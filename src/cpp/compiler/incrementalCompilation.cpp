@@ -406,62 +406,7 @@ bool canReuseInactiveBodies(
 		   currentProjection.at("sources") == priorProjection.at("sources");
 }
 
-bool observationsStillEquivalent(
-	const Json &previous, RecordingFileSystem &files, const ParseContext &context, std::string &cachedDiagnostics,
-	bool &configOnlyChange
-) {
-	std::vector<std::string> changedSources;
-	bool configChanged = false;
-	const Json &configPaths = previous.at("config_paths");
-	for (const auto &[path, observation] : previous.at("files").items()) {
-		Json current = observeFile(path, files.getFile(path));
-		Json rawObservation = observation;
-		if (rawObservation.is_object())
-			rawObservation.erase("semantic");
-		if (current == rawObservation)
-			continue;
-		if (path == configPaths[0].get<std::string>() || path == configPaths[1].get<std::string>()) {
-			if (current.is_null() || observation.is_null() || current.at("canonical") != observation.at("canonical") ||
-				current.at("internal") != observation.at("internal"))
-				return false;
-			configChanged = true;
-			continue;
-		}
-		if (current.is_null() || observation.is_null() || fs::path(path).extension() != ".dl" ||
-			!previous.contains("comment_prefixes") || !observation.contains("semantic"))
-			return false;
-		if (current.at("canonical") != observation.at("canonical") || current.at("internal") != observation.at("internal"))
-			return false;
-		changedSources.push_back(path);
-	}
-	if (!configChanged && changedSources.empty()) {
-		cachedDiagnostics = previous.at("diagnostics").get<std::string>();
-		return true;
-	}
-	if (configPaths != Json::array({context.builtinSyntaxConfigPath, context.projectSyntaxConfigPath}) ||
-		previous.at("syntax_structure") !=
-			Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity}))
-		return false;
-	if (!changedSources.empty() && (context.options.emitDebugInfo || context.options.traceExecution))
-		return false;
-	const Json &prefixes = previous.at("comment_prefixes");
-	for (const std::string &path : changedSources) {
-		lsp::SourceFile *file = files.cachedFile(path);
-		if (!file)
-			throw std::runtime_error("recorded source disappeared: " + path);
-		const std::string &prefix = file->isInternal ? prefixes.at("builtin").get_ref<const std::string &>()
-													 : prefixes.at("project").get_ref<const std::string &>();
-		if (semanticSourceDigest(file->content, prefix) != previous.at("files").at(path).at("semantic").get<std::string>())
-			return false;
-	}
-	std::optional<std::string> rendered =
-		renderCachedDiagnostics(previous, files, context, std::set<std::string>(changedSources.begin(), changedSources.end()));
-	if (!rendered)
-		return false;
-	cachedDiagnostics = std::move(*rendered);
-	configOnlyChange = configChanged && changedSources.empty();
-	return true;
-}
+#include "incrementalObservationReuse.inl"
 
 Json optionIdentity(const ParseContext::Options &options) {
 	auto optionalBool = [](std::optional<bool> value) -> Json {
@@ -647,28 +592,52 @@ bool compileIncrementally(
 		fs::create_directories(directory);
 		std::string compilerIdentity = compilerBuildIdentity(compilerPath);
 		Json options = optionIdentity(context.options);
-		fs::path programEntry = directory / ("program-" + digest(compilerIdentity + options.dump()) + ".entry");
+		std::string programKey = digest(compilerIdentity + options.dump());
+		fs::path programEntry = directory / ("program-" + programKey + ".entry");
+		fs::path failedEntry = directory / ("errors-" + programKey + ".entry");
 		auto files = std::make_unique<RecordingFileSystem>();
 		RecordingFileSystem *recording = files.get();
 		context.fileSystem = std::move(files);
 		BuildStatistics statistics;
 		bool success = false;
 		std::optional<Json> previous;
+		std::optional<Json> previousFailure;
 		bool reusePreviousFrontend = false;
+		bool reuseFailedFrontend = false;
 		bool configOnlyChange = false;
 		std::string cachedDiagnostics;
 		std::string previousMatches;
 		std::string previousMatcherKey;
-		if (auto cached = readEntry(programEntry)) {
-			previous = Json::parse(*cached);
+		if (auto cached = readEntry(failedEntry)) {
+			previousFailure = Json::parse(*cached);
 			if (!initializeSyntaxConfigs(context, context.options.inputPath))
 				return false;
-			reusePreviousFrontend =
-				observationsStillEquivalent(*previous, *recording, context, cachedDiagnostics, configOnlyChange);
-			if (!reusePreviousFrontend)
-				previousMatcherKey = previous->at("matcher_key").get<std::string>();
+			reuseFailedFrontend =
+				observationsStillEquivalent(*previousFailure, *recording, context, cachedDiagnostics, configOnlyChange);
+			if (!reuseFailedFrontend)
+				previousMatcherKey = previousFailure->at("matcher_key").get<std::string>();
 		}
-		if (reusePreviousFrontend) {
+		if (!reuseFailedFrontend) {
+			if (auto cached = readEntry(programEntry)) {
+				previous = Json::parse(*cached);
+				if (!previousFailure && !initializeSyntaxConfigs(context, context.options.inputPath))
+					return false;
+				reusePreviousFrontend =
+					observationsStillEquivalent(*previous, *recording, context, cachedDiagnostics, configOnlyChange);
+				if (!reusePreviousFrontend && previousMatcherKey.empty())
+					previousMatcherKey = previous->at("matcher_key").get<std::string>();
+			}
+		}
+		if (reuseFailedFrontend) {
+			statistics.reusedFrontend = true;
+			std::cerr << cachedDiagnostics;
+			if (configOnlyChange) {
+				(*previousFailure)["files"] = recording->observations;
+				(*previousFailure)["diagnostics"] = cachedDiagnostics;
+				recordSemanticSources(*previousFailure, *recording, context);
+				writeEntry(failedEntry, previousFailure->dump());
+			}
+		} else if (reusePreviousFrontend) {
 			statistics.reusedFrontend = true;
 			std::vector<std::string> objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 			std::cerr << cachedDiagnostics;
@@ -725,6 +694,12 @@ bool compileIncrementally(
 			context.recordMatcherResult = [&](PatternReference *reference, MatchOptions options, const PatternMatch *match,
 											  const MatchDependencies *dependencies) {
 				matcherCache.record(reference, options, match, dependencies);
+			};
+			auto saveMatcher = [&]() {
+				std::string payload = matcherCache.snapshot();
+				std::string key = digest(payload);
+				writeEntry(directory / ("matcher-" + key + ".entry"), payload);
+				return key;
 			};
 			auto stageStart = Clock::now();
 			bool compiled = compileBeforeTypeInference(context.options.inputPath, context);
@@ -816,12 +791,6 @@ bool compileIncrementally(
 			statistics.matcherRestoreMilliseconds = matcherCache.restoreTimeMilliseconds();
 			context.reuseMatcherResult = {};
 			context.recordMatcherResult = {};
-			auto saveMatcher = [&]() {
-				std::string payload = matcherCache.snapshot();
-				std::string key = digest(payload);
-				writeEntry(directory / ("matcher-" + key + ".entry"), payload);
-				return key;
-			};
 			if (reuseTypeInference) {
 				statistics.reusedTypeInference = true;
 				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
@@ -926,8 +895,24 @@ bool compileIncrementally(
 				context.recordGeneratedFunction = {};
 				context.reuseGeneratedFunction = {};
 				context.importReusedFunctions = {};
+			} else if (context.compilationStage >= ParseContext::CompilationStage::ImportedFiles &&
+					   !context.diagnostics.empty()) {
+				std::string diagnostics;
+				std::set<std::string> diagnosticSources;
+				Json records = captureCachedDiagnostics(context, diagnostics, diagnosticSources);
+				Json result{
+					{"files", recording->observations},
+					{"diagnostics", diagnostics},
+					{"diagnostic_records", std::move(records)},
+					{"diagnostic_sources", std::move(diagnosticSources)},
+					{"matcher_key", saveMatcher()}
+				};
+				recordSemanticSources(result, *recording, context);
+				writeEntry(failedEntry, result.dump());
 			}
 		}
+		if (success)
+			fs::remove(failedEntry);
 		trimCache(directory);
 		if (showStatistics)
 			std::cerr << "incremental: "

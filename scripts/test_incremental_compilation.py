@@ -207,6 +207,27 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     code_after_message_edit = build(entry=config_warning_main)
     assert code_after_message_edit[0]["matcher_cache_hits"] > 0, "message edit invalidated unrelated pattern matches"
     assert code_after_message_edit[1:] == build(False, entry=config_warning_main)[1:]
+    error_config_dir = root / "config_error"
+    error_config_dir.mkdir()
+    error_main = error_config_dir / "main.dl"
+    error_config = error_config_dir / "config.dl"
+    error_main.write_text('missing function\n')
+    error_config.write_text('dynlex options:\n    messages:\n        unresolved pattern: "First missing"\n')
+    first_error = build(entry=error_main, success=False)
+    assert "First missing" in first_error[1]
+    error_config.write_text('dynlex options:\n    messages:\n        unresolved pattern: "Second missing"\n')
+    updated_error = build(entry=error_main, success=False)
+    assert updated_error[0]["frontend_reused"], "error wording recompiled failed source"
+    assert updated_error[0]["link_ms"] == 0
+    assert "Second missing" in updated_error[1]
+    assert updated_error[1] == build(False, entry=error_main, success=False)[1]
+    error_main.write_text('missing function\n@intrinsic("discard", 1)\n')
+    still_missing = build(entry=error_main, success=False)
+    assert still_missing[0]["matcher_cache_hits"] >= 1, "failed lookup was not reused after an unrelated edit"
+    assert still_missing[1] == build(False, entry=error_main, success=False)[1]
+    error_main.write_text('to missing function: @intrinsic("discard", 1)\nmissing function\n')
+    resolved_error = build(entry=error_main)
+    assert resolved_error[1:] == build(False, entry=error_main)[1:], "fixed error kept cached diagnostics"
     critical.write_text(critical.read_text() + "alpha\n")
     main.write_text("import critical.dl\nalpha\n")
     build()

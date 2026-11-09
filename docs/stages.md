@@ -760,6 +760,12 @@ The cache records structured warnings and notes, including source locations and
 configured message keys, variants and placeholders. Comment edits relocate their
 source locations without rebuilding the frontend. An edit confined to messages in an
 existing `config.dl` rerenders those diagnostics without recompiling.
+Failed builds that reached section analysis or later store diagnostic records and
+failed pattern lookups separately from the last successful native result. An
+unchanged source or message-only configuration edit replays the errors without
+rerunning the frontend. A later code edit reuses a failed lookup only while its
+source and candidate pattern tree are equivalent; a successful build retires the
+failed snapshot.
 The compiler linker build ID (or executable content digest when the format has no
 build ID), effective compiler options and host CPU features identify the computation. Modification timestamps are never a correctness criterion.
 
