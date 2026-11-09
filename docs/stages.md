@@ -848,7 +848,7 @@ build has the same matching environment, an edited section marks only its revers
 reachable callers dirty; a preinferred section with an unchanged interface stops
 that propagation. Missing graph entries use the current expression walk. Inference
 variants restored from cache carry their prior call dependencies forward, while
-newly inferred variants capture current calls. The graph currently speeds codegen
+newly inferred variants capture current calls. The graph speeds preinference and codegen
 eligibility checks; section parsing and resolution still rebuild their state.
 Section cache identities use source URI, normalized header, section type, and a
 same-identity sibling ordinal. Inserting a different definition before an existing
@@ -895,7 +895,7 @@ summary, so its warnings are regenerated. Functions imported from cached IR coun
 deciding whether an edited body can be ignored. This prevents a later callee edit
 from reusing the preceding build's type inference and executable.
 
-For functions with one pattern path, primitive scalar arguments, and no transitive
+For functions with one pattern path, restorable concrete argument types, and no transitive
 global access, the compiler can infer affected instantiations in dependency order.
 It compares every instantiation's return type and execution effects with the prior
 summary. An equivalent interface stops invalidation at that function: higher callers

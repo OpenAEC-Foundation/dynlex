@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from test_incremental_dependency_graph import check_global_match_reuse_after_execution_edit, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_runtime_pure_value_summary
+from test_incremental_dependency_graph import check_global_match_reuse_after_execution_edit, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_runtime_pure_value_summary
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -894,22 +894,7 @@ function left times right:
     assert class_writer_edit[0]["inference_instantiations_reused"] >= 1, "class global writer was re-inferred"
     assert class_writer_edit[1:] == build(False, entry=class_writer_main)[1:]
 
-    pointer_main = root / "pointer_main.dl"
-    pointer_source = ('integer means: @intrinsic("type", "int")\n'
-                      'pointer to kind means: @intrinsic("add pointer depth", kind)\n'
-                      'to alpha {pointer to integer:value}:\n'
-                      '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))\n'
-                      'to beta {pointer to integer:value}:\n'
-                      '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))\n'
-                      '@intrinsic("store", number, 1)\n'
-                      'alpha @intrinsic("address of", number)\n'
-                      'beta @intrinsic("address of", number)\n')
-    pointer_main.write_text(pointer_source)
-    build(entry=pointer_main)
-    pointer_main.write_text(pointer_source.replace('"alpha"))', '"changed"))'))
-    pointer_edit = build(entry=pointer_main)
-    assert pointer_edit[0]["inference_instantiations_reused"] >= 1, "pointer argument function was re-inferred"
-    assert pointer_edit[1:] == build(False, entry=pointer_main)[1:], "pointer argument edit differs from clean build"
+    check_pointer_preinfer(root, build)
 
     for flags in [("-O2",), ("-g",), ("-ffast-math",), ("--trace-execution",)]:
         changed = build(flags=flags)

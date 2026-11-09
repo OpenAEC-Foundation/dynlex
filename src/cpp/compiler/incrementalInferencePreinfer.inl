@@ -12,7 +12,7 @@ std::set<Section *> matchedSectionDependencies(Section *section) {
 	return dependencies;
 }
 
-IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
+IncrementalPreinferPlan incrementalInferenceCandidates(
 	const ParseContext &context, const Json &previous, const Json &observations,
 	const std::map<const Section *, std::string> &sectionPaths, const Json &current
 ) {
@@ -76,13 +76,10 @@ IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 				break;
 			ParseContext::IncrementalFunctionRequest request{const_cast<Section *>(section), parameterNames, {}};
 			for (const Json &encoded : summary.at("argument_types")) {
-				DataType type{
-					static_cast<DataType::Kind>(encoded.at(0).get<int>()), encoded.at(1).get<int>(), encoded.at(2).get<int>()
-				};
-				if (type.pointerDepth != 0 || (type.kind != DataType::Kind::Bool && type.kind != DataType::Kind::Float &&
-											   type.kind != DataType::Kind::Int && type.kind != DataType::Kind::UInt))
+				auto type = decodeInferenceTypeIdentity(encoded, classPaths);
+				if (!type)
 					break;
-				request.argumentTypes.push_back(type);
+				request.argumentTypes.push_back(std::move(*type));
 			}
 			InstantiationKey key;
 			key.argumentTypes = request.argumentTypes;

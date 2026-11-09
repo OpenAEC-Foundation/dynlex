@@ -677,7 +677,7 @@ bool compileIncrementally(
 			std::unordered_set<const Section *> graphStable;
 			if (compiled && !reuseTypeInference) {
 				if (previous) {
-					IncrementalPreinferPlan plan = scalarArgumentIncrementalCandidates(
+					IncrementalPreinferPlan plan = incrementalInferenceCandidates(
 						context, *previous, recording->observations, sectionPaths, resolvedFunctionProjection
 					);
 					statistics.preinferDependencyGraphSectionsChecked = plan.dependencyGraphSectionsChecked;

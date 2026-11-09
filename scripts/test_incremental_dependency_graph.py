@@ -285,3 +285,23 @@ def check_local_match_projection_reuse(root, build):
     unrelated = build(entry=main)
     assert unrelated[1:] == build(False, entry=main)[1:], \
         "adding an unrelated definition changed the saved call matches"
+
+
+def check_pointer_preinfer(root, build):
+    main = root / "pointer_preinfer.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'pointer to kind means: @intrinsic("add pointer depth", kind)\n'
+              'to alpha {pointer to integer:value}:\n'
+              '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))\n'
+              'to beta {pointer to integer:value}:\n'
+              '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))\n'
+              '@intrinsic("store", number, 1)\n'
+              'alpha @intrinsic("address of", number)\n'
+              'beta @intrinsic("address of", number)\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('"alpha"))', '"changed"))'))
+    edited = build(entry=main)
+    assert edited[0]["preinferred_instantiations"] >= 1, "pointer argument function was not pre-inferred"
+    assert edited[0]["inference_instantiations_reused"] >= 1, "independent pointer function was re-inferred"
+    assert edited[1:] == build(False, entry=main)[1:]
