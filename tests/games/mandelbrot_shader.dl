@@ -2,7 +2,7 @@ import tests/games/shader_values.dl
 
 # Animated Mandelbrot fragment shader — zooms into the fractal
 
-set pixel to a planar position with x the fragment x coordinate and y the fragment y coordinate
+set pixel to a planar position with x the study x and y the study y
 set time to the shader time
 
 # Animated zoom: oscillate zoom level with time
@@ -14,7 +14,7 @@ set zoom to (zoom * zoom) * zoom
 set center to a complex number with real -0.745 and imaginary 0.186
 
 # Map pixel to complex plane centered on zoom target
-set coordinate to a complex number with real (center's real part + ((pixel's x / 800.0) * 3.0 - 1.5) / zoom) and imaginary (center's imaginary part + ((pixel's y / 600.0) * 3.0 - 1.5) / zoom)
+set coordinate to a complex number with real (center's real part + (((pixel's x - (the study width / 2.0)) * 3.0) / the study height) / zoom) and imaginary (center's imaginary part + (((pixel's y * 3.0) / the study height) - 1.5) / zoom)
 
 set orbit to a complex number with real 0.0 and imaginary 0.0
 set iteration to 0

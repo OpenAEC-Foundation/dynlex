@@ -8,11 +8,10 @@ class:
         column as a floating-point number
         row as a floating-point number
 
-to get a snake position at {floating-point number:column} and {floating-point number:row}:
-    return @intrinsic("construct", snake position, column, row)
+a snake position at {floating-point number:column} and {floating-point number:row} means: @intrinsic("construct", snake position, column, row)
 
 to get the impact compression in {a pointer to snake match:match}:
-    if (match's impact = false) or match's reduced motion:
+    if (not match's impact) or match's reduced motion:
         return 0.0
     set phase to match's impact time / the snake impact duration
     return 0.38 * (the sine of (phase * 3.141592653589793))

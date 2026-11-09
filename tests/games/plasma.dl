@@ -1,21 +1,3 @@
-import lib/graphics.dl
+import tests/games/gallery/application.dl
 
-# Plasma host program
-# Build:
-#   ./build/dynlex tests/games/plasma_shader.dl --emit-spirv --shader-stage=fragment -o tests/games/plasma.spv
-#   ./build/dynlex tests/games/plasma.dl -o tests/games/plasma
-# Run:
-#   ./tests/games/plasma
-
-set window to a new window with width 800 and height 600
-
-set program to a shader program for window using vertex shader at "tests/games/passthrough.spv" and fragment shader at "tests/games/plasma.spv"
-
-while window remains open:
-    set frame to a new graphics frame in window
-    use program in frame
-    draw a fullscreen surface in frame
-    display frame
-
-release program
-close the window
+explore shaders in shader atelier starting with 1

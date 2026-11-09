@@ -1,0 +1,7 @@
+import lib/river_challenge.dl
+
+loop 2 times:
+    get the sheep in the boat
+    row to the other side
+    get the sheep out of the boat
+    row to the other side

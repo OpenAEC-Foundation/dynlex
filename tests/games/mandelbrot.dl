@@ -1,24 +1,3 @@
-import lib/graphics.dl
+import tests/games/gallery/application.dl
 
-# Mandelbrot host program
-# Loads SPIR-V vertex and fragment shaders, renders a fullscreen quad
-#
-# Build:
-#   ./build/dynlex tests/games/passthrough_vertex.dl --emit-spirv --shader-stage=vertex -o tests/games/passthrough.spv
-#   ./build/dynlex tests/games/mandelbrot_shader.dl --emit-spirv -o tests/games/mandelbrot.spv
-#   ./build/dynlex tests/games/mandelbrot.dl -o tests/games/mandelbrot
-# Run:
-#   ./tests/games/mandelbrot
-
-set window to a new window with width 800 and height 600
-
-set program to a shader program for window using vertex shader at "tests/games/passthrough.spv" and fragment shader at "tests/games/mandelbrot.spv"
-
-while window remains open:
-    set frame to a new graphics frame in window
-    use program in frame
-    draw a fullscreen surface in frame
-    display frame
-
-release program
-close the window
+explore shaders in shader atelier starting with 0

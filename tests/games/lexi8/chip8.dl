@@ -24,7 +24,7 @@ class:
 		x, y
 
 a pixel position at x {integer:x} and y {integer:y} means: @intrinsic("construct", a pixel position, x, y)
-a chip machine using {a pointer to an integer:memory}, {a pointer to an integer:registers}, {a pointer to an integer:stack}, {a pointer to an integer:display} and {a pointer to an integer:keys}, starting at program {integer:program} with index {integer:index}, stack depth {integer:depth}, delay {integer:delay}, sound {integer:sound}, status {integer:status}, glyph position {integer:glyph} and cycle count {integer:cycles} means: @intrinsic("construct", a chip machine, memory, registers, stack, display, keys, program, index, depth, delay, sound, status, glyph, cycles)
+a chip machine using {a pointer to an integer:memory}, {a pointer to an integer:registers}, {a pointer to an integer:call stack}, {a pointer to an integer:display} and {a pointer to an integer:keys}, starting at program {integer:program} with index {integer:index}, stack depth {integer:depth}, delay {integer:delay}, sound {integer:sound}, status {integer:status}, glyph position {integer:glyph} and cycle count {integer:cycles} means: @intrinsic("construct", a chip machine, memory, registers, call stack, display, keys, program, index, depth, delay, sound, status, glyph, cycles)
 set memory to an integer array of 4096 slots
 set registers to an integer array of 16 slots
 set stack to an integer array of 16 slots
@@ -73,20 +73,14 @@ function install the machine font:
 function initialize the machine:
 	globals: console
 	execute:
-		set index to 0
-		loop while index < 4096:
+		loop index from 0 to 4096:
 			store 0 into console's memory at index
-			increment index
-		set index to 0
-		loop while index < 2048:
+		loop index from 0 to 2048:
 			store 0 into console's display at index
-			increment index
-		set index to 0
-		loop while index < 16:
+		loop index from 0 to 16:
 			store 0 into console's registers at index
 			store 0 into console's stack at index
 			store 0 into console's keys at index
-			increment index
 		set console's program to 512
 		set console's index, console's depth, console's delay, console's sound, console's status and console's cycles to 0
 		install the machine font
@@ -94,10 +88,8 @@ function initialize the machine:
 function load the assembled program into the machine:
 	globals: console
 	execute:
-		set index to 0
-		loop while index < the assembled program size:
+		loop index from 0 to the assembled program size:
 			store the assembled program byte at index into console's memory at 512 + index
-			increment index
 
 # --- Observation (used by the renderer, the status area and the tests) ---
 
@@ -134,10 +126,9 @@ function the machine is running:
 function the count of lit machine pixels:
 	globals: console
 	execute:
-		set total and index to 0
-		loop while index < 2048:
+		set total to 0
+		loop index from 0 to 2048:
 			add the item at index in (console's display) to total
-			increment index
 		return total
 
 # --- Input and timers ---
@@ -167,13 +158,11 @@ function draw a machine sprite at {pixel position:origin} with {integer:count} [
 	globals: console
 	execute:
 		store 0 into console's registers at 15
-		set row to 0
-		loop while row < count:
+		loop row from 0 to count:
 			set pixel to a pixel position at x origin's x and y (origin's y + row)
 			if pixel's y < 32:
 				set bitmap to the item at (console's index + row) in (console's memory)
-				set column to 0
-				loop while column < 8:
+				loop column from 0 to 8:
 					if ((bitmap shifted right by (7 - column)) bitwise and 1) = 1:
 						set pixel's x to origin's x + column
 						if pixel's x < 64:
@@ -181,8 +170,6 @@ function draw a machine sprite at {pixel position:origin} with {integer:count} [
 							if the item at cell in (console's display) = 1:
 								store 1 into console's registers at 15
 							store ((the item at cell in (console's display)) bitwise xor 1) into console's display at cell
-					increment column
-			increment row
 
 # --- The interpreter ---
 
@@ -203,10 +190,8 @@ function step the machine:
 			match based on high shifted right by 4:
 				case 0:
 					if operand = 224:
-						set index to 0
-						loop while index < 2048:
+						loop index from 0 to 2048:
 							store 0 into console's display at index
-							increment index
 					else if operand = 238:
 						decrement console's depth
 						set console's program to the item at console's depth in (console's stack)
@@ -247,13 +232,13 @@ function step the machine:
 						store ((left + right) shifted right by 8) into console's registers at 15
 					else if operation = 5:
 						store ((left - right) bitwise and 255) into console's registers at target
-						store ((256 + left - right) shifted right by 8) into console's registers at 15
+						store (((256 + left) - right) shifted right by 8) into console's registers at 15
 					else if operation = 6:
 						store (left shifted right by 1) into console's registers at target
 						store (left bitwise and 1) into console's registers at 15
 					else if operation = 7:
 						store ((right - left) bitwise and 255) into console's registers at target
-						store ((256 + right - left) shifted right by 8) into console's registers at 15
+						store (((256 + right) - left) shifted right by 8) into console's registers at 15
 					else if operation = 14:
 						store ((left shifted left by 1) bitwise and 255) into console's registers at target
 						store ((left shifted right by 7) bitwise and 1) into console's registers at 15
@@ -285,11 +270,9 @@ function step the machine:
 						store console's delay into console's registers at target
 					else if operand = 10:
 						set pressed to the negative of 1
-						set key to 0
-						loop while key < 16:
+						loop key from 0 to 16:
 							if the item at key in (console's keys) = 1:
 								set pressed to key
-							increment key
 						if pressed < 0:
 							set console's program to console's program - 2
 						else:
@@ -308,20 +291,14 @@ function step the machine:
 						store (left / 10) mod 10 into console's memory at console's index + 1
 						store left mod 10 into console's memory at console's index + 2
 					else if operand = 85:
-						set index to 0
-						loop while index <= target:
+						loop index from 0 through target:
 							store the item at index in (console's registers) into console's memory at console's index + index
-							increment index
 					else if operand = 101:
-						set index to 0
-						loop while index <= target:
+						loop index from 0 through target:
 							store the item at (console's index + index) in (console's memory) into console's registers at index
-							increment index
 					else:
 						report a machine fault for opcode
 
 to step the machine {integer:count} [time|times]:
-	set index to 0
-	loop while index < count:
+	loop count times:
 		step the machine
-		increment index

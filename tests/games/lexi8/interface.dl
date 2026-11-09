@@ -1,0 +1,89 @@
+import lib/ui_resizing.dl
+import tests/games/lexi8/session.dl
+
+the breakout in {a pointer to UI instance:instance} means: instance's state as a pointer to breakout session
+
+this breakout means: the breakout in this window
+
+to refresh breakout in {a pointer to UI instance:instance}:
+    set session to the breakout in instance
+    set the text of "Score" in instance to the machine register 8
+    set the text of "Lives" in instance to the machine register 10
+    set the text of "Bricks left" in instance to the machine register 9
+    set status to "IN PLAY"
+    if session's paused:
+        set status to "PAUSED"
+    if the machine cycle count > 640:
+        if the machine register 10 = 0:
+            set status to "GAME OVER"
+        else if the machine register 9 = 0:
+            set status to "ALL CLEAR"
+    set the text of "Console status" in instance to status
+
+window lexi arcade:
+    group at 32 24 sized 680 by 64:
+        brand "LEXI-8"
+        caption "BREAKOUT / THE FANTASY CONSOLE"
+    group at 932 32 sized 236 by 40:
+        badge "Console status"
+    panel at 344 112 sized 824 by 600:
+        group at 24 20 sized 768 by 20:
+            eyebrow "64 BRICKS. THREE LIVES. ONE MORE TRY."
+        canvas "Screen" at 24 64 sized 768 by 384
+        group at 24 476 sized 224 by 96:
+            statistic "Score"
+        group at 284 476 sized 224 by 96:
+            statistic "Lives"
+        group at 544 476 sized 224 by 96:
+            statistic "Bricks left"
+    page "playing":
+        panel at 32 112 sized 288 by 600:
+            eyebrow "THE ORIGINAL ARCADE RHYTHM"
+            space of 12 pixels
+            title "Break"
+            accent title "through."
+            label "Keep the ball in play."
+            label "Clear the wall, one brick at a time."
+            space of 12 pixels
+            primary button "Pause"
+            button "Restart"
+            space of 20 pixels
+            switch "Phosphor trail"
+            choices "Display tint":
+                option "Amber"
+                option "Mint"
+                option "Violet"
+    page "paused":
+        panel at 32 112 sized 288 by 600:
+            eyebrow "TAKE YOUR TIME"
+            space of 12 pixels
+            title "On"
+            accent title "hold."
+            label "Your ball is right where you left it."
+            space of 12 pixels
+            primary button "Resume"
+            button "New game"
+    group at 32 736 sized 1136 by 20:
+        caption "ARROWS / A D  MOVE     SPACE  PAUSE     R  RESTART     TAB + ENTER  NAVIGATE     ESC  CLOSE"
+    style:
+        the interface uses a "midnight" theme
+        the interface fits 1200 by 780 pixels
+        the window is at least 900 by 585 pixels
+    code:
+        set the value of "Phosphor trail" in this window to 1
+        show page "playing" in this window
+        when the "Pause" button is clicked:
+            set this breakout's paused to true
+            show page "paused" in this window
+        when the "Resume" button is clicked:
+            set this breakout's paused to false
+            show page "playing" in this window
+        when the "Restart" button is clicked:
+            restart this breakout
+        when the "New game" button is clicked:
+            restart this breakout
+            show page "playing" in this window
+        when the "Phosphor trail" control changes:
+            set this breakout's trail to the "Phosphor trail" switch is on in this window
+        when the "Display tint" control changes:
+            set this breakout's palette to the value of "Display tint" in this window

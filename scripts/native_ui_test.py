@@ -5,6 +5,14 @@ import struct
 import time
 import zlib
 
+
+def isolated_x11_environment(environment):
+    result = dict(environment)
+    result.pop("WAYLAND_DISPLAY", None)
+    result["XDG_SESSION_TYPE"] = "x11"
+    return result
+
+
 class XButton(c.Structure):
     _fields_ = [
         ("type", c.c_int), ("serial", c.c_ulong), ("send_event", c.c_int),

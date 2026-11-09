@@ -1,0 +1,28 @@
+import tests/games/lexi8/session.dl
+import lib/check.dl
+
+seed the random number generator with 20260713
+build the breakout program
+set session to a new arcade session
+loop 20 times:
+    update (the address of session) after (1.0 / 60.0) seconds
+require condition ((the count of lit machine pixels) = 199) reporting "Breakout did not boot"
+set cycles to the machine cycle count
+restart the address of session
+loop 10 times:
+    update (the address of session) after (1.0 / 30.0) seconds
+require condition ((the machine cycle count) = cycles) reporting "The display rate changed the emulation speed"
+set session's paused to true
+update (the address of session) after 0.25 seconds
+require condition ((the machine cycle count) = cycles) reporting "A paused console advanced"
+set session's paused to false
+set machine key 6 to 1
+loop 60 times:
+    update (the address of session) after (1.0 / 60.0) seconds
+require condition ((the machine register 3) = 58) reporting "The paddle did not reach the right wall"
+restart the address of session
+require condition ((the machine cycle count) = 0) reporting "Restart kept the old machine state"
+require condition (not session's paused) reporting "Restart left the console paused"
+require condition ((the item at 0 in (session's phosphor)) = 0.0) reporting "Restart kept the old phosphor"
+close the address of session
+print line "Breakout session passed"

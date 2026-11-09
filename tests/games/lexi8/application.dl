@@ -1,0 +1,34 @@
+import tests/games/lexi8/painting.dl
+
+to play breakout using {a pointer to native UI view:view}:
+    set session to the breakout in (view's instance)
+    set previous to the time since start for view's window
+    set pause and reset to false
+    loop while view's window remains open:
+        poll window events
+        set window to view's window
+        set now to the time since start for window
+        set pressed to key (the space key) is down in window
+        if pressed and not pause:
+            set session's paused to not session's paused
+            if session's paused:
+                show page "paused" in (view's instance)
+            else:
+                show page "playing" in (view's instance)
+        set pause to pressed
+        set pressed to key (the R key) is down in window
+        if pressed and not reset:
+            restart session
+            show page "playing" in (view's instance)
+        set reset to pressed
+        if key (the escape key) is down in window:
+            request that window close
+        set left to (key (the left arrow key) is down in window) or (key (the A key) is down in window)
+        set right to (key (the right arrow key) is down in window) or (key (the D key) is down in window)
+        set machine key 4 to left as an integer
+        set machine key 6 to right as an integer
+        update session after (now - previous) seconds
+        set previous to now
+        refresh breakout in (view's instance)
+        render view
+        sleep for 4 milliseconds

@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 from find_vulkan_icd import find_vulkan_icd, vulkan_driver_environment
+from native_ui_test import isolated_x11_environment
 
 
 if len(sys.argv) != 3:
@@ -68,6 +69,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-vulkan-runtime-") as temporary_d
         raise SystemExit(f"The Vulkan runtime test requires a Vulkan driver: {error}") from error
     environment = vulkan_driver_environment(vulkan_icd, environment)
     if sys.platform.startswith("linux"):
+        environment = isolated_x11_environment(environment)
         xvfb_run = shutil.which("xvfb-run")
         if xvfb_run is None:
             raise SystemExit("The Vulkan runtime test requires xvfb-run on Linux")

@@ -1,4 +1,4 @@
-import lib/graphics.dl
+import tests/games/studio/application.dl
 import tests/games/three_dimensional.dl
 
 to position the camera from {spatial camera:view} in {graphics frame:frame}:
@@ -63,27 +63,15 @@ to draw a cube at {spatial position:position} with size {floating-point number:s
     finish triangles in frame
     restore the model transform in frame
 
-set window to a new window with width 800 and height 600
+to paint the cube on {a pointer to UI canvas frame:canvas}:
+    set session to the spatial study in (canvas's instance)
+    set frame to canvas's frame
+    use a perspective of 77.3 degrees from 0.1 to 200.0 on canvas
+    position the camera from (session's camera) in frame
+    rotate the model in frame by 25.0 degrees around x 1.0, y 0.0 and z 0.0
+    rotate the model in frame by (35.0 + session's elapsed * 18.0) degrees around x 0.0, y 1.0 and z 0.0
+    draw a cube at (a position with x 0.0, y 0.0 and z 0.0) with size 3.0 in frame
 
-set view to a camera at (a position with x 0.0, y 1.5 and z 8.0) facing 0.0 degrees with speed 0.2 and turn rate 2.0
-
-while window remains open:
-    if key (the up arrow key) is down in window:
-        decrease the x coordinate of view's position by ((the sine of (view's yaw * 0.0174533)) * view's movement)
-        decrease the z coordinate of view's position by ((the cosine of (view's yaw * 0.0174533)) * view's movement)
-    if key (the down arrow key) is down in window:
-        increase the x coordinate of view's position by ((the sine of (view's yaw * 0.0174533)) * view's movement)
-        increase the z coordinate of view's position by ((the cosine of (view's yaw * 0.0174533)) * view's movement)
-    if key (the right arrow key) is down in window:
-        add view's turning to view's yaw
-    if key (the left arrow key) is down in window:
-        subtract view's turning from view's yaw
-
-    set frame to a new graphics frame in window with background red (20.0 / 255.0), green (26.0 / 255.0), blue (36.0 / 255.0) and alpha 1.0
-    use perspective with a vertical field of view of 77.3 degrees, a near plane of 0.1 and a far plane of 200.0 in frame
-    enable depth testing in frame
-    position the camera from view in frame
-    draw a cube at (a position with x 0.0, y 0.0 and z 0.0) with size 2.0 in frame
-    display frame
-
-close the window
+set session to a new spatial study from (a camera at (a position with x 0.0, y 0.0 and z 8.0) facing 0.0 degrees with speed 0.2 and turn rate 2.0)
+set session's painter to (the function named "paint the cube on $") as a pointer
+explore (the address of session) named "Color cube" in spatial studio

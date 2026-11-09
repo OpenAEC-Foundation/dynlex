@@ -1,0 +1,24 @@
+import lib/ui_native.dl
+import tests/games/lexi8/interface.dl
+
+to paint breakout on {a pointer to UI canvas frame:canvas}:
+    set session to the breakout in (canvas's instance)
+    set box to canvas's bounds
+    set frame to canvas's frame
+    draw a rounded UI surface box with radius 12.0 from (UI ink 13 16 24) to (UI ink 7 10 17) opacity 255 feathered by 0.8 on frame
+    set scale to box's width / 64.0
+    set ink to UI ink 255 196 98
+    if session's palette = 1:
+        set ink to UI ink 117 242 201
+    if session's palette = 2:
+        set ink to UI ink 184 166 255
+    loop row from 0 to 32:
+        loop column from 0 to 64:
+            set brightness to the item at (row * 64 + column) in (session's phosphor)
+            if brightness > 0.05:
+                set x to box's x + ((column as a floating-point number) * scale)
+                set y to box's y + ((row as a floating-point number) * scale)
+                set color to UI ink between (UI ink 8 10 16) and ink at brightness
+                if session's trail:
+                    draw a rounded UI surface (UI box at x y sized scale scale) with radius 2.0 from color to color opacity 45 feathered by 3.0 on frame
+                draw a rounded UI surface (UI box at (x + 1.0) (y + 1.0) sized (scale - 2.0) (scale - 2.0)) with radius 1.6 from color to color opacity 255 feathered by 0.6 on frame

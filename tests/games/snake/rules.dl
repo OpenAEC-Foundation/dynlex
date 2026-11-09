@@ -50,11 +50,9 @@ to get {snake cell:first} is the same cell as {snake cell:second}:
     return (first's column = second's column) and (first's row = second's row)
 
 to get {snake cell:location} is occupied in {a pointer to snake match:match}:
-    set index to 0
-    loop while index < match's length:
+    loop index from 0 to match's length:
         if location is the same cell as (the item at index in (match's body)):
             return true
-        increment index
     return false
 
 to get the next choice below {integer:limit} in {a pointer to snake match:match}:
@@ -68,15 +66,13 @@ to place food in {a pointer to snake match:match}:
         set match's phase to the completed screen
         return nothing
     set {chosen cell} to the next choice below free cells in match
-    set index to 0
-    loop while index < the snake board capacity:
+    loop index from 0 to the snake board capacity:
         set location to a snake cell at (index mod the snake board width) and (index / the snake board width)
-        if (location is occupied in match) = false:
+        if not (location is occupied in match):
             if chosen cell = 0:
                 set match's food to location
                 return nothing
             decrement chosen cell
-        increment index
     require condition false reporting "The snake board's free-cell count is inconsistent"
 
 to get the cell after {snake cell:origin} toward {integer:direction}:
@@ -116,10 +112,8 @@ to begin a run in {a pointer to snake match:match}:
     set match's impact time to 0.0
     set match's steps to 0
     set match's phase to the playing screen
-    set index to 0
-    loop while index < match's length:
+    loop index from 0 to match's length:
         store a snake cell at (12 - index) and 12 into match's body at index
-        increment index
     place food in match
 
 to get a new snake session:
@@ -153,21 +147,17 @@ to advance the snake in {a pointer to snake match:match}:
     set {collision length} to match's length - 1
     if eating:
         increment collision length
-    set index to 0
-    loop while index < collision length:
+    loop index from 0 to collision length:
         if head is the same cell as (the item at index in (match's body)):
             end match on impact
             return nothing
-        increment index
     if eating:
         increment match's length
         increment match's score
         if match's score > match's best score:
             set match's best score to match's score
-    set index to match's length - 1
-    loop while index > 0:
+    loop index from (match's length - 1) down to 0:
         store the item at (index - 1) in (match's body) into match's body at index
-        decrement index
     store head into match's body at 0
     increment match's steps
     if eating:

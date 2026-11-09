@@ -1,11 +1,10 @@
 # Snake Studio
 
-From this checkout's root (the `ui-declarations` worktree when using that checkout):
+From this checkout's root:
 
 ```sh
 ./scripts/build.sh
-./build/dynlex tests/games/snake.dl -O2 -o /tmp/snake-studio
-/tmp/snake-studio
+python3 scripts/play_game.py snake
 ```
 
 The native interface uses the project's Vulkan, GLFW and FreeType dependencies.

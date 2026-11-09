@@ -20,13 +20,17 @@ require ((the item at 5 in combined) = 3.0)
 require ((the item at 10 in combined) = 4.0)
 require ((the item at 12 in combined) = 10.0)
 set projection to a graphics orthographic projection from left 0.0 right 640.0 top 0.0 bottom 480.0 near -1.0 far 1.0
+require ((the item at 5 in projection) > 0.0)
 require ((the item at 12 in projection) = -1.0)
 require ((the item at 13 in projection) = -1.0)
 require ((the item at 10 in projection) = -0.5)
 require ((the item at 14 in projection) = 0.5)
 set projection to a graphics perspective projection with angle 90.0 aspect 2.0 near 1.0 far 11.0
 require ((the absolute value of ((the item at 0 in projection) - 0.5)) < 0.00001)
-require ((the absolute value of ((the item at 5 in projection) - 1.0)) < 0.00001)
+require ((the absolute value of ((the item at 5 in projection) + 1.0)) < 0.00001)
+set above to (((the item at 5 in projection) / 2.0) + 1.0) * 240.0
+set below to ((-(the item at 5 in projection) / 2.0) + 1.0) * 240.0
+require (above < below)
 require ((the item at 11 in projection) = -1.0)
 require ((the absolute value of ((the item at 10 in projection) + 1.1)) < 0.00001)
 require ((the absolute value of ((the item at 14 in projection) + 1.1)) < 0.00001)

@@ -1,21 +1,32 @@
-# Test text rendering
+import lib/ui_native.dl
 
-import lib/font.dl
+window typography studio:
+    group at 40 32 sized 720 by 64:
+        brand "TYPE / DYNLEX"
+        caption "A STUDY IN CLARITY"
+    panel at 40 128 sized 720 by 432:
+        eyebrow "SIMPLE WORDS. PRECISE SHAPES."
+        space of 20 pixels
+        title "Hello,"
+        accent title "DynLex."
+        space of 12 pixels
+        heading "Room for every idea."
+        label "From small captions to large headlines, one interface language."
+        caption "NOTO SANS / REGULAR + SEMIBOLD"
+    group at 40 584 sized 720 by 24:
+        caption "RESIZE THE WINDOW TO EXPLORE THE TYPE     ESC  CLOSE"
+    style:
+        the interface uses a "midnight" theme
+        the interface fits 800 by 640 pixels
+        the window is at least 600 by 480 pixels
 
-set window to a new window with width 400 and height 300
-set {font loading} to the result of loading a font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 32 for window
-set typeface to font loading's typeface
-if font loading failed:
-    set {font release} to the result of releasing (the address of typeface)
-    close the window
-    return 1
-set frame to a new graphics frame in window
-use screen coordinates in frame
-set rendering to the result of drawing "Hello DynLex!" as text at x 20 and y 100 using typeface in color red 255, green 255 and blue 255 in frame
-display frame
-if rendering succeeded:
-    sleep for 3000 milliseconds
-set {font release} to the result of releasing (the address of typeface)
-close the window
-if rendering failed or font release failed:
-    return 1
+set interface to an instance of typography studio
+set view to a native view of (the address of interface) sized 800 by 640 using fonts "tests/games/fonts/NotoSans-Regular.ttf" and "tests/games/fonts/NotoSans-SemiBold.ttf"
+loop while view's window remains open:
+    poll window events
+    if key (the escape key) is down in (view's window):
+        request that view's window close
+    render the address of view
+    sleep for 4 milliseconds
+close the address of view
+close the address of interface

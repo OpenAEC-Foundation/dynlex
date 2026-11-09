@@ -5,6 +5,9 @@ import lib/subject.dl
 a farm number means: @intrinsic("type", "int", 32)
 a farm text means: @intrinsic("type", "string")
 
+in this file:
+    @intrinsic("number rule", a farm number)
+
 to emit farm text: @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "%s\n", text))
 
 class:
@@ -55,288 +58,288 @@ class:
         target as a farm number
         area as a farm text
 
-an axe means: @intrinsic("construct", farm item, @intrinsic("cast", 0, a farm number), @intrinsic("cast", 1, a farm number))
-axes means: @intrinsic("construct", farm item, @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-a hoe means: @intrinsic("construct", farm item, @intrinsic("cast", 1, a farm number), @intrinsic("cast", 1, a farm number))
-hoes means: @intrinsic("construct", farm item, @intrinsic("cast", 1, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-a bucket means: @intrinsic("construct", farm item, @intrinsic("cast", 2, a farm number), @intrinsic("cast", 1, a farm number))
-buckets means: @intrinsic("construct", farm item, @intrinsic("cast", 2, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-a shovel means: @intrinsic("construct", farm item, @intrinsic("cast", 3, a farm number), @intrinsic("cast", 1, a farm number))
-shovels means: @intrinsic("construct", farm item, @intrinsic("cast", 3, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-seeds means: @intrinsic("construct", farm item, @intrinsic("cast", 4, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-logs means: @intrinsic("construct", farm item, @intrinsic("cast", 5, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-carrots means: @intrinsic("construct", farm item, @intrinsic("cast", 6, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-wheat means: @intrinsic("construct", farm item, @intrinsic("cast", 7, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-hay means: @intrinsic("construct", farm item, @intrinsic("cast", 8, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-eggs means: @intrinsic("construct", farm item, @intrinsic("cast", 9, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-milk means: @intrinsic("construct", farm item, @intrinsic("cast", 10, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-scraps means: @intrinsic("construct", farm item, @intrinsic("cast", 11, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-fertilizer means: @intrinsic("construct", farm item, @intrinsic("cast", 12, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-everything means: @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-nearby items means: @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-my hands means: @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
-my bucket means: @intrinsic("construct", farm item, @intrinsic("cast", 2, a farm number), @intrinsic("cast", 1, a farm number))
-finished compost means: @intrinsic("construct", farm item, @intrinsic("cast", 12, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number))
+an axe means: @intrinsic("construct", farm item, 0, 1)
+axes means: @intrinsic("construct", farm item, 0, @intrinsic("negate", 1))
+a hoe means: @intrinsic("construct", farm item, 1, 1)
+hoes means: @intrinsic("construct", farm item, 1, @intrinsic("negate", 1))
+a bucket means: @intrinsic("construct", farm item, 2, 1)
+buckets means: @intrinsic("construct", farm item, 2, @intrinsic("negate", 1))
+a shovel means: @intrinsic("construct", farm item, 3, 1)
+shovels means: @intrinsic("construct", farm item, 3, @intrinsic("negate", 1))
+seeds means: @intrinsic("construct", farm item, 4, @intrinsic("negate", 1))
+logs means: @intrinsic("construct", farm item, 5, @intrinsic("negate", 1))
+carrots means: @intrinsic("construct", farm item, 6, @intrinsic("negate", 1))
+wheat means: @intrinsic("construct", farm item, 7, @intrinsic("negate", 1))
+hay means: @intrinsic("construct", farm item, 8, @intrinsic("negate", 1))
+eggs means: @intrinsic("construct", farm item, 9, @intrinsic("negate", 1))
+milk means: @intrinsic("construct", farm item, 10, @intrinsic("negate", 1))
+scraps means: @intrinsic("construct", farm item, 11, @intrinsic("negate", 1))
+fertilizer means: @intrinsic("construct", farm item, 12, @intrinsic("negate", 1))
+everything means: @intrinsic("construct", farm item, @intrinsic("negate", 1), @intrinsic("negate", 1))
+nearby items means: @intrinsic("construct", farm item, @intrinsic("negate", 1), @intrinsic("negate", 1))
+my hands means: @intrinsic("construct", farm item, @intrinsic("negate", 1), @intrinsic("negate", 1))
+my bucket means: @intrinsic("construct", farm item, 2, 1)
+finished compost means: @intrinsic("construct", farm item, 12, @intrinsic("negate", 1))
 {a farm number:count} {farm item:items} means: @intrinsic("construct", farm item, items's identifier, count)
-the barn means: @intrinsic("construct", farm target, @intrinsic("cast", 0, a farm number), "")
-barn means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 0, a farm number))
-the pond means: @intrinsic("construct", farm target, @intrinsic("cast", 1, a farm number), "")
-pond means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 1, a farm number))
-the red flag means: @intrinsic("construct", farm target, @intrinsic("cast", 2, a farm number), "")
-red flag means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 2, a farm number))
-the blue flag means: @intrinsic("construct", farm target, @intrinsic("cast", 3, a farm number), "")
-blue flag means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 3, a farm number))
-the green flag means: @intrinsic("construct", farm target, @intrinsic("cast", 4, a farm number), "")
-green flag means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 4, a farm number))
-tree means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 5, a farm number))
-empty plot means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 6, a farm number))
-thirsty crop means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 7, a farm number))
-ripe crop means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 8, a farm number))
-the cow means: @intrinsic("construct", farm target, @intrinsic("cast", 9, a farm number), "")
-cow means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 9, a farm number))
-chicken means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 10, a farm number))
-the compost heap means: @intrinsic("construct", farm target, @intrinsic("cast", 11, a farm number), "")
-compost heap means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 11, a farm number))
-item pile means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 12, a farm number))
-egg means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 13, a farm number))
-the yellow flag means: @intrinsic("construct", farm target, @intrinsic("cast", 14, a farm number), "")
-yellow flag means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 14, a farm number))
-the purple flag means: @intrinsic("construct", farm target, @intrinsic("cast", 15, a farm number), "")
-purple flag means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 15, a farm number))
-the orange flag means: @intrinsic("construct", farm target, @intrinsic("cast", 16, a farm number), "")
-orange flag means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 16, a farm number))
-the pink flag means: @intrinsic("construct", farm target, @intrinsic("cast", 17, a farm number), "")
-pink flag means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 17, a farm number))
-the white flag means: @intrinsic("construct", farm target, @intrinsic("cast", 18, a farm number), "")
-white flag means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 18, a farm number))
-the black flag means: @intrinsic("construct", farm target, @intrinsic("cast", 19, a farm number), "")
-black flag means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 19, a farm number))
-the ground means: @intrinsic("construct", farm target, @intrinsic("cast", 20, a farm number), "")
-the crops means: @intrinsic("construct", farm target, @intrinsic("cast", 21, a farm number), "")
-the tree in front of me means: @intrinsic("construct", farm target, @intrinsic("cast", 22, a farm number), "")
-a tree in front of me means: @intrinsic("construct", farm target, @intrinsic("cast", 23, a farm number), "")
-the chickens means: @intrinsic("construct", farm target, @intrinsic("cast", 24, a farm number), "")
-items nearby means: @intrinsic("construct", farm target, @intrinsic("cast", 25, a farm number), "")
-a nearby worker means: @intrinsic("construct", farm target, @intrinsic("cast", 26, a farm number), "")
-worker means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 26, a farm number))
-the farmer means: @intrinsic("construct", farm target, @intrinsic("cast", 27, a farm number), "")
-farmer means: @intrinsic("construct", farm entity kind, @intrinsic("cast", 27, a farm number))
+the barn means: @intrinsic("construct", farm target, 0, "")
+barn means: @intrinsic("construct", farm entity kind, 0)
+the pond means: @intrinsic("construct", farm target, 1, "")
+pond means: @intrinsic("construct", farm entity kind, 1)
+the red flag means: @intrinsic("construct", farm target, 2, "")
+red flag means: @intrinsic("construct", farm entity kind, 2)
+the blue flag means: @intrinsic("construct", farm target, 3, "")
+blue flag means: @intrinsic("construct", farm entity kind, 3)
+the green flag means: @intrinsic("construct", farm target, 4, "")
+green flag means: @intrinsic("construct", farm entity kind, 4)
+tree means: @intrinsic("construct", farm entity kind, 5)
+empty plot means: @intrinsic("construct", farm entity kind, 6)
+thirsty crop means: @intrinsic("construct", farm entity kind, 7)
+ripe crop means: @intrinsic("construct", farm entity kind, 8)
+the cow means: @intrinsic("construct", farm target, 9, "")
+cow means: @intrinsic("construct", farm entity kind, 9)
+chicken means: @intrinsic("construct", farm entity kind, 10)
+the compost heap means: @intrinsic("construct", farm target, 11, "")
+compost heap means: @intrinsic("construct", farm entity kind, 11)
+item pile means: @intrinsic("construct", farm entity kind, 12)
+egg means: @intrinsic("construct", farm entity kind, 13)
+the yellow flag means: @intrinsic("construct", farm target, 14, "")
+yellow flag means: @intrinsic("construct", farm entity kind, 14)
+the purple flag means: @intrinsic("construct", farm target, 15, "")
+purple flag means: @intrinsic("construct", farm entity kind, 15)
+the orange flag means: @intrinsic("construct", farm target, 16, "")
+orange flag means: @intrinsic("construct", farm entity kind, 16)
+the pink flag means: @intrinsic("construct", farm target, 17, "")
+pink flag means: @intrinsic("construct", farm entity kind, 17)
+the white flag means: @intrinsic("construct", farm target, 18, "")
+white flag means: @intrinsic("construct", farm entity kind, 18)
+the black flag means: @intrinsic("construct", farm target, 19, "")
+black flag means: @intrinsic("construct", farm entity kind, 19)
+the ground means: @intrinsic("construct", farm target, 20, "")
+the crops means: @intrinsic("construct", farm target, 21, "")
+the tree in front of me means: @intrinsic("construct", farm target, 22, "")
+a tree in front of me means: @intrinsic("construct", farm target, 23, "")
+the chickens means: @intrinsic("construct", farm target, 24, "")
+items nearby means: @intrinsic("construct", farm target, 25, "")
+a nearby worker means: @intrinsic("construct", farm target, 26, "")
+worker means: @intrinsic("construct", farm entity kind, 26)
+the farmer means: @intrinsic("construct", farm target, 27, "")
+farmer means: @intrinsic("construct", farm entity kind, 27)
 the nearest {farm entity kind:kind} means: @intrinsic("construct", farm target, kind's identifier, "")
-the soil means: @intrinsic("construct", farm target, @intrinsic("cast", 20, a farm number), "")
-the soil in front of me means: @intrinsic("construct", farm target, @intrinsic("cast", 20, a farm number), "")
-the ground in front of me means: @intrinsic("construct", farm target, @intrinsic("cast", 20, a farm number), "")
-the crops in front of me means: @intrinsic("construct", farm target, @intrinsic("cast", 21, a farm number), "")
-the compost means: @intrinsic("construct", farm target, @intrinsic("cast", 11, a farm number), "")
-thirsty crops means: @intrinsic("construct", farm target, @intrinsic("cast", 7, a farm number), "")
+the soil means: @intrinsic("construct", farm target, 20, "")
+the soil in front of me means: @intrinsic("construct", farm target, 20, "")
+the ground in front of me means: @intrinsic("construct", farm target, 20, "")
+the crops in front of me means: @intrinsic("construct", farm target, 21, "")
+the compost means: @intrinsic("construct", farm target, 11, "")
+thirsty crops means: @intrinsic("construct", farm target, 7, "")
 {farm target:target} in [the|] area {a farm text:name} means: @intrinsic("construct", farm target, target's identifier, name)
-forward means: @intrinsic("construct", farm direction, @intrinsic("cast", 0, a farm number))
-backward means: @intrinsic("construct", farm direction, @intrinsic("cast", 1, a farm number))
-left means: @intrinsic("construct", farm direction, @intrinsic("cast", 2, a farm number))
-right means: @intrinsic("construct", farm direction, @intrinsic("cast", 3, a farm number))
-a channel means: @intrinsic("construct", farm feature, @intrinsic("cast", 0, a farm number))
-lumberjack means: @intrinsic("construct", farm role, @intrinsic("cast", 0, a farm number))
-gardener means: @intrinsic("construct", farm role, @intrinsic("cast", 1, a farm number))
-waterer means: @intrinsic("construct", farm role, @intrinsic("cast", 2, a farm number))
-harvester means: @intrinsic("construct", farm role, @intrinsic("cast", 3, a farm number))
-keeper means: @intrinsic("construct", farm role, @intrinsic("cast", 4, a farm number))
-composter means: @intrinsic("construct", farm role, @intrinsic("cast", 5, a farm number))
-irrigator means: @intrinsic("construct", farm role, @intrinsic("cast", 6, a farm number))
-porter means: @intrinsic("construct", farm role, @intrinsic("cast", 7, a farm number))
+forward means: @intrinsic("construct", farm direction, 0)
+backward means: @intrinsic("construct", farm direction, 1)
+left means: @intrinsic("construct", farm direction, 2)
+right means: @intrinsic("construct", farm direction, 3)
+a channel means: @intrinsic("construct", farm feature, 0)
+lumberjack means: @intrinsic("construct", farm role, 0)
+gardener means: @intrinsic("construct", farm role, 1)
+waterer means: @intrinsic("construct", farm role, 2)
+harvester means: @intrinsic("construct", farm role, 3)
+keeper means: @intrinsic("construct", farm role, 4)
+composter means: @intrinsic("construct", farm role, 5)
+irrigator means: @intrinsic("construct", farm role, 6)
+porter means: @intrinsic("construct", farm role, 7)
 
 flex function step {farm direction:direction}:
     replacement:
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 0, a farm number), direction's identifier, @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 2), a farm number), ""))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 0, direction's identifier, @intrinsic("negate", 1), @intrinsic("negate", 2), ""))
 
 flex function turn {farm direction:direction}:
     replacement:
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 1, a farm number), direction's identifier, @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 2), a farm number), ""))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 1, direction's identifier, @intrinsic("negate", 1), @intrinsic("negate", 2), ""))
 
 flex function walk to {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 2, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area))
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 2, 0, @intrinsic("negate", 1), target's identifier, target's area))
 
 flex function chop {farm target:target} down:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 3, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area))
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 3, 0, @intrinsic("negate", 1), target's identifier, target's area))
 
 flex function plow {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 4, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area))
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 4, 0, @intrinsic("negate", 1), target's identifier, target's area))
 
 flex function plant {farm item:items}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 5, a farm number), items's identifier, items's amount, @intrinsic("cast", 20, a farm number), ""))
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 5, items's identifier, items's amount, 20, ""))
 
 flex function plant {farm item:items} in {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 5, a farm number), items's identifier, items's amount, target's identifier, target's area))
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 5, items's identifier, items's amount, target's identifier, target's area))
 
 flex function water {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 6, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area))
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 6, 0, @intrinsic("negate", 1), target's identifier, target's area))
 
 flex function harvest {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 7, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area))
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 7, 0, @intrinsic("negate", 1), target's identifier, target's area))
 
 flex function fertilize {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 8, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area))
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 8, 0, @intrinsic("negate", 1), target's identifier, target's area))
 
 flex function fill {farm item:items}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 9, a farm number), items's identifier, items's amount, @intrinsic("cast", @intrinsic("negate", 2), a farm number), ""))
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 9, items's identifier, items's amount, @intrinsic("negate", 2), ""))
 
 flex function store {farm item:items}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 10, a farm number), items's identifier, items's amount, @intrinsic("cast", 0, a farm number), ""))
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 10, items's identifier, items's amount, 0, ""))
 
 flex function give {farm item:items} to {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 11, a farm number), items's identifier, items's amount, target's identifier, target's area))
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 11, items's identifier, items's amount, target's identifier, target's area))
 
 flex function put down {farm item:items}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 12, a farm number), items's identifier, items's amount, @intrinsic("cast", @intrinsic("negate", 2), a farm number), ""))
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 12, items's identifier, items's amount, @intrinsic("negate", 2), ""))
 
 flex function [grab|take|collect|pick up] {farm item:items}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 13, a farm number), items's identifier, items's amount, @intrinsic("cast", @intrinsic("negate", 2), a farm number), ""))
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 13, items's identifier, items's amount, @intrinsic("negate", 2), ""))
 
 flex function [grab|take|collect|pick up] {farm item:items} from {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 13, a farm number), items's identifier, items's amount, target's identifier, target's area))
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 13, items's identifier, items's amount, target's identifier, target's area))
 
 flex function dig {farm feature:feature}:
     replacement:
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 14, a farm number), feature's identifier, @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", 20, a farm number), ""))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 14, feature's identifier, @intrinsic("negate", 1), 20, ""))
 
 flex function dig {farm feature:feature} in {farm target:target}:
     replacement:
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 14, a farm number), feature's identifier, @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 14, feature's identifier, @intrinsic("negate", 1), target's identifier, target's area))
 
 flex function feed {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 15, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area))
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 15, 0, @intrinsic("negate", 1), target's identifier, target's area))
 
 flex function add {farm item:items} to {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 16, a farm number), items's identifier, items's amount, target's identifier, target's area))
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 16, items's identifier, items's amount, target's identifier, target's area))
 
 flex function wait:
     replacement:
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 17, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 2), a farm number), ""))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 17, 0, @intrinsic("negate", 1), @intrinsic("negate", 2), ""))
 
 flex function set the subject to {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 18, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area))
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 18, 0, @intrinsic("negate", 1), target's identifier, target's area))
 
 flex function set the subject to {farm item:items}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", @intrinsic("cast", 19, a farm number), items's identifier, items's amount, @intrinsic("cast", @intrinsic("negate", 2), a farm number), ""))
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "DO|%d|%d|%d|%d|%s\n", 19, items's identifier, items's amount, @intrinsic("negate", 2), ""))
 
 flex function there [is|are] {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 0, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area)
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("construct", farm condition, 0, 0, @intrinsic("negate", 1), target's identifier, target's area)
 
 flex function there's {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 0, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area)
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("construct", farm condition, 0, 0, @intrinsic("negate", 1), target's identifier, target's area)
 
 flex function {farm target:target} [is|are] [still|] there:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 0, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area)
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("construct", farm condition, 0, 0, @intrinsic("negate", 1), target's identifier, target's area)
 
 flex function {farm target:target}'s still there:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 0, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area)
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("construct", farm condition, 0, 0, @intrinsic("negate", 1), target's identifier, target's area)
 
 flex function i can reach {farm target:target}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 1, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area)
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("construct", farm condition, 1, 0, @intrinsic("negate", 1), target's identifier, target's area)
 
 flex function {farm item:items} [is|are] full:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 2, a farm number), items's identifier, items's amount, @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("construct", farm condition, 2, items's identifier, items's amount, @intrinsic("negate", 2), "")
 
 flex function {farm item:items} [is|are] empty:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 3, a farm number), items's identifier, items's amount, @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("construct", farm condition, 3, items's identifier, items's amount, @intrinsic("negate", 2), "")
 
-it's raining means: @intrinsic("construct", farm condition, @intrinsic("cast", 4, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
+it's raining means: @intrinsic("construct", farm condition, 4, 0, @intrinsic("negate", 1), @intrinsic("negate", 2), "")
 
 flex function {farm target:target} [is|are] dry:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 5, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area)
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("construct", farm condition, 5, 0, @intrinsic("negate", 1), target's identifier, target's area)
 
 flex function {farm target:target} [is|are] ripe:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 6, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area)
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("construct", farm condition, 6, 0, @intrinsic("negate", 1), target's identifier, target's area)
 
 flex function {farm target:target} [is|are] empty:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 7, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area)
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("construct", farm condition, 7, 0, @intrinsic("negate", 1), target's identifier, target's area)
 
 flex function {farm target:target} [needs|need] plowing:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 8, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area)
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("construct", farm condition, 8, 0, @intrinsic("negate", 1), target's identifier, target's area)
 
 flex function {farm target:target} [is|are] ready:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 9, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area)
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("construct", farm condition, 9, 0, @intrinsic("negate", 1), target's identifier, target's area)
 
 flex function {farm target:target} [is|are] hungry:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("cast", @intrinsic("negate", 1), a farm number), ""))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 10, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), target's identifier, target's area)
+        @intrinsic("set subject", @intrinsic("construct", farm target, @intrinsic("negate", 1), ""))
+        @intrinsic("construct", farm condition, 10, 0, @intrinsic("negate", 1), target's identifier, target's area)
 
 flex function i am carrying {farm item:items}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 11, a farm number), items's identifier, items's amount, @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("construct", farm condition, 11, items's identifier, items's amount, @intrinsic("negate", 2), "")
 
 flex function i am not carrying {farm item:items}:
     replacement:
-        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
-        @intrinsic("construct", farm condition, @intrinsic("cast", 12, a farm number), items's identifier, items's amount, @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
+        @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("negate", 2), @intrinsic("negate", 1)))
+        @intrinsic("construct", farm condition, 12, items's identifier, items's amount, @intrinsic("negate", 2), "")
 
-i am a {farm role:role} means: @intrinsic("construct", farm condition, @intrinsic("cast", 13, a farm number), role's identifier, @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
+i am a {farm role:role} means: @intrinsic("construct", farm condition, 13, role's identifier, @intrinsic("negate", 1), @intrinsic("negate", 2), "")
 
-i can step {farm direction:direction} means: @intrinsic("construct", farm condition, @intrinsic("cast", 14, a farm number), direction's identifier, @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
+i can step {farm direction:direction} means: @intrinsic("construct", farm condition, 14, direction's identifier, @intrinsic("negate", 1), @intrinsic("negate", 2), "")
 
-there are at least {a farm number:count} {farm item:items} in {farm target:target} means: @intrinsic("construct", farm condition, @intrinsic("cast", 15, a farm number), items's identifier, count, target's identifier, target's area)
+there are at least {a farm number:count} {farm item:items} in {farm target:target} means: @intrinsic("construct", farm condition, 15, items's identifier, count, target's identifier, target's area)
 
-there are fewer than {a farm number:count} {farm item:items} in {farm target:target} means: @intrinsic("construct", farm condition, @intrinsic("cast", 16, a farm number), items's identifier, count, target's identifier, target's area)
+there are fewer than {a farm number:count} {farm item:items} in {farm target:target} means: @intrinsic("construct", farm condition, 16, items's identifier, count, target's identifier, target's area)
 
 flex section if {farm condition:condition}:
     replacement:

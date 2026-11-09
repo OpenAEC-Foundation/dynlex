@@ -94,7 +94,8 @@ to get [a graphics perspective projection with angle] {floating-point number:deg
     set scale to (the cosine of radians) / (the sine of radians)
     set result to a new graphics matrix
     store ((scale / aspect)) as a 32 bit floating-point number into result at 0
-    store (scale) as a 32 bit floating-point number into result at 5
+    # Vulkan's positive-height viewport has framebuffer Y pointing downward.
+    store (-scale) as a 32 bit floating-point number into result at 5
     store ((far / (near - far))) as a 32 bit floating-point number into result at 10
     store (-1.0) as a 32 bit floating-point number into result at 11
     store (((near * far) / (near - far))) as a 32 bit floating-point number into result at 14

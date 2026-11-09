@@ -12,6 +12,7 @@ import tempfile
 import time
 
 from native_ui_test import click, close_window, named_window, save_png, screenshot, x11_library
+from native_ui_test import isolated_x11_environment
 from find_vulkan_icd import find_vulkan_icd, vulkan_driver_environment
 
 
@@ -89,7 +90,7 @@ def main():
         command = [xvfb, "--auto-servernum", "--server-args=-screen 0 1100x760x24", sys.executable, str(Path(__file__).resolve()), str(project), str(compiler), "--drive", str(executable)]
         if args.snapshot:
             command += ["--snapshot", str(args.snapshot.resolve())]
-        subprocess.run(command, cwd=project, env=vulkan_driver_environment(find_vulkan_icd(), os.environ), check=True, timeout=60)
+        subprocess.run(command, cwd=project, env=isolated_x11_environment(vulkan_driver_environment(find_vulkan_icd(), os.environ)), check=True, timeout=60)
 
 
 if __name__ == "__main__":

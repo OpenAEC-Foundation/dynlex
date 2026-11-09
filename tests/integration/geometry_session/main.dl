@@ -1,0 +1,50 @@
+import tests/games/geometry_dash/session.dl
+
+set session to a new route session
+require condition (session's phase = 0) reporting "The level did not open at its start screen"
+begin the address of session
+set session's held to true
+update (the address of session) after (1.0 / 60.0) seconds
+require condition (session's player's y < the dash floor - the cube size) reporting "The cube did not jump"
+require condition (session's player's jumps = 1) reporting "The held input was counted more than once"
+set distance to session's player's x
+set session's paused to true
+update (the address of session) after 0.25 seconds
+require condition (session's player's x = distance) reporting "The level moved while paused"
+restart the address of session
+require condition (session's player's x = the cube anchor) reporting "Restart kept the old distance"
+require condition (session's attempts = 2) reporting "Restart did not count the attempt"
+require condition (session's player's jumps = 0) reporting "Restart kept the old jumps"
+loop while session's phase = 1:
+    update (the address of session) after the dash tick seconds
+require condition (session's phase = 2) reporting "A collision did not enter the death phase"
+set best to session's best
+loop 90 times:
+    update (the address of session) after the dash tick seconds
+require condition (session's attempts = 3) reporting "Death did not automatically restart the level"
+require condition (session's best = best) reporting "Retry lost the best progress"
+# Replay a legal input trace through the real session, rather than a fake runner.
+restart the address of session
+set action to 0
+loop while session's phase = 1:
+    set session's held to false
+    if action < session's course's jumps:
+        set planned to the item at action in (session's course's actions)
+        if session's tick = planned's tick:
+            set session's held to true
+            increment action
+    update (the address of session) after the dash tick seconds
+require condition ((session's phase = 3) and (session's best = 100)) reporting "The validated route did not complete in gameplay"
+close the address of session
+set slow to a new route session
+set fast to a new route session
+begin the address of slow
+begin the address of fast
+loop 30 times:
+    update (the address of slow) after (1.0 / 30.0) seconds
+loop 120 times:
+    update (the address of fast) after (1.0 / 120.0) seconds
+require condition ((the absolute value of (slow's player's x - fast's player's x)) < 0.00001) reporting "The display rate changed the forward speed"
+close the address of slow
+close the address of fast
+print line "Geometry session passed"

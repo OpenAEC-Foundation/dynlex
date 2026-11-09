@@ -1,0 +1,99 @@
+import lib/ui_resizing.dl
+import tests/games/geometry_dash/session.dl
+
+the route in {a pointer to UI instance:instance} means: instance's state as a pointer to dash session
+this route means: the route in this window
+
+to refresh the route in {a pointer to UI instance:instance}:
+    set session to the route in instance
+    set page to "playing"
+    if session's phase = 0:
+        set page to "ready"
+    if session's phase = 2:
+        set page to "dead"
+    if session's phase = 3:
+        set page to "finished"
+    if session's paused:
+        set page to "paused"
+    if instance's page's text != page:
+        show page page in instance
+    set the text of "Attempt" in instance to formatted "ATTEMPT {session's attempts}"
+    set the text of "Progress" in instance to formatted "{the completion of (the value at session)}%"
+    set the text of "Best" in instance to formatted "BEST {session's best}%   /   SEED {session's seed}"
+
+window geometry dash:
+    canvas "Run" at 0 0 sized 1280 by 780
+    group at 28 22 sized 300 by 24:
+        label "NEON CIRCUIT"
+    group at 28 50 sized 140 by 28:
+        badge "Attempt"
+    group at 612 50 sized 56 by 28:
+        badge "Progress"
+    group at 28 702 sized 300 by 28:
+        badge "Best"
+    page "playing":
+        group at 1100 22 sized 152 by 48:
+            button "Pause"
+    page "ready":
+        panel at 408 150 sized 464 by 440:
+            eyebrow "CLASSIC CUBE / PROCEDURAL LEVELS"
+            space of 12 pixels
+            title "Geometry"
+            accent title "Dash."
+            label "One cube. One button. No second chances."
+            space of 16 pixels
+            primary button "Play"
+            button "New level"
+            space of 12 pixels
+            caption "Every seed is verified with the real physics."
+    page "paused":
+        panel at 408 150 sized 464 by 440:
+            eyebrow "PAUSED"
+            space of 12 pixels
+            title "Find your"
+            accent title "rhythm."
+            space of 16 pixels
+            primary button "Resume"
+            button "Restart"
+            button "Change level"
+            space of 12 pixels
+            caption "Your attempt is frozen right here."
+    page "dead":
+        group at 500 218 sized 320 by 80:
+            heading "ONE MORE TRY"
+            caption "Restarting the same level..."
+    page "finished":
+        panel at 408 150 sized 464 by 440:
+            eyebrow "100% / LEVEL COMPLETE"
+            space of 12 pixels
+            title "You made"
+            accent title "the jump."
+            space of 16 pixels
+            primary button "Replay"
+            button "Next level"
+            space of 12 pixels
+            label "A different seed. A new challenge."
+    group at 28 744 sized 1224 by 20:
+        caption "SPACE / UP / CLICK  JUMP     HOLD  REPEAT ON LANDING     P / ESC  PAUSE     R  RETRY     TAB + ENTER  NAVIGATE     Q  QUIT"
+    style:
+        the interface uses a "midnight" theme
+        the interface fits 1280 by 780 pixels
+        the window is at least 960 by 585 pixels
+    code:
+        show page "ready" in this window
+        when the "Play" button is clicked:
+            begin this route
+        when the "Pause" button is clicked:
+            set this route's paused to true
+        when the "Resume" button is clicked:
+            set this route's paused to false
+        when the "Restart" button is clicked:
+            restart this route
+        when the "Replay" button is clicked:
+            restart this route
+        when the "New level" button is clicked:
+            explore the next level in this route
+        when the "Change level" button is clicked:
+            explore the next level in this route
+        when the "Next level" button is clicked:
+            explore the next level in this route

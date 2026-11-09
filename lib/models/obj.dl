@@ -433,11 +433,11 @@ to draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} and z {a
         move the model in frame by x horizontal, y vertical and z depth
         scale the model in frame by x scale, y scale and z scale
 
-        set mode to requested
-        if mode < 0:
-            set mode to 0
-        if mode > 2:
-            set mode to 2
+        set shading to requested
+        if shading < 0:
+            set shading to 0
+        if shading > 2:
+            set shading to 2
 
         set base to color
         set index to 0
@@ -473,7 +473,7 @@ to draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} and z {a
                 set shade to 1.0
 
             set {selected resource} to 0 as a pointer to a byte
-            if mode = 0:
+            if shading = 0:
                 if texture is loaded and triangle has usable texture coordinates for mesh:
                     set selected resource to texture's resource
 
@@ -487,7 +487,7 @@ to draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} and z {a
                 set active resource to selected resource
                 set drawing to true
 
-            if mode = 0:
+            if shading = 0:
                 if texture is loaded and triangle has usable texture coordinates for mesh:
                     use a grayscale OBJ color with brightness shade as the vertex color in frame
                     set start to the item at (triangle's first's texture coordinate) in coordinates
@@ -500,7 +500,7 @@ to draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} and z {a
                     use fallback scaled by shade as the vertex color in frame
                     add first, second and third to frame
             else:
-                if mode = 1:
+                if shading = 1:
                     if triangle has usable texture coordinates for mesh:
                         set start to the item at (triangle's first's texture coordinate) in coordinates
                         set middle to the item at (triangle's second's texture coordinate) in coordinates

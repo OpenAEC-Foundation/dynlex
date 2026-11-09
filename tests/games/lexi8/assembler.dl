@@ -83,7 +83,7 @@ to emit an opcode with high byte {integer:high} and low byte {integer:low}:
 
 # --- Labels and fixups ---
 
-function label {C string:name}:
+function mark label {C string:name}:
 	globals: assembler
 	execute:
 		store name into assembler's labels's names at assembler's labels's count
@@ -93,11 +93,9 @@ function label {C string:name}:
 function the address of label {C string:name}:
 	globals: assembler
 	execute:
-		set index to 0
-		loop while index < assembler's labels's count:
+		loop index from 0 to assembler's labels's count:
 			if the item at index in (assembler's labels)'s names = name:
 				return the item at index in (assembler's labels)'s addresses
-			increment index
 		return the negative of 1
 
 # Emits `top nnn` with nnn unknown; records the spot so `resolve all labels`
@@ -113,8 +111,7 @@ function emit an opcode with top nibble {integer:top} addressing label {C string
 function resolve [all|] labels:
 	globals: assembler
 	execute:
-		set index to 0
-		loop while index < assembler's fixups's count:
+		loop index from 0 to assembler's fixups's count:
 			set name to the item at index in (assembler's fixups)'s names
 			set target to the address of label name
 			if target < 0:
@@ -123,7 +120,6 @@ function resolve [all|] labels:
 			set offset to the item at index in (assembler's fixups)'s offsets
 			store ((the item at offset in (assembler's program)'s bytes) bitwise or ((target shifted right by 8) bitwise and 15)) into assembler's program's bytes at offset
 			store (target bitwise and 255) into assembler's program's bytes at offset + 1
-			increment index
 
 # --- Instruction statements ---
 # Register numbers run from 0 through 15; expressions are allowed, so games

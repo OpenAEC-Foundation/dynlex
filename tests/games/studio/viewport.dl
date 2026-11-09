@@ -1,0 +1,21 @@
+# Convert a fitted UI canvas into its physical framebuffer viewport.
+import lib/ui_native.dl
+
+to get the framebuffer box of {UI bounds:box} in {a pointer to native UI view:view}:
+    set horizontal to view's content bounds' width / (view's logical width as a floating-point number)
+    set vertical to view's content bounds' height / (view's logical height as a floating-point number)
+    return UI box at (view's content bounds' x + (box's x * horizontal)) (view's content bounds' y + (box's y * vertical)) sized (box's width * horizontal) (box's height * vertical)
+
+to use viewport {UI bounds:box} on {graphics frame:frame}:
+    set rectangle to a new VkViewport
+    set rectangle's x to box's x as a 32 bit floating-point number
+    set rectangle's y to box's y as a 32 bit floating-point number
+    set rectangle's width to box's width as a 32 bit floating-point number
+    set rectangle's height to box's height as a 32 bit floating-point number
+    set rectangle's maxDepth to 1.0 as a 32 bit floating-point number
+    set state to frame's window as a pointer to DynlexGraphics
+    set active to the item at (state's frame_index) in (state's frames)
+    @intrinsic("call", "vulkan", "vkCmdSetViewport", nothing, active's commands, 0, 1, the address of rectangle)
+
+to restore the viewport on {graphics frame:frame}:
+    use viewport (UI box at 0 0 sized (the framebuffer width of frame's window) (the framebuffer height of frame's window)) on frame

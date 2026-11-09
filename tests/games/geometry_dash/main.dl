@@ -1,86 +1,12 @@
-import lib/graphics.dl
-import lib/array.dl
-import tests/games/geometry_dash/generator.dl
-import tests/games/geometry_dash/physics.dl
-import tests/games/geometry_dash/scene.dl
+import tests/games/geometry_dash/application.dl
 
-class:
-	patterns:
-		[a|] route follower
-	members:
-		runner, step, elapsed, sliding
-
-a route follower tracking {runner state:body} means: @intrinsic("construct", a route follower, body, 0, 0, true)
-to get {route follower:follower} is sliding:
-	return follower's sliding
-
-set plan to a route plan with 24 steps
-fill plan using seed 1337
-
-set window to a new window with width the window width and height the world height
-set player to a runner at height the player's ground height moving with velocity 0.0
-set reference to a route follower tracking (a runner at height the player's ground height moving with velocity 0.0)
-set scroll to 0
-
-loop while window remains open:
-	if key (the up arrow key) is down in window and player's y >= the player's ground height:
-		start a jump for player
-
-	apply gravity to player
-	clamp player to the ground
-
-	add the scroll speed to scroll
-
-	if reference's step < plan's count:
-		set step to the item at reference's step in (plan's steps)
-		if reference is sliding:
-			add the frame time in milliseconds to reference's elapsed
-			if reference's elapsed >= step's slide duration:
-				set reference's elapsed to 0
-				set reference's sliding to false
-				start a jump for reference's runner
-		else:
-			apply gravity to reference's runner
-			clamp reference's runner to the ground
-			add the frame time in milliseconds to reference's elapsed
-			if reference's elapsed >= step's jump duration:
-				set reference's elapsed to 0
-				set reference's sliding to true
-				increment reference's step
-
-	set frame to a new graphics frame in window
-	use screen coordinates in frame
-	draw the static world in frame
-
-	set surface to the player's ground height
-	set distance to the reference horizontal offset - scroll
-	set index to 0
-	loop while index < plan's count:
-		set step to the item at index in (plan's steps)
-		set slide to step's slide duration
-		set jump to step's jump duration
-		set landing to a runner at height surface moving with velocity 0.0
-		start a jump for landing
-		set elapsed to 0
-		loop while elapsed < jump:
-			apply gravity to landing
-			add the frame time in milliseconds to elapsed
-		clamp landing to the ground
-		set top to landing's y as an integer + the player size
-		set clearance to the ground height - top
-		set span to ((the scroll speed * slide) / the frame time in milliseconds)
-		add 72 to span
-		set horizontal to the player horizontal position + distance
-		if clearance > 0:
-			draw a rectangle at x horizontal and y top with width span and height clearance in color red 210, green 120 and blue 50 in frame
-		set surface to landing's y
-		add the scroll speed * (slide + jump) / the frame time in milliseconds to distance
-		increment index
-
-	draw a runner at (a point at x the player horizontal position and y (player's y as an integer)) with (a color with red 80, green 220 and blue 255) in frame
-	draw a runner at (a point at x (the player horizontal position + the reference horizontal offset) and y (reference's runner's y as an integer)) with (a color with red 255, green 220 and blue 80) in frame
-	display frame
-	set delay to the frame time in milliseconds
-	sleep for delay milliseconds
-
-close the window
+set session to a new route session
+set interface to an instance of geometry dash with state (the address of session)
+bind (the control labeled "Run" in (the address of interface)) in (the address of interface) to (the function named "paint the route on $") for event 1
+set view to a native view of (the address of interface) sized 1280 by 780 using fonts "tests/games/fonts/NotoSans-Regular.ttf" and "tests/games/fonts/NotoSans-SemiBold.ttf"
+set view's theme's accent to UI ink 182 255 58
+refresh the route in (the address of interface)
+explore routes using the address of view
+close the address of view
+close the address of interface
+close the address of session

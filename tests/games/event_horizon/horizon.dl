@@ -4,16 +4,14 @@ import tests/games/shader_values.dl
 # An interactive procedural black hole rendered entirely by DynLex.
 #
 # Uniform bindings are explicit:
-#   0 time, 1 width, 2 height, 3 mouse x, 4 mouse y, 5 pulse age,
-#   6 camera x, 7 camera y.
+#   0 time, 1 width, 2 height, 3 left, 4 top, 5 mouse x, 6 mouse y,
+#   7 pulse age, 8 camera x, 9 camera y.
 
-the shader width means: @intrinsic("shader uniform", "width", 1)
-the shader height means: @intrinsic("shader uniform", "height", 2)
-the shader mouse x means: @intrinsic("shader uniform", "mouse_x", 3)
-the shader mouse y means: @intrinsic("shader uniform", "mouse_y", 4)
-the shader pulse age means: @intrinsic("shader uniform", "pulse_age", 5)
-the shader camera x means: @intrinsic("shader uniform", "camera_x", 6)
-the shader camera y means: @intrinsic("shader uniform", "camera_y", 7)
+the shader mouse x means: @intrinsic("shader uniform", "mouse_x", 5)
+the shader mouse y means: @intrinsic("shader uniform", "mouse_y", 6)
+the shader pulse age means: @intrinsic("shader uniform", "pulse_age", 7)
+the shader camera x means: @intrinsic("shader uniform", "camera_x", 8)
+the shader camera y means: @intrinsic("shader uniform", "camera_y", 9)
 to get the fractional part of {floating-point number:number}:
     return number - the floor of number
 
@@ -87,9 +85,9 @@ to get the star brightness at {planar position:position} with scale {floating-po
     set light to (rarity * (core * 3.5 + glow))
     return light * twinkle
 
-set pixel to a planar position with x the fragment x coordinate and y the fragment y coordinate
+set pixel to a planar position with x the study x and y the study y
 set time to the shader time
-set frame to a planar position with x (the maximum of (the shader width) and 1.0) and y (the maximum of (the shader height) and 1.0)
+set frame to a planar position with x the study width and y the study height
 set mouse to a planar position with x the shader mouse x and y the shader mouse y
 set age to the shader pulse age
 set camera to a planar position with x the shader camera x and y the shader camera y

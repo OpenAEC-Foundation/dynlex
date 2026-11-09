@@ -2,11 +2,11 @@ import tests/games/shader_values.dl
 
 # Plasma fragment shader — animated colorful interference pattern
 
-set pixel to a planar position with x the fragment x coordinate and y the fragment y coordinate
+set pixel to a planar position with x the study x and y the study y
 set time to the shader time
 
 # Normalize to [-1, 1]
-set position to a planar position with x (pixel's x / 400.0 - 1.0) and y (pixel's y / 300.0 - 1.0)
+set position to a planar position with x (((pixel's x * 2.0) - the study width) / the study height) and y (((pixel's y * 2.0) / the study height) - 1.0)
 
 # Layered sine waves that create plasma interference (animated with time)
 set horizontal to the sine of (position's x * 10.0 + time * 3.0)

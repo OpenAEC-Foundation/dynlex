@@ -4,15 +4,19 @@ class:
     patterns:
         [a|] spatial camera
     members:
-        position, yaw, movement, turning
+        position as spatial position
+        yaw as a floating-point number
+        movement as a floating-point number
+        turning as a floating-point number
 
 class:
     patterns:
         [a|] spatial bounding box
     members:
-        minimum, maximum
+        minimum as spatial position
+        maximum as spatial position
 
-[a|] spatial position means: a point
+[a|] spatial position means: the type of (a position with x 0.0, y 0.0 and z 0.0)
 [the|] spatial dimensions means: a point
 [a|] spatial color means: a color
 [a|] normalized color means: a color

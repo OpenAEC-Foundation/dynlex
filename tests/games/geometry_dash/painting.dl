@@ -1,0 +1,96 @@
+import tests/games/geometry_dash/artwork.dl
+import tests/games/geometry_dash/interface.dl
+
+to paint dash terrain {dash obstacle:obstacle} offset by {floating-point number:camera} on {graphics frame:frame}:
+    set left to the maximum of 0.0 and (obstacle's x - camera)
+    set right to the minimum of (the dash width) and (obstacle's x + obstacle's width - camera)
+    if right <= left:
+        return nothing
+    set top to obstacle's y
+    set height to the minimum of (obstacle's height) and (the dash height - top)
+    set bounds to UI box at left top sized (right - left) height
+    set rim to UI ink 80 235 255
+    set fill to UI ink 9 32 78
+    if obstacle's height < 80.0:
+        set rim to UI ink 186 152 255
+        set fill to UI ink 33 22 80
+    paint a dash box at left top sized (right - left) by height in fill on frame
+    outline a dash box bounds in rim on frame
+    set first to (the floor of ((left + camera) / 36.0)) as an integer
+    set last to (the ceiling of ((right + camera) / 36.0)) as an integer
+    loop column from first to last:
+        set x to ((column as a floating-point number) * 36.0) - camera + 4.0
+        if (x > left + 2.0) and (x + 28.0 < right - 2.0):
+            set bottom to the minimum of (top + height - 4.0) and 744.0
+            set y to top + 6.0
+            loop while y + 26.0 < bottom:
+                outline a dash box (UI box at x y sized 28.0 26.0) in (UI ink between fill and rim at 0.18) on frame
+                add 36.0 to y
+    paint a dash box at left top sized (right - left) by 3.0 in (UI ink 225 255 255) on frame
+
+to paint dash spike {dash obstacle:obstacle} offset by {floating-point number:camera} on {graphics frame:frame}:
+    set x to obstacle's x - camera
+    set y to obstacle's y
+    set width to obstacle's width
+    set height to obstacle's height
+    set first to @intrinsic("construct", UI point, x, y + height)
+    set second to @intrinsic("construct", UI point, x + (width / 2.0), y)
+    set third to @intrinsic("construct", UI point, x + width, y + height)
+    paint a dash triangle from first through second to third in (UI ink 243 252 255) on frame
+    set first to @intrinsic("construct", UI point, x + 4.0, y + height - 2.0)
+    set second to @intrinsic("construct", UI point, x + (width / 2.0), y + 6.0)
+    set third to @intrinsic("construct", UI point, x + width - 4.0, y + height - 2.0)
+    paint a dash triangle from first through second to third in (UI ink 8 15 42) on frame
+
+to paint dash impact {dash session:session} offset by {floating-point number:camera} on {graphics frame:frame}:
+    set elapsed to session's impact
+    set originX to session's player's x - camera + (the cube size / 2.0)
+    set originY to session's player's y + (the cube size / 2.0)
+    loop index from 0 to 28:
+        set angle to (index as a floating-point number) * 2.3999632297
+        set speed to 90.0 + (((index * 73) mod 190) as a floating-point number)
+        set x to originX + ((the cosine of angle) * elapsed * speed)
+        set y to originY + ((the sine of angle) * elapsed * speed) + (elapsed * elapsed * 180.0)
+        set size to 2.0 + ((1.0 - (elapsed / 0.7)) * 7.0)
+        set ink to UI ink 182 255 58
+        if index mod 3 = 0:
+            set ink to UI ink 226 255 255
+        paint dash face (UI box at (-size / 2.0) (-size / 2.0) sized size size) about x y rotated (elapsed * speed) in ink on frame
+
+to paint the route on {a pointer to UI canvas frame:canvas}:
+    set session to the route in (canvas's instance)
+    set frame to canvas's frame
+    set camera to session's player's x - the cube anchor
+    if session's phase = 2:
+        add ((the sine of (session's impact * 90.0)) * (1.0 - (session's impact / 0.7)) * 4.0) to camera
+    paint the dash background for (the value at session) offset by camera on frame
+    loop index from 0 to (session's course's count):
+        set obstacle to the item at index in (session's course's objects)
+        if (obstacle's x + obstacle's width > camera) and (obstacle's x < camera + the dash width):
+            if obstacle's kind = the solid tile:
+                paint dash terrain obstacle offset by camera on frame
+            else:
+                paint dash spike obstacle offset by camera on frame
+    set finish to session's course's finish - camera
+    if finish < the dash width:
+        paint a dash box at finish 110.0 sized 4.0 by 500.0 in (UI ink 184 255 64) on frame
+        loop row from 0 to 10:
+            set x to finish + (((row mod 2) as a floating-point number) * 16.0)
+            paint a dash box at x (110.0 + ((row as a floating-point number) * 16.0)) sized 16.0 by 16.0 in (UI ink 228 255 242) on frame
+    if session's phase = 2:
+        paint dash impact (the value at session) offset by camera on frame
+    else:
+        loop index from 0 to (session's trace count):
+            set slot to ((session's trace head - session's trace count) + index + 32) mod 32
+            set trace to the item at slot in (session's traces)
+            set size to 2.0 + ((index as a floating-point number) / 5.0)
+            set x to trace's x - camera + 4.0
+            set y to trace's y + the cube size - 8.0
+            draw a rounded UI surface (UI box at x y sized size size) with radius 0.0 from (UI ink 166 255 50) to (UI ink 63 194 134) opacity (12 + index * 3) feathered by 0.0 on frame
+        paint dash cube (session's player) offset by camera on frame
+    paint a dash box at 0.0 0.0 sized (the dash width) by 92.0 in (UI ink 9 18 57) on frame
+    outline a dash box (UI box at 438.0 28.0 sized 404.0 16.0) in (UI ink 197 242 255) on frame
+    paint a dash box at 442.0 32.0 sized 396.0 by 8.0 in (UI ink 8 17 48) on frame
+    set progress to the completion of (the value at session)
+    if progress > 0:
+        paint a dash box at 442.0 32.0 sized ((progress as a floating-point number) * 3.96) by 8.0 in (UI ink 182 255 58) on frame

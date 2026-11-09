@@ -2,11 +2,11 @@ import tests/games/shader_values.dl
 
 # Julia set fragment shader — animated beautiful fractal
 
-set pixel to a planar position with x the fragment x coordinate and y the fragment y coordinate
+set pixel to a planar position with x the study x and y the study y
 set time to the shader time
 
 # Map pixel to complex plane [-2, 2] x [-1.5, 1.5]
-set orbit to a complex number with real (pixel's x / 200.0 - 2.0) and imaginary (pixel's y / 200.0 - 1.5)
+set orbit to a complex number with real (((pixel's x - (the study width / 2.0)) * 3.0) / the study height) and imaginary (((pixel's y * 3.0) / the study height) - 1.5)
 
 # Animate Julia constant — orbits around interesting values
 set constant to a complex number with real (-0.8 + 0.2 * the sine of (time * 0.7)) and imaginary (0.156 + 0.15 * the cosine of (time * 0.5))

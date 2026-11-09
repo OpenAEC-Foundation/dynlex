@@ -8,19 +8,23 @@ ring, filmic exposure, and a click-triggered shockwave.
 Build from the repository root:
 
 ```bash
-./build/dynlex tests/games/event_horizon/vertex.dl --emit-spirv --shader-stage=vertex -o tests/games/event_horizon/vertex.spv
-./build/dynlex tests/games/event_horizon/horizon.dl --emit-spirv --shader-stage=fragment -o tests/games/event_horizon/horizon.spv
-./build/dynlex tests/games/event_horizon/main.dl -o tests/games/event_horizon/event_horizon
+python3 scripts/play_game.py event-horizon --build-only
 ```
 
 Run:
 
 ```bash
-./tests/games/event_horizon/event_horizon
+./build/games/event-horizon.out
 ```
 
-- Use WASD or the arrow keys to move the camera across the lens.
+- Use WASD to move the camera across the lens.
 - Move the mouse to bend the viewpoint.
 - Click to emit a gravitational shockwave.
 - Press R to recenter the camera.
+- Press Space to pause and resume the animation.
+- Use the gallery buttons or Left/Right to switch between the five studies.
 - Press Escape to close the window.
+
+Event Horizon shares the declarative gallery in `tests/games/gallery`. Its image
+and pointer coordinates use the canvas's framebuffer bounds, including after
+resizing and on displays with scaled pixels.

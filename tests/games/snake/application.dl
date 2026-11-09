@@ -18,21 +18,21 @@ to read snake input from {a pointer to native UI view:view} using {a pointer to 
     set east to (key (the right arrow key) is down in window) or (key (the D key) is down in window)
     set south to (key (the down arrow key) is down in window) or (key (the S key) is down in window)
     set west to (key (the left arrow key) is down in window) or (key (the A key) is down in window)
-    if north and (keyboard's north = false):
+    if north and not keyboard's north:
         turn match toward 0
-    if east and (keyboard's east = false):
+    if east and not keyboard's east:
         turn match toward 1
-    if south and (keyboard's south = false):
+    if south and not keyboard's south:
         turn match toward 2
-    if west and (keyboard's west = false):
+    if west and not keyboard's west:
         turn match toward 3
     set keyboard's north to north
     set keyboard's east to east
     set keyboard's south to south
     set keyboard's west to west
     set pause to (key (the space key) is down in window) or (key (the P key) is down in window)
-    if pause and (keyboard's pause = false):
-        if (view's instance's page's text = "playing") or (view's instance's page's text = "paused"):
+    if pause and not keyboard's pause:
+        if view's instance's page's text is one of "playing" and "paused":
             pause or resume match
             if match's phase = the paused screen:
                 show page "paused" in (view's instance)
@@ -40,7 +40,7 @@ to read snake input from {a pointer to native UI view:view} using {a pointer to 
                 show page "playing" in (view's instance)
     set keyboard's pause to pause
     set back to key (the escape key) is down in window
-    if back and (keyboard's back = false):
+    if back and not keyboard's back:
         if view's instance's page's text = "settings":
             leave snake settings in (view's instance)
         else if match's phase = the playing screen:
@@ -65,7 +65,7 @@ to refresh the snake interface in {a pointer to native UI view:view}:
         set status to "PAUSED"
     if view's instance's page's text = "settings":
         set status to "MAKE IT YOURS"
-    if (match's phase = the finished screen) or (match's phase = the completed screen):
+    if match's phase is one of (the finished screen) and (the completed screen):
         set status to "RUN COMPLETE"
     set the text of "Session status" in (view's instance) to status
     set the text of "Score" in (view's instance) to match's score
@@ -76,10 +76,10 @@ to refresh the snake interface in {a pointer to native UI view:view}:
         set pace to "RELAXED"
     if match's pace = 2:
         set pace to "SWIFT"
-    set the text of "Board mode" in (view's instance) to (the string form of pace) + " / 24 x 24"
+    set the text of "Board mode" in (view's instance) to formatted "{pace} / 24 x 24"
     set seconds to match's elapsed as an integer
-    set the text of "Time" in (view's instance) to (the string form of seconds) + "s"
-    if (match's phase = the finished screen) or (match's phase = the completed screen):
+    set the text of "Time" in (view's instance) to formatted "{seconds}s"
+    if match's phase is one of (the finished screen) and (the completed screen):
         if match's impact and (match's impact time < the snake impact duration):
             show page "impact" in (view's instance)
         else:

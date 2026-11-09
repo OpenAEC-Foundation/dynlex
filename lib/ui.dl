@@ -171,6 +171,9 @@ to get an instance of {UI reference:description} with state {a pointer to a valu
     initialize the address of result from description
     return result
 
+to get an instance of {UI reference:description}:
+    return an instance of description with state (0 as a pointer to a byte)
+
 to click {UI reference:button} in {a pointer to UI instance:instance}:
     set handler to instance's handlers
     loop while handler != @intrinsic("construct", a pointer to UI handler):

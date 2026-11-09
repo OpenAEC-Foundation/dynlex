@@ -181,8 +181,6 @@ assert.doesNotMatch(
   "River commands must accept a typed passenger instead of hard-coded zero-argument phrases"
 );
 
-assert.match(library, /RIVER\|ERROR\|there is no sheep to pick up/);
-assert.match(library, /RIVER\|ERROR\|there is no hay to pick up/);
 assert.match(library, /RIVER\|DANGER\|WOLF\|SHEEP/);
 assert.match(library, /RIVER\|DANGER\|SHEEP\|HAY/);
 assert.match(library, /RIVER\|SUCCESS/);
@@ -192,6 +190,12 @@ const {
   createInitialRiverScene,
   parseRiverTrace
 } = await import(pathToFileURL(paths.model).href);
+for (const passenger of ["sheep", "hay"]) {
+  const message = `there is no ${passenger} to pick up`;
+  const missing = parseRiverTrace(`RIVER|COMMAND|LOAD|${passenger.toUpperCase()}\nRIVER|ERROR|${message}\n`);
+  assert.equal(missing.outcome, "failure");
+  assert.equal(missing.message, message);
+}
 const trace = parseRiverTrace([
   "RIVER|COMMAND|LOAD|HAY",
   "RIVER|ACTION|LOAD|HAY",

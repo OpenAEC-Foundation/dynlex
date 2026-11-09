@@ -1,0 +1,27 @@
+import tests/games/geometry_dash/generator.dl
+
+set course to an empty dash level
+loop seed from 0 to 100:
+    generate (the address of course) using seed seed
+    verify course
+    require condition (course's count < 256) reporting "Obstacle storage was exceeded"
+    require condition (course's duration > 2000) reporting "The level is too short"
+    set highest to 0
+    loop index from 0 to course's jumps:
+        set action to the item at index in (course's actions)
+        set highest to the maximum of highest and (action's level)
+        require condition (action's landing > action's tick) reporting "A jump has no flight time"
+    require condition (highest = 3) reporting "Chained elevated platforms were not generated"
+generate (the address of course) using seed 1337
+set first to the item at 3 in (course's objects)
+set count to course's count
+generate (the address of course) using seed 1337
+set repeated to the item at 3 in (course's objects)
+require condition ((count = course's count) and (first's x = repeated's x)) reporting "The seed did not reproduce the level"
+# No input must lose: generated hazards have actual consequences.
+set body to a fresh cube
+loop 2000 times:
+    step (the address of body) through course holding jump false
+require condition (body's dead) reporting "The level can be completed without jumping"
+close the address of course
+print line "100 seeded levels and timing margins passed"

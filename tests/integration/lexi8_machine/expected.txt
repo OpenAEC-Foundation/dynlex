@@ -24,6 +24,6 @@ lives at the end
 pixels at the end
 136
 halted
-0
+false
 cycles
 252480

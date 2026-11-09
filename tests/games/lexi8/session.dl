@@ -1,0 +1,48 @@
+# The machine advances at 60 Hz, independently of the display rate.
+import tests/games/lexi8/chip8.dl
+import tests/games/lexi8/breakout.dl
+
+class:
+    patterns:
+        breakout session
+    members:
+        phosphor as a pointer to a floating-point number
+        paused as a boolean
+        trail as a boolean
+        palette as an integer
+        progress as a floating-point number
+
+to restart {a pointer to breakout session:session}:
+    initialize the machine
+    load the assembled program into the machine
+    loop cell from 0 to 2048:
+        store 0.0 into session's phosphor at cell
+    set session's progress to 0.0
+    set session's paused to false
+
+to get a new arcade session:
+    set result to a new breakout session
+    set result's phosphor to storage for 2048 slots initialized with 0.0
+    set result's trail to true
+    restart the address of result
+    return result
+
+to update {a pointer to breakout session:session} after {floating-point number:elapsed time} seconds:
+    if session's paused:
+        return nothing
+    add (the minimum of 0.25 and elapsed time) to session's progress
+    loop while session's progress >= 1.0 / 60.0:
+        step the machine 32 times
+        tick the machine timers
+        loop row from 0 to 32:
+            loop column from 0 to 64:
+                set cell to row * 64 + column
+                set brightness to 0.0
+                if session's trail:
+                    set brightness to (the item at cell in (session's phosphor)) * 0.76
+                if the machine pixel at column, row = 1:
+                    set brightness to 1.0
+                store brightness into session's phosphor at cell
+        subtract (1.0 / 60.0) from session's progress
+
+to close {a pointer to breakout session:session}: deallocate session's phosphor

@@ -11,7 +11,7 @@ DynLex:
    and backward through a fixup table, and sprites are authored as pictures:
 
    ```text
-   label "paddle sprite"
+   mark label "paddle sprite"
    emit a data row "XXXXXX.."
    ```
 
@@ -27,26 +27,29 @@ DynLex:
    detection in register 15. Unknown opcodes halt the machine with a fault
    report.
 
-4. **`main.dl`** — the CRT. Every emulated pixel becomes an amber phosphor
+4. **`painting.dl`** — the CRT. Every emulated pixel becomes an amber phosphor
    dot with a glow halo that keeps fading for a few frames after it turns
-   off, so the ball drags a light trail behind it. The HUD reads the score
-   and lives live out of the emulated registers while the game runs.
+   off, so the ball drags a light trail behind it. `interface.dl` declares
+   the window, pause page, scoreboard and display preferences. `session.dl`
+   advances the console at 60 Hz independently of the rendering rate;
+   `application.dl` handles input and connects the session to the UI.
 
 ## Build and run
 
 From the repository root:
 
 ```bash
-./build/dynlex tests/games/lexi8/main.dl -o tests/games/lexi8/lexi8
-./tests/games/lexi8/lexi8
+python3 scripts/play_game.py breakout
 ```
 
-Left/right arrows (or A and D) move the paddle. R reboots the console.
-Escape quits.
+Left/right arrows (or A and D) move the paddle. Space pauses and resumes;
+R reboots the console and Escape closes it. Tab and Enter navigate the controls.
+Display preferences select amber, mint or violet pixels and toggle phosphor trails.
+Preferences survive restarting the game in the current session.
 
 ## Test
 
-`test.dl` assembles the ROM and runs the machine headlessly with seeded
+`tests/integration/lexi8_machine/main.dl` assembles the ROM and runs the machine headlessly with seeded
 randomness: it checks the ROM size and entry opcode, counts lit pixels after
 boot (64 bricks x 3 + 6 paddle + 1 ball = 199), drives the paddle with
 simulated key presses to both walls, lets the game play itself, and verifies
@@ -55,6 +58,6 @@ screen (whose 136 lit pixels are the letter sprites plus the two score
 digits).
 
 ```bash
-./build/dynlex tests/games/lexi8/test.dl -o tests/games/lexi8/test.out
-./tests/games/lexi8/test.out | diff - tests/games/lexi8/expected.txt
+./build/dynlex tests/integration/lexi8_machine/main.dl -o build/games/lexi8-test.out
+./build/games/lexi8-test.out | diff - tests/integration/lexi8_machine/expected.txt
 ```

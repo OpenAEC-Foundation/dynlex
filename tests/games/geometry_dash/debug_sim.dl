@@ -1,28 +1,20 @@
-import lib/array.dl
-import tests/games/geometry_dash/generator.dl
-import tests/games/geometry_dash/physics.dl
+import tests/games/geometry_dash/session.dl
 
-function report the simulation with {runner state:body}:
-	replacement:
-		ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "DEBUG_SIM_BASELINE_OK highest_y=%ld\n", body's y as a 64 bit integer)
-set plan to a route plan with 24 steps
-fill plan using seed 1337
-
-set body to a runner at height the player's ground height moving with velocity 0.0
-set highest to body's y
-set index to 0
-loop while index < plan's count:
-	set body's velocity to 0.0
-	start a jump for body
-	set elapsed to 0
-	set duration to (the item at index in (plan's steps))'s jump duration
-	loop while elapsed < duration:
-		apply gravity to body
-		if body's y < highest:
-			set highest to body's y
-		add the frame time in milliseconds to elapsed
-	clamp body to the ground
-	increment index
-
-set body's y to highest
-report the simulation with body
+set session to a new route session
+begin the address of session
+set action to 0
+set highest to session's player's y
+loop while session's phase = 1:
+    set session's held to false
+    if action < session's course's jumps:
+        set planned to the item at action in (session's course's actions)
+        if session's tick = planned's tick:
+            set session's held to true
+            increment action
+    update (the address of session) after the dash tick seconds
+    set message to formatted "Collision at tick {session's tick}, cube {session's player's x}, {session's player's y}"
+    require condition (not session's player's dead) reporting (the data of message)
+    set highest to the minimum of highest and (session's player's y)
+require condition (session's phase = 3) reporting "The reference did not complete the level"
+print line formatted "DEBUG_SIM_BASELINE_OK jumps={action} highest_y={highest}"
+close the address of session

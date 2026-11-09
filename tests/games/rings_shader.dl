@@ -2,11 +2,11 @@ import tests/games/shader_values.dl
 
 # Concentric rings with animated color wave — hypnotic pattern
 
-set pixel to a planar position with x the fragment x coordinate and y the fragment y coordinate
+set pixel to a planar position with x the study x and y the study y
 set time to the shader time
 
 # Center and normalize
-set position to a planar position with x (pixel's x / 400.0 - 1.0) and y (pixel's y / 300.0 - 1.0)
+set position to a planar position with x (((pixel's x * 2.0) - the study width) / the study height) and y (((pixel's y * 2.0) / the study height) - 1.0)
 
 # Distance from center
 set distance to the square root of (position's x * position's x + position's y * position's y)

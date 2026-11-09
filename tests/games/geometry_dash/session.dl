@@ -1,0 +1,102 @@
+import tests/games/geometry_dash/generator.dl
+
+class:
+    patterns:
+        cube trace
+    members:
+        x as a floating-point number
+        y as a floating-point number
+
+class:
+    patterns:
+        dash session
+    members:
+        course as dash level
+        player as cube state
+        traces as a pointer to cube trace
+        trace count as an integer
+        trace head as an integer
+        seed as an integer
+        tick as an integer
+        phase as an integer
+        attempts as an integer
+        best as an integer
+        paused as a boolean
+        held as a boolean
+        progress as a floating-point number
+        impact as a floating-point number
+
+# Phases: ready, running, death effect, complete. Pause freezes every phase.
+to get the completion of {dash session:session}:
+    set covered to session's player's x - the cube anchor
+    set distance to session's course's finish - the cube anchor
+    return (the minimum of 100.0 and ((covered / distance) * 100.0)) as an integer
+
+to restart {a pointer to dash session:session}:
+    set session's player to a fresh cube
+    set session's tick, session's trace count and session's trace head to 0
+    set session's progress and session's impact to 0.0
+    set session's phase to 1
+    set session's paused and session's held to false
+    increment session's attempts
+
+to prepare {a pointer to dash session:session}:
+    generate (the address of (session's course)) using seed (session's seed)
+    verify session's course
+    set session's attempts and session's best to 0
+    restart session
+    set session's phase to 0
+
+to get a new route session:
+    set result to a new dash session
+    set result's course to an empty dash level
+    set result's traces to storage for 32 slots initialized with a new cube trace
+    set result's seed to 1337
+    prepare the address of result
+    return result
+
+to begin {a pointer to dash session:session}:
+    if session's phase = 0:
+        set session's phase to 1
+
+to explore the next level in {a pointer to dash session:session}:
+    increment session's seed
+    prepare session
+
+to advance {a pointer to dash session:session}:
+    if session's phase = 2:
+        add the dash tick to session's impact
+        if session's impact >= 0.7:
+            restart session
+        return nothing
+    if session's phase != 1:
+        return nothing
+    set trace to a new cube trace
+    set trace's x to session's player's x
+    set trace's y to session's player's y
+    store trace into session's traces at (session's trace head)
+    set session's trace head to (session's trace head + 1) mod 32
+    set session's trace count to the minimum of 32 and (session's trace count + 1)
+    step (the address of (session's player)) through (session's course) holding jump (session's held)
+    increment session's tick
+    set session's best to the maximum of (session's best) and (the completion of (the value at session))
+    if session's player's dead:
+        set session's phase to 2
+        set session's impact to 0.0
+    else if session's player's x >= session's course's finish:
+        set session's phase to 3
+        set session's best to 100
+
+to update {a pointer to dash session:session} after {floating-point number:elapsed time} seconds:
+    if session's paused or (session's phase = 0) or (session's phase = 3):
+        return nothing
+    add (the minimum of 0.25 and elapsed time) to session's progress
+    loop while session's progress >= the dash tick:
+        subtract the dash tick from session's progress
+        advance session
+        if session's phase = 3:
+            set session's progress to 0.0
+
+to close {a pointer to dash session:session}:
+    close the address of (session's course)
+    deallocate session's traces

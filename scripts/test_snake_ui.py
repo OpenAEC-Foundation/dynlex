@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 
+from native_ui_test import isolated_x11_environment
 from find_vulkan_icd import find_vulkan_icd, vulkan_driver_environment
 from native_ui_test import click, image_region, named_window, press_key, save_png, screenshot, x11_library
 
@@ -134,7 +135,7 @@ def main():
         command = [xvfb, "--auto-servernum", "--server-args=-screen 0 1400x1000x24", sys.executable, str(Path(__file__).resolve()), str(project), str(compiler), "--drive", str(executable)]
         if snapshots:
             command += ["--snapshots", str(snapshots)]
-        environment = vulkan_driver_environment(find_vulkan_icd(), os.environ)
+        environment = isolated_x11_environment(vulkan_driver_environment(find_vulkan_icd(), os.environ))
         subprocess.run(command, cwd=project, env=environment, check=True, timeout=60)
         rendering = Path(directory) / "rendering.out"
         compile_fixture("tests/runtime/snake_rendering.dl", rendering)

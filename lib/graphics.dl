@@ -5,6 +5,7 @@
 # native window and Vulkan-surface dependency; it is not part of this API.
 
 import lib/std.dl
+import lib/graphics_types.dl
 import lib/texture.dl
 import lib/graphics_window.dl
 import lib/graphics_native_types.dl
@@ -23,6 +24,7 @@ the space key means: 32
 the enter key means: 257
 the tab key means: 258
 the P key means: 80
+the R key means: 82
 the A key means: 65
 the D key means: 68
 the E key means: 69
@@ -43,32 +45,6 @@ the right arrow key means: 262
 the left arrow key means: 263
 the down arrow key means: 264
 the up arrow key means: 265
-class:
-	patterns:
-		[a|] cursor position
-	members:
-		x as a floating-point number
-		y as a floating-point number
-
-class:
-	patterns:
-		[a|] mouse button
-	members:
-		number as an integer
-
-class:
-	patterns:
-		[a|] graphics frame
-	members:
-		window as a pointer
-		drawable as a boolean
-
-class:
-	patterns:
-		[a|] shader program
-	members:
-		resource as a pointer
-
 local function a graphics frame for {pointer:window} in drawable state {boolean:drawable}:
 	replacement:
 		@intrinsic("construct", a graphics frame, window, drawable)

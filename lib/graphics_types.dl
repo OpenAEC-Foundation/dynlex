@@ -1,0 +1,29 @@
+# Renderer-independent public graphics values.
+import lib/std.dl
+
+class:
+	patterns:
+		[a|] cursor position
+	members:
+		x as a floating-point number
+		y as a floating-point number
+
+class:
+	patterns:
+		[a|] mouse button
+	members:
+		number as an integer
+
+class:
+	patterns:
+		[a|] graphics frame
+	members:
+		window as a pointer
+		drawable as a boolean
+
+class:
+	patterns:
+		[a|] shader program
+	members:
+		resource as a pointer
+

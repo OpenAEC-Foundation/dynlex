@@ -1,56 +1,130 @@
-import lib/std.dl
+import lib/array.dl
+import lib/check.dl
+
+# Coordinates are world pixels, Y down. Generation and play share 120 Hz.
+the dash tick means: 1.0 / 120.0
+the dash speed means: 3.1
+the dash gravity means: 0.28
+the dash impulse means: 7.8
+the cube size means: 36.0
+the dash floor means: 610.0
+the dash width means: 1280.0
+the dash height means: 780.0
+the cube anchor means: 240.0
+the jump timing margin means: 3
+the solid tile means: 1
+the spike tile means: 2
 
 class:
-	patterns:
-		[a|] runner state
-	members:
-		y, velocity
+    patterns:
+        dash obstacle
+    members:
+        kind as an integer
+        x as a floating-point number
+        y as a floating-point number
+        width as a floating-point number
+        height as a floating-point number
 
-a runner at height {floating-point number:y} moving with velocity {floating-point number:velocity} means: @intrinsic("construct", a runner state, y, velocity)
-to get the window width:
-	return 1000
+class:
+    patterns:
+        dash action
+    members:
+        tick as an integer
+        landing as an integer
+        level as an integer
+        motif as an integer
 
-to get the world height:
-	return 420
+class:
+    patterns:
+        dash level
+    members:
+        objects as a pointer to dash obstacle
+        count as an integer
+        actions as a pointer to dash action
+        jumps as an integer
+        duration as an integer
+        finish as a floating-point number
 
-to get the ground height:
-	return 340
+class:
+    patterns:
+        cube state
+    members:
+        x as a floating-point number
+        y as a floating-point number
+        velocity as a floating-point number
+        rotation as a floating-point number
+        grounded as a boolean
+        dead as a boolean
+        jumps as an integer
 
-to get the ceiling height:
-	return 48
+to get a fresh cube:
+    set result to a new cube state
+    set result's x to the cube anchor
+    set result's y to the dash floor - the cube size
+    set result's grounded to true
+    return result
 
-to get the player size:
-	return 32
+to get a dash obstacle of kind {integer:kind} at {floating-point number:x} {floating-point number:y} sized {floating-point number:width} by {floating-point number:height}:
+    return @intrinsic("construct", dash obstacle, kind, x, y, width, height)
 
-to get the player horizontal position:
-	return 180
+to add {dash obstacle:obstacle} to {a pointer to dash level:course}:
+    require condition (course's count < 256) reporting "The generated level exceeded its obstacle capacity"
+    require condition ((obstacle's width > 0.0) and (obstacle's height > 0.0)) reporting "An obstacle has no area"
+    store obstacle into course's objects at (course's count)
+    increment course's count
 
-to get the reference horizontal offset:
-	return 84
+to get {cube state:body} touches spike {dash obstacle:spike}:
+    # The lethal hitbox is inset; the visible square lands on its full base.
+    set left to body's x + 5.0
+    set right to (body's x + the cube size) - 5.0
+    set bottom to (body's y + the cube size) - 4.0
+    if (right <= spike's x) or (left >= spike's x + spike's width):
+        return false
+    set center to spike's x + (spike's width / 2.0)
+    set nearest to the maximum of left and (the minimum of right and center)
+    set surface to spike's y + ((spike's height * (the absolute value of (nearest - center))) / (spike's width / 2.0))
+    return (bottom > surface) and (body's y + 4.0 < spike's y + spike's height)
 
-to get the scroll speed:
-	return 7
+to apply dash gravity to {a pointer to cube state:body}:
+    add the dash gravity to body's velocity
+    add body's velocity to body's y
 
-to get the frame time in milliseconds:
-	return 16
+to step {a pointer to cube state:body} through {dash level:course} holding jump {boolean:held}:
+    if body's dead:
+        return nothing
+    if held and body's grounded:
+        set body's velocity to -the dash impulse
+        set body's grounded to false
+        increment body's jumps
+    set bottom to body's y + the cube size
+    add the dash speed to body's x
+    apply dash gravity to body
+    set body's grounded to false
+    set surface to the dash height + 200.0
+    loop index from 0 to (course's count):
+        set obstacle to the item at index in (course's objects)
+        if obstacle's kind = the solid tile:
+            if (body's x + the cube size > obstacle's x) and (body's x < obstacle's x + obstacle's width):
+                if (body's velocity >= 0.0) and ((bottom <= obstacle's y + 0.001) and (body's y + the cube size >= obstacle's y)):
+                    set surface to the minimum of surface and (obstacle's y)
+                    set body's grounded to true
+    if body's grounded:
+        set body's y to surface - the cube size
+        set body's velocity to 0.0
+        set body's rotation to (the floor of ((body's rotation + 45.0) / 90.0)) * 90.0
+    else:
+        add 3.4 to body's rotation
+    loop index from 0 to (course's count):
+        set obstacle to the item at index in (course's objects)
+        if (body's x + the cube size > obstacle's x + 0.001) and (body's x < (obstacle's x + obstacle's width) - 0.001):
+            if obstacle's kind = the solid tile:
+                if (body's y + the cube size > obstacle's y + 0.001) and (body's y < (obstacle's y + obstacle's height) - 0.001):
+                    set body's dead to true
+            else if (the value at body) touches spike obstacle:
+                set body's dead to true
+    if body's y > the dash height + the cube size:
+        set body's dead to true
 
-to get the gravity strength:
-	return 1.15
-
-to get the jump speed:
-	return 15.5
-
-to get the player's ground height:
-	return (the ground height - the player size) as a floating-point number
-
-to start a jump for {runner state:body}: set body's velocity to the negative of the jump speed
-
-to apply gravity to {runner state:body}:
-	add the gravity strength to body's velocity
-	add body's velocity to body's y
-
-to clamp {runner state:body} to the ground:
-	set floor to the player's ground height
-	if body's y > floor:
-		set body's y to floor
-		set body's velocity to 0.0
+to close {a pointer to dash level:course}:
+    deallocate course's objects
+    deallocate course's actions

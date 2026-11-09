@@ -30,7 +30,7 @@ class:
 
 a ball register set with x {integer:x}, y {integer:y}, horizontal {integer:horizontal} and vertical {integer:vertical} means: @intrinsic("construct", a ball register set, x, y, horizontal, vertical)
 a register pair with x {integer:x} and y {integer:y} means: @intrinsic("construct", a register pair, x, y)
-a breakout register set using {ball register set:ball} for the ball and {register pair:cursor} for the cursor, with scratch {integer:scratch}, tens {integer:tens}, ones {integer:ones}, paddle {integer:paddle}, score {integer:score}, bricks {integer:bricks}, lives {integer:lives}, temporary {integer:temporary}, auxiliary {integer:auxiliary} and flags {integer:flags} means: @intrinsic("construct", a breakout register set, scratch, tens, ones, paddle, ball, score, bricks, lives, temporary, cursor, auxiliary, flags)
+a breakout register set using {ball register set:ball state} for the ball and {register pair:cursor state} for the cursor, with scratch {integer:scratch}, tens {integer:tens}, ones {integer:ones}, paddle {integer:paddle}, score {integer:score}, bricks {integer:bricks}, lives {integer:lives}, temporary {integer:temporary}, auxiliary {integer:auxiliary} and flags {integer:flags} means: @intrinsic("construct", a breakout register set, scratch, tens, ones, paddle, ball state, score, bricks, lives, temporary, cursor state, auxiliary, flags)
 to build the breakout program:
 	reset the assembly state
 
@@ -40,7 +40,7 @@ to build the breakout program:
 	set registers to a breakout register set using ball for the ball and cursor for the cursor, with scratch 0, tens 1, ones 2, paddle 3, score 8, bricks 9, lives 10, temporary 11, auxiliary 14 and flags 15
 
 	# --- Boot ---
-	label "start"
+	mark label "start"
 	clear the display
 	load value 3 into register registers's lives
 	load value 0 into register registers's score
@@ -54,11 +54,11 @@ to build the breakout program:
 	jump to label "main loop"
 
 	# --- Routine: draw the wall of bricks (16 columns, 4 rows) ---
-	label "draw the bricks"
+	mark label "draw the bricks"
 	point index at label "brick sprite"
 	load value 0 into register registers's temporary
 	load value 6 into register registers's auxiliary
-	label "brick loop"
+	mark label "brick loop"
 	draw 1 row at horizontal register registers's temporary and vertical register registers's auxiliary
 	raise register registers's temporary by 4
 	skip when register registers's temporary equals 64
@@ -70,7 +70,7 @@ to build the breakout program:
 	end the routine
 
 	# --- Routine: serve a fresh ball, drifting upward ---
-	label "reset the ball"
+	mark label "reset the ball"
 	randomize register registers's ball's x masked by 31
 	raise register registers's ball's x by 16
 	load value 20 into register registers's ball's y
@@ -83,18 +83,18 @@ to build the breakout program:
 	end the routine
 
 	# --- Routines: reverse a direction (1 and 255 swap under xor 254) ---
-	label "reverse horizontal direction"
+	mark label "reverse horizontal direction"
 	load value 254 into register registers's auxiliary
 	combine register registers's ball's horizontal with register registers's auxiliary using bitwise xor
 	end the routine
 
-	label "reverse vertical direction"
+	mark label "reverse vertical direction"
 	load value 254 into register registers's auxiliary
 	combine register registers's ball's vertical with register registers's auxiliary using bitwise xor
 	end the routine
 
 	# --- Main loop: paddle input ---
-	label "main loop"
+	mark label "main loop"
 	load value 4 into register registers's scratch
 	skip when key in register registers's scratch is down
 	jump to label "check right key"
@@ -105,7 +105,7 @@ to build the breakout program:
 	draw 1 row at horizontal register registers's paddle and vertical register registers's auxiliary
 	raise register registers's paddle by 254
 	draw 1 row at horizontal register registers's paddle and vertical register registers's auxiliary
-	label "check right key"
+	mark label "check right key"
 	load value 6 into register registers's scratch
 	skip when key in register registers's scratch is down
 	jump to label "ball step"
@@ -118,7 +118,7 @@ to build the breakout program:
 	draw 1 row at horizontal register registers's paddle and vertical register registers's auxiliary
 
 	# --- Main loop: ball flight ---
-	label "ball step"
+	mark label "ball step"
 	point index at label "ball sprite"
 	draw 1 row at horizontal register registers's ball's x and vertical register registers's ball's y
 	skip when register registers's ball's x equals 63
@@ -127,19 +127,19 @@ to build the breakout program:
 	jump to label "check top wall"
 	run the routine named "reverse horizontal direction"
 	jump to label "check top wall"
-	label "check left wall"
+	mark label "check left wall"
 	skip when register registers's ball's x equals 0
 	jump to label "check top wall"
 	skip when register registers's ball's horizontal equals 255
 	jump to label "check top wall"
 	run the routine named "reverse horizontal direction"
-	label "check top wall"
+	mark label "check top wall"
 	skip when register registers's ball's y equals 0
 	jump to label "advance ball"
 	skip when register registers's ball's vertical equals 255
 	jump to label "advance ball"
 	run the routine named "reverse vertical direction"
-	label "advance ball"
+	mark label "advance ball"
 	add register registers's ball's horizontal into register registers's ball's x
 	add register registers's ball's vertical into register registers's ball's y
 	point index at label "ball sprite"
@@ -151,7 +151,7 @@ to build the breakout program:
 	jump to label "ball missed"
 
 	# --- Collisions: the paddle sits at row 31, bricks on rows 6 to 12 ---
-	label "hit something"
+	mark label "hit something"
 	skip when register registers's ball's y differs from 31
 	jump to label "paddle bounce"
 	copy register registers's ball's x into register registers's temporary
@@ -167,11 +167,11 @@ to build the breakout program:
 	jump to label "pace"
 	jump to label "you win"
 
-	label "paddle bounce"
+	mark label "paddle bounce"
 	load value 255 into register registers's ball's vertical
 	jump to label "pace"
 
-	label "ball missed"
+	mark label "ball missed"
 	point index at label "ball sprite"
 	draw 1 row at horizontal register registers's ball's x and vertical register registers's ball's y
 	load value 1 into register registers's auxiliary
@@ -179,12 +179,12 @@ to build the breakout program:
 	skip when register registers's lives equals 0
 	jump to label "respawn"
 	jump to label "game over"
-	label "respawn"
+	mark label "respawn"
 	run the routine named "reset the ball"
 	jump to label "pace"
 
 	# --- Main loop: pacing (one game tick per two 60 Hz timer ticks) ---
-	label "pace"
+	mark label "pace"
 	load the delay into register registers's scratch
 	skip when register registers's scratch equals 0
 	jump to label "pace"
@@ -193,7 +193,7 @@ to build the breakout program:
 	jump to label "main loop"
 
 	# --- Routine: draw the two digit score with the built in font ---
-	label "show the score"
+	mark label "show the score"
 	point index at label "score scratch"
 	store the decimal digits of register registers's score
 	point index at label "score scratch"
@@ -208,7 +208,7 @@ to build the breakout program:
 	end the routine
 
 	# --- Ending screens ---
-	label "game over"
+	mark label "game over"
 	clear the display
 	load value 6 into register registers's cursor's x
 	load value 8 into register registers's cursor's y
@@ -236,10 +236,10 @@ to build the breakout program:
 	point index at label "letter R"
 	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
 	run the routine named "show the score"
-	label "rest in peace"
+	mark label "rest in peace"
 	jump to label "rest in peace"
 
-	label "you win"
+	mark label "you win"
 	clear the display
 	load value 14 into register registers's cursor's x
 	load value 8 into register registers's cursor's y
@@ -261,87 +261,87 @@ to build the breakout program:
 	point index at label "letter N"
 	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
 	run the routine named "show the score"
-	label "victory lap"
+	mark label "victory lap"
 	jump to label "victory lap"
 
 	# --- Sprites ---
-	label "ball sprite"
+	mark label "ball sprite"
 	emit a data row "X......."
-	label "paddle sprite"
+	mark label "paddle sprite"
 	emit a data row "XXXXXX.."
-	label "brick sprite"
+	mark label "brick sprite"
 	emit a data row "XXX....."
-	label "score scratch"
+	mark label "score scratch"
 	emit a data byte 0
 	emit a data byte 0
 	emit a data byte 0
-	label "letter G"
+	mark label "letter G"
 	emit a data row "XXXX...."
 	emit a data row "X......."
 	emit a data row "X.XX...."
 	emit a data row "X..X...."
 	emit a data row "XXXX...."
-	label "letter A"
+	mark label "letter A"
 	emit a data row "XXXX...."
 	emit a data row "X..X...."
 	emit a data row "XXXX...."
 	emit a data row "X..X...."
 	emit a data row "X..X...."
-	label "letter M"
+	mark label "letter M"
 	emit a data row "X..X...."
 	emit a data row "XXXX...."
 	emit a data row "XXXX...."
 	emit a data row "X..X...."
 	emit a data row "X..X...."
-	label "letter E"
-	emit a data row "XXXX...."
-	emit a data row "X......."
+	mark label "letter E"
 	emit a data row "XXXX...."
 	emit a data row "X......."
 	emit a data row "XXXX...."
-	label "letter O"
+	emit a data row "X......."
+	emit a data row "XXXX...."
+	mark label "letter O"
 	emit a data row "XXXX...."
 	emit a data row "X..X...."
 	emit a data row "X..X...."
 	emit a data row "X..X...."
 	emit a data row "XXXX...."
-	label "letter V"
+	mark label "letter V"
 	emit a data row "X..X...."
 	emit a data row "X..X...."
 	emit a data row "X..X...."
 	emit a data row "X..X...."
 	emit a data row ".XX....."
-	label "letter R"
+	mark label "letter R"
 	emit a data row "XXXX...."
 	emit a data row "X..X...."
 	emit a data row "XXXX...."
 	emit a data row "X.X....."
 	emit a data row "X..X...."
-	label "letter Y"
+	mark label "letter Y"
 	emit a data row "X..X...."
 	emit a data row "X..X...."
 	emit a data row ".XX....."
 	emit a data row ".X......"
 	emit a data row ".X......"
-	label "letter U"
+	mark label "letter U"
 	emit a data row "X..X...."
 	emit a data row "X..X...."
 	emit a data row "X..X...."
 	emit a data row "X..X...."
 	emit a data row "XXXX...."
-	label "letter W"
+	mark label "letter W"
 	emit a data row "X..X...."
 	emit a data row "X..X...."
 	emit a data row "XXXX...."
 	emit a data row "XXXX...."
 	emit a data row "X..X...."
-	label "letter I"
+	mark label "letter I"
 	emit a data row "XXX....."
 	emit a data row ".X......"
 	emit a data row ".X......"
 	emit a data row ".X......"
 	emit a data row "XXX....."
-	label "letter N"
+	mark label "letter N"
 	emit a data row "X..X...."
 	emit a data row "XX.X...."
 	emit a data row "X.XX...."
