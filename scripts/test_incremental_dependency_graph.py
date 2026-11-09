@@ -382,6 +382,30 @@ def check_independent_reference_delay(root, build):
     assert top_level[1:] == build(False, entry=main)[1:]
 
 
+def check_generated_accessor_graph_edges(root, build):
+    main = root / "generated_accessor_graph.dl"
+    main.write_text('integer means: @intrinsic("type", "int")\n'
+                    'function left plus right:\n'
+                    '    after: default\n'
+                    '    replacement: @intrinsic("add", left, right)\n'
+                    'function left times right:\n'
+                    '    before: default\n'
+                    '    replacement: @intrinsic("multiply", left, right)\n'
+                    'class box:\n'
+                    '    members:\n'
+                    '        x as integer\n'
+                    '@intrinsic("return", 0)\n')
+    compiled = build(entry=main)
+    assert compiled[0]["precedence_graph_edges"] <= 8, \
+        "generated accessors created an edge for every accessor and precedence target"
+    assert compiled[1:] == build(False, entry=main)[1:]
+    no_accessors = root / "precedence_graph_without_accessors.dl"
+    no_accessors.write_text(main.read_text().replace('class box:\n    members:\n        x as integer\n', ''))
+    bare = build(entry=no_accessors)
+    assert bare[0]["precedence_graph_edges"] == 2, \
+        "the accessor sentinel added edges when the program has no generated accessors"
+
+
 def check_global_reader_after_top_level_edit(root, build):
     main = root / "global_reader_top_level_edit.dl"
     source = ('integer means: @intrinsic("type", "int")\n'

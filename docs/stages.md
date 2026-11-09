@@ -112,6 +112,9 @@ the families and repeats to a fixed point. Operand grouping also consumes that
 same family order during type inference.
 The rematch pass sorts only references whose current match can be affected by
 precedence, preserving source order among equal locations.
+Generated class accessors precede authored syntax through a shared graph node,
+so graph edges grow with accessor families and precedence targets rather than
+their product. Incremental build statistics report the resulting edge count.
 
 All pattern definitions are stored in a pattern tree, a trie structure containing pattern elements.
 

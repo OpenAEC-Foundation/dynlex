@@ -944,6 +944,7 @@ bool compileIncrementally(
 							  {"definition_parse_hits", statistics.definitionParseHits},
 							  {"definition_parse_misses", statistics.definitionParseMisses},
 							  {"body_resolution_reference_visits", context.bodyResolutionReferenceVisits},
+							  {"precedence_graph_edges", context.patternPrecedenceGraphEdges},
 							  {"source_projections_reused", statistics.sourceProjectionWork.reused},
 							  {"source_projections_scanned", statistics.sourceProjectionWork.scanned},
 							  {"source_projection_mask_ms", statistics.sourceProjectionWork.maskMilliseconds},
