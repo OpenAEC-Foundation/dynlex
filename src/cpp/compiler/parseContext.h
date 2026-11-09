@@ -95,7 +95,7 @@ struct ParseContext {
 	// Native incremental builds may import a previously generated function body
 	// after this compilation has inferred its current types and selected calls.
 	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;
-	std::function<bool(Section *, const InstantiationKey &, Instantiation &)> reuseInferredInstantiation;
+	std::function<bool(Section *, const InstantiationKey &, Instantiation &, bool)> reuseInferredInstantiation;
 	std::function<void(ParseContext &, const std::function<bool(const IncrementalFunctionRequest &)> &)>
 		runIncrementalPreinference;
 	std::vector<IncrementalFunctionRequest> incrementalReplacementFunctions;

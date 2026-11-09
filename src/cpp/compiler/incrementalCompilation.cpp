@@ -731,8 +731,8 @@ bool compileIncrementally(
 							priorSummaries, previous->at("global_types"), *functionReuse, sectionPaths, std::move(eligible)
 						);
 						inferred.reuseInferredInstantiation = [&](Section *section, const InstantiationKey &key,
-																  Instantiation &instantiation) {
-							return inferenceReuse->reuse(section, key, instantiation);
+																  Instantiation &instantiation, bool allowPureValueSummary) {
+							return inferenceReuse->reuse(section, key, instantiation, allowPureValueSummary);
 						};
 					};
 				}

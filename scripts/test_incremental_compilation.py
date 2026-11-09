@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from test_incremental_dependency_graph import check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_leaf_dependency_cascade
+from test_incremental_dependency_graph import check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_leaf_dependency_cascade, check_runtime_pure_value_summary
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -352,6 +352,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_inactive_projection_refresh(root, build)
     check_inactive_edit_with_unrelated_warning(root, build)
     check_inactive_edit_after_warning_wording(root, build)
+    check_runtime_pure_value_summary(root, build)
     precedence_source = '''function left plus right:
     RULE: $ times $
     replacement:

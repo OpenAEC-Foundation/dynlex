@@ -192,3 +192,27 @@ def check_inactive_edit_after_warning_wording(root, build):
     edited = build(entry=main)
     assert edited[0]["type_inference_reused"], "warning wording invalidated an unrelated inactive body"
     assert edited[1:] == build(False, entry=main)[1:], "edited build used old diagnostic wording"
+
+
+def check_runtime_pure_value_summary(root, build):
+    main = root / "runtime_pure_value_summary.dl"
+    definition = 'function identity {integer:value}:\n    execute:\n        @intrinsic("return", value)\n'
+    prefix = ('integer means: @intrinsic("type", "int")\n' + definition +
+              '@intrinsic("discard", identity (@intrinsic("call", "libc", "rand", integer)))\n')
+    main.write_text(prefix + '@intrinsic("discard", 1)\n')
+    build(entry=main)
+    main.write_text(prefix + '@intrinsic("discard", 2)\n')
+    runtime_edit = build(entry=main)
+    assert runtime_edit[0]["inference_instantiations_reused"] >= 1, \
+        "runtime call re-inferred a pure value function with an unchanged body"
+    assert runtime_edit[1:] == build(False, entry=main)[1:]
+    main.write_text(prefix + '@intrinsic("return", @intrinsic("subtract", identity 4, 4))\n')
+    known_call = build(entry=main)
+    assert known_call[1:] == build(False, entry=main)[1:], \
+        "a later known-value call used a cached summary without inferring its body"
+    changed_definition = definition.replace('"return", value', '"return", @intrinsic("add", value, 1)')
+    main.write_text((prefix + '@intrinsic("return", @intrinsic("subtract", identity 4, 4))\n')
+                    .replace(definition, changed_definition)
+                    .replace('identity 4, 4', 'identity 4, 5'))
+    changed_body = build(entry=main)
+    assert changed_body[1:] == build(False, entry=main)[1:], "changed pure body retained its prior summary"

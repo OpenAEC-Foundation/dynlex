@@ -55,11 +55,24 @@
 	} else {
 		requireCompilerInvariant(inst.argumentTypes == argTypes, "Instantiation argumentTypes diverged from map key");
 	}
+	bool knownCallArguments = false;
+	if (context.parseContext.reuseInferredInstantiation || inst.inferenceReusedFromCache) {
+		std::vector<std::pair<std::string, Expression *>> knownBindings;
+		std::vector<std::pair<std::string, CompileTimeValue>> knownValues;
+		knownCallArguments = collectKnownCallArgumentValues(
+			expr, def, [&](Expression *argumentExpression) {
+				return resolveStoredCompileTimeValue(argumentExpression, flexBindingFrameStack, &context);
+			}, knownBindings, knownValues
+		);
+	}
+	if (knownCallArguments && inst.inferenceReusedFromCache && inst.purity == InstantiationPurity::Pure &&
+		inst.returnType.kind != DataType::Kind::Void)
+		inst.needsReinfer = true;
 	if (!inst.returnType.isDeduced() && context.parseContext.reuseInferredInstantiation) {
 		if (!inst.body)
 			inst.body = context.cloneSectionBody(matchedSection);
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
-		context.parseContext.reuseInferredInstantiation(matchedSection, instantiationKey, inst);
+		context.parseContext.reuseInferredInstantiation(matchedSection, instantiationKey, inst, !knownCallArguments);
 	}
 	std::optional<InstantiationKey> refinedInstantiationKey;
 	bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer;

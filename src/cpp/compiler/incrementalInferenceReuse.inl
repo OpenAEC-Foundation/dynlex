@@ -33,8 +33,6 @@ bool canPersistInferenceSummary(
 		   inferenceSummaryKey(key, classPaths).has_value() && instantiation.valid && !instantiation.inferring &&
 		   !instantiation.needsReinfer && instantiation.body &&
 		   inferenceTypeIdentity(instantiation.returnType, classPaths, visiting).has_value() &&
-		   (instantiation.purity == InstantiationPurity::Impure ||
-			(instantiation.purity == InstantiationPurity::Pure && instantiation.returnType.kind == DataType::Kind::Void)) &&
 		   instantiation.argumentTypes == key.argumentTypes && instantiation.parameterSeedTypesByName.empty() &&
 		   std::ranges::all_of(
 			   instantiation.parameterOutputTypesByName,
@@ -44,7 +42,7 @@ bool canPersistInferenceSummary(
 	}
 		   ) &&
 		   instantiation.constantParameterValues.empty() && instantiation.requiredCompileTimeParameters.empty() &&
-		   instantiation.pureReturnValuesByArguments.empty() && !instantiation.memoryViolation;
+		   !instantiation.memoryViolation;
 }
 
 bool inferenceSummarySourceExcluded(const Section *section, const std::set<std::string> &excludedSources) {
@@ -113,7 +111,7 @@ class IncrementalInferenceReuse {
 		classPaths = classIdentityPaths(sectionPaths);
 	}
 
-	bool reuse(Section *section, const InstantiationKey &key, Instantiation &instantiation) {
+	bool reuse(Section *section, const InstantiationKey &key, Instantiation &instantiation, bool allowPureValueSummary) {
 		std::optional<std::string> keyText = inferenceSummaryKey(key, classPaths);
 		if (!eligible.contains(section) || !keyText)
 			return false;
@@ -121,6 +119,10 @@ class IncrementalInferenceReuse {
 		if (!summaries.contains(path) || !summaries.at(path).contains(*keyText))
 			return false;
 		const Json &summary = summaries.at(path).at(*keyText);
+		auto returnType = decodeInferenceTypeIdentity(summary.at("return_type"), classPaths);
+		if (!returnType || (summary.at("purity").get<int>() == static_cast<int>(InstantiationPurity::Pure) &&
+							 returnType->kind != DataType::Kind::Void && !allowPureValueSummary))
+			return false;
 		bool needsGlobalTypes = summary.at("needs_global_types").get<bool>();
 		if (needsGlobalTypes) {
 			auto currentGlobalTypes = captureGlobalTypeProjection(sectionPaths);
@@ -128,9 +130,6 @@ class IncrementalInferenceReuse {
 				return false;
 		}
 		if (!irReuse.hasReusableIRForInstantiation(section, *keyText, needsGlobalTypes))
-			return false;
-		auto returnType = decodeInferenceTypeIdentity(summary.at("return_type"), classPaths);
-		if (!returnType)
 			return false;
 		instantiation.returnType = std::move(*returnType);
 		instantiation.purity = static_cast<InstantiationPurity>(summary.at("purity").get<int>());

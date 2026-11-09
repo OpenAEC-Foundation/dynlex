@@ -861,10 +861,11 @@ when both fingerprints match. `--incremental-stats` reports reused and scanned
 source projections; semantic compatibility compares the projected text digest,
 so a comment insertion does not invalidate the next executable edit.
 
-For active edits, the native cache also persists inference summaries for impure
-functions and pure functions returning `nothing`, with concrete runtime argument
-and return types, including class pointers. Pure functions returning values still
-require their inferred bodies for compile-time evaluation of new arguments.
+For active edits, the native cache also persists inference summaries for functions
+with concrete runtime argument and return types, including class pointers. A pure
+function returning a value reuses its summary when its call arguments are not all
+known at compile time. A call with known arguments infers the function body so
+compile-time evaluation has the inferred expressions it needs.
 Summaries record return address provenance and storage-parameter relationships, plus
 writes, known constants, address provenance, and address escapes for global variables.
 Class type identities include the current instantiation's field types; a changed layout
