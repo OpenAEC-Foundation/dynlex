@@ -31,15 +31,20 @@ static bool samePatternMatchSyntax(const PatternMatch &left, const PatternMatch 
 using PrecedenceMatchChanges = std::vector<std::pair<PatternReference *, std::unique_ptr<PatternMatch>>>;
 
 static bool matchMayChangeWithPrecedence(const PatternMatch &match) {
-	// The precedence pass only rejects matched definitions that outrank an operand.
-	for (const PatternDefinition *definition : match.matchingDefinitions) {
-		requireCompilerInvariant(definition->family != nullptr, "precedence candidate has no syntax family");
-		if (!definition->family->precedenceSuccessors.empty())
-			return true;
-	}
-	for (const PatternMatch &subMatch : match.subMatches)
+	// The precedence pass only rejects a definition when one of its completed
+	// operands belongs to a family it outranks. Nested operands can regroup too.
+	for (const PatternMatch &subMatch : match.subMatches) {
+		requireCompilerInvariant(!subMatch.matchingDefinitions.empty(), "precedence operand has no matched definition");
+		const PatternFamily *operandFamily = subMatch.matchingDefinitions.front()->family;
+		requireCompilerInvariant(operandFamily != nullptr, "precedence operand has no syntax family");
+		for (const PatternDefinition *definition : match.matchingDefinitions) {
+			requireCompilerInvariant(definition->family != nullptr, "precedence candidate has no syntax family");
+			if (definition->family->precedenceSuccessors.contains(operandFamily))
+				return true;
+		}
 		if (matchMayChangeWithPrecedence(subMatch))
 			return true;
+	}
 	return false;
 }
 

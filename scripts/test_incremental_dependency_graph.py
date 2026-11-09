@@ -406,6 +406,26 @@ def check_generated_accessor_graph_edges(root, build):
         "the accessor sentinel added edges when the program has no generated accessors"
 
 
+def check_irrelevant_precedence_rematch(root, build):
+    main = root / "irrelevant_precedence_rematch.dl"
+    source = ('function left plus right:\n'
+              '    before: default\n'
+              '    replacement: @intrinsic("add", left, right)\n'
+              'function left times right:\n'
+              '    after: default\n'
+              '    replacement: @intrinsic("multiply", left, right)\n'
+              'to keep: @intrinsic("discard", 1 plus 2)\n'
+              'to unrelated: @intrinsic("discard", 3)\n'
+              'keep\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('"discard", 3', '"discard", 4'))
+    edited = build(entry=main)
+    assert edited[0]["precedence_matcher_cache_hits"] == 0, \
+        "precedence rematched a call without a higher-priority operand"
+    assert edited[1:] == build(False, entry=main)[1:]
+
+
 def check_global_reader_after_top_level_edit(root, build):
     main = root / "global_reader_top_level_edit.dl"
     source = ('integer means: @intrinsic("type", "int")\n'
