@@ -1,0 +1,10 @@
+import lib/json_builders.dl
+
+set entry to a JSON object containing [
+    JSON text "name" is "Aé\"B",
+    JSON number "count" is 18446744073709551615,
+    JSON flag "enabled" is true,
+    JSON child "values" is (a JSON array containing [a new JSON number from (2 as a 64 bit integer), a new JSON value of kind the JSON null kind])
+]
+print line the compact JSON form of entry
+free entry

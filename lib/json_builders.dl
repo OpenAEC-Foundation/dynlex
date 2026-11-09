@@ -1,0 +1,39 @@
+# Container construction transfers ownership of the supplied child values.
+import lib/json.dl
+import lib/check.dl
+
+to get a JSON object containing {an array:members}:
+    set result to a new JSON value of kind the JSON object kind
+    set index to 0
+    loop while index < the length of members:
+        set entry to the item at index in members
+        add a JSON member named (entry's name) with value (entry's value) to result
+        increment index
+    return result
+
+to get a JSON array containing {an array:values}:
+    set result to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of values:
+        add (the item at index in values) to the JSON array result
+        increment index
+    return result
+
+to get JSON text {C string:name} is {a value:value}:
+    set node to a new JSON value of kind the JSON text kind
+    set node's text to the string form of value
+    return @intrinsic("construct", JSON member, the string form of name, node)
+
+to get JSON number {C string:name} is {a number:value}:
+    require condition ((value as a floating-point number) is finite) reporting "JSON numbers must be finite"
+    set node to a new JSON value of kind the JSON number kind
+    set node's text to the string form of value
+    set node's number to value as a floating-point number
+    return @intrinsic("construct", JSON member, the string form of name, node)
+
+to get JSON flag {C string:name} is {boolean:value}:
+    set node to a new JSON value of kind the JSON boolean kind
+    set node's boolean to value
+    return @intrinsic("construct", JSON member, the string form of name, node)
+
+JSON child {C string:name} is {a pointer to JSON value:value} means: @intrinsic("construct", JSON member, the string form of name, value)
