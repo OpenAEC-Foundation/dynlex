@@ -143,6 +143,7 @@ We discover what is a variable based on these principles:
 - `{type:name}` does the same and constrains the variable to values accepted by the type expression. This syntax works both in pattern definitions and in executable code.
 - After a multi-word name has been introduced explicitly, later unbraced occurrences of that full name are matched as one variable in the same lexical scope and its children.
   An exact visible explicit name is resolved before attempting a pattern call, including an operand nested in another call.
+  At the start of an operator expression, that operand also precedes a colliding literal prefix function.
   Data declaration names follow this rule for single-word names as well. Literal continuations keep their normal priority;
   whitespace surrounding an intrinsic argument does not change its variable identity.
 

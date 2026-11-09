@@ -1,0 +1,35 @@
+integer means: @intrinsic("type", "int", 32)
+
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+free {integer:value} means: @intrinsic("add", value, 100)
+left = right means: @intrinsic("equal", left, right)
+left + right means: @intrinsic("add", left, right)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+to emit {integer:value}:
+    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", value))
+
+to check explicit operands:
+    set cells to 5
+    emit (free cells)
+    set {free cells} to 7
+    if free cells = 7:
+        emit free cells
+        emit (free cells + 1)
+    if 7 = free cells:
+        emit free cells
+
+to check typed operands:
+    set cells to 6
+    set {integer:free cells} to 9
+    if free cells = 9:
+        emit (free cells + 1)
+
+check explicit operands
+check typed operands

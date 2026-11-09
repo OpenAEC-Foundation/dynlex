@@ -449,6 +449,7 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 		nextMatches.insert(nextMatches.begin(), std::move(single));
 	}
 
+	llvm::SmallVector<MatchProgress, 2> explicitOperands;
 	RemainingPatternElement element = remainingPatternElement(patternReference, sourceElementIndex, sourceCharIndex);
 	bool hasSourceElement = element.exists;
 	PatternElement::Type elementType = element.type;
@@ -614,7 +615,10 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 						storage, {substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, variableIndex}
 					);
 					substituteStep.patternPos += candidate.patternLength;
-					nextMatches.push_back(std::move(substituteStep));
+					if (type == SectionType::Function && currentNode == rootNode)
+						explicitOperands.push_back(std::move(substituteStep));
+					else
+						nextMatches.push_back(std::move(substituteStep));
 				}
 			};
 
@@ -729,6 +733,12 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 		};
 		nextMatches.push_back(std::move(multiple));
 	}
+	// At the start of an expression, a visible explicit name is an operand
+	// before it is a prefix call. Enclosing literal continuations retain their
+	// normal priority once the current pattern has consumed its prefix.
+	nextMatches.insert(
+		nextMatches.end(), std::make_move_iterator(explicitOperands.begin()), std::make_move_iterator(explicitOperands.end())
+	);
 	return result;
 }
 
