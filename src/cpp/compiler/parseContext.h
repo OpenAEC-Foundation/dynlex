@@ -90,6 +90,8 @@ struct ParseContext {
 	// register their own references and resolve them against the current pattern trees.
 	std::function<Expression *(Section *, Range, SectionType)> reuseParsedExpression;
 	std::function<void(Range, SectionType, const Expression *)> recordParsedExpression;
+	std::function<bool(Range, std::vector<DefinitionPatternElement> &)> reuseParsedDefinition;
+	std::function<void(Range, const std::vector<DefinitionPatternElement> &)> recordParsedDefinition;
 	// Native incremental builds may import a previously generated function body
 	// after this compilation has inferred its current types and selected calls.
 	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;

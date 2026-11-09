@@ -770,12 +770,13 @@ The compiler linker build ID (or executable content digest when the format has n
 build ID), effective compiler options and host CPU features identify the computation. Modification timestamps are never a correctness criterion.
 
 After an executable source edit, the frontend reconstructs sections and pattern trees.
-Before section analysis, the native cache restores unresolved expression trees for
-unchanged expression text. It rebases every range onto the current logical line and
+The native cache restores unresolved expression trees for unchanged expression text
+before section analysis and parsed declaration elements before pattern resolution.
+It rebases every range onto the current logical line and
 registers the current section's pattern references, explicit captures and source
 tokens; resolution still uses the current pattern trees. Expressions that emitted
-parse diagnostics are parsed again. `--incremental-stats` counts expression parse
-cache hits from the preceding compiler invocation and misses.
+parse diagnostics are parsed again. `--incremental-stats` counts expression and
+definition parse cache hits from the preceding compiler invocation and misses.
 It reuses pointer-free matcher results from the previous build in both the initial
 resolution and precedence matching passes for unchanged references when the pattern-tree mutation history, the reference's
 source line and position mapping, relative lexical declaration visibility, and

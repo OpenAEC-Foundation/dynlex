@@ -83,7 +83,16 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     main.write_text(source.replace("alpha\nbeta\n", "beta\nbeta\n"))
     same_file_edit = build()
     assert same_file_edit[0]["matcher_cache_hits"] > 0, "code edit discarded unchanged same-file matches"
+    assert same_file_edit[0]["definition_parse_hits"] >= 3, "code edit reparsed unchanged declarations"
     assert same_file_edit[1:] == build(False)[1:], "same-file match reuse differs from clean build"
+    choice_main = root / "choice_main.dl"
+    choice_output = root / "choice_program"
+    choice_main.write_text('to [alpha|beta]: @intrinsic("discard", 1)\nalpha\n')
+    build(entry=choice_main, target=choice_output)
+    choice_main.write_text('to [alpha|beta]: @intrinsic("discard", 1)\nbeta\n')
+    choice_edit = build(entry=choice_main, target=choice_output)
+    assert choice_edit[0]["definition_parse_hits"] > 0, "choice declaration was reparsed after a call edit"
+    assert choice_edit[1:] == build(False, entry=choice_main, target=choice_output)[1:]
     repeated_calls = "alpha\nbeta\n" * 20
     main.write_text(source.replace("alpha\nbeta\n", repeated_calls))
     build()
@@ -969,8 +978,13 @@ function left times right:
     with old.open("wb") as sparse:
         sparse.truncate(512 * 1024 * 1024 + 1)
     os.utime(old, (1, 1))
+    old_parser = namespace / ("parser-" + "e" * 64 + ".entry")
+    with old_parser.open("wb") as sparse:
+        sparse.truncate(512 * 1024 * 1024 + 1)
+    os.utime(old_parser, (1, 1))
     assert build()[0]["frontend_reused"]
-    assert not old.exists() and unrelated.read_text() == "user file", "eviction deleted the wrong entry"
+    assert not old.exists() and not old_parser.exists(), "eviction retained old cache entries"
+    assert unrelated.read_text() == "user file", "eviction deleted the wrong entry"
 
     # Damage all option variants so the current program certainly encounters one.
     entries = list((cache / "native-v1").glob("object-*.entry"))

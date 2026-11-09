@@ -29,6 +29,8 @@ struct BuildStatistics {
 	size_t precedenceMatcherCacheHits = 0;
 	size_t expressionParseHits = 0;
 	size_t expressionParseMisses = 0;
+	size_t definitionParseHits = 0;
+	size_t definitionParseMisses = 0;
 	SourceProjectionWork sourceProjectionWork;
 	double matcherKeyMilliseconds = 0;
 	double matcherRestoreMilliseconds = 0;

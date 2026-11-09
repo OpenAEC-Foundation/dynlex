@@ -404,12 +404,16 @@ bool resolvePatterns(ParseContext &context) {
 				continue;
 			}
 			std::vector<DefinitionPatternElement> parsedElements;
-			if (!parsePatternElements(
-					context, unresolvedDefinition->range, unresolvedDefinition->range.subString, parsedElements
-				)) {
+			bool reused =
+				context.reuseParsedDefinition && context.reuseParsedDefinition(unresolvedDefinition->range, parsedElements);
+			if (!reused && !parsePatternElements(
+							   context, unresolvedDefinition->range, unresolvedDefinition->range.subString, parsedElements
+						   )) {
 				hadPatternParseError = true;
 				continue;
 			}
+			if (!reused && context.recordParsedDefinition)
+				context.recordParsedDefinition(unresolvedDefinition->range, parsedElements);
 			unresolvedDefinition->patternElements = std::move(parsedElements);
 			if (!prepareConversionPattern(context, *unresolvedDefinition)) {
 				hadPatternParseError = true;

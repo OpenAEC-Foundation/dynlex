@@ -213,6 +213,8 @@ restoreParsedExpression(std::string_view input, size_t &position, ParseContext &
 	return expression;
 }
 
+#include "incrementalParsedDefinitionCache.inl"
+
 class IncrementalParsedExpressionCache {
   public:
 	IncrementalParsedExpressionCache(ParseContext &context, std::string_view previous) : context(context) {
@@ -264,6 +266,40 @@ class IncrementalParsedExpressionCache {
 		current.insert_or_assign(expressionKey(range, patternType), std::move(payload));
 	}
 
+	bool reuseDefinition(Range range, std::vector<DefinitionPatternElement> &elements) {
+		std::string key = definitionKey(range);
+		std::string_view payload;
+		if (auto found = current.find(key); found != current.end()) {
+			payload = std::visit([](const auto &value) -> std::string_view {
+				return value;
+			}, found->second);
+		} else if (auto found = prior.find(key); found != prior.end()) {
+			payload = found->second;
+			current.emplace(key, payload);
+			definitionHits++;
+		} else {
+			definitionMisses++;
+			return false;
+		}
+		size_t position = 0;
+		std::uint64_t count = readParseLength(payload, position);
+		if (count > payload.size() - position)
+			throw std::runtime_error("invalid parsed definition element count");
+		for (std::uint64_t index = 0; index < count; index++)
+			elements.push_back(readParsedDefinitionElement(payload, position, range));
+		if (position != payload.size())
+			throw std::runtime_error("trailing parsed definition cache data");
+		return true;
+	}
+
+	void recordDefinition(Range range, const std::vector<DefinitionPatternElement> &elements) {
+		std::string payload;
+		appendParseLength(payload, elements.size());
+		for (const DefinitionPatternElement &element : elements)
+			appendParsedDefinitionElement(payload, range, element);
+		current.insert_or_assign(definitionKey(range), std::move(payload));
+	}
+
 	std::string snapshot() const {
 		std::string output(parsedExpressionCacheHeader);
 		for (const auto &[key, value] : current) {
@@ -279,6 +315,8 @@ class IncrementalParsedExpressionCache {
 
 	size_t hits() const { return priorHits; }
 	size_t missCount() const { return misses; }
+	size_t definitionHitCount() const { return definitionHits; }
+	size_t definitionMissCount() const { return definitionMisses; }
 
   private:
 	static std::string expressionKey(Range range, SectionType patternType) {
@@ -288,10 +326,13 @@ class IncrementalParsedExpressionCache {
 		source.append(range.subString);
 		return digest(source);
 	}
+	static std::string definitionKey(Range range) { return digest("definition:" + std::string(range.subString)); }
 
 	ParseContext &context;
 	std::unordered_map<std::string_view, std::string_view> prior;
 	std::map<std::string, std::variant<std::string, std::string_view>> current;
 	size_t priorHits = 0;
 	size_t misses = 0;
+	size_t definitionHits = 0;
+	size_t definitionMisses = 0;
 };

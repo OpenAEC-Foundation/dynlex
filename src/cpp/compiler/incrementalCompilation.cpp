@@ -472,6 +472,8 @@ void trimCache(const fs::path &directory) {
 		size_t prefixLength = name.starts_with("object-")	 ? 7
 							  : name.starts_with("program-") ? 8
 							  : name.starts_with("matcher-") ? 8
+							  : name.starts_with("parser-")	 ? 7
+							  : name.starts_with("errors-")	 ? 7
 															 : 0;
 		if (!prefixLength || name.size() != prefixLength + 64 ||
 			!std::all_of(name.begin() + prefixLength, name.end(), [](char character) {
@@ -637,6 +639,12 @@ bool compileIncrementally(
 			context.recordParsedExpression = [&](Range range, SectionType patternType, const Expression *expression) {
 				parserCache.record(range, patternType, expression);
 			};
+			context.reuseParsedDefinition = [&](Range range, std::vector<DefinitionPatternElement> &elements) {
+				return parserCache.reuseDefinition(range, elements);
+			};
+			context.recordParsedDefinition = [&](Range range, const std::vector<DefinitionPatternElement> &elements) {
+				parserCache.recordDefinition(range, elements);
+			};
 			IncrementalMatcherCache matcherCache(context, previousMatches);
 			context.reuseMatcherResult = [&](PatternReference *reference, MatchOptions options,
 											 MatchDependencies *dependencies) {
@@ -663,8 +671,12 @@ bool compileIncrementally(
 			statistics.frontendMilliseconds = elapsedMilliseconds(stageStart);
 			statistics.expressionParseHits = parserCache.hits();
 			statistics.expressionParseMisses = parserCache.missCount();
+			statistics.definitionParseHits = parserCache.definitionHitCount();
+			statistics.definitionParseMisses = parserCache.definitionMissCount();
 			context.reuseParsedExpression = {};
 			context.recordParsedExpression = {};
+			context.reuseParsedDefinition = {};
+			context.recordParsedDefinition = {};
 			stageStart = Clock::now();
 			std::map<std::string, Section *> sections;
 			if (compiled)
@@ -912,6 +924,8 @@ bool compileIncrementally(
 							  {"precedence_matcher_cache_hits", statistics.precedenceMatcherCacheHits},
 							  {"expression_parse_hits", statistics.expressionParseHits},
 							  {"expression_parse_misses", statistics.expressionParseMisses},
+							  {"definition_parse_hits", statistics.definitionParseHits},
+							  {"definition_parse_misses", statistics.definitionParseMisses},
 							  {"source_projections_reused", statistics.sourceProjectionWork.reused},
 							  {"source_projections_scanned", statistics.sourceProjectionWork.scanned},
 							  {"matcher_key_ms", statistics.matcherKeyMilliseconds},
