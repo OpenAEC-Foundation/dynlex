@@ -24,13 +24,19 @@ void prepareDeferredMatchReplay(
 			(!priorDeclarations.contains(path) || sectionDeclaration(*section) != priorDeclarations.at(path)))
 			return;
 	Json ambient = sourceProjection(context, observations, reusable, true, true, false, &prior.at("ambient_sources"));
-	if (!sourceProjectionsEqual(ambient, prior.at("ambient_sources")))
-		return;
+	bool stableAmbient = sourceProjectionsEqual(ambient, prior.at("ambient_sources"));
+	if (!stableAmbient) {
+		Json nonexecution =
+			sourceProjection(context, observations, reusable, true, true, true, &prior.at("ambient_nonexecution_sources"));
+		if (!sourceProjectionsEqual(nonexecution, prior.at("ambient_nonexecution_sources")))
+			return;
+	}
 	Json bodies = functionBodyDigests(context, sections);
 	std::unordered_set<const PatternReference *> deferred(deferredReferences.begin(), deferredReferences.end());
 	for (const auto &[path, section] : sections) {
-		if (!reusable.contains(section) || !prior.at("bodies").contains(path) || !bodies.contains(path) ||
-			bodies.at(path) != prior.at("bodies").at(path) || !prior.at("match_entries").contains(path))
+		if (!reusable.contains(section) || (!stableAmbient && !hasNoGlobalAccess(section)) ||
+			!prior.at("bodies").contains(path) || !bodies.contains(path) || bodies.at(path) != prior.at("bodies").at(path) ||
+			!prior.at("match_entries").contains(path))
 			continue;
 		const Json &entries = prior.at("match_entries").at(path);
 		std::vector<PatternReference *> references;

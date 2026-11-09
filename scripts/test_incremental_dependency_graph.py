@@ -360,6 +360,28 @@ def check_independent_body_resolution_order(root, build):
         "single-word alternative lost its body-driven parameter promotion"
 
 
+def check_independent_reference_delay(root, build):
+    main = root / "independent_reference_delay.dl"
+    source = ('to use value:\n'
+              '    helper\n'
+              '    @intrinsic("discard", value)\n'
+              'to helper:\n'
+              '    @intrinsic("discard", 1)\n'
+              'use 2\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('"discard", 1', '"discard", 2'))
+    edited = build(entry=main)
+    assert edited[0]["deferred_match_keys_replayed"] >= 1, \
+        "independent body reference waited for unrelated parameter classification"
+    assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text().replace('use 2\n', 'use 3\n'))
+    top_level = build(entry=main)
+    assert top_level[0]["deferred_match_keys_replayed"] >= 1, \
+        "top-level execution invalidated a function without global access"
+    assert top_level[1:] == build(False, entry=main)[1:]
+
+
 def check_global_reader_after_top_level_edit(root, build):
     main = root / "global_reader_top_level_edit.dl"
     source = ('integer means: @intrinsic("type", "int")\n'

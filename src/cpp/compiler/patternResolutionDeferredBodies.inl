@@ -1,5 +1,5 @@
-// A body can wait until all definitions are indexed when it cannot classify
-// an enclosing pattern parameter. Its eventual match still contributes normal
+// An expression reference can wait until all definitions are indexed when it
+// cannot classify an enclosing pattern parameter. Its eventual match contributes
 // variable bindings, diagnostics, and precedence information.
 static bool bodyReferenceCanWaitForDefinitions(const PatternReference *reference) {
 	if (reference->purpose != PatternReference::Purpose::Expression)
@@ -19,7 +19,8 @@ static bool bodyReferenceCanWaitForDefinitions(const PatternReference *reference
 			bool canClassifyParameter = false;
 			forEachLeafElement(definition->patternElements, [&](const DefinitionPatternElement &element) {
 				canClassifyParameter |= section->canPromoteImplicitParameter(*definition, element) &&
-										section->variableLikeCounts.at(element.text) != 0;
+										section->variableLikeCounts.at(element.text) != 0 &&
+										reference->pattern.text.find(element.text) != std::string::npos;
 			});
 			if (canClassifyParameter)
 				return false;

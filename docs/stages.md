@@ -127,6 +127,11 @@ Failed body matches wait on the specific trie edges and endpoints inspected by t
 Adding a definition wakes a waiting reference only when one of those conditions changes;
 deadlock recovery still sees all waiting references. This avoids rescanning every failed
 reference on each resolution pass.
+An expression reference that cannot mention a live implicit parameter candidate waits
+until definitions are indexed, even when another reference in the same function must
+classify that candidate. Unchanged functions without global access can replay their
+matcher keys after a top-level execution edit when the nonexecution source projection
+is unchanged.
 
 Incremental matcher keys reuse each parsed reference's candidate literal spellings and numeric literal arguments.
 The pattern tree and lexical scope are fingerprinted again for every lookup, so a newly indexed overload or a
