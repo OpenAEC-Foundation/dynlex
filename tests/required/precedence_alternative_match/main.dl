@@ -1,0 +1,23 @@
+flex section for each item in values:
+    replacement:
+        @intrinsic("store", item, @intrinsic("extract element", values, 0))
+        @intrinsic("execute body")
+integer means: @intrinsic("type", "int")
+function set variable to value:
+    replacement: @intrinsic("store", variable, value)
+function set {arguments:variables} to value:
+    replacement:
+        @intrinsic("store", {assigned}, value)
+        for each {variable} in variables:
+            set variable to assigned
+function {boolean:left} and {boolean:right}:
+    before: $ or $
+    replacement: @intrinsic("and", left, right)
+function left or right:
+    replacement: @intrinsic("or", left, right)
+boolean means: @intrinsic("type", "bool")
+to foo a bar {integer:value}: @intrinsic("discard", 1)
+to foo a baz:
+    set value and index to 0
+    foo a bar value
+foo a baz
