@@ -1,0 +1,139 @@
+.download-shell {
+    width: min(780px, calc(100% - 40px));
+    min-height: 78svh;
+    margin: 0 auto;
+    padding: calc(var(--header-height) + 64px) 0 48px;
+    display: grid;
+    align-items: center;
+}
+
+.download-main {
+    padding: clamp(28px, 6vw, 64px);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    text-align: center;
+}
+
+.download-main h1 {
+    margin: 0 0 20px;
+    font-size: clamp(2rem, 6vw, 3.5rem);
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+}
+
+.download-main p {
+    margin: 0 auto;
+    color: var(--text-muted);
+    line-height: 1.7;
+}
+
+.primary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 28px;
+}
+
+.download-btn {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.download-btn:hover {
+    border-color: var(--accent);
+    background: var(--surface-hover);
+}
+
+.download-btn.primary {
+    width: min(360px, 100%);
+    padding: 16px 24px;
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: 1rem;
+}
+
+.download-btn.primary:hover {
+    border-color: var(--accent-hover);
+    background: var(--accent-hover);
+}
+
+.download-icon {
+    font-size: 1.15rem;
+    line-height: 1;
+}
+
+.small-note {
+    font-size: 0.88rem;
+}
+
+.release-link {
+    display: inline-block;
+    margin-top: 24px;
+    color: var(--accent-text);
+    font-size: 0.9rem;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+
+.release-link:hover {
+    color: var(--text-primary);
+}
+
+.bottom-switch {
+    width: min(920px, calc(100% - 40px));
+    margin: 0 auto 64px;
+}
+
+.chooser summary {
+    width: fit-content;
+    margin: 0 auto;
+    padding: 12px 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.chooser-panel {
+    margin-top: 16px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+}
+
+.other-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.linux-one-liner {
+    margin-top: 24px;
+    padding: 16px;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--console-bg);
+    color: var(--console-text);
+    font: 0.82rem/1.6 var(--font-code);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

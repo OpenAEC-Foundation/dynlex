@@ -48,7 +48,7 @@
     body.menu-open .site-header {
         height: 100svh;
         align-items: flex-start;
-        background: var(--ink);
+        background: var(--page-bg);
         backdrop-filter: none;
     }
 
@@ -64,9 +64,9 @@
         align-items: center;
         gap: 11px;
         padding: 8px 0;
-        color: var(--white);
+        color: var(--text-primary);
         cursor: pointer;
-        font: 500 0.61rem/1 var(--mono);
+        font: 500 0.61rem/1 var(--font-code);
         text-transform: uppercase;
     }
 
@@ -102,8 +102,8 @@
         gap: 0;
         overflow-y: auto;
         padding: clamp(24px, 6svh, 58px) 24px 30px;
-        border-top: 1px solid var(--line);
-        background: var(--ink);
+        border-top: 1px solid var(--border);
+        background: var(--page-bg);
         opacity: 0;
         pointer-events: none;
     }
@@ -116,8 +116,8 @@
 
     .primary-nav > a:not(.nav-launch) {
         padding: 14px 0;
-        border-bottom: 1px solid var(--line);
-        color: var(--white);
+        border-bottom: 1px solid var(--border);
+        color: var(--text-primary);
         font-size: clamp(1.8rem, 7vw, 3.4rem);
         font-weight: 700;
         letter-spacing: -0.06em;
@@ -227,7 +227,7 @@
 
     .workbench-window {
         margin-top: 52px;
-        box-shadow: 7px 7px 0 var(--blue);
+        box-shadow: var(--shadow-lg);
     }
 
     .workbench-bar {
@@ -247,7 +247,7 @@
     .workbench-code {
         --snippet-frame-height: 330px;
         border-right: 0;
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--border);
     }
 
     .hero-snippet-editor {
@@ -315,14 +315,13 @@
     }
 
     .section-title h2,
-    .language-copy h2,
     .studio-copy h2,
     .install-copy h2 {
         font-size: clamp(3rem, 14vw, 4.6rem);
     }
 
     .language-board {
-        box-shadow: 7px 7px 0 var(--acid);
+        box-shadow: var(--shadow-lg);
     }
 
     .lab-panel {
@@ -345,7 +344,7 @@
     }
 
     .studio-window {
-        box-shadow: 7px 7px 0 var(--coral);
+        box-shadow: var(--shadow-lg);
     }
 
     .studio-bar {
@@ -376,7 +375,7 @@
 
     .studio-output {
         min-height: 120px;
-        border-top: 1px solid var(--line);
+        border-top: 1px solid var(--border);
         border-left: 0;
     }
 

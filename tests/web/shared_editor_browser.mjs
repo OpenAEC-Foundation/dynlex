@@ -6,10 +6,12 @@ await waitFor("document.querySelectorAll('[data-snippet-source][data-language-re
 assert.equal(await evaluate("document.querySelectorAll('.snippet-editor-shell, .farm-source-highlight, .river-source-highlight').length"),0);
 await clickElement('[data-farm-challenge-load]');
 await waitFor("document.querySelector('[data-river-challenge-mount]').dataset.challengeLoaded==='farm'", 'farm ready');
+assert.equal(await evaluate("getComputedStyle(document.querySelector('[data-remove-flag=red]'),'::before').backgroundColor"),
+  'rgb(205, 99, 80)', 'Destination swatches retain their actual flag color');
 const farm='[data-farm-editor]';
 await evaluate("document.querySelector('[data-farm-role-panel]').scrollIntoView({block:'center',behavior:'instant'})");
 await editCode(farm,'loop forever:\n    walk to the barn\n    wait');
-await waitFor("[...document.querySelectorAll('[data-farm-editor] .view-line:first-child span')].some(s=>getComputedStyle(s).color==='rgb(255, 215, 135)')",'farm semantic colors');
+await waitFor("[...document.querySelectorAll('[data-farm-editor] .view-line:first-child span')].some(s=>getComputedStyle(s).color==='rgb(245, 158, 11)')",'farm semantic colors');
 await withEditor(farm,"editor.focus();editor.setPosition({lineNumber:3,column:9});");
 await evaluate(`(() => {
   window.highlightSamples=[]; window.sampleHighlight=true;

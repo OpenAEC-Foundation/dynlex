@@ -182,7 +182,7 @@ function getInitialTheme() {
   if (persisted === "dark" || persisted === "light") {
     return persisted;
   }
-  return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+  return "dark";
 }
 
 function requiredElement(id) {
