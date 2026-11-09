@@ -672,6 +672,7 @@ bool compileIncrementally(
 					IncrementalPreinferPlan plan = scalarArgumentIncrementalCandidates(
 						context, *previous, recording->observations, sectionPaths, resolvedFunctionProjection
 					);
+					statistics.preinferDependencyGraphSectionsChecked = plan.dependencyGraphSectionsChecked;
 					context.runIncrementalPreinference =
 						[&, plan = std::move(plan)](
 							ParseContext &inferred,
@@ -896,6 +897,7 @@ bool compileIncrementally(
 							  {"preinferred_instantiations", statistics.preinferredInstantiations},
 							  {"functions_ir_reused", statistics.reusedFunctionIR},
 							  {"dependency_graph_sections_reused", statistics.dependencyGraphSectionsReused},
+							  {"preinfer_dependency_graph_sections_checked", statistics.preinferDependencyGraphSectionsChecked},
 							  {"dependency_graph_entries_reused", statistics.dependencyGraphEntriesReused},
 							  {"linked_cached_objects", statistics.linkedCachedObjects},
 							  {"objects_reused", statistics.reusedObjects},

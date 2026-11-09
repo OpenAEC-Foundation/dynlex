@@ -26,6 +26,7 @@ struct BuildStatistics {
 	size_t reusedObjects = 0;
 	size_t builtObjects = 0;
 	size_t dependencyGraphSectionsReused = 0;
+	size_t preinferDependencyGraphSectionsChecked = 0;
 	size_t dependencyGraphEntriesReused = 0;
 	size_t matcherCacheHits = 0;
 	size_t precedenceMatcherCacheHits = 0;

@@ -1,29 +1,14 @@
 struct IncrementalPreinferPlan {
 	std::vector<ParseContext::IncrementalFunctionRequest> requests;
 	std::unordered_map<const Section *, bool> bodyUnchanged;
+	size_t dependencyGraphSectionsChecked = 0;
 };
 
 std::set<Section *> matchedSectionDependencies(Section *section) {
-	std::set<Section *> dependencies;
-	std::function<void(const PatternMatch &)> visitMatch = [&](const PatternMatch &match) {
-		for (PatternDefinition *definition : match.matchingDefinitions) {
-			if (definition->section != section)
-				dependencies.insert(definition->section);
-		}
-		for (const PatternMatch &child : match.subMatches)
-			visitMatch(child);
-	};
-	std::function<void(Section *)> visitBody = [&](Section *body) {
-		for (PatternReference *reference : body->patternReferences) {
-			if (reference->match)
-				visitMatch(*reference->match);
-		}
-		for (Section *child : body->children) {
-			if (child->patternDefinitions.empty())
-				visitBody(child);
-		}
-	};
-	visitBody(section);
+	std::vector<Section *> matched;
+	collectMatchedSectionDependencies(section, matched);
+	std::set<Section *> dependencies(matched.begin(), matched.end());
+	dependencies.erase(section);
 	return dependencies;
 }
 
@@ -40,8 +25,7 @@ IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 	if (!fullyCompatible && !compatibleGlobalFreeProjection(prior, current))
 		return result;
 	for (const auto &[section, path] : sectionPaths)
-		result.bodyUnchanged[section] = !reusableCodegenSection(*section) ||
-									  unchangedFunctionSource(path, prior, current);
+		result.bodyUnchanged[section] = !reusableCodegenSection(*section) || unchangedFunctionSource(path, prior, current);
 	const Json &summaries = previous.at("inference_summaries");
 	ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
 	std::map<std::string, size_t> generatedFunctionCounts;
@@ -51,16 +35,26 @@ IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 	std::unordered_map<const Section *, bool> globalFree;
 	for (const auto &[section, _] : sectionPaths)
 		globalFree[section] = (fullyCompatible || section != context.mainSection) && hasNoGlobalAccess(section);
+	std::optional<std::unordered_set<std::string>> graphDirty;
+	if (fullyCompatible && previous.contains("section_dependency_graph")) {
+		std::map<std::string, Section *> sections;
+		for (const auto &[section, path] : sectionPaths)
+			sections.emplace(path, const_cast<Section *>(section));
+		graphDirty = dirtySectionsFromSavedGraph(previous.at("section_dependency_graph"), sections, globalFree, {});
+	}
 	std::unordered_map<Section *, bool> globalFreeClosure;
 	for (const auto &[section, path] : sectionPaths) {
 		if (section->type != SectionType::Function || section->isFlex || section->isConversion || !globalFree.at(section) ||
 			!summaries.contains(path) || summaries.at(path).empty() || section->patternDefinitions.size() != 1 ||
 			section->patternDefinitions.front()->indexedPaths.size() != 1 ||
-			!prior.at("function_declarations").contains(path) ||
-			!current.at("function_declarations").contains(path) ||
+			!prior.at("function_declarations").contains(path) || !current.at("function_declarations").contains(path) ||
 			prior.at("function_declarations").at(path) != current.at("function_declarations").at(path))
 			continue;
-		if (!functionDependenciesUnchanged(const_cast<Section *>(section), globalFree, globalFreeClosure))
+		if (graphDirty) {
+			result.dependencyGraphSectionsChecked++;
+			if (graphDirty->contains(path))
+				continue;
+		} else if (!functionDependenciesUnchanged(const_cast<Section *>(section), globalFree, globalFreeClosure))
 			continue;
 		if (generatedFunctionCounts[path] != summaries.at(path).size())
 			continue;
@@ -85,9 +79,8 @@ IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 				DataType type{
 					static_cast<DataType::Kind>(encoded.at(0).get<int>()), encoded.at(1).get<int>(), encoded.at(2).get<int>()
 				};
-				if (type.pointerDepth != 0 ||
-					(type.kind != DataType::Kind::Bool && type.kind != DataType::Kind::Float &&
-					 type.kind != DataType::Kind::Int && type.kind != DataType::Kind::UInt))
+				if (type.pointerDepth != 0 || (type.kind != DataType::Kind::Bool && type.kind != DataType::Kind::Float &&
+											   type.kind != DataType::Kind::Int && type.kind != DataType::Kind::UInt))
 					break;
 				request.argumentTypes.push_back(type);
 			}
