@@ -89,6 +89,12 @@ multiword names and forward references use the normal variable matcher. After ma
 the declaring capture binds the result variable and supplies its spelling as a string
 argument to the value expression.
 
+Once section signatures are available, the normal matcher indexes declaring captures
+before function-body resolution must finish. This discovers only declaration names;
+the global call remains unresolved until the ordinary global-reference boundary.
+Function bodies can therefore refer to multiword data names without creating a
+dependency cycle between their own resolution and that of the declaring call.
+
 A section with `receiver` metadata moves its already parsed body into an ordinary
 callable function with one receiver parameter. This occurs before expression expansion
 and variable grouping, including for nested deferred bodies. The original section call
@@ -277,8 +283,12 @@ pass, and participate in inference-trial rollback. Returns inferred inside a nes
 function do not determine the caller's result.
 
 An ordinary overload lookup with unresolved recursive operands is deferred until
-the existing body reinference pass deduces those operands. Dependency observation
-belongs to each argument, so an unrelated unresolved argument remains a failure.
+the existing body reinference pass deduces those operands. Reads and assignments
+of a pending local retain the dependency observed by their owning function pass.
+Nested function passes keep separate observations, so an unrelated callee's error
+remains a failure. Fixed Boolean results can be inferred while their operand checks
+await the next pass; a condition whose type is still pending preserves its section
+outcome and permits traversal to the return that resolves the recursive cycle.
 Flex overloads explicitly accepting unresolved arguments still participate in
 selection, including return wrappers that must record the return observation.
 
@@ -685,6 +695,9 @@ Lifecycle inference follows runtime expressions from main, exposed functions and
 operands do not make their class lifecycle bodies reachable. Runtime owning values, nested owning fields and explicit
 destruction do; lifecycle bodies can in turn require more runtime types. Retain/release declaration pairing is validated
 independently of runtime use. Intrinsic type-only operand classification is shared with memory diagnostics.
+Resolved data-field values and symbolic callable constants participate in this graph:
+their generated arrays and callbacks can own managed values even when the containing
+description is only emitted as static data.
 
 External call signatures come entirely from their inferred DynLex operands; code generation does not identify or special-case
 library function names. `@intrinsic("call", library, function, return type, arguments...)` emits a fixed signature.
@@ -703,7 +716,8 @@ These are compile-time predicates, so platform-specific native calls in unselect
 
 Runtime-loaded native symbols use `@intrinsic("call pointer", callee pointer, return type, arguments...)`. The callee is an
 opaque runtime pointer and the return type is a concrete compile-time type; the remaining operands define its fixed, nonvariadic C
-ABI signature. This is CPU-only, because WebAssembly and SPIR-V have no corresponding opaque native-call ABI. Library authors
+ABI signature. Native pointers identify callable addresses; WebAssembly pointers identify entries in the module's function table.
+Both pointer calls and typed `invoke` calls support CPU and WebAssembly targets; SPIR-V rejects them. Library authors
 must ensure the runtime pointer and stated signature match, and should keep this intrinsic inside a natural-language wrapper pattern
 that obtains the symbol from the relevant loader, so application code calls the wrapper rather than spelling ABI metadata at each use
 site.
@@ -734,9 +748,17 @@ WebAssembly object emission is followed by the pinned LLD WebAssembly driver, em
 compilers. Each link consumes one compiler object and uses one thread, including in single-threaded Web Workers.
 The linker resolves all code and data relocations, exports `main`, and reserves the first 16 bytes for null.
 Static data precedes the aligned 8 MiB stack, and the immutable `__heap_base` export identifies the first heap address,
-including any BSS that has no active data segment. The module defines its own stack pointer and function table. The
+including any BSS that has no active data segment. The module defines its own stack pointer and exports its function table as
+`__indirect_function_table`, so host imports can retain and invoke typed callbacks after `main` returns. The
 browser runtime supplies linear memory and host functions, reads that linked heap boundary, and allocates from it;
 it does not compute another stack or static-data layout. Relocatable objects are never treated as executable modules.
+
+Function references retain their symbolic definition, pattern path and inferred
+callable instantiation as compile-time values. Pure calls and address casts preserve
+that identity; code generation materializes the callable symbol when emitting a
+constant. Static callback tables therefore remain constant data when their entries
+use ordinary library patterns. Host addresses and WebAssembly table indices are
+assigned by linking rather than guessed during inference.
 
 SPIR-V vertex-to-fragment interpolants are identified by arbitrary non-empty semantic names. Each independently compiled shader
 stage encodes those names into valid interface identifiers and assigns locations in lexical semantic-name order, so matching

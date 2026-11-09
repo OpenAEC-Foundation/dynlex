@@ -762,11 +762,11 @@ assert.match(
 );
 assert.doesNotMatch(shaderBannerJavascript, /thoughtPreview/);
 assert.doesNotMatch(shaderBannerJavascript, /HTMLMediaElement|\.play\(|\.pause\(|webm|mp4|poster/);
-assert.match(sharedRenderer, /navigator\.gpu/);
+assert.match(sharedRenderer, /requestShaderGraphics/);
 assert.match(sharedRenderer, /createWebGpuShaderPreview/);
 assert.match(sharedRenderer, /createWebGlShaderPreview/);
 assert.match(webGpuRenderer, /getContext\("webgpu"/);
-assert.match(webGpuRenderer, /navigator\.gpu\.requestAdapter/);
+assert.match(webGpuRenderer, /requestGraphicsBackend/);
 assert.match(webGpuRenderer, /navigator\.gpu\.getPreferredCanvasFormat/);
 assert.match(webGpuRenderer, /addEventListener\("uncapturederror"/);
 assert.equal((webGpuRenderer.match(/device\.lost\.then/g) ?? []).length, 1,

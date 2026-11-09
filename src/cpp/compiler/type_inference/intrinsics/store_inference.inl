@@ -296,7 +296,9 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	BindingFrameStack valueBindingFrameStack = std::move(resolvedValue.bindingFrameStack);
 	ScopedRecursiveInferenceObservation valueObservation(context, context.currentInstantiation);
 	DataType valueType = ensureExpressionTypeWithCurrentGrouping(valueExpr, context, valueBindingFrameStack);
-	bool valueDependsOnInProgressInstantiation = valueObservation.observed();
+	// A preceding store may have assigned a pending recursive result to a local.
+	// Its reads must defer with this function's pass, just like deferred returns.
+	bool valueDependsOnInProgressInstantiation = valueObservation.ownerObserved();
 	if (valueType.kind == DataType::Kind::ArgumentReference) {
 		resolvedDestination = resolveThroughBindingLayers(expr->arguments[1], flexBindingFrameStack, [&](Expression *current) {
 			return selectInferenceFlexBindingExpansion(&context, current);

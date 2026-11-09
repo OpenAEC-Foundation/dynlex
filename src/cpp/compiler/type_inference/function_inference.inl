@@ -933,6 +933,33 @@ static DataType ensureExpressionTypeWithCurrentGrouping(
 	return requestKnownOrInferExpressionType(expr, context, bindingFrameStack, true);
 }
 
+static bool validateLocalVariableTypes(Section *section, InstantiatedSectionBody &body, InferenceContext &context) {
+	return section->forEachExecutionSection([&](Section *current) {
+		for (const auto &[name, variable] : current->variables) {
+			if (variable->type.isDeduced())
+				continue;
+			Expression *statement = variable->definition->range.line->expression;
+			// An omitted capture has no executable declaration. Unreachable
+			// branches likewise need no storage or runtime type.
+			if (!statement)
+				continue;
+			Expression *inferred = body.findCloneOf(statement);
+			requireCompilerInvariant(inferred, "local variable declaration is missing from its instantiated body");
+			if (!inferred->executionFallsThrough.has_value())
+				continue;
+			context.fail(
+				Diagnostic(
+					context.parseContext, Diagnostic::Level::Error, "variable has no type", variable->definition->range, "name",
+					name
+				),
+				1, false
+			);
+			return false;
+		}
+		return true;
+	});
+}
+
 #include "callback_type_inference.inl"
 #include "function_inference_evaluation.inl"
 #include "function_inference_ordered.inl"

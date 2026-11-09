@@ -85,8 +85,12 @@ class RuntimeLifecycleUses {
 		if (expression->type.isMetaType() || !expressions.insert(expression).second)
 			return;
 		collectType(expression->type);
+		if (const auto *function = std::get_if<CompileTimeFunction>(&expression->compileTimeValue))
+			collectInstantiation(*function->instantiation, true);
 		if (expression->selectedInstantiation)
 			collectInstantiation(*expression->selectedInstantiation, expression->selectedCallableDefinition != nullptr);
+		if (expression->inferredDataValue)
+			collectExpression(expression->inferredDataValue, bindings);
 		BindingFrameStack replacementBindings = bindings;
 		if (expression->inferredFlexBody) {
 			pushPatternCallBindingScope(replacementBindings, expression, expression->selectedPatternDefinition);

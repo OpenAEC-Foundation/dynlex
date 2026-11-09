@@ -4,6 +4,7 @@ import {
 } from "./terrain-geometry.js";
 import { validateShaderGeometryDescriptor } from "./shader-renderer-shared.js";
 import { createCloudTriangleVertices } from "./shader-transition-compositor.js";
+import { createWebGlProgram as createProgram } from "./graphics-backend.js";
 
 const fullscreenVertexSource = `#version 300 es
 precision highp float;
@@ -52,37 +53,6 @@ const uniformValueProviders = Object.freeze({
   height: (frame) => frame.height,
   render_pass: (_frame, renderPass) => renderPass
 });
-
-function compileShader(gl, type, source) {
-  const shader = gl.createShader(type);
-  if (!shader) throw new Error("WebGL could not allocate a shader");
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return shader;
-  console.error("WebGL shader compilation failed", gl.getShaderInfoLog(shader));
-  gl.deleteShader(shader);
-  throw new Error("Shader preview could not compile. Check the browser log.");
-}
-
-function createProgram(gl, vertexSource, fragmentSource) {
-  const vertex = compileShader(gl, gl.VERTEX_SHADER, vertexSource);
-  const fragment = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
-  const program = gl.createProgram();
-  if (!program) {
-    gl.deleteShader(vertex);
-    gl.deleteShader(fragment);
-    throw new Error("WebGL could not allocate a shader program");
-  }
-  gl.attachShader(program, vertex);
-  gl.attachShader(program, fragment);
-  gl.linkProgram(program);
-  gl.deleteShader(vertex);
-  gl.deleteShader(fragment);
-  if (gl.getProgramParameter(program, gl.LINK_STATUS)) return program;
-  console.error("WebGL shader linking failed", gl.getProgramInfoLog(program));
-  gl.deleteProgram(program);
-  throw new Error("Shader preview could not link. Check the browser log.");
-}
 
 function createGeometryBinding(gl, geometry) {
   const vertexArray = gl.createVertexArray();

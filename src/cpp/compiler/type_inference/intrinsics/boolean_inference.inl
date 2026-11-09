@@ -1,4 +1,18 @@
 void ExpressionInferenceSupport::inferBooleanIntrinsic(IntrinsicKind kind) {
+	ScopedRecursiveInferenceObservation operandObservation(context, context.currentInstantiation);
+	bool unresolvedOperand = false;
+	for (size_t index = 1; index < expr->arguments.size(); index++)
+		unresolvedOperand |= !ensureExpressionType(expr->arguments[index], context, flexBindingFrameStack).isDeduced();
+	if (!context.typesValid)
+		return;
+	if (unresolvedOperand && operandObservation.ownerObserved()) {
+		// Comparisons and logical negation have a fixed result type even while
+		// their operands await the recursive body's next inference pass. `and`
+		// can also combine type constraints, so its result must remain pending.
+		if (kind != IntrinsicKind::And)
+			expr->type = {DataType::Kind::Bool};
+		return;
+	}
 	if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
 		DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 		DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);

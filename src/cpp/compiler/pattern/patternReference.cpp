@@ -21,21 +21,26 @@ std::optional<std::string> numericPatternArgumentSpelling(const PatternReference
 	return numeric ? std::optional<std::string>(argument->range.subString) : std::nullopt;
 }
 
-void PatternReference::resolve(PatternMatch *matchResult) {
-	match = matchResult;
-	if (match) {
-		for (PatternDefinition *definition : match->matchingDefinitions) {
-			if (!definition->section->dataSection || definition->section->dataSection->declarationParameter.empty())
-				continue;
-			if (const VariableMatch *variable = dataSectionDeclaredVariable(*match, *definition)) {
-				range().section()->dataVariableDeclarations.insert(variable->name);
-				range().section()->registerExplicitVariableName(
-					variable->name,
-					Range(range().line, range().start() + variable->lineStartPos, range().start() + variable->lineEndPos)
-				);
-			}
+bool PatternReference::indexDataDeclarationNames(const PatternMatch &matched) {
+	bool changed = false;
+	for (PatternDefinition *definition : matched.matchingDefinitions) {
+		if (!definition->section->dataSection || definition->section->dataSection->declarationParameter.empty())
+			continue;
+		if (const VariableMatch *variable = dataSectionDeclaredVariable(matched, *definition)) {
+			changed |= range().section()->dataVariableDeclarations.insert(variable->name).second;
+			range().section()->registerExplicitVariableName(
+				variable->name,
+				Range(range().line, range().start() + variable->lineStartPos, range().start() + variable->lineEndPos)
+			);
 		}
 	}
+	return changed;
+}
+
+void PatternReference::resolve(PatternMatch *matchResult) {
+	match = matchResult;
+	if (match)
+		indexDataDeclarationNames(*match);
 	resolved = true;
 	range().section()->decrementUnresolved();
 }

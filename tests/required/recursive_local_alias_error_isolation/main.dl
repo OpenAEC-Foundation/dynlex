@@ -1,0 +1,18 @@
+function broken:
+    execute:
+        @intrinsic("store", invalid, @intrinsic("address of", 1))
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function walk value:
+    execute:
+        @intrinsic("store", result, value)
+        if @intrinsic("greater than", value, 0):
+            @intrinsic("store", candidate, walk @intrinsic("subtract", value, 1))
+            @intrinsic("discard", broken)
+            @intrinsic("store", result, candidate)
+        @intrinsic("return", result)
+
+@intrinsic("discard", walk 1)

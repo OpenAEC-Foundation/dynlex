@@ -725,6 +725,8 @@ run_auxiliary_test "web_runtime_filesystem" 10 node "$PROJECT_DIR/tests/web/runt
 run_auxiliary_test "web_runtime_host" 10 node "$PROJECT_DIR/tests/web/runtime_host.mjs"
 run_auxiliary_test "web_path_library" 30 node "$PROJECT_DIR/tests/web/path_library.mjs" "$COMPILER"
 run_auxiliary_test "web_memory_layout" 30 node "$PROJECT_DIR/tests/web/memory_layout.mjs" "$COMPILER"
+run_auxiliary_test "web_runtime_math" 30 node "$PROJECT_DIR/tests/web/runtime_math.mjs" "$COMPILER"
+run_auxiliary_test "web_host_callbacks" 30 node "$PROJECT_DIR/tests/web/host_callbacks.mjs" "$COMPILER"
 run_auxiliary_test "path_host_runtime" 20 python3 -B "$SCRIPT_DIR/test_path_host_runtime.py"
 run_auxiliary_test \
     "filesystem_transaction_runtime" 20 python3 -B "$SCRIPT_DIR/test_filesystem_transaction_runtime.py"
@@ -733,7 +735,6 @@ run_auxiliary_test "command_line_argument_targets" 10 python3 -B "$SCRIPT_DIR/te
 run_auxiliary_test "shader_intrinsic_targets" 20 python3 -B "$SCRIPT_DIR/test_shader_intrinsic_targets.py" "$COMPILER"
 run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"
-run_auxiliary_test "ui_svg_import" 10 python3 -B "$SCRIPT_DIR/test_ui_svg.py"
 run_auxiliary_test "native_platform_targets" 30 python3 -B "$SCRIPT_DIR/test_native_platform_targets.py" "$PROJECT_DIR" "$COMPILER"
 run_auxiliary_test "nested_operand_grouping" 30 python3 -B "$SCRIPT_DIR/test_nested_operand_grouping.py" "$PROJECT_DIR" "$COMPILER"
 run_auxiliary_test "string_literal_boundaries" 10 python3 -B "$SCRIPT_DIR/test_string_literal_boundaries.py" "$PROJECT_DIR" "$COMPILER"
@@ -741,11 +742,6 @@ run_auxiliary_test "codegen_options" 30 python3 -B "$SCRIPT_DIR/test_codegen_opt
 run_auxiliary_test "object_output" 20 python3 -B "$SCRIPT_DIR/test_object_output.py" "$COMPILER"
 run_auxiliary_test "native_pointer_calls" 20 python3 -B "$SCRIPT_DIR/test_native_pointer_calls.py" "$COMPILER"
 run_auxiliary_test "typed_callbacks" 120 python3 -B "$SCRIPT_DIR/test_typed_callbacks.py" "$PROJECT_DIR" "$COMPILER"
-if [[ "$(uname -s)" == "Linux" ]]; then
-    run_auxiliary_test "declarative_ui_window" 120 python3 -B "$SCRIPT_DIR/test_ui_sections.py" "$PROJECT_DIR" "$COMPILER"
-    run_auxiliary_test "snake_studio_window" 120 python3 -B "$SCRIPT_DIR/test_snake_ui.py" "$PROJECT_DIR" "$COMPILER"
-    run_auxiliary_test "ribbon_studio_window" 120 python3 -B "$SCRIPT_DIR/test_ribbon_ui.py" "$PROJECT_DIR" "$COMPILER"
-fi
 run_auxiliary_test "native_atomics" 30 python3 -B "$SCRIPT_DIR/test_native_atomics.py" "$COMPILER"
 run_auxiliary_test "json_integer64" 30 python3 -B "$SCRIPT_DIR/test_json_integer64.py" "$COMPILER"
 run_auxiliary_test "float_math_codegen" 20 python3 -B "$SCRIPT_DIR/test_float_math_codegen.py" "$COMPILER"

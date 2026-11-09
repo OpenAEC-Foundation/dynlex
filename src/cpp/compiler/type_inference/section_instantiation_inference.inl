@@ -66,8 +66,7 @@ bool ensureSectionInstantiationInferred(
 	std::string functionName = definition ? (std::string)definition->range.subString : "";
 	bool instantiationFallsThrough = true;
 	bool inferenceSucceeded = runInstantiationReinferenceLoop(
-		context, inst, definition, fallbackRange, std::move(functionName), callerInstantiation != nullptr,
-		[&]() {
+		context, inst, definition, fallbackRange, std::move(functionName), callerInstantiation != nullptr, [&]() {
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 		beginParameterOutputReinference(inst);
 		inst.writtenGlobalReferences.clear();
@@ -134,21 +133,10 @@ bool ensureSectionInstantiationInferred(
 	if (!inst.valid || !context.typesValid)
 		return false;
 
-	bool localsResolved = section->forEachExecutionSection([&](Section *currentSection) {
-		for (auto &[name, var] : currentSection->variables) {
-			if (var->type.isDeduced())
-				continue;
-			if (!context.suppressReinferPassDiagnostics) {
-				context.addDiagnostic(Diagnostic(
-					parseContext, Diagnostic::Level::Error, "variable has no type", var->definition->range, "name", name
-				));
-			}
-			return false;
-		}
-		return true;
-	});
-	if (!localsResolved) {
+	if (!inst.needsReinfer && !validateLocalVariableTypes(section, *inst.body, context)) {
 		inst.valid = false;
+		if (callerContext)
+			callerContext->inheritTypeFailureFrom(context);
 		return false;
 	}
 	InstantiationKey refinedKey =

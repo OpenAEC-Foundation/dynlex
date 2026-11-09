@@ -1,0 +1,23 @@
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function left = right:
+    execute:
+        @intrinsic("return", @intrinsic("equal", left, right))
+
+function left != right:
+    replacement:
+        @intrinsic("not", left = right)
+
+function walk value:
+    execute:
+        @intrinsic("store", result, value)
+        if @intrinsic("greater than", value, 0):
+            @intrinsic("store", candidate, walk @intrinsic("subtract", value, 1))
+            if candidate != 1:
+                @intrinsic("store", result, candidate)
+        @intrinsic("return", result)
+
+if @intrinsic("not equal", walk 3, 0):
+    @intrinsic("call", "libc", "abort", @intrinsic("type", "nothing"))
