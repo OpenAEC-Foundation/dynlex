@@ -277,9 +277,21 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     active_noop.write_text('to no effect: @intrinsic("discard", 2)\nno effect\n')
     active_noop_edit = build(entry=active_noop)
     assert not active_noop_edit[0]["frontend_reused"]
+    assert active_noop_edit[0]["expression_parse_hits"] >= 1, "unchanged expression syntax was parsed again"
     assert active_noop_edit[0]["objects_built"] == 0
     assert active_noop_edit[0]["link_ms"] == 0, "equivalent active code edit relinked the executable"
     assert active_noop_edit[1:] == build(False, entry=active_noop)[1:]
+    capture_main = root / "capture_reuse.dl"
+    capture_source = ('to store value:\n'
+                      '    @intrinsic("store", {local}, value)\n'
+                      '    @intrinsic("discard", local)\n'
+                      'store 1\n')
+    capture_main.write_text(capture_source)
+    build(entry=capture_main)
+    capture_main.write_text(capture_source.replace('store 1\n', 'store 2\n'))
+    capture_edit = build(entry=capture_main)
+    assert capture_edit[0]["expression_parse_hits"] >= 2, "unchanged capture syntax was parsed again"
+    assert capture_edit[1:] == build(False, entry=capture_main)[1:], "restored capture changed program behavior"
     main.write_text(unused_source.replace('"discard", 1)', '"discard", 2)\n    @intrinsic("discard", 3)'))
     inserted_unused = build()
     assert inserted_unused[0]["type_inference_reused"], "unused body insertion repeated type inference"

@@ -41,7 +41,9 @@
 #include <optional>
 #include <set>
 #include <stdexcept>
+#include <type_traits>
 #include <unordered_set>
+#include <variant>
 
 namespace {
 using Json = nlohmann::json;
@@ -174,6 +176,7 @@ class RecordingFileSystem : public lsp::FileSystem {
 };
 
 #include "incrementalDiagnosticCache.inl"
+#include "incrementalParsedExpressionCache.inl"
 
 void recordSemanticSources(Json &result, RecordingFileSystem &files, const ParseContext &context) {
 	result["comment_prefixes"] =
@@ -500,87 +503,7 @@ void trimCache(const fs::path &directory) {
 	}
 }
 
-struct TemporaryObjects {
-	fs::path directory;
-	TemporaryObjects() {
-		llvm::SmallString<256> path;
-		if (std::error_code error = llvm::sys::fs::createUniqueDirectory("dynlex-incremental", path))
-			throw fs::filesystem_error("cannot create incremental build directory", error);
-		directory = path.str().str();
-	}
-	~TemporaryObjects() {
-		if (directory.empty())
-			return;
-		std::error_code error;
-		fs::remove_all(directory, error);
-		if (error)
-			std::cerr << "Failed to clean incremental build directory: " << error.message() << '\n';
-	}
-};
-
-struct BuildStatistics {
-	bool reusedFrontend = false;
-	bool reusedTypeInference = false;
-	bool linkedCachedObjects = false;
-	size_t reusedInferenceInstantiations = 0;
-	size_t preinferredInstantiations = 0;
-	size_t reusedFunctionIR = 0;
-	size_t reusedObjects = 0;
-	size_t builtObjects = 0;
-	size_t matcherCacheHits = 0;
-	size_t precedenceMatcherCacheHits = 0;
-	SourceProjectionWork sourceProjectionWork;
-	double matcherKeyMilliseconds = 0;
-	double matcherRestoreMilliseconds = 0;
-	double frontendMilliseconds = 0;
-	double inferenceMilliseconds = 0;
-	double projectionMilliseconds = 0;
-	double preinferenceMilliseconds = 0;
-	double codegenMilliseconds = 0;
-	double irGenerationMilliseconds = 0;
-	double partitionMilliseconds = 0;
-	double linkMilliseconds = 0;
-	std::vector<std::string> objectKeys;
-};
-
-std::optional<bool> linkCachedObjects(
-	ParseContext &context, const fs::path &directory, const std::vector<std::string> &keys,
-	const std::vector<std::string> &libraries, BuildStatistics &statistics
-) {
-	TemporaryObjects temporary;
-	std::vector<std::string> paths;
-	paths.reserve(keys.size());
-	for (size_t index = 0; index < keys.size(); index++) {
-		std::optional<std::string> object = readEntry(directory / ("object-" + keys[index] + ".entry"));
-		if (!object)
-			return std::nullopt;
-		fs::path path = temporary.directory / (std::to_string(index) + ".o");
-		std::ofstream output(path, std::ios::binary);
-		output.write(object->data(), object->size());
-		output.close();
-		if (!output)
-			throw std::runtime_error("cannot materialize cached object: " + path.string());
-		paths.push_back(path.string());
-	}
-	statistics.reusedObjects = keys.size();
-	statistics.linkedCachedObjects = true;
-	auto linkStart = Clock::now();
-	bool linked = emitNativeExecutableWithObjects(context, paths, libraries);
-	statistics.linkMilliseconds = elapsedMilliseconds(linkStart);
-	return linked;
-}
-
-void restoreCachedModule(ParseContext &context, const Json &cached, const fs::path &entry) {
-	delete context.llvmModule;
-	context.llvmModule = nullptr;
-	llvm::SMDiagnostic diagnostic;
-	std::unique_ptr<llvm::Module> module =
-		llvm::parseAssemblyString(cached.at("ir").get<std::string>(), diagnostic, *context.llvmContext);
-	if (!module || llvm::verifyModule(*module))
-		throw std::runtime_error("invalid cached LLVM IR: " + entry.string());
-	module->setModuleIdentifier(cached.at("module_id").get<std::string>());
-	context.llvmModule = module.release();
-}
+#include "incrementalNativeObjects.inl"
 
 #include "incrementalCompilationPartitions.inl"
 #include "incrementalInferenceTypes.inl"
@@ -615,6 +538,7 @@ bool compileIncrementally(
 		std::string cachedDiagnostics;
 		std::string previousMatches;
 		std::string previousMatcherKey;
+		std::string previousParserKey;
 		if (auto cached = readEntry(failedEntry)) {
 			previousFailure = Json::parse(*cached);
 			if (!initializeSyntaxConfigs(context, context.options.inputPath))
@@ -623,6 +547,8 @@ bool compileIncrementally(
 				observationsStillEquivalent(*previousFailure, *recording, context, cachedDiagnostics, configOnlyChange);
 			if (!reuseFailedFrontend)
 				previousMatcherKey = previousFailure->at("matcher_key").get<std::string>();
+			if (!reuseFailedFrontend)
+				previousParserKey = previousFailure->at("parser_key").get<std::string>();
 		}
 		if (!reuseFailedFrontend) {
 			if (auto cached = readEntry(programEntry)) {
@@ -633,6 +559,8 @@ bool compileIncrementally(
 					observationsStillEquivalent(*previous, *recording, context, cachedDiagnostics, configOnlyChange);
 				if (!reusePreviousFrontend && previousMatcherKey.empty())
 					previousMatcherKey = previous->at("matcher_key").get<std::string>();
+				if (!reusePreviousFrontend && previousParserKey.empty())
+					previousParserKey = previous->at("parser_key").get<std::string>();
 			}
 		}
 		if (reuseFailedFrontend) {
@@ -693,6 +621,22 @@ bool compileIncrementally(
 					previousMatches = std::move(*cached);
 				}
 			}
+			std::string previousParsedExpressions;
+			if (!previousParserKey.empty()) {
+				fs::path parserEntry = directory / ("parser-" + previousParserKey + ".entry");
+				if (auto cached = readEntry(parserEntry)) {
+					if (digest(*cached) != previousParserKey)
+						throw std::runtime_error("corrupt parser cache entry: " + parserEntry.string());
+					previousParsedExpressions = std::move(*cached);
+				}
+			}
+			IncrementalParsedExpressionCache parserCache(context, previousParsedExpressions);
+			context.reuseParsedExpression = [&](Section *section, Range range, SectionType patternType) {
+				return parserCache.reuse(section, range, patternType);
+			};
+			context.recordParsedExpression = [&](Range range, SectionType patternType, const Expression *expression) {
+				parserCache.record(range, patternType, expression);
+			};
 			IncrementalMatcherCache matcherCache(context, previousMatches);
 			context.reuseMatcherResult = [&](PatternReference *reference, MatchOptions options,
 											 MatchDependencies *dependencies) {
@@ -708,9 +652,19 @@ bool compileIncrementally(
 				writeEntry(directory / ("matcher-" + key + ".entry"), payload);
 				return key;
 			};
+			auto saveParser = [&]() {
+				std::string payload = parserCache.snapshot();
+				std::string key = digest(payload);
+				writeEntry(directory / ("parser-" + key + ".entry"), payload);
+				return key;
+			};
 			auto stageStart = Clock::now();
 			bool compiled = compileBeforeTypeInference(context.options.inputPath, context);
 			statistics.frontendMilliseconds = elapsedMilliseconds(stageStart);
+			statistics.expressionParseHits = parserCache.hits();
+			statistics.expressionParseMisses = parserCache.missCount();
+			context.reuseParsedExpression = {};
+			context.recordParsedExpression = {};
 			stageStart = Clock::now();
 			std::map<std::string, Section *> sections;
 			if (compiled)
@@ -826,6 +780,7 @@ bool compileIncrementally(
 					result["files"] = recording->observations;
 					result["inactive_projection"] = std::move(inactiveProjection);
 					result["matcher_key"] = saveMatcher();
+					result["parser_key"] = saveParser();
 					result["object_keys"] = statistics.objectKeys;
 					recordSemanticSources(result, *recording, context);
 					result["linked_output"] = linkedOutputIdentity(context);
@@ -866,6 +821,7 @@ bool compileIncrementally(
 						{"diagnostic_sources", diagnosticSources}
 					};
 					result["matcher_key"] = saveMatcher();
+					result["parser_key"] = saveParser();
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
 					if (functionReuse) {
 						for (const std::string &name : functionReuse->reusedFunctionNames()) {
@@ -932,7 +888,8 @@ bool compileIncrementally(
 					{"diagnostics", diagnostics},
 					{"diagnostic_records", std::move(records)},
 					{"diagnostic_sources", std::move(diagnosticSources)},
-					{"matcher_key", saveMatcher()}
+					{"matcher_key", saveMatcher()},
+					{"parser_key", saveParser()}
 				};
 				recordSemanticSources(result, *recording, context);
 				writeEntry(failedEntry, result.dump());
@@ -953,6 +910,8 @@ bool compileIncrementally(
 							  {"objects_built", statistics.builtObjects},
 							  {"matcher_cache_hits", statistics.matcherCacheHits},
 							  {"precedence_matcher_cache_hits", statistics.precedenceMatcherCacheHits},
+							  {"expression_parse_hits", statistics.expressionParseHits},
+							  {"expression_parse_misses", statistics.expressionParseMisses},
 							  {"source_projections_reused", statistics.sourceProjectionWork.reused},
 							  {"source_projections_scanned", statistics.sourceProjectionWork.scanned},
 							  {"matcher_key_ms", statistics.matcherKeyMilliseconds},

@@ -86,6 +86,10 @@ struct ParseContext {
 	// Installed by native incremental builds while the frontend is being compiled.
 	std::function<std::optional<PatternMatch *>(PatternReference *, MatchOptions, MatchDependencies *)> reuseMatcherResult;
 	std::function<void(PatternReference *, MatchOptions, const PatternMatch *, const MatchDependencies *)> recordMatcherResult;
+	// Parse cache entries contain only unresolved syntax; current sections still
+	// register their own references and resolve them against the current pattern trees.
+	std::function<Expression *(Section *, Range, SectionType)> reuseParsedExpression;
+	std::function<void(Range, SectionType, const Expression *)> recordParsedExpression;
 	// Native incremental builds may import a previously generated function body
 	// after this compilation has inferred its current types and selected calls.
 	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;
