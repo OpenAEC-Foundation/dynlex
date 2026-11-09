@@ -239,7 +239,7 @@ Json captureInactiveProjection(
 	const ParseContext &context, const Json &observations, const Json *priorInactive = nullptr,
 	const std::set<std::string> *generatedFunctionPaths = nullptr,
 	const std::map<std::string, Section *> *knownSections = nullptr, const Json *priorSources = nullptr,
-	SourceProjectionWork *projectionWork = nullptr
+	SourceProjectionWork *projectionWork = nullptr, const Json *requiredSources = nullptr
 ) {
 	std::map<std::string, Section *> collectedSections;
 	if (!knownSections) {
@@ -258,10 +258,13 @@ Json captureInactiveProjection(
 			return nullptr;
 		selected.insert(section->second);
 	}
+	Json sources = sourceProjection(context, observations, selected, false, false, false, priorSources, projectionWork);
+	if (requiredSources && !sourceProjectionsEqual(sources, *requiredSources))
+		return nullptr;
 	return Json{
 		{"inactive", inactive},
 		{"declarations", declarationDigest(*knownSections)},
-		{"sources", sourceProjection(context, observations, selected, false, false, false, priorSources, projectionWork)}
+		{"sources", std::move(sources)}
 	};
 }
 

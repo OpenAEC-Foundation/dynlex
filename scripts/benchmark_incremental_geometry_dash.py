@@ -20,6 +20,11 @@ cases = {
     "comment_in_physics": (game / "physics.dl", "return 84", "return 84 # benchmark comment"),
     "physics_constant": (game / "physics.dl", "return 84", "return 85"),
     "top_level_seed": (game / "main.dl", "fill plan using seed 1337", "fill plan using seed 1338"),
+    "project_warning_message": (
+        Path("config.dl"),
+        "Expression {expression} has choices: {chosen} or {alternative}.",
+        "New grouping wording for {expression}: {chosen} or {alternative}.",
+    ),
 }
 
 
@@ -47,6 +52,10 @@ with tempfile.TemporaryDirectory(prefix="dynlex-geometry-dash-benchmark-") as te
             root = Path(temporary) / f"{name}-{repetition}"
             shutil.copytree(project / "lib", root / "lib")
             shutil.copytree(project / game, root / game)
+            if filename == Path("config.dl"):
+                (root / filename).write_text(
+                    f'dynlex options:\n    messages:\n        ambiguous operand grouping: "{before}"\n'
+                )
             compile_program(root, True)
             changed = root / filename
             original = changed.read_text()
@@ -57,6 +66,11 @@ with tempfile.TemporaryDirectory(prefix="dynlex-geometry-dash-benchmark-") as te
             clean_ms, _, clean_diagnostics = compile_program(root, False)
             if incremental_diagnostics != clean_diagnostics:
                 raise RuntimeError(f"incremental diagnostics differ from clean build: {name}")
+            if filename == Path("config.dl"):
+                if after.split(" for ")[0] not in incremental_diagnostics:
+                    raise RuntimeError("edited warning wording did not appear")
+                if not stats["frontend_reused"] or stats["codegen_and_link_ms"] or stats["objects_built"]:
+                    raise RuntimeError("warning wording edit recompiled executable code")
             results[name].append((incremental_ms, clean_ms, stats))
             print(f"{name} run {repetition + 1}: incremental={incremental_ms:.1f} ms clean={clean_ms:.1f} ms", flush=True)
 

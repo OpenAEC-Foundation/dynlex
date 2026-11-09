@@ -32,6 +32,30 @@ def assert_reverse_edges(graph):
     assert actual == expected, "saved reverse edges disagree with saved forward edges"
 
 
+def check_cross_file_typed_overload(root, build):
+    caller = root / "typed_caller.dl"
+    overloads = root / "typed_overloads.dl"
+    main = root / "typed_main.dl"
+    caller.write_text('integer means: @intrinsic("type", "int")\nto emit:\n    use 1\n')
+    generic = ('to use {value}: @intrinsic("discard", '
+               '@intrinsic("call", "libc", "puts", integer, "generic"))\n')
+    typed = ('to use {integer:value}: @intrinsic("discard", '
+             '@intrinsic("call", "libc", "puts", integer, "typed"))\n')
+    overloads.write_text(generic)
+    main.write_text('import typed_caller.dl\nimport typed_overloads.dl\nemit\n')
+    initial = build(entry=main)
+    assert initial[2] == b"generic\n"
+    assert initial[1:] == build(False, entry=main)[1:]
+    overloads.write_text(generic + typed)
+    added = build(entry=main)
+    assert added[2] == b"typed\n", "new cross-file overload did not invalidate its caller"
+    assert added[1:] == build(False, entry=main)[1:]
+    overloads.write_text(generic)
+    removed = build(entry=main)
+    assert removed[2] == b"generic\n", "removed cross-file overload remained selected"
+    assert removed[1:] == build(False, entry=main)[1:]
+
+
 def check_leaf_dependency_cascade(root, build):
     leaf_a = root / "leaf_a.dl"
     leaf_b = root / "leaf_b.dl"
