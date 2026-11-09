@@ -44,7 +44,6 @@
 #include <type_traits>
 #include <unordered_set>
 #include <variant>
-
 namespace {
 using Json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -198,7 +197,6 @@ void recordSemanticSources(Json &result, RecordingFileSystem &files, const Parse
 }
 
 #include "incrementalSectionIdentity.inl"
-
 bool containsNestedDefinition(const Section &section) {
 	for (const Section *child : section.children) {
 		if (!child->patternDefinitions.empty() || containsNestedDefinition(*child))
@@ -658,15 +656,17 @@ bool compileIncrementally(
 			std::optional<Json> refreshedProjection;
 			if (reuseTypeInference)
 				refreshedProjection = refreshInactiveFunctionProjection(
-					context, recording->observations, sections, previous->at("all_function_projection"),
-					previous->at("inactive_projection"), statistics.inactiveProjectionMatchesRechecked
+					context, recording->observations, sections, matcherCache, previous->at("all_function_projection"),
+					previous->at("inactive_projection"), statistics.inactiveProjectionMatchesRechecked,
+					statistics.sourceProjectionWork.matchEntriesReused
 				);
 			Json resolvedFunctionProjection = nullptr;
 			if (compiled && refreshedProjection)
 				resolvedFunctionProjection = std::move(*refreshedProjection);
 			else if (compiled)
 				resolvedFunctionProjection = captureAllFunctionProjection(
-					context, recording->observations, sections, previous ? &*previous : nullptr, &statistics.sourceProjectionWork
+					context, recording->observations, sections, matcherCache, previous ? &*previous : nullptr,
+					&statistics.sourceProjectionWork
 				);
 			statistics.projectionMilliseconds = elapsedMilliseconds(stageStart);
 			std::map<const Section *, std::string> sectionPaths;
@@ -960,6 +960,7 @@ bool compileIncrementally(
 							  {"projection_declarations_ms", statistics.sourceProjectionWork.declarationMilliseconds},
 							  {"projection_matches_ms", statistics.sourceProjectionWork.matchMilliseconds},
 							  {"projection_global_matches_reused", statistics.sourceProjectionWork.globalMatchesReused},
+							  {"projection_match_entries_reused", statistics.sourceProjectionWork.matchEntriesReused},
 							  {"projection_inactive_ms", statistics.sourceProjectionWork.inactiveMilliseconds},
 							  {"projection_ambient_ms", statistics.sourceProjectionWork.ambientMilliseconds},
 							  {"projection_compatibility_ms", statistics.sourceProjectionWork.compatibilityMilliseconds},

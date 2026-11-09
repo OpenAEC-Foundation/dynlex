@@ -851,7 +851,12 @@ same-identity sibling ordinal. Inserting a different definition before an existi
 function leaves that function's identity and cached inference or IR intact.
 When the declaration and surrounding source projections are stable, an edited
 build carries resolved-match fingerprints forward for unchanged function bodies
-and computes fingerprints only for edited bodies.
+and recomputes fingerprints for edited bodies or changed matching environments.
+Edited bodies retain a fingerprint
+per reference and the matcher dependency key that produced it. A reference with
+the same key after a later edit reuses its fingerprint; changed references are
+fingerprinted again. The function fingerprint is assembled from those reference
+fingerprints, so a later overload addition can still compare the edited body.
 If top-level execution changes but its global declarations keep the same names
 and locations, directly declared functions also retain their resolved-match
 fingerprints. Their inference and generated code still follow the ordinary

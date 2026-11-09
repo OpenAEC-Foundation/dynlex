@@ -94,6 +94,7 @@ static std::vector<Section *> unresolveReference(
 	// Clear match and mark unresolved
 	delete reference->match;
 	reference->match = nullptr;
+	reference->incrementalMatcherKey.clear();
 	reference->resolved = false;
 	reference->range().section()->incrementUnresolved();
 	TRACE_RESOLUTION("unresolve " + referenceTraceId(reference));

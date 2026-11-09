@@ -37,7 +37,7 @@ Json globalResolutionIdentity(const Section &root) {
 
 Json captureAllFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
-	const Json *previous = nullptr, SourceProjectionWork *projectionWork = nullptr
+	const IncrementalMatcherCache &matcherCache, const Json *previous = nullptr, SourceProjectionWork *projectionWork = nullptr
 ) {
 	auto phaseStart = Clock::now();
 	const Json *prior =
@@ -45,6 +45,7 @@ Json captureAllFunctionProjection(
 	Json selected = Json::object();
 	Json declarations = Json::object();
 	Json matches = Json::object();
+	Json matchEntries = Json::object();
 	std::map<const Section *, std::string> paths;
 	std::unordered_set<const Section *> reusable;
 	std::unordered_set<const Section *> selectedSections;
@@ -112,13 +113,24 @@ Json captureAllFunctionProjection(
 			prior->at("bodies").contains(path) && prior->at("bodies").at(path) == projection.at("bodies").at(path) &&
 			prior->at("function_declarations").at(path) == projection.at("function_declarations").at(path)) {
 			matches[path] = prior->at("matches").at(path);
+			matchEntries[path] = prior->at("match_entries").at(path);
 			if (reuseGlobalMatches && !stableMatchingEnvironment && !hasNoGlobalAccess(section) && projectionWork)
 				projectionWork->globalMatchesReused++;
-		} else
-			matches[path] = resolvedFunctionMatches(section, paths);
+		} else {
+			const Json *oldEntries = prior && prior->at("match_entries").contains(path)
+										 ? &prior->at("match_entries").at(path)
+										 : nullptr;
+			ResolvedFunctionMatches result = resolvedFunctionMatches(
+				section, paths, matcherCache, oldEntries,
+				projectionWork ? &projectionWork->matchEntriesReused : nullptr
+			);
+			matches[path] = std::move(result.fingerprint);
+			matchEntries[path] = std::move(result.entries);
+		}
 	}
 	if (projectionWork)
 		projectionWork->matchMilliseconds += elapsedMilliseconds(phaseStart);
 	projection["matches"] = std::move(matches);
+	projection["match_entries"] = std::move(matchEntries);
 	return projection;
 }

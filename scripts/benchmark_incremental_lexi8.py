@@ -89,6 +89,7 @@ for name, samples in results.items():
         "projection_declarations_ms": round(statistics.median(sample[2]["projection_declarations_ms"] for sample in samples), 1),
         "projection_matches_ms": round(statistics.median(sample[2]["projection_matches_ms"] for sample in samples), 1),
         "projection_global_matches_reused": round(statistics.median(sample[2]["projection_global_matches_reused"] for sample in samples)),
+        "projection_match_entries_reused": round(statistics.median(sample[2]["projection_match_entries_reused"] for sample in samples)),
         "projection_ambient_ms": round(statistics.median(sample[2]["projection_ambient_ms"] for sample in samples), 1),
         "inactive_projection_ms": round(statistics.median(sample[2]["inactive_projection_ms"] for sample in samples), 1),
         "preinference_ms": round(statistics.median(sample[2]["preinference_ms"] for sample in samples), 1),

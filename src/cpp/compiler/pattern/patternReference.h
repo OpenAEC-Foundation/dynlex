@@ -17,6 +17,8 @@ struct PatternReference {
 	SectionType patternType;
 	std::vector<PatternElement> patternElements{};
 	PatternMatch *match{};
+	// Dependency key of the match currently attached to this reference.
+	std::string incrementalMatcherKey;
 	// for extracting arguments
 	Expression *expression;
 	// Lexical scope used for matching explicit variable names. Synthetic references,

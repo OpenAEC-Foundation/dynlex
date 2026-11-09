@@ -263,3 +263,25 @@ def check_known_pure_return_summary(root, build):
                     '@intrinsic("return", @intrinsic("subtract", identity 4, 5))\n')
     changed_body = build(entry=main)
     assert changed_body[1:] == build(False, entry=main)[1:], "changed pure body retained a cached result"
+
+
+def check_local_match_projection_reuse(root, build):
+    main = root / "local_match_projection.dl"
+    prefix = 'to leaf: @intrinsic("discard", 1)\nto run:\n    leaf\n    leaf\n'
+    main.write_text(prefix + '    @intrinsic("discard", 1)\nrun\n')
+    build(entry=main)
+    main.write_text(prefix + '    @intrinsic("discard", 2)\nrun\n')
+    edited = build(entry=main)
+    assert edited[0]["projection_match_entries_reused"] >= 2, \
+        "a one-line body edit re-fingerprinted unchanged pattern calls"
+    assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text(prefix.replace('to run:\n', 'to run:\n    @intrinsic("discard", 9)\n') +
+                    '    @intrinsic("discard", 2)\nrun\n')
+    inserted = build(entry=main)
+    assert inserted[0]["projection_match_entries_reused"] >= 2, \
+        "inserting a body line re-fingerprinted later unchanged calls"
+    assert inserted[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text() + 'to unrelated: @intrinsic("discard", 3)\n')
+    unrelated = build(entry=main)
+    assert unrelated[1:] == build(False, entry=main)[1:], \
+        "adding an unrelated definition changed the saved call matches"

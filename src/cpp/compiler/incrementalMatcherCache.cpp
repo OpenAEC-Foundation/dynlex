@@ -168,6 +168,11 @@ std::string IncrementalMatcherCache::snapshot() const {
 	return result;
 }
 
+std::optional<std::string_view> IncrementalMatcherCache::resultKey(const PatternReference *reference) const {
+	return reference->incrementalMatcherKey.empty() ? std::nullopt
+													: std::optional<std::string_view>(reference->incrementalMatcherKey);
+}
+
 std::string IncrementalMatcherCache::precedenceDigest() {
 	requireCompilerInvariant(
 		context.patternPrecedenceRevision != 0, "precedence match cache requires resolved syntax families"
@@ -530,17 +535,22 @@ IncrementalMatcherCache::restoreMatch(std::string_view input, size_t &position, 
 
 std::optional<PatternMatch *>
 IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options, MatchDependencies *dependencies) {
-	if (!available(options))
+	if (!available(options)) {
+		reference->incrementalMatcherKey.clear();
 		return std::nullopt;
+	}
 	std::string cacheKey = key(*reference, dependencies != nullptr);
 	auto entry = previousEntries.find(cacheKey);
-	if (entry == previousEntries.end())
+	if (entry == previousEntries.end()) {
+		reference->incrementalMatcherKey.clear();
 		return std::nullopt;
+	}
 	std::string_view value = entry->second;
 	if (value.empty())
 		throw std::runtime_error("empty incremental matcher cache value");
 	size_t position = 1;
 	if (value[0] == 0) {
+		reference->incrementalMatcherKey.clear();
 		requireCompilerInvariant(dependencies != nullptr, "cached failure is missing dependency storage");
 		dependencies->clear();
 		std::uint64_t count = readLength(value, position);
@@ -566,6 +576,7 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 	if (position != value.size())
 		throw std::runtime_error("trailing incremental matcher cache data");
 	recorded[cacheKey] = value;
+	reference->incrementalMatcherKey = cacheKey;
 	reusedCount++;
 	if (context.compilationStage == ParseContext::CompilationStage::ResolvedPatternPrecedence)
 		reusedPrecedenceCount++;
@@ -575,14 +586,21 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 void IncrementalMatcherCache::record(
 	PatternReference *reference, MatchOptions options, const PatternMatch *match, const MatchDependencies *dependencies
 ) {
-	if (!available(options))
-		return;
-	if (match) {
-		std::string packed(1, '\1');
-		if (appendMatch(packed, *reference, *match))
-			recorded[key(*reference, dependencies != nullptr)] = std::move(packed);
+	if (!available(options)) {
+		reference->incrementalMatcherKey.clear();
 		return;
 	}
+	if (match) {
+		std::string packed(1, '\1');
+		if (appendMatch(packed, *reference, *match)) {
+			std::string cacheKey = key(*reference, dependencies != nullptr);
+			reference->incrementalMatcherKey = cacheKey;
+			recorded[std::move(cacheKey)] = std::move(packed);
+		} else
+			reference->incrementalMatcherKey.clear();
+		return;
+	}
+	reference->incrementalMatcherKey.clear();
 	if (!dependencies)
 		return;
 	std::string packed(1, '\0');

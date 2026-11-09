@@ -50,25 +50,59 @@ Json resolvedMatchIdentity(const PatternMatch &match, const std::map<const Secti
 	};
 }
 
-std::string resolvedFunctionMatches(const Section *section, const std::map<const Section *, std::string> &paths) {
-	Json references = Json::array();
+struct ResolvedFunctionMatches {
+	std::string fingerprint;
+	Json entries;
+};
+
+ResolvedFunctionMatches resolvedFunctionMatches(
+	const Section *section, const std::map<const Section *, std::string> &paths,
+	const IncrementalMatcherCache &matcherCache, const Json *priorEntries, size_t *reused
+) {
+	Json entries = Json::array();
+	Json identities = Json::array();
+	std::unordered_map<std::string, const Json *> priorByKey;
+	if (priorEntries)
+		for (const Json &entry : *priorEntries) {
+			if (entry.at("key").is_null())
+				continue;
+			const std::string &key = entry.at("key").get_ref<const std::string &>();
+			auto [found, inserted] = priorByKey.emplace(key, &entry);
+			if (!inserted)
+				requireCompilerInvariant(
+					found->second->at("identity") == entry.at("identity") &&
+					found->second->at("shape") == entry.at("shape"),
+					"identical matcher keys have different resolved references"
+				);
+		}
 	std::function<void(const Section *)> visit = [&](const Section *body) {
 		for (const PatternReference *reference : body->patternReferences) {
-			references.push_back(
-				Json{
-					{"text", reference->pattern.text},
-					{"type", static_cast<int>(reference->patternType)},
-					{"purpose", static_cast<int>(reference->purpose)},
-					{"match", reference->match ? resolvedMatchIdentity(*reference->match, paths) : Json(nullptr)}
-				}
+			Json shape = Json::array(
+				{reference->pattern.text, static_cast<int>(reference->patternType), static_cast<int>(reference->purpose)}
 			);
+			std::optional<std::string_view> key =
+				reference->match ? matcherCache.resultKey(reference) : std::nullopt;
+			auto old = key ? priorByKey.find(std::string(*key)) : priorByKey.end();
+			Json entry;
+			if (old != priorByKey.end() && old->second->at("shape") == shape) {
+				entry = *old->second;
+				if (reused)
+					(*reused)++;
+			} else {
+				Json identity = shape;
+				identity.push_back(reference->match ? resolvedMatchIdentity(*reference->match, paths) : Json(nullptr));
+				entry = Json{{"key", key ? Json(*key) : Json(nullptr)},
+							 {"shape", std::move(shape)}, {"identity", digest(identity.dump())}};
+			}
+			identities.push_back(entry.at("identity"));
+			entries.push_back(std::move(entry));
 		}
 		for (const Section *child : body->children)
 			if (child->patternDefinitions.empty())
 				visit(child);
 	};
 	visit(section);
-	return digest(references.dump());
+	return {digest(identities.dump()), std::move(entries)};
 }
 
 bool compatibleFunctionProjection(const Json &prior, const Json &current) {

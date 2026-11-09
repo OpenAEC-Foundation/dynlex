@@ -4,7 +4,8 @@
 // changed body and match units without rebuilding those whole-program views.
 std::optional<Json> refreshInactiveFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
-	const Json &prior, const Json &priorInactive, size_t &matchesRechecked
+	const IncrementalMatcherCache &matcherCache, const Json &prior, const Json &priorInactive,
+	size_t &matchesRechecked, size_t &matchEntriesReused
 ) {
 	Json selected = Json::object();
 	std::map<const Section *, std::string> paths;
@@ -37,7 +38,11 @@ std::optional<Json> refreshInactiveFunctionProjection(
 			return std::nullopt;
 		refreshed["bodies"][path] = body;
 		if (reusable.contains(path)) {
-			refreshed["matches"][path] = resolvedFunctionMatches(sections.at(path), paths);
+			ResolvedFunctionMatches result = resolvedFunctionMatches(
+				sections.at(path), paths, matcherCache, &prior.at("match_entries").at(path), &matchEntriesReused
+			);
+			refreshed["matches"][path] = std::move(result.fingerprint);
+			refreshed["match_entries"][path] = std::move(result.entries);
 			matchesRechecked++;
 		}
 	}
