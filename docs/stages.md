@@ -110,6 +110,8 @@ later than its parent, including operands inside variadic captures. If implicit
 parameter discovery changes a declaration during this pass, resolution rebuilds
 the families and repeats to a fixed point. Operand grouping also consumes that
 same family order during type inference.
+The rematch pass sorts only references whose current match can be affected by
+precedence, preserving source order among equal locations.
 
 All pattern definitions are stored in a pattern tree, a trie structure containing pattern elements.
 

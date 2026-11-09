@@ -48,12 +48,14 @@ static bool collectPrecedenceMatchChanges(ParseContext &context, PrecedenceMatch
 	std::list<Section *> sections;
 	context.mainSection->collectPatternReferencesAndSections(bodyReferences, globalReferences, sections);
 	bodyReferences.splice(bodyReferences.end(), globalReferences);
-	bodyReferences.sort(referenceComesBefore);
+	std::vector<PatternReference *> candidates;
+	candidates.reserve(bodyReferences.size());
 	for (PatternReference *reference : bodyReferences) {
-		if (!reference->match)
-			continue; // Single-variable references have no matched function.
-		if (!matchMayChangeWithPrecedence(*reference->match))
-			continue;
+		if (reference->match && matchMayChangeWithPrecedence(*reference->match))
+			candidates.push_back(reference);
+	}
+	std::stable_sort(candidates.begin(), candidates.end(), referenceComesBefore);
+	for (PatternReference *reference : candidates) {
 		auto match = std::unique_ptr<PatternMatch>(context.match(reference));
 		if (!match) {
 			context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range()));
