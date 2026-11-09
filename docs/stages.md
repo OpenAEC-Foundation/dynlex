@@ -852,6 +852,10 @@ function leaves that function's identity and cached inference or IR intact.
 When the declaration and surrounding source projections are stable, an edited
 build carries resolved-match fingerprints forward for unchanged function bodies
 and computes fingerprints only for edited bodies.
+If top-level execution changes but its global declarations keep the same names
+and locations, directly declared functions also retain their resolved-match
+fingerprints. Their inference and generated code still follow the ordinary
+dependency checks for changed global values.
 These source projections use the configured comment scanner and ignore blank
 lines and trailing whitespace, so a comment-only build does not invalidate the
 next executable edit.

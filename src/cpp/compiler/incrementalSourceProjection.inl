@@ -1,6 +1,7 @@
 struct SourceProjectionWork {
 	size_t reused = 0;
 	size_t scanned = 0;
+	size_t globalMatchesReused = 0;
 	double maskMilliseconds = 0;
 	double sourceMilliseconds = 0;
 	double setupMilliseconds = 0;

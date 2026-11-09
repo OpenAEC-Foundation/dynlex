@@ -17,6 +17,24 @@ Json functionBodyDigests(const ParseContext &context, const std::map<std::string
 	return result;
 }
 
+Json globalResolutionIdentity(const Section &root) {
+	auto location = [](const Range &range) {
+		requireCompilerInvariant(range.line && range.line->sourceFile, "global declaration has no source location");
+		return Json::array({range.line->sourceFile->uri, range.line->mergedLineIndex, range.start()});
+	};
+	Json explicitDeclarations = Json::object();
+	for (const auto &[name, range] : root.explicitVariableDeclarations)
+		explicitDeclarations[name] = location(range);
+	Json variableDefinitions = Json::object();
+	for (const auto &[name, definition] : root.variableDefinitions) {
+		requireCompilerInvariant(definition != nullptr, "global variable definition is null");
+		variableDefinitions[name] = location(definition->range);
+	}
+	std::vector<std::string> dataDeclarations(root.dataVariableDeclarations.begin(), root.dataVariableDeclarations.end());
+	std::ranges::sort(dataDeclarations);
+	return Json::array({std::move(explicitDeclarations), std::move(variableDefinitions), dataDeclarations});
+}
+
 Json captureAllFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
 	const Json *previous = nullptr, SourceProjectionWork *projectionWork = nullptr
@@ -53,6 +71,7 @@ Json captureAllFunctionProjection(
 	Json projection{
 		{"inactive", std::move(selected)},
 		{"declarations", declarationDigest(sections)},
+		{"global_resolution", globalResolutionIdentity(*context.mainSection)},
 		{"sources", sourceProjection(
 						context, observations, selectedSections, false, false, false, prior ? &prior->at("sources") : nullptr,
 						projectionWork
@@ -82,15 +101,20 @@ Json captureAllFunctionProjection(
 									 projection.at("inactive") == prior->at("inactive");
 	bool stableGlobalFreeEnvironment = prior && projection.at("declarations") == prior->at("declarations") &&
 									   compatibleGlobalFreeProjection(*prior, projection);
+	bool stableGlobalResolutionEnvironment =
+		stableGlobalFreeEnvironment && projection.at("global_resolution") == prior->at("global_resolution");
 	if (projectionWork)
 		projectionWork->compatibilityMilliseconds += elapsedMilliseconds(phaseStart);
 	for (const Section *section : reusable) {
 		const std::string &path = paths.at(section);
-		if ((stableMatchingEnvironment || (stableGlobalFreeEnvironment && hasNoGlobalAccess(section))) &&
+		bool reuseGlobalMatches = stableGlobalResolutionEnvironment && section->parent == context.mainSection;
+		if ((stableMatchingEnvironment || (stableGlobalFreeEnvironment && hasNoGlobalAccess(section)) || reuseGlobalMatches) &&
 			prior->at("bodies").contains(path) && prior->at("bodies").at(path) == projection.at("bodies").at(path) &&
-			prior->at("function_declarations").at(path) == projection.at("function_declarations").at(path))
+			prior->at("function_declarations").at(path) == projection.at("function_declarations").at(path)) {
 			matches[path] = prior->at("matches").at(path);
-		else
+			if (reuseGlobalMatches && !stableMatchingEnvironment && !hasNoGlobalAccess(section) && projectionWork)
+				projectionWork->globalMatchesReused++;
+		} else
 			matches[path] = resolvedFunctionMatches(section, paths);
 	}
 	if (projectionWork)

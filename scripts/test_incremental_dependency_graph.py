@@ -216,3 +216,26 @@ def check_runtime_pure_value_summary(root, build):
                     .replace('identity 4, 4', 'identity 4, 5'))
     changed_body = build(entry=main)
     assert changed_body[1:] == build(False, entry=main)[1:], "changed pure body retained its prior summary"
+
+
+def check_global_match_reuse_after_execution_edit(root, build):
+    main = root / "global_match_reuse.dl"
+    definition = ('function read global:\n'
+                  '    globals:\n'
+                  '        value\n'
+                  '    execute:\n'
+                  '        @intrinsic("return", value)\n')
+    prefix = definition + '@intrinsic("store", value, 1)\n'
+    main.write_text(prefix + '@intrinsic("return", @intrinsic("subtract", read global, 1))\n')
+    build(entry=main)
+    main.write_text(prefix.replace('value, 1', 'value, 2') +
+                    '@intrinsic("return", @intrinsic("subtract", read global, 2))\n')
+    edited = build(entry=main)
+    assert edited[0]["projection_global_matches_reused"] >= 1, \
+        "unchanged global-reading function rebuilt its match projection after a value edit"
+    assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text(definition + '@intrinsic("store", other, 2)\n' +
+                    '@intrinsic("return", @intrinsic("subtract", read global, 2))\n')
+    missing_global = build(entry=main, success=False)
+    assert missing_global[1:] == build(False, entry=main, success=False)[1:], \
+        "a removed global declaration retained its prior function match"

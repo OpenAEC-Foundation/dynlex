@@ -958,6 +958,7 @@ bool compileIncrementally(
 							  {"projection_body_ms", statistics.sourceProjectionWork.bodyMilliseconds},
 							  {"projection_declarations_ms", statistics.sourceProjectionWork.declarationMilliseconds},
 							  {"projection_matches_ms", statistics.sourceProjectionWork.matchMilliseconds},
+							  {"projection_global_matches_reused", statistics.sourceProjectionWork.globalMatchesReused},
 							  {"projection_inactive_ms", statistics.sourceProjectionWork.inactiveMilliseconds},
 							  {"projection_ambient_ms", statistics.sourceProjectionWork.ambientMilliseconds},
 							  {"projection_compatibility_ms", statistics.sourceProjectionWork.compatibilityMilliseconds},
