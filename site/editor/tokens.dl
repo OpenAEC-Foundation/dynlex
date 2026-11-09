@@ -19,10 +19,12 @@ to get the website token ink for {string:name}:
 to apply website semantic tokens {a pointer to JSON value:tokens} in {a pointer to website state:state}:
     set language to the address of (state's language)
     set instance to state's view's instance
-    set node to the control labeled "IDE source" in instance
+    set node to the website source editor in state
     if (the UI value for node in instance)'s text != language's snapshot:
         return nothing
     if language's uri != (the website source URI in state):
+        return nothing
+    if language's profile != (the website analysis profile in state):
         return nothing
     color UI text (language's snapshot) in node in instance
     scan lines in (language's snapshot) and set scanned to it

@@ -1,0 +1,44 @@
+# Canvas-independent scene clocks, uniforms and camera-grid geometry.
+import types.dl
+import program.dl
+import terrain.dl
+import ../packages/dynlex-ui/platform/browser/shaders.dl
+import lib/json_builders.dl
+
+to get shader values for {a pointer to JSON value:program} at {floating-point number:seconds} sized {integer:width} by {integer:height}:
+    set passes to the JSON member named "passes" in program
+    set result to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < passes's length:
+        set pass to the JSON value at index index in passes
+        add (a JSON object containing [JSON number "time" is seconds, JSON number "width" is width, JSON number "height" is height, JSON number "render_pass" is (the JSON number named "renderPass" in pass)]) to the JSON array result
+        increment index
+    return result
+
+to get the rendered website shader {a pointer to website shader view:scene} sized {integer:width} by {integer:height}:
+    if scene's texture's resource != (0 as a pointer):
+        if ((scene's texture's width = width) and (scene's texture's height = height)) and (scene's rendered seconds = scene's seconds):
+            return scene's texture
+    if scene's geometry's kind = 1:
+        if width != scene's mesh width:
+            set mesh to a perspective terrain mesh from (scene's geometry) at width pixels
+            set browser UI shader (scene's resource) pass 0 to vertices (mesh's vertices) counting (mesh's vertex count) indexed by (mesh's indices) counting (mesh's index count)
+            release mesh
+            set scene's mesh width to width
+    set values to shader values for (scene's program) at (scene's seconds) sized width by height
+    set payload to the compact JSON form of values
+    free values
+    set scene's texture to the browser UI texture of shader (scene's resource) sized width by height using payload
+    set scene's rendered seconds to scene's seconds
+    return scene's texture
+
+to advance website shader {a pointer to website shader view:scene} visible {boolean:visible} in {a pointer to UI view:view}:
+    set active to visible and ((scene's resource != (0 as a pointer)) and ((scene's paused = false) and (view's instance's reduced motion = false)))
+    if active:
+        set active to shader program (scene's program) uses input "time"
+    if active and (scene's active):
+        set scene's seconds to scene's seconds + (view's seconds - scene's last seconds)
+    set scene's last seconds to view's seconds
+    set scene's active to active
+    if active:
+        animate UI view view

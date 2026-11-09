@@ -1,16 +1,39 @@
 import ../state.dl
+import ../editor/shader.dl
 
 to stop website [program] {integer:index} in {a pointer to website state:state}:
     set program to state's programs + index
+    if index = 2:
+        set editor to the address of (state's shader editor)
+        if editor's source request != 0:
+            cancel website request (editor's source request) in state
+            set editor's source request to 0
+            set editor's source failed to true
+            set the text of "IDE status" in (state's view's instance) to "Stopped."
+            set the text of "Run program ▶" in (state's view's instance) to "Retry source load ↻"
+        if editor's pending program != @intrinsic("construct", a pointer to JSON value):
+            free editor's pending program
+            set editor's pending program to @intrinsic("construct", a pointer to JSON value)
+        set editor's preview's paused to true
+        set editor's preview's active to false
+        set the text of "Pause preview" in (state's view's instance) to "Resume preview"
     if program's phase = 0:
         return nothing
-    cancel website request (program's request) in state
+    if program's phase != 3:
+        cancel website request (program's request) in state
     set program's phase to 0
     set program's request to 0
     set description to the item at index in (the website program descriptions)
     set the text of (description's status) in (state's view's instance) to "Stopped."
 
 to run website [program] {integer:index} in {a pointer to website state:state}:
+    if (index = 2) and (the website editor uses shaders in state):
+        if state's shader editor's source request != 0:
+            set the text of "IDE status" in (state's view's instance) to "Loading shader source…"
+            return nothing
+        if state's shader editor's source failed:
+            load the website shader source in state
+            return nothing
     set other to 0
     loop while other < the length of (the website program descriptions):
         stop website program other in state
@@ -25,14 +48,25 @@ to run website [program] {integer:index} in {a pointer to website state:state}:
     increment state's invocation
     set program's invocation to state's invocation
     set program's phase to 1
-    set the text of (description's output) in instance to ""
+    if (index != 2) or ((the website editor uses shaders in state) = false):
+        set the text of (description's output) in instance to ""
     set the text of (description's status) in instance to "Compiling…"
     set name to the string form of "main.dl"
     if index = 2:
-        set name to (the UI value for (the control labeled "IDE filename" in instance) in instance)'s text
+        set name to the website source filename in state
+    set target to "wasm"
+    set stages to a new JSON value of kind the JSON array kind
+    if (index = 2) and (the website editor uses shaders in state):
+        set target to "shader"
+        free stages
+        set stages to the shader stages for (state's shader editor's description's geometry)
+        set state's shader editor's preview's paused to false
+        set state's shader editor's preview's active to false
+        set the text of "Pause preview" in instance to "Pause preview"
     request "compiler" containing (a JSON object containing [
-        JSON text "operation" is "compile", JSON text "target" is "wasm", JSON text "entry" is name,
+        JSON text "operation" is "compile", JSON text "target" is target, JSON text "entry" is name,
         JSON flag "traced" is false,
+        JSON child "stages" is stages,
         JSON child "sources" is (a JSON object containing [JSON text name is source])
     ]) for purpose 6 indexed index in state
     set program's request to state's requests' id
@@ -62,8 +96,14 @@ to receive website compilation {a pointer to JSON value:response} for {integer:i
     if (the JSON number named "status" in response) != 0.0:
         set program's phase to 0
         set program's output to the website diagnostic text in response
-        set the text of (description's output) in instance to (program's output)
+        if (index != 2) or ((the website editor uses shaders in state) = false):
+            set the text of (description's output) in instance to (program's output)
         set the text of (description's status) in instance to "Compilation failed."
+        if (index = 2) and (the website editor uses shaders in state):
+            set the text of "IDE diagnostics" in instance to (program's output)
+        return nothing
+    if (index = 2) and (the website editor uses shaders in state):
+        receive website shader compilation response in state
         return nothing
     set program's phase to 2
     set the text of (description's status) in instance to "Running…"
@@ -99,6 +139,10 @@ to receive website [program] output {a pointer to JSON value:message} in {a poin
 
 to fail website [program] {integer:index} in {a pointer to website state:state}:
     set program to state's programs + index
+    if index = 2:
+        if state's shader editor's pending program != @intrinsic("construct", a pointer to JSON value):
+            free state's shader editor's pending program
+            set state's shader editor's pending program to @intrinsic("construct", a pointer to JSON value)
     set program's phase to 0
     set program's request to 0
     set description to the item at index in (the website program descriptions)
@@ -107,6 +151,19 @@ to fail website [program] {integer:index} in {a pointer to website state:state}:
 to discard website reply {a pointer to JSON value:response} in {a pointer to website state:state}:
     if response has JSON member named "artifact":
         request "compiler" containing (a JSON object containing [JSON text "operation" is "release", JSON number "artifact" is (the JSON number named "artifact" in response)]) for purpose 0 indexed 0 in state
+    if response has JSON member named "resource":
+        request "graphics" containing (a JSON object containing [JSON text "operation" is "release", JSON number "resource" is (the JSON number named "resource" in response)]) for purpose 0 indexed 0 in state
+
+to select website editor mode {integer:mode} in {a pointer to website state:state}:
+    stop website program 2 in state
+    set instance to state's view's instance
+    set the value of "IDE modes" in instance to mode
+    set the value of "IDE result" in instance to mode
+    set caption to "Recompile shader ↻" if (mode = 1), else "Run program ▶"
+    set the text of "Run program ▶" in instance to caption
+    set the text of "IDE status" in instance to "Ready."
+    set the text of "IDE diagnostics" in instance to "Checking source…"
+    set the text of "IDE analysis" in instance to "Analyzing…"
 
 to handle website program shortcut in {a pointer to UI view:view}:
     if (view's input kind != 3) or (view's input code != 257):

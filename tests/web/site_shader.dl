@@ -1,0 +1,88 @@
+import ../../site/programs/controller.dl
+import site_fixture.dl
+
+to wake recorded website view {a pointer to UI view:view}:
+    ignore view
+
+set driver to a new UI driver
+set driver's wake to (the function named "wake recorded website view $") as a pointer
+set instance to an instance of website fixture
+set view to a new UI view
+set view's driver to the address of driver
+set view's instance to the address of instance
+set state to a new website state
+set state's view to the address of view
+set state's shader editor's description to the custom website shader
+set instance's state to (the address of state) as a pointer
+set still to a new website shader view
+set still's resource to 1 as a pointer
+set still's program to a JSON object containing [JSON child "passes" is (a JSON array containing [a JSON object containing [JSON child "uniforms" is (a new JSON-RPC array)]])]
+set view's seconds to 1.0
+advance website shader (the address of still) visible true in (the address of view)
+set view's seconds to 2.0
+advance website shader (the address of still) visible true in (the address of view)
+require condition (still's seconds = 0.0) reporting "A shader without a time input kept animating"
+free still's program
+select website editor mode 1 in (the address of state)
+set the text of "IDE output" in (the address of instance) to "Retained program output"
+run website program 2 in (the address of state)
+require condition ((the item at 2 in (state's programs))'s phase = 1) reporting "The shader did not start compiling"
+set stage to a JSON object containing [JSON text "webgpu" is "code", JSON text "webgl" is "code", JSON child "uniforms" is (a JSON array containing [a JSON object containing [JSON text "name" is "time", JSON number "group" is 0, JSON number "binding" is 0]])]
+set response to a JSON object containing [JSON number "status" is 0, JSON number "milliseconds" is 1.5, JSON child "stages" is (a JSON object containing [JSON child "fragment" is stage])]
+receive website compilation response for 2 in (the address of state)
+free response
+require condition ((the item at 2 in (state's programs))'s phase = 2) reporting "A shader build did not create its graphics program"
+set response to a JSON object containing [JSON number "resource" is 42, JSON number "passes" is 1]
+receive the website shader preview response in (the address of state)
+free response
+set rendering to the address of (state's shader editor's preview)
+require condition ((the item at 2 in (state's programs))'s phase = 3) reporting "A linked shader did not become a running preview"
+set view's seconds to 10.0
+advance website shader rendering visible true in (the address of view)
+set view's seconds to 10.25
+advance website shader rendering visible true in (the address of view)
+require condition (rendering's seconds = 0.25) reporting "The preview clock did not advance by the frame time"
+set view's seconds to 11.0
+advance website shader rendering visible false in (the address of view)
+set view's seconds to 30.0
+advance website shader rendering visible true in (the address of view)
+require condition (rendering's seconds = 0.25) reporting "Returning to a preview counted time spent offscreen"
+stop website program 2 in (the address of state)
+require condition (rendering's paused) reporting "Stop did not pause the preview"
+toggle the website shader preview in (the address of state)
+require condition (rendering's paused = false) reporting "A paused preview could not resume"
+reset the website shader preview in (the address of state)
+require condition (rendering's seconds = 0.0) reporting "Reset did not restart the preview clock"
+ignore the rendered website shader rendering sized 320 by 180
+ignore the rendered website shader rendering sized 320 by 180
+set rendering's seconds to 0.5
+ignore the rendered website shader rendering sized 320 by 180
+ignore the rendered website shader rendering sized 321 by 180
+run website program 2 in (the address of state)
+toggle the website shader preview in (the address of state)
+require condition ((the item at 2 in (state's programs))'s phase = 1) reporting "Preview playback interrupted an in-flight compilation"
+set response to a JSON object containing [JSON number "status" is 1, JSON number "milliseconds" is 1, JSON child "diagnostics" is (a new JSON-RPC array)]
+receive website compilation response for 2 in (the address of state)
+free response
+require condition (rendering's resource = (42 as a pointer)) reporting "A failed edit discarded the last successful preview"
+require condition ((the UI value for (the control labeled "IDE output" in (the address of instance)) in (the address of instance))'s text = "Retained program output") reporting "Shader editing discarded the program tab's output"
+run website program 2 in (the address of state)
+set stage to a JSON object containing [JSON text "webgpu" is "new code", JSON text "webgl" is "new code", JSON child "uniforms" is (a new JSON-RPC array)]
+set response to a JSON object containing [JSON number "status" is 0, JSON number "milliseconds" is 1, JSON child "stages" is (a JSON object containing [JSON child "fragment" is stage])]
+receive website compilation response for 2 in (the address of state)
+free response
+toggle the website shader preview in (the address of state)
+require condition ((the item at 2 in (state's programs))'s phase = 2) reporting "Preview playback interrupted graphics creation"
+stop website program 2 in (the address of state)
+set response to a JSON object containing [JSON number "resource" is 43]
+discard website reply response in (the address of state)
+free response
+require condition (state's shader editor's pending program = @intrinsic("construct", a pointer to JSON value)) reporting "A cancelled graphics request retained its description"
+free rendering's program
+set pending to state's requests
+loop while pending != @intrinsic("construct", a pointer to website request):
+    set next to pending's next
+    deallocate pending
+    set pending to next
+close the address of instance
+print line "Shader compilation, last-successful previews, playback and cancellation share DynLex state."

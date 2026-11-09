@@ -11,7 +11,7 @@ class:
 the website program descriptions means: [
     @intrinsic("construct", website program description, "Square field", "Square field output", "Square field status"),
     @intrinsic("construct", website program description, "Vocabulary", "Vocabulary output", "Vocabulary status"),
-    @intrinsic("construct", website program description, "IDE source", "IDE output", "IDE status"),
+    @intrinsic("construct", website program description, "IDE modes", "IDE output", "IDE status"),
     @intrinsic("construct", website program description, "Studio source", "Studio output", "Studio status")
 ]
 

@@ -33,6 +33,19 @@ the entry once when the source link changes. Repeated location notifications and
 returning from another page retain edits and do not repeat autorun. A new entry
 stops the previous program. Invalid links report a generic error and log details.
 
+The Studio has separate Program and Shader tabs with retained source and undo
+history. Shader edits compile to both WGSL and GLSL, then use the same DynLex
+linker and renderer as the homepage. A failed edit keeps the last successful
+preview. Stop, pause/resume and reset control its clock; offscreen previews and
+reduced-motion pages do not advance it. Unchanged frames reuse their texture.
+
+Use `/ide/?mode=shader` for a new shader, or
+`/ide/?mode=shader&scene=endless-terrain` to edit a packaged scene. Scene links
+load their actual source and geometry from `shaders/catalog.dl`. Inline shader
+links also accept `code`, `code64` and `name` and compile on entry. Adding a
+scene to that catalog supplies its source, stages, geometry and duration to the
+build, homepage and editor together.
+
 Controller tests run without windows:
 
 ```bash
@@ -44,6 +57,7 @@ python3 tests/web/source_package.py
 
 Migration is in progress. The current build contains the homepage, eleven
 documentation pages, downloads, an explicit missing page and the initial IDE,
-including live diagnostics and semantic colors. Game/account flows, shader
-editing, further editor features, accessibility and deployment migration remain.
+including live diagnostics, semantic colors and editable shader previews.
+Game/account flows, further editor features, accessibility and deployment
+migration remain.
 The existing deployment has not been replaced.

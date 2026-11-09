@@ -1,6 +1,5 @@
 # Build metadata comes from the same DynLex descriptions used by the application.
-import catalog.dl
-import lib/json_builders.dl
+import program.dl
 
 to get the JSON description of {shader geometry:geometry}:
     if geometry's kind = 0:
@@ -24,47 +23,6 @@ to get the JSON description of {shader geometry:geometry}:
         JSON number "waterFar" is (geometry's water far columns)
     ]
 
-to get a render pass for {live shader:shader} drawing geometry {boolean:mesh}:
-    set prefix to "assets/shaders/" + (the string form of (shader's id))
-    set vertex to a new JSON value of kind the JSON null kind
-    set buffers to a new JSON value of kind the JSON null kind
-    set blend to "opaque"
-    set depth to false
-    set layer to 0
-    if mesh:
-        set vertex's kind to the JSON text kind
-        set vertex's text to prefix + ".vertex"
-        if shader's geometry's kind = 1:
-            set depth to true
-        if shader's geometry's kind = 2:
-            free buffers
-            set buffers to a JSON object containing [
-                JSON text "vertices" is (shader's geometry's path),
-                JSON child "indices" is (a new JSON value of kind the JSON null kind)
-            ]
-            set blend to "additive"
-            set layer to 1
-    return a JSON object containing [
-        JSON text "fragment" is (prefix + ".fragment"),
-        JSON child "vertex" is vertex,
-        JSON child "geometry" is buffers,
-        JSON flag "depth" is depth,
-        JSON text "blend" is blend,
-        JSON text "topology" is "triangle-list",
-        JSON number "renderPass" is layer
-    ]
-
-to get the rendering program for {live shader:shader}:
-    set passes to a new JSON value of kind the JSON array kind
-    if (shader's geometry's kind = 0) or (shader's geometry's kind = 2):
-        add (a render pass for shader drawing geometry false) to the JSON array passes
-    if shader's geometry's kind != 0:
-        add (a render pass for shader drawing geometry true) to the JSON array passes
-    return a JSON object containing [
-        JSON text "operation" is "shader",
-        JSON child "passes" is passes
-    ]
-
 set result to a new JSON value of kind the JSON array kind
 set index to 0
 set shaders to the site's shaders
@@ -76,7 +34,7 @@ loop while index < the length of shaders:
         JSON text "source" is (entry's source),
         JSON number "duration" is (entry's duration),
         JSON child "geometry" is (the JSON description of (entry's geometry)),
-        JSON child "program" is (the rendering program for entry)
+        JSON child "stages" is (the shader stages for (entry's geometry))
     ]
     add description to the JSON array result
     increment index

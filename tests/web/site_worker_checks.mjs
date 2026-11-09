@@ -66,6 +66,22 @@ export async function verifyWorkers() {
     require(tokens.find(message => message.id === 2)?.result?.data?.length > 0,
       'The embedded language server returned no semantic tokens');
     await language('shutdown', null, 3); await language('exit', null);
+    phase = 'shader language profile';
+    await provider.services.language({ operation: 'reset' }, { signal });
+    const shaderSource = 'import lib/shader.dl\nset the fragment color with a red channel of 0.2, a green channel of 0.4, a blue channel of 0.8 and an alpha channel of 1.0\n';
+    await provider.services.language({ operation: 'project', sources: { 'preview.dl': shaderSource } }, { signal });
+    await language('initialize', { processId: null, rootUri: 'file:///workspace', capabilities: {},
+      initializationOptions: { dynlex: { analysisProfiles: [{ target: 'spirv', shaderStage: 'fragment' }] } } }, 1);
+    await language('initialized', {});
+    const shaderOpened = await language('textDocument/didOpen', { textDocument: {
+      uri: 'file:///workspace/preview.dl', languageId: 'dynlex', version: 1, text: shaderSource } });
+    require(!shaderOpened.some(message => message.method === 'textDocument/publishDiagnostics'
+      && message.params.diagnostics.some(diagnostic => diagnostic.severity === 1)),
+      'Resetting the language service did not install the shader analysis profile');
+    const shader = await provider.services.compiler({ operation: 'compile', target: 'shader', entry: 'preview.dl',
+      stages: ['fragment'], sources: { 'preview.dl': shaderSource } }, { signal });
+    require(shader.status === 0 && shader.stages.fragment.webgpu.includes('@fragment')
+      && shader.stages.fragment.webgl.includes('void main'), 'The compiler did not return both shader backends');
     return { output: chunks.join(''), compilationMilliseconds: result.milliseconds, cancelled };
   } finally { clearTimeout(timer); provider.close(); }
 }

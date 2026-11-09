@@ -1,8 +1,18 @@
 import ../documentation.dl
+import ../editor/types.dl
 
 appearance IDE code appearance:
     use code appearance
     height is 560
+
+appearance IDE tabs appearance:
+    font size is 14
+    gap is 12
+
+appearance IDE preview appearance:
+    height is 320
+    background is UI ink 9 11 18
+    corner radius is 12
 
 website page IDE page at "/ide/index.html" titled "DynLex Studio" described "Write, compile and run DynLex programs in the browser.":
     region "Studio" using content appearance:
@@ -13,12 +23,24 @@ website page IDE page at "/ide/index.html" titled "DynLex Studio" described "Wri
             link "Stop program ■" to "action:stop-ide" using link appearance
             link "Save source ↓" to "action:save-source" using link appearance
         region "Studio workspace" using columns appearance:
-            region "Studio editor" using document stack appearance:
-                paragraph "IDE filename" containing "main.dl" using signal appearance
-                editor "IDE source" containing "import lib/std.dl\n\nprint line \"Hello from DynLex.\"" using IDE code appearance
+            tab group "IDE modes" using IDE tabs appearance:
+                tab "Program":
+                    paragraph "IDE filename" containing "main.dl" using signal appearance
+                    editor "IDE source" containing "import lib/std.dl\n\nprint line \"Hello from DynLex.\"" using IDE code appearance
+                tab "Shader":
+                    paragraph "Shader filename" containing "shader.dl" using signal appearance
+                    editor "Shader source" containing the default website shader source using IDE code appearance
             region "Studio result" using card appearance:
-                paragraph "Output" using subheading appearance
-                paragraph "IDE output" containing "Run the program to see its output." using output appearance
+                view group "IDE result" using document stack appearance:
+                    region "Program result" using document stack appearance:
+                        paragraph "Output" using subheading appearance
+                        paragraph "IDE output" containing "Run the program to see its output." using output appearance
+                    region "Shader result" using document stack appearance:
+                        paragraph "Last successful build" using subheading appearance
+                        surface "IDE shader preview" using IDE preview appearance
+                        region "Preview playback" using cards appearance:
+                            link "Pause preview" to "action:toggle-preview" using link appearance
+                            link "Reset time ↺" to "action:reset-preview" using link appearance
                 paragraph "IDE status" containing "Ready." using signal appearance
                 paragraph "Problems" using subheading appearance
                 paragraph "IDE diagnostics" containing "The language service checks your code as you type." using output appearance

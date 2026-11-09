@@ -58,7 +58,25 @@ receive website language reply response at step 10 in (the address of state)
 free response
 require condition (state's language's uri = "file:///workspace/renamed.dl") reporting "The language document kept its old filename"
 require condition (state's language's version = 1) reporting "The new document did not begin with its own version"
-free state's language's token types
+set response to a new JSON-RPC array
+receive website language reply response at step 4 in (the address of state)
+free response
+set response to a JSON array containing [a JSON object containing [JSON number "id" is 6, JSON child "result" is (a JSON object containing [JSON child "data" is (a new JSON-RPC array)])]]
+receive website language reply response at step 6 in (the address of state)
+free response
+set state's shader editor's description to the custom website shader
+set the value of "IDE modes" in (the address of instance) to 1
+set the value of "IDE result" in (the address of instance) to 1
+advance website language analysis in (the address of state)
+require condition (state's language's phase = 11) reporting "Changing targets did not reset the language session"
+set response to a new JSON-RPC null
+receive website language reply response at step 11 in (the address of state)
+free response
+start website language analysis in (the address of state)
+set response to a new JSON-RPC null
+receive website language reply response at step 1 in (the address of state)
+free response
+require condition (state's language's profile = 1) reporting "The shader editor kept its CPU analysis profile"
 set pending to state's requests
 loop while pending != @intrinsic("construct", a pointer to website request):
     set next to pending's next

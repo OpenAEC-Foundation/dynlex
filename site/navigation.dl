@@ -15,9 +15,7 @@ to get the top of {a pointer to UI layout:target} inside {a pointer to UI layout
 
 to apply location {a pointer to JSON value:location} to {a pointer to website state:state}:
     set path to the JSON text named "path" in location
-    if path = "/":
-        set path to "/index.html"
-    if (path = "/wiki/") or (path = "/wiki/sections/"):
+    if path has "/" at offset (path's length - 1):
         set path to path + "index.html"
     set pages to the site's pages
     set index to 0

@@ -1,102 +1,51 @@
 import ../state.dl
 import ../editor/language.dl
-import terrain.dl
-import ../packages/dynlex-ui/platform/browser/shaders.dl
-
-# Rendering state is application code; the platform only executes GPU passes.
-to get the uniform values for {integer:scene} at {floating-point number:time} sized {integer:width} by {integer:height} in {a pointer to website state:state}:
-    set entry to the JSON value at index scene in (state's shader catalog)
-    set program to the JSON member named "program" in entry
-    set passes to the JSON member named "passes" in program
-    set result to a new JSON value of kind the JSON array kind
-    set index to 0
-    loop while index < passes's length:
-        set pass to the JSON value at index index in passes
-        set bindings to a JSON object containing [
-            JSON number "time" is time,
-            JSON number "width" is width,
-            JSON number "height" is height,
-            JSON number "render_pass" is (the JSON number named "renderPass" in pass)
-        ]
-        add bindings to the JSON array result
-        increment index
-    return result
-
-to get the rendered shader {integer:scene} at {floating-point number:time} sized {integer:width} by {integer:height} in {a pointer to website state:state}:
-    set values to the uniform values for scene at time sized width by height in state
-    set payload to the compact JSON form of values
-    free values
-    return the browser UI texture of shader (the item at scene in (state's shader resources)) sized width by height using payload
-
-function prepare the website terrain in {a pointer to website state:state}:
-    globals:
-        endless terrain
-    execute:
-        set resource to the item at 1 in (state's shader resources)
-        if resource = (0 as a pointer):
-            return nothing
-        set width to the maximum of 1 and ((state's view's width * state's view's pixel scale) as an integer)
-        if width = state's shader width:
-            return nothing
-        set mesh to a perspective terrain mesh from (endless terrain's geometry) at width pixels
-        set browser UI shader resource pass 0 to vertices (mesh's vertices) counting (mesh's vertex count) indexed by (mesh's indices) counting (mesh's index count)
-        release mesh
-        set state's shader width to width
+import ../editor/shader.dl
+import rendering.dl
 
 to advance to the next website shader in {a pointer to website state:state}:
-    set state's shader index to (state's shader index + 1) mod 3
-    store 0.0 into (state's shader times) at (state's shader index)
-    set entry to the item at (state's shader index) in (the site's shaders)
-    set destination to "/ide/index.html?shader=" + (the string form of (entry's id))
+    set descriptions to the site's shaders
+    set state's shader index to (state's shader index + 1) mod (the length of descriptions)
+    set (state's shaders + state's shader index)'s seconds to 0.0
+    set (state's shaders + state's shader index)'s active to false
+    set entry to the item at (state's shader index) in descriptions
+    set destination to "/ide/index.html?mode=shader&scene=" + (the string form of (entry's id))
     set the destination of "Open this shader ↗" in (state's view's instance) to destination
     request a UI redraw in (state's view)
 
 to paint the website shader {a pointer to UI canvas frame:painting}:
     set state to the website state in (painting's instance)
-    if state's shader catalog = @intrinsic("construct", a pointer to JSON value):
-        return nothing
     set width to the maximum of 1 and ((painting's bounds' width * state's view's pixel scale) as an integer)
     set height to the maximum of 1 and ((painting's bounds' height * state's view's pixel scale) as an integer)
     set coverage to 0.0
     set index to 0
-    loop while index < 3:
+    loop while index < the length of (the site's shaders):
         set weight to the item at index in (state's shader weights)
-        set resource to the item at index in (state's shader resources)
-        if (weight > 0.0) and (resource != (0 as a pointer)):
+        set scene to state's shaders + index
+        if (weight > 0.0) and (scene's resource != (0 as a pointer)):
             set coverage to coverage + weight
-            set time to the item at index in (state's shader times)
-            set texture to the rendered shader index at time sized width by height in state
+            set texture to the rendered website shader scene sized width by height
             draw UI texture texture in (painting's bounds) in (UI ink 255 255 255) with opacity ((255.0 * weight / coverage) as an integer) on (painting's frame)
         increment index
 
 to advance the website frame {a pointer to UI view:view}:
     set state to the website state in (view's instance)
     advance website language analysis in state
-    set elapsed to view's seconds - state's shader last seconds
-    set active to state's shader active
-    set state's shader last seconds to view's seconds
-    set state's shader active to false
-    if state's route != "/index.html":
-        return nothing
-    set canvas to the UI layout labeled "Live shader" in (view's layout)
-    if ((canvas's painted bounds' y + canvas's painted bounds' height) <= 0.0) or (canvas's painted bounds' y >= view's height):
-        return nothing
-    if (the item at (state's shader index) in (state's shader resources)) = (0 as a pointer):
-        return nothing
-    prepare the website terrain in state
-    set state's shader active to true
+    advance the website shader preview in state
+    set visible to false
+    if state's route = "/index.html":
+        set canvas to the UI layout labeled "Live shader" in (view's layout)
+        set visible to ((canvas's painted bounds' y + canvas's painted bounds' height) > 0.0) and (canvas's painted bounds' y < view's height)
     set index to 0
-    loop while index < 3:
-        set target to 1.0 if (index = state's shader index), else 0.0
-        set weight to the item at index in (state's shader weights)
-        set weight to UI value weight approaching target at speed 8.0 in view
-        store weight into (state's shader weights) at index
+    loop while index < the length of (the site's shaders):
+        advance website shader (state's shaders + index) visible (visible and (index = state's shader index)) in view
+        if visible:
+            set target to 1.0 if (index = state's shader index), else 0.0
+            set weight to the item at index in (state's shader weights)
+            store (UI value weight approaching target at speed 8.0 in view) into (state's shader weights) at index
         increment index
-    if view's instance's reduced motion = false:
-        set time to the item at (state's shader index) in (state's shader times)
-        if active:
-            set time to time + elapsed
-        store time into (state's shader times) at (state's shader index)
-        if time > 11.0:
+    if visible and (view's instance's reduced motion = false):
+        set selected to state's shaders + state's shader index
+        set description to the item at (state's shader index) in (the site's shaders)
+        if selected's seconds > description's duration:
             advance to the next website shader in state
-        animate UI view view

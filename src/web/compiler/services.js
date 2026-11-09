@@ -34,6 +34,7 @@ export function createCompilerServices(base, dependencyUrl) {
       return result;
     },
     async language(payload, { signal }) {
+      if (payload.operation === 'reset') return connection('language').request('reset', {}, { signal });
       if (payload.operation === 'project') return connection('language').request('project',
         { sources: { ...await sources(), ...payload.sources } }, { signal });
       if (payload.operation === 'exchange') return connection('language').request('language',

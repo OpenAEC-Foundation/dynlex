@@ -9,6 +9,12 @@ to follow website link {a pointer to UI instance:instance}:
     if destination = "action:next-shader":
         advance to the next website shader in state
         return nothing
+    if destination = "action:toggle-preview":
+        toggle the website shader preview in state
+        return nothing
+    if destination = "action:reset-preview":
+        reset the website shader preview in state
+        return nothing
     set runs to ["action:run-square", "action:run-vocabulary", "action:run-ide", "action:run-studio"]
     set stops to ["action:stop-square", "action:stop-vocabulary", "action:stop-ide", "action:stop-studio"]
     set index to 0
@@ -21,11 +27,12 @@ to follow website link {a pointer to UI instance:instance}:
             return nothing
         increment index
     if destination = "action:save-source":
-        set source to (the UI value for (the control labeled "IDE source" in instance) in instance)'s text
-        set name to (the UI value for (the control labeled "IDE filename" in instance) in instance)'s text
+        set source to the website source text in state
+        set name to the website source filename in state
         request "download" containing (a JSON object containing [JSON text "name" is name, JSON text "type" is "text/plain;charset=utf-8", JSON text "content" is source]) for purpose 0 indexed 0 in state
         return nothing
     if destination = "action:open-example":
+        select website editor mode 0 in state
         set parent to the parent of (instance's event target) within (instance's description)
         set the text of "IDE source" in instance to (parent's content)
         navigate to (the string form of "/ide/index.html") in state
@@ -41,6 +48,16 @@ to follow website link {a pointer to UI instance:instance}:
             return nothing
         require condition false reporting "This website action has not been registered"
     navigate to destination in state
+
+to notice website editor mode {a pointer to UI instance:instance}:
+    set state to the website state in instance
+    set selected to the value of "IDE modes" in instance
+    select website editor mode selected in state
+    if selected = 1:
+        if state's shader editor's preview's resource = (0 as a pointer):
+            run website program 2 in state
+        else:
+            toggle the website shader preview in state
 
 to bind website links in {UI reference:node} for {a pointer to UI instance:instance}:
     if node's kind = 43:

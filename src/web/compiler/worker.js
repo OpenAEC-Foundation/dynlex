@@ -39,6 +39,7 @@ function checked(module, name, types, values) {
 async function handle(type, payload) {
   const module = await compiler();
   if (type === 'initialize') return null;
+  if (type === 'reset') { module.ccall('dynlex_web_init'); return null; }
   if (type === 'project') {
     checked(module, 'dynlex_web_set_import_sources', ['string'], [JSON.stringify(payload.sources)]);
     return null;

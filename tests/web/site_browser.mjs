@@ -27,7 +27,7 @@ const server = http.createServer(async (request, response) => {
     }
     const filename = path.resolve(directory, '.' + new URL(request.url, 'http://localhost').pathname);
     if (!filename.startsWith(directory + '/') && filename !== directory) throw new Error('Path');
-    const resolved = filename === directory ? path.join(filename, 'index.html') : filename;
+    const resolved = (await fs.stat(filename)).isDirectory() ? path.join(filename, 'index.html') : filename;
     response.setHeader('Content-Type', mime[path.extname(resolved)] || 'application/octet-stream');
     response.end(await fs.readFile(resolved));
   } catch { response.writeHead(404); response.end(); }
@@ -115,10 +115,31 @@ try {
       platformVersion: '6.0.0', architecture: 'x86', model: '', mobile: false, bitness: '64', wow64: false }
   });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.siteProbe = { paints: 0, api: '', texts: [], diagnostics: [], compilations: [], downloads: [] };
+    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], compilations: [], builds: [], downloads: [] };
+    const instantiate = WebAssembly.instantiate.bind(WebAssembly);
+    WebAssembly.instantiate = function(bytes, imports, ...args) {
+      const env = imports?.env;
+      if (env?.ui_text_mask) {
+        const begin = env.ui_begin, mask = env.ui_text_mask;
+        const decoder = new TextDecoder();
+        env.ui_begin = (...args) => { window.siteProbe.visible = []; return begin(...args); };
+        env.ui_text_mask = (font, pointer, count, ...args) => {
+          const result = mask(font, pointer, count, ...args);
+          if (result) window.siteProbe.visible.push(decoder.decode(new Uint8Array(env.__linear_memory.buffer, pointer, count)));
+          return result;
+        };
+      }
+      return instantiate(bytes, imports, ...args);
+    };
+    const blobs = new Map();
+    const objectUrl = URL.createObjectURL.bind(URL), revokeUrl = URL.revokeObjectURL.bind(URL);
+    URL.createObjectURL = blob => { const url = objectUrl(blob); blobs.set(url, blob); return url; };
+    URL.revokeObjectURL = url => { blobs.delete(url); revokeUrl(url); };
     const download = HTMLAnchorElement.prototype.click;
     HTMLAnchorElement.prototype.click = function(...args) {
-      window.siteProbe.downloads.push({ name: this.download, href: this.href });
+      const record = { name: this.download, href: this.href };
+      window.siteProbe.downloads.push(record);
+      if (blobs.has(this.href)) blobs.get(this.href).text().then(content => { record.content = content; });
       return download.apply(this, args);
     };
     const BrowserWorker = window.Worker;
@@ -130,6 +151,9 @@ try {
       constructor(...args) {
         super(...args);
         this.addEventListener('message', ({ data }) => {
+          if (data.result?.status !== undefined) window.siteProbe.builds.push({
+            status: data.result.status, stages: Object.keys(data.result.stages || {})
+          });
           if (!Array.isArray(data.result)) return;
           for (const message of data.result) if (message.method === 'textDocument/publishDiagnostics')
             window.siteProbe.diagnostics.push(message.params);
@@ -192,7 +216,7 @@ try {
   await pause(500); await capture('ide');
   await click(237,287);
   await waitFor('window.siteProbe.texts.includes("Hello from DynLex.")');
-  await click(120,421);
+  await click(120,480);
   const key = async (code,key,number,modifiers=0) => {
     await command('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:number,modifiers});
     await command('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:number,modifiers});
@@ -202,11 +226,11 @@ try {
   await click(237,287);
   await waitFor('window.siteProbe.texts.includes("7")');
   await capture('ide-executed');
-  await click(120,421); await key('KeyA','a',65,2);
+  await click(120,480); await key('KeyA','a',65,2);
   await command('Input.insertText',{text:'unrecognized instruction'});
   await waitFor('window.siteProbe.texts.some(text => text.includes("This pattern couldn"))');
   const beforeValid = await evaluate('window.siteProbe.diagnostics.length');
-  await click(120,421); await key('KeyA','a',65,2);
+  await click(120,480); await key('KeyA','a',65,2);
   await command('Input.insertText',{text:'import lib/std.dl\nprint line "😀"'});
   await waitFor(`window.siteProbe.diagnostics.slice(${beforeValid}).some(result => result.diagnostics.length === 0)`);
   await capture('ide-analysis');
@@ -214,10 +238,14 @@ try {
   const analyzed = await evaluate('window.siteProbe.paints');
   await pause(500);
   assert.equal(await evaluate('window.siteProbe.paints'), analyzed, 'An idle analyzed editor kept repainting');
-  await click(120,421); await key('KeyA','a',65,2);
+  await click(120,480); await key('KeyA','a',65,2);
   await command('Input.insertText',{text:'import lib/std.dl\nloop while true:\n    ignore 1'});
   await click(237,287); await pause(1800); await click(640,287);
   await waitFor('window.siteProbe.texts.includes("Stopped.")');
+  await click(480,363);
+  await waitFor('window.siteProbe.texts.some(text => text.startsWith("Shader compiled in"))');
+  await capture('shader-default');
+  await click(190,363);
   await click(1115,22);
   await waitFor('location.pathname === "/wiki/index.html"');
   await evaluate('history.back()'); await waitFor('location.pathname === "/ide/index.html"');
@@ -265,7 +293,7 @@ try {
   await click(1000,287);
   await waitFor('window.siteProbe.downloads.some(item => item.name === "renamed.dl" && item.href.startsWith("blob:"))');
   await capture('ide-linked');
-  await click(120,421); await key('KeyA','a',65,2);
+  await click(120,480); await key('KeyA','a',65,2);
   await command('Input.insertText',{text:'abcd'});
   await key('Home','Home',36,2);
   await key('ArrowRight','ArrowRight',39); await key('ArrowRight','ArrowRight',39);
@@ -281,6 +309,53 @@ try {
   await pause(700);
   assert.equal(await evaluate('window.siteProbe.compilations.length'), compilations,
     'History navigation repeated the source link autorun');
+  const shaderSource = 'import lib/shader.dl\nset the fragment color with a red channel of 0.2, a green channel of 0.4, a blue channel of 0.8 and an alpha channel of 1.0\n';
+  const shaderUrl = '/ide/?' + new URLSearchParams({ mode: 'shader', name: 'preview.dl', code: shaderSource });
+  await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}${shaderUrl}` });
+  await waitFor('window.siteProbe?.texts.some(text => text.startsWith("Shader compiled in"))');
+  await waitFor('window.siteProbe.diagnostics.some(result => result.uri.endsWith("/preview.dl") && result.diagnostics.length === 0)');
+  await capture('shader-inline');
+  await pause(1200);
+  const staticPaints = await evaluate('window.siteProbe.paints');
+  await pause(500);
+  assert.equal(await evaluate('window.siteProbe.paints'), staticPaints,
+    'A shader without a time input kept repainting');
+  await click(190,363);
+  await click(120,480); await key('KeyA','a',65,2);
+  await command('Input.insertText', { text: 'import lib/std.dl\nprint line "Retained program tab"' });
+  await click(480,363);
+  await click(1000,287);
+  await waitFor('window.siteProbe.downloads.some(item => item.name === "preview.dl" && item.content !== undefined)');
+  assert.equal(await evaluate('window.siteProbe.downloads.at(-1).content'), shaderSource,
+    'Switching editor tabs replaced the shader source');
+  const previewImage = async () => (await command('Page.captureScreenshot', { format: 'png',
+    clip: { x: 680, y: 418, width: 528, height: 320, scale: 1 } })).data;
+  const successfulPreview = await previewImage();
+  await evaluate('window.siteProbe.texts.length = 0');
+  await click(120,480); await key('KeyA','a',65,2);
+  await command('Input.insertText', { text: 'unknown shader instruction' });
+  await click(237,287);
+  await waitFor('window.siteProbe.texts.includes("Compilation failed.")');
+  await capture('shader-failed-edit');
+  assert.equal(await previewImage(), successfulPreview, 'A failed shader edit replaced the last successful preview');
+  await evaluate('window.siteProbe.texts.length = 0');
+  await click(120,480); await key('KeyA','a',65,2);
+  await command('Input.insertText', { text: shaderSource });
+  await click(237,287);
+  await click(750,783);
+  await waitFor('window.siteProbe.texts.some(text => text.startsWith("Shader compiled in"))');
+  await waitFor('window.siteProbe.visible.includes("Resume preview")');
+  await click(750,783);
+  await waitFor('window.siteProbe.visible.includes("Pause preview")');
+  for (const scene of ['event-horizon', 'endless-terrain', 'nano-choreography']) {
+    const url = '/ide/index.html?' + new URLSearchParams({ mode: 'shader', scene });
+    await evaluate(`window.siteProbe.texts.length = 0; history.pushState(null, '', ${JSON.stringify(url)}); dispatchEvent(new PopStateEvent('popstate'))`);
+    await waitFor(`window.siteProbe.texts.includes(${JSON.stringify(scene + '.dl')}) && window.siteProbe.texts.some(text => text.startsWith("Shader compiled in"))`);
+    await waitFor(`window.siteProbe.diagnostics.some(result => result.uri.endsWith(${JSON.stringify('/' + scene + '.dl')}) && result.diagnostics.length === 0)`);
+    assert.deepEqual(await evaluate('window.siteProbe.builds.at(-1).stages'),
+      scene === 'event-horizon' ? ['fragment'] : ['fragment', 'vertex']);
+    await pause(500); await capture('shader-' + scene);
+  }
   assert.equal(errors.length,0,JSON.stringify(errors));
   console.log('Site background preview passed.');
 } finally {

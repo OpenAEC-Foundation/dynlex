@@ -14,18 +14,23 @@ to get receive website reply {a pointer to JSON value:response} for {integer:job
     if job = 3:
         require condition ((the JSON number named "status" in response) = 200.0) reporting "The shader catalog could not be loaded"
         parse (the JSON text named "text" in response) as JSON and set parsed to it
-        set state's shader catalog to the value of parsed
+        set catalog to the value of parsed
+        require condition (catalog's length = (the length of (the site's shaders))) reporting "The shader catalog is inconsistent with its descriptions"
         set cursor to 0
-        loop while cursor < state's shader catalog's length:
-            set entry to the JSON value at index cursor in (state's shader catalog)
-            set payload to the compact JSON form of (the JSON member named "program" in entry)
+        loop while cursor < catalog's length:
+            set entry to the JSON value at index cursor in catalog
+            set scene to state's shaders + cursor
+            set description to the item at cursor in (the site's shaders)
+            require condition ((the JSON text named "id" in entry) = description's id) reporting "The shader catalog order is inconsistent"
+            set scene's geometry to description's geometry
+            set scene's program to a copy of JSON-RPC node (the JSON member named "program" in entry)
+            set payload to the compact JSON form of (scene's program)
             request "graphics" with JSON data payload for purpose 4 indexed cursor in state
             increment cursor
+        free catalog
     if job = 4:
         set resource to ((the JSON number named "resource" in response) as an integer) as a pointer
-        store resource into (state's shader resources) at index
-        if index = 1:
-            prepare the website terrain in state
+        set (state's shaders + index)'s resource to resource
         request a UI redraw in (state's view)
     if job = 5:
         receive website release response in state
@@ -35,12 +40,22 @@ to get receive website reply {a pointer to JSON value:response} for {integer:job
         receive website execution response for index in state
     if job = 8:
         receive website language reply response at step index in state
+    if job = 9:
+        if receive website shader source response in state:
+            run website program 2 in state
+    if job = 10:
+        receive the website shader preview response in state
     return false
 
 to read website input {a pointer to UI view:view}:
     handle website program shortcut in view
     if view's input kind = 7:
-        set (the website state in (view's instance))'s shader active to false
+        set state to the website state in (view's instance)
+        set index to 0
+        loop while index < the length of (the site's shaders):
+            set (state's shaders + index)'s active to false
+            increment index
+        set state's shader editor's preview's active to false
     if (view's input kind != 11) and (view's input kind != 12):
         return nothing
     set state to the website state in (view's instance)
@@ -80,6 +95,10 @@ to read website input {a pointer to UI view:view}:
                 if pending's purpose = 8:
                     set state's language's phase to 8
                     set the text of "IDE analysis" in (view's instance) to "An error occurred. Check the log."
+                if pending's purpose = 9:
+                    fail the website shader source in state
+                if pending's purpose = 10:
+                    fail website program 2 in state
             deallocate pending
             if retained = false:
                 free document
@@ -99,7 +118,16 @@ to close the website {a pointer to UI view:view}:
         deallocate pending
         set pending to next
     free state's environment
-    free state's shader catalog
+    set index to 0
+    loop while index < the length of (the site's shaders):
+        set program to (state's shaders + index)'s program
+        if program != @intrinsic("construct", a pointer to JSON value):
+            free program
+        increment index
+    if state's shader editor's preview's program != @intrinsic("construct", a pointer to JSON value):
+        free state's shader editor's preview's program
+    if state's shader editor's pending program != @intrinsic("construct", a pointer to JSON value):
+        free state's shader editor's pending program
     if state's language's token types != @intrinsic("construct", a pointer to JSON value):
         free state's language's token types
     if state's release != @intrinsic("construct", a pointer to website release):
@@ -121,11 +149,15 @@ function open the DynLex website using {a pointer to UI driver:driver}:
         show page "/index.html" in instance
         set view to storage for one slot initialized with (a UI view of instance sized 1280 by 900 using fonts "assets/fonts/Inter-400.ttf" and "assets/fonts/Inter-600.ttf" with driver)
         set state's view to view
+        set state's shader editor's description to the custom website shader
         store 1.0 into (state's shader weights) at 0
         set state's route to "/index.html"
         set view's close action to (the function named "close the website $") as a pointer
         bind website links in (instance's description) for instance
         bind (the control labeled "IDE source" in instance) in instance to (the function named "notice website source edit $") for event 0
+        bind (the control labeled "Shader source" in instance) in instance to (the function named "notice website source edit $") for event 0
+        bind (the control labeled "IDE modes" in instance) in instance to (the function named "notice website editor mode $") for event 0
+        bind (the control labeled "IDE shader preview" in instance) in instance to (the function named "paint the website shader preview $") for event 1
         bind (the control labeled "Live shader" in instance) in instance to (the function named "paint the website shader $") for event 1
         watch UI input in view using (the function named "read website input $")
         update UI frames in view using (the function named "advance the website frame $")

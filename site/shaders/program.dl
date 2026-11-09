@@ -1,0 +1,124 @@
+# The same shader program descriptions feed packaged scenes and edited previews.
+import catalog.dl
+import lib/json_builders.dl
+import lib/json_rpc_values.dl
+
+class:
+    patterns:
+        shader linkage
+    members:
+        program as a pointer to JSON value
+        error as a string
+
+{shader linkage:result} succeeded means: result's program != @intrinsic("construct", a pointer to JSON value)
+{shader linkage:result} failed means: result's program = @intrinsic("construct", a pointer to JSON value)
+
+to get a failed shader linkage reporting {C string:message}:
+    return @intrinsic("construct", shader linkage, @intrinsic("construct", a pointer to JSON value), the string form of message)
+
+to get a successful shader linkage to {a pointer to JSON value:program}:
+    return @intrinsic("construct", shader linkage, program, the string form of "")
+
+to get the shader stages for {shader geometry:geometry}:
+    set result to a JSON array containing [a new JSON-RPC text for "fragment"]
+    if geometry's kind != 0:
+        add (a new JSON-RPC text for "vertex") to the JSON array result
+    return result
+
+to get shader program {a pointer to JSON value:program} uses input {C string:name}:
+    set passes to the JSON member named "passes" in program
+    set index to 0
+    loop while index < passes's length:
+        set uniforms to the JSON member named "uniforms" in (the JSON value at index index in passes)
+        set cursor to 0
+        loop while cursor < uniforms's length:
+            if (the JSON text named "name" in (the JSON value at index cursor in uniforms)) = name:
+                return true
+            increment cursor
+        increment index
+    return false
+
+to get the linked shader stage {a pointer to JSON value:stage} stored as {C string:kind}:
+    return a JSON object containing [
+        JSON child "webgpu" is (a JSON object containing [JSON text "kind" is kind, JSON text "value" is (the JSON text named "webgpu" in stage)]),
+        JSON child "webgl" is (a JSON object containing [JSON text "kind" is kind, JSON text "value" is (the JSON text named "webgl" in stage)])
+    ]
+
+to get the error from merging shader bindings from {a pointer to JSON value:stage} into {a pointer to JSON value:bindings}:
+    set uniforms to the JSON member named "uniforms" in stage
+    set index to 0
+    loop while index < uniforms's length:
+        set uniform to the JSON value at index index in uniforms
+        set group to the JSON number named "group" in uniform
+        set binding to the JSON number named "binding" in uniform
+        set name to the JSON text named "name" in uniform
+        set cursor to 0
+        set found to false
+        loop while cursor < bindings's length:
+            set existing to the JSON value at index cursor in bindings
+            set same to ((the JSON number named "group" in existing) = group) and ((the JSON number named "binding" in existing) = binding)
+            if same:
+                if (the JSON text named "name" in existing) != name:
+                    return "Shader stages disagree about a uniform binding"
+                set found to true
+            else:
+                if (the JSON text named "name" in existing) = name:
+                    return "A shader uniform uses different bindings across stages"
+            increment cursor
+        if found = false:
+            add (a copy of JSON-RPC node uniform) to the JSON array bindings
+        increment index
+    return ""
+
+to get a linked render pass for {live shader:shader} drawing geometry {boolean:mesh} using {a pointer to JSON value:stages} stored as {C string:kind}:
+    set fragment to the JSON member named "fragment" in stages
+    set uniforms to a new JSON-RPC array
+    set error to the error from merging shader bindings from fragment into uniforms
+    if error != "":
+        free uniforms
+        return a failed shader linkage reporting error
+    set vertex to a new JSON-RPC null
+    set buffers to a new JSON-RPC null
+    set blend to "opaque"
+    set depth to false
+    set layer to 0
+    if mesh:
+        set source to the JSON member named "vertex" in stages
+        set error to the error from merging shader bindings from source into uniforms
+        if error != "":
+            free uniforms
+            free vertex
+            free buffers
+            return a failed shader linkage reporting error
+        free vertex
+        set vertex to the linked shader stage source stored as kind
+        if shader's geometry's kind = 1:
+            set depth to true
+        if shader's geometry's kind = 2:
+            free buffers
+            set buffers to a JSON object containing [JSON text "vertices" is (shader's geometry's path), JSON child "indices" is (a new JSON-RPC null)]
+            set blend to "additive"
+            set layer to 1
+    return a successful shader linkage to (a JSON object containing [
+        JSON child "fragment" is (the linked shader stage fragment stored as kind),
+        JSON child "vertex" is vertex, JSON child "geometry" is buffers,
+        JSON flag "depth" is depth, JSON text "blend" is blend,
+        JSON text "topology" is "triangle-list", JSON number "renderPass" is layer,
+        JSON child "uniforms" is uniforms
+    ])
+
+to get the linkage of {live shader:shader} using {a pointer to JSON value:stages} stored as {C string:kind}:
+    set passes to a new JSON-RPC array
+    if (shader's geometry's kind = 0) or (shader's geometry's kind = 2):
+        set linked to a linked render pass for shader drawing geometry false using stages stored as kind
+        if linked failed:
+            free passes
+            return linked
+        add (linked's program) to the JSON array passes
+    if shader's geometry's kind != 0:
+        set linked to a linked render pass for shader drawing geometry true using stages stored as kind
+        if linked failed:
+            free passes
+            return linked
+        add (linked's program) to the JSON array passes
+    return a successful shader linkage to (a JSON object containing [JSON text "operation" is "shader", JSON child "passes" is passes])

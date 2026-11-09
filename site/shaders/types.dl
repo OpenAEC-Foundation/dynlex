@@ -1,0 +1,18 @@
+import catalog.dl
+import lib/json.dl
+import ../packages/dynlex-ui/ui/platform_types.dl
+
+class:
+    patterns:
+        website shader view
+    members:
+        resource as a pointer
+        geometry as shader geometry
+        program as a pointer to JSON value
+        seconds as a floating-point number
+        last seconds as a floating-point number
+        active as a boolean
+        paused as a boolean
+        mesh width as an integer
+        texture as UI texture
+        rendered seconds as a floating-point number

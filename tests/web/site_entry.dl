@@ -31,6 +31,30 @@ set query to a JSON object containing [JSON text "code" is "must not load", JSON
 apply website editor entry query in (the address of state)
 free query
 require condition ((the UI value for (the control labeled "IDE filename" in (the address of instance)) in (the address of instance))'s text = "plain.dl") reporting "A source link accepted directory traversal"
+set query to a JSON object containing [JSON text "mode" is "unknown", JSON text "code" is "must not load"]
+apply website editor entry query in (the address of state)
+free query
+require condition ((the website editor uses shaders in (the address of state)) = false) reporting "An invalid editor mode changed the selected tab"
+set query to a JSON object containing [JSON text "mode" is "shader", JSON text "scene" is "unknown"]
+apply website editor entry query in (the address of state)
+free query
+require condition (state's shader editor's source request = 0) reporting "An unknown scene initiated a source load"
+set query to a JSON object containing [JSON text "mode" is "shader", JSON text "scene" is "endless-terrain"]
+apply website editor entry query in (the address of state)
+free query
+require condition (the website editor uses shaders in (the address of state)) reporting "A shader scene link did not select its editor"
+require condition (state's shader editor's description's geometry's kind = 1) reporting "A scene link lost its terrain geometry"
+require condition (state's shader editor's source request = state's requests' id) reporting "A scene source load has no request owner"
+set query to a JSON object containing [JSON text "mode" is "shader", JSON text "scene" is "nano-choreography"]
+apply website editor entry query in (the address of state)
+free query
+require condition (state's shader editor's description's geometry's kind = 2) reporting "Replacing a scene did not replace its geometry"
+set query to a JSON object containing [JSON text "mode" is "shader", JSON text "code" is "shader source", JSON text "name" is "preview.dl"]
+apply website editor entry query in (the address of state)
+free query
+require condition (state's shader editor's source request = 0) reporting "An inline shader retained its previous scene fetch"
+require condition (state's shader editor's description's geometry's kind = 0) reporting "An inline shader retained its previous scene geometry"
+require condition ((the website source filename in (the address of state)) = "preview.dl") reporting "The inline shader lost its filename"
 set pending to state's requests
 loop while pending != @intrinsic("construct", a pointer to website request):
     set next to pending's next

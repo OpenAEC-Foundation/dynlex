@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Build the DynLex website from its page and shader descriptions and a pinned UI SDK."""
 import argparse
-import copy
 import html
 import json
 import posixpath
@@ -21,34 +20,17 @@ def compile_jobs(root, sources, jobs, stage):
     request.unlink()
 
 
-def run_json(root, program):
-    result = subprocess.run(['node', str(root / 'scripts/run_program.mjs'), str(program)],
+def run_json(root, program, payload=None):
+    command = ['node', str(root / 'scripts/run_program.mjs'), str(program)]
+    if payload is not None:
+        files = program.parent / 'runtime-files.json'
+        files.write_text(json.dumps({'/input.json': json.dumps(payload)}))
+        command.append(str(files))
+    result = subprocess.run(command,
                             check=True, text=True, capture_output=True)
+    if payload is not None:
+        files.unlink()
     return json.loads(result.stdout)
-
-
-def link_shader_program(description, directory):
-    """Resolve stage artifacts and their reflected bindings, independent of scene behavior."""
-    program = copy.deepcopy(description)
-    for render_pass in program['passes']:
-        uniforms = {}
-        for stage in ['fragment', 'vertex']:
-            prefix = render_pass[stage]
-            if prefix is None:
-                continue
-            reflection = json.loads((directory / (prefix + '.json')).read_text())
-            for uniform in reflection['uniforms']:
-                key = (uniform['group'], uniform['binding'])
-                entry = {name: uniform[name] for name in ['name', 'group', 'binding']}
-                if key in uniforms and uniforms[key] != entry:
-                    raise ValueError(f'Shader stages disagree about uniform binding {key}')
-                uniforms[key] = entry
-            render_pass[stage] = {
-                backend: {'kind': 'url', 'value': prefix + suffix}
-                for backend, suffix in [('webgpu', '.wgsl'), ('webgl', '.glsl')]
-            }
-        render_pass['uniforms'] = [uniforms[key] for key in sorted(uniforms)]
-    return program
 
 
 def write_routes(site, stage, pages):
@@ -84,7 +66,8 @@ def main():
         stage = Path(temporary)
         compile_jobs(root, sources, [
             {'entry': 'site/shaders/export.dl', 'kind': 'wasm', 'output': 'shader-catalog.wasm'},
-            {'entry': 'site/pages/export.dl', 'kind': 'wasm', 'output': 'page-catalog.wasm'}
+            {'entry': 'site/pages/export.dl', 'kind': 'wasm', 'output': 'page-catalog.wasm'},
+            {'entry': 'site/shaders/link.dl', 'kind': 'wasm', 'output': 'shader-linker.wasm'}
         ], stage)
         scenes = run_json(root, stage / 'shader-catalog.wasm')
         pages = run_json(root, stage / 'page-catalog.wasm')
@@ -92,15 +75,25 @@ def main():
         (stage / 'page-catalog.wasm').unlink()
         jobs = [{'entry': project['entry'], 'kind': 'wasm', 'output': 'application.wasm'}]
         for scene in scenes:
-            stages = {'fragment'}
-            if any(render_pass['vertex'] is not None for render_pass in scene['program']['passes']):
-                stages.add('vertex')
-            for shader_stage in sorted(stages):
+            for shader_stage in scene['stages']:
                 jobs.append({'entry': scene['source'], 'kind': 'shader', 'stage': shader_stage,
                              'output': f"assets/shaders/{scene['id']}.{shader_stage}"})
         compile_jobs(root, sources, jobs, stage)
+        linked = []
         for scene in scenes:
-            scene['program'] = link_shader_program(scene['program'], stage)
+            stages = {}
+            for shader_stage in scene['stages']:
+                prefix = f"assets/shaders/{scene['id']}.{shader_stage}"
+                stages[shader_stage] = {
+                    'webgpu': prefix + '.wgsl', 'webgl': prefix + '.glsl',
+                    **json.loads((stage / (prefix + '.json')).read_text())
+                }
+            linked.append({'id': scene['id'], 'stages': stages})
+        programs = run_json(root, stage / 'shader-linker.wasm', linked)
+        (stage / 'shader-linker.wasm').unlink()
+        for scene, program in zip(scenes, programs, strict=True):
+            scene['program'] = program
+            shutil.copyfile(root / scene['source'], stage / f"assets/shaders/{scene['id']}.dl")
         sdk.extract(stage / 'packages/dynlex-ui')
         shutil.copytree(site / 'assets', stage / 'assets', dirs_exist_ok=True)
         shutil.copytree(site / 'platform', stage / 'platform')

@@ -24,14 +24,9 @@ class:
         route as a string
         fragment as a string
         environment as a pointer to JSON value
-        shader catalog as a pointer to JSON value
-        shader resources as a pointer array of 3 items
+        shaders as website shader view array of (the length of (the site's shaders)) items
         shader index as an integer
-        shader times as a floating-point number array of 3 items
-        shader weights as a floating-point number array of 3 items
-        shader width as an integer
-        shader last seconds as a floating-point number
-        shader active as a boolean
+        shader weights as a floating-point number array of (the length of (the site's shaders)) items
         release as a pointer to website release
         release loading as a boolean
         download started as a boolean
@@ -39,12 +34,32 @@ class:
         invocation as an integer
         language as website language state
         editor entry as a string
+        shader editor as website shader editor
 
 [the|] website state in {a pointer to UI instance:instance} means: instance's state as a pointer to website state
 
 to get the website source URI in {a pointer to website state:state}:
-    set name to (the UI value for (the control labeled "IDE filename" in (state's view's instance)) in (state's view's instance))'s text
-    return "file:///workspace/" + name
+    return "file:///workspace/" + (the website source filename in state)
+
+to get the website editor uses shaders in {a pointer to website state:state}:
+    return (the value of "IDE modes" in (state's view's instance)) = 1
+
+to get the website source filename label in {a pointer to website state:state}:
+    return "Shader filename" if (the website editor uses shaders in state), else "IDE filename"
+
+to get the website source filename in {a pointer to website state:state}:
+    return (the UI value for (the control labeled (the website source filename label in state) in (state's view's instance)) in (state's view's instance))'s text
+
+to get the website source editor in {a pointer to website state:state}:
+    return the active UI editor within (the control labeled "IDE modes" in (state's view's instance)) in (state's view's instance)
+
+to get the website source text in {a pointer to website state:state}:
+    return (the UI value for (the website source editor in state) in (state's view's instance))'s text
+
+to get the website analysis profile in {a pointer to website state:state}:
+    if (the website editor uses shaders in state) = false:
+        return 0
+    return 1 if (state's shader editor's description's geometry's kind = 0), else 2
 
 to request {C string:service} containing {a pointer to JSON value:payload} for purpose {integer:job} indexed {integer:index} in {a pointer to website state:state}:
     set data to the compact JSON form of payload

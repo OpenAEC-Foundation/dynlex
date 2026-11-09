@@ -10,7 +10,7 @@ website page home page at "/index.html" titled "DynLex — Make the language par
             paragraph "Compilation measurement" containing "Run a sketch to measure compilation\non this device." using hero signal appearance
             region "Shader actions" using columns appearance:
                 link "Next shader →" to "action:next-shader" using navigation link appearance
-                link "Open this shader ↗" to "/ide/index.html?shader=event-horizon" using navigation link appearance
+                link "Open this shader ↗" to "/ide/index.html?mode=shader&scene=event-horizon" using navigation link appearance
 
     region "playground" using content appearance:
         paragraph "DYNLEX / OPEN SKETCH" using signal appearance

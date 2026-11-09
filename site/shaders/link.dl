@@ -1,0 +1,24 @@
+# Build-time linking uses exactly the same DynLex program builder as the IDE.
+import program.dl
+import lib/filesystem.dl
+
+read the file at "/input.json" and set input to it
+require condition (input succeeded) reporting "The shader linker needs its input file"
+parse (input's contents) as JSON and set parsed to it
+require condition (parsed succeeded) reporting "The shader linker input is not JSON"
+set entries to the value of parsed
+set descriptions to the site's shaders
+require condition (entries's length = (the length of descriptions)) reporting "The shader linker needs every scene"
+set result to a new JSON-RPC array
+set index to 0
+loop while index < entries's length:
+    set entry to the JSON value at index index in entries
+    set description to the item at index in descriptions
+    require condition ((the JSON text named "id" in entry) = description's id) reporting "The shader linker scene order is inconsistent"
+    set linked to the linkage of description using (the JSON member named "stages" in entry) stored as "url"
+    require condition (linked succeeded) reporting (the data of (linked's error))
+    add (linked's program) to the JSON array result
+    increment index
+print line the compact JSON form of result
+free result
+free entries
