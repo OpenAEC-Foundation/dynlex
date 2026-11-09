@@ -168,6 +168,43 @@ def check_inactive_edit_with_unrelated_warning(root, build):
         "a new diagnostic in the edited body was hidden by cached warnings"
 
 
+def check_frontend_warning_inference_reuse(root, build):
+    main = root / "frontend_warning_inference_reuse.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'value means: 1\n'
+              'to show {integer:value}: @intrinsic("discard", value)\n'
+              'show 2\n'
+              '@intrinsic("discard", 1)\n')
+    main.write_text(source)
+    first = build(entry=main)
+    assert "Warning:" in first[1], "fixture did not produce a declaration warning"
+    main.write_text(source.replace('"discard", 1', '"discard", 2'))
+    edited = build(entry=main)
+    assert edited[0]["inference_instantiations_reused"] >= 1, \
+        "a declaration warning prevented reuse of an unchanged function"
+    assert edited[1:] == build(False, entry=main)[1:]
+
+
+def check_inference_warning_rechecked(root, build):
+    main = root / "inference_warning_rechecked.dl"
+    source = ('function return value:\n'
+              '    replacement: @intrinsic("return", value)\n'
+              'to get left - right:\n'
+              '    return @intrinsic("subtract", left, right)\n'
+              'to get value adjusted:\n'
+              '    return value\n'
+              'to get the tested form of value:\n'
+              '    return value - 1 adjusted\n'
+              '@intrinsic("discard", the tested form of 4)\n'
+              '@intrinsic("discard", 1)\n')
+    main.write_text(source)
+    first = build(entry=main)
+    assert "multiple valid operand groupings" in first[1], "fixture did not produce an inference warning"
+    main.write_text(source.replace('"discard", 1', '"discard", 2'))
+    edited = build(entry=main)
+    assert edited[1:] == build(False, entry=main)[1:], "cached inference hid a warning"
+
+
 def check_inactive_edit_after_warning_wording(root, build):
     folder = root / "warn_inactive_config"
     folder.mkdir()

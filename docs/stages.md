@@ -100,6 +100,10 @@ expression constants, operand groupings, and callable selections join the caller
 trial state. The outer transaction commits or discards those results together with
 the inferred body; retaining only types loses metadata needed by code generation.
 
+Incremental inference summaries omit functions in sources named by inference-stage
+diagnostics and their notes. Warnings already produced during pattern resolution
+do not exclude unrelated function summaries in the same file.
+
 After the pattern trees stabilize, definitions connected through shared trie
 endpoints form one syntax family, including transitive connections through choice
 alternatives. Precedence is a partial order between these families. Each family's

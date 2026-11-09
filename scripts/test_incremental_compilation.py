@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from test_incremental_dependency_graph import check_deferred_match_key_replay, check_precedence_match_key_replay, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_runtime_pure_value_summary
+from test_incremental_dependency_graph import check_deferred_match_key_replay, check_precedence_match_key_replay, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_runtime_pure_value_summary
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -351,6 +351,8 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     assert invalid_unused[1] == build(False, success=False)[1], "unused body edit hid a resolution error"
     check_inactive_projection_refresh(root, build)
     check_inactive_edit_with_unrelated_warning(root, build)
+    check_frontend_warning_inference_reuse(root, build)
+    check_inference_warning_rechecked(root, build)
     check_inactive_edit_after_warning_wording(root, build)
     check_runtime_pure_value_summary(root, build)
     check_global_match_reuse_after_execution_edit(root, build)

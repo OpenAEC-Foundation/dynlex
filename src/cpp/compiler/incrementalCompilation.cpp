@@ -630,6 +630,7 @@ bool compileIncrementally(
 			Json frontendDiagnosticRecords = compiled
 				? captureCachedDiagnostics(context, frontendDiagnosticText, frontendDiagnosticSources)
 				: Json::array();
+			size_t frontendDiagnosticCount = context.diagnostics.size();
 			Json inactiveProjection;
 			stageStart = Clock::now();
 			bool reuseTypeInference =
@@ -812,6 +813,8 @@ bool compileIncrementally(
 					std::string diagnostics;
 					std::set<std::string> diagnosticSources;
 					Json diagnosticRecords = captureCachedDiagnostics(compiled, diagnostics, diagnosticSources);
+					std::set<std::string> inferenceDiagnosticSources =
+						diagnosticSourcesAfter(compiled, frontendDiagnosticCount);
 					Json result{
 						{"files", recording->observations},
 						{"ir", renderModule(*compiled.llvmModule)},
@@ -850,9 +853,9 @@ bool compileIncrementally(
 					result["inference_summaries"] =
 						inferenceReuse
 							? inferenceReuse->snapshot(
-								  sectionPaths, diagnosticSources, globalTypes, &statistics.reusedInferenceSummarySections
+								  sectionPaths, inferenceDiagnosticSources, globalTypes, &statistics.reusedInferenceSummarySections
 							  )
-							: captureInferenceSummaries(sectionPaths, diagnosticSources, globalTypes);
+							: captureInferenceSummaries(sectionPaths, inferenceDiagnosticSources, globalTypes);
 					auto graphStart = Clock::now();
 					result["section_dependency_graph"] = captureSectionDependencyGraph(
 						sectionPaths, previous ? &previous->at("section_dependency_graph") : nullptr, graphStable,
