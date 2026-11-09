@@ -153,7 +153,7 @@ pathsEqual(const std::vector<std::vector<PatternElement>> &left, const std::vect
 // has a more specific literal element. Any matchingDefinition found only on
 // the less-specific endpoints is a less-specific definition.
 static void walkForLessSpecific(
-	const std::vector<DefinitionPatternElement> &path, size_t index, std::vector<PatternTreeNode *> mainNodes,
+	const std::vector<PatternElement> &path, size_t index, std::vector<PatternTreeNode *> mainNodes,
 	std::vector<PatternTreeNode *> lessSpecificNodes, std::vector<PatternDefinition *> &result
 ) {
 	if (index >= path.size()) {
@@ -168,9 +168,9 @@ static void walkForLessSpecific(
 		return;
 	}
 
-	const DefinitionPatternElement &element = path[index];
+	const PatternElement &element = path[index];
 
-	auto advanceThroughElement = [](const DefinitionPatternElement &elem, std::vector<PatternTreeNode *> &mainNodes,
+	auto advanceThroughElement = [](const PatternElement &elem, std::vector<PatternTreeNode *> &mainNodes,
 									std::vector<PatternTreeNode *> &lessSpecificNodes) {
 		std::vector<PatternTreeNode *> nextMain, nextLess;
 
@@ -267,9 +267,10 @@ static void walkForLessSpecific(
 		walkForLessSpecific(path, index + 1, std::move(mainNodes), std::move(lessSpecificNodes), result);
 }
 
-std::vector<PatternDefinition *> PatternTreeNode::findLessSpecificDefinitions(std::vector<DefinitionPatternElement> &elements) {
+std::vector<PatternDefinition *> PatternTreeNode::findLessSpecificDefinitions(const PatternDefinition &definition) {
+	requireCompilerInvariant(definition.indexedTree == this, "specificity search requires an indexed definition in this tree");
 	std::vector<PatternDefinition *> result;
-	for (const auto &path : canonicalPatternPaths(elements))
+	for (const auto &path : definition.indexedPaths)
 		walkForLessSpecific(path, 0, {this}, {}, result);
 	// Deduplicate
 	std::unordered_set<PatternDefinition *> seen;
@@ -310,7 +311,6 @@ void PatternTreeNode::addPatternDefinition(PatternDefinition *definition, Sectio
 			endpoint->endpointRevision++;
 		}
 	}
-	requirePatternDefinitionIndexed(definition);
 	recordTreeMutation(this, definition, "add");
 }
 

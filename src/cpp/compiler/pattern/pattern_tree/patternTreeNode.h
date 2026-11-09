@@ -49,7 +49,7 @@ struct PatternTreeNode : public PatternElement {
 	void removePatternDefinition(PatternDefinition *definition);
 	// Assert that the definition snapshot, endpoints, and all trie metadata agree.
 	void requirePatternDefinitionIndexed(const PatternDefinition *definition) const;
-	// Find definitions already in the tree that are less specific than the given definition.
+	// Find definitions already in the tree that are less specific than an indexed definition.
 	// A definition is less specific if it has an argument slot where the new definition has a literal.
-	std::vector<PatternDefinition *> findLessSpecificDefinitions(std::vector<DefinitionPatternElement> &elements);
+	std::vector<PatternDefinition *> findLessSpecificDefinitions(const PatternDefinition &definition);
 };

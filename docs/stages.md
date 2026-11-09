@@ -823,7 +823,8 @@ an unrelated definition with no precedence relation leaves the fingerprint intac
 Within a compilation, a newly indexed more-specific definition requeues callers of
 less-specific patterns only when at least one canonical path can occur in that
 reference's matcher input. Missing literal words exclude a path; numeric arguments
-use their matcher spelling. This keeps unrelated callers resolved during cold and
+use their matcher spelling. The specificity search uses the definition's indexed
+canonical paths after insertion. This keeps unrelated callers resolved during cold and
 edited builds while retaining rematches for genuinely competing patterns.
 Body references whose enclosing definitions have no pending implicit parameter
 candidate wait until definitions are indexed. They then resolve once against the
