@@ -853,6 +853,9 @@ eligibility checks; section parsing and resolution still rebuild their state.
 Section cache identities use source URI, normalized header, section type, and a
 same-identity sibling ordinal. Inserting a different definition before an existing
 function leaves that function's identity and cached inference or IR intact.
+Declaration fingerprints include each resolved pattern element's classification.
+When a body edit removes the last use of an implicit parameter, the changed
+declaration invalidates saved caller matches even though its spelling is unchanged.
 When the declaration and surrounding source projections are stable, an edited
 build carries resolved-match fingerprints forward for unchanged function bodies
 and recomputes fingerprints for edited bodies or changed matching environments.

@@ -305,3 +305,29 @@ def check_pointer_preinfer(root, build):
     assert edited[0]["preinferred_instantiations"] >= 1, "pointer argument function was not pre-inferred"
     assert edited[0]["inference_instantiations_reused"] >= 1, "independent pointer function was re-inferred"
     assert edited[1:] == build(False, entry=main)[1:]
+
+
+def check_implicit_parameter_classification_cascade(root, build):
+    main = root / "implicit_classification_cascade.dl"
+    caller = ('to wrapper thing:\n'
+              '    use thing\n'
+              '    @intrinsic("discard", thing)\n'
+              'wrapper 1\n')
+    parameter_body = '    @intrinsic("discard", thing)\n'
+    literal_body = '    @intrinsic("discard", 1)\n'
+    main.write_text('to use thing:\n' + parameter_body + caller)
+    build(entry=main)
+    before = projection_for(root / "cache", main)
+    main.write_text('to use thing:\n' + literal_body + caller)
+    edited = build(entry=main)
+    after = projection_for(root / "cache", main)
+    assert before["declarations"] != after["declarations"], \
+        "implicit parameter removal kept the old declaration dependency"
+    changed = [path for path in before["function_declarations"]
+               if before["function_declarations"][path] != after["function_declarations"][path]]
+    assert len(changed) == 1, "body edit did not isolate the reclassified declaration"
+    caller_path = next(path for path, declaration in before["function_declarations"].items()
+                       if declaration["identity"]["header"] == "wrapper thing:")
+    assert before["matches"][caller_path] != after["matches"][caller_path], \
+        "caller matches ignored reclassified pattern"
+    assert edited[1:] == build(False, entry=main)[1:]

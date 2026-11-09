@@ -217,24 +217,7 @@ Json inactiveFunctionSections(const std::map<std::string, Section *> &sections) 
 	return inactive;
 }
 
-Json sectionDeclaration(const Section &section) {
-	Json definitions = Json::array();
-	for (const PatternDefinition *definition : section.patternDefinitions)
-		definitions.push_back(definition->toString());
-	return Json{
-		{"identity", sectionIdentity(section)},
-		{"definitions", definitions},
-		{"local", section.isLocal},
-		{"flex", section.isFlex},
-		{"exposed", section.isExposed},
-		{"conversion", section.isConversion},
-		{"implicit_conversion", section.isImplicitConversion},
-		{"return_contract", static_cast<int>(section.returnContract)},
-		{"before", section.beforePatterns},
-		{"after", section.afterPatterns},
-		{"associativity", static_cast<int>(section.associativity)}
-	};
-}
+#include "incrementalResolvedDeclaration.inl"
 
 bool reusableCodegenSection(const Section &section) {
 	if (section.type == SectionType::Retain || section.type == SectionType::Release)

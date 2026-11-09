@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from test_incremental_dependency_graph import check_global_match_reuse_after_execution_edit, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_runtime_pure_value_summary
+from test_incremental_dependency_graph import check_global_match_reuse_after_execution_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_runtime_pure_value_summary
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -895,6 +895,7 @@ function left times right:
     assert class_writer_edit[1:] == build(False, entry=class_writer_main)[1:]
 
     check_pointer_preinfer(root, build)
+    check_implicit_parameter_classification_cascade(root, build)
 
     for flags in [("-O2",), ("-g",), ("-ffast-math",), ("--trace-execution",)]:
         changed = build(flags=flags)
