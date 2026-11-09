@@ -12,11 +12,15 @@
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <optional>
+#include <set>
 #include <spirv_cross.hpp>
 #include <stdexcept>
 #include <string>
@@ -140,7 +144,9 @@ class WebLspServer final : public lsp::DynLexServer {
 
 struct WebCompilerState {
 	bool initialized = false;
-	std::string mainSource;
+	std::string entryPath = kMainSourcePath;
+	std::optional<std::string> mainSource;
+	std::vector<std::filesystem::path> importSourcePaths;
 	std::vector<uint8_t> outputWasm;
 	std::string outputWasmBase64;
 	std::vector<uint8_t> outputShaderSpirv;
@@ -156,6 +162,28 @@ struct WebCompilerState {
 WebCompilerState &webState() {
 	static WebCompilerState state;
 	return state;
+}
+
+std::filesystem::path relativeSourcePath(const std::string &name) {
+	const std::filesystem::path path(name);
+	if (name.empty() || name.find('\0') != std::string::npos || path.is_absolute() || path.filename().empty() ||
+		path == "." || *path.begin() == ".." || path.lexically_normal().generic_string() != name)
+		throw std::invalid_argument("A source needs a normalized relative filename");
+	return path;
+}
+
+void clearImportSources(WebCompilerState &state) {
+	std::set<std::filesystem::path> directories;
+	for (const auto &path : state.importSourcePaths) {
+		std::filesystem::remove(path);
+		for (auto directory = path.parent_path(); directory != "/workspace"; directory = directory.parent_path())
+			directories.insert(directory);
+	}
+	for (auto directory = directories.rbegin(); directory != directories.rend(); ++directory) {
+		if (std::filesystem::is_empty(*directory))
+			std::filesystem::remove(*directory);
+	}
+	state.importSourcePaths.clear();
 }
 
 void appendCompilerLog(std::string level, std::string message) {
@@ -358,7 +386,7 @@ int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderSta
 	appendCompilerLog("info", "compile request started");
 
 	ParseContext context;
-	context.options.inputPath = kMainSourcePath;
+	context.options.inputPath = state.entryPath;
 	context.options.outputPath = outputKind == WebOutputKind::ShaderSpirv ? kOutputSpirvPath : kOutputWasmPath;
 	context.options.emitWASM = outputKind == WebOutputKind::ProgramWasm;
 	context.options.emitLLVM = false;
@@ -366,10 +394,11 @@ int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderSta
 	context.options.shaderStage = shaderStage;
 	context.options.traceExecution = traceExecution;
 	auto memoryFileSystem = std::make_unique<lsp::MemoryFileSystem>(std::make_unique<lsp::LocalFileSystem>());
-	memoryFileSystem->setFile(kMainSourcePath, state.mainSource);
+	if (state.mainSource)
+		memoryFileSystem->setFile(state.entryPath, *state.mainSource);
 	context.fileSystem = std::move(memoryFileSystem);
 
-	bool frontEndSuccess = compile(kMainSourcePath, context);
+	bool frontEndSuccess = compile(state.entryPath, context);
 	bool codegenSuccess = false;
 	if (frontEndSuccess) {
 		appendCompilerLog("info", "front-end compile finished");
@@ -468,6 +497,7 @@ extern "C" {
 // NOLINTBEGIN(readability-identifier-naming)
 EMSCRIPTEN_KEEPALIVE void dynlex_web_init() {
 	WebCompilerState &state = webState();
+	clearImportSources(state);
 	state = {};
 	state.initialized = true;
 	state.mainSource = "print \"\"";
@@ -481,7 +511,67 @@ EMSCRIPTEN_KEEPALIVE void dynlex_web_set_main_source(const char *utf8Source) {
 	WebCompilerState &state = webState();
 	if (!state.initialized)
 		dynlex_web_init();
+	state.entryPath = kMainSourcePath;
 	state.mainSource = utf8Source ? std::string(utf8Source) : std::string{};
+}
+
+EMSCRIPTEN_KEEPALIVE int dynlex_web_set_entry_file(const char *relativeFilename) {
+	WebCompilerState &state = webState();
+	if (!state.initialized)
+		dynlex_web_init();
+	try {
+		if (!relativeFilename)
+			throw std::invalid_argument("The entry file needs a relative filename");
+		state.entryPath = (std::filesystem::path("/workspace") / relativeSourcePath(relativeFilename)).generic_string();
+		state.mainSource.reset();
+		return WebCompileStatusOk;
+	} catch (const std::invalid_argument &error) {
+		appendCompilerLog("error", error.what());
+		flushCompilerLogJson();
+		return WebCompileStatusCompileFailed;
+	}
+}
+
+// Replace the browser workspace's project modules. No application library is
+// embedded in the compiler; the caller explicitly selects an inline or file entry.
+EMSCRIPTEN_KEEPALIVE int dynlex_web_set_import_sources(const char *sourcesJson) {
+	WebCompilerState &state = webState();
+	if (!state.initialized)
+		dynlex_web_init();
+	std::map<std::string, std::string> sources;
+	try {
+		if (!sourcesJson)
+			throw std::invalid_argument("Imported sources need a JSON object");
+		const Json input = Json::parse(sourcesJson);
+		if (!input.is_object())
+			throw std::invalid_argument("Imported sources must be a filename-to-source object");
+		for (const auto &[name, value] : input.items()) {
+			relativeSourcePath(name);
+			sources.emplace(name, value.get<std::string>());
+		}
+		for (const auto &[name, source] : sources) {
+			for (auto parent = std::filesystem::path(name).parent_path(); !parent.empty(); parent = parent.parent_path()) {
+				if (sources.contains(parent.generic_string()))
+					throw std::invalid_argument("An imported source filename cannot also be a directory");
+			}
+		}
+	} catch (const std::exception &error) {
+		appendCompilerLog("error", std::string("Imported sources rejected: ") + error.what());
+		flushCompilerLogJson();
+		return WebCompileStatusCompileFailed;
+	}
+
+	clearImportSources(state);
+	for (const auto &[name, source] : sources) {
+		const auto path = std::filesystem::path("/workspace") / name;
+		std::filesystem::create_directories(path.parent_path());
+		std::ofstream output(path, std::ios::binary);
+		output.exceptions(std::ios::badbit | std::ios::failbit);
+		output.write(source.data(), static_cast<std::streamsize>(source.size()));
+		output.close();
+		state.importSourcePaths.push_back(path);
+	}
+	return WebCompileStatusOk;
 }
 
 EMSCRIPTEN_KEEPALIVE int dynlex_web_compile_and_emit_wasm() {
