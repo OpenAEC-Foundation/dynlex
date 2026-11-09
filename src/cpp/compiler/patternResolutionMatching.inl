@@ -399,6 +399,10 @@ bool resolvePatterns(ParseContext &context) {
 	for (PatternReference *ref : globalReferences)
 		ref->patternElements = getPatternElements(ref->pattern.text);
 
+	DataDeclarationNameIndex declarationNames;
+	declarationNames.add(globalReferences);
+	declarationNames.add(bodyReferences);
+
 	// Compute initial VL counts before resolution
 	computeVariableLikeCounts(unResolvedSections);
 
@@ -598,13 +602,12 @@ bool resolvePatterns(ParseContext &context) {
 			if (staleInvalidationOccurred) {
 				madeProgress = true;
 			}
-			if (unResolvedSections.empty()) {
-				bool namesChanged = indexDataDeclarationNames(context, globalReferences);
-				namesChanged |= indexDataDeclarationNames(context, bodyReferences);
-				if (namesChanged) {
-					failedBodyMatchDependencies.clear();
-					madeProgress = true;
-				}
+			declarationNames.add(globalReferences);
+			declarationNames.add(bodyReferences);
+			if (declarationNames.refresh(context)) {
+				failedBodyMatchDependencies.clear();
+				appendRequeuedReferences();
+				continue;
 			}
 
 			appendRequeuedReferences();

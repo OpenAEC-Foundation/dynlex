@@ -159,7 +159,9 @@ if [ "$LINT" = "true" ]; then
     fi
 fi
 
-if command -v nproc >/dev/null 2>&1; then
+if [ -n "${CMAKE_BUILD_PARALLEL_LEVEL:-}" ]; then
+    JOBS="$CMAKE_BUILD_PARALLEL_LEVEL"
+elif command -v nproc >/dev/null 2>&1; then
     JOBS="$(nproc)"
 elif command -v getconf >/dev/null 2>&1; then
     JOBS="$(getconf _NPROCESSORS_ONLN)"

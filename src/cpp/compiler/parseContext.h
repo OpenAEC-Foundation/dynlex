@@ -290,6 +290,7 @@ struct ParseContext {
 	void registerShaderInterpolantName(const std::string &interpolantName);
 	VariableReference *createVariableReference(Range range, const std::string &name);
 	std::shared_ptr<ExpressionAllocationStats> expressionAllocationStats = std::make_shared<ExpressionAllocationStats>();
+	std::uint64_t expressionInferenceRevision = 0;
 	std::shared_ptr<ExpressionStorage> createExpressionStorage();
 	std::unordered_map<InstantiatedSectionBody *, std::shared_ptr<InstantiatedSectionBody>> capturedExpressionBodies;
 	void retainCapturedExpressionBody(Expression *expression);

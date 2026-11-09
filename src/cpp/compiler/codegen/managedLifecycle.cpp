@@ -121,9 +121,7 @@ bool releaseInitializedStorage(ParseContext &context, ParseContext::ManagedStora
 	llvm::BasicBlock *continueBlock = llvm::BasicBlock::Create(*context.llvmContext, "managed.continue", function);
 	builder.CreateCondBr(initialized, releaseBlock, continueBlock);
 	builder.SetInsertPoint(releaseBlock);
-	llvm::Value *value = builder.CreateAlignedLoad(
-		getLLVMType(context, storage.type), storage.address, getLLVMABIAlignment(context, storage.type), "managed_stored_value"
-	);
+	llvm::Value *value = loadLLVMValue(context, storage.type, storage.address, "managed_stored_value");
 	if (!releaseManagedValue(context, storage.type, value))
 		return false;
 	builder.CreateStore(builder.getFalse(), storage.initializedAddress);
@@ -213,8 +211,7 @@ bool storeManagedValue(ParseContext &context, llvm::Value *address, const DataTy
 		if (!releaseInitializedStorage(context, *storage))
 			return false;
 	} else {
-		llvm::Value *oldValue =
-			builder.CreateAlignedLoad(getLLVMType(context, type), address, getLLVMABIAlignment(context, type), "managed_old");
+		llvm::Value *oldValue = loadLLVMValue(context, type, address, "managed_old");
 		if (!releaseManagedValue(context, type, oldValue))
 			return false;
 	}

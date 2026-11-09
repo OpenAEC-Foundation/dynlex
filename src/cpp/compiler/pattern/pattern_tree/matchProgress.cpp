@@ -67,7 +67,7 @@ explicitVariableDeclarationPrecedes(const Range &declaration, const PatternRefer
 		   std::pair(reference.range().line->mergedLineIndex, useStart);
 }
 
-static std::vector<ExplicitVariableCandidate> explicitMultiWordVariableCandidates(const MatchProgress &progress) {
+static std::vector<ExplicitVariableCandidate> explicitNamedVariableCandidates(const MatchProgress &progress) {
 	std::vector<ExplicitVariableCandidate> result;
 	if (!progress.patternReference || progress.sourceCharIndex != 0 || !progress.patternReference->range().line)
 		return result;
@@ -80,7 +80,8 @@ static std::vector<ExplicitVariableCandidate> explicitMultiWordVariableCandidate
 			if (!section->dataVariableDeclarations.contains(name) &&
 				!explicitVariableDeclarationPrecedes(declaration, *progress.patternReference, progress.sourceElementIndex))
 				continue;
-			if (!shadowedNames.insert(name).second || name.find(' ') == std::string::npos)
+			if (!shadowedNames.insert(name).second ||
+				(name.find(' ') == std::string::npos && !section->dataVariableDeclarations.contains(name)))
 				continue;
 			std::vector<PatternElement> nameElements = getPatternElements(name);
 			if (nameElements.empty() || progress.sourceElementIndex + nameElements.size() > sourceElements.size())
@@ -595,8 +596,8 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 					nextMatches.push_back(std::move(substituteStep));
 			};
 
-			auto pushExplicitMultiWordCaptures = [&]() {
-				for (const ExplicitVariableCandidate &candidate : explicitMultiWordVariableCandidates(*this)) {
+			auto pushExplicitNamedCaptures = [&]() {
+				for (const ExplicitVariableCandidate &candidate : explicitNamedVariableCandidates(*this)) {
 					MatchProgress substituteStep = *this;
 					substituteStep.currentNode = captureNode;
 					if (!pack.expectsItem || pack.count == 0)
@@ -640,8 +641,10 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 			};
 
 			pushArgumentCapture();
-			pushExplicitMultiWordCaptures();
 			pushSubmatch();
+			// An explicitly named value is an operand before it is a nested
+			// call. Literal continuations retain their normal higher priority.
+			pushExplicitNamedCaptures();
 			// A declaration parameter binds source identifiers rather than
 			// evaluating them as an existing expression. It uses this same trie.
 			bool declarationCapture = false;
@@ -678,7 +681,10 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 					next.appendArgument(storage, {next.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, index});
 					next.sourceElementIndex = end + 1;
 					next.patternPos += length;
-					nextMatches.push_back(std::move(next));
+					if (hasLiteralContinuation(next))
+						literalContinuations.push_back(std::move(next));
+					else
+						nextMatches.push_back(std::move(next));
 				}
 			}
 			nextMatches.insert(

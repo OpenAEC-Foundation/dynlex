@@ -1,0 +1,18 @@
+integer means: @intrinsic("type", "int", 32)
+
+section record {name}:
+    declares: name
+    result: integer
+    value:
+        1
+section record {name} using {integer:setting}:
+    declares: name
+    result: integer
+    value:
+        @intrinsic("add", setting, 1)
+record responsive page using root appearance:
+record root appearance:
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", responsive page))
+
+responsive page using root appearance means: 99
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", responsive page using root appearance))

@@ -10,6 +10,7 @@
 #include "sourceFile.h"
 #include "type.h"
 #include "variable.h"
+#include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DebugInfoMetadata.h"
@@ -30,6 +31,16 @@ llvm::Type *getLLVMType(ParseContext &context, DataType type) {
 
 llvm::Align getLLVMABIAlignment(ParseContext &context, DataType type) {
 	return llvm::Align(type.getABIAlignment(context.llvmModule->getDataLayout(), *context.llvmContext));
+}
+
+llvm::Value *loadLLVMValue(ParseContext &context, const DataType &type, llvm::Value *address, const std::string &name) {
+	llvm::Type *valueType = getLLVMType(context, type);
+	if (auto *constantAddress = llvm::dyn_cast<llvm::Constant>(address)) {
+		if (auto *value = llvm::ConstantFoldLoadFromConstPtr(constantAddress, valueType, context.llvmModule->getDataLayout()))
+			return value;
+	}
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	return builder.CreateAlignedLoad(valueType, address, getLLVMABIAlignment(context, type), name);
 }
 
 unsigned getClassFieldLLVMIndex(ParseContext &context, const DataType &classType, int fieldIndex) {
@@ -525,13 +536,10 @@ LValueAddressResult generateLValueAddress(ParseContext &context, Expression *exp
 			return {nullptr, LValueAddressStatus::Failed};
 		requireCompilerInvariant(owner.value != nullptr, "class pointer lvalue owner produced no pointer value");
 		ownerAddress = owner.value;
-		auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 		DataType pointerType = ownerType;
 		while (pointerType.pointerDepth > 1) {
 			pointerType = pointerType.dereferenced();
-			ownerAddress = builder.CreateAlignedLoad(
-				getLLVMType(context, pointerType), ownerAddress, getLLVMABIAlignment(context, pointerType), "property_owner"
-			);
+			ownerAddress = loadLLVMValue(context, pointerType, ownerAddress, "property_owner");
 		}
 	} else {
 		LValueAddressResult owner = generateLValueAddress(context, ownerExpression);

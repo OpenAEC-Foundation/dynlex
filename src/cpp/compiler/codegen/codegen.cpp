@@ -570,9 +570,8 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			return generateCompileTimeRuntimeValue(context, valueIt->second, varType);
 		}
 
-		llvm::Type *loadType = getLLVMType(context, varType);
 		auto loadOwnedValue = [&](llvm::Value *address, const std::string &valueName) -> CodegenResult {
-			llvm::Value *value = builder.CreateAlignedLoad(loadType, address, getLLVMABIAlignment(context, varType), valueName);
+			llvm::Value *value = loadLLVMValue(context, varType, address, valueName);
 			if (typeHasManagedLifecycle(varType) && !retainManagedValue(context, varType, value))
 				return CodegenResult::failure();
 			return value;

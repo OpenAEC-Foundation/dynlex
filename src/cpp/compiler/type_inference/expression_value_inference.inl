@@ -91,7 +91,8 @@ bool ExpressionInferenceSupport::inferVariable() {
 		ResolvedBindingLayers resolvedBinding = resolveVariableBindingWithCallerScope(expr, flexBindingFrameStack);
 		Expression *flexBinding = resolvedBinding.expression;
 		if (flexBinding && flexBinding != expr) {
-			bool reusable = flexBinding->type.isDeduced() && context.inferredArguments->reusable(flexBinding);
+			bool reusable = flexBinding->type.isDeduced() &&
+							context.inferredArguments->replay(flexBinding, resolvedBinding.bindingFrameStack);
 			if (!reusable) {
 				// A binding belongs to the caller, outside this expression's
 				// grouping snapshot. Rejected trials must restore its selected

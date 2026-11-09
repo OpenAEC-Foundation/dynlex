@@ -45,6 +45,7 @@ struct LValueAddressResult {
 // Shared codegen utilities (codegenTypes.cpp)
 llvm::Type *getLLVMType(ParseContext &context, DataType type);
 llvm::Align getLLVMABIAlignment(ParseContext &context, DataType type);
+llvm::Value *loadLLVMValue(ParseContext &context, const DataType &type, llvm::Value *address, const std::string &name);
 unsigned getClassFieldLLVMIndex(ParseContext &context, const DataType &classType, int fieldIndex);
 llvm::Value *
 createClassFieldPointer(ParseContext &context, const DataType &classType, int fieldIndex, llvm::Value *classPointer);

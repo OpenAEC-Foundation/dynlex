@@ -5,7 +5,7 @@ generateStaticReferenceIntrinsic(ParseContext &context, Expression *callExpr, co
 	DataType valueType = finalizedExpressionType(context, args[1]);
 	auto *global = new llvm::GlobalVariable(
 		*context.llvmModule, getLLVMType(context, valueType), true, llvm::GlobalValue::InternalLinkage,
-		llvm::Constant::getNullValue(getLLVMType(context, valueType)), "section.data"
+		nullptr, "section.data"
 	);
 	global->setAlignment(getLLVMABIAlignment(context, valueType));
 	context.staticLLVMValues[callExpr] = global;
@@ -163,10 +163,7 @@ generatePropertyIntrinsic(ParseContext &context, Expression *callExpr, const std
 		return CodegenResult::failure();
 	if (propertyAddress.status == LValueAddressStatus::Addressable) {
 		requireCompilerInvariant(propertyAddress.address != nullptr, "addressable property produced no field address");
-		llvm::Value *fieldValue = builder.CreateAlignedLoad(
-			getLLVMType(context, fieldType), propertyAddress.address, getLLVMABIAlignment(context, fieldType),
-			fieldName + "_val"
-		);
+		llvm::Value *fieldValue = loadLLVMValue(context, fieldType, propertyAddress.address, fieldName + "_val");
 		if (typeHasManagedLifecycle(fieldType) && !retainManagedValue(context, fieldType, fieldValue))
 			return CodegenResult::failure();
 		return fieldValue;
@@ -341,10 +338,7 @@ generateExtractElementIntrinsic(ParseContext &context, const std::vector<Express
 	builder.CreateStore(aggregate, storage);
 	llvm::Value *address =
 		builder.CreateInBoundsGEP(getLLVMType(context, aggregateType), storage, {builder.getInt32(0), idx}, "element_address");
-	return builder.CreateAlignedLoad(
-		getLLVMType(context, *aggregateType.arrayElementType), address,
-		getLLVMABIAlignment(context, *aggregateType.arrayElementType), "elem"
-	);
+	return loadLLVMValue(context, *aggregateType.arrayElementType, address, "elem");
 }
 
 [[gnu::noinline]] static CodegenResult
@@ -382,7 +376,5 @@ generateInsertElementIntrinsic(ParseContext &context, const std::vector<Expressi
 		getLLVMType(context, aggregateType), storage, {builder.getInt32(0), index}, "element_address"
 	);
 	builder.CreateAlignedStore(element, address, getLLVMABIAlignment(context, elementType));
-	return builder.CreateAlignedLoad(
-		getLLVMType(context, aggregateType), storage, getLLVMABIAlignment(context, aggregateType), "aggregate_inserted"
-	);
+	return loadLLVMValue(context, aggregateType, storage, "aggregate_inserted");
 }

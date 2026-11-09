@@ -570,6 +570,10 @@ struct InferenceContext {
 			if (currentValue != knownConstants.end())
 				return currentValue->second;
 		}
+		return lookupStoredExpressionValue(expression);
+	}
+
+	CompileTimeValue lookupStoredExpressionValue(Expression *expression) const {
 		if (trial) {
 			auto trialIt = trialExpressionValues.find(expression);
 			if (trialIt != trialExpressionValues.end())

@@ -1,0 +1,12 @@
+integer means: @intrinsic("type", "int", 32)
+function {integer:left} + {integer:right}:
+    associativity: left
+    execute:
+        @intrinsic("return", @intrinsic("add", left, right))
+function {integer:left} ^ {integer:right}:
+    associativity: right
+    execute:
+        @intrinsic("return", @intrinsic("add", left, right))
+
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1 ^ 1))

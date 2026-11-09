@@ -94,6 +94,11 @@ before function-body resolution must finish. This discovers only declaration nam
 the global call remains unresolved until the ordinary global-reference boundary.
 Function bodies can therefore refer to multiword data names without creating a
 dependency cycle between their own resolution and that of the declaring call.
+Discovery retains source-header snapshots and refreshes its complete contribution
+to each lexical name index until stable. A changed header match removes its prior
+tentative name while preserving independent explicit captures. Declaring captures
+give literal continuations their ordinary priority, so an optional trailing clause
+does not become part of a multiword declaration name.
 
 A section with `receiver` metadata moves its already parsed body into an ordinary
 callable function with one receiver parameter. This occurs before expression expansion
@@ -137,7 +142,9 @@ We discover what is a variable based on these principles:
 - `{name}` explicitly introduces or references a variable. The name can contain multiple words separated by spaces.
 - `{type:name}` does the same and constrains the variable to values accepted by the type expression. This syntax works both in pattern definitions and in executable code.
 - After a multi-word name has been introduced explicitly, later unbraced occurrences of that full name are matched as one variable in the same lexical scope and its children.
-  An exact visible explicit name is resolved before attempting a pattern call; whitespace surrounding an intrinsic argument does not change its variable identity.
+  An exact visible explicit name is resolved before attempting a pattern call, including an operand nested in another call.
+  Data declaration names follow this rule for single-word names as well. Literal continuations keep their normal priority;
+  whitespace surrounding an intrinsic argument does not change its variable identity.
 
 A square-bracket group without a top-level `|` is an explicit literal and is flattened into its ordinary literal elements.
 `{literal:text}` produces the same representation. Square-bracket groups with alternatives remain choice elements.
@@ -418,9 +425,15 @@ When processing a function call, we infer that function right away so we can kno
 
 Argument type inference and argument execution have separate effects. After selecting a replacement, inference restores the
 caller's execution state from before the preliminary argument walk. The replacement then applies argument effects where its
-bindings are used. An already inferred binding is reusable only when its inference did not change execution state and that same
-state still holds. This state includes constants, address provenance, the subject and the owning instantiation's effect summary;
-restoration retains inferred types, grouping selections and recursive inference dependencies.
+bindings are used. The preliminary walk records each argument's input and output execution state. A binding can replay that
+transition when its caller bindings, assignment-target role, input state and inferred tree still match. Tree revisions and
+stored results reject reuse after reinference or regrouping. These dependencies include complete replacement/caller/loop
+bodies and the source expressions reached through argument references; an argument reference is not a leaf of the inference
+result. Comparing stored results does not substitute a variable's current
+execution value. This state includes constants, address provenance, type refinements, the subject and the owning
+instantiation's effect summary. Repeated or reordered uses with different inputs are inferred normally. Restoration retains
+inferred types, grouping selections and recursive inference dependencies, avoiding exponential speculative inference for
+nested replacements around effectful arguments.
 
 Subject values belong to their function invocation during pure evaluation, just like local variable values. Publishing an unmanaged value is a local effect; publishing a managed value retains lifecycle effects and cannot make an effectful type function pure. A subject whose assignment depends on recursive inference stays pending with that dependency until a body pass resolves its value.
 
@@ -498,6 +511,9 @@ Unary arithmetic intrinsics require numeric scalar or vector values. Classes, po
 ## Operand Reordering
 
 Binary infix patterns may declare `associativity: left` or `associativity: right`.
+Grouping generation rejects operand spans with no legal root before enumerating
+their siblings. Declared associativity must constrain the search itself, rather
+than causing an already-enumerated sibling to be discarded repeatedly.
 This is a syntax-family rule shared by typed overloads and choice spellings;
 contradictory declarations are errors. It determines grouping, not algebraic
 equivalence or reassociation by an optimizer. The rule applies to directly
@@ -671,6 +687,13 @@ publishes an immutable global before lowering its initializer, allowing cyclic s
 graphs; the initializer must lower to a constant. `deferred body` uses ordinary native
 callable generation, while the body record and receiver intrinsics use their inferred
 expressions. There is no runtime data-section builder pass.
+
+Ordinary memory reads fold addresses into initialized immutable globals before
+emitting loads, using the target data layout. This includes fields, dereferences
+and pointer chains, so one static description can compose another. Globals are
+published without an initializer while their initializer is being lowered; cyclic
+graphs must not observe a fabricated zero value. Mutable storage and atomic or
+volatile reads retain their runtime semantics.
 
 Calls with an inferred pure, compile-time-known result materialize it directly
 when their runtime operands lower to LLVM constants, using the same scalar emitter
