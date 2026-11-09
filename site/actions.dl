@@ -22,7 +22,8 @@ to follow website link {a pointer to UI instance:instance}:
         increment index
     if destination = "action:save-source":
         set source to (the UI value for (the control labeled "IDE source" in instance) in instance)'s text
-        request "download" containing (a JSON object containing [JSON text "name" is "main.dl", JSON text "type" is "text/plain;charset=utf-8", JSON text "content" is source]) for purpose 0 indexed 0 in state
+        set name to (the UI value for (the control labeled "IDE filename" in instance) in instance)'s text
+        request "download" containing (a JSON object containing [JSON text "name" is name, JSON text "type" is "text/plain;charset=utf-8", JSON text "content" is source]) for purpose 0 indexed 0 in state
         return nothing
     if destination = "action:open-example":
         set parent to the parent of (instance's event target) within (instance's description)

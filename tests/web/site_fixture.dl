@@ -1,0 +1,8 @@
+# Controller tests use the production editor/program declarations without loading
+# unrelated documentation pages. Application composition stays in application.dl.
+import ../../site/pages/home.dl
+import ../../site/pages/ide.dl
+
+document website fixture:
+    home page
+    IDE page

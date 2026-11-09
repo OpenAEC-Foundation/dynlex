@@ -115,9 +115,18 @@ try {
       platformVersion: '6.0.0', architecture: 'x86', model: '', mobile: false, bitness: '64', wow64: false }
   });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.siteProbe = { paints: 0, api: '', texts: [], diagnostics: [] };
+    window.siteProbe = { paints: 0, api: '', texts: [], diagnostics: [], compilations: [], downloads: [] };
+    const download = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function(...args) {
+      window.siteProbe.downloads.push({ name: this.download, href: this.href });
+      return download.apply(this, args);
+    };
     const BrowserWorker = window.Worker;
     window.Worker = class extends BrowserWorker {
+      postMessage(message, ...args) {
+        if (message.type === 'compile') window.siteProbe.compilations.push(message.payload.entry);
+        return super.postMessage(message, ...args);
+      }
       constructor(...args) {
         super(...args);
         this.addEventListener('message', ({ data }) => {
@@ -240,6 +249,38 @@ try {
   for (let index = 0; index < 100 && downloads.length === 0; index++) await pause(50);
   assert.deepEqual(downloads, ['https://downloads.invalid/dynlex-linux-x64.deb']);
   await capture('download');
+  const linkedSource = 'import lib/std.dl\nprint line "Shared link ran."\n';
+  const entryUrl = '/ide/index.html?' + new URLSearchParams({
+    code64: Buffer.from(linkedSource).toString('base64url'), name: 'linked.dl', autorun: 'true'
+  });
+  await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}${entryUrl}` });
+  await waitFor('window.siteProbe?.texts.includes("Shared link ran.")');
+  await waitFor('window.siteProbe.diagnostics.some(result => result.uri.endsWith("/linked.dl") && result.diagnostics.length === 0)');
+  const renamedUrl = '/ide/index.html?' + new URLSearchParams({
+    code: 'import lib/std.dl\nprint line "Renamed source ran."\n', name: 'renamed.dl', autorun: '1'
+  });
+  await evaluate(`history.pushState(null, '', ${JSON.stringify(renamedUrl)}); dispatchEvent(new PopStateEvent('popstate'))`);
+  await waitFor('window.siteProbe.texts.includes("Renamed source ran.")');
+  await waitFor('window.siteProbe.diagnostics.some(result => result.uri.endsWith("/renamed.dl") && result.diagnostics.length === 0)');
+  await click(1000,287);
+  await waitFor('window.siteProbe.downloads.some(item => item.name === "renamed.dl" && item.href.startsWith("blob:"))');
+  await capture('ide-linked');
+  await click(120,421); await key('KeyA','a',65,2);
+  await command('Input.insertText',{text:'abcd'});
+  await key('Home','Home',36,2);
+  await key('ArrowRight','ArrowRight',39); await key('ArrowRight','ArrowRight',39);
+  const replacementUrl = '/ide/index.html?' + new URLSearchParams({
+    code: '#😀\nimport lib/std.dl\nprint line "Replacement source"\n', name: 'caret.dl'
+  });
+  await evaluate(`history.pushState(null, '', ${JSON.stringify(replacementUrl)}); dispatchEvent(new PopStateEvent('popstate'))`);
+  await waitFor('window.siteProbe.diagnostics.some(result => result.uri.endsWith("/caret.dl") && result.diagnostics.length === 0)');
+  await capture('ide-replaced');
+  const compilations = await evaluate('window.siteProbe.compilations.length');
+  await click(1115,22); await waitFor('location.pathname === "/wiki/index.html"');
+  await evaluate('history.back()'); await waitFor('location.pathname === "/ide/index.html"');
+  await pause(700);
+  assert.equal(await evaluate('window.siteProbe.compilations.length'), compilations,
+    'History navigation repeated the source link autorun');
   assert.equal(errors.length,0,JSON.stringify(errors));
   console.log('Site background preview passed.');
 } finally {

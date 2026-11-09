@@ -10,3 +10,4 @@ class:
         snapshot as a string
         edited at as a floating-point number
         token types as a pointer to JSON value
+        uri as a string

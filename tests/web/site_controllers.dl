@@ -1,6 +1,7 @@
 import ../../site/programs/controller.dl
+import site_fixture.dl
 
-set instance to an instance of dynlex website
+set instance to an instance of website fixture
 set view to a new UI view
 set view's instance to the address of instance
 set state to a new website state

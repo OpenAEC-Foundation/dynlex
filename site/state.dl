@@ -1,4 +1,3 @@
-import interface.dl
 import packages/dynlex-ui/ui/application.dl
 import packages/dynlex-ui/platform/browser/requests.dl
 import lib/json_builders.dl
@@ -39,8 +38,13 @@ class:
         programs as website program state array of (the length of (the website program descriptions)) items
         invocation as an integer
         language as website language state
+        editor entry as a string
 
 [the|] website state in {a pointer to UI instance:instance} means: instance's state as a pointer to website state
+
+to get the website source URI in {a pointer to website state:state}:
+    set name to (the UI value for (the control labeled "IDE filename" in (state's view's instance)) in (state's view's instance))'s text
+    return "file:///workspace/" + name
 
 to request {C string:service} containing {a pointer to JSON value:payload} for purpose {integer:job} indexed {integer:index} in {a pointer to website state:state}:
     set data to the compact JSON form of payload

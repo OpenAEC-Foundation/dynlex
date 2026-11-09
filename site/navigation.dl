@@ -1,4 +1,5 @@
 import downloads/controller.dl
+import editor/entry.dl
 
 # Resolve anchors from retained layout coordinates, including their parent regions.
 to get the top of {a pointer to UI layout:target} inside {a pointer to UI layout:layout} below {floating-point number:origin}:
@@ -46,6 +47,8 @@ to apply location {a pointer to JSON value:location} to {a pointer to website st
         set view's layout's scroll target to 0.0
     set state's route to path
     set state's fragment to fragment
+    if path = "/ide/index.html":
+        apply website editor entry (the JSON member named "search" in location) in state
     if path = "/download.html":
         if state's release = @intrinsic("construct", a pointer to website release):
             load website downloads in state

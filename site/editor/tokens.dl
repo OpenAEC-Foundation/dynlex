@@ -22,6 +22,8 @@ to apply website semantic tokens {a pointer to JSON value:tokens} in {a pointer 
     set node to the control labeled "IDE source" in instance
     if (the UI value for node in instance)'s text != language's snapshot:
         return nothing
+    if language's uri != (the website source URI in state):
+        return nothing
     color UI text (language's snapshot) in node in instance
     scan lines in (language's snapshot) and set scanned to it
     require condition (scanned succeeded) reporting "The editor source is not valid UTF-8"

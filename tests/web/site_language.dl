@@ -1,6 +1,7 @@
 import ../../site/editor/language.dl
+import site_fixture.dl
 
-set instance to an instance of dynlex website
+set instance to an instance of website fixture
 set view to a new UI view
 set view's instance to the address of instance
 set state to a new website state
@@ -23,7 +24,7 @@ set response to a new JSON-RPC array
 receive website language reply response at step 3 in (the address of state)
 free response
 require condition (state's language's snapshot = source) reporting "The opened document lost the editor source"
-set diagnostics to a JSON object containing [JSON text "uri" is the website source URI, JSON child "diagnostics" is (a new JSON-RPC array)]
+set diagnostics to a JSON object containing [JSON text "uri" is (state's language's uri), JSON child "diagnostics" is (a new JSON-RPC array)]
 set response to a JSON array containing [a JSON object containing [JSON text "method" is "textDocument/publishDiagnostics", JSON child "params" is diagnostics]]
 receive website language reply response at step 4 in (the address of state)
 free response
@@ -36,7 +37,7 @@ set entry to the UI value for (the control labeled "IDE source" in (the address 
 require condition ((entry's colors' end - entry's colors' start) = 6) reporting "UTF-16 semantic tokens did not convert to UTF-8 bytes"
 set the text of "IDE source" in (the address of instance) to "newer text"
 set the text of "IDE diagnostics" in (the address of instance) to "Newer diagnostics"
-set response to a JSON array containing [a JSON object containing [JSON text "method" is "textDocument/publishDiagnostics", JSON child "params" is (a JSON object containing [JSON text "uri" is the website source URI, JSON child "diagnostics" is (a new JSON-RPC array)])]]
+set response to a JSON array containing [a JSON object containing [JSON text "method" is "textDocument/publishDiagnostics", JSON child "params" is (a JSON object containing [JSON text "uri" is (state's language's uri), JSON child "diagnostics" is (a new JSON-RPC array)])]]
 receive website diagnostics in response in (the address of state)
 free response
 require condition ((the UI value for (the control labeled "IDE diagnostics" in (the address of instance)) in (the address of instance))'s text = "Newer diagnostics") reporting "An old analysis replaced diagnostics for newer source"
@@ -44,6 +45,19 @@ set view's seconds to 1.0
 advance website language analysis in (the address of state)
 require condition (state's language's phase = 5) reporting "A changed document was not synchronized"
 require condition (state's language's version = 2) reporting "Document changes did not advance their version"
+set state's language's phase to 7
+set the text of "IDE filename" in (the address of instance) to "renamed.dl"
+advance website language analysis in (the address of state)
+require condition (state's language's phase = 9) reporting "Renaming a source did not close its old document"
+set response to a new JSON-RPC array
+receive website language reply response at step 9 in (the address of state)
+free response
+require condition (state's language's phase = 10) reporting "Renaming did not replace the source project"
+set response to a new JSON-RPC null
+receive website language reply response at step 10 in (the address of state)
+free response
+require condition (state's language's uri = "file:///workspace/renamed.dl") reporting "The language document kept its old filename"
+require condition (state's language's version = 1) reporting "The new document did not begin with its own version"
 free state's language's token types
 set pending to state's requests
 loop while pending != @intrinsic("construct", a pointer to website request):
