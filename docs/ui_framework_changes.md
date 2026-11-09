@@ -63,3 +63,40 @@ Platform checks use private displays and browser profiles. They exercise real
 entry-point lifetime, populated dropdowns, nine ribbon tabs, scrolling endpoints,
 independent resizing, SVG scaling, Unicode editing, clipboard actions and idle
 paint counts. Test instrumentation is outside the application renderer.
+
+## General browser graphics support
+
+`web/graphics-backend.js` now supplies device selection and WebGL shader-program
+creation to the homepage, IDE and UI SDK. The UI build packages that same module.
+WebGPU is preferred when device acquisition succeeds; an absent API, null adapter
+or rejected device request selects WebGL2 before a canvas is bound. Initialization
+and rendering errors after selection remain errors rather than changing backends.
+
+The UI transports share vertex batching, clipping and the DynLex renderer. WebGL2
+uses an sRGB attachment for linear-light blending and sRGB presentation. Browser
+checks cover the ribbon, Snake and editor with WebGPU, no adapter, and no WebGPU
+API, including pixel checks for blending, odd-width masks and fractional scaling.
+
+Extracting shader-program creation also fixed a resource leak: if fragment
+compilation failed, the previously compiled vertex shader was never released.
+The helper releases shaders and failed programs and keeps detailed errors in the
+log. The stale homepage manifest compiler digest was regenerated against the
+already rebuilt compiler. No additional compiler changes were needed.
+
+The isolated browser test setup now explicitly uses SwiftShader for both graphics
+APIs. Its previous Vulkan/lavapipe configuration acquired a WebGPU device but
+failed to create a WebGL2 context even in a minimal page, blocking the homepage's
+farm renderer. A browser check covers both APIs together before application tests.
+The web farm test also now reads its moved integration fixture from the current
+location instead of the removed required-suite path.
+The IDE navigation check had stale default-sketch text and line numbers. A focused
+browser probe confirmed that the invocation is on line 6 and F12 reaches its
+definition on line 3; the test now uses those current source positions.
+The mobile homepage's stacked grid also retained code-card intrinsic minimum
+widths, pushing the language card's Run button past the viewport. Its shared
+single-column rule now uses a zero-minimum flexible track; the existing overflow
+assertion remains in place.
+Finally, the editor test helper no longer starts an unawaited module import in
+every future document. That leaked instrumentation into unrelated pages and
+produced uncaught import failures during navigation. Access is now awaited and
+document-scoped; tests that reload explicitly reinstall it in the new document.

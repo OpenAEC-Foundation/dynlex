@@ -6,6 +6,7 @@ import {
 } from "./browser_test_driver.mjs";
 import { verifyOffscreenRevealReturn } from "./shader_visibility_test.mjs";
 import { verifyWebGpuStageUniformBindings } from "./webgpu_stage_uniform_browser.mjs";
+import { verifyGraphicsDevices } from "./graphics_devices_browser.mjs";
 import { verifyHomepageUltrawideLayout } from "./homepage_ultrawide_browser.mjs";
 import {
   assertRiverChallengeLoadingBoundary,
@@ -22,6 +23,7 @@ for (const scene of shaderManifest.scenes) {
   assert.ok(Number.isInteger(timeUniform?.binding), "Each shader must reflect its time uniform binding");
 }
 
+await verifyGraphicsDevices();
 await navigate("/");
 await waitFor(
   "document.querySelectorAll('[data-runnable-sketch]').length === 3",
@@ -559,6 +561,8 @@ await waitFor(
   "document.querySelector('#shader-preview')?.dataset.previewState === 'ready'",
   "the editable shader's first successful preview"
 );
+assert.equal(await evaluate("typeof window.editorFor"), "undefined",
+  "Editor test access must remain scoped to the document that installed it");
 await waitFor(
   "Number(document.querySelector('#shader-preview').dataset.previewGeometryHorizontalPixels)"
     + " === Math.ceil(document.querySelector('#shader-preview').clientWidth * (window.devicePixelRatio || 1))",
@@ -697,7 +701,7 @@ await hoverMonacoText("square");
 await waitFor(`[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.includes('Choose inferred instance') && hover.textContent.includes('{a 32-bit integer:value} squared'))`, "the inferred-instance hover to display its parameter type");
 await findMonacoText("squared", 1);
 await waitFor(
-  "document.querySelector('.line-numbers.active-line-number')?.textContent.trim() === '7'",
+  "document.querySelector('.line-numbers.active-line-number')?.textContent.trim() === '6'",
   "the square invocation to be selected"
 );
 await dispatchKey("F12", "F12", 123);
@@ -705,7 +709,7 @@ await waitFor(
   "document.querySelector('.line-numbers.active-line-number')?.textContent.trim() === '3'",
   "F12 to navigate from the square invocation to its definition"
 );
-await findMonacoText("print 8 squared");
+await findMonacoText("print line 8 squared");
 await dispatchKey("F12", "F12", 123);
 await waitFor(
   "[...document.querySelectorAll('[data-current-file]')].every((label) => label.textContent === 'string.dl')",

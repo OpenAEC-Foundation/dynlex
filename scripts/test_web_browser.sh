@@ -89,15 +89,19 @@ else
 fi
 SERVER_PID="$!"
 if [[ "$GRAPHICS_BACKEND" = webgpu ]]; then
-    VULKAN_ICD="$(python3 "$SCRIPT_DIR/find_vulkan_icd.py")"
-    VK_DRIVER_FILES="$VULKAN_ICD" VK_ICD_FILENAMES="$VULKAN_ICD" setsid xvfb-run -a -s "-screen 0 1440x1000x24" \
+    # Exercise both browser APIs on one software driver, including the farm's WebGL2 renderer.
+    # https://chromium.googlesource.com/chromium/src/+/HEAD/docs/gpu/swiftshader.md
+    setsid env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u VK_DRIVER_FILES -u VK_ICD_FILENAMES \
+        XDG_SESSION_TYPE=x11 xvfb-run -a -s "-screen 0 1440x1000x24" \
         google-chrome --no-sandbox --no-first-run --no-default-browser-check --mute-audio \
         --disable-background-networking --enable-unsafe-webgpu \
-        --enable-features=Vulkan,WebGPU --use-vulkan=native --use-angle=vulkan \
+        --enable-features=Vulkan,WebGPU --use-gl=angle --use-angle=swiftshader \
+        --use-vulkan=swiftshader --use-webgpu-adapter=swiftshader --disable-vulkan-surface \
         --remote-debugging-port="$DEBUG_PORT" --user-data-dir="$BROWSER_PROFILE" \
         --window-size=1440,1000 about:blank >"$BROWSER_LOG" 2>&1 &
 elif [[ "$GRAPHICS_BACKEND" = webgl ]]; then
-    setsid google-chrome --headless=new --no-sandbox --enable-unsafe-swiftshader --mute-audio \
+    setsid env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET \
+        google-chrome --headless=new --no-sandbox --use-gl=angle --use-angle=swiftshader --mute-audio \
         --no-first-run --no-default-browser-check --disable-background-networking \
         --remote-debugging-port="$DEBUG_PORT" --user-data-dir="$BROWSER_PROFILE" \
         --window-size=1440,1000 about:blank >"$BROWSER_LOG" 2>&1 &

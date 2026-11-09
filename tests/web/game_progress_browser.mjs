@@ -5,6 +5,7 @@ async function reload() {
  const origin=await evaluate('performance.timeOrigin');
  await command('Page.reload');
  await waitFor(`performance.timeOrigin!==${origin} && document.readyState==='complete' && document.querySelectorAll('[data-snippet-source][data-language-ready=true]').length===5`,'new page initialized');
+ await installEditorAccess();
 }
 await navigate('/');
 await installEditorAccess();

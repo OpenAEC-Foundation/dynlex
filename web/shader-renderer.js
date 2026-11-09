@@ -1,6 +1,6 @@
 import {
   createWebGpuShaderPreview,
-  hasWebGpuDevice
+  requestShaderGraphics
 } from "./shader-renderer-webgpu.js";
 import { createWebGlShaderPreview } from "./shader-renderer-webgl.js";
 import { validateShaderGeometryDescriptor } from "./shader-renderer-shared.js";
@@ -35,9 +35,9 @@ function selectedPreview(preview, backend) {
 }
 
 export async function createShaderPreview(canvas, options = {}) {
-  const backend = navigator.gpu && await hasWebGpuDevice() ? "webgpu" : "webgl";
+  const { backend, device } = await requestShaderGraphics();
   const preview = backend === "webgpu"
-    ? await createWebGpuShaderPreview(canvas, options)
+    ? await createWebGpuShaderPreview(canvas, device, options)
     : createWebGlShaderPreview(canvas, options);
   return selectedPreview(preview, backend);
 }

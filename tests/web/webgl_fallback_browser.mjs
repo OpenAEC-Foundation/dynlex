@@ -8,9 +8,11 @@ import {
   waitFor
 } from "./browser_test_driver.mjs";
 
-export async function verifyWebGlFallback() {
+export async function verifyWebGlFallback({ adapterUnavailable = false } = {}) {
   const injection = await command("Page.addScriptToEvaluateOnNewDocument", {
-    source: "Object.defineProperty(Navigator.prototype, 'gpu', { configurable: true, get: () => undefined });"
+    source: adapterUnavailable
+      ? "Object.defineProperty(Navigator.prototype, 'gpu', { configurable: true, get: () => ({ requestAdapter: async () => null }) });"
+      : "Object.defineProperty(Navigator.prototype, 'gpu', { configurable: true, get: () => undefined });"
   });
   try {
     await navigate("/");
