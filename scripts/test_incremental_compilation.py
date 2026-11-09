@@ -93,6 +93,32 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     choice_edit = build(entry=choice_main, target=choice_output)
     assert choice_edit[0]["definition_parse_hits"] > 0, "choice declaration was reparsed after a call edit"
     assert choice_edit[1:] == build(False, entry=choice_main, target=choice_output)[1:]
+    rematch_main = root / "rematch_main.dl"
+    rematch_output = root / "rematch_program"
+    rematch_source = ('the shutdown code for item and user means: @intrinsic("add", item, user)\n'
+                      'the lights shutdown code means: the shutdown code for lights and 4\n'
+                      'the shutdown code for lights and user means: the shutdown code for placeholder and user\n')
+    rematch_main.write_text(rematch_source)
+    rematch_cold = build(entry=rematch_main, target=rematch_output)
+    assert rematch_cold[0]["body_resolution_reference_visits"] > 0
+    assert rematch_cold[1:] == build(False, entry=rematch_main, target=rematch_output)[1:]
+    rematch_main.write_text(rematch_source.replace('"add", item, user', '"subtract", item, user'))
+    rematch_edit = build(entry=rematch_main, target=rematch_output)
+    assert rematch_edit[1:] == build(False, entry=rematch_main, target=rematch_output)[1:]
+    chain_main = root / "chain_main.dl"
+    chain_output = root / "chain_program"
+    chain_source = ''.join(
+        f'to chain{index} item:\n    ' +
+        (f'chain{index + 1} item' if index < 7 else '@intrinsic("discard", item)') + '\n'
+        for index in range(8)
+    ) + 'chain0 1\n'
+    chain_main.write_text(chain_source)
+    chain_cold = build(entry=chain_main, target=chain_output)
+    assert chain_cold[0]["body_resolution_reference_visits"] <= 16, "failed references were rescanned every pass"
+    assert chain_cold[1:] == build(False, entry=chain_main, target=chain_output)[1:]
+    chain_main.write_text(chain_source.replace('@intrinsic("discard", item)', '@intrinsic("discard", 2)'))
+    chain_edit = build(success=False, entry=chain_main, target=chain_output)
+    assert chain_edit[1:] == build(False, success=False, entry=chain_main, target=chain_output)[1:]
     repeated_calls = "alpha\nbeta\n" * 20
     main.write_text(source.replace("alpha\nbeta\n", repeated_calls))
     build()

@@ -121,6 +121,10 @@ shared group, so revisiting a memoized state cannot lose a subsequently discover
 parent. Inline storage grows when needed and never limits matching alternatives.
 
 We match with multiple iterations. This makes sure that patterns earlier in the file can call functions later in the file.
+Failed body matches wait on the specific trie edges and endpoints inspected by the matcher.
+Adding a definition wakes a waiting reference only when one of those conditions changes;
+deadlock recovery still sees all waiting references. This avoids rescanning every failed
+reference on each resolution pass.
 
 We discover what is a variable based on these principles:
 

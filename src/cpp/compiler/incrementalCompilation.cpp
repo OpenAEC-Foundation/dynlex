@@ -926,6 +926,7 @@ bool compileIncrementally(
 							  {"expression_parse_misses", statistics.expressionParseMisses},
 							  {"definition_parse_hits", statistics.definitionParseHits},
 							  {"definition_parse_misses", statistics.definitionParseMisses},
+							  {"body_resolution_reference_visits", context.bodyResolutionReferenceVisits},
 							  {"source_projections_reused", statistics.sourceProjectionWork.reused},
 							  {"source_projections_scanned", statistics.sourceProjectionWork.scanned},
 							  {"matcher_key_ms", statistics.matcherKeyMilliseconds},

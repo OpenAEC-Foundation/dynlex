@@ -228,6 +228,8 @@ static bool matchDependenciesChanged(const MatchDependencies &dependencies) {
 	});
 }
 
+#include "patternResolutionFailedWorklist.inl"
+
 static bool isArgumentExpressionReference(const PatternReference *reference) {
 	requireCompilerInvariant(
 		reference && reference->expression && reference->range().line,
@@ -244,9 +246,12 @@ static bool resolveReferences(
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> *defToRefs = nullptr, const char *phase = "body",
 	PatternReference **activeReference = nullptr, PatternMatch **activeMatch = nullptr,
 	bool *activeReferenceNeedsRematch = nullptr, bool *deferredActiveRematch = nullptr,
-	std::vector<Section *> *pendingPromotionCleanupSections = nullptr
+	std::vector<Section *> *pendingPromotionCleanupSections = nullptr, FailedReferenceWorklist *failedWorklist = nullptr
 ) {
-	return std::erase_if(references, [&](PatternReference *reference) {
+	bool resolvedAny = false;
+	std::erase_if(references, [&](PatternReference *reference) {
+		if (decrementCounts)
+			context.bodyResolutionReferenceVisits++;
 		if (const std::string *explicitVariableName = findVisibleExplicitWholeVariableName(reference)) {
 			failedMatchDependencies.erase(reference);
 			if (decrementCounts)
@@ -263,6 +268,7 @@ static bool resolveReferences(
 				context, context.createVariableReference(variableRange, *explicitVariableName)
 			);
 			TRACE_RESOLUTION(std::string(phase) + " resolved-as-explicit-variable " + referenceTraceId(reference));
+			resolvedAny = true;
 			return reference->resolved;
 		}
 		PatternMatch *match = nullptr;
@@ -339,6 +345,7 @@ static bool resolveReferences(
 			if (defToRefs)
 				trackMatchDefinitions(*match, reference, *defToRefs);
 			TRACE_RESOLUTION(std::string(phase) + " resolved " + referenceTraceId(reference));
+			resolvedAny = true;
 			if (activeReferenceNeedsRematch && *activeReferenceNeedsRematch) {
 				requireCompilerInvariant(
 					defToRefs && deferredActiveRematch && pendingPromotionCleanupSections,
@@ -363,8 +370,15 @@ static bool resolveReferences(
 				   reference->patternElements[0].type == PatternElement::Type::VariableLike) {
 			const std::string &varName = reference->patternElements[0].text;
 			if ((!isArgumentExpressionReference(reference) && !isDataSectionBodyReference(*reference)) ||
-				(!allowUnmatchedVariables && !findEnclosingParameterCandidate(reference, varName)))
+				(!allowUnmatchedVariables && !findEnclosingParameterCandidate(reference, varName))) {
+				if (shouldRetry)
+					failedMatchDependencies.emplace(reference, std::move(dependencies));
+				if (failedWorklist) {
+					failedWorklist->park(reference);
+					return true;
+				}
 				return false;
+			}
 			failedMatchDependencies.erase(reference);
 			// An unmatched word can only be a variable when another expression consumes it as an argument.
 			reference->patternElements[0].type = PatternElement::Type::Variable;
@@ -375,11 +389,17 @@ static bool resolveReferences(
 			if (decrementCounts)
 				decrementVariableLikeCounts(reference);
 			TRACE_RESOLUTION(std::string(phase) + " resolved-as-variable " + referenceTraceId(reference));
+			resolvedAny = true;
 		} else if (shouldRetry) {
 			failedMatchDependencies.emplace(reference, std::move(dependencies));
 		}
+		if (failedWorklist && !reference->resolved) {
+			failedWorklist->park(reference);
+			return true;
+		}
 		return reference->resolved;
-	}) > 0;
+	});
+	return resolvedAny;
 }
 
 #include "patternPrecedenceMatching.inl"
@@ -455,6 +475,7 @@ bool resolvePatterns(ParseContext &context) {
 	// Phase 1: resolve body references and definitions
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> definitionToReferences;
 	FailedMatchDependencies failedBodyMatchDependencies;
+	FailedReferenceWorklist failedBodyWorklist(failedBodyMatchDependencies);
 	bool staleInvalidationOccurred = false;
 	std::vector<Section *> pendingPromotionCleanupSections;
 	std::vector<PatternReference *> referencesToRequeue;
@@ -542,6 +563,7 @@ bool resolvePatterns(ParseContext &context) {
 	// Helper: add a definition to the pattern tree.
 	auto addDefinitionToTree = [&](PatternDefinition *definition, SectionType treeType) {
 		context.patternTrees[(size_t)treeType]->addPatternDefinition(definition, treeType);
+		failedBodyWorklist.notifyAddedDefinition(*definition);
 		TRACE_RESOLUTION("add " + definitionTraceId(definition) + " tree=" + std::to_string((int)treeType));
 		invalidateStaleMatches(definition, treeType);
 	};
@@ -647,6 +669,10 @@ bool resolvePatterns(ParseContext &context) {
 				madeProgress = true;
 			}
 
+			if (unResolvedSections.empty())
+				failedBodyWorklist.wakeUnmatchedVariables();
+			if (failedBodyWorklist.drain(bodyReferences))
+				madeProgress = true;
 			appendRequeuedReferences();
 			activeResolvingReference = nullptr;
 			activeResolvingMatch = nullptr;
@@ -655,12 +681,14 @@ bool resolvePatterns(ParseContext &context) {
 			bool resolvedReference = resolveReferences(
 				context, bodyReferences, true, unResolvedSections.empty(), failedBodyMatchDependencies, &definitionToReferences,
 				"body", &activeResolvingReference, &activeResolvingMatch, &activeReferenceNeedsRematch, &deferredActiveRematch,
-				&pendingPromotionCleanupSections
+				&pendingPromotionCleanupSections, &failedBodyWorklist
 			);
 			activeResolvingReference = nullptr;
 			activeResolvingMatch = nullptr;
 			activeReferenceNeedsRematch = false;
-			bool appendedAfterResolution = appendRequeuedReferences();
+			bool wokenAfterResolution = failedBodyWorklist.drain(bodyReferences);
+			bool requeuedAfterResolution = appendRequeuedReferences();
+			bool appendedAfterResolution = wokenAfterResolution || requeuedAfterResolution;
 			if (resolvedReference || deferredActiveRematch || appendedAfterResolution || staleInvalidationOccurred) {
 				madeProgress = true;
 			}
@@ -679,7 +707,7 @@ bool resolvePatterns(ParseContext &context) {
 					madeProgress = true;
 			}
 
-			if (unResolvedSections.empty() && bodyReferences.empty())
+			if (unResolvedSections.empty() && bodyReferences.empty() && !failedBodyWorklist.hasWaiting())
 				break;
 
 			// Deadlock detection: if no progress was made, we have a cycle (self-recursion,
@@ -695,7 +723,11 @@ bool resolvePatterns(ParseContext &context) {
 					collectPromotablePatternNames(section, promotableNames, visitedSections);
 					if (promotableNames.empty())
 						continue;
-					for (PatternReference *reference : bodyReferences) {
+					std::vector<PatternReference *> candidateReferences(bodyReferences.begin(), bodyReferences.end());
+					for (PatternReference *reference : failedBodyWorklist.blockedReferences())
+						if (failedBodyWorklist.isWaiting(reference))
+							candidateReferences.push_back(reference);
+					for (PatternReference *reference : candidateReferences) {
 						Section *referenceSection = reference->range().section();
 						if (!sectionContainsOrIsAncestorOf(section, referenceSection))
 							continue;
@@ -766,13 +798,16 @@ bool resolvePatterns(ParseContext &context) {
 			for (PatternReference *reference : bodyReferences) {
 				emitReferenceDiagnostic(reference);
 			}
+			for (PatternReference *reference : failedBodyWorklist.blockedReferences())
+				if (failedBodyWorklist.isWaiting(reference))
+					emitReferenceDiagnostic(reference);
 			for (PatternReference *reference : globalReferences) {
 				emitReferenceDiagnostic(reference);
 			}
 		};
 
 		// Commit phase 1 only after definitions and definition bodies are fully resolved.
-		if (!unResolvedSections.empty() || !bodyReferences.empty()) {
+		if (!unResolvedSections.empty() || !bodyReferences.empty() || failedBodyWorklist.hasWaiting()) {
 			emitUnresolvedPatternDiagnostics();
 			return false;
 		}
