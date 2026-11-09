@@ -358,3 +358,35 @@ def check_independent_body_resolution_order(root, build):
     promoted = build(entry=alternative)
     assert promoted[1:] == build(False, entry=alternative)[1:], \
         "single-word alternative lost its body-driven parameter promotion"
+
+
+def check_global_reader_after_top_level_edit(root, build):
+    main = root / "global_reader_top_level_edit.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              '@intrinsic("store", counter, 1)\n'
+              'function read state:\n'
+              '    globals:\n'
+              '        counter\n'
+              '    execute:\n'
+              '        @intrinsic("return", counter)\n'
+              '@intrinsic("return", @intrinsic("subtract", read state, 1))\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('counter, 1)', 'counter, 2)').replace('read state, 1)', 'read state, 2)'))
+    edited = build(entry=main)
+    assert edited[0]["inference_instantiations_reused"] >= 1, \
+        "top-level value edit re-inferred a function with unchanged global types"
+    assert edited[0]["functions_ir_reused"] >= 1, "top-level value edit regenerated an unchanged global reader"
+    assert edited[1:] == build(False, entry=main)[1:]
+
+    typed = root / "global_reader_type_edit.dl"
+    typed_source = source.replace('function read state:', 'function inspect state:').replace(
+        '@intrinsic("return", counter)', '@intrinsic("discard", counter)').replace(
+        '@intrinsic("return", @intrinsic("subtract", read state, 1))', 'inspect state')
+    typed.write_text(typed_source)
+    build(entry=typed)
+    typed.write_text(typed_source.replace('counter, 1)', 'counter, 1.0)'))
+    changed_type = build(entry=typed)
+    assert changed_type[0]["inference_instantiations_reused"] == 0, \
+        "global type change reused an old inference summary"
+    assert changed_type[1:] == build(False, entry=typed)[1:]

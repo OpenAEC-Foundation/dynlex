@@ -127,6 +127,5 @@ bool unchangedFunctionSource(const std::string &path, const Json &prior, const J
 		oldDeclarations.at(path) != newDeclarations.at(path) || !oldBodies.contains(path) || !newBodies.contains(path) ||
 		oldBodies.at(path) != newBodies.at(path))
 		return false;
-	return current.at("declarations") == prior.at("declarations") ||
-		   current.at("matches").at(path) == prior.at("matches").at(path);
+	return current.at("matches").at(path) == prior.at("matches").at(path);
 }

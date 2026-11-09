@@ -902,6 +902,10 @@ run ordinary inference. A function in a file with diagnostics gets no inference
 summary, so its warnings are regenerated. Functions imported from cached IR count as active when
 deciding whether an edited body can be ignored. This prevents a later callee edit
 from reusing the preceding build's type inference and executable.
+An edit to top-level executable code can retain global-reading function summaries
+when those functions and their dependencies are unchanged. Replay compares the
+current inferred global types; IR import separately compares the emitted global
+types and initializers. The changed top-level body is inferred and generated.
 
 For functions with one pattern path, restorable concrete argument types, and no transitive
 global access, the compiler can infer affected instantiations in dependency order.

@@ -53,9 +53,12 @@ std::unordered_set<const Section *> eligibleCodegenSections(
 	if (!fullyCompatible && !globalFreeCompatible)
 		return eligible;
 	std::unordered_map<const Section *, bool> unchanged;
+	// A top-level execution edit does not change an unchanged function body.
+	// Global readers remain candidates: summary replay checks current global
+	// types, and IR import checks the finalized global types and initializers.
 	for (const auto &[path, section] : sections)
 		unchanged[section] =
-			(fullyCompatible || (section != context.mainSection && hasNoGlobalAccess(section))) &&
+			(fullyCompatible || section != context.mainSection) &&
 			(!reusableCodegenSection(*section) || unchangedFunctionSource(path, priorProjection, currentProjection) ||
 			 interfaceStableChanges.contains(section));
 	if (fullyCompatible && previous.contains("section_dependency_graph")) {

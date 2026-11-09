@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from test_incremental_dependency_graph import check_global_match_reuse_after_execution_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_runtime_pure_value_summary
+from test_incremental_dependency_graph import check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_runtime_pure_value_summary
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -819,7 +819,8 @@ function left times right:
     assert global_edit[1:] == build(False, entry=global_main)[1:], "global reader edit differs from clean build"
     global_main.write_text(global_main.read_text().replace('counter, 1)', 'counter, 2)').replace('read state, 1)', 'read state, 2)'))
     global_initializer_edit = build(entry=global_main)
-    assert global_initializer_edit[0]["functions_ir_reused"] == 1, "global initializer edit should reuse only the independent function IR"
+    assert global_initializer_edit[0]["functions_ir_reused"] >= 2, \
+        "runtime global value edit regenerated a reader whose global type stayed unchanged"
     assert global_initializer_edit[1:] == build(False, entry=global_main)[1:]
 
     indirect_global_main = root / "indirect_global_main.dl"
@@ -897,6 +898,7 @@ function left times right:
     check_pointer_preinfer(root, build)
     check_implicit_parameter_classification_cascade(root, build)
     check_independent_body_resolution_order(root, build)
+    check_global_reader_after_top_level_edit(root, build)
 
     for flags in [("-O2",), ("-g",), ("-ffast-math",), ("--trace-execution",)]:
         changed = build(flags=flags)
