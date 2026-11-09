@@ -52,8 +52,9 @@ void collectDependencies(
 
 IncrementalIRReuse::IncrementalIRReuse(
 	ParseContext &context, const std::string &previousIR, const nlohmann::json &previousFunctions,
-	const nlohmann::json &previousCallableFunctions, std::map<const Section *, std::string> sectionPaths,
-	std::unordered_set<const Section *> eligibleSections, std::unordered_set<std::string> replacementPaths
+	const nlohmann::json &previousCallableFunctions, const nlohmann::json &previousFunctionInstantiations,
+	std::map<const Section *, std::string> sectionPaths, std::unordered_set<const Section *> eligibleSections,
+	std::unordered_set<std::string> replacementPaths
 )
 	: currentModule(context.llvmModule), previousFunctions(previousFunctions),
 	  previousCallableFunctions(previousCallableFunctions), sectionPaths(std::move(sectionPaths)),
@@ -67,8 +68,10 @@ IncrementalIRReuse::IncrementalIRReuse(
 		throw std::runtime_error("cached LLVM target differs from the current target");
 	for (const Section *section : this->eligibleSections)
 		eligiblePaths.insert(this->sectionPaths.at(section));
-	for (const auto &[name, owner] : previousFunctions.items())
-		previousNamesByPath[owner.get<std::string>()].push_back(name);
+	for (const auto &[name, key] : previousFunctionInstantiations.items()) {
+		requireCompilerInvariant(previousFunctions.contains(name), "cached instantiation has no generated function owner");
+		previousNamesByPathAndKey[previousFunctions.at(name).get<std::string>()][key.get<std::string>()].push_back(name);
+	}
 }
 
 bool IncrementalIRReuse::reusableClosure(
@@ -108,12 +111,17 @@ bool IncrementalIRReuse::reusableClosure(
 	return true;
 }
 
-bool IncrementalIRReuse::hasReusableIRForSection(const Section *section, bool allowUnmaterializedGlobals) const {
+bool IncrementalIRReuse::hasReusableIRForInstantiation(
+	const Section *section, const std::string &key, bool allowUnmaterializedGlobals
+) const {
 	if (!eligibleSections.contains(section))
 		return false;
 	const std::string &path = sectionPaths.at(section);
-	auto names = previousNamesByPath.find(path);
-	if (names == previousNamesByPath.end())
+	auto owner = previousNamesByPathAndKey.find(path);
+	if (owner == previousNamesByPathAndKey.end())
+		return false;
+	auto names = owner->second.find(key);
+	if (names == owner->second.end())
 		return false;
 	for (const std::string &name : names->second) {
 		const llvm::Function *function = previousModule->getFunction(name);

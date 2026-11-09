@@ -127,7 +127,7 @@ class IncrementalInferenceReuse {
 			if (!currentGlobalTypes || *currentGlobalTypes != priorGlobalTypes)
 				return false;
 		}
-		if (!irReuse.hasReusableIRForSection(section, needsGlobalTypes))
+		if (!irReuse.hasReusableIRForInstantiation(section, *keyText, needsGlobalTypes))
 			return false;
 		auto returnType = decodeInferenceTypeIdentity(summary.at("return_type"), classPaths);
 		if (!returnType)

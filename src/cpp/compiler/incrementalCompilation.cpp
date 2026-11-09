@@ -720,7 +720,8 @@ bool compileIncrementally(
 							replacementPaths.insert(sectionPaths.at(section));
 						functionReuse = std::make_unique<IncrementalIRReuse>(
 							inferred, previous->at("ir").get_ref<const std::string &>(), previous->at("function_sections"),
-							previous->at("callable_functions"), sectionPaths, eligible, std::move(replacementPaths)
+							previous->at("callable_functions"), previous->at("function_instantiations"), sectionPaths, eligible,
+							std::move(replacementPaths)
 						);
 						inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
 							priorSummaries, previous->at("global_types"), *functionReuse, sectionPaths, std::move(eligible)
@@ -777,11 +778,19 @@ bool compileIncrementally(
 			} else if (compiled) {
 				std::map<std::string, std::string> functionSections;
 				Json callableFunctions = Json::object();
-				context.recordGeneratedFunction = [&](Section *section, llvm::Function *function, bool callable) {
+				Json functionInstantiations = Json::object();
+				ClassIdentityPaths functionClassPaths = classIdentityPaths(sectionPaths);
+				context.recordGeneratedFunction = [&](Section *section, const InstantiationKey *key, llvm::Function *function,
+													  bool callable) {
+					requireCompilerInvariant(
+						callable == (key == nullptr), "generated function has an invalid instantiation key"
+					);
 					std::string name = function->getName().str();
 					functionSections.emplace(name, sectionPaths.at(section));
 					if (callable)
 						callableFunctions[name] = true;
+					else if (std::optional<std::string> identity = inferenceSummaryKey(*key, functionClassPaths))
+						functionInstantiations[name] = *identity;
 				};
 				if (functionReuse) {
 					context.reuseGeneratedFunction = [&](Section *section, Instantiation &instantiation,
@@ -818,10 +827,13 @@ bool compileIncrementally(
 							functionSections.emplace(name, previous->at("function_sections").at(name).get<std::string>());
 							if (previous->at("callable_functions").contains(name))
 								callableFunctions[name] = true;
+							if (previous->at("function_instantiations").contains(name))
+								functionInstantiations[name] = previous->at("function_instantiations").at(name);
 						}
 					}
 					result["function_sections"] = functionSections;
 					result["callable_functions"] = callableFunctions;
+					result["function_instantiations"] = std::move(functionInstantiations);
 					std::set<std::string> generatedFunctionPaths;
 					for (const auto &[_, path] : functionSections)
 						generatedFunctionPaths.insert(path);
@@ -841,7 +853,7 @@ bool compileIncrementally(
 					auto graphStart = Clock::now();
 					result["section_dependency_graph"] = captureSectionDependencyGraph(
 						sectionPaths, previous ? &previous->at("section_dependency_graph") : nullptr, graphStable,
-						&statistics.dependencyGraphEntriesReused
+						&statistics.dependencyGraphEntriesReused, &statistics.dependencyGraphReverseNodesUpdated
 					);
 					statistics.dependencyGraphMilliseconds = elapsedMilliseconds(graphStart);
 					recordSemanticSources(result, *recording, compiled);
@@ -914,6 +926,7 @@ bool compileIncrementally(
 							  {"dependency_graph_sections_reused", statistics.dependencyGraphSectionsReused},
 							  {"preinfer_dependency_graph_sections_checked", statistics.preinferDependencyGraphSectionsChecked},
 							  {"dependency_graph_entries_reused", statistics.dependencyGraphEntriesReused},
+							  {"dependency_graph_reverse_nodes_updated", statistics.dependencyGraphReverseNodesUpdated},
 							  {"linked_cached_objects", statistics.linkedCachedObjects},
 							  {"objects_reused", statistics.reusedObjects},
 							  {"objects_built", statistics.builtObjects},

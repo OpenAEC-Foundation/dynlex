@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from test_incremental_dependency_graph import check_leaf_dependency_cascade
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -447,53 +448,7 @@ function left times right:
     assert scope_edit[0]["functions_ir_reused"] == 0, "file number-rule edit retained stale function IR"
     assert scope_edit[1:] == build(False, entry=scope_main)[1:], "file number-rule edit differs from clean build"
 
-    leaf_a = root / "leaf_a.dl"
-    leaf_b = root / "leaf_b.dl"
-    leaf_helper = root / "leaf_helper.dl"
-    leaf_types = root / "leaf_types.dl"
-    leaf_main = root / "leaf_main.dl"
-    leaf_types.write_text('integer means: @intrinsic("type", "int")\n')
-    leaf_helper.write_text('to helper:\n    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "helper"))\n')
-    leaf_a.write_text('to alpha:\n    helper\n    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\nto sibling:\n    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "sibling"))\n')
-    leaf_b.write_text('to beta:\n    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "second"))\n')
-    leaf_main.write_text('import leaf_types.dl\nimport leaf_helper.dl\nimport leaf_a.dl\nimport leaf_b.dl\nalpha\nsibling\nbeta\n')
-    build(entry=leaf_main)
-    leaf_a.write_text('# comment between executable builds\n' + leaf_a.read_text())
-    assert build(entry=leaf_main)[0]["frontend_reused"]
-    leaf_a.write_text(leaf_a.read_text().replace('"first"', '"changed"'))
-    leaf_edit = build(entry=leaf_main)
-    assert leaf_edit[0]["source_projections_reused"] >= 3, "unchanged imported files were reprojected"
-    assert leaf_edit[0]["preinfer_dependency_graph_sections_checked"] >= 2, \
-        "preinference traversed unchanged function bodies instead of saved dependencies"
-    assert leaf_edit[0]["inference_summary_sections_reused"] >= 2, \
-        "cached function inference summaries were re-encoded"
-    assert leaf_edit[0]["dependency_graph_sections_reused"] >= 3, "unchanged sections ignored saved dependencies"
-    assert leaf_edit[0]["dependency_graph_entries_reused"] >= 2, "reused inference dependencies were captured again"
-    assert leaf_edit[0]["functions_ir_reused"] >= 3, "active edit regenerated independent or same-file function IR"
-    assert leaf_edit[1:] == build(False, entry=leaf_main)[1:], "reused function IR changed active edit behavior"
-    leaf_b.write_text(leaf_b.read_text().replace('"second"', '"updated"'))
-    caller_edit = build(entry=leaf_main)
-    assert caller_edit[0]["functions_ir_reused"] >= 2, "unchanged caller and callee were regenerated"
-    assert caller_edit[1:] == build(False, entry=leaf_main)[1:], "reused call chain changed active edit behavior"
-    leaf_helper.write_text(leaf_helper.read_text().replace('"helper"', '"replacement"'))
-    dependency_edit = build(entry=leaf_main)
-    assert dependency_edit[0]["inference_instantiations_reused"] >= 3, f"unchanged caller was re-inferred despite equivalent callee interface: {dependency_edit[0]}"
-    assert dependency_edit[0]["functions_ir_reused"] >= 3, f"unchanged caller IR was regenerated despite equivalent callee interface: {dependency_edit[0]}"
-    assert dependency_edit[1:] == build(False, entry=leaf_main)[1:], "changed callee retained stale caller IR"
-    leaf_helper.write_text('to helper:\n    @intrinsic("discard", 1)\n')
-    effect_edit = build(entry=leaf_main)
-    assert effect_edit[0]["inference_instantiations_reused"] == 2, "changed callee effect reused caller inference"
-    assert effect_edit[1:] == build(False, entry=leaf_main)[1:], "changed callee effect kept stale caller code"
-    leaf_b.write_text(leaf_b.read_text() + 'to unused addition:\n    @intrinsic("discard", 3)\n')
-    added_definition = build(entry=leaf_main)
-    assert added_definition[0]["inference_instantiations_reused"] >= 3, f"unrelated definition re-inferred existing functions: {added_definition[0]}"
-    assert added_definition[0]["functions_ir_reused"] >= 3, "unrelated definition regenerated existing function IR"
-    assert added_definition[1:] == build(False, entry=leaf_main)[1:], "unrelated definition changed incremental build behavior"
-    leaf_a.write_text('to unused prefix:\n    @intrinsic("discard", 4)\n' + leaf_a.read_text())
-    inserted_definition = build(entry=leaf_main)
-    assert inserted_definition[0]["inference_instantiations_reused"] >= 3, f"insertion shifted unchanged function identities: {inserted_definition[0]}"
-    assert inserted_definition[0]["functions_ir_reused"] >= 3, "insertion regenerated unchanged function IR"
-    assert inserted_definition[1:] == build(False, entry=leaf_main)[1:], "inserted definition changed incremental build behavior"
+    check_leaf_dependency_cascade(root, build)
 
     specific_main = root / "specific_addition.dl"
     specific_base = ('integer means: @intrinsic("type", "int")\n'

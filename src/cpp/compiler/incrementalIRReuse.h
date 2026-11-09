@@ -20,11 +20,14 @@ class IncrementalIRReuse {
   public:
 	IncrementalIRReuse(
 		ParseContext &context, const std::string &previousIR, const nlohmann::json &previousFunctions,
-		const nlohmann::json &previousCallableFunctions, std::map<const Section *, std::string> sectionPaths,
-		std::unordered_set<const Section *> eligibleSections, std::unordered_set<std::string> replacementPaths = {}
+		const nlohmann::json &previousCallableFunctions, const nlohmann::json &previousFunctionInstantiations,
+		std::map<const Section *, std::string> sectionPaths, std::unordered_set<const Section *> eligibleSections,
+		std::unordered_set<std::string> replacementPaths = {}
 	);
 	bool reuse(Section *section, Instantiation &instantiation, llvm::Function *function);
-	bool hasReusableIRForSection(const Section *section, bool allowUnmaterializedGlobals = false) const;
+	bool hasReusableIRForInstantiation(
+		const Section *section, const std::string &key, bool allowUnmaterializedGlobals = false
+	) const;
 	bool import(ParseContext &context);
 	size_t reusedCount() const { return reusedNames.size(); }
 	const std::unordered_set<std::string> &reusedFunctionNames() const { return reusedNames; }
@@ -41,7 +44,7 @@ class IncrementalIRReuse {
 	std::map<const Section *, std::string> sectionPaths;
 	std::unordered_set<const Section *> eligibleSections;
 	std::unordered_set<std::string> eligiblePaths;
-	std::unordered_map<std::string, std::vector<std::string>> previousNamesByPath;
+	std::unordered_map<std::string, std::unordered_map<std::string, std::vector<std::string>>> previousNamesByPathAndKey;
 	std::unordered_set<std::string> replacementPaths;
 	std::unordered_set<std::string> reusedNames;
 };

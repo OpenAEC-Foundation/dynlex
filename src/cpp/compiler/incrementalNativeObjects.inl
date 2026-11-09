@@ -29,6 +29,7 @@ struct BuildStatistics {
 	size_t dependencyGraphSectionsReused = 0;
 	size_t preinferDependencyGraphSectionsChecked = 0;
 	size_t dependencyGraphEntriesReused = 0;
+	size_t dependencyGraphReverseNodesUpdated = 0;
 	size_t matcherCacheHits = 0;
 	size_t precedenceMatcherCacheHits = 0;
 	size_t expressionParseHits = 0;
