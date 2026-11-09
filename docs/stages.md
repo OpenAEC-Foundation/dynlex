@@ -811,6 +811,11 @@ less-specific patterns only when at least one canonical path can occur in that
 reference's matcher input. Missing literal words exclude a path; numeric arguments
 use their matcher spelling. This keeps unrelated callers resolved during cold and
 edited builds while retaining rematches for genuinely competing patterns.
+Body references whose enclosing definitions have no pending implicit parameter
+candidate wait until definitions are indexed. They then resolve once against the
+completed tree, avoiding failed matches and later specificity retries. A
+single-word alternative can still promote an implicit parameter from its body,
+so early indexing alone does not make its references eligible to wait.
 An edit confined to the bodies of ordinary functions that had no inferred
 instantiation in the prior build can stop after pattern resolution and validation.
 The cache compares declarations and all source text outside those bodies. It

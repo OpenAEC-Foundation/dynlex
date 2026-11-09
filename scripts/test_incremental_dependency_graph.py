@@ -331,3 +331,30 @@ def check_implicit_parameter_classification_cascade(root, build):
     assert before["matches"][caller_path] != after["matches"][caller_path], \
         "caller matches ignored reclassified pattern"
     assert edited[1:] == build(False, entry=main)[1:]
+
+
+def check_independent_body_resolution_order(root, build):
+    main = root / "independent_body_resolution.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'to alpha {integer:value}:\n'
+              '    use value with later\n'
+              'to use value with later:\n'
+              '    @intrinsic("discard", value)\n'
+              'alpha 1\n')
+    main.write_text(source)
+    cold = build(entry=main)
+    assert cold[0]["body_resolution_reference_visits"] == 2, \
+        "an independent body was matched before its callees were indexed"
+    main.write_text(source.replace('alpha 1\n', 'alpha 2\n'))
+    edited = build(entry=main)
+    assert edited[0]["body_resolution_reference_visits"] == 2
+    assert edited[1:] == build(False, entry=main)[1:]
+
+    alternative = root / "single_word_alternative_promotion.dl"
+    alternative.write_text('function [the negative of |-]value:\n'
+                           '    execute:\n'
+                           '        @intrinsic("return", @intrinsic("negate", value))\n'
+                           '@intrinsic("discard", the negative of 1)\n')
+    promoted = build(entry=alternative)
+    assert promoted[1:] == build(False, entry=alternative)[1:], \
+        "single-word alternative lost its body-driven parameter promotion"

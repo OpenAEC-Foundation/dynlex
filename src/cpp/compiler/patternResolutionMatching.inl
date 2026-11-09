@@ -240,6 +240,8 @@ static bool isArgumentExpressionReference(const PatternReference *reference) {
 		   reference->range().section()->isValueExpressionContext();
 }
 
+#include "patternResolutionDeferredBodies.inl"
+
 // Resolve a list of pattern references against the tree. Returns true if all resolved.
 static bool resolveReferences(
 	ParseContext &context, std::list<PatternReference *> &references, bool decrementCounts, bool allowUnmatchedVariables,
@@ -464,6 +466,16 @@ bool resolvePatterns(ParseContext &context) {
 
 	// Compute initial VL counts before resolution
 	computeVariableLikeCounts(unResolvedSections);
+	std::list<PatternReference *> deferredBodyReferences;
+	for (auto reference = bodyReferences.begin(); reference != bodyReferences.end();) {
+		if (!bodyReferenceCanWaitForDefinitions(*reference)) {
+			++reference;
+			continue;
+		}
+		auto delayed = reference++;
+		TRACE_RESOLUTION("defer " + referenceTraceId(*delayed));
+		deferredBodyReferences.splice(deferredBodyReferences.end(), bodyReferences, delayed);
+	}
 
 	// add the roots
 	std::generate(std::begin(context.patternTrees), std::end(context.patternTrees), [&]() {
@@ -809,6 +821,19 @@ bool resolvePatterns(ParseContext &context) {
 
 		// Commit phase 1 only after definitions and definition bodies are fully resolved.
 		if (!unResolvedSections.empty() || !bodyReferences.empty() || failedBodyWorklist.hasWaiting()) {
+			emitUnresolvedPatternDiagnostics();
+			return false;
+		}
+		for (int iteration = 0; iteration < context.options.maxResolutionIterations && !deferredBodyReferences.empty();
+			 iteration++) {
+			if (!resolveReferences(
+					context, deferredBodyReferences, true, true, failedBodyMatchDependencies, &definitionToReferences,
+					"deferred-body"
+				))
+				break;
+		}
+		if (!deferredBodyReferences.empty()) {
+			bodyReferences.splice(bodyReferences.end(), deferredBodyReferences);
 			emitUnresolvedPatternDiagnostics();
 			return false;
 		}
