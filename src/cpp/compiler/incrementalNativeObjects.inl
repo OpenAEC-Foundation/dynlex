@@ -34,6 +34,7 @@ struct BuildStatistics {
 	size_t reusedDiagnosticRecords = 0;
 	size_t matcherCacheHits = 0;
 	size_t deferredMatchKeysReplayed = 0;
+	size_t precedenceMatchKeysReplayed = 0;
 	size_t precedenceMatcherCacheHits = 0;
 	size_t expressionParseHits = 0;
 	size_t expressionParseMisses = 0;

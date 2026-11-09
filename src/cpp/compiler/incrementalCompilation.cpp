@@ -231,19 +231,7 @@ bool sourceProjectionsEqual(const Json &left, const Json &right);
 
 #include "incrementalFunctionMatches.inl"
 #include "incrementalMatcherTreeSignature.inl"
-
-std::string
-declarationDigest(const std::map<std::string, Section *> &sections, const std::unordered_set<const Section *> &excluded = {}) {
-	Json declarations = Json::array();
-	for (const auto &[path, section] : sections) {
-		if (section->patternDefinitions.empty() || excluded.contains(section))
-			continue;
-		Json entry = sectionDeclaration(*section);
-		entry["path"] = path;
-		declarations.push_back(std::move(entry));
-	}
-	return digest(declarations.dump());
-}
+#include "incrementalDeclarationDigest.inl"
 
 #include "incrementalSourceProjection.inl"
 
@@ -586,6 +574,7 @@ bool compileIncrementally(
 			};
 			IncrementalMatcherCache matcherCache(context, previousMatches);
 			std::string initialMatcherTree;
+			PriorMatchKeys precedenceKeys;
 			context.reuseMatcherResult = [&](PatternReference *reference, MatchOptions options,
 											 MatchDependencies *dependencies) {
 				return matcherCache.reuse(reference, options, dependencies);
@@ -597,7 +586,13 @@ bool compileIncrementally(
 			context.prepareDeferredMatcherReplay = [&](const std::list<PatternReference *> &references) {
 				initialMatcherTree = matcherTreeSignature(context);
 				if (previous)
-					prepareDeferredMatchReplay(context, *previous, recording->observations, initialMatcherTree, references);
+					prepareDeferredMatchReplay(context, *previous, recording->observations, initialMatcherTree, references,
+						precedenceKeys);
+			};
+			context.preparePrecedenceMatcherReplay = [&](const std::vector<PatternReference *> &references) {
+				if (previous)
+					preparePrecedenceMatchReplay(context, previous->at("all_function_projection"), matcherCache,
+						precedenceKeys, references);
 			};
 			statistics.cacheRestoreMilliseconds = elapsedMilliseconds(restoreStart);
 			auto saveMatcher = [&]() {
@@ -738,12 +733,14 @@ bool compileIncrementally(
 			context.runIncrementalPreinference = {};
 			statistics.matcherCacheHits = matcherCache.hits();
 			statistics.deferredMatchKeysReplayed = matcherCache.deferredKeyReplays();
+			statistics.precedenceMatchKeysReplayed = matcherCache.precedenceKeyReplays();
 			statistics.precedenceMatcherCacheHits = matcherCache.precedenceHits();
 			statistics.matcherKeyMilliseconds = matcherCache.keyTimeMilliseconds();
 			statistics.matcherRestoreMilliseconds = matcherCache.restoreTimeMilliseconds();
 			context.reuseMatcherResult = {};
 			context.recordMatcherResult = {};
 			context.prepareDeferredMatcherReplay = {};
+			context.preparePrecedenceMatcherReplay = {};
 			if (reuseTypeInference) {
 				statistics.reusedTypeInference = true;
 				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
@@ -940,6 +937,7 @@ bool compileIncrementally(
 							  {"objects_built", statistics.builtObjects},
 							  {"matcher_cache_hits", statistics.matcherCacheHits},
 							  {"deferred_match_keys_replayed", statistics.deferredMatchKeysReplayed},
+							  {"precedence_match_keys_replayed", statistics.precedenceMatchKeysReplayed},
 							  {"precedence_matcher_cache_hits", statistics.precedenceMatcherCacheHits},
 							  {"expression_parse_hits", statistics.expressionParseHits},
 							  {"expression_parse_misses", statistics.expressionParseMisses},

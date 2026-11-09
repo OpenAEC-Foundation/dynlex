@@ -87,6 +87,7 @@ struct ParseContext {
 	std::function<std::optional<PatternMatch *>(PatternReference *, MatchOptions, MatchDependencies *)> reuseMatcherResult;
 	std::function<void(PatternReference *, MatchOptions, const PatternMatch *, const MatchDependencies *)> recordMatcherResult;
 	std::function<void(const std::list<PatternReference *> &)> prepareDeferredMatcherReplay;
+	std::function<void(const std::vector<PatternReference *> &)> preparePrecedenceMatcherReplay;
 	// Parse cache entries contain only unresolved syntax; current sections still
 	// register their own references and resolve them against the current pattern trees.
 	std::function<Expression *(Section *, Range, SectionType)> reuseParsedExpression;

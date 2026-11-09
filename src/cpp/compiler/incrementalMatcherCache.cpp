@@ -579,6 +579,8 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 		recorded[cacheKey] = value;
 		reusedCount++;
 		prevalidatedCount += prevalidated;
+		if (prevalidated && context.compilationStage == ParseContext::CompilationStage::ResolvedPatternPrecedence)
+			prevalidatedPrecedenceCount++;
 		if (context.compilationStage == ParseContext::CompilationStage::ResolvedPatternPrecedence)
 			reusedPrecedenceCount++;
 		return static_cast<PatternMatch *>(nullptr);
@@ -594,6 +596,8 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 	reference->incrementalMatcherKey = cacheKey;
 	reusedCount++;
 	prevalidatedCount += prevalidated;
+	if (prevalidated && context.compilationStage == ParseContext::CompilationStage::ResolvedPatternPrecedence)
+		prevalidatedPrecedenceCount++;
 	if (context.compilationStage == ParseContext::CompilationStage::ResolvedPatternPrecedence)
 		reusedPrecedenceCount++;
 	return new PatternMatch(std::move(match));

@@ -106,6 +106,7 @@ for name, samples in results.items():
         "body_resolution_reference_visits": round(statistics.median(sample[2]["body_resolution_reference_visits"] for sample in samples)),
         "matcher_cache_hits": round(statistics.median(sample[2]["matcher_cache_hits"] for sample in samples)),
         "deferred_match_keys_replayed": round(statistics.median(sample[2]["deferred_match_keys_replayed"] for sample in samples)),
+        "precedence_match_keys_replayed": round(statistics.median(sample[2]["precedence_match_keys_replayed"] for sample in samples)),
         "matcher_key_ms": round(statistics.median(sample[2]["matcher_key_ms"] for sample in samples), 1),
         "matcher_restore_ms": round(statistics.median(sample[2]["matcher_restore_ms"] for sample in samples), 1),
         "expression_parse_hits": round(statistics.median(sample[2]["expression_parse_hits"] for sample in samples)),

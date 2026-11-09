@@ -37,7 +37,7 @@ Json globalResolutionIdentity(const Section &root) {
 
 Json captureAllFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
-	const IncrementalMatcherCache &matcherCache, std::string_view initialMatcherTree, const Json *previous = nullptr,
+	IncrementalMatcherCache &matcherCache, std::string_view initialMatcherTree, const Json *previous = nullptr,
 	SourceProjectionWork *projectionWork = nullptr
 ) {
 	auto phaseStart = Clock::now();
@@ -72,6 +72,8 @@ Json captureAllFunctionProjection(
 	phaseStart = Clock::now();
 	Json projection{
 		{"initial_matcher_tree", initialMatcherTree},
+		{"final_matcher_tree", matcherTreeSignature(context)},
+		{"precedence_signature", matcherCache.precedenceSignature()},
 		{"inactive", std::move(selected)},
 		{"declarations", declarationDigest(sections)},
 		{"global_resolution", globalResolutionIdentity(*context.mainSection)},

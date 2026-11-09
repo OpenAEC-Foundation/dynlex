@@ -412,9 +412,38 @@ def check_deferred_match_key_replay(root, build):
     renamed = build(entry=main)
     assert renamed[0]["deferred_match_keys_replayed"] == 0, \
         "declaration edit replayed matches against a different pattern tree"
+    assert renamed[0]["precedence_match_keys_replayed"] == 0, \
+        "declaration edit replayed precedence matches against a different pattern tree"
     assert renamed[1:] == build(False, entry=main)[1:]
     main.write_text(main.read_text().replace(
         'to renamed independent:',
         'to first: @intrinsic("discard", 5)\nto renamed independent:'))
     changed_tree = build(entry=main, success=False)
     assert changed_tree[1] == build(False, entry=main, success=False)[1]
+
+
+def check_precedence_match_key_replay(root, build):
+    main = root / "precedence_key_replay.dl"
+    source = ('function left plus right:\n'
+              '    before: $ times $\n'
+              '    replacement: @intrinsic("add", left, right)\n'
+              'function left times right:\n'
+              '    replacement: @intrinsic("multiply", left, right)\n'
+              'to keep grouping: @intrinsic("discard", 1 plus 2 times 3)\n'
+              'to unrelated: @intrinsic("discard", 4)\n'
+              '@intrinsic("return", 0)\n')
+    main.write_text(source)
+    build(entry=main)
+    projection = projection_for(root / "cache", main)
+    assert projection["final_matcher_tree"] and projection["precedence_signature"], \
+        "precedence matching environment was not persisted"
+    main.write_text(source.replace('"discard", 4', '"discard", 5'))
+    edited = build(entry=main)
+    assert edited[0]["precedence_match_keys_replayed"] >= 1, \
+        "unchanged precedence-sensitive function computed matcher keys again"
+    assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text().replace('before: $ times $', 'after: $ times $'))
+    changed_rule = build(entry=main)
+    assert changed_rule[0]["precedence_match_keys_replayed"] == 0, \
+        "changed precedence rule replayed a stale matcher key"
+    assert changed_rule[1:] == build(False, entry=main)[1:]

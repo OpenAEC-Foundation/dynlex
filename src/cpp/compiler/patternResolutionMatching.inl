@@ -824,7 +824,7 @@ bool resolvePatterns(ParseContext &context) {
 			emitUnresolvedPatternDiagnostics();
 			return false;
 		}
-		if (context.prepareDeferredMatcherReplay)
+		if (context.prepareDeferredMatcherReplay && context.patternPrecedenceRevision == 0)
 			context.prepareDeferredMatcherReplay(deferredBodyReferences);
 		for (int iteration = 0; iteration < context.options.maxResolutionIterations && !deferredBodyReferences.empty();
 			 iteration++) {

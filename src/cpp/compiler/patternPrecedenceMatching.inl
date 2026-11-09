@@ -55,6 +55,8 @@ static bool collectPrecedenceMatchChanges(ParseContext &context, PrecedenceMatch
 			candidates.push_back(reference);
 	}
 	std::stable_sort(candidates.begin(), candidates.end(), referenceComesBefore);
+	if (context.preparePrecedenceMatcherReplay)
+		context.preparePrecedenceMatcherReplay(candidates);
 	for (PatternReference *reference : candidates) {
 		auto match = std::unique_ptr<PatternMatch>(context.match(reference));
 		if (!match) {

@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from test_incremental_dependency_graph import check_deferred_match_key_replay, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_runtime_pure_value_summary
+from test_incremental_dependency_graph import check_deferred_match_key_replay, check_precedence_match_key_replay, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_runtime_pure_value_summary
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -900,6 +900,7 @@ function left times right:
     check_independent_body_resolution_order(root, build)
     check_global_reader_after_top_level_edit(root, build)
     check_deferred_match_key_replay(root, build)
+    check_precedence_match_key_replay(root, build)
 
     for flags in [("-O2",), ("-g",), ("-ffast-math",), ("--trace-execution",)]:
         changed = build(flags=flags)

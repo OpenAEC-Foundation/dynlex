@@ -27,7 +27,9 @@ class IncrementalMatcherCache {
 	std::optional<std::string_view> resultKey(const PatternReference *reference) const;
 	size_t hits() const { return reusedCount; }
 	size_t precedenceHits() const { return reusedPrecedenceCount; }
-	size_t deferredKeyReplays() const { return prevalidatedCount; }
+	size_t deferredKeyReplays() const { return prevalidatedCount - prevalidatedPrecedenceCount; }
+	size_t precedenceKeyReplays() const { return prevalidatedPrecedenceCount; }
+	std::string precedenceSignature() { return precedenceDigest(); }
 	double keyTimeMilliseconds() const { return keyMilliseconds; }
 	double restoreTimeMilliseconds() const { return restoreMilliseconds; }
 
@@ -40,6 +42,7 @@ class IncrementalMatcherCache {
 	size_t reusedCount = 0;
 	size_t reusedPrecedenceCount = 0;
 	size_t prevalidatedCount = 0;
+	size_t prevalidatedPrecedenceCount = 0;
 	double keyMilliseconds = 0;
 	double restoreMilliseconds = 0;
 
