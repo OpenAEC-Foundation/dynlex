@@ -1,6 +1,6 @@
 bool emitPartitions(
 	ParseContext &context, const fs::path &directory, const std::string &compilerIdentity, const Json &options,
-	const std::vector<std::string> &libraries, BuildStatistics &statistics
+	const std::vector<std::string> &libraries, BuildStatistics &statistics, const Json *previous = nullptr
 ) {
 	TemporaryObjects temporary;
 	std::vector<std::string> objects;
@@ -61,6 +61,12 @@ bool emitPartitions(
 		objects.push_back(object.string());
 	});
 	statistics.partitionMilliseconds = elapsedMilliseconds(partitionStart);
+	if (success && previous && previous->at("object_keys") == statistics.objectKeys && previous->at("libraries") == libraries &&
+		linkedOutputUnchanged(context, *previous)) {
+		fs::remove_all(temporary.directory);
+		temporary.directory.clear();
+		return true;
+	}
 	auto linkStart = Clock::now();
 	bool linked = success && emitNativeExecutableWithObjects(context, objects, libraries);
 	statistics.linkMilliseconds = elapsedMilliseconds(linkStart);

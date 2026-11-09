@@ -648,7 +648,7 @@ bool compileIncrementally(
 			statistics.reusedFrontend = true;
 			std::vector<std::string> objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 			std::cerr << cachedDiagnostics;
-			if (configOnlyChange && linkedOutputUnchanged(context, *previous)) {
+			if (linkedOutputUnchanged(context, *previous)) {
 				success = true;
 			} else {
 				context.llvmContext = new llvm::LLVMContext();
@@ -808,13 +808,18 @@ bool compileIncrementally(
 				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
 				context.requiredLibraries.insert(libraries.begin(), libraries.end());
 				std::vector<std::string> objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
-				std::optional<bool> cachedLink = linkCachedObjects(context, directory, objectKeys, libraries, statistics);
-				if (cachedLink) {
-					success = *cachedLink;
+				if (linkedOutputUnchanged(context, *previous)) {
+					success = true;
 					statistics.objectKeys = objectKeys;
 				} else {
-					restoreCachedModule(context, *previous, programEntry);
-					success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
+					std::optional<bool> cachedLink = linkCachedObjects(context, directory, objectKeys, libraries, statistics);
+					if (cachedLink) {
+						success = *cachedLink;
+						statistics.objectKeys = objectKeys;
+					} else {
+						restoreCachedModule(context, *previous, programEntry);
+						success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
+					}
 				}
 				if (success) {
 					Json result = *previous;
@@ -888,17 +893,24 @@ bool compileIncrementally(
 					bool reusedGeneratedCode = false;
 					if (previous && previous->at("ir") == result.at("ir")) {
 						std::vector<std::string> priorObjects = previous->at("object_keys").get<std::vector<std::string>>();
-						std::optional<bool> cachedLink =
-							linkCachedObjects(compiled, directory, priorObjects, libraries, statistics);
-						if (cachedLink) {
-							if (!*cachedLink)
-								return false;
+						if (previous->at("libraries") == libraries && linkedOutputUnchanged(compiled, *previous)) {
 							statistics.objectKeys = std::move(priorObjects);
 							reusedGeneratedCode = true;
+						} else {
+							std::optional<bool> cachedLink =
+								linkCachedObjects(compiled, directory, priorObjects, libraries, statistics);
+							if (cachedLink) {
+								if (!*cachedLink)
+									return false;
+								statistics.objectKeys = std::move(priorObjects);
+								reusedGeneratedCode = true;
+							}
 						}
 					}
-					if (!reusedGeneratedCode &&
-						!emitPartitions(compiled, directory, compilerIdentity, options, libraries, statistics))
+					if (!reusedGeneratedCode && !emitPartitions(
+													compiled, directory, compilerIdentity, options, libraries, statistics,
+													previous ? &*previous : nullptr
+												))
 						return false;
 					result["object_keys"] = statistics.objectKeys;
 					result["linked_output"] = linkedOutputIdentity(compiled);

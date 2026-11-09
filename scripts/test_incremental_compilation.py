@@ -27,7 +27,8 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     main.write_text(source)
 
     def build(incremental=True, flags=(), success=True, entry=main, target=output):
-        arguments = [str(compiler), str(entry), *flags, "-o", str(target)]
+        build_target = target if incremental else target.with_name(target.name + ".clean")
+        arguments = [str(compiler), str(entry), *flags, "-o", str(build_target)]
         if incremental:
             arguments += ["--incremental", str(cache), "--incremental-stats"]
         result = subprocess.run(arguments, cwd=root, capture_output=True, text=True, timeout=120)
@@ -39,7 +40,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         diagnostics = "".join(line for line in lines if not line.startswith("incremental: "))
         runtime = None
         if success:
-            runtime = subprocess.run([str(target)], cwd=root, capture_output=True, timeout=10)
+            runtime = subprocess.run([str(build_target)], cwd=root, capture_output=True, timeout=10)
             if runtime.returncode:
                 raise AssertionError(f"execution failed: {runtime.stderr!r}")
         return stats, diagnostics, runtime.stdout if runtime else None
@@ -57,7 +58,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
             generated = build(entry=entry)
             assert generated[1:] == reference[1:], f"partitioned code changed behavior: {fixture}"
             reused = build(entry=entry)
-            assert reused[0]["frontend_reused"] and reused[0]["linked_cached_objects"]
+            assert reused[0]["frontend_reused"] and reused[0]["link_ms"] == 0
             assert reused[0]["objects_built"] == 0
             assert reused[1:] == reference[1:], f"cached code changed behavior: {fixture}"
         print("Incremental native integration builds passed")
@@ -69,11 +70,12 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     clean = build(False)
     assert cold[1:] == clean[1:], "cold build differs from clean build"
     warm = build()
-    assert warm[0]["frontend_reused"] and warm[0]["linked_cached_objects"]
+    assert warm[0]["frontend_reused"] and warm[0]["link_ms"] == 0
     assert warm[0]["objects_built"] == 0
-    assert warm[0]["objects_reused"] == cold[0]["objects_built"]
+    assert warm[0]["objects_reused"] == 0, "unchanged output materialized cached objects"
     assert warm[1:] == clean[1:], "warm build differs from clean build"
     next((cache / "native-v1").glob("object-*.entry")).unlink()
+    output.unlink()
     recovered = build()
     assert recovered[0]["frontend_reused"] and not recovered[0]["linked_cached_objects"]
     assert recovered[0]["objects_built"] == 1, "evicted object was not rebuilt from cached IR"
@@ -108,7 +110,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     main.write_text("# A new source comment must not invalidate executable code.\n" + source)
     commented = build()
     assert commented[0]["frontend_reused"], "comment-only edit rebuilt the frontend"
-    assert commented[0]["linked_cached_objects"], "comment-only edit reparsed LLVM IR"
+    assert commented[0]["link_ms"] == 0, "comment-only edit relinked an unchanged executable"
     assert commented[1:] == build(False)[1:], "comment-only reuse differs from clean build"
     main.write_text(source)
     assert build()[0]["frontend_reused"], "removing a source comment rebuilt the frontend"
@@ -155,7 +157,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     assert "Warning:" in warning_cold[1], "diagnostic dependency test produced no warning"
     warning_helper.write_text("# Comment in a used file with no diagnostic ranges.\n" + helper_source)
     warning_comment = build(entry=warning_main)
-    assert warning_comment[0]["frontend_reused"] and warning_comment[0]["linked_cached_objects"]
+    assert warning_comment[0]["frontend_reused"] and warning_comment[0]["link_ms"] == 0
     assert warning_comment[1:] == warning_cold[1:], "unrelated comment changed cached diagnostics"
     warning_main.write_text("# Comment before the warning.\n" + warning_source)
     moved_warning = build(entry=warning_main)
@@ -266,9 +268,18 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     unused_edit = build()
     assert not unused_edit[0]["frontend_reused"], "unused body edit skipped source validation"
     assert unused_edit[0]["type_inference_reused"], "unused body edit repeated whole-program type inference"
-    assert unused_edit[0]["linked_cached_objects"], "identical generated code did not reuse cached objects directly"
+    assert unused_edit[0]["link_ms"] == 0, "unused body edit relinked identical generated code"
     assert unused_edit[0]["objects_built"] == 0
     assert unused_edit[1:] == build(False)[1:], "unused body edit differs from clean build"
+    active_noop = root / "active_noop.dl"
+    active_noop.write_text('to no effect: @intrinsic("discard", 1)\nno effect\n')
+    build(entry=active_noop)
+    active_noop.write_text('to no effect: @intrinsic("discard", 2)\nno effect\n')
+    active_noop_edit = build(entry=active_noop)
+    assert not active_noop_edit[0]["frontend_reused"]
+    assert active_noop_edit[0]["objects_built"] == 0
+    assert active_noop_edit[0]["link_ms"] == 0, "equivalent active code edit relinked the executable"
+    assert active_noop_edit[1:] == build(False, entry=active_noop)[1:]
     main.write_text(unused_source.replace('"discard", 1)', '"discard", 2)\n    @intrinsic("discard", 3)'))
     inserted_unused = build()
     assert inserted_unused[0]["type_inference_reused"], "unused body insertion repeated type inference"
@@ -954,6 +965,7 @@ function left times right:
     for entry in entries:
         data = entry.read_bytes()
         entry.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
+    output.unlink()
     corrupted = build(success=False)
     assert "corrupt cache entry" in corrupted[1], "cache corruption was hidden"
     assert corrupted[0] is None or corrupted[0]["objects_built"] == 0

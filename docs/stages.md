@@ -869,18 +869,21 @@ into deterministic, independently linkable partitions. Local symbols receive a s
 program namespace before LLVM externalizes them. Each partition's complete IR and target
 configuration identify its object cache entry; code changes, changed declarations,
 inlined callees, globals and debug metadata are reflected in that identity. Unchanged
-objects are reused. A message-only configuration edit also skips linking when the
-existing executable matches the prior output. Other warm builds link again, including
-current runtime libraries. This is native partition reuse, matcher query reuse, the unused-body
+objects are reused. If the ordered object keys and required libraries are unchanged,
+and the existing executable still matches the recorded output digest, an edited build
+skips linking. An unchanged, comment-only, or message-only configuration build also
+skips linking while that output identity matches. This is native partition reuse, matcher query reuse, the unused-body
 fast path, function IR reuse, and inference-summary reuse. The last two paths skip
 inference and code generation for eligible unchanged functions during active edits.
 The program cache records its ordered object keys. An unchanged or
-comment-only build links those cached objects directly without parsing or splitting
-the LLVM IR. If an object was evicted, the saved IR regenerates the missing partition
-before linking. The linker still runs on ordinary warm builds so changes to native
-libraries are observed.
+comment-only build with a missing or changed output links those cached objects directly
+without parsing or splitting the LLVM IR. If an object was evicted, the saved IR
+regenerates the missing partition before linking. The cache tracks DynLex source,
+compiler, and output identities; changes made solely to native linker inputs are
+outside its invalidation model.
 After an executable edit, a successful frontend and code generation pass whose
-LLVM IR is identical to the prior result also links the cached objects directly.
+LLVM IR is identical to the prior result also reuses the cached object keys, and links
+only if the required libraries or output identity differ.
 This still validates the edited source and updates diagnostics and matcher data.
 
 Cache entries carry BLAKE3 integrity checks and are published with atomic rename.
