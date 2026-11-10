@@ -183,11 +183,14 @@ Reuse native build results across invocations:
 ./build/dynlex program.dl --incremental .cache/dynlex --incremental-stats -o program.out
 ```
 
-Unchanged source/configuration and compiler options reuse the complete analyzed LLVM
-IR. After edits, analysis runs again while unchanged native code partitions reuse
-cached objects. Every build links the executable against the current libraries.
-This mode supports native executable output; it does not yet reuse individual
-function inference results after an edit or change the LSP compilation pipeline.
+Unchanged source/configuration and compiler options reuse the complete compilation.
+Comment edits can reuse analyzed code, and diagnostic-message edits in `config.dl` update
+warnings and errors without recompiling. After code edits, unaffected parser and
+matcher results can be restored. At `-O0`, without debug information or execution
+tracing, eligible functions also reuse inference summaries and LLVM bodies. Native
+partitions reuse cached objects, and an unchanged executable skips linking.
+This mode supports native executable output. Some stages still reconstruct shared
+state after code edits; the LSP retains its existing compilation pipeline.
 The cache checks file contents (including imports and syntax configuration), compiler
 identity and target options. Corruption is reported as an error. Disk usage is limited
 to 512 MiB; deleting the cache is safe and makes the next build cold. Optional statistics

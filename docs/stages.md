@@ -824,7 +824,7 @@ source locations without rebuilding the frontend. An edit confined to messages i
 existing `config.dl` rerenders those diagnostics without recompiling.
 The program entry is a small manifest of observations, diagnostics, object keys,
 and content-addressed keys for the saved LLVM bitcode, function projection, dependency
-graph, and inference summaries. Unchanged and comment-only builds inspect the
+graph, inference summaries, and native partition dependencies. Unchanged and comment-only builds inspect the
 manifest without parsing these larger payloads; they load LLVM bitcode only if an object
 must be rebuilt. Executable source edits first load the function projection.
 They load the dependency graph, inference summaries, and LLVM bitcode only if type
@@ -995,6 +995,9 @@ the declaration on the same physical line.
 It refreshes body and resolved-match fingerprints for edited inactive functions,
 then reuses the prior inferred result and linked objects. Active function edits
 traverse type inference again; eligible unchanged instantiations reuse cached summaries.
+Blank and comment-only logical lines do not contribute to function-body fingerprints.
+When inference is reused, the saved constraint-probe schedule and class instantiations
+remain attached to the next snapshot even if its frontend projection was rebuilt.
 A compile-time-folded function may have no emitted LLVM body. When its caller's
 LLVM body is reused, the snapshot retains the folded callee as active through
 the saved section-dependency graph, even if that callee was not instantiated
@@ -1026,12 +1029,16 @@ reachable callers dirty; a preinferred section with an unchanged interface stops
 that propagation. Missing graph entries use the current expression walk. Inference
 variants restored from cache carry their prior call dependencies forward, while
 newly inferred variants capture current calls. Imported LLVM functions also retain
-their prior variant dependencies when their bodies were not re-inferred. Functions
-without a serializable variant key remain unknown to graph-based invalidation.
+their prior variant dependencies when their bodies were not re-inferred.
 The graph speeds preinference and codegen
 eligibility checks; section parsing and resolution still rebuild their state.
 The graph payload stores section paths once and indexes forward, reverse, and
-per-instantiation edges by path number. Loading it restores the same graph used
+per-instantiation edges by path number. Variants whose compile-time arguments
+cannot form an inference-summary key store the union of their selected edges
+under the reserved `*` variant key. Importing their IR retains those edges, so
+successive edits do not invalidate unrelated callers. A reused inference or IR
+variant without its saved edges is an internal inconsistency.
+Loading it restores the same graph used
 by the dependency checks while avoiding repeated long path strings in the cache.
 Section cache identities use source URI, normalized header, section type, and a
 same-identity sibling ordinal. Inserting a different definition before an existing
@@ -1115,7 +1122,20 @@ inferred results rather than guessing from edited source text.
 
 Native emission divides the finalized IR
 into deterministic, independently linkable partitions. Local symbols receive a stable
-program namespace before LLVM externalizes them. Each partition's complete IR and target
+program namespace and hidden external linkage. Aliases, resolvers, COMDAT groups, and
+block-address users remain together. The native dependency snapshot records each
+partition's definitions and referenced declaration interfaces, including attributes,
+metadata and named types. Reused function IR retains its symbol dependencies. Global
+initializers and module settings are fingerprinted separately. An unchanged partition
+reuses its object before cloning or printing its IR; only affected or evicted units
+construct a partition module. `native_partition_modules_built`,
+`native_partition_modules_skipped`, `native_function_dependencies_reused`, and
+`native_dependency_ms` expose this work. The native snapshot is a separate cache payload
+loaded only when native partition processing is required.
+Interned string literals use content-derived names and hidden ODR linkage, with
+COMDAT selection on supported targets, so importing cached bodies preserves the
+same literal objects instead of introducing renamed duplicates.
+Each affected partition's complete IR and target
 configuration identify its object cache entry; code changes, changed declarations,
 inlined callees, globals and debug metadata are reflected in that identity. Unchanged
 objects are reused. If the ordered object keys and required libraries are unchanged,

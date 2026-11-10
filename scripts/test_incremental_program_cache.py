@@ -14,7 +14,6 @@ def decode_graph(encoded):
         "instantiations": {path: {key: [paths[index] for index in edges]
                                   for key, edges in variants.items()}
                            for path, variants in zip(paths, encoded["instantiations"])},
-        "unknown": [paths[index] for index in encoded["unknown"]],
     }
 
 
@@ -50,7 +49,7 @@ def check_program_payloads(root, build):
                          if str(main) in json.loads(path.read_bytes().split(b"\n", 2)[2])["files"])
     manifest = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
     assert set(manifest["payload_keys"]) == {
-        "all_function_projection", "section_dependency_graph", "inference_summaries", "ir"
+        "all_function_projection", "section_dependency_graph", "inference_summaries", "ir", "native_units"
     }
     assert all(field not in manifest for field in manifest["payload_keys"])
     payloads = [directory / f"payload-{key}.entry" for key in manifest["payload_keys"].values()]
@@ -64,7 +63,7 @@ def check_program_payloads(root, build):
     assert commented[1:] == build(False, entry=main)[1:]
     main.write_text("# comment\n" + source.replace('"first"', '"second"'))
     edited = build(entry=main)
-    assert edited[0]["cache_payloads_loaded"] == 4
+    assert edited[0]["cache_payloads_loaded"] == 5
     assert edited[1:] == build(False, entry=main)[1:]
     assert read_program(root / "cache", main)["ir"].startswith(b"BC\xc0\xde")
     updated = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])

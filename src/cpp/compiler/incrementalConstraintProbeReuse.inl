@@ -44,8 +44,6 @@ std::vector<bool> reusableConstraintProbes(
 	const Json &schedule = prior.at("constraint_probe_schedule");
 	const Json &forward = graph.at("forward");
 	const Json &reverse = graph.at("reverse");
-	if (!graph.at("unknown").empty())
-		return {};
 	for (const char *field : {"function_declarations", "inactive"}) {
 		for (const auto &[path, value] : prior.at(field).items())
 			if (!current.at(field).contains(path) || current.at(field).at(path) != value)

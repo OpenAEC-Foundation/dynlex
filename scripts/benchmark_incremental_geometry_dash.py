@@ -20,6 +20,7 @@ runs = int(sys.argv[1]) if len(sys.argv) > 1 else 1
 cases = {
     "comment_in_physics": (game / "physics.dl", "the dash floor means: 610.0", "the dash floor means: 610.0 # benchmark comment"),
     "physics_constant": (game / "physics.dl", "the dash floor means: 610.0", "the dash floor means: 611.0"),
+    "rotation_step": (game / "physics.dl", "add 3.4 to body's rotation", "add 3.5 to body's rotation"),
     "unrelated_pattern": (
         game / "physics.dl",
         "the dash floor means: 610.0\n",
@@ -103,7 +104,10 @@ for name, samples in results.items():
                          "projection_inactive_ms", "projection_ambient_ms",
                          "source_projection_mask_ms", "source_projection_files_ms",
                          "preinference_ms", "inference_ms", "ir_generation_ms", "snapshot_ms",
-                         "partition_ms", "link_ms",
+                         "partition_ms", "link_ms", "native_dependency_ms",
+                         "native_partition_modules_built", "native_partition_modules_skipped",
+                         "native_function_dependencies_reused",
+                         "native_function_fingerprints_computed",
                          "dependency_graph_ms", "codegen_and_link_ms",
                          "cache_payload_load_ms", "cache_write_ms")},
         "frontend_reused": all(sample[2]["frontend_reused"] for sample in samples),

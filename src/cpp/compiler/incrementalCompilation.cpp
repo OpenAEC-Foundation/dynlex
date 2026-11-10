@@ -16,6 +16,11 @@
 #include "syntaxConfig.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/GlobalAlias.h"
+#include "llvm/IR/GlobalIFunc.h"
+#include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
@@ -28,7 +33,7 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
 #include "llvm/Transforms/IPO/StripDeadPrototypes.h"
-#include "llvm/Transforms/Utils/SplitModule.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -361,7 +366,12 @@ std::string renderModule(const llvm::Module &module) {
 
 #include "incrementalCacheTrim.inl"
 
+// clang-format off: the native fragments share declarations in this order.
 #include "incrementalNativeObjects.inl"
+#include "incrementalNativeLayout.inl"
+#include "incrementalNativeSymbols.inl"
+#include "incrementalNativeDependencies.inl"
+// clang-format on
 
 #include "incrementalCompilationPartitions.inl"
 #include "incrementalInferenceTypes.inl"
@@ -463,7 +473,9 @@ bool compileIncrementally(
 					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
 					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 					restoreCachedModule(context, *previous, programEntry);
-					success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
+					success = emitPartitions(
+						context, directory, compilerIdentity, options, libraries, statistics, &*previous, nullptr, true
+					);
 					if (success)
 						(*previous)["object_keys"] = statistics.objectKeys;
 				}
@@ -743,9 +755,16 @@ bool compileIncrementally(
 			if (compiled && !reuseTypeInference)
 				compiled = finishTypeInference(context);
 			statistics.inferenceMilliseconds = elapsedMilliseconds(stageStart);
-			if (compiled && !reuseTypeInference) {
-				resolvedFunctionProjection["constraint_probe_schedule"] = captureConstraintProbeSchedule(context, sectionPaths);
-				resolvedFunctionProjection["class_instantiations"] = captureClassInstantiations(sectionPaths);
+			if (compiled) {
+				if (reuseTypeInference) {
+					const Json &inferred = previous->at("all_function_projection");
+					for (const char *field : {"constraint_probe_schedule", "class_instantiations"})
+						resolvedFunctionProjection[field] = inferred.at(field);
+				} else {
+					resolvedFunctionProjection["constraint_probe_schedule"] =
+						captureConstraintProbeSchedule(context, sectionPaths);
+					resolvedFunctionProjection["class_instantiations"] = captureClassInstantiations(sectionPaths);
+				}
 			}
 			statistics.expressionParseHits = parserCache.hits();
 			statistics.temporaryExpressionParseHits = parserCache.temporaryHitCount();
@@ -788,7 +807,9 @@ bool compileIncrementally(
 						statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
 						statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 						restoreCachedModule(context, *previous, programEntry);
-						success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
+						success = emitPartitions(
+							context, directory, compilerIdentity, options, libraries, statistics, &*previous, nullptr, true
+						);
 					}
 				}
 				if (success) {
@@ -918,10 +939,15 @@ bool compileIncrementally(
 					}
 					if (!reusedGeneratedCode && !emitPartitions(
 													compiled, directory, compilerIdentity, options, libraries, statistics,
-													previous ? &*previous : nullptr
+													previous ? &*previous : nullptr, functionReuse.get(),
+													previous && previous->at("ir") == result.at("ir")
 												))
 						return false;
 					result["object_keys"] = statistics.objectKeys;
+					if (reusedGeneratedCode)
+						result["payload_keys"]["native_units"] = previous->at("payload_keys").at("native_units");
+					else
+						result["native_units"] = std::move(statistics.nativeUnits);
 					result["linked_output"] = linkedOutputIdentity(compiled);
 					auto writeStart = Clock::now();
 					writeProgramEntry(programEntry, std::move(result), previous ? &*previous : nullptr);

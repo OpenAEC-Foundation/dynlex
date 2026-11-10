@@ -28,6 +28,11 @@ struct BuildStatistics {
 	size_t topLevelProjectionSectionsReused = 0;
 	size_t reusedObjects = 0;
 	size_t builtObjects = 0;
+	size_t nativePartitionModulesBuilt = 0;
+	size_t nativePartitionModulesSkipped = 0;
+	size_t nativeFunctionDependenciesReused = 0;
+	size_t nativeFunctionFingerprintsComputed = 0;
+	Json nativeUnits;
 	size_t dependencyGraphSectionsReused = 0;
 	size_t preinferDependencyGraphSectionsChecked = 0;
 	size_t dependencyGraphEntriesReused = 0;
@@ -70,6 +75,7 @@ struct BuildStatistics {
 	double snapshotMilliseconds = 0;
 	double cacheWriteMilliseconds = 0;
 	double partitionMilliseconds = 0;
+	double nativeDependencyMilliseconds = 0;
 	double linkMilliseconds = 0;
 	std::vector<std::string> objectKeys;
 };

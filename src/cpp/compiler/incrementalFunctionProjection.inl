@@ -4,12 +4,15 @@ Json functionBodyDigests(const ParseContext &context, const std::map<std::string
 		if ((section->type == SectionType::Function && !section->patternDefinitions.empty()) ||
 			section->type == SectionType::Retain || section->type == SectionType::Release)
 			bodies.emplace(section, "");
-	for (const CodeLine *line : context.codeLines)
+	for (const CodeLine *line : context.codeLines) {
+		if (line->rightTrimmedText.empty())
+			continue;
 		for (const Section *section = line->section; section; section = section->parent)
 			if (auto body = bodies.find(section); body != bodies.end()) {
 				body->second.append(line->rightTrimmedText);
 				body->second += '\n';
 			}
+	}
 	Json result = Json::object();
 	for (const auto &[path, section] : sections)
 		if (auto body = bodies.find(section); body != bodies.end())
