@@ -882,6 +882,12 @@ newly relevant overloads and failed lookups rematch.
 The matcher still restores the result and its dependencies; changed bodies and
 changed matching environments compute
 their keys normally.
+`body_resolution_reference_visits` counts references examined by the resolution
+loop, including restored matches. `body_resolution_match_cache_hits` counts
+restored successful and failed matcher results, while
+`body_resolution_match_computations` counts actual matcher executions. The
+remaining visits include explicit-variable handling and references waiting on
+unchanged failed-match dependencies.
 Unchanged references replay saved precedence-pass keys when their first-pass
 keys and precedence families still match. If the final indexed tree changed,
 the cache compares its wildcard and starting-literal mutations against each

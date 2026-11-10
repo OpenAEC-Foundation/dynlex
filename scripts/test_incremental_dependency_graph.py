@@ -732,7 +732,8 @@ def check_deferred_match_key_replay(root, build):
               'to independent: @intrinsic("discard", 3)\n'
               'caller\n')
     main.write_text(source)
-    build(entry=main)
+    cold = build(entry=main)
+    assert cold[0]["body_resolution_match_cache_hits"] == 0
     projection = projection_for(root / "cache", main)
     assert projection["initial_matcher_tree"] and projection["initial_matcher_roots"], \
         "the indexed pattern tree state was not persisted"
@@ -740,6 +741,10 @@ def check_deferred_match_key_replay(root, build):
     edited = build(entry=main)
     assert edited[0]["deferred_match_keys_replayed"] >= 1, \
         "unchanged body matched after definitions were indexed instead of replaying its resolved reference"
+    assert edited[0]["body_resolution_match_cache_hits"] >= 1, \
+        "unchanged body reference ran the matcher instead of restoring its result"
+    assert edited[0]["body_resolution_match_cache_hits"] + edited[0]["body_resolution_match_computations"] <= \
+        edited[0]["body_resolution_reference_visits"]
     assert edited[1:] == build(False, entry=main)[1:]
     main.write_text(main.read_text().replace('to independent:', 'to renamed independent:'))
     renamed = build(entry=main)

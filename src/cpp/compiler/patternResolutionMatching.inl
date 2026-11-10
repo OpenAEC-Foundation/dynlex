@@ -281,7 +281,7 @@ static bool resolveReferences(
 		if (shouldRetry) {
 			if (failedMatch != failedMatchDependencies.end())
 				failedMatchDependencies.erase(failedMatch);
-			match = context.match(reference, {}, &dependencies);
+			match = context.match(reference, {}, &dependencies, decrementCounts);
 		}
 		if (match) {
 			if (activeReference)

@@ -126,6 +126,8 @@ struct ParseContext {
 	double resolutionReplaySetupMilliseconds = 0;
 	double resolutionCandidateMatchMilliseconds = 0;
 	size_t bodyResolutionReferenceVisits = 0;
+	size_t bodyResolutionMatchCacheHits = 0;
+	size_t bodyResolutionMatchComputations = 0;
 	size_t variableLikeCountReferencesScanned = 0;
 	size_t patternPrecedenceGraphEdges = 0;
 	size_t pureValueSummaryHits = 0;
@@ -340,7 +342,10 @@ struct ParseContext {
 		sourceTokenAnnotations.push_back({range, kind, referencedPatternType});
 	}
 	void printDiagnostics();
-	PatternMatch *match(PatternReference *reference, MatchOptions options = {}, MatchDependencies *dependencies = nullptr);
+	PatternMatch *match(
+		PatternReference *reference, MatchOptions options = {}, MatchDependencies *dependencies = nullptr,
+		bool countBodyResolution = false
+	);
 	void registerShaderUniform(std::string uniformName, std::uint32_t binding, Range range);
 	void registerShaderInterpolantName(const std::string &interpolantName);
 	VariableReference *createVariableReference(Range range, const std::string &name);

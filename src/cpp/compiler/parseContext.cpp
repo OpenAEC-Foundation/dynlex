@@ -47,16 +47,22 @@ void ParseContext::printDiagnostics() {
 	}
 }
 
-PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions options, MatchDependencies *dependencies) {
+PatternMatch *ParseContext::match(
+	PatternReference *reference, MatchOptions options, MatchDependencies *dependencies, bool countBodyResolution
+) {
 	requireCompilerInvariant(
 		!dependencies || !options.acceptLiterals,
 		"failed match dependency tracking does not support literal-acceptance ordering"
 	);
 	if (reuseMatcherResult) {
 		if (std::optional<PatternMatch *> reused = reuseMatcherResult(reference, options, dependencies)) {
+			if (countBodyResolution)
+				bodyResolutionMatchCacheHits++;
 			return *reused;
 		}
 	}
+	if (countBodyResolution)
+		bodyResolutionMatchComputations++;
 	auto finish = [&](PatternMatch *result) {
 		if (recordMatcherResult)
 			recordMatcherResult(reference, options, result, dependencies);
