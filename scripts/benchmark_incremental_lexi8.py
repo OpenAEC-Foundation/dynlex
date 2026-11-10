@@ -24,6 +24,10 @@ cases = {
     "lives_in_breakout": ("breakout.dl", "load value 3 into register registers's lives",
                            "load value 2 into register registers's lives"),
 }
+if len(sys.argv) > 2:
+    cases = {name: case for name, case in cases.items() if name in sys.argv[2:]}
+    if len(cases) != len(set(sys.argv[2:])):
+        raise SystemExit("unknown benchmark case")
 
 
 def compile_program(root, incremental):
