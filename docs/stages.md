@@ -842,6 +842,13 @@ candidate wait until definitions are indexed. They then resolve once against the
 completed tree, avoiding failed matches and later specificity retries. A
 single-word alternative can still promote an implicit parameter from its body,
 so early indexing alone does not make its references eligible to wait.
+Implicit-parameter candidate counts use one section-tree walk. Each body
+reference contributes once to candidate words in ancestor definition sections,
+including nested definitions. `variable_like_count_references_scanned` counts
+those references.
+An ordinary nested function has no implicit closure. Validation reports a
+reference to an outer runtime local and directs the author to pass it as an
+argument; global variables remain accessible.
 For an unchanged ordinary function body, an edited build can replay the saved
 matcher key for those deferred references after checking the indexed pattern-tree
 signature, declarations of reusable functions, and source outside their bodies.

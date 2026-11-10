@@ -124,44 +124,42 @@ void expandExpression(Expression *expr, Section *section) {
 	}
 }
 
-// Collect all body references from a definition section's descendants (including through nested definitions,
-// since nested code can access parent parameters).
-static void collectBodyReferences(Section *section, std::vector<PatternReference *> &refs) {
-	for (Section *child : section->children) {
-		refs.insert(refs.end(), child->patternReferences.begin(), child->patternReferences.end());
-		collectBodyReferences(child, refs);
-	}
-}
-
 // Compute initial variableLikeCounts for each definition section.
-static void computeVariableLikeCounts(std::list<Section *> &sections) {
+static void computeVariableLikeCounts(ParseContext &context, std::list<Section *> &sections) {
+	std::unordered_set<Section *> pending(sections.begin(), sections.end());
 	for (Section *section : sections) {
-		std::vector<PatternReference *> bodyRefs;
-		collectBodyReferences(section, bodyRefs);
-
-		// Collect all VL texts from all definitions in this section
-		std::unordered_set<std::string> vlTexts;
+		section->variableLikeCounts.clear();
 		for (PatternDefinition *def : section->patternDefinitions) {
 			forEachLeafElement(def->patternElements, [&](DefinitionPatternElement &elem) {
 				if (section->canPromoteImplicitParameter(*def, elem))
-					vlTexts.insert(elem.text);
+					section->variableLikeCounts.try_emplace(elem.text, 0);
 			});
 		}
-
-		// Count body references that contain each VL text
-		for (const std::string &vlText : vlTexts) {
-			int count = 0;
-			for (PatternReference *ref : bodyRefs) {
-				for (const PatternElement &refElem : ref->patternElements) {
-					if (refElem.type == PatternElement::Type::VariableLike && refElem.text == vlText) {
-						count++;
-						break;
-					}
+	}
+	std::vector<Section *> ancestors;
+	std::function<void(Section *)> visit = [&](Section *owner) {
+		if (!ancestors.empty())
+			for (PatternReference *reference : owner->patternReferences) {
+				context.variableLikeCountReferencesScanned++;
+				std::unordered_set<std::string_view> counted;
+				for (const PatternElement &element : reference->patternElements) {
+					if (element.type != PatternElement::Type::VariableLike || !counted.insert(element.text).second)
+						continue;
+					for (Section *ancestor : ancestors)
+						if (auto found = ancestor->variableLikeCounts.find(element.text);
+							found != ancestor->variableLikeCounts.end())
+							found->second++;
 				}
 			}
-			section->variableLikeCounts[vlText] = count;
-		}
-	}
+		bool relevant = pending.contains(owner) && !owner->variableLikeCounts.empty();
+		if (relevant)
+			ancestors.push_back(owner);
+		for (Section *child : owner->children)
+			visit(child);
+		if (relevant)
+			ancestors.pop_back();
+	};
+	visit(context.mainSection);
 }
 
 // After a body reference resolves, decrement VL counts on all ancestor definition sections

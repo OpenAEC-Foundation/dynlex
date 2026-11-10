@@ -114,6 +114,7 @@ struct ParseContext {
 	double resolutionReplaySetupMilliseconds = 0;
 	double resolutionCandidateMatchMilliseconds = 0;
 	size_t bodyResolutionReferenceVisits = 0;
+	size_t variableLikeCountReferencesScanned = 0;
 	size_t patternPrecedenceGraphEdges = 0;
 	size_t pureValueSummaryHits = 0;
 	// On-demand signature probes are scoped to this compilation and never committed.

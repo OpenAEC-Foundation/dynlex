@@ -466,7 +466,7 @@ bool resolvePatterns(ParseContext &context) {
 		ref->patternElements = getPatternElements(ref->pattern.text);
 
 	// Compute initial VL counts before resolution
-	computeVariableLikeCounts(unResolvedSections);
+	computeVariableLikeCounts(context, unResolvedSections);
 	std::list<PatternReference *> deferredBodyReferences;
 	for (auto reference = bodyReferences.begin(); reference != bodyReferences.end();) {
 		if (!bodyReferenceCanWaitForDefinitions(*reference)) {
@@ -768,7 +768,7 @@ bool resolvePatterns(ParseContext &context) {
 					}
 				}
 				if (promotedCyclicParameter) {
-					computeVariableLikeCounts(unResolvedSections);
+					computeVariableLikeCounts(context, unResolvedSections);
 					continue;
 				}
 				TRACE_RESOLUTION("iter " + std::to_string(resolutionIteration) + " deadlock force-resolve");

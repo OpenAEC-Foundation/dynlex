@@ -908,6 +908,7 @@ bool compileIncrementally(
 							  {"definition_parse_hits", statistics.definitionParseHits},
 							  {"definition_parse_misses", statistics.definitionParseMisses},
 							  {"body_resolution_reference_visits", context.bodyResolutionReferenceVisits},
+							  {"variable_like_count_references_scanned", context.variableLikeCountReferencesScanned},
 							  {"resolution_setup_ms", context.resolutionSetupMilliseconds},
 							  {"resolution_definition_ms", context.resolutionDefinitionMilliseconds},
 							  {"resolution_body_ms", context.resolutionBodyMilliseconds},

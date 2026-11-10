@@ -26,6 +26,10 @@ cases = {
         "New grouping wording for {expression}: {chosen} or {alternative}.",
     ),
 }
+if len(sys.argv) > 2:
+    cases = {name: case for name, case in cases.items() if name in sys.argv[2:]}
+    if len(cases) != len(set(sys.argv[2:])):
+        raise SystemExit("unknown benchmark case")
 
 
 def compile_program(root, incremental):
@@ -81,8 +85,16 @@ for name, samples in results.items():
         "incremental_wall_ms": round(statistics.median(sample[0] for sample in samples), 1),
         "clean_wall_ms": round(statistics.median(sample[1] for sample in samples), 1),
         **{field: round(statistics.median(sample[2][field] for sample in samples), 1)
-           for field in ("frontend_ms", "resolve_ms", "projection_ms", "inference_ms",
-                         "snapshot_ms", "codegen_and_link_ms")},
+           for field in ("frontend_ms", "resolve_ms", "resolution_setup_ms",
+                         "resolution_definition_ms", "resolution_body_ms",
+                         "resolution_precedence_ms", "resolution_rematch_ms",
+                         "variable_like_count_references_scanned",
+                         "body_resolution_reference_visits", "matcher_cache_hits",
+                         "projection_ms", "projection_setup_ms", "projection_body_ms",
+                         "projection_declarations_ms", "projection_matches_ms",
+                         "projection_inactive_ms", "projection_ambient_ms",
+                         "inference_ms", "snapshot_ms",
+                         "codegen_and_link_ms")},
         "frontend_reused": all(sample[2]["frontend_reused"] for sample in samples),
         "functions_ir_reused": round(statistics.median(sample[2]["functions_ir_reused"] for sample in samples)),
         "projection_top_level_sections_reused": round(statistics.median(

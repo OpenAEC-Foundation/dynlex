@@ -455,6 +455,7 @@ def check_implicit_parameter_classification_cascade(root, build):
     main.write_text('to use thing:\n' + literal_body + caller)
     edited = build(entry=main)
     after = projection_for(root / "cache", main)
+    assert edited[0]["variable_like_count_references_scanned"] >= 2
     assert before["declarations"] != after["declarations"], \
         "implicit parameter removal kept the old declaration dependency"
     changed = [path for path in before["function_declarations"]
@@ -465,6 +466,20 @@ def check_implicit_parameter_classification_cascade(root, build):
     assert before["matches"][caller_path] != after["matches"][caller_path], \
         "caller matches ignored reclassified pattern"
     assert edited[1:] == build(False, entry=main)[1:]
+
+    nested = root / "nested_body_implicit_classification.dl"
+    nested_source = ('function use thing:\n'
+                     '    execute:\n'
+                     '        @intrinsic("discard", thing)\n')
+    nested.write_text(nested_source)
+    build(entry=nested)
+    nested_before = projection_for(root / "cache", nested)
+    nested.write_text(nested_source.replace('"discard", thing', '"discard", 1'))
+    nested_edit = build(entry=nested)
+    nested_after = projection_for(root / "cache", nested)
+    assert nested_before["declarations"] != nested_after["declarations"], \
+        "nested body reference did not affect its ancestor's implicit parameter"
+    assert nested_edit[1:] == build(False, entry=nested)[1:]
 
 
 def check_independent_body_resolution_order(root, build):
