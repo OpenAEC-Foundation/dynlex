@@ -28,7 +28,8 @@ std::set<std::string> retainedActiveFunctionPaths(const IncrementalIRReuse *reus
 }
 
 Json captureInactiveProjection(
-	const ParseContext &context, const Json &observations, const Json *priorInactive = nullptr,
+	const Json &resolvedDeclarations, const ParseContext &context, const Json &observations,
+	const Json *priorInactive = nullptr,
 	const std::set<std::string> *generatedFunctionPaths = nullptr,
 	const std::map<std::string, Section *> *knownSections = nullptr, const Json *priorSources = nullptr,
 	SourceProjectionWork *projectionWork = nullptr, const Json *requiredSources = nullptr,
@@ -57,5 +58,5 @@ Json captureInactiveProjection(
 	Json sources = sourceProjection(context, observations, selected, false, false, false, priorSources, projectionWork);
 	if (requiredSources && !sourceProjectionsEqual(sources, *requiredSources))
 		return nullptr;
-	return Json{{"inactive", inactive}, {"declarations", declarationDigest(*knownSections)}, {"sources", std::move(sources)}};
+	return Json{{"inactive", inactive}, {"declarations", resolvedDeclarations}, {"sources", std::move(sources)}};
 }

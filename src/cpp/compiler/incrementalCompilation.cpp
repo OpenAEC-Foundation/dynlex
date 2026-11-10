@@ -805,7 +805,8 @@ bool compileIncrementally(
 					std::set<std::string> retainedActivePaths =
 						retainedActiveFunctionPaths(functionReuse.get(), previous ? &*previous : nullptr);
 					result["inactive_projection"] = captureInactiveProjection(
-						compiled, recording->observations, nullptr, &generatedFunctionPaths, &sections, priorInactiveSources,
+						result.at("all_function_projection").at("declarations"), compiled, recording->observations, nullptr,
+						&generatedFunctionPaths, &sections, priorInactiveSources,
 						&statistics.sourceProjectionWork, nullptr, &retainedActivePaths
 					);
 					Json globalTypes = captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
