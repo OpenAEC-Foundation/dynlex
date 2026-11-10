@@ -984,6 +984,9 @@ Precedence matcher-key replay compares the current matcher tree and a compact
 signature of precedence-bearing declarations with their saved versions. When
 both agree, it carries forward the saved full precedence fingerprint. A rule
 edit recomputes the full fingerprint before any saved final matcher key is used.
+If an added literal pattern cannot occur in any precedence-bearing declaration
+or its rule text, the saved fingerprint also remains valid; wildcard changes
+still trigger the full check.
 If top-level execution changes but its global declarations keep the same names
 and locations, directly declared functions also retain their resolved-match
 fingerprints. Their inference and generated code still follow the ordinary

@@ -883,6 +883,8 @@ def check_precedence_match_key_replay(root, build):
         "unrelated pattern-tree addition recomputed precedence-sensitive matches"
     assert distant[0]["projection_declaration_sections_reused"] >= 1, \
         "unrelated pattern-tree addition rebuilt an unchanged function declaration"
+    assert distant[0]["precedence_signature_reused"] >= 1 and distant[0]["precedence_signature_ms"] == 0, \
+        "unrelated pattern-tree addition recomputed unchanged precedence matches"
     assert distant[1:] == build(False, entry=main)[1:]
     main.write_text(main.read_text().replace('before: $ times $', 'after: $ times $'))
     changed_rule = build(entry=main)

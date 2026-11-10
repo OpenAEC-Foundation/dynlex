@@ -100,6 +100,18 @@ void prepareDeferredMatchReplay(
 	}
 }
 
+bool changedTreeMayAffectPrecedenceRules(const MatcherTreeChanges &changes, const Section &root) {
+	if (!root.patternDefinitions.empty() &&
+		(!root.beforePatterns.empty() || !root.afterPatterns.empty() ||
+		 root.associativity != PatternAssociativity::Unspecified) &&
+		changes.mayAffect(root))
+		return true;
+	for (const Section *child : root.children)
+		if (changedTreeMayAffectPrecedenceRules(changes, *child))
+			return true;
+	return false;
+}
+
 void preparePrecedenceMatchReplay(
 	ParseContext &context, const Json &prior, IncrementalMatcherCache &matcherCache, const PriorMatchKeys &precedenceKeys,
 	const std::vector<PatternReference *> &candidates, double &treeMilliseconds, double &precedenceMilliseconds,
@@ -116,7 +128,8 @@ void preparePrecedenceMatchReplay(
 	started = Clock::now();
 	std::string rules = precedenceRulesSignature(*context.mainSection);
 	ruleMilliseconds += elapsedMilliseconds(started);
-	if (!treeChanges && rules == prior.at("precedence_rules").get<std::string>()) {
+	if (rules == prior.at("precedence_rules").get<std::string>() &&
+		(!treeChanges || !changedTreeMayAffectPrecedenceRules(*treeChanges, *context.mainSection))) {
 		matcherCache.reusePrecedenceSignature(prior.at("precedence_signature").get_ref<const std::string &>());
 		signaturesReused++;
 	} else {
