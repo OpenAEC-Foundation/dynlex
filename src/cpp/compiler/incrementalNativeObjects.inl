@@ -39,6 +39,7 @@ struct BuildStatistics {
 	size_t precedenceMatchKeysReplayed = 0;
 	size_t precedenceMatcherCacheHits = 0;
 	size_t expressionParseHits = 0;
+	size_t temporaryExpressionParseHits = 0;
 	size_t expressionParseMisses = 0;
 	size_t definitionParseHits = 0;
 	size_t definitionParseMisses = 0;

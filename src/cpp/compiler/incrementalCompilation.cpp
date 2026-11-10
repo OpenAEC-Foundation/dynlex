@@ -501,11 +501,13 @@ bool compileIncrementally(
 				}
 			}
 			IncrementalParsedExpressionCache parserCache(context, previousParsedExpressions);
-			context.reuseParsedExpression = [&](Section *section, Range range, SectionType patternType) {
-				return parserCache.reuse(section, range, patternType);
+			context.reuseParsedExpression = [&](Section *section, Range range, SectionType patternType,
+												bool registerReferences) {
+				return parserCache.reuse(section, range, patternType, registerReferences);
 			};
-			context.recordParsedExpression = [&](Range range, SectionType patternType, const Expression *expression) {
-				parserCache.record(range, patternType, expression);
+			context.recordParsedExpression = [&](Range range, SectionType patternType, bool registerReferences,
+												 const Expression *expression) {
+				parserCache.record(range, patternType, registerReferences, expression);
 			};
 			context.reuseParsedDefinition = [&](Range range, std::vector<DefinitionPatternElement> &elements) {
 				return parserCache.reuseDefinition(range, elements);
@@ -562,14 +564,6 @@ bool compileIncrementally(
 			auto stageStart = Clock::now();
 			bool compiled = compileBeforeTypeInference(context.options.inputPath, context);
 			statistics.frontendMilliseconds = elapsedMilliseconds(stageStart);
-			statistics.expressionParseHits = parserCache.hits();
-			statistics.expressionParseMisses = parserCache.missCount();
-			statistics.definitionParseHits = parserCache.definitionHitCount();
-			statistics.definitionParseMisses = parserCache.definitionMissCount();
-			context.reuseParsedExpression = {};
-			context.recordParsedExpression = {};
-			context.reuseParsedDefinition = {};
-			context.recordParsedDefinition = {};
 			std::map<std::string, Section *> sections;
 			if (compiled)
 				collectSections(context.mainSection, "root", sections);
@@ -687,6 +681,15 @@ bool compileIncrementally(
 			if (compiled && !reuseTypeInference)
 				compiled = finishTypeInference(context);
 			statistics.inferenceMilliseconds = elapsedMilliseconds(stageStart);
+			statistics.expressionParseHits = parserCache.hits();
+			statistics.temporaryExpressionParseHits = parserCache.temporaryHitCount();
+			statistics.expressionParseMisses = parserCache.missCount();
+			statistics.definitionParseHits = parserCache.definitionHitCount();
+			statistics.definitionParseMisses = parserCache.definitionMissCount();
+			context.reuseParsedExpression = {};
+			context.recordParsedExpression = {};
+			context.reuseParsedDefinition = {};
+			context.recordParsedDefinition = {};
 			statistics.reusedInferenceInstantiations = inferenceReuse ? inferenceReuse->reusedCount() : 0;
 			context.reuseInferredInstantiation = {};
 			context.runIncrementalPreinference = {};
@@ -908,6 +911,7 @@ bool compileIncrementally(
 							  {"precedence_match_keys_replayed", statistics.precedenceMatchKeysReplayed},
 							  {"precedence_matcher_cache_hits", statistics.precedenceMatcherCacheHits},
 							  {"expression_parse_hits", statistics.expressionParseHits},
+							  {"temporary_expression_parse_hits", statistics.temporaryExpressionParseHits},
 							  {"expression_parse_misses", statistics.expressionParseMisses},
 							  {"definition_parse_hits", statistics.definitionParseHits},
 							  {"definition_parse_misses", statistics.definitionParseMisses},

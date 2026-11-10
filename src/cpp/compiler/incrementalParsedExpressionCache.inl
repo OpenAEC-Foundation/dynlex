@@ -1,4 +1,4 @@
-constexpr std::string_view parsedExpressionCacheHeader = "DynLex parsed expressions v1\n";
+constexpr std::string_view parsedExpressionCacheHeader = "DynLex parsed expressions v2\n";
 
 void appendParseLength(std::string &output, std::uint64_t value) {
 	do {
@@ -132,8 +132,10 @@ void appendParsedExpression(std::string &output, Range root, const Expression &e
 		appendParsedExpression(output, root, *argument);
 }
 
-Expression *
-restoreParsedExpression(std::string_view input, size_t &position, ParseContext &context, Section *section, Range root) {
+Expression *restoreParsedExpression(
+	std::string_view input, size_t &position, ParseContext &context, Section *section, Range root,
+	bool registerPatternReferences
+) {
 	auto kind = static_cast<Expression::Kind>(readParseByte(input, position));
 	Range range = readParseRange(input, position, root);
 	auto *expression = new Expression();
@@ -173,9 +175,14 @@ restoreParsedExpression(std::string_view input, size_t &position, ParseContext &
 		variable->declaredTypeConstraintName = std::move(typeName);
 		if (!variable->declaredTypeConstraintName.empty())
 			variable->declaredTypeConstraintRange = readParseRange(input, position, root);
-		if (variable->declaredTypeConstraintName.empty())
-			section->registerExplicitVariableName(name, nameRange);
-		context.pendingExplicitVariableReferences.push_back(variable);
+		if (registerPatternReferences) {
+			if (variable->declaredTypeConstraintName.empty())
+				section->registerExplicitVariableName(name, nameRange);
+			context.pendingExplicitVariableReferences.push_back(variable);
+		} else if (auto definition = section->variableDefinitions.find(name);
+				   definition != section->variableDefinitions.end()) {
+			variable->definition = normalizeBindingReference(definition->second);
+		}
 		context.addSourceToken(nameRange, ParseContext::SourceTokenKind::Variable);
 		expression->variable = variable;
 		break;
@@ -207,8 +214,10 @@ restoreParsedExpression(std::string_view input, size_t &position, ParseContext &
 	if (arguments > input.size() - position)
 		throw std::runtime_error("invalid parsed expression argument count");
 	for (std::uint64_t index = 0; index < arguments; index++)
-		expression->arguments.push_back(restoreParsedExpression(input, position, context, section, root));
-	if (expression->patternReference)
+		expression->arguments.push_back(
+			restoreParsedExpression(input, position, context, section, root, registerPatternReferences)
+		);
+	if (registerPatternReferences && expression->patternReference)
 		section->addPatternReference(expression->patternReference);
 	return expression;
 }
@@ -224,10 +233,12 @@ class IncrementalParsedExpressionCache {
 			throw std::runtime_error("invalid parsed expression cache header");
 		size_t position = parsedExpressionCacheHeader.size();
 		while (position < previous.size()) {
-			if (previous.size() - position < 64)
+			if (previous.size() - position < 65)
 				throw std::runtime_error("truncated parsed expression cache key");
-			std::string_view key = previous.substr(position, 64);
-			position += 64;
+			std::string_view key = previous.substr(position, 65);
+			if (key.front() != 'R' && key.front() != 'T' && key.front() != 'D')
+				throw std::runtime_error("invalid parsed expression cache key kind");
+			position += 65;
 			std::uint64_t length = readParseLength(previous, position);
 			if (length > previous.size() - position)
 				throw std::runtime_error("truncated parsed expression cache value");
@@ -238,8 +249,10 @@ class IncrementalParsedExpressionCache {
 		}
 	}
 
-	Expression *reuse(Section *section, Range range, SectionType patternType) {
-		std::string key = expressionKey(range, patternType);
+	Expression *reuse(Section *section, Range range, SectionType patternType, bool registerPatternReferences) {
+		std::string key = expressionKey(range, patternType, registerPatternReferences);
+		if (!registerPatternReferences)
+			hasCurrentTemporaryEntries = true;
 		std::string_view payload;
 		if (auto found = current.find(key); found != current.end()) {
 			payload = std::visit([](const auto &value) -> std::string_view {
@@ -249,21 +262,25 @@ class IncrementalParsedExpressionCache {
 			payload = found->second;
 			current.emplace(key, payload);
 			priorHits++;
+			if (!registerPatternReferences)
+				temporaryHits++;
 		} else {
 			misses++;
 			return nullptr;
 		}
 		size_t position = 0;
-		Expression *expression = restoreParsedExpression(payload, position, context, section, range);
+		Expression *expression = restoreParsedExpression(payload, position, context, section, range, registerPatternReferences);
 		if (position != payload.size())
 			throw std::runtime_error("trailing parsed expression cache data");
 		return expression;
 	}
 
-	void record(Range range, SectionType patternType, const Expression *expression) {
+	void record(Range range, SectionType patternType, bool registerPatternReferences, const Expression *expression) {
+		if (!registerPatternReferences)
+			hasCurrentTemporaryEntries = true;
 		std::string payload;
 		appendParsedExpression(payload, range, *expression);
-		current.insert_or_assign(expressionKey(range, patternType), std::move(payload));
+		current.insert_or_assign(expressionKey(range, patternType, registerPatternReferences), std::move(payload));
 	}
 
 	bool reuseDefinition(Range range, std::vector<DefinitionPatternElement> &elements) {
@@ -302,36 +319,52 @@ class IncrementalParsedExpressionCache {
 
 	std::string snapshot() const {
 		std::string output(parsedExpressionCacheHeader);
+		auto append = [&](std::string_view key, std::string_view payload) {
+			output.append(key);
+			appendParseLength(output, payload.size());
+			output.append(payload);
+		};
 		for (const auto &[key, value] : current) {
-			output += key;
 			std::string_view payload = std::visit([](const auto &entry) -> std::string_view {
 				return entry;
 			}, value);
-			appendParseLength(output, payload.size());
-			output.append(payload);
+			append(key, payload);
+		}
+		if (!hasCurrentTemporaryEntries) {
+			std::vector<std::string_view> retained;
+			for (const auto &[key, _] : prior)
+				if (key.front() == 'T')
+					retained.push_back(key);
+			std::ranges::sort(retained);
+			for (std::string_view key : retained)
+				append(key, prior.at(key));
 		}
 		return output;
 	}
 
 	size_t hits() const { return priorHits; }
+	size_t temporaryHitCount() const { return temporaryHits; }
 	size_t missCount() const { return misses; }
 	size_t definitionHitCount() const { return definitionHits; }
 	size_t definitionMissCount() const { return definitionMisses; }
 
   private:
-	static std::string expressionKey(Range range, SectionType patternType) {
+	static std::string expressionKey(Range range, SectionType patternType, bool registerPatternReferences) {
 		std::string source;
-		source.reserve(range.subString.size() + 2);
+		source.reserve(range.subString.size() + 3);
+		source.push_back(registerPatternReferences ? 'R' : 'T');
 		source.push_back(static_cast<char>(patternType));
 		source.append(range.subString);
-		return digest(source);
+		return std::string(1, registerPatternReferences ? 'R' : 'T') + digest(source);
 	}
-	static std::string definitionKey(Range range) { return digest("definition:" + std::string(range.subString)); }
+	static std::string definitionKey(Range range) { return "D" + digest("definition:" + std::string(range.subString)); }
 
 	ParseContext &context;
 	std::unordered_map<std::string_view, std::string_view> prior;
 	std::map<std::string, std::variant<std::string, std::string_view>> current;
 	size_t priorHits = 0;
+	size_t temporaryHits = 0;
+	bool hasCurrentTemporaryEntries = false;
 	size_t misses = 0;
 	size_t definitionHits = 0;
 	size_t definitionMisses = 0;

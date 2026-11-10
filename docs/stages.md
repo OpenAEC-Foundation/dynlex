@@ -808,12 +808,14 @@ build ID), effective compiler options and host CPU features identify the computa
 
 After an executable source edit, the frontend reconstructs sections and pattern trees.
 The native cache restores unresolved expression trees for unchanged expression text
-before section analysis and parsed declaration elements before pattern resolution.
-It rebases every range onto the current logical line and
-registers the current section's pattern references, explicit captures and source
-tokens; resolution still uses the current pattern trees. Expressions that emitted
-parse diagnostics are parsed again. `--incremental-stats` counts expression and
-definition parse cache hits from the preceding compiler invocation and misses.
+before section analysis and for temporary type-constraint expressions during inference.
+It also restores parsed declaration elements before pattern resolution. Every range
+is rebased onto the current logical line. Ordinary expressions register their current
+section's pattern references and explicit captures; temporary expressions keep their
+references unregistered and resolve against the current tree when evaluated. Both
+restore source tokens. Expressions that emitted parse diagnostics are parsed again.
+`--incremental-stats` counts expression and definition parse hits and misses from
+the preceding compiler invocation, including temporary expression hits separately.
 It reuses pointer-free matcher results from the previous build in both the initial
 resolution and precedence matching passes for unchanged references when the pattern-tree mutation history, the reference's
 source line and position mapping, relative lexical declaration visibility, and

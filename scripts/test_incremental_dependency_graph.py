@@ -25,6 +25,29 @@ def assert_reverse_edges(graph):
     assert actual == expected, "saved reverse edges disagree with saved forward edges"
 
 
+def check_temporary_expression_parse_reuse(root, build):
+    main = root / "temporary_expression_parse.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'to use {integer:value}: @intrinsic("discard", value)\n'
+              'to idle: @intrinsic("discard", 1)\n'
+              'use 1\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('use 1\n', 'use 2\n'))
+    edited = build(entry=main)
+    assert edited[0]["temporary_expression_parse_hits"] >= 1, \
+        "unchanged temporary type expression was parsed again"
+    assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text().replace('"discard", 1)', '"discard", 2)'))
+    inactive = build(entry=main)
+    assert inactive[0]["type_inference_reused"], "unused function edit re-ran inference"
+    main.write_text(main.read_text().replace('use 2\n', 'use 3\n'))
+    resumed = build(entry=main)
+    assert resumed[0]["temporary_expression_parse_hits"] >= 1, \
+        "skipped inference discarded unchanged temporary parse entries"
+    assert resumed[1:] == build(False, entry=main)[1:]
+
+
 def check_cross_file_typed_overload(root, build):
     caller = root / "typed_caller.dl"
     overloads = root / "typed_overloads.dl"

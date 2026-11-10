@@ -216,9 +216,10 @@ bool Section::finalize(ParseContext & /*context*/) { return true; }
 
 Expression *
 Section::detectPatterns(ParseContext &context, Range range, SectionType patternType, bool registerPatternReferences) {
-	bool cacheable = registerPatternReferences && context.compilationStage == ParseContext::CompilationStage::ImportedFiles;
+	bool cacheable = registerPatternReferences ? context.compilationStage == ParseContext::CompilationStage::ImportedFiles
+											   : context.compilationStage == ParseContext::CompilationStage::Validated;
 	if (cacheable && context.reuseParsedExpression)
-		if (Expression *cached = context.reuseParsedExpression(this, range, patternType))
+		if (Expression *cached = context.reuseParsedExpression(this, range, patternType, registerPatternReferences))
 			return cached;
 	size_t diagnosticsBefore = context.diagnostics.size();
 	StringHierarchy *hierarchy = parseBracketHierarchy(context, range);
@@ -227,7 +228,7 @@ Section::detectPatterns(ParseContext &context, Range range, SectionType patternT
 	Expression *expr = detectPatternsRecursively(context, range, hierarchy, patternType, registerPatternReferences);
 	delete hierarchy;
 	if (cacheable && expr && context.diagnostics.size() == diagnosticsBefore && context.recordParsedExpression)
-		context.recordParsedExpression(range, patternType, expr);
+		context.recordParsedExpression(range, patternType, registerPatternReferences, expr);
 	return expr;
 }
 
