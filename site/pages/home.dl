@@ -38,6 +38,7 @@ website page home page at "/index.html" titled "DynLex — Make the language par
         region "Choose a challenge" using columns appearance:
             region "River crossing" using card appearance:
                 paragraph "01 / THE RIVER" using signal appearance
+                picture "River crossing landscape" from "assets/games/river/painted-river.webp" using challenge artwork appearance
                 paragraph "Wolf, sheep, and hay" using heading appearance
                 paragraph "Help a farmer cross the river. Keep the sheep safe from the wolf, and the hay safe from the sheep." using body appearance
                 link "Open the river challenge →" to "action:river" using primary link appearance

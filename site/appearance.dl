@@ -101,6 +101,11 @@ appearance primary link appearance:
     text is UI ink 24 24 27
     text is centered
 
+appearance challenge artwork appearance:
+    height is 220
+    corner radius is 8
+    image fit is cover
+
 appearance code appearance:
     background is UI ink 42 42 50
     text is UI ink 250 250 249

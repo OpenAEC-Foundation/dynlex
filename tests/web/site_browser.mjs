@@ -12,7 +12,8 @@ assert(['system', 'webgpu', 'webgl-no-adapter', 'webgl-no-api'].includes(graphic
 const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'dynlex-ui-chrome-'));
 await fs.mkdir('.cache', { recursive: true });
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json',
-  '.wasm': 'application/wasm', '.ttf': 'font/ttf' };
+  '.wasm': 'application/wasm', '.ttf': 'font/ttf', '.webp': 'image/webp',
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg' };
 const server = http.createServer(async (request, response) => {
   try {
     if (request.url === '/__tests__/workers.mjs') {
@@ -115,13 +116,18 @@ try {
       platformVersion: '6.0.0', architecture: 'x86', model: '', mobile: false, bitness: '64', wow64: false }
   });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], compilations: [], builds: [], downloads: [], programOutput: '' };
+    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [] };
     const instantiate = WebAssembly.instantiate.bind(WebAssembly);
     WebAssembly.instantiate = function(bytes, imports, ...args) {
       const env = imports?.env;
       if (env?.ui_text_mask) {
         const begin = env.ui_begin, mask = env.ui_text_mask;
         const decoder = new TextDecoder();
+        const picture = env.ui_open_picture;
+        env.ui_open_picture = (surface,view,image,done,pointer,count) => {
+          window.siteProbe.pictures.push(decoder.decode(new Uint8Array(env.__linear_memory.buffer,pointer,count)));
+          return picture(surface,view,image,done,pointer,count);
+        };
         env.ui_begin = (...args) => { window.siteProbe.visible = []; return begin(...args); };
         env.ui_text_mask = (font, pointer, count, ...args) => {
           const result = mask(font, pointer, count, ...args);
@@ -189,6 +195,7 @@ try {
   await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
   await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` });
   await waitFor('window.siteProbe?.paints > 2');
+  await waitFor('window.siteProbe.pictures.includes("assets/games/river/painted-river.webp")');
   await pause(1800);
   assert.equal(errors.length,0,JSON.stringify(errors));
   const capture = async name => {
@@ -204,6 +211,7 @@ try {
   };
   await click(335,627); await pause(1500); await capture('terrain');
   await click(335,627); await pause(1500); await capture('nano');
+  await click(800,22); await pause(700); await capture('challenges');
   await click(1115,22);
   await waitFor('location.pathname === "/wiki/index.html" && document.title === "DynLex Wiki"');
   await pause(1600); await capture('docs');
@@ -260,6 +268,7 @@ try {
   await waitFor('location.pathname === "/wiki/index.html"');
   await evaluate('history.back()'); await waitFor('location.pathname === "/ide/index.html"');
   await evaluate('history.back()'); await waitFor('location.pathname === "/wiki/index.html"');
+  await evaluate('history.back()'); await waitFor('location.pathname === "/index.html" && location.hash === "#challenges"');
   await evaluate('history.back()'); await waitFor('location.pathname === "/"'); await pause(500);
   await click(905,22);
   await waitFor('location.hash === "#language"'); await pause(1000);
