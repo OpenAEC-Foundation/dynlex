@@ -826,6 +826,12 @@ unchanged. The saved dependency graph also invalidates a probe when an edited
 body can reach another candidate that could match its expression. Later-pass
 probes and probes after the first affected item run again so a changed
 constraint can resolve earlier and cascade in order.
+Adding an ordinary function retains saved probes when prior function declarations
+and scope rules are unchanged, the source outside functions is unchanged, and the
+new pattern cannot match any saved constraint text or current pattern reference.
+Potential matches rerun the probes. Global declaration identities use positions
+within their source files, so adding lines to an earlier imported file does not
+change the identity of an unchanged global declaration.
 The compiler still commits each constraint in the current inference context.
 `constraint_probes_reused` and
 `constraint_probes_run` report the skipped and executed speculative probes.

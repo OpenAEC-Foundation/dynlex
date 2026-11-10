@@ -20,7 +20,7 @@ Json functionBodyDigests(const ParseContext &context, const std::map<std::string
 Json globalResolutionIdentity(const Section &root) {
 	auto location = [](const Range &range) {
 		requireCompilerInvariant(range.line && range.line->sourceFile, "global declaration has no source location");
-		return Json::array({range.line->sourceFile->uri, range.line->mergedLineIndex, range.start()});
+		return Json::array({range.line->sourceFile->uri, range.line->sourceFileLineIndex, range.start()});
 	};
 	Json explicitDeclarations = Json::object();
 	for (const auto &[name, range] : root.explicitVariableDeclarations)

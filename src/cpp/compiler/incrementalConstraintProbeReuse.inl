@@ -1,10 +1,10 @@
 bool stableConstraintProbePrelude(const Json &prior, const Json &current) {
 	for (const char *field :
-		 {"initial_matcher_tree", "final_matcher_tree", "precedence_signature", "precedence_rules", "declarations",
-		  "ambient_declarations", "global_resolution", "scope_rule_bodies", "inactive"})
+		 {"precedence_signature", "precedence_rules", "ambient_declarations", "global_resolution", "scope_rule_bodies"})
 		if (prior.at(field) != current.at(field))
 			return false;
-	return sourceProjectionsEqual(prior.at("sources"), current.at("sources"));
+	return sourceProjectionsEqual(prior.at("sources"), current.at("sources")) ||
+		   sourceProjectionsEqual(prior.at("ambient_sources"), current.at("ambient_sources"));
 }
 
 bool constraintDefinitionMayMatch(const Section &section, std::string_view loweredText) {
@@ -45,6 +45,22 @@ std::vector<bool> reusableConstraintProbes(
 	const Json &reverse = graph.at("reverse");
 	if (!graph.at("unknown").empty())
 		return {};
+	for (const char *field : {"function_declarations", "inactive"}) {
+		for (const auto &[path, value] : prior.at(field).items())
+			if (!current.at(field).contains(path) || current.at(field).at(path) != value)
+				return {};
+	}
+	std::vector<const Section *> addedDefinitions;
+	for (const auto &[path, _] : current.at("function_declarations").items()) {
+		if (prior.at("function_declarations").contains(path))
+			continue;
+		if (!sections.contains(path))
+			return {};
+		addedDefinitions.push_back(sections.at(path));
+	}
+	for (const auto &[path, _] : current.at("inactive").items())
+		if (!prior.at("inactive").contains(path) && !current.at("function_declarations").contains(path))
+			return {};
 	const auto items = schedule.at("items").get<std::vector<std::string>>();
 	const auto texts = schedule.at("texts").get<std::vector<std::string>>();
 	const auto passes = schedule.at("passes").get<std::vector<int>>();
@@ -62,15 +78,40 @@ std::vector<bool> reusableConstraintProbes(
 			lowered.push_back(static_cast<char>(std::tolower(character)));
 		loweredTexts.push_back(std::move(lowered));
 	}
+	for (const Section *added : addedDefinitions) {
+		auto mayMatchText = [&](std::string_view source) {
+			std::string lowered;
+			lowered.reserve(source.size());
+			for (unsigned char character : source)
+				lowered.push_back(static_cast<char>(std::tolower(character)));
+			return constraintDefinitionMayMatch(*added, lowered);
+		};
+		for (const std::string &text : loweredTexts)
+			if (constraintDefinitionMayMatch(*added, text))
+				return {};
+		for (const auto &[_, section] : sections)
+			for (const PatternReference *reference : section->patternReferences) {
+				if (mayMatchText(reference->pattern.text) || mayMatchText(reference->range().line->fullText))
+					return {};
+				if (reference->expression)
+					for (size_t index = 0; index < reference->expression->arguments.size(); index++)
+						if (std::optional<std::string> spelling = numericPatternArgumentSpelling(reference, index);
+							spelling && mayMatchText(*spelling))
+							return {};
+			}
+	}
 	std::vector<std::string> changedBodies;
 	for (const auto &[path, oldBody] : prior.at("bodies").items()) {
 		if (!current.at("bodies").contains(path))
 			return {};
-		if (oldBody != current.at("bodies").at(path))
+		if (oldBody != current.at("bodies").at(path) ||
+			(prior.at("matches").contains(path) &&
+			 (!current.at("matches").contains(path) || prior.at("matches").at(path) != current.at("matches").at(path))))
 			changedBodies.push_back(path);
 	}
-	if (prior.at("bodies").size() != current.at("bodies").size())
-		return {};
+	for (const auto &[path, _] : current.at("bodies").items())
+		if (!prior.at("bodies").contains(path) && !current.at("function_declarations").contains(path))
+			return {};
 	// Reverse reachability identifies both committed dependencies and candidate
 	// functions that an earlier speculative grouping may have rejected.
 	std::unordered_set<std::string> dirtyClosure;

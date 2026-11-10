@@ -81,6 +81,31 @@ def check_independent_constraint_probes(root, build):
     assert changed[1:] == build(False, entry=main, success=False)[1:]
 
 
+def check_unrelated_added_pattern_constraint_probes(root, build):
+    main = root / "unrelated_added_pattern_constraint_probes.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'to accept {integer:value}: @intrinsic("discard", value)\n'
+              'accept 1\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source + 'to unrelated marker: @intrinsic("discard", 2)\n')
+    edited = build(entry=main)
+    assert edited[0]["constraint_probes_reused"] >= 1, \
+        "an unrelated added pattern re-probed the existing type constraint"
+    assert edited[0]["constraint_probes_run"] == 0, \
+        "an unrelated added pattern executed an existing type-constraint probe"
+    assert edited[1:] == build(False, entry=main)[1:]
+
+    relevant = root / "relevant_added_pattern_constraint_probes.dl"
+    relevant.write_text(source)
+    build(entry=relevant)
+    relevant.write_text(source + 'to integer marker: @intrinsic("discard", 2)\n')
+    affected = build(entry=relevant)
+    assert affected[0]["constraint_probes_run"] >= 1, \
+        "a pattern containing the constraint name reused its prior probe"
+    assert affected[1:] == build(False, entry=relevant)[1:]
+
+
 def check_header_parameter_constraint_owner(root, build):
     main = root / "header_parameter_constraint_owner.dl"
     source = ('a value means: @intrinsic("type", "any")\n'
@@ -281,10 +306,10 @@ def check_resolved_declaration_snapshot_reuse(root, build):
     imported.write_text(imported.read_text() + 'to distant: @intrinsic("discard", 4)\n')
     shifted = build(entry=imported_main)
     after_import_edit = projection_for(root / "cache", imported_main)
-    assert before_import_edit["global_resolution"] != after_import_edit["global_resolution"], \
-        "import insertion did not shift the recorded global source position"
+    assert before_import_edit["global_resolution"] == after_import_edit["global_resolution"], \
+        "import insertion changed an unchanged global declaration identity"
     assert shifted[0]["projection_declaration_sections_reused"] >= 1, \
-        "a shifted root global position rebuilt an unrelated function declaration"
+        "an imported definition rebuilt an unrelated function declaration"
     assert shifted[1:] == build(False, entry=imported_main)[1:]
 
 
