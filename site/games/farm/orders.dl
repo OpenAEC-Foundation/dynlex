@@ -1,0 +1,111 @@
+import management.dl
+
+class:
+    patterns:
+        website farm order
+    members:
+        title as a C string
+        first item as an integer
+        first count as an integer
+        second item as an integer
+        second count as an integer
+
+[farm order] {C string:title} [needs item] {integer:first} [quantity] {integer:first count} [and item] {integer:second} [quantity] {integer:second count} means: @intrinsic("construct", website farm order, title, first, first count, second, second count)
+
+the website farm orders means: [
+    farm order "A neighbor's new kitchen" needs item 6 quantity 4 and item 5 quantity 2,
+    farm order "Breakfast at the mill" needs item 7 quantity 4 and item 9 quantity 2,
+    farm order "The village garden" needs item 10 quantity 2 and item 12 quantity 2
+]
+
+to get [the current website farm order in] {a pointer to website farm world:world}:
+    set orders to the website farm orders
+    return the item at ((world's orders % the length of orders) as an integer) in orders
+
+to get [website farm world] {a pointer to website farm world:world} [can deliver its order]:
+    set order to the current website farm order in world
+    return ((the item at (order's first item) in (world's stock)) >= order's first count) and ((the item at (order's second item) in (world's stock)) >= order's second count)
+
+to get [the website farm order reward in] {a pointer to website farm world:world}:
+    if (world's orders % 3) = 1:
+        return "More seeds" if world's expanded, else "A cow, the east field and seeds"
+    return "A new worker and seeds" if (the length of (world's workers)) < 6, else "More seeds"
+
+class:
+    patterns:
+        website farm spawn
+    members:
+        found as a boolean
+        point as website farm point
+
+to get [the closest website farm spawn to] {website farm point:origin} [in] {a pointer to website farm world:world} [within pen] {integer:pen}:
+    set result to a new website farm spawn
+    set best to the website farm square count
+    loop index from 0 to the website farm square count:
+        set point to website farm point (index % the website farm width) (index / the website farm width)
+        if (pen = -1) or ((the website farm pen at (point's x) (point's y)) = pen):
+            if website farm land at (point's x) (point's y) is walkable in world except actor (0 as a pointer to website farm actor):
+                set distance to the website farm distance from point to origin
+                if distance < best:
+                    set result's found to true
+                    set result's point to point
+                    set best to distance
+    return result
+
+to get [deliver the website farm order in] {a pointer to website farm world:world}:
+    if (website farm world world can deliver its order) = false:
+        return false
+    set index to world's orders % 3
+    set spawn to a new website farm spawn
+    if (index != 1) and ((the length of (world's workers)) < 6):
+        set spawn to the closest website farm spawn to (website farm point 4 13) in world within pen (-1)
+        if spawn's found = false:
+            return false
+    set order to the current website farm order in world
+    set gift to the website farm order reward in world
+    subtract (order's first count) from (the item at (order's first item) in (world's stock))
+    subtract (order's second count) from (the item at (order's second item) in (world's stock))
+    if (index = 1) and (world's expanded = false):
+        set world's expanded to true
+        set {cow spawn} to the closest website farm spawn to (world's pasture) in world within pen 0
+        require condition (cow spawn's found) reporting "A Farm cow reward needs a free square in its pen."
+        set world's cow present to true
+        set world's cow to a new website farm animal
+        set world's cow's id to "cow"
+        set world's cow's x to cow spawn's point's x
+        set world's cow's y to cow spawn's point's y
+        set world's cow's direction to 2
+    if spawn's found:
+        set names to ["Ada", "Bo", "Nell", "Otis", "Pip", "Rue"]
+        set number to the length of (world's workers) + 1
+        set id to "worker-" + (the string form of number)
+        set name to the item at (number - 1) in names
+        append (a website farm worker named name identified by id at (spawn's point's x) (spawn's point's y)) to world's workers
+    add 12 to (the item at 4 in (world's stock))
+    increment world's orders
+    append (the string form of (order's title)) to world's delivered
+    notify website farm world saying ("Delivered: " + (the string form of (order's title)) + ". Received: " + (the string form of gift) + ".")
+    return true
+
+to [advance the website farm player in] {a pointer to website farm world:world}:
+    set player to world's player
+    require condition (player's target's present) reporting "Advancing the Farm player needs an active target."
+    if player's target's animal is not empty:
+        set found to false
+        set index to 0
+        loop while index < the length of (world's chickens):
+            set animal to the item at index in (world's chickens)
+            if animal's id = player's target's animal:
+                set player's target's x to animal's x
+                set player's target's y to animal's y
+                set found to true
+            increment index
+        if (world's cow present) and (world's cow's id = player's target's animal):
+            set player's target's x to world's cow's x
+            set player's target's y to world's cow's y
+            set found to true
+        require condition found reporting "A Farm movement target refers to a missing animal."
+    set moved to move website farm actor player towards (the website farm position of (player's target)) in world adjacently (player's target's adjacent)
+    set player's status to moved's message
+    if moved's done:
+        set player's target to a new website farm movement target

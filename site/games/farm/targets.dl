@@ -1,0 +1,247 @@
+import environment.dl
+
+class:
+    patterns:
+        website farm resolved target
+    members:
+        present as a boolean
+        point as website farm point
+        actor as a pointer to website farm actor
+        animal as a pointer to website farm animal
+        tile as a pointer to website farm tile
+
+to get [website farm tile] {a pointer to website farm tile:tile} [has a standing tree]:
+    return (tile's tree's present) and (tile's tree's regrow = 0)
+
+to get [the website farm target of] {website farm reference:reference} [in] {a pointer to website farm world:world}:
+    set result to a new website farm resolved target
+    if reference's kind = 0:
+        return result
+    if (reference's kind = 1) or (reference's kind = 2):
+        set result's present to true
+        set result's point to world's barn if reference's kind = 1, else (the website farm position of (world's compost))
+        return result
+    if reference's kind = 3:
+        set actor to the website farm actor identified by (reference's id) in world
+        if actor != (0 as a pointer to website farm actor):
+            set result's present to true
+            set result's point to the website farm position of actor
+            set result's actor to actor
+            return result
+        loop index from 0 to the website farm animal count in world:
+            set animal to the website farm animal at index in world
+            if animal's id = reference's id:
+                set result's present to true
+                set result's point to the website farm position of animal
+                set result's animal to animal
+                return result
+        return result
+    if reference's kind = 4:
+        set descriptions to the website farm flags
+        set index to 0
+        loop while index < the length of (world's flags):
+            set flag to the item at index in (world's flags)
+            set description to the item at (flag's color) in descriptions
+            if (description's key = reference's id) and (flag's serial = reference's serial):
+                set result's present to true
+                set result's point to the website farm position of flag
+                return result
+            increment index
+        return result
+    require condition (5 <= reference's kind <= 8) reporting "Unknown Farm reference kind."
+    set tile to the website farm square at (reference's x) (reference's y) in world
+    set present to reference's kind = 5
+    if reference's kind = 6:
+        set present to (website farm tile tile has a standing tree) and (tile's tree's serial = reference's serial)
+    if reference's kind = 7:
+        set present to (tile's crop's present) and (tile's crop's serial = reference's serial)
+    if reference's kind = 8:
+        set index to 0
+        loop while index < the length of (tile's items):
+            set item to the item at index in (tile's items)
+            if reference's serials contains (item's serial):
+                set present to true
+            increment index
+    if present:
+        set result's present to true
+        set result's point to the website farm position of tile
+        set result's tile to tile
+    return result
+
+to get [a website farm entity reference for] {a value:id}:
+    set result to a new website farm reference
+    set result's kind to 3
+    set result's id to the string form of id
+    return result
+
+to get [website farm tile] {a pointer to website farm tile:tile} [matches destination] {C string:key} [for] {a pointer to website farm actor:actor}:
+    if key = "pond":
+        return tile's terrain = 1
+    if key = "tree":
+        return website farm tile tile has a standing tree
+    if key = "plot":
+        return (tile's plot) and (tile's crop's present = false)
+    if key = "thirsty":
+        return (tile's crop's present) and ((tile's crop's growth < 1.0) and (tile's moisture < 3.0))
+    if key = "ripe":
+        return (tile's crop's present) and (tile's crop's growth >= 1.0)
+    if key = "items":
+        return (the length of (tile's items)) > 0
+    if key = "nearbyItems":
+        return ((the length of (tile's items)) > 0) and ((the website farm distance from (the website farm position of actor) to (the website farm position of tile)) <= 1)
+    if key = "egg":
+        set index to 0
+        loop while index < the length of (tile's items):
+            if (the item at index in (tile's items))'s kind = 9:
+                return true
+            increment index
+    return false
+
+to get [a website farm tile reference for] {a pointer to website farm tile:tile} [as] {C string:key}:
+    set result to a new website farm reference
+    set result's kind to 5
+    set result's x to tile's x
+    set result's y to tile's y
+    if (key = "tree") or ((key = "frontTree") or (key = "sightedTree")):
+        set result's kind to 6
+        set result's serial to tile's tree's serial
+    else if (key = "thirsty") or ((key = "ripe") or (key = "frontCrop")):
+        set result's kind to 7
+        set result's serial to tile's crop's serial
+    else if (key = "egg") or ((key = "items") or (key = "nearbyItems")):
+        set result's kind to 8
+        set serials to an empty list of a website farm quantity
+        set index to 0
+        loop while index < the length of (tile's items):
+            set item to the item at index in (tile's items)
+            if (key != "egg") or (item's kind = 9):
+                append (item's serial) to serials
+            increment index
+        set result's serials to a sequence taking the items from serials
+        free serials
+    return result
+
+to get [the website farm candidates for] {C string:key} [seen by] {a pointer to website farm actor:actor} [in] {a pointer to website farm world:world}:
+    set result to an empty list of website farm reference
+    if (key = "barn") or (key = "compost"):
+        set reference to a new website farm reference
+        set reference's kind to 1 if key = "barn", else 2
+        append reference to result
+    else if key = "cow":
+        if world's cow present:
+            append (a website farm entity reference for "cow") to result
+    else if key = "player":
+        append (a website farm entity reference for (world's player's id)) to result
+    else if key = "worker":
+        loop index from 0 to the website farm actor count in world:
+            set other to the website farm actor at index in world
+            if other != actor:
+                append (a website farm entity reference for (other's id)) to result
+    else if (key = "chicken") or (key = "chickens"):
+        set index to 0
+        loop while index < the length of (world's chickens):
+            append (a website farm entity reference for ((the item at index in (world's chickens))'s id)) to result
+            increment index
+    else if (key = "ground") or ((key = "frontTree") or (key = "frontCrop")):
+        set point to the website farm square ahead of actor
+        if website farm land at (point's x) (point's y) is unlocked in world:
+            set tile to the website farm square at (point's x) (point's y) in world
+            if (key = "ground") or (((key = "frontTree") and (website farm tile tile has a standing tree)) or ((key = "frontCrop") and (tile's crop's present))):
+                append (a website farm tile reference for tile as key) to result
+    else if key = "sightedTree":
+        set directions to the website farm directions as points
+        set step to the item at (actor's direction) in directions
+        set point to the website farm square ahead of actor
+        set searching to true
+        loop while searching and (website farm land at (point's x) (point's y) exists):
+            set tile to the website farm square at (point's x) (point's y) in world
+            if tile's terrain = 1:
+                set searching to false
+            else if website farm tile tile has a standing tree:
+                append (a website farm tile reference for tile as key) to result
+                set searching to false
+            else:
+                add (step's x) to point's x
+                add (step's y) to point's y
+    else:
+        set descriptions to the website farm flags
+        set index to 0
+        loop while index < the length of (world's flags):
+            set flag to the item at index in (world's flags)
+            set description to the item at (flag's color) in descriptions
+            if description's key = key:
+                set reference to a new website farm reference
+                set reference's kind to 4
+                set reference's id to key
+                set reference's serial to flag's serial
+                append reference to result
+            increment index
+        loop index from 0 to the website farm square count:
+            set tile to world's tiles + index
+            if (website farm land at (tile's x) (tile's y) is unlocked in world) and (website farm tile tile matches destination key for actor):
+                append (a website farm tile reference for tile as key) to result
+    return result
+
+to get [the website farm reference for target] {integer:target} [within area] {string:area name} [seen by] {a pointer to website farm actor:actor} [in] {a pointer to website farm world:world}:
+    if target = the website farm absent target:
+        return a new website farm reference
+    if target = the website farm subject target:
+        return actor's subject's reference if actor's subject's kind = 1, else (a new website farm reference)
+    set areas to world's areas
+    set area to a new website farm area
+    set found to area name is empty
+    set index to 0
+    loop while index < the length of areas:
+        set candidate to the item at index in areas
+        if candidate's name = area name:
+            set found to true
+            set area to candidate
+        increment index
+    if found = false:
+        return a new website farm reference
+    set descriptions to the website farm destinations
+    set description to the item at target in descriptions
+    set key to description's key
+    set candidates to the website farm candidates for key seen by actor in world
+    set result to a new website farm reference
+    set {best distance} to the website farm square count
+    set {best feed} to 0
+    set index to 0
+    loop while index < the length of candidates:
+        set reference to the item at index in candidates
+        set resolved to the website farm target of reference in world
+        require condition (resolved's present) reporting "A freshly selected Farm target must exist."
+        set point to resolved's point
+        if (area name is empty) or ((area's left <= point's x <= area's right) and (area's top <= point's y <= area's bottom)):
+            set distance to the website farm distance from (the website farm position of actor) to point
+            set feed to 0
+            if key = "chickens":
+                set feed to resolved's animal's feed
+            set better to distance < best distance
+            if (key = "chickens") and ((distance <= 1) and (best distance <= 1)):
+                set better to feed < best feed
+            if better:
+                set result to reference
+                set best distance to distance
+                set best feed to feed
+        increment index
+    free candidates
+    return result
+
+to [remember website farm target] {website farm reference:reference} [for] {a pointer to website farm actor:actor}:
+    set actor's subject to a new website farm subject
+    set actor's subject's kind to 1
+    set actor's subject's reference to reference
+
+to get [the website farm label of] {website farm instruction:instruction}:
+    if instruction's target = the website farm subject target:
+        return the string form of "it"
+    set destinations to the website farm destinations
+    set destination to the item at (instruction's target) in destinations
+    set kind to the string form of (destination's kind)
+    set result to the string form of (destination's literal)
+    if destination's literal is empty:
+        set result to "the nearest " + kind
+    if instruction's area is not empty:
+        set result to result + " in " + (instruction's area)
+    return result

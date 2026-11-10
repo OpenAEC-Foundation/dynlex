@@ -1,0 +1,44 @@
+import site/games/farm/targets.dl
+import site/games/farm/orders.dl
+
+set world to the initial website farm world
+require condition (world's next entity = 30) reporting "Initial Farm entities lost their stable serials."
+set route to the website farm route from (world's player) to (world's barn) in world adjacently true
+require condition ((route's reachable) and ((the length of (route's steps)) = 2)) reporting "The player cannot reach the barn."
+set world's expanded to true
+require condition ((website farm travel from (website farm point 14 10) to (website farm point 15 10) is allowed in world for an animal false) and ((website farm travel from (website farm point 14 3) to (website farm point 15 3) is allowed in world for an animal false) = false)) reporting "Opening the east field removed the cow pen fence."
+set world's expanded to false
+
+set worker to the item at 0 in (world's workers)
+set worker's x to 1
+set worker's y to 9
+set worker's direction to 0
+set reference to the website farm reference for target 22 within area (the string form of "") seen by worker in world
+require condition ((reference's kind = 6) and (reference's serial = 1)) reporting "Looking ahead selected the wrong tree."
+remember website farm target reference for worker
+set remembered to the website farm reference for target (-1) within area (the string form of "") seen by worker in world
+set tree to the website farm square at 1 8 in world
+set tree's tree's regrow to 1
+set worker's y to 8
+update website farm environment in world
+require condition ((tree's tree's regrow = 1) and (tree's tree's serial = 1)) reporting "A tree regrew under a worker."
+set worker's y to 9
+update website farm environment in world
+require condition ((tree's tree's regrow = 0) and (tree's tree's serial != remembered's serial)) reporting "A regrown tree reused the old target serial."
+require condition ((the website farm target of remembered in world)'s present = false) reporting "An old command followed a replacement tree."
+
+drop website farm item 5 quantity 2 at (the website farm position of (world's player)) in world
+set pile to the website farm reference for target 12 within area (the string form of "") seen by (world's player) in world
+set copy to pile
+set pile to a new website farm reference
+require condition ((copy's kind = 8) and ((the length of (copy's serials)) = 1)) reporting "Copying a pile target lost its immutable serials."
+require condition ((the website farm target of copy in world)'s present) reporting "A copied pile target no longer resolves."
+
+set area to add website farm area named (the string form of "  North 🌽  ") identified by (the string form of "north") from (website farm point 5 9) to (website farm point 8 11) in world
+require condition ((area's error is empty) and (area's area's name = "North 🌽")) reporting "A Unicode area name was not trimmed correctly."
+store (4 as a website farm quantity) into (world's stock) at 6
+store (2 as a website farm quantity) into (world's stock) at 5
+require condition (deliver the website farm order in world) reporting "A stocked Farm order could not be delivered."
+require condition (((the length of (world's workers)) = 2) and (((the item at 1 in (world's workers))'s name) = "Bo")) reporting "The first order did not unlock Bo."
+free website farm world world
+print line "Farm routes, permanent fences, stable targets, Unicode areas and order rewards keep their world state."

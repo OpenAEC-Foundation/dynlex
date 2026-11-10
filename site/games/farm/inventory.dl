@@ -1,0 +1,97 @@
+import world.dl
+
+to get [the website farm carrying capacity of] {a pointer to website farm actor:actor} [for] {integer:kind}:
+    set descriptions to the website farm items
+    set description to the item at kind in descriptions
+    set capacity to description's capacity as a website farm quantity
+    set result to (2 - the length of (actor's inventory)) * capacity
+    set index to 0
+    loop while index < the length of (actor's inventory):
+        set item to the item at index in (actor's inventory)
+        if item's kind = kind:
+            add (capacity - item's count) to result
+        increment index
+    return result
+
+to get [give website farm actor] {a pointer to website farm actor:actor} [item] {integer:kind} [quantity] {an integer:count} [with properties] {website farm item:properties}:
+    require condition (0 <= count <= 9007199254740991) reporting "A Farm transfer needs a nonnegative exact quantity."
+    set quantity to count as a website farm quantity
+    set accepted to the minimum of quantity and (the website farm carrying capacity of actor for kind)
+    set remaining to accepted
+    set descriptions to the website farm items
+    set description to the item at kind in descriptions
+    set capacity to description's capacity as a website farm quantity
+    set index to 0
+    loop while index < the length of (actor's inventory):
+        set slot to (actor's inventory's data) + index
+        if slot's kind = kind:
+            set amount to the minimum of remaining and (capacity - slot's count)
+            add amount to slot's count
+            subtract amount from remaining
+        increment index
+    loop while remaining > 0:
+        set item to properties
+        set item's kind to kind
+        set item's count to the minimum of remaining and capacity
+        if (kind = 2) and (item's water present = false):
+            set item's water present to true
+            set item's water to 0
+        append item to actor's inventory
+        subtract (item's count) from remaining
+    return accepted
+
+to get [give website farm actor] {a pointer to website farm actor:actor} [item] {integer:kind} [quantity] {an integer:count}:
+    return give website farm actor actor item kind quantity count with properties (a new website farm item)
+
+to [remove empty website farm items from] {a value:inventory}:
+    set index to (the length of inventory) - 1
+    loop while index >= 0:
+        if (the item at index in inventory)'s count = 0:
+            remove item index from inventory
+        decrement index
+
+to get [take website farm item] {integer:kind} [quantity] {an integer:count} [from] {a pointer to website farm actor:actor}:
+    require condition (0 <= count <= 9007199254740991) reporting "A Farm transfer needs a nonnegative exact quantity."
+    set quantity to count as a website farm quantity
+    set total to 0 as a website farm quantity
+    set index to 0
+    loop while index < the length of (actor's inventory):
+        set item to the item at index in (actor's inventory)
+        if item's kind = kind:
+            add (item's count) to total
+        increment index
+    if total < quantity:
+        return false
+    set remaining to quantity
+    set index to 0
+    loop while index < the length of (actor's inventory):
+        set slot to (actor's inventory's data) + index
+        if slot's kind = kind:
+            set amount to the minimum of remaining and (slot's count)
+            subtract amount from slot's count
+            subtract amount from remaining
+        increment index
+    remove empty website farm items from (actor's inventory)
+    return true
+
+to [drop website farm item] {integer:kind} [quantity] {an integer:count} [at] {website farm point:position} [with properties] {website farm item:properties} [in] {a pointer to website farm world:world}:
+    require condition (0 <= count <= 9007199254740991) reporting "A Farm pile needs a nonnegative exact quantity."
+    set quantity to count as a website farm quantity
+    if count = 0:
+        return nothing
+    set tile to the website farm square at (position's x) (position's y) in world
+    set index to 0
+    loop while index < the length of (tile's items):
+        set slot to (tile's items' data) + index
+        if (slot's kind = kind) and ((slot's water present = properties' water present) and ((slot's water present = false) or (slot's water = properties' water))):
+            add quantity to slot's count
+            return nothing
+        increment index
+    set item to properties
+    set item's kind to kind
+    set item's count to quantity
+    set item's serial to the next website farm entity in world
+    append item to tile's items
+
+to [drop website farm item] {integer:kind} [quantity] {an integer:count} [at] {website farm point:position} [in] {a pointer to website farm world:world}:
+    drop website farm item kind quantity count at position with properties (a new website farm item) in world

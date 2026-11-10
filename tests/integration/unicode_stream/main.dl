@@ -1,0 +1,26 @@
+import lib/std.dl
+import lib/unicode.dl
+import lib/check.dl
+
+set text to the string form of "Aé🌽"
+set expected to [65, 233, 127805]
+set cursor and index to 0
+loop while cursor < text's length:
+    decode the next UTF-8 code point in text at byte cursor and set decoded to it
+    require condition (decoded succeeded) reporting "A valid stream code point failed."
+    require condition ((the code point of decoded) = (the item at index in expected)) reporting "A streaming decoder skipped a scalar."
+    set cursor to the next byte offset of decoded
+    increment index
+require condition ((index = 3) and (cursor = 7)) reporting "A streaming decoder returned a wrong byte offset."
+decode the next UTF-8 code point in text at byte -1 and set outside to it
+require condition ((the status of outside) = the invalid text position status) reporting "A negative byte offset was read."
+decode the next UTF-8 code point in text at byte 7 and set end to it
+require condition ((the status of end) = the invalid text position status) reporting "A stream decoder read beyond the buffer."
+set broken to a new string buffer containing 2 bytes
+store (255 as a byte) into (broken's data) at 0
+store (65 as a byte) into (broken's data) at 1
+decode the next UTF-8 code point in broken at byte 0 and set invalid to it
+require condition ((the status of invalid) = the invalid UTF-8 status) reporting "A malformed leading byte was accepted."
+decode the next UTF-8 code point in broken at byte 1 and set resumed to it
+require condition ((resumed succeeded) and ((the code point of resumed) = 65)) reporting "A stream decoder rescanned an earlier chunk."
+print line "UTF-8 streams decode one scalar at a time, preserve offsets, and report malformed or out-of-range input."

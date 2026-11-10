@@ -1,0 +1,144 @@
+import boundaries.dl
+
+[the website farm directions as points] means: [website farm point 0 (-1), website farm point 1 0, website farm point 0 1, website farm point (-1) 0]
+
+to get [website farm land at] {integer:x} {integer:y} [exists]:
+    return (0 <= x < the website farm width) and (0 <= y < the website farm height)
+
+to get [website farm land at] {integer:x} {integer:y} [is unlocked in] {a pointer to website farm world:world}:
+    return (website farm land at x y exists) and ((x < 15) or (world's expanded))
+
+to get [the website farm distance from] {website farm point:from} [to] {website farm point:to}:
+    return (the absolute value of (from's x - to's x)) + (the absolute value of (from's y - to's y))
+
+to get [the website farm position of] {a value:entity}:
+    return website farm point (entity's x) (entity's y)
+
+to get [the website farm square ahead of] {a value:entity}:
+    set directions to the website farm directions as points
+    set step to the item at (entity's direction) in directions
+    return website farm point (entity's x + step's x) (entity's y + step's y)
+
+to get [the website farm actor count in] {a pointer to website farm world:world}:
+    return 1 + the length of (world's workers)
+
+to get [the website farm actor at] {integer:index} [in] {a pointer to website farm world:world}:
+    if index = 0:
+        return world's player
+    return the item at (index - 1) in (world's workers)
+
+to get [the website farm actor identified by] {a value:id} [in] {a pointer to website farm world:world}:
+    set index to 0
+    loop while index < the website farm actor count in world:
+        set actor to the website farm actor at index in world
+        if actor's id = id:
+            return actor
+        increment index
+    return 0 as a pointer to website farm actor
+
+to get [website farm land at] {integer:x} {integer:y} [is walkable in] {a pointer to website farm world:world} [except actor] {a pointer to website farm actor:actor} [except animal] {a value:animal}:
+    if (website farm land at x y is unlocked in world) = false:
+        return false
+    set tile to the website farm square at x y in world
+    if (tile's terrain = 1) or ((tile's tree's present) and (tile's tree's regrow = 0)):
+        return false
+    if ((x = world's barn's x) and (y = world's barn's y)) or ((x = world's compost's x) and (y = world's compost's y)):
+        return false
+    if ((world's cow present) and (world's cow's id != animal)) and ((x = world's cow's x) and (y = world's cow's y)):
+        return false
+    set index to 0
+    loop while index < the length of (world's chickens):
+        set chicken to the item at index in (world's chickens)
+        if (chicken's id != animal) and ((chicken's x = x) and (chicken's y = y)):
+            return false
+        increment index
+    set index to 0
+    loop while index < the website farm actor count in world:
+        set other to the website farm actor at index in world
+        if (other != actor) and ((other's x = x) and (other's y = y)):
+            return false
+        increment index
+    return true
+
+to get [website farm land at] {integer:x} {integer:y} [is walkable in] {a pointer to website farm world:world} [except actor] {a pointer to website farm actor:actor}:
+    return website farm land at x y is walkable in world except actor actor except animal ""
+
+to [face website farm entity] {a value:entity} [towards] {website farm point:target}:
+    set dx to target's x - entity's x
+    set dy to target's y - entity's y
+    if (dx != 0) or (dy != 0):
+        if (the absolute value of dx) > (the absolute value of dy):
+            set entity's direction to 1 if dx > 0, else 3
+        else:
+            set entity's direction to 2 if dy > 0, else 0
+
+to get [website farm position] {website farm point:position} [reaches] {website farm point:target} [in] {a pointer to website farm world:world} [adjacently] {boolean:adjacent}:
+    set distance to 1 if adjacent, else 0
+    return ((the website farm distance from position to target) <= distance) and (website farm travel from position to target is allowed in world for an animal false)
+
+class:
+    patterns:
+        website farm route
+    members:
+        reachable as a boolean
+        steps as the type of (an empty sequence of website farm point)
+
+to get [the website farm route from] {a pointer to website farm actor:actor} [to] {website farm point:target} [in] {a pointer to website farm world:world} [adjacently] {boolean:adjacent}:
+    set result to a new website farm route
+    if website farm position (the website farm position of actor) reaches target in world adjacently adjacent:
+        set result's reachable to true
+        return result
+    set queue and parents to a new integer array of 400 items
+    set seen to a new boolean array of 400 items
+    set start to (actor's y * the website farm width) + actor's x
+    store start into queue at 0
+    store true into seen at start
+    set head to 0
+    set length to 1
+    set directions to the website farm directions as points
+    loop while head < length:
+        set current to the item at head in queue
+        increment head
+        set from to website farm point (current % the website farm width) (current / the website farm width)
+        for each step in directions:
+            set next to website farm point (from's x + step's x) (from's y + step's y)
+            if website farm land at (next's x) (next's y) exists:
+                set index to (next's y * the website farm width) + next's x
+                if ((the item at index in seen) = false) and ((website farm land at (next's x) (next's y) is walkable in world except actor actor) and (website farm travel from from to next is allowed in world for an animal false)):
+                    store true into seen at index
+                    store current into parents at index
+                    if website farm position next reaches target in world adjacently adjacent:
+                        set path to an empty list of website farm point
+                        set cursor to index
+                        loop while cursor != start:
+                            append (website farm point (cursor % the website farm width) (cursor / the website farm width)) to path
+                            set cursor to the item at cursor in parents
+                        set left to 0
+                        set right to (the length of path) - 1
+                        loop while left < right:
+                            set first to the item at left in path
+                            replace item at index left in path with (the item at right in path)
+                            replace item at index right in path with first
+                            increment left
+                            decrement right
+                        set result's reachable to true
+                        set result's steps to a sequence taking the items from path
+                        free path
+                        return result
+                    store index into queue at length
+                    increment length
+    return result
+
+to get [move website farm actor] {a pointer to website farm actor:actor} [towards] {website farm point:target} [in] {a pointer to website farm world:world} [adjacently] {boolean:adjacent}:
+    set route to the website farm route from actor to target in world adjacently adjacent
+    if route's reachable = false:
+        return a website farm routine reply false saying (the string form of "Waiting for a clear path.")
+    if the length of (route's steps) > 0:
+        set first to the item at 0 in (route's steps)
+        face website farm entity actor towards first
+        set actor's x to first's x
+        set actor's y to first's y
+    set done to the length of (route's steps) <= 1
+    if done:
+        face website farm entity actor towards target
+    return a website farm routine reply done saying (the string form of ("Arrived." if done, else "Walking."))

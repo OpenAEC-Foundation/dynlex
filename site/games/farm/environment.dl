@@ -1,0 +1,130 @@
+import navigation.dl
+import inventory.dl
+
+to get [the website farm animal count in] {a pointer to website farm world:world}:
+    return the length of (world's chickens) + (1 if world's cow present, else 0)
+
+to get [the website farm animal at] {integer:index} [in] {a pointer to website farm world:world}:
+    set position to index
+    if world's cow present:
+        if position = 0:
+            return the address of (world's cow)
+        decrement position
+    return (world's chickens' data) + position
+
+to get [the website farm egg count in] {a pointer to website farm world:world}:
+    set result to 0 as a website farm quantity
+    loop index from 0 to the website farm square count:
+        set tile to world's tiles + index
+        set cursor to 0
+        loop while cursor < the length of (tile's items):
+            set item to the item at cursor in (tile's items)
+            if item's kind = 9:
+                add (item's count) to result
+            increment cursor
+    return result
+
+to [update website farm livestock in] {a pointer to website farm world:world}:
+    set directions to the website farm directions as points
+    loop index from 0 to the website farm animal count in world:
+        set animal to the website farm animal at index in world
+        if animal's held = false:
+            set cow to animal's id = "cow"
+            set capacity to (animal's produce < 6) if cow, else ((the website farm egg count in world) < 12)
+            if (animal's feed > 0) and capacity:
+                increment animal's progress
+                if animal's progress >= 20:
+                    set animal's progress to 0
+                    decrement animal's feed
+                    if cow:
+                        increment animal's produce
+                    else:
+                        drop website farm item 9 quantity 1 at (the website farm position of animal) in world
+            set period to 7 if cow, else 4
+            set ready to ((world's tick + (index * 3)) % period) = 0
+            set cursor to 0
+            loop while cursor < the website farm actor count in world:
+                set person to the website farm actor at cursor in world
+                if (the website farm distance from (the website farm position of person) to (the website farm position of animal)) <= 1:
+                    set ready to false
+                increment cursor
+            if ready:
+                set pen to the website farm pen at (animal's x) (animal's y)
+                set options to a new website farm point array of 4 items
+                set count to 0
+                for each step in directions:
+                    set point to website farm point (animal's x + step's x) (animal's y + step's y)
+                    if (website farm land at (point's x) (point's y) exists) and ((the website farm pen at (point's x) (point's y)) = pen):
+                        set gate to false
+                        if pen != -1:
+                            set pens to the website farm pens
+                            set bounds to the item at pen in pens
+                            set gate to (point's x = bounds' gate) and (point's y = bounds' bottom)
+                        if (gate = false) and ((website farm travel from (the website farm position of animal) to point is allowed in world for an animal true) and (website farm land at (point's x) (point's y) is walkable in world except actor (0 as a pointer to website farm actor) except animal (animal's id))):
+                            store point into options at count
+                            increment count
+                if count > 0:
+                    set choice to the absolute value of (the sine of ((world's tick * 12.9898) + (index * 78.233)))
+                    set selected to (the floor of (choice * count)) as an integer
+                    set point to the item at selected in options
+                    face website farm entity animal towards point
+                    set animal's x to point's x
+                    set animal's y to point's y
+
+to [update website farm environment in] {a pointer to website farm world:world}:
+    set world's raining to (world's tick % 100) >= 75
+    set queue to a new integer array of 400 items
+    set head and length to 0
+    loop index from 0 to the website farm square count:
+        set tile to world's tiles + index
+        set tile's water to tile's terrain = 1
+        if tile's water:
+            store index into queue at length
+            increment length
+    set directions to the website farm directions as points
+    loop while head < length:
+        set tile to world's tiles + (the item at head in queue)
+        increment head
+        for each step in directions:
+            set x to tile's x + step's x
+            set y to tile's y + step's y
+            if website farm land at x y exists:
+                set next to the website farm square at x y in world
+                if ((next's terrain = 2) and (next's water = false)) and ((next's height - 0.16) < 0.30):
+                    set next's water to true
+                    store ((y * the website farm width) + x) into queue at length
+                    increment length
+    loop index from 0 to the website farm square count:
+        set tile to world's tiles + index
+        if tile's terrain = 3:
+            set irrigated to false
+            for each step in directions:
+                set x to tile's x + step's x
+                set y to tile's y + step's y
+                if website farm land at x y exists:
+                    if (the website farm square at x y in world)'s water:
+                        set irrigated to true
+            set tile's moisture to 10.0 if ((world's raining) or irrigated), else (the maximum of 0.0 and (tile's moisture - 0.18))
+            if (tile's crop's present) and (tile's moisture > 0.0):
+                set factor to 2.0 if tile's fertilizer != 0, else 1.0
+                set tile's crop's growth to the minimum of 1.0 and (tile's crop's growth + (0.025 * factor))
+        if (tile's tree's present) and (tile's tree's regrow > 0):
+            decrement tile's tree's regrow
+            if tile's tree's regrow = 0:
+                set occupied to false
+                loop cursor from 0 to the website farm actor count in world:
+                    set actor to the website farm actor at cursor in world
+                    if (actor's x = tile's x) and (actor's y = tile's y):
+                        set occupied to true
+                if occupied:
+                    set tile's tree's regrow to 1
+                else:
+                    set tile's tree's hits to 3
+                    set tile's tree's serial to the next website farm entity in world
+    update website farm livestock in world
+    if world's compost's input > 0:
+        increment world's compost's age
+        if world's compost's age >= 20:
+            add (world's compost's input) to world's compost's ready
+            set world's compost's input to 0
+            set world's compost's age to 0

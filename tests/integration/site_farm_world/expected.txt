@@ -1,0 +1,1 @@
+Farm routes, permanent fences, stable targets, Unicode areas and order rewards keep their world state.

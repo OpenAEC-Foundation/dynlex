@@ -1,0 +1,158 @@
+import world_types.dl
+
+to get [the website farm item number named] {a value:key}:
+    set entries to the website farm items
+    set index to 0
+    loop while index < the length of entries:
+        if (the item at index in entries)'s key = key:
+            return index
+        increment index
+    require condition false reporting "Unknown Farm item."
+    return 0
+
+to get [the website farm flag number named] {a value:key}:
+    set entries to the website farm flags
+    set index to 0
+    loop while index < the length of entries:
+        if (the item at index in entries)'s key = key:
+            return index
+        increment index
+    require condition false reporting "Unknown Farm flag."
+    return 0
+
+to get [a website farm worker named] {a value:name} [identified by] {a value:id} [at] {integer:x} {integer:y}:
+    set result to storage for one slot initialized with (a new website farm actor)
+    set result's id to the string form of id
+    set result's name to the string form of name
+    set result's x to x
+    set result's y to y
+    set result's inventory to an empty list of website farm item
+    set plan to an empty website farm plan
+    set result's routine to a website farm routine for plan initially carrying (a new website farm reference)
+    free website farm plan the address of plan
+    set result's status to "Choose a role for me."
+    return result
+
+to [free website farm actor] {a pointer to website farm actor:actor}:
+    free actor's inventory
+    free website farm routine the address of (actor's routine)
+    destroy the value at actor
+    deallocate actor
+
+to get [an empty website farm world with] {a pointer to website farm actor:player}:
+    set result to storage for one slot initialized with (a new website farm world)
+    set result's player to player
+    set result's tiles to storage for the website farm square count slots initialized with (a new website farm tile)
+    set index to 0
+    loop while index < the website farm square count:
+        set tile to result's tiles + index
+        set tile's x to index % the website farm width
+        set tile's y to index / the website farm width
+        set tile's items to an empty list of website farm item
+        increment index
+    set result's areas to an empty list of website farm area
+    set result's coding to new website coding progress for "farm"
+    set result's delivered to an empty list of string
+    set result's workers to an empty list of a pointer to website farm actor
+    set result's flags to an empty list of website farm flag
+    set result's chickens to an empty list of website farm animal
+    set result's notices to an empty list of string
+    return result
+
+to get [the next website farm entity in] {a pointer to website farm world:world}:
+    set serial to world's next entity
+    increment world's next entity
+    return serial
+
+to get [the website farm square at] {integer:x} {integer:y} [in] {a pointer to website farm world:world}:
+    require condition ((0 <= x < the website farm width) and (0 <= y < the website farm height)) reporting "A Farm square lies outside the map."
+    return world's tiles + ((y * the website farm width) + x)
+
+to get [the initial website farm world]:
+    set result to an empty website farm world with (a website farm worker named "You" identified by "player" at 5 14)
+    set result's next entity to 1
+    set index to 0
+    loop while index < the website farm square count:
+        set tile to result's tiles + index
+        set tile's height to (0.42 + ((the sine of (tile's x * 0.7)) * 0.025)) + ((the cosine of (tile's y * 0.5)) * 0.025)
+        if ((2 <= tile's x <= 5) and (2 <= tile's y <= 5)) and (((tile's x != 2) and (tile's x != 5)) or (tile's y != 2)):
+            set tile's terrain to 1
+            set tile's height to 0.06
+            set tile's water to true
+        if (tile's x = 7) and (5 <= tile's y <= 7):
+            set tile's terrain to 2
+        increment index
+    set trees to [website farm point 1 8, website farm point 2 9, website farm point 1 11, website farm point 2 7,
+        website farm point 3 8, website farm point 2 16, website farm point 3 17, website farm point 5 17,
+        website farm point 6 16, website farm point 8 3, website farm point 9 2, website farm point 11 2,
+        website farm point 11 3, website farm point 9 4, website farm point 10 5, website farm point 17 3,
+        website farm point 18 4, website farm point 17 5, website farm point 18 15, website farm point 17 16]
+    for each point in trees:
+        set tile to the website farm square at (point's x) (point's y) in result
+        set tile's tree's present to true
+        set tile's tree's serial to the next website farm entity in result
+        set tile's tree's hits to 3
+    set starts to [8, 15]
+    for each start in starts:
+        loop y from 9 to 13:
+            loop x from start to (start + 3):
+                set tile to the website farm square at x y in result
+                set tile's plot to true
+                if (start = 8) and (y < 11):
+                    set tile's terrain to 3
+                    set tile's moisture to 6.0
+                    set tile's crop's present to true
+                    set tile's crop's serial to the next website farm entity in result
+                    set tile's crop's kind to 7 if x = 10, else 6
+                    set tile's crop's growth to 1.0 if y = 9, else 0.35
+    loop y from 6 to 18:
+        set tile to the website farm square at 6 y in result
+        set tile's terrain to 4
+    loop x from 3 to 15:
+        set tile to the website farm square at x 14 in result
+        set tile's terrain to 4
+    set result's player's status to "Click the ground to walk."
+    append (a website farm worker named "Ada" identified by "worker-1" at 4 12) to result's workers
+    set flags to [website farm point 8 11, website farm point 10 11, website farm point 6 5]
+    set index to 0
+    loop while index < the length of flags:
+        set point to the item at index in flags
+        append (@intrinsic("construct", website farm flag, index, the next website farm entity in result, point's x, point's y)) to result's flags
+        increment index
+    set result's barn to website farm point 3 13
+    set result's compost's x to 4
+    set result's compost's y to 7
+    set result's pasture to website farm point 13 3
+    loop index from 0 to 2:
+        set animal to a new website farm animal
+        set animal's id to "chicken-" + (the string form of (index + 1))
+        set animal's x to 12 + index
+        set animal's y to 7
+        set animal's direction to index * 2
+        append animal to result's chickens
+    set result's stock to [4, 4, 4, 3, 48, 0, 0, 18, 18, 0, 0, 6, 0] as (a website farm quantity array of 13 items)
+    append (the string form of "Start with Ada and two chickens. Try the Lumberjack example, then write your own roles.") to result's notices
+    return result
+
+to [free website farm world] {a pointer to website farm world:world}:
+    set index to 0
+    loop while index < the website farm square count:
+        set tile to world's tiles + index
+        free tile's items
+        destroy the value at tile
+        increment index
+    deallocate world's tiles
+    free world's areas
+    free world's coding
+    free world's delivered
+    free website farm actor world's player
+    set index to 0
+    loop while index < the length of (world's workers):
+        free website farm actor the item at index in (world's workers)
+        increment index
+    free world's workers
+    free world's flags
+    free world's chickens
+    free world's notices
+    destroy the value at world
+    deallocate world

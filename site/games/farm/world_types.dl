@@ -1,0 +1,182 @@
+import routine.dl
+import lib/sequence.dl
+import ../progress/goals.dl
+
+[a website farm quantity] means: a 64 bit integer
+[the website farm width] means: 20
+[the website farm height] means: 20
+[the website farm square count] means: 400
+[the website farm terrain names] means: ["grass", "pond", "channel", "plowed", "path"]
+
+class:
+    patterns:
+        website farm point
+    members:
+        x as an integer
+        y as an integer
+
+[website farm point] {integer:x} {integer:y} means: @intrinsic("construct", website farm point, x, y)
+
+class:
+    patterns:
+        website farm reference
+    members:
+        kind as an integer
+        id as a string
+        x as an integer
+        y as an integer
+        serial as a website farm quantity
+        serials as the type of (an empty sequence of a website farm quantity)
+
+# Reference kinds: none, barn, compost, actor, flag, ground, tree, crop, pile.
+[the website farm reference kinds] means: ["", "barn", "compost", "actor", "flag", "ground", "tree", "crop", "pile"]
+
+class:
+    patterns:
+        website farm subject
+    members:
+        kind as an integer
+        reference as website farm reference
+        argument as an integer
+        amount as a website farm quantity
+
+class:
+    patterns:
+        website farm movement target
+    members:
+        present as a boolean
+        x as an integer
+        y as an integer
+        adjacent as a boolean
+        animal as a string
+
+class:
+    patterns:
+        website farm item
+    members:
+        kind as an integer
+        count as a website farm quantity
+        water present as a boolean
+        water as an integer
+        serial as a website farm quantity
+
+class:
+    patterns:
+        website farm crop
+    members:
+        present as a boolean
+        serial as a website farm quantity
+        kind as an integer
+        growth as a floating-point number
+
+class:
+    patterns:
+        website farm tree
+    members:
+        present as a boolean
+        serial as a website farm quantity
+        hits as an integer
+        regrow as an integer
+
+class:
+    patterns:
+        website farm tile
+    members:
+        x as an integer
+        y as an integer
+        height as a floating-point number
+        terrain as an integer
+        plot as a boolean
+        crop as website farm crop
+        moisture as a floating-point number
+        fertilizer as an integer
+        tree as website farm tree
+        items as the type of (an empty list of website farm item)
+        water as a boolean
+
+class:
+    patterns:
+        website farm actor
+    members:
+        id as a string
+        name as a string
+        x as an integer
+        y as an integer
+        direction as an integer
+        inventory as the type of (an empty list of website farm item)
+        role as a string
+        routine as the type of (a website farm routine for (an empty website farm plan) initially carrying (a new website farm reference))
+        subject as website farm subject
+        status as a string
+        target as website farm movement target
+        held as a boolean
+        paused as a boolean
+
+class:
+    patterns:
+        website farm animal
+    members:
+        id as a string
+        x as an integer
+        y as an integer
+        direction as an integer
+        held as a boolean
+        feed as an integer
+        progress as an integer
+        produce as a website farm quantity
+
+class:
+    patterns:
+        website farm flag
+    members:
+        color as an integer
+        serial as a website farm quantity
+        x as an integer
+        y as an integer
+
+class:
+    patterns:
+        website farm area
+    members:
+        id as a string
+        name as a string
+        color as a string
+        left as an integer
+        top as an integer
+        right as an integer
+        bottom as an integer
+
+class:
+    patterns:
+        website farm compost
+    members:
+        x as an integer
+        y as an integer
+        input as a website farm quantity
+        ready as a website farm quantity
+        age as an integer
+
+class:
+    patterns:
+        website farm world
+    members:
+        tiles as a pointer to website farm tile
+        areas as the type of (an empty list of website farm area)
+        coding as a pointer to JSON value
+        tick as a website farm quantity
+        raining as a boolean
+        expanded as a boolean
+        orders as a website farm quantity
+        delivered as the type of (an empty list of string)
+        player as a pointer to website farm actor
+        workers as the type of (an empty list of a pointer to website farm actor)
+        flags as the type of (an empty list of website farm flag)
+        barn as website farm point
+        compost as website farm compost
+        pasture as website farm point
+        cow present as a boolean
+        cow as website farm animal
+        chickens as the type of (an empty list of website farm animal)
+        stock as a website farm quantity array of 13 items
+        notices as the type of (an empty list of string)
+        next entity as a website farm quantity

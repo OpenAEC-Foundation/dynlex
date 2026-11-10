@@ -1,0 +1,200 @@
+import world.dl
+import ../execution_json.dl
+
+local function JSON text from {a value:value}:
+    execute:
+        set entry to JSON text "" is value
+        return entry's value
+
+local function JSON number from {a number:value}:
+    execute:
+        return a new JSON number from value
+
+to get [the website farm optional text JSON of] {string:value}:
+    if value is empty:
+        return a new JSON value of kind the JSON null kind
+    return JSON text from value
+
+to get [the website farm reference JSON of] {website farm reference:reference}:
+    if reference's kind = 0:
+        return a new JSON value of kind the JSON null kind
+    set names to the website farm reference kinds
+    set result to a JSON object containing [JSON text "kind" is (the item at (reference's kind) in names)]
+    if (reference's kind = 3) or (reference's kind = 4):
+        set entry to JSON text "id" is (reference's id)
+        add a JSON member named (entry's name) with value (entry's value) to result
+    if reference's kind >= 5:
+        add a JSON member named (the string form of "x") with value (JSON number from (reference's x)) to result
+        add a JSON member named (the string form of "y") with value (JSON number from (reference's y)) to result
+    if (reference's kind = 4) or ((reference's kind = 6) or (reference's kind = 7)):
+        add a JSON member named (the string form of "serial") with value (JSON number from (reference's serial)) to result
+    if reference's kind = 8:
+        set serials to a new JSON value of kind the JSON array kind
+        set index to 0
+        loop while index < the length of (reference's serials):
+            add (JSON number from (the item at index in (reference's serials))) to the JSON array serials
+            increment index
+        add a JSON member named (the string form of "serials") with value serials to result
+    return result
+
+to get [the website farm item JSON of] {website farm item:item}:
+    set descriptions to the website farm items
+    set description to the item at (item's kind) in descriptions
+    set result to a JSON object containing [JSON text "kind" is (description's key), JSON number "count" is (item's count)]
+    if item's water present:
+        add a JSON member named (the string form of "water") with value (JSON number from (item's water)) to result
+    if item's serial != 0:
+        add a JSON member named (the string form of "serial") with value (JSON number from (item's serial)) to result
+    return result
+
+to get [the website farm inventory JSON of] {a value:items}:
+    set result to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of items:
+        add (the website farm item JSON of (the item at index in items)) to the JSON array result
+        increment index
+    return result
+
+to get [the website farm routine JSON of] {a value:routine}:
+    set loops to a new JSON value of kind the JSON object kind
+    set index to 0
+    loop while index < the length of (routine's loops):
+        set remaining to the item at index in (routine's loops)
+        if remaining != -2:
+            add a JSON member named (the string form of index) with value (JSON number from remaining) to loops
+        increment index
+    set trace to a new JSON value of kind the JSON null kind
+    if routine's traced:
+        free trace
+        set trace to a JSON object containing [JSON child "range" is (the website execution range JSON of (routine's source)),
+            JSON child "branch" is (the website execution branch JSON of (routine's branch)), JSON text "message" is (routine's message)]
+        if routine's condition branch != -1:
+            add a JSON member named (the string form of "condition") with value (a JSON object containing [
+                JSON child "range" is (the website execution range JSON of (routine's condition source)),
+                JSON child "branch" is (the website execution branch JSON of (routine's condition branch))]) to trace
+    set continuation to a new JSON value of kind the JSON null kind
+    if routine's continuing:
+        free continuation
+        set continuation to a JSON object containing [JSON child "target" is (the website farm reference JSON of (routine's continuation))]
+    return a JSON object containing [JSON number "pc" is (routine's position), JSON child "loops" is loops,
+        JSON flag "finished" is (routine's finished), JSON child "trace" is trace, JSON child "continuation" is continuation]
+
+to get [the website farm subject JSON of] {website farm subject:subject}:
+    if subject's kind = 0:
+        return a new JSON value of kind the JSON null kind
+    if subject's kind = 1:
+        return a JSON object containing [JSON text "kind" is "target", JSON child "value" is (the website farm reference JSON of (subject's reference))]
+    require condition (subject's kind = 2) reporting "Unknown Farm subject kind."
+    return a JSON object containing [JSON text "kind" is "items", JSON child "value" is (a JSON object containing [
+        JSON number "argument" is (subject's argument), JSON number "amount" is (subject's amount)])]
+
+to get [the website farm movement JSON of] {website farm movement target:target}:
+    if target's present = false:
+        return a new JSON value of kind the JSON null kind
+    return a JSON object containing [JSON number "x" is (target's x), JSON number "y" is (target's y),
+        JSON flag "adjacent" is (target's adjacent), JSON child "animal" is (the website farm optional text JSON of (target's animal))]
+
+to get [the website farm actor JSON of] {a pointer to website farm actor:actor}:
+    return a JSON object containing [JSON text "id" is (actor's id), JSON text "name" is (actor's name),
+        JSON number "x" is (actor's x), JSON number "y" is (actor's y), JSON number "direction" is (actor's direction),
+        JSON child "inventory" is (the website farm inventory JSON of (actor's inventory)),
+        JSON child "role" is (the website farm optional text JSON of (actor's role)),
+        JSON child "routine" is (the website farm routine JSON of (actor's routine)),
+        JSON child "subject" is (the website farm subject JSON of (actor's subject)),
+        JSON text "status" is (actor's status), JSON child "target" is (the website farm movement JSON of (actor's target)),
+        JSON flag "held" is (actor's held), JSON flag "paused" is (actor's paused)]
+
+to get [the website farm animal JSON of] {website farm animal:animal} [as cow] {boolean:cow}:
+    set result to a JSON object containing [JSON text "id" is (animal's id), JSON number "x" is (animal's x),
+        JSON number "y" is (animal's y), JSON number "direction" is (animal's direction),
+        JSON number "feed" is (animal's feed), JSON number "progress" is (animal's progress)]
+    if cow:
+        add a JSON member named (the string form of "produce") with value (JSON number from (animal's produce)) to result
+    else:
+        set property to JSON flag "held" is (animal's held)
+        add a JSON member named (property's name) with value (property's value) to result
+    return result
+
+to get [the website farm tile JSON of] {a pointer to website farm tile:tile}:
+    set tree to a new JSON value of kind the JSON null kind
+    if tile's tree's present:
+        free tree
+        set tree to a JSON object containing [JSON number "serial" is (tile's tree's serial),
+            JSON number "hits" is (tile's tree's hits), JSON number "regrow" is (tile's tree's regrow)]
+    set crop to a new JSON value of kind the JSON null kind
+    if tile's crop's present:
+        free crop
+        set items to the website farm items
+        set description to the item at (tile's crop's kind) in items
+        set crop to a JSON object containing [JSON number "serial" is (tile's crop's serial),
+            JSON text "kind" is (description's key), JSON number "growth" is (tile's crop's growth)]
+    set names to the website farm terrain names
+    return a JSON object containing [JSON number "x" is (tile's x), JSON number "y" is (tile's y),
+        JSON number "height" is (tile's height), JSON text "type" is (the item at (tile's terrain) in names),
+        JSON flag "plot" is (tile's plot), JSON child "crop" is crop, JSON number "moisture" is (tile's moisture),
+        JSON number "fertilizer" is (tile's fertilizer), JSON child "tree" is tree,
+        JSON child "items" is (the website farm inventory JSON of (tile's items)), JSON flag "water" is (tile's water)]
+
+to get [the website farm world JSON of] {a pointer to website farm world:world}:
+    set rows to a new JSON value of kind the JSON array kind
+    loop y from 0 to the website farm height:
+        set row to a new JSON value of kind the JSON array kind
+        loop x from 0 to the website farm width:
+            add (the website farm tile JSON of (the website farm square at x y in world)) to the JSON array row
+        add row to the JSON array rows
+    set workers to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of (world's workers):
+        add (the website farm actor JSON of (the item at index in (world's workers))) to the JSON array workers
+        increment index
+    set chickens to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of (world's chickens):
+        add (the website farm animal JSON of (the item at index in (world's chickens)) as cow false) to the JSON array chickens
+        increment index
+    set cow to a new JSON value of kind the JSON null kind
+    if world's cow present:
+        free cow
+        set cow to the website farm animal JSON of (world's cow) as cow true
+    set descriptions to the website farm flags
+    set flags to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of (world's flags):
+        set flag to the item at index in (world's flags)
+        set description to the item at (flag's color) in descriptions
+        add (a JSON object containing [JSON text "id" is (description's key), JSON number "serial" is (flag's serial),
+            JSON number "x" is (flag's x), JSON number "y" is (flag's y)]) to the JSON array flags
+        increment index
+    set areas to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of (world's areas):
+        set area to the item at index in (world's areas)
+        add (a JSON object containing [JSON text "id" is (area's id), JSON text "name" is (area's name), JSON text "color" is (area's color),
+            JSON number "left" is (area's left), JSON number "top" is (area's top), JSON number "right" is (area's right), JSON number "bottom" is (area's bottom)]) to the JSON array areas
+        increment index
+    set delivered to a new JSON value of kind the JSON array kind
+    set notices to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of (world's delivered):
+        add (JSON text from (the item at index in (world's delivered))) to the JSON array delivered
+        increment index
+    set index to 0
+    loop while index < the length of (world's notices):
+        add (JSON text from (the item at index in (world's notices))) to the JSON array notices
+        increment index
+    set stock to a new JSON value of kind the JSON object kind
+    set items to the website farm items
+    set index to 0
+    loop while index < the length of items:
+        set item to the item at index in items
+        add a JSON member named (the string form of (item's key)) with value (JSON number from (the item at index in (world's stock))) to stock
+        increment index
+    return a JSON object containing [JSON child "tiles" is rows, JSON child "areas" is areas, JSON child "coding" is (a copy of JSON node (world's coding)),
+        JSON number "tick" is (world's tick), JSON flag "raining" is (world's raining), JSON flag "expanded" is (world's expanded),
+        JSON number "orders" is (world's orders), JSON child "delivered" is delivered, JSON child "player" is (the website farm actor JSON of (world's player)),
+        JSON child "workers" is workers, JSON child "flags" is flags,
+        JSON child "barn" is (a JSON object containing [JSON number "x" is (world's barn's x), JSON number "y" is (world's barn's y)]),
+        JSON child "compost" is (a JSON object containing [JSON number "x" is (world's compost's x), JSON number "y" is (world's compost's y),
+            JSON number "input" is (world's compost's input), JSON number "ready" is (world's compost's ready), JSON number "age" is (world's compost's age)]),
+        JSON child "pasture" is (a JSON object containing [JSON number "x" is (world's pasture's x), JSON number "y" is (world's pasture's y)]),
+        JSON child "cow" is cow, JSON child "chickens" is chickens, JSON child "stock" is stock, JSON child "notices" is notices, JSON number "nextEntity" is (world's next entity)]

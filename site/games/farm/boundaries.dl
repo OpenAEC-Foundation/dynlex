@@ -1,0 +1,88 @@
+import world.dl
+
+class:
+    patterns:
+        website farm pen
+    members:
+        id as a C string
+        left as an integer
+        right as an integer
+        top as an integer
+        bottom as an integer
+        gate as an integer
+
+class:
+    patterns:
+        website farm fence
+    members:
+        present as a boolean
+        from as website farm point
+        to as website farm point
+        start x as a floating-point number
+        start y as a floating-point number
+        end x as a floating-point number
+        end y as a floating-point number
+        gate as a boolean
+        locked as a boolean
+
+[the website farm pens] means: [
+    @intrinsic("construct", website farm pen, "cow", 12, 14, 2, 4, 13),
+    @intrinsic("construct", website farm pen, "chickens", 11, 13, 6, 8, 12)
+]
+
+to get [the website farm pen at] {integer:x} {integer:y}:
+    set pens to the website farm pens
+    set index to 0
+    loop while index < the length of pens:
+        set pen to the item at index in pens
+        if (pen's left <= x <= pen's right) and (pen's top <= y <= pen's bottom):
+            return index
+        increment index
+    return -1
+
+to get [a website farm fence from] {website farm point:from} [to] {website farm point:to} [with gate] {boolean:gate} [locked] {boolean:locked}:
+    set result to a new website farm fence
+    set result's present to true
+    set result's from to from
+    set result's to to to
+    set x to (from's x + to's x) / 2.0
+    set y to (from's y + to's y) / 2.0
+    set dx to 0.5 if from's x = to's x, else 0.0
+    set dy to 0.5 if from's y = to's y, else 0.0
+    set result's start x to x - dx
+    set result's start y to y - dy
+    set result's end x to x + dx
+    set result's end y to y + dy
+    set result's gate to gate
+    set result's locked to locked
+    return result
+
+to get [the website farm fence from] {website farm point:from} [to] {website farm point:to} [in] {a pointer to website farm world:world}:
+    set vertical to (from's x = to's x) and ((the absolute value of (from's y - to's y)) = 1)
+    set horizontal to (from's y = to's y) and ((the absolute value of (from's x - to's x)) = 1)
+    set {low x} to the minimum of (from's x) and (to's x)
+    set {low y} to the minimum of (from's y) and (to's y)
+    # Pens precede the divider: their permanent right-hand fence remains when
+    # the east field opens, even where the two boundaries share an edge.
+    set pens to the website farm pens
+    for each pen in pens:
+        if vertical and (pen's left <= from's x <= pen's right):
+            if (low y = pen's top - 1) or (low y = pen's bottom):
+                set gate to (low y = pen's bottom) and (from's x = pen's gate)
+                return a website farm fence from from to to with gate gate locked false
+        if horizontal and (pen's top <= from's y <= pen's bottom):
+            if (low x = pen's left - 1) or (low x = pen's right):
+                return a website farm fence from from to to with gate false locked false
+    if vertical and (0 <= from's x < the website farm width):
+        if (low y = -1) or (low y = the website farm height - 1):
+            return a website farm fence from from to to with gate false locked false
+    if horizontal and (0 <= from's y < the website farm height):
+        if (low x = -1) or (low x = the website farm width - 1):
+            return a website farm fence from from to to with gate false locked false
+        if (low x = 14) and (world's expanded = false):
+            return a website farm fence from from to to with gate false locked true
+    return a new website farm fence
+
+to get [website farm travel from] {website farm point:from} [to] {website farm point:to} [is allowed in] {a pointer to website farm world:world} [for an animal] {boolean:animal}:
+    set fence to the website farm fence from from to to in world
+    return (fence's present = false) or ((fence's gate) and (animal = false))

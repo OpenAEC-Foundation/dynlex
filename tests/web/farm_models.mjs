@@ -13,12 +13,29 @@ const models=[
   {name:'catalog',entry:'site/games/farm/export_vocabulary.dl',fixture:'farm-vocabulary.json'},
   {name:'plans',entry:'tests/web/farm_plan_model.dl',fixture:'farm-plans.json'},
   {name:'routines',entry:'tests/web/farm_routine_model.dl',fixture:'farm-routines.json'},
+  {name:'world',entry:'tests/web/farm_world_model.dl',fixture:'farm-world-cases.json'},
 ];
 function check(model,output,target) {
   const actual=JSON.parse(output);
   const expected=model.name==='catalog'?model.data:model.data.expected;
-  assert.deepEqual(actual,expected,`${model.name}: ${target}`);
+  if(model.name==='world') compareWorld(actual,expected,`${model.name}: ${target}`);
+  else assert.deepEqual(actual,expected,`${model.name}: ${target}`);
   console.log(`PASS Farm ${model.name} ${target}${model.data.cases?`: ${model.data.cases.length} scenarios`:''}`);
+}
+
+// Native libm and the browser's Math implementation can differ by an ulp.
+// Only initial terrain heights use that tolerance; every other value is exact.
+function compareWorld(actual,expected,location) {
+  if(location.endsWith('.height')) {
+    assert(Math.abs(actual-expected)<1e-14,`${location}: ${actual} != ${expected}`);
+  } else if(Array.isArray(expected)) {
+    assert(Array.isArray(actual),location);
+    assert.equal(actual.length,expected.length,location+'.length');
+    expected.forEach((value,index)=>compareWorld(actual[index],value,location+'['+index+']'));
+  } else if(expected!==null&&typeof expected==='object') {
+    assert.deepEqual(Object.keys(actual).sort(),Object.keys(expected).sort(),location+'.keys');
+    for(const [key,value] of Object.entries(expected)) compareWorld(actual[key],value,location+'.'+key);
+  } else assert.equal(actual,expected,location);
 }
 
 async function checkWasm(model,file,target) {
@@ -52,9 +69,9 @@ try {
   }
   if(process.argv.includes('--shipped')) {
     const sources={};
-    for(const folder of ['site/games/farm','site/games'])
+    for(const folder of ['site/games/farm','site/games/progress','site/games'])
       for(const name of await fs.readdir(path.join(root,folder))) if(name.endsWith('.dl')) sources[`${folder}/${name}`]=await fs.readFile(path.join(root,folder,name),'utf8');
-    for(const name of ['tests/web/farm_plan_model.dl','tests/web/farm_routine_model.dl','tests/web/farm_test_json.dl','lib/text.dl'])
+    for(const name of ['tests/web/farm_plan_model.dl','tests/web/farm_routine_model.dl','tests/web/farm_world_model.dl','tests/web/farm_test_json.dl'])
       sources[name]=await fs.readFile(path.join(root,name),'utf8');
     const request=path.join(directory,'request.json');
     await fs.writeFile(request,JSON.stringify({sources,jobs:models.map(model=>({entry:model.entry,kind:'wasm',output:model.name+'.wasm'}))}));

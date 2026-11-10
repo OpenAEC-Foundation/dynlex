@@ -1,0 +1,41 @@
+import lib/sequence.dl
+import lib/check.dl
+
+to get [the sequence returned from] {a sequence:values}:
+    return values
+
+to [check sequence lifetimes]:
+    set empty to an empty sequence of integer
+    require condition (the length of empty = 0) reporting "An empty sequence allocated items."
+    set duplicate to a sequence copying empty
+    require condition (the length of duplicate = 0) reporting "Copying an empty sequence introduced an item."
+    set builder to an empty list of string
+    set taken to a sequence taking the items from builder
+    require condition ((the length of taken = 0) and (the length of builder = 0)) reporting "Taking an empty builder introduced an item."
+    append (the string form of "temporary") to builder
+    remove the last item from builder
+    set taken to a sequence taking the items from builder
+    free builder
+    require condition (the length of taken = 0) reporting "Taking an emptied builder kept a removed value."
+    set numbers to a sequence copying [2, 4, 6]
+    set shared to the sequence returned from numbers
+    set numbers to an empty sequence of integer
+    require condition ((the length of shared = 3) and ((the item at 2 in shared) = 6)) reporting "A sequence copy lost its backing storage."
+    set words to an empty list of string
+    append (the string form of "🌽") to words
+    append (the string form of "the north field") to words
+    set names to a sequence copying words
+    set moved to a sequence taking the items from words
+    require condition (the length of words = 0) reporting "Taking a builder did not empty it."
+    append (the string form of "another field") to words
+    free words
+    require condition ((the item at 1 in moved) = "the north field") reporting "Reusing a transferred builder mutated its old sequence."
+    require condition (((the item at 0 in names) = "🌽") and ((the item at 1 in names) = "the north field")) reporting "Sequence elements did not retain their values."
+    set other to a sequence copying names
+    set names to an empty sequence of string
+    require condition ((the item at 1 in other) = "the north field") reporting "Copying a sequence did not retain its elements."
+    require condition (shared contains 4) reporting "Sequence membership missed an element."
+    require condition ((shared contains 5) = false) reporting "Sequence membership accepted a missing element."
+
+check sequence lifetimes
+print line "Owned sequences keep immutable copies alive and release their elements with the last owner."
