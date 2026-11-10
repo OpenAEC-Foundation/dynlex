@@ -1,0 +1,28 @@
+import ../../../site/games/execution.dl
+
+set output to website execution from (the string form of "Before\r\n\nDYNLEX|TRACE|2|0|3|9|-1\r\nHello 東京\nDYNLEX|TRACE|4|2|4|8|1\nDYNLEX|TRACE|5|0|5|6|0\nAfter") dropping 2 source lines
+require condition (output's error's length = 0) reporting "Valid execution output was rejected"
+require condition (output's count = 5) reporting "Trace markers became output or empty lines became records"
+set record to output's first
+require condition ((record's text = "Before") and (record's source's known = false)) reporting "Output before the first trace acquired a source range"
+set record to record's next
+require condition ((record's text = "Hello 東京") and (record's branch = -1)) reporting "Output text or its absent branch changed"
+require condition ((record's source's start line = 0) and (record's source's end line = 1)) reporting "The program prefix was not removed"
+require condition ((record's source's start column = 0) and (record's source's end column = 9)) reporting "Source columns changed"
+set record to record's next
+require condition ((record's branch = 1) and (record's source's start line = 2)) reporting "A true condition lost its source range"
+set record to record's next
+require condition ((record's branch = 0) and (record's source's start line = 3)) reporting "A false condition was discarded"
+require condition (output's last's text = "After") reporting "Trailing output without a newline was lost"
+free website execution the address of output
+for each text in ["DYNLEX|TRACE|2|0|2|8", "DYNLEX|TRACE|2|0|2|8|-1|0", "DYNLEX|TRACE|1|0|2|8|-1", "DYNLEX|TRACE|2|-1|2|8|-1", "DYNLEX|TRACE|2|0|1|8|-1", "DYNLEX|TRACE|2|9|2|3|-1", "DYNLEX|TRACE|2|0|2|8|2", "DYNLEX|TRACE|2|0|2|8|", "DYNLEX|TRACE|x|0|2|8|-1", "DYNLEX|TRACE|2147483648|0|2|8|-1"]:
+    set output to website execution from (the string form of text) dropping 2 source lines
+    require condition (output's error's length > 0) reporting "An invalid execution source event was accepted"
+    free website execution the address of output
+set output to website execution from (the string form of "DYNLEX|TRACE|0|0|0|3|-1\nplain") dropping 0 source lines
+require condition ((output's error's length = 0) and (output's first's source's start line = 0)) reporting "A program without a prefix lost its first line"
+free website execution the address of output
+set output to website execution from (the string form of "plain\r") dropping 0 source lines
+require condition (output's first's text = "plain\r") reporting "A trailing carriage return without a newline was removed from program output"
+free website execution the address of output
+print line "Execution output preserves Unicode text, source ranges and branch outcomes and rejects malformed events."

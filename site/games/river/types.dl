@@ -1,0 +1,55 @@
+import ../execution.dl
+
+# Kinds: 0 condition, 1 load, 2 unload, 3 cross, 4 danger, 5 error, 6 success.
+# Passengers: 1 sheep, 2 wolf, 3 hay. Banks: 0 home, 1 far, -1 aboard.
+class:
+    patterns:
+        website river event
+    members:
+        kind as an integer
+        subject as an integer
+        other as an integer
+        message as a string
+        next as a pointer to website river event
+
+class:
+    patterns:
+        website river instruction
+    members:
+        kind as an integer
+        subject as an integer
+        source as website execution range
+        branch as an integer
+        first as a pointer to website river event
+        last as a pointer to website river event
+        next as a pointer to website river instruction
+
+class:
+    patterns:
+        website river trace
+    members:
+        first as a pointer to website river instruction
+        last as a pointer to website river instruction
+        count as an integer
+        outcome as an integer
+        message as a string
+        error as a string
+
+class:
+    patterns:
+        website river scene
+    members:
+        bank as an integer
+        heading as an integer
+        cargo as an integer
+        passengers as an integer array of 3 items
+        predator as an integer
+        prey as an integer
+        complete as a boolean
+
+class:
+    patterns:
+        website river transition
+    members:
+        scene as website river scene
+        error as a string

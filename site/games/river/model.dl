@@ -1,0 +1,64 @@
+import types.dl
+
+to get [the initial website river scene]:
+    set result to a new website river scene
+    set result's heading to 1
+    return result
+
+to get [the website river scene after] {website river event:event} from {website river scene:current}:
+    set result to a new website river transition
+    set result's scene to current
+    set kind to event's kind
+    set subject to event's subject
+    if (kind = 1) or (kind = 2):
+        if (subject < 1) or (subject > 3):
+            set result's error to "Unknown river passenger"
+            return result
+        set position to the item at (subject - 1) in (current's passengers)
+        if kind = 1:
+            if (current's cargo != 0) or (position != current's bank):
+                set result's error to "Inconsistent river LOAD event"
+                return result
+            set result's scene's cargo to subject
+            store -1 into (result's scene's passengers) at (subject - 1)
+        else:
+            if (current's cargo != subject) or (position != -1):
+                set result's error to "Inconsistent river UNLOAD event"
+                return result
+            set result's scene's cargo to 0
+            store (current's bank) into (result's scene's passengers) at (subject - 1)
+    else if kind = 3:
+        if ((subject < 0) or (subject > 1)) or (subject = current's bank):
+            set result's error to "Inconsistent river CROSS event"
+            return result
+        set result's scene's bank to subject
+        set result's scene's heading to subject
+    else if kind = 4:
+        set prey to event's other
+        if ((subject < 1) or (subject > 3)) or (((prey < 1) or (prey > 3)) or (prey = subject)):
+            set result's error to "Unknown river danger pair"
+            return result
+        set first to the item at (subject - 1) in (current's passengers)
+        set last to the item at (prey - 1) in (current's passengers)
+        if ((first = -1) or (first != last)) or (first = current's bank):
+            set result's error to "Inconsistent river DANGER event"
+            return result
+        set result's scene's predator to subject
+        set result's scene's prey to prey
+    else if kind = 5:
+        if event's message's length = 0:
+            set result's error to "A river ERROR event requires a message"
+    else if kind = 6:
+        set index to 0
+        loop while index < 3:
+            if (the item at index in (current's passengers)) != 1:
+                set result's error to "River SUCCESS arrived before everyone reached the far bank"
+                return result
+            increment index
+        if current's bank != 1:
+            set result's error to "River SUCCESS arrived before the boat reached the far bank"
+            return result
+        set result's scene's complete to true
+    else:
+        set result's error to "Unknown river event"
+    return result

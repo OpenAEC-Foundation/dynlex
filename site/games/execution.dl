@@ -1,0 +1,168 @@
+# Both games consume source locations emitted by the compiler, alongside output.
+import lib/std.dl
+import lib/check.dl
+
+the website execution trace prefix means: "DYNLEX|TRACE|"
+
+class:
+    patterns:
+        website execution range
+    members:
+        known as a boolean
+        start line as an integer
+        start column as an integer
+        end line as an integer
+        end column as an integer
+
+class:
+    patterns:
+        website execution record
+    members:
+        text as a string
+        source as website execution range
+        branch as an integer
+        next as a pointer to website execution record
+
+class:
+    patterns:
+        website execution output
+    members:
+        first as a pointer to website execution record
+        last as a pointer to website execution record
+        count as an integer
+        error as a string
+
+class:
+    patterns:
+        website execution integer
+    members:
+        valid as a boolean
+        value as an integer
+        next as an integer
+
+class:
+    patterns:
+        website execution marker
+    members:
+        valid as a boolean
+        source as website execution range
+        branch as an integer
+
+to get the website execution integer at {integer:start} in {string:line}:
+    set result to a new website execution integer
+    set position to start
+    set negative to false
+    if position < line's length:
+        if (the character at position in line) = 45:
+            set negative to true
+            increment position
+    set first to position
+    set total to 0 as a word sized integer
+    set limit to 8 if negative, else 7
+    set reading to true
+    loop while (position < line's length) and reading:
+        set character to the character at position in line
+        if (character < 48) or (character > 57):
+            set reading to false
+        else:
+            set digit to (character as an integer) - 48
+            if (total > 214748364) or ((total = 214748364) and (digit > limit)):
+                return result
+            set total to (total * 10) + digit
+            increment position
+    if position = first:
+        return result
+    if negative:
+        set total to 0 - total
+    set result's valid to true
+    set result's value to total as an integer
+    set result's next to position
+    return result
+
+to get the website execution marker in {string:line} dropping {integer:prefix} [source lines]:
+    set result to a new website execution marker
+    set fields to a new integer array of 5 items
+    set position to the length of the website execution trace prefix
+    set index to 0
+    loop while index < 5:
+        set value to the website execution integer at position in line
+        if value's valid = false:
+            return result
+        store (value's value) into fields at index
+        set position to value's next
+        if index < 4:
+            if position >= line's length:
+                return result
+            if (the character at position in line) != 124:
+                return result
+            increment position
+        increment index
+    if position != line's length:
+        return result
+    set first to the item at 0 in fields
+    set left to the item at 1 in fields
+    set last to the item at 2 in fields
+    set right to the item at 3 in fields
+    set branch to the item at 4 in fields
+    if ((first < prefix) or (last < first)) or ((left < 0) or (right < 0)):
+        return result
+    if (first = last) and (right < left):
+        return result
+    if (branch < -1) or (branch > 1):
+        return result
+    set result's valid to true
+    set result's source to @intrinsic("construct", website execution range, true, first - prefix, left, last - prefix, right)
+    set result's branch to branch
+    return result
+
+to append website execution text {string:text} from {website execution range:source} with branch {integer:branch} into {a pointer to website execution output:output}:
+    set record to @intrinsic("construct", website execution record, text, source, branch, @intrinsic("construct", a pointer to website execution record))
+    set entry to storage for one slot initialized with record
+    if output's first = @intrinsic("construct", a pointer to website execution record):
+        set output's first to entry
+    else:
+        set output's last's next to entry
+    set output's last to entry
+    increment output's count
+
+to get website execution from {string:stdout} dropping {integer:prefix} [source lines]:
+    require condition (prefix >= 0) reporting "An execution prefix cannot have a negative line count"
+    set output to a new website execution output
+    set source to a new website execution range
+    set start to 0
+    set position to 0
+    loop while position <= stdout's length:
+        set ending to position = stdout's length
+        if ending = false:
+            set ending to (the character at position in stdout) = 10
+        if ending:
+            set end to position
+            if (end > start) and (position < stdout's length):
+                if (the character at (end - 1) in stdout) = 13:
+                    decrement end
+            set line to the substring of stdout from start spanning (end - start) bytes
+            if line's length > 0:
+                if line has the website execution trace prefix at offset 0:
+                    set marker to the website execution marker in line dropping prefix source lines
+                    if marker's valid = false:
+                        set output's error to "Invalid execution source event: " + line
+                        return output
+                    set source to marker's source
+                    if marker's branch != -1:
+                        append website execution text (the string form of "") from source with branch (marker's branch) into (the address of output)
+                else:
+                    append website execution text line from source with branch -1 into (the address of output)
+            set start to position + 1
+        increment position
+    return output
+
+to free website execution {a pointer to website execution output:output}:
+    set record to output's first
+    loop while record != @intrinsic("construct", a pointer to website execution record):
+        set next to record's next
+        destroy the value at record
+        deallocate record
+        set record to next
+    set output's first to @intrinsic("construct", a pointer to website execution record)
+    set output's last to @intrinsic("construct", a pointer to website execution record)
+    set output's count to 0

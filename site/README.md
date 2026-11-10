@@ -17,7 +17,8 @@ source SDK; it does not open a browser or desktop window.
 
 Page declarations live in `pages/`, with shared appearances in `appearance.dl`.
 `interface.dl` composes the pages. Controllers in `programs/`, `editor/`,
-`downloads/` and `shaders/` own behavior and retained state. `application.dl`
+`downloads/` and `shaders/` own behavior and retained state. `games/` contains
+the shared execution source reader and river event/scene model. `application.dl`
 connects the interface, controllers and platform event stream.
 
 To use changes from a dynlex-ui checkout, update the package and lock together:
@@ -53,6 +54,7 @@ python3 tests/web/site_runtime.py
 python3 tests/web/site_runtime.py --case site_entry
 node tests/web/project_sources.mjs
 python3 tests/web/source_package.py
+node tests/web/site_games.mjs
 ```
 
 Migration is in progress. The current build contains the homepage, eleven

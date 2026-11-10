@@ -27,7 +27,7 @@ for (const job of jobs) {
   const target = path.join(output, job.output);
   await mkdir(path.dirname(target), { recursive: true });
   if (job.kind === 'wasm') {
-    checked('dynlex_web_compile_and_emit_wasm');
+    checked(job.traced ? 'dynlex_web_compile_and_emit_wasm_traced' : 'dynlex_web_compile_and_emit_wasm');
     await writeFile(target, Buffer.from(call('dynlex_web_get_output_wasm_base64', 'string'), 'base64'));
   } else if (job.kind === 'shader') {
     translator ??= await createWgslTranslator(await readFile(path.join(directory, 'dynlex_wgsl_translator.wasm')));
