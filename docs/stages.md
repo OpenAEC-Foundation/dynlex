@@ -257,6 +257,9 @@ also accepted so unary negation can form that signed value; it can be explicitly
 cast to an unsigned 64-bit integer. Explicit `8`, `16`, `32`, and `64` bit unsigned
 integer type values preserve wrapping arithmetic, logical right shifts, and
 unsigned comparison, division, and remainder at compile time and runtime.
+Built-in integer types and numeric width constraints admit only those four
+widths; floating-point types admit 32 and 64 bits. Unsupported widths are rejected
+when their type reference is formed, before they can reach code generation.
 Integer casts retain the target-width bits. Floating-point to integer casts
 truncate toward zero and are compile-time-known only when the truncated value
 fits the target signed or unsigned width, matching the native LLVM conversion.

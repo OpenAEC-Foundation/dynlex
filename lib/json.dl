@@ -186,7 +186,19 @@ local flex function write {integer:scalar} as JSON UTF-8 into {a pointer to a by
 local function the JSON text read by {a pointer to a JSON parser:parser}:
     execute:
         set opening to the position of parser
-        set limit to ((the length of the source of parser) - opening)
+        # The encoded token bounds the decoded length. Retaining the remaining
+        # document here would make a collection of short strings quadratic.
+        set ending to opening + 1
+        set scanning to true
+        loop while scanning and (ending < parser's source's length):
+            set octet to the unsigned JSON byte value of the character at ending in (parser's source)
+            if octet = 34:
+                set scanning to false
+            else if octet = 92:
+                set ending to the minimum of (ending + 2) and (parser's source's length)
+            else:
+                increment ending
+        set limit to (ending - opening) - 1
         set output to a new string buffer containing limit bytes
         set writer to 0
         set the position of parser to opening + 1

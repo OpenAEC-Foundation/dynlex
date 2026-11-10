@@ -151,16 +151,6 @@ NEGATIVE_SOURCES = {
         '@intrinsic("atomic load", the address of value, "relaxed")\n',
         "Atomic operation requires a supported concrete scalar pointee",
     ),
-    "float8": (
-        'set value to 0 as @intrinsic("type", "float", 8)\n'
-        '@intrinsic("atomic load", the address of value, "relaxed")\n',
-        "Atomic operation requires a supported concrete scalar pointee",
-    ),
-    "float16": (
-        'set value to 0 as @intrinsic("type", "float", 16)\n'
-        '@intrinsic("atomic load", the address of value, "relaxed")\n',
-        "Atomic operation requires a supported concrete scalar pointee",
-    ),
 }
 
 

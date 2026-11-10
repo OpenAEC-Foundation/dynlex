@@ -489,6 +489,11 @@ inline DataType defaultFloatType(bool emitSPIRV) { return {DataType::Kind::Float
 
 inline std::optional<DataType>
 makeBuiltinTypeReference(std::string_view kindName, bool emitSPIRV, std::optional<int> numericByteSize = std::nullopt) {
+	if (numericByteSize) {
+		const int size = *numericByteSize;
+		if ((size != 1 && size != 2 && size != 4 && size != 8) || (kindName == "float" && size != 4 && size != 8))
+			return std::nullopt;
+	}
 	DataType result{DataType::Kind::Type};
 	if (kindName == "int" || kindName == "integer") {
 		result.referencedKind = DataType::Kind::Int;

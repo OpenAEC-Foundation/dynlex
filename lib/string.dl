@@ -164,9 +164,9 @@ to copy {string:source} into target at offset {integer:offset}:
         increment index
 
 to get the count of decimal digits in {integer:value}:
-    set remaining to value as a word sized integer
+    set remaining to value / (10 as (the type of value))
     set total to 1
-    loop while (remaining <= -10) or (remaining >= 10):
+    loop while remaining != 0:
         set remaining to (remaining / (10 as (the type of remaining)))
         set total to (total + 1)
     return total
@@ -174,7 +174,7 @@ to get the count of decimal digits in {integer:value}:
 to get {integer:value} padded to {integer:width} digits:
     set result to a new string buffer containing width bytes
     set data to the data of result
-    set remaining to value as a word sized integer
+    set remaining to value
     set index to width - 1
     set writing to true
     loop while writing:
@@ -198,7 +198,7 @@ to get the string form of {integer:value}:
         increment length
     set result to a new string buffer containing length bytes
     set data to the data of result
-    set remaining to value as a word sized integer
+    set remaining to value
     set index to length - 1
     set writing to true
     loop while writing:
@@ -217,11 +217,7 @@ to get the string form of {integer:value}:
     return result
 
 to get the string form of {unsigned integer:value}:
-    set remaining to value
-    set digits to 1
-    loop while remaining >= (10 as (the type of remaining)):
-        set remaining to (remaining / (10 as (the type of remaining)))
-        set digits to (digits + 1)
+    set digits to the count of decimal digits in value
     set result to a new string buffer containing digits bytes
     set data to the data of result
     set remaining to value
@@ -241,7 +237,7 @@ to get the string form of {unsigned integer:value}:
 to get the string form of {floating-point number:value}:
     set negative to value < 0.0
     set magnitude to the absolute value of value
-    set whole to (the floor of magnitude) as a word sized integer
+    set whole to (the floor of magnitude) as a 64 bit integer
     set places to the count of decimal digits in whole
     set decimals to 6 - places
     if decimals < 0:
@@ -251,7 +247,7 @@ to get the string form of {floating-point number:value}:
     loop while index < decimals:
         multiply scale by 10
         increment index
-    set rounded to (the floor of ((magnitude * scale) as a floating-point number + 0.5)) as a word sized integer
+    set rounded to (the floor of ((magnitude * scale) as a floating-point number + 0.5)) as a 64 bit integer
     set whole to rounded / scale
     set fraction to rounded mod scale
     set integral to the string form of whole

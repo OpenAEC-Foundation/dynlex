@@ -1,0 +1,1 @@
+JSON text buffers scale with individual tokens and preserve Unicode decoding.

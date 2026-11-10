@@ -1,0 +1,3 @@
+tests/required/float_width_unsupported/main.dl:51-53: Error: Intrinsic 'type' argument 2 must be 32 or 64 for a floating-point type
+  note: while inferring intrinsic 'type' in '@intrinsic("type", "float", 16)' with arguments [a pointer to a byte, a 32-bit integer] -> an unresolved value tests/required/float_width_unsupported/main.dl:23-54
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", @intrinsic("type", "float", 16))' with arguments [an unresolved value] -> an unresolved value tests/required/float_width_unsupported/main.dl:1-55

@@ -1,0 +1,1 @@
+JSON copies own their children, edits preserve order, and save timestamps retain precision.
