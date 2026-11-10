@@ -1,0 +1,48 @@
+import types.dl
+
+class:
+    patterns:
+        website sound description
+    members:
+        path as a C string
+        volume as a floating-point number
+        pitch as a floating-point number
+        loop as a boolean
+
+# Music, ambience, boat, idle sheep, anxious sheep, rowing, victory.
+[the website river sounds] means: [
+    @intrinsic("construct", website sound description, "assets/games/river/puzzle-casual-game-music.mp3", 0.34, 1.0, true),
+    @intrinsic("construct", website sound description, "assets/games/river/forest-river-ambience-loop.mp3", 0.28, 1.0, true),
+    @intrinsic("construct", website sound description, "assets/games/river/boat-whoosh.mp3", 0.38, 1.0, false),
+    @intrinsic("construct", website sound description, "assets/games/river/sheep-idle.mp3", 0.16, 1.0, false),
+    @intrinsic("construct", website sound description, "assets/games/river/sheep-anxious.mp3", 0.52, 1.189207115, false),
+    @intrinsic("construct", website sound description, "assets/games/river/rowing-paddle.mp3", 0.34, 1.0, false),
+    @intrinsic("construct", website sound description, "assets/games/river/win-level-up.mp3", 0.46, 1.0, false)
+]
+
+class:
+    patterns:
+        website sound voice
+    members:
+        id as an integer
+        request as an integer
+        cue as an integer
+        volume as a floating-point number
+        rate as a floating-point number
+
+class:
+    patterns:
+        website river audio
+    members:
+        status as an integer
+        load request as an integer
+        buffers as an integer array of (the length of (the website river sounds)) items
+        voices as website sound voice array of 5 items
+        serial as an integer
+        idle request as an integer
+        idle first as a boolean
+        muted as a boolean
+        audible as a boolean
+        effect as a pointer to website river event
+        celebrated as a boolean
+        mouth as a floating-point number

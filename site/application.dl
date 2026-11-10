@@ -46,6 +46,12 @@ to get receive website reply {a pointer to JSON value:response} for {integer:job
             run website program 2 in state
     if job = 10:
         receive the website shader preview response in state
+    if job = 11:
+        receive website river audio response in state
+    if job = 12:
+        receive website river idle deadline in state
+    if job = 13:
+        receive website river voice index in state
     return false
 
 to read website input {a pointer to UI view:view}:
@@ -101,6 +107,8 @@ to read website input {a pointer to UI view:view}:
                     fail the website shader source in state
                 if pending's purpose = 10:
                     fail website program 2 in state
+                if (pending's purpose = 11) or ((pending's purpose = 12) or (pending's purpose = 13)):
+                    fail website river audio after purpose (pending's purpose) indexed (pending's index) in state
             deallocate pending
             if retained = false:
                 free document

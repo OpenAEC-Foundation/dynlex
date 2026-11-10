@@ -1,6 +1,6 @@
 import ../../packages/dynlex-ui/ui/images.dl
 
-[the website river artwork] means: ["assets/games/river/painted-river.webp", "assets/games/river/boat.webp", "assets/games/river/sheep.webp", "assets/games/river/wolf.webp", "assets/games/river/hay.webp", "assets/games/river/boat-blink.webp", "assets/games/river/sheep-blink.webp", "assets/games/river/wolf-blink.webp"]
+[the website river artwork] means: ["assets/games/river/painted-river.webp", "assets/games/river/boat.webp", "assets/games/river/sheep.webp", "assets/games/river/wolf.webp", "assets/games/river/hay.webp", "assets/games/river/boat-blink.webp", "assets/games/river/sheep-blink.webp", "assets/games/river/wolf-blink.webp", "assets/games/river/wolf-tongue.svg", "assets/games/river/speech-sprig.svg"]
 
 to get [the website river artwork status in] {a pointer to UI view:view}:
     set result to 1

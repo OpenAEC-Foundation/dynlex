@@ -1,0 +1,53 @@
+import playback.dl
+import sprites.dl
+import ../../packages/dynlex-ui/ui/document_fonts.dl
+
+# Dust uses the original five lobes, offsets and staggered breathing motion.
+to [paint website river dust in] {UI bounds:world} for {website river scene:scene} at {floating-point number:seconds} on {UI frame:frame}:
+    set bank to the item at (scene's predator - 1) in (scene's passengers)
+    set center to 0.25 if (bank = 0), else 0.75
+    set width to world's width * 0.15
+    set height to width / 1.5
+    set left to world's x + world's width * center - width / 2.0
+    set top to world's y + world's height * 0.61 - height / 2.0
+    set lobes to [[0.04, 0.26, 0.42, 0.0], [0.27, 0.02, 0.42, 0.21], [0.51, 0.30, 0.42, 0.11], [0.25, 0.49, 0.31, 0.31], [0.63, 0.18, 0.24, 0.08]]
+    for each lobe in lobes:
+        set phase to 0.5 + 0.5 * (the sine of ((seconds + (the item at 3 in lobe)) * 7.4799825085))
+        set size to width * (the item at 2 in lobe)
+        set scale to 0.78 + 0.28 * phase
+        set radius to (size * scale) / 2.0
+        set x to left + width * (the item at 0 in lobe) + size / 2.0 - 4.0 + 7.0 * phase
+        set y to top + height * (the item at 1 in lobe) + size / 2.0 + 3.0 - 7.0 * phase
+        set box to UI box at (x - radius) (y - radius) sized (radius * 2.0) (radius * 2.0)
+        draw a rounded UI surface box with radius radius from (UI ink 89 68 42) to (UI ink 89 68 42) opacity 170 feathered by 0.75 on frame
+        set inside to UI box at (box's x + 1.0) (box's y + 1.0) sized (box's width - 2.0) (box's height - 2.0)
+        draw a rounded UI surface inside with radius (radius - 1.0) from (UI ink 235 219 168) to (UI ink 207 183 132) opacity 245 feathered by 0.75 on frame
+
+to [paint website river celebration in] {UI bounds:world} appearing {floating-point number:phase} on {UI frame:frame}:
+    set width to the minimum of 260.0 and (world's width * 0.47)
+    set font to a cached UI font from "assets/fonts/Inter-600.ttf" sized 11 in (frame's view)
+    set height to 52.0
+    set box to UI box at (world's x + world's width * 0.579 - width * 0.75) (world's y + world's height * 0.669 - height - 30.0) sized width height
+    set scale to 1.0 + ((1.0 - phase) * (-0.35 * (the cosine of (phase * 4.5))))
+    save the model transform in frame
+    move the model in frame by x (box's x + width * 0.75), y (box's y + height + 30.0) and z 0.0
+    scale the model in frame by x scale, y scale and z 1.0
+    move the model in frame by x (0.0 - box's x - width * 0.75), y (0.0 - box's y - height - 30.0) and z 0.0
+    draw a UI shadow under box with radius 18.0 softness 10.0 strength 32 in (UI ink 5 28 24) on frame
+    set tail to UI box at (box's x + width * 0.69) (box's y + height - 10.0) sized 22.0 22.0
+    save the model transform in frame
+    move the model in frame by x (tail's x + 11.0), y (tail's y + 11.0) and z 0.0
+    rotate the model in frame by 45.0 degrees around x 0.0, y 0.0 and z 1.0
+    move the model in frame by x (0.0 - tail's x - 11.0), y (0.0 - tail's y - 11.0) and z 0.0
+    draw a rounded UI box tail with radius 2.0 in (UI ink 74 101 56) on frame
+    set inner to UI box at (tail's x + 1.5) (tail's y + 1.5) sized 19.0 19.0
+    draw a rounded UI box inner with radius 1.0 in (UI ink 220 231 173) on frame
+    restore the model transform in frame
+    draw a rounded UI box box with radius 18.0 in (UI ink 74 101 56) on frame
+    set inner to UI box at (box's x + 1.5) (box's y + 1.5) sized (width - 3.0) (height - 3.0)
+    draw a rounded UI surface inner with radius 16.5 from (UI ink 239 243 200) to (UI ink 212 230 159) opacity ((255.0 * phase) as an integer) feathered by 0.75 on frame
+    draw UI text "We made it!" centered in (UI box at (box's x) (box's y + 5.0) sized width 20.0) with font in (UI ink 35 48 37) on frame
+    draw UI text "What a brilliant plan!" centered in (UI box at (box's x) (box's y + 25.0) sized width 20.0) with font in (UI ink 35 48 37) on frame
+    set sprig to UI box at (box's x + width - 82.0) (box's y - 26.0) sized 72.0 34.0
+    paint website river sprite 9 in sprig flipped false opacity 255 on frame
+    restore the model transform in frame

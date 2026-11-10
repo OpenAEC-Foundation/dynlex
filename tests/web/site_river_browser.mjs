@@ -13,7 +13,7 @@ const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'dynlex-ui-chrome-'));
 await fs.mkdir('.cache', { recursive: true });
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json',
   '.wasm': 'application/wasm', '.ttf': 'font/ttf', '.webp': 'image/webp',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg' };
+  '.mp3': 'audio/mpeg', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg' };
 const server = http.createServer(async (request, response) => {
   try {
     if (request.url === '/__tests__/workers.mjs') {
@@ -116,7 +116,27 @@ try {
       platformVersion: '6.0.0', architecture: 'x86', model: '', mobile: false, bitness: '64', wow64: false }
   });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], commands: [] };
+    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], commands: [], marks: [], requests: [], contexts: [], sources: [], decoded: 0, frames: new Set() };
+    const scheduleFrame = requestAnimationFrame.bind(window), cancelFrame = cancelAnimationFrame.bind(window);
+    window.requestAnimationFrame = callback => {
+      let id = scheduleFrame(time => { window.siteProbe.frames.delete(id); callback(time); });
+      window.siteProbe.frames.add(id); return id;
+    };
+    window.cancelAnimationFrame = id => { window.siteProbe.frames.delete(id); cancelFrame(id); };
+    const BrowserAudio = window.AudioContext;
+    window.AudioContext = class extends BrowserAudio {
+      constructor(...args) { super(...args); window.siteProbe.contexts.push(this); }
+      decodeAudioData(...args) { return super.decodeAudioData(...args).then(buffer => { window.siteProbe.decoded++; return buffer; }); }
+      createBufferSource() {
+        const source = super.createBufferSource(), record = { source, started: false, ended: false, stopped: false };
+        window.siteProbe.sources.push(record);
+        const start = source.start.bind(source), stop = source.stop.bind(source);
+        source.start = (...args) => { record.started = true; return start(...args); };
+        source.stop = (...args) => { record.stopped = true; return stop(...args); };
+        source.addEventListener('ended', () => { record.ended = true; });
+        return source;
+      }
+    };
     const instantiate = WebAssembly.instantiate.bind(WebAssembly);
     WebAssembly.instantiate = function(bytes, imports, ...args) {
       const env = imports?.env;
@@ -124,12 +144,20 @@ try {
         const begin = env.ui_begin, mask = env.ui_text_mask, triangles = env.ui_triangles;
         const captions = new Map();
         const decoder = new TextDecoder();
+        const request = env.ui_request;
+        env.ui_request = (surface,name,pointer,count) => {
+          const bytes = new Uint8Array(env.__linear_memory.buffer); let end=name;
+          while(bytes[end]) end++;
+          const service=decoder.decode(bytes.subarray(name,end));
+          if(service==='audio' || service==='timer') window.siteProbe.requests.push({service,payload:JSON.parse(decoder.decode(bytes.subarray(pointer,pointer+count)))});
+          return request(surface,name,pointer,count);
+        };
         const picture = env.ui_open_picture;
         env.ui_open_picture = (surface,view,image,done,pointer,count) => {
           window.siteProbe.pictures.push(decoder.decode(new Uint8Array(env.__linear_memory.buffer,pointer,count)));
           return picture(surface,view,image,done,pointer,count);
         };
-        env.ui_begin = (...args) => { window.siteProbe.visible = []; window.siteProbe.commands = []; return begin(...args); };
+        env.ui_begin = (...args) => { window.siteProbe.visible = []; window.siteProbe.commands = []; window.siteProbe.marks = []; return begin(...args); };
         env.ui_text_mask = (font, pointer, count, ...args) => {
           const result = mask(font, pointer, count, ...args);
           if (result) {
@@ -139,6 +167,13 @@ try {
           return result;
         };
         env.ui_triangles = (surface,pointer,count,texture,x,y,width,height) => {
+          if(!texture && count>0) {
+            const vertices=new Float32Array(env.__linear_memory.buffer,pointer,count*8);
+            const linear=value=>value<=10.31475?value/3294.6:Math.pow((value/255+0.055)/1.055,2.4);
+            const palettes=[[104,153,178],[80,153,114],[196,153,66],[201,88,63]];
+            if(Math.abs(vertices[7]-100/255)<0.0001 && palettes.some(ink=>ink.every((value,index)=>Math.abs(linear(value)-vertices[4+index])<0.0001)))
+              window.siteProbe.marks.push({x:vertices[0],y:vertices[1]});
+          }
           if (captions.has(texture)) {
             const vertices = new Float32Array(env.__linear_memory.buffer,pointer,count*8);
             let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
@@ -229,11 +264,11 @@ try {
     await command('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});
   };
   const textVisible = text => `window.siteProbe.commands.some(entry => entry.text === ${JSON.stringify(text)})`;
-  const clickText = async text => {
+  const clickText = async (text,settle=350) => {
     for(let attempt=0;attempt<22;attempt++) {
       let point = await evaluate(`window.siteProbe.commands.find(entry => entry.text === ${JSON.stringify(text)} && entry.y > (innerWidth<700?140:80) && entry.y < innerHeight-20)`);
       if(point) {
-        await pause(350);
+        await pause(settle);
         point = await evaluate(`window.siteProbe.commands.find(entry => entry.text === ${JSON.stringify(text)} && entry.y > (innerWidth<700?140:80) && entry.y < innerHeight-20)`);
         if(point) { await click(point.x,point.y); return; }
       }
@@ -257,15 +292,34 @@ try {
   const plan = source.slice(source.indexOf('\n')+1).trimStart();
   await click(800,22); await pause(800);
   await clickText('Open the river challenge →');
-  await waitFor('window.siteProbe.pictures.length >= 8');
+  await waitFor('window.siteProbe.pictures.length >= 10');
+  await waitFor('window.siteProbe.decoded === 7 && window.siteProbe.contexts[0].state === "running"');
   await waitFor('window.siteProbe.texts.includes("THE RIVER / WAITING FOR A PLAN")');
   await pause(500); await capture('river-ready');
   const idle = await evaluate('window.siteProbe.paints');
   await pause(500);
   assert.equal(await evaluate('window.siteProbe.paints'),idle,'An idle River scene kept repainting');
+  await clickText('Audio on ♪');
+  await waitFor(textVisible('Audio off ♪'));
+  assert(await evaluate('window.siteProbe.requests.some(item => item.service === "audio" && item.payload.operation === "state" && item.payload.volume === 0)'));
+  await clickText('Audio off ♪');
+  const audible = 'window.siteProbe.requests.filter(item => item.service === "audio" && item.payload.operation === "state").slice(-2).some(item => item.payload.volume > 0.2)';
+  await waitFor(audible);
+  const hiddenTab = await command('Target.createTarget',{url:'about:blank'});
+  await waitFor('document.hidden');
+  await waitFor('window.siteProbe.requests.filter(item => item.service === "audio" && item.payload.operation === "state").slice(-2).every(item => item.payload.volume === 0)');
+  await pause(250);
+  const hiddenPaints = await evaluate('window.siteProbe.paints');
+  await pause(300);
+  assert.equal(await evaluate('window.siteProbe.paints'),hiddenPaints,'The hidden surface kept polling after its visibility event');
+  await command('Target.closeTarget',{targetId:hiddenTab.targetId});
+  await waitFor('!document.hidden');
+  await waitFor(audible);
   await clickText('One instruction');
   await waitFor('window.siteProbe.texts.includes("Play ▶")');
+  await waitFor('window.siteProbe.marks.length > 0');
   await pause(400); await capture('river-step');
+  await waitFor('window.siteProbe.frames.size === 0');
   const paused = await evaluate('window.siteProbe.paints');
   await pause(400);
   assert.equal(await evaluate('window.siteProbe.paints'),paused,'A stepped River scene kept repainting');
@@ -279,19 +333,26 @@ try {
   await clickText('# The official names are: sheep, wolf, and hay.');
   await key('KeyA','a',65,2);
   await command('Input.insertText',{text:plan});
+  await pause(100);
+  assert.equal(await evaluate('window.siteProbe.marks.length'),0,'Editing retained execution marks from another snapshot');
   await clickText('Run plan ▶');
   await waitFor('window.siteProbe.texts.includes("THE RIVER / EVERYONE MADE IT")');
   await capture('river-solved');
   await wheel(320);
   await waitFor('window.siteProbe.texts.includes("3 / 3")');
+  await clickText('4× speed');
   await clickText('Replay ▶');
   await waitFor(textVisible('Pause Ⅱ'));
-  await clickText('Pause Ⅱ');
+  await waitFor('window.siteProbe.sources.some(item => item.started && !item.stopped && !item.ended && !item.source.loop && item.source.playbackRate.value === 1 && Math.abs(item.source.buffer.duration - 1) < 0.1)');
+  await clickText('Pause Ⅱ',0);
   await pause(300);
+  assert(await evaluate('window.siteProbe.sources.some(item => item.started && !item.stopped && !item.ended && item.source.playbackRate.value === 0)'),'Pause did not reach its audio voice: '+await evaluate('JSON.stringify(window.siteProbe.sources.map(item => ({started:item.started,stopped:item.stopped,ended:item.ended,rate:item.source.playbackRate.value,loop:item.source.loop})))'));
+  await waitFor('window.siteProbe.frames.size === 0');
   const stopped = await evaluate('window.siteProbe.paints');
   await pause(400);
   assert.equal(await evaluate('window.siteProbe.paints'),stopped,'A paused River animation kept repainting');
   await clickText('Reset scene ↺');
+  await clickText('1× speed'); await clickText('2× speed');
   await clickText('ferry the sheep');
   await key('KeyA','a',65,2);
   await command('Input.insertText',{text:'this is invalid river code'});
@@ -305,9 +366,11 @@ try {
   await capture('river-mobile');
   assert.equal(await evaluate('document.querySelector("canvas").getBoundingClientRect().width'),390);
   await clickText('← Choose a challenge');
+  await pause(150);
+  assert(await evaluate('window.siteProbe.requests.filter(item => item.service === "audio" && item.payload.operation === "state").slice(-2).every(item => item.payload.volume === 0)'),'Leaving the challenge did not silence its background sounds');
   await waitFor(textVisible('01 / THE RIVER'));
   assert.equal(errors.length,0,JSON.stringify(errors));
-  console.log('DynLex River browser interaction passed: step, failure, edit, solve, replay, pause, reset, prefix diagnostics and mobile layout.');
+  console.log('DynLex River browser interaction passed: step, failure, edit, solve, replay, pause, reset, prefix diagnostics, source marks, audio and mobile layout.');
 } finally {
   socket?.close();
   if (chrome.exitCode === null) {

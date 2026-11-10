@@ -1,0 +1,1 @@
+Execution source spans convert UTF-16 columns across Unicode and CRLF and reject invalid ranges.

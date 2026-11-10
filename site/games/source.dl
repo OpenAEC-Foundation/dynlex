@@ -1,0 +1,43 @@
+# Execution protocols use UTF-16 columns; the UI stores source byte offsets.
+import execution.dl
+import lib/unicode.dl
+
+class:
+    patterns:
+        website source span
+    members:
+        valid as a boolean
+        first as an integer
+        last as an integer
+
+to get [the website source offset at] {integer:row} column {integer:column} in {string:source} indexed by {a pointer to text line index:lines}:
+    set result to @intrinsic("construct", text position result, the invalid text position status, 0, -1)
+    set start to the start of line row in lines
+    set end to the content end of line row in lines
+    if (start failed) or (end failed):
+        return result
+    set text to the substring of source from (start's position) spanning (end's position - start's position) bytes
+    set result to the UTF-8 byte offset of UTF-16 position column in text
+    if result succeeded:
+        set result's position to result's position + start's position
+    return result
+
+to get [the website source span of] {website execution range:range} in {string:source} indexed by {a pointer to text line index:lines}:
+    set result to a new website source span
+    if range's known = false:
+        return result
+    set first to the website source offset at (range's start line) column (range's start column) in source indexed by lines
+    set last to the website source offset at (range's end line) column (range's end column) in source indexed by lines
+    if (first succeeded) and (last succeeded):
+        set result's valid to first's position <= last's position
+        set result's first to first's position
+        set result's last to last's position
+    return result
+
+to get [the website source span of] {website execution range:range} in {string:source}:
+    scan lines in source and set scanned to it
+    require condition (scanned succeeded) reporting "An execution source snapshot is not valid UTF-8"
+    set lines to the line index of scanned
+    set result to the website source span of range in source indexed by lines
+    free lines
+    return result

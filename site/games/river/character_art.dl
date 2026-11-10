@@ -1,0 +1,63 @@
+# The original mouth path is data, independent of the UI and playback controller.
+import lib/std.dl
+
+[the website wolf mouth points] means: [
+    [30.801, 61.471, 154.359],
+    [31.563, 62.915, 150.033],
+    [32.421, 64.281, 145.688],
+    [33.37, 65.565, 141.32],
+    [34.406, 66.762, 136.925],
+    [35.523, 67.867, 132.498],
+    [36.715, 68.877, 128.03],
+    [37.977, 69.787, 123.515],
+    [39.304, 70.592, 118.946],
+    [40.691, 71.287, 114.317],
+    [42.13, 71.868, 109.624],
+    [43.616, 72.329, 104.867],
+    [45.142, 72.667, 100.048],
+    [46.702, 72.875, 95.175],
+    [48.287, 72.95, 90.258],
+    [49.89, 72.888, 85.313],
+    [51.38, 72.704, 82.451],
+    [52.117, 72.63, 82.41],
+    [53.047, 72.475, 78.546],
+    [53.946, 72.26, 74.623],
+    [54.813, 71.99, 70.672],
+    [55.644, 71.665, 66.724],
+    [56.439, 71.291, 62.81],
+    [57.193, 70.871, 58.959],
+    [57.907, 70.408, 55.196],
+    [58.58, 69.908, 51.542],
+    [59.21, 69.375, 48.013],
+    [59.799, 68.812, 44.619],
+    [60.348, 68.224, 41.365],
+    [60.856, 67.614, 38.255],
+    [61.325, 66.986, 35.285],
+    [61.757, 66.343, 32.451],
+    [62.152, 65.687, 29.745]
+]
+
+class:
+    patterns:
+        website wolf tongue pose
+    members:
+        x as a floating-point number
+        y as a floating-point number
+        angle as a floating-point number
+        extension as a floating-point number
+
+to get [the website wolf tongue at] {floating-point number:phase}:
+    set result to a new website wolf tongue pose
+    set sweep to the minimum of 1.0 and (the maximum of 0.0 and ((phase - 0.18) / 0.64))
+    set position to (1.0 - sweep) * ((the length of (the website wolf mouth points)) - 1)
+    set first to (the floor of position) as an integer
+    set last to the minimum of (first + 1) and ((the length of (the website wolf mouth points)) - 1)
+    set fraction to position - first
+    set points to the website wolf mouth points
+    set start to the item at first in points
+    set end to the item at last in points
+    set result's x to (the item at 0 in start) + (((the item at 0 in end) - (the item at 0 in start)) * fraction)
+    set result's y to (the item at 1 in start) + (((the item at 1 in end) - (the item at 1 in start)) * fraction)
+    set result's angle to (the item at 2 in start) + (((the item at 2 in end) - (the item at 2 in start)) * fraction)
+    set result's extension to the maximum of 0.0 and (the minimum of 1.0 and (the minimum of (phase / 0.18) and ((1.0 - phase) / 0.18)))
+    return result

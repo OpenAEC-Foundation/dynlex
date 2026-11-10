@@ -15,7 +15,7 @@ from source_package import SourcePackage
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--compiler', type=Path, default=ROOT / 'build/dynlex')
-    parser.add_argument('--case', action='append', choices=['site_controllers', 'site_language', 'site_entry', 'site_shader', 'site_program_events', 'site_river_controller'])
+    parser.add_argument('--case', action='append', choices=['site_controllers', 'site_language', 'site_entry', 'site_shader', 'site_program_events', 'site_river_controller', 'site_river_audio'])
     args = parser.parse_args()
     package = SourcePackage(ROOT / 'site/dependencies/dynlex-ui.zip')
     with tempfile.TemporaryDirectory(prefix='dynlex-site-test-') as directory:
@@ -28,7 +28,7 @@ def main():
         fixture = project / 'tests/web/site_fixture.dl'
         fixture.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / 'tests/web/site_fixture.dl', fixture)
-        for name in args.case or ['site_controllers', 'site_language', 'site_entry', 'site_shader', 'site_program_events', 'site_river_controller']:
+        for name in args.case or ['site_controllers', 'site_language', 'site_entry', 'site_shader', 'site_program_events', 'site_river_controller', 'site_river_audio']:
             source = project / f'tests/web/{name}.dl'
             source.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / f'tests/web/{name}.dl', source)

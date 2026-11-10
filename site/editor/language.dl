@@ -144,7 +144,7 @@ to notice website source edit {a pointer to UI instance:instance}:
     set state to the website state in instance
     if the website editor uses shaders in state:
         if state's shader editor's source request != 0:
-            cancel website request (state's shader editor's source request) in state
+            ignore cancel website request (state's shader editor's source request) in state
             set state's shader editor's source request to 0
         set state's shader editor's source failed to false
         set the text of "Run program ▶" in instance to "Recompile shader ↻"

@@ -1,6 +1,7 @@
 # The game clock is independent of windows, platform requests and painting.
 import model.dl
 import trace.dl
+import audio_types.dl
 
 class:
     patterns:
@@ -14,6 +15,8 @@ class:
         event as a pointer to website river event
         position as an integer
         shown position as an integer
+        marked position as an integer
+        marked failure as a boolean
         stage as an integer
         elapsed as a floating-point number
         duration as a floating-point number
@@ -22,6 +25,7 @@ class:
         playing as a boolean
         failed as a boolean
         paused as a boolean
+        reduced motion as a boolean
         stepping as a boolean
         active as a boolean
         last seconds as a floating-point number
@@ -30,6 +34,7 @@ class:
         deliveries as an integer
         solved as a boolean
         message as a string
+        audio as website river audio
 
 # Validate the entire output before presenting any of it. User programs can print
 # arbitrary text, including strings that resemble the game's event protocol.
@@ -54,7 +59,7 @@ to [prepare website river instruction in] {a pointer to website river playback:p
     if instruction = @intrinsic("construct", a pointer to website river instruction):
         if playback's trace's outcome = 2:
             set playback's stage to 2
-            set playback's duration to 2.4
+            set playback's duration to 0.0 if (playback's reduced motion), else 2.4
         else:
             set playback's stage to 0
             set playback's playing to false
@@ -66,6 +71,8 @@ to [prepare website river instruction in] {a pointer to website river playback:p
     set playback's stage to 1
     set playback's event to instruction's first
     set playback's duration to 0.5 if (instruction's kind = 0), else 0.0
+    if playback's reduced motion:
+        set playback's duration to 0.0
     if playback's event != @intrinsic("construct", a pointer to website river event):
         prepare website river event in playback
 
@@ -84,6 +91,8 @@ to [prepare website river event in] {a pointer to website river playback:playbac
         set playback's duration to 1.5
     if kind = 6:
         set playback's duration to 0.52
+    if playback's reduced motion:
+        set playback's duration to 0.0
 
 to [begin website river replay in] {a pointer to website river playback:playback} stepping {boolean:stepping}:
     require condition (playback's trace's first != @intrinsic("construct", a pointer to website river instruction)) reporting "A river replay requires instructions"

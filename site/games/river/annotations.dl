@@ -1,0 +1,44 @@
+import ../../state.dl
+import ../source.dl
+import ../../packages/dynlex-ui/ui/text_marks.dl
+
+to get [the website river source error in] {website river trace:trace} for {string:source}:
+    scan lines in source and set scanned to it
+    require condition (scanned succeeded) reporting "The River source snapshot is not valid UTF-8"
+    set lines to the line index of scanned
+    set error to the string form of ""
+    set instruction to trace's first
+    loop while instruction != @intrinsic("construct", a pointer to website river instruction):
+        if instruction's source's known:
+            set span to the website source span of (instruction's source) in source indexed by lines
+            if span's valid = false:
+                set error to "An execution source range does not belong to the compiled plan"
+        set instruction to instruction's next
+    free lines
+    return error
+
+to [refresh website river annotations in] {a pointer to website state:state}:
+    set river to the address of (state's river)
+    set instance to state's view's instance
+    set node to the control labeled "River source" in instance
+    set value to the UI value for node in instance
+    if river's shown = @intrinsic("construct", a pointer to website river instruction):
+        if value's marks != @intrinsic("construct", a pointer to UI text mark):
+            mark UI text (value's text) in node in instance
+        set river's marked position to 0
+        set river's marked failure to false
+        return nothing
+    if (river's marked position = river's shown position) and (river's marked failure = river's failed):
+        return nothing
+    set program to state's programs + (the website program for source "River source")
+    set span to the website source span of (river's shown's source) in (program's source)
+    mark UI text (program's source) in node in instance
+    if span's valid and (span's last > span's first):
+        set ink to UI ink 104 153 178
+        if river's shown's branch != -1:
+            set ink to (UI ink 80 153 114) if (river's shown's branch = 1), else (UI ink 196 153 66)
+        if river's failed:
+            set ink to UI ink 201 88 63
+        add UI text mark ink from (span's first) to (span's last) with opacity 100 in node in instance
+    set river's marked position to river's shown position
+    set river's marked failure to river's failed

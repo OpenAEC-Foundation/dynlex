@@ -1,0 +1,17 @@
+import ../../../site/games/source.dl
+
+set source to the string form of "a😀b\r\néx\nlast"
+set range to @intrinsic("construct", website execution range, true, 0, 1, 1, 1)
+set span to the website source span of range in source
+require condition ((span's valid) and ((span's first = 1) and (span's last = 10))) reporting "A multiline UTF-16 range lost its byte positions or CRLF"
+set range's start column to 2
+set span to the website source span of range in source
+require condition (span's valid = false) reporting "A trace range split a supplementary Unicode character"
+set range's start column to 1
+set range's end line to 20
+set span to the website source span of range in source
+require condition (span's valid = false) reporting "A forged trace range exceeded its source"
+set range's known to false
+set span to the website source span of range in source
+require condition (span's valid = false) reporting "A missing trace range invented an annotation"
+print line "Execution source spans convert UTF-16 columns across Unicode and CRLF and reject invalid ranges."

@@ -1,17 +1,19 @@
 import ../../state.dl
 import assets.dl
+import character_rendering.dl
+import decorations.dl
 import ../../packages/dynlex-ui/ui/clipping.dl
 
 # World coordinates stay independent of the responsive surface size.
 to get [the website river boat box in] {website river scene:scene} across {UI bounds:world}:
-    set width to world's width * 0.148
+    set width to world's width * (0.19 if (world's width / world's height < 1.5), else 0.148)
     set height to width * 941.0 / 1672.0
     set x to 0.4 if (scene's bank = 0), else 0.6
     return UI box at (world's x + world's width * x - width / 2.0) (world's y + world's height * 0.69 - height / 2.0) sized width height
 
 to get [the website river passenger box for] {integer:subject} in {website river scene:scene} across {UI bounds:world}:
     set bank to the item at (subject - 1) in (scene's passengers)
-    set width to world's width * 0.074
+    set width to world's width * (0.1 if (world's width / world's height < 1.5), else 0.074)
     set home to [0.17, 0.23, 0.29]
     set far to [0.83, 0.77, 0.71]
     set heights to [0.49, 0.68, 0.54]
@@ -52,32 +54,6 @@ to get [the website river easing at] {floating-point number:phase} crossing {boo
     set t to (low + high) / 2.0
     return 3.0 * (1.0 - t) * (1.0 - t) * t * y1 + 3.0 * (1.0 - t) * t * t * y2 + t * t * t
 
-to get [the website river blink at] {floating-point number:seconds} cycling {floating-point number:duration} offset {floating-point number:offset}:
-    set phase to (seconds + offset) / duration
-    set phase to phase - (the floor of phase)
-    if (phase <= 0.91) or (phase >= 0.95):
-        return 0
-    if phase < 0.92:
-        return ((phase - 0.91) * 25500.0) as an integer
-    if phase > 0.94:
-        return ((0.95 - phase) * 25500.0) as an integer
-    return 255
-
-to [paint website river sprite] {integer:index} in {UI bounds:box} flipped {boolean:flipped} opacity {integer:opacity} on {UI frame:frame}:
-    set path to the string form of (the item at index in (the website river artwork))
-    set image to UI image from path in (frame's view)
-    set sample to UI box at (1.0 if flipped, else 0.0) 0.0 sized (-1.0 if flipped, else 1.0) 1.0
-    draw UI texture (image's texture) in box rounded by 0.0 sampling sample in (UI ink 255 255 255) with opacity opacity on frame
-
-to [paint website river blink] {integer:index} across {UI bounds:box} flipped {boolean:flipped} centered {floating-point number:x} {floating-point number:y} radius {floating-point number:rx} {floating-point number:ry} solid {floating-point number:solid} opacity {integer:opacity} on {UI frame:frame}:
-    if opacity = 0:
-        return nothing
-    set image to UI image from (the string form of (the item at index in (the website river artwork))) in (frame's view)
-    set sample to UI box at (1.0 if flipped, else 0.0) 0.0 sized (-1.0 if flipped, else 1.0) 1.0
-    set center to 1.0 - x if flipped, else x
-    set mask to UI box at (box's x + box's width * (center - rx)) (box's y + box's height * (y - ry)) sized (box's width * rx * 2.0) (box's height * ry * 2.0)
-    draw UI texture (image's texture) across box sampling sample masked by mask opaque through solid with opacity opacity on frame
-
 to [paint the website river] {a pointer to UI canvas frame:painting}:
     set state to the website state in (painting's instance)
     set river to the address of (state's river)
@@ -88,7 +64,8 @@ to [paint the website river] {a pointer to UI canvas frame:painting}:
         draw UI text text centered in world with (frame's view's small) in (UI ink 221 232 219) on frame
         return nothing
     set clip to a UI clip restricted to world in (frame's view) on frame
-    paint website river sprite 0 in world flipped false opacity 255 on frame
+    set landscape to UI image from (the string form of "assets/games/river/painted-river.webp") in (frame's view)
+    draw UI image landscape in world rounded by 8.0 fitting 1 on frame
     set scene to river's scene
     set target to scene
     set kind to 0
@@ -102,6 +79,14 @@ to [paint the website river] {a pointer to UI canvas frame:painting}:
         if painting's instance's reduced motion:
             set movement to 0.0
     set boat to website river box between (the website river boat box in scene across world) and (the website river boat box in target across world) at movement
+    if kind = 6:
+        set amount to progress / 0.72 if (progress < 0.72), else ((progress - 0.72) / 0.28)
+        set scale to (0.75 + 0.33 * amount) if (progress < 0.72), else (1.08 - 0.08 * amount)
+        set rise to (8.0 - 13.0 * amount) if (progress < 0.72), else (-5.0 + 5.0 * amount)
+        set boat's x to boat's x + boat's width * (1.0 - scale) / 2.0
+        set boat's y to boat's y + boat's height * (1.0 - scale) / 2.0 + rise
+        set boat's width to boat's width * scale
+        set boat's height to boat's height * scale
     set heading to target's heading if (kind = 3), else scene's heading
     set flipped to heading = 0
     paint website river sprite 1 in boat flipped flipped opacity 255 on frame
@@ -116,18 +101,18 @@ to [paint the website river] {a pointer to UI canvas frame:painting}:
         if (kind = 4) and (subject = target's prey):
             if river's elapsed > 0.65:
                 set opacity to 0
+        set scuffle to (kind = 4) and ((river's elapsed < 0.65) and ((subject = target's predator) or (subject = target's prey)))
+        if scuffle and (painting's instance's reduced motion = false):
+            save the model transform in frame
+            set wave to 0.0 - (the cosine of (river's elapsed * 20.9439510239))
+            move the model in frame by x (box's x + box's width / 2.0 + wave * 4.0), y (box's y + box's height / 2.0 - 0.5 - wave * 2.5) and z 0.0
+            rotate the model in frame by (0.5 + wave * 8.5) degrees around x 0.0, y 0.0 and z 1.0
+            move the model in frame by x (0.0 - box's x - box's width / 2.0), y (0.0 - box's y - box's height / 2.0) and z 0.0
         paint website river sprite (subject + 1) in box flipped false opacity opacity on frame
-        if (subject = 1) and (opacity > 0):
-            set blink to the website river blink at (river's seconds) cycling 6.4 offset 2.1
-            set box's y to box's y - box's height * 0.03
-            paint website river blink 6 across box flipped false centered 0.455 0.44 radius 0.09 0.09 solid 0.8 opacity blink on frame
-            paint website river blink 6 across box flipped false centered 0.68 0.44 radius 0.09 0.09 solid 0.8 opacity blink on frame
-        if (subject = 2) and (opacity > 0):
-            set blink to the website river blink at (river's seconds) cycling 8.1 offset 4.6
-            paint website river blink 7 across box flipped false centered 0.364 0.504 radius 0.08 0.075 solid 0.82 opacity blink on frame
-            set box's x to box's x - box's width * 0.018
-            set box's y to box's y + box's height * 0.012
-            paint website river blink 7 across box flipped false centered 0.559 0.49 radius 0.08 0.075 solid 0.82 opacity blink on frame
+        if opacity > 0:
+            paint website river expressions for subject in box at river on frame
+        if scuffle and (painting's instance's reduced motion = false):
+            restore the model transform in frame
         increment subject
     set hull to UI box at (boat's x) (boat's y + boat's height * 0.63) sized (boat's width) (boat's height * 0.37)
     set {hull clip} to a UI clip restricted to hull in (frame's view) on frame
@@ -135,20 +120,9 @@ to [paint the website river] {a pointer to UI canvas frame:painting}:
     restore UI clip {hull clip} in (frame's view) on frame
     if (kind = 4) or (scene's predator != 0):
         set danger to target if (kind = 4), else scene
-        set bank to the item at (danger's predator - 1) in (danger's passengers)
-        set center to 0.25 if (bank = 0), else 0.75
-        set index to 0
-        loop while index < 5:
-            set angle to index * 1.2566370614 + river's seconds * 5.0
-            set size to world's width * (0.027 + 0.004 * (the sine of (angle * 2.0)))
-            set x to world's x + world's width * (center + 0.025 * (the cosine of angle))
-            set y to world's y + world's height * (0.61 + 0.035 * (the sine of angle))
-            draw a rounded UI surface (UI box at (x - size / 2.0) (y - size / 2.0) sized size size) with radius (size / 2.0) from (UI ink 235 219 168) to (UI ink 187 157 104) opacity 210 feathered by 1.5 on frame
-            increment index
-    if scene's complete:
-        set box to UI box at (world's x + world's width * 0.36) (world's y + world's height * 0.23) sized (world's width * 0.47) 40.0
-        draw a rounded UI box box with radius 14.0 in (UI ink 238 232 201) on frame
-        draw UI text "We made it! What a brilliant plan!" centered in box with (frame's view's small) in (UI ink 35 48 37) on frame
+        paint website river dust in world for danger at (river's elapsed if (kind = 4), else (1.5 + river's elapsed)) on frame
+    if (kind = 6) or scene's complete:
+        paint website river celebration in world appearing (progress if (kind = 6), else 1.0) on frame
     if river's playing:
         set fraction to (river's position - 1.0 + progress) / river's trace's count
         draw a rounded UI box (UI box at (world's x) (world's y + world's height - 3.0) sized (world's width * fraction) 3.0) with radius 1.5 in (UI ink 242 206 123) on frame

@@ -1,0 +1,88 @@
+import ../../site/games/river/controller.dl
+import site_fixture.dl
+
+set instance to an instance of website fixture
+set view to a new UI view
+set view's instance to the address of instance
+set view's active to true
+set view's frame seconds to 0.016
+set state to a new website state
+set state's view to the address of view
+set instance's state to (the address of state) as a pointer
+initialize the website river in (the address of state)
+ignore follow website river action (the string form of "action:river") in (the address of state)
+require condition (state's river's audio's status = 1) reporting "Opening River did not load its sounds"
+set buffers to a new JSON value of kind the JSON array kind
+set index to 1
+loop while index <= 7:
+    add (a JSON object containing [JSON number "id" is index, JSON number "duration" is 2.0]) to the JSON array buffers
+    increment index
+set reply to a JSON object containing [JSON child "buffers" is buffers]
+receive website river audio reply in (the address of state)
+free reply
+advance the website river audio in (the address of state) visible true
+set audio to the address of (state's river's audio)
+require condition (((audio's voices + 0)'s id != 0) and ((audio's voices + 1)'s id != 0)) reporting "Visible River did not start music and ambience"
+require condition (audio's idle request != 0) reporting "An idle River did not schedule its sheep"
+set {last request} to state's requests' id
+advance the website river audio in (the address of state) visible true
+require condition (state's requests' id = {last request}) reporting "An unchanged audio state kept issuing platform requests"
+receive website river idle deadline in (the address of state)
+advance the website river audio in (the address of state) visible true
+require condition (((audio's voices + 3)'s id != 0) and (audio's mouth > 0.0)) reporting "The idle sheep did not bellow"
+ignore follow website river action (the string form of "action:river-audio") in (the address of state)
+advance the website river audio in (the address of state) visible true
+require condition ((audio's audible = false) and (((audio's voices + 3)'s id = 0) and (audio's idle request = 0))) reporting "Muting did not stop idle cues and timers"
+ignore follow website river action (the string form of "action:river-audio") in (the address of state)
+advance the website river audio in (the address of state) visible true
+set {program index} to the website program for source "River source"
+set program to state's programs + {program index}
+set program's phase to 1
+notice website river start {program index} in (the address of state)
+advance the website river audio in (the address of state) visible true
+require condition (audio's idle request = 0) reporting "Compiling a plan left its idle timer running"
+set event to a new website river event
+set event's kind to 3
+set state's river's event to the address of event
+set state's river's playing and state's river's active to true
+set state's river's stage to 1
+set state's river's speed to 2
+advance the website river audio in (the address of state) visible true
+require condition (((audio's voices + 2)'s cue = 5) and ((audio's voices + 2)'s rate = 2.0)) reporting "Crossing did not start a speed-controlled rowing cue"
+set state's river's active to false
+advance the website river audio in (the address of state) visible true
+require condition ((audio's voices + 2)'s rate = 0.0) reporting "Pausing the game did not pause its trace sound"
+set state's river's active to true
+set state's river's speed to 4
+advance the website river audio in (the address of state) visible true
+require condition ((audio's voices + 2)'s rate = 4.0) reporting "Resuming at another speed did not update the trace cue"
+receive website river voice 2 in (the address of state)
+advance the website river audio in (the address of state) visible true
+require condition ((audio's voices + 2)'s id = 0) reporting "A finished short cue restarted inside the same instruction"
+advance the website river audio in (the address of state) visible false
+require condition ((audio's audible = false) and ((audio's voices + 0)'s volume = 0.0)) reporting "Hidden River music did not fade out"
+fail website river audio in (the address of state)
+require condition ((audio's status = 3) and ((audio's voices + 0)'s id = 0)) reporting "An audio failure retained playing resources"
+# A failed play reply has already relinquished its request before cleanup.
+ignore follow website river action (the string form of "action:river-audio") in (the address of state)
+set buffers to a new JSON value of kind the JSON array kind
+set index to 1
+loop while index <= 7:
+    add (a JSON object containing [JSON number "id" is (index + 10), JSON number "duration" is 2.0]) to the JSON array buffers
+    increment index
+set reply to a JSON object containing [JSON child "buffers" is buffers]
+receive website river audio reply in (the address of state)
+free reply
+play website river sound 2 in slot 2 at offset 0.0 in (the address of state)
+set consumed to state's requests
+set state's requests to consumed's next
+deallocate consumed
+fail website river audio after purpose 13 indexed 2 in (the address of state)
+require condition ((audio's voices + 2)'s request = 0) reporting "Failure cleanup tried to cancel its consumed play request"
+set pending to state's requests
+loop while pending != @intrinsic("construct", a pointer to website request):
+    set next to pending's next
+    deallocate pending
+    set pending to next
+close the address of instance
+print line "River audio owns decoding, idle deadlines, muting, visibility, cue boundaries, pause, speed and failure cleanup in DynLex."

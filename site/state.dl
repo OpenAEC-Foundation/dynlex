@@ -73,25 +73,27 @@ to request {C string:service} with JSON data {string:data} for purpose {integer:
     set pending to @intrinsic("construct", website request, id, job, index, state's requests, false)
     set state's requests to storage for one slot initialized with pending
 
-to cancel website request {integer:id} in {a pointer to website state:state}:
+to get cancel website request {integer:id} in {a pointer to website state:state}:
     set pending to state's requests
     set previous to @intrinsic("construct", a pointer to website request)
-    loop while pending != @intrinsic("construct", a pointer to website request):
-        if pending's id = id:
-            if cancel browser UI request id:
-                if previous = @intrinsic("construct", a pointer to website request):
-                    set state's requests to pending's next
-                else:
-                    set previous's next to pending's next
-                deallocate pending
-            else:
-                # The reply is already in the input queue and still owns its
-                # result. Consume it normally, releasing any unused artifact.
-                set pending's cancelled to true
-            return nothing
-        set previous to pending
-        set pending to pending's next
-    require condition false reporting "The cancelled website request has no owner"
+    set found to false
+    loop while (pending != @intrinsic("construct", a pointer to website request)) and (found = false):
+        set found to pending's id = id
+        if found = false:
+            set previous to pending
+            set pending to pending's next
+    require condition found reporting "The cancelled website request has no owner"
+    set active to cancel browser UI request id
+    if active:
+        if previous = @intrinsic("construct", a pointer to website request):
+            set state's requests to pending's next
+        else:
+            set previous's next to pending's next
+        deallocate pending
+    else:
+        # The reply is already in the input queue and still owns its result.
+        set pending's cancelled to true
+    return active
 
 to get the parent of {UI reference:target} within {UI reference:root}:
     set index to 0

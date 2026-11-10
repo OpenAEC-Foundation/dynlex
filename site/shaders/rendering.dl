@@ -33,7 +33,7 @@ to get the rendered website shader {a pointer to website shader view:scene} size
     return scene's texture
 
 to advance website shader {a pointer to website shader view:scene} visible {boolean:visible} in {a pointer to UI view:view}:
-    set active to visible and ((scene's resource != (0 as a pointer)) and ((scene's paused = false) and (view's instance's reduced motion = false)))
+    set active to (visible and view's active) and ((scene's resource != (0 as a pointer)) and ((scene's paused = false) and (view's instance's reduced motion = false)))
     if active:
         set active to shader program (scene's program) uses input "time"
     if active and (scene's active):

@@ -62,6 +62,10 @@ The River challenge uses `games/river/interface.dl` for its retained description
 `controller.dl` for actions and program callbacks, `playback.dl` for its testable
 clock, and `rendering.dl` for its responsive world. Run, Stop, one-instruction
 steps, pause/resume, replay, speed, reset and coding hints use the shared UI.
+Execution marks follow the compiled source snapshot, including UTF-16 trace
+columns converted to UTF-8 editor offsets. Character expressions, music, ambience,
+effects, idle calls, visibility and mute/pause/speed policy also live in DynLex.
+The browser audio adapter owns only decoded buffers and playback primitives.
 Its program prefix and tracing options live in `programs/types.dl`; protocol
 output is retained for replay instead of being shown as console text.
 
@@ -74,6 +78,6 @@ env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET DYNLEX_BACKGROUND_BROWSER=1 XDG_SESSION
 Migration is in progress. The current build contains the homepage, eleven
 documentation pages, downloads, an explicit missing page and the initial IDE,
 including live diagnostics, semantic colors and editable shader previews.
-River audio, execution highlighting and saved progress, the farm/account flows,
+River saved progress and language-service integration, the farm/account flows,
 further editor features, accessibility and deployment migration remain.
 The existing deployment has not been replaced.

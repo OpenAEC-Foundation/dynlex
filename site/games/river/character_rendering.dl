@@ -1,0 +1,40 @@
+import character_art.dl
+import playback.dl
+import sprites.dl
+import ../../packages/dynlex-ui/ui/images.dl
+
+# Blinks and expressions are composited over the original painted body.
+to [paint website river expressions for] {integer:subject} in {UI bounds:actor} at {a pointer to website river playback:river} on {UI frame:frame}:
+    if subject = 1:
+        set blink to the website river blink at (river's seconds) cycling 6.4 offset 2.1
+        set box to actor
+        set box's y to box's y - box's height * 0.03
+        paint website river blink 6 across box flipped false centered 0.455 0.44 radius 0.09 0.09 solid 0.8 opacity blink on frame
+        paint website river blink 6 across box flipped false centered 0.68 0.44 radius 0.09 0.09 solid 0.8 opacity blink on frame
+        set mouth to river's audio's mouth
+        if mouth > 0.01:
+            set box to UI box at (actor's x + actor's width * 0.515) (actor's y + actor's height * 0.485) sized (actor's width * 0.09) (actor's height * 0.07 * mouth)
+            draw a rounded UI box box with radius (box's height * 0.45) in (UI ink 33 23 24) on frame
+            set box's x to box's x + box's width * 0.16
+            set box's y to box's y + box's height * 0.62
+            set box's width to box's width * 0.68
+            set box's height to box's height * 0.34
+            draw a rounded UI box box with radius (box's height / 2.0) in (UI ink 185 93 104) on frame
+    if subject = 2:
+        set blink to the website river blink at (river's seconds) cycling 8.1 offset 4.6
+        paint website river blink 7 across actor flipped false centered 0.364 0.504 radius 0.08 0.075 solid 0.82 opacity blink on frame
+        set box to actor
+        set box's x to box's x - box's width * 0.018
+        set box's y to box's y + box's height * 0.012
+        paint website river blink 7 across box flipped false centered 0.559 0.49 radius 0.08 0.075 solid 0.82 opacity blink on frame
+        if (river's stage = 1) and (river's event != @intrinsic("construct", a pointer to website river event)):
+            if (river's event's kind = 4) and (river's elapsed >= 0.65):
+                set pose to the website wolf tongue at ((river's elapsed - 0.65) / 0.85)
+                set width to actor's width * 0.052
+                set height to width * (40.0 / 39.0)
+                save the model transform in frame
+                move the model in frame by x (actor's x + actor's width * (pose's x / 100.0)), y (actor's y + actor's height * (pose's y / 100.0)) and z 0.0
+                rotate the model in frame by (pose's angle) degrees around x 0.0, y 0.0 and z 1.0
+                set box to UI box at (-0.5 * width) (-0.5 * height) sized (width * pose's extension) height
+                paint website river sprite 8 in box flipped false opacity ((255.0 * pose's extension) as an integer) on frame
+                restore the model transform in frame

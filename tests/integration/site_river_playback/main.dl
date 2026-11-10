@@ -20,6 +20,14 @@ require condition ((playback's scene's bank = 1) and (playback's scene's cargo =
 advance website river playback (the address of playback) by 0.28
 require condition ((playback's playing = false) and ((playback's deliveries = 1) and (playback's passenger))) reporting "A safe unfinished plan did not stop or record its distinct goals"
 require condition ((playback's scene's bank = 1) and ((the item at 0 in (playback's scene's passengers)) = 1)) reporting "An incomplete plan reset the world"
+set playback's reduced motion to true
+begin website river replay in (the address of playback) stepping true
+advance website river playback (the address of playback) by 0.0
+require condition (playback's paused and (playback's scene's cargo = 1)) reporting "Reduced motion lost the single-instruction boundary"
+set playback's stepping and playback's paused to false
+advance website river playback (the address of playback) by 0.0
+require condition ((playback's playing = false) and (playback's scene's bank = 1)) reporting "Reduced motion retained animation delays"
+set playback's reduced motion to false
 free website river trace the address of (playback's trace)
 set playback's trace to website river trace from (the string form of "RIVER|COMMAND|CROSS\nRIVER|ACTION|CROSS|FAR\nRIVER|DANGER|WOLF|SHEEP\nRIVER|ERROR|The wolf ate the sheep.\n") dropping 2 source lines
 begin website river replay in (the address of playback) stepping false

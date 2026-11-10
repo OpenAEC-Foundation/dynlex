@@ -21,6 +21,8 @@ appearance river stage appearance:
     aspect ratio is 16 by 9
     corner radius is 8
     background is UI ink 11 93 110
+    when viewport is below 700:
+        aspect ratio is 4 by 3
 
 appearance river code appearance:
     use code appearance
@@ -92,7 +94,9 @@ document river challenge using river panel appearance:
                 link "One instruction" to "action:river-step" using river action appearance
                 link "River speed" to "action:river-speed" using river action appearance
                 link "Reset scene ↺" to "action:river-reset" using river action appearance
+                link "River audio" to "action:river-audio" using river action appearance
                 link "Retry artwork ↻" to "action:river-retry-art" using river action appearance
+            paragraph "River audio status" containing "" using river signal appearance
             paragraph "River message" containing "The farmer can take one passenger at a time." using river text appearance
     paragraph "OPTIONAL CODING GOALS" using river signal appearance
     region "River goals" using cards appearance:
@@ -118,3 +122,4 @@ document river challenge using river panel appearance:
                 region "Rescue hint closed" using no UI appearance:
                 paragraph "Step through your plan. After each crossing, check who is alone on each shore. Name repeated commands with a function beginning with to." using river hint appearance
     paragraph "PAINTED FOR DYNLEX / ORIGINAL GAME ART" using river signal appearance
+    link "MUSIC / SOUNOVAMUSIC · PIXABAY ↗" to "https://pixabay.com/music/happy-childrens-tunes-puzzle-amp-casual-game-music-460543/" using river signal appearance

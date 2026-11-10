@@ -1,0 +1,125 @@
+import ../../state.dl
+import lib/random.dl
+
+# Voice slots: music, ambience, current instruction, idle sheep, celebration.
+to [load the website river audio in] {a pointer to website state:state}:
+    set audio to the address of (state's river's audio)
+    require condition ((audio's status = 0) or (audio's status = 3)) reporting "River audio was loaded twice"
+    set audio's status to 1
+    set audio's idle first to true
+    set urls to a new JSON value of kind the JSON array kind
+    for each sound in (the website river sounds):
+        set entry to JSON text "" is (sound's path)
+        add (entry's value) to the JSON array urls
+    request "audio" containing (a JSON object containing [JSON text "operation" is "load", JSON child "urls" is urls]) for purpose 11 indexed 0 in state
+    set audio's load request to state's requests' id
+    seed the random number generator with (the current time as a 32 bit unsigned integer)
+
+to [stop website river voice] {integer:slot} in {a pointer to website state:state}:
+    set voice to state's river's audio's voices + slot
+    set cancelled to false
+    if voice's request != 0:
+        set cancelled to cancel website request (voice's request) in state
+        set voice's request to 0
+    if voice's id != 0:
+        if cancelled = false:
+            request "audio" containing (a JSON object containing [JSON text "operation" is "release", JSON number "voice" is (voice's id)]) for purpose 0 indexed 0 in state
+        set voice's id to 0
+
+to [stop website river idle sound in] {a pointer to website state:state}:
+    set audio to the address of (state's river's audio)
+    if audio's idle request != 0:
+        ignore cancel website request (audio's idle request) in state
+        set audio's idle request to 0
+    stop website river voice 3 in state
+    set audio's idle first to true
+
+to [stop website river effects in] {a pointer to website state:state}:
+    stop website river voice 2 in state
+    stop website river voice 4 in state
+    stop website river idle sound in state
+    set state's river's audio's effect to @intrinsic("construct", a pointer to website river event)
+    set state's river's audio's celebrated to false
+
+to [play website river sound] {integer:cue} in slot {integer:slot} at offset {floating-point number:offset} in {a pointer to website state:state}:
+    set audio to the address of (state's river's audio)
+    require condition (audio's status = 2) reporting "River audio must be decoded before playback"
+    stop website river voice slot in state
+    set voice to audio's voices + slot
+    set sound to the item at cue in (the website river sounds)
+    increment audio's serial
+    set voice's id to audio's serial
+    set voice's cue to cue
+    set voice's volume to sound's volume if (audio's audible), else 0.0
+    set voice's rate to sound's pitch
+    if slot = 2:
+        set voice's rate to 0.0 if (state's river's active = false), else (sound's pitch * state's river's speed)
+    request "audio" containing (a JSON object containing [
+        JSON text "operation" is "play", JSON number "voice" is (voice's id),
+        JSON number "buffer" is (the item at cue in (audio's buffers)),
+        JSON number "volume" is (voice's volume), JSON number "rate" is (voice's rate),
+        JSON number "offset" is offset, JSON flag "loop" is (sound's loop)
+    ]) for purpose 13 indexed slot in state
+    set voice's request to state's requests' id
+
+to [receive website river audio] {a pointer to JSON value:response} in {a pointer to website state:state}:
+    set audio to the address of (state's river's audio)
+    set buffers to the JSON member named "buffers" in response
+    require condition (buffers's length = (the length of (the website river sounds))) reporting "A decoded River sound is missing"
+    set index to 0
+    loop while index < buffers's length:
+        set buffer to the JSON value at index index in buffers
+        store ((the JSON number named "id" in buffer) as an integer) into (audio's buffers) at index
+        increment index
+    set audio's status to 2
+    set audio's load request to 0
+
+to [receive website river voice] {integer:slot} in {a pointer to website state:state}:
+    set voice to state's river's audio's voices + slot
+    set voice's request to 0
+    stop website river voice slot in state
+    if slot = 3:
+        set state's river's audio's idle first to false
+
+to [receive website river idle deadline in] {a pointer to website state:state}:
+    set audio to the address of (state's river's audio)
+    require condition (audio's idle request != 0) reporting "A River idle timer has no owner"
+    set audio's idle request to 0
+    play website river sound 3 in slot 3 at offset 0.0 in state
+
+to [fail website river audio in] {a pointer to website state:state}:
+    set audio to the address of (state's river's audio)
+    set audio's status to 3
+    if audio's load request != 0:
+        ignore cancel website request (audio's load request) in state
+        set audio's load request to 0
+    set slot to 0
+    loop while slot < 5:
+        stop website river voice slot in state
+        increment slot
+    stop website river idle sound in state
+    set buffers to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of (the website river sounds):
+        set id to the item at index in (audio's buffers)
+        if id != 0:
+            set member to JSON number "" is id
+            add (member's value) to the JSON array buffers
+            store 0 into (audio's buffers) at index
+        increment index
+    if buffers's length > 0:
+        request "audio" containing (a JSON object containing [JSON text "operation" is "unload", JSON child "buffers" is buffers]) for purpose 0 indexed 0 in state
+    else:
+        free buffers
+    set the text of "River audio status" in (state's view's instance) to "An error occurred. Check the log."
+
+to [fail website river audio after purpose] {integer:job} indexed {integer:index} in {a pointer to website state:state}:
+    set audio to the address of (state's river's audio)
+    if job = 11:
+        set audio's load request to 0
+    if job = 12:
+        set audio's idle request to 0
+    if job = 13:
+        set (audio's voices + index)'s request to 0
+        set (audio's voices + index)'s id to 0
+    fail website river audio in state

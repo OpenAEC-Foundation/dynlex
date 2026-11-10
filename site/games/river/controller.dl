@@ -1,8 +1,11 @@
 import ../../programs/controller.dl
 import assets.dl
+import annotations.dl
+import audio_policy.dl
 
 # Commands change the model here; surfaces only draw its current snapshots.
 to [refresh website river controls in] {a pointer to website state:state}:
+    refresh website river annotations in state
     set river to the address of (state's river)
     set instance to state's view's instance
     set program to state's programs + (the website program for source "River source")
@@ -11,6 +14,12 @@ to [refresh website river controls in] {a pointer to website state:state}:
     set the "Stop plan ■" control in instance enabled (program's phase != 0)
     set the "One instruction" control in instance enabled (busy = false)
     set the "River play" control in instance enabled ((busy = false) and (river's trace's count > 0))
+    set {audio caption} to "Audio off ♪" if (river's audio's muted), else "Audio on ♪"
+    if river's audio's status = 1:
+        set {audio caption} to "Loading audio…"
+    if river's audio's status = 3:
+        set {audio caption} to "Retry audio ↻"
+    set the text of "River audio" in instance to {audio caption}
     set caption to the string form of "Replay ▶"
     if river's playing:
         set caption to "Play ▶" if (river's paused), else "Pause Ⅱ"
@@ -54,6 +63,7 @@ to [refresh website river controls in] {a pointer to website state:state}:
 function [notice website river start] {integer:index} in {a pointer to website state:state}:
     execute:
         set river to the address of (state's river)
+        stop website river effects in state
         free website river trace the address of (river's trace)
         set river's trace to a new website river trace
         set river's scene to the initial website river scene
@@ -74,10 +84,13 @@ function [notice website river finish] {integer:index} in {a pointer to website 
         set program to state's programs + index
         set river to the address of (state's river)
         set river's active to false
+        set river's reduced motion to state's view's instance's reduced motion
         if program's result = 1:
             set description to the item at index in (the website program descriptions)
             set trace to website river trace from (program's output) dropping (the website prefix line count of description) source lines
             set error to the website river trace error in trace
+            if error's length = 0:
+                set error to the website river source error in trace for (program's source)
             if error's length > 0:
                 request "log" containing (a JSON object containing [JSON text "level" is "error", JSON text "message" is ("River plan: " + error)]) for purpose 0 indexed 0 in state
                 set the text of "River diagnostics" in (state's view's instance) to "The plan did not produce valid River instructions. Check the log."
@@ -125,6 +138,8 @@ to get [follow website river action] {string:destination} in {a pointer to websi
     set program to state's programs + index
     if destination = "action:river":
         set the value of "Challenge views" in instance to 1
+        if (river's audio's status = 0) or (river's audio's status = 3):
+            load the website river audio in state
         refresh website river controls in state
         return true
     if destination = "action:challenge-gallery":
@@ -137,6 +152,7 @@ to get [follow website river action] {string:destination} in {a pointer to websi
             set river's stepping to false
             set river's active to false
         else:
+            set river's reduced motion to instance's reduced motion
             begin website river replay in river stepping false
             set program's phase to 3
         refresh website river controls in state
@@ -147,6 +163,7 @@ to get [follow website river action] {string:destination} in {a pointer to websi
             set river's stepping to true
             set river's active to false
         else if river's trace's count > 0:
+            set river's reduced motion to instance's reduced motion
             begin website river replay in river stepping true
             set program's phase to 3
         else:
@@ -159,6 +176,7 @@ to get [follow website river action] {string:destination} in {a pointer to websi
         refresh website river controls in state
         return true
     if destination = "action:river-reset":
+        stop website river effects in state
         stop website program index in state
         set river's scene to the initial website river scene
         set river's target to river's scene
@@ -171,6 +189,13 @@ to get [follow website river action] {string:destination} in {a pointer to websi
         set the text of "River execution" in instance to "Write a plan. Run it, or take one instruction at a time."
         set the text of "River diagnostics" in instance to ""
         set the text of "River status" in instance to "Ready."
+        refresh website river controls in state
+        return true
+    if destination = "action:river-audio":
+        if river's audio's status = 3:
+            load the website river audio in state
+        else:
+            set river's audio's muted to river's audio's muted = false
         refresh website river controls in state
         return true
     if destination = "action:river-retry-art":
@@ -213,3 +238,4 @@ to [advance the website river in] {a pointer to website state:state}:
                 set caption to "Try again."
             set the text of "River status" in (view's instance) to caption
     refresh website river controls in state
+    advance the website river audio in state

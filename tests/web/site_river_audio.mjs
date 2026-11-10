@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { recordWebsiteProgram } from './recording_runtime.mjs';
+const {output,requests,cancelled}=await recordWebsiteProgram(process.argv[2],{cancelRequest:()=>true});
+assert.equal(output,'River audio owns decoding, idle deadlines, muting, visibility, cue boundaries, pause, speed and failure cleanup in DynLex.\n');
+assert.equal(requests[0].payload.operation,'load');assert.equal(requests[0].payload.urls.length,7);
+assert(requests.some(item=>item.service==='timer' && item.payload.milliseconds===4000));
+const states=requests.filter(item=>item.service==='audio' && item.payload.operation==='state');
+assert(states.some(item=>item.payload.rate===0));assert(states.some(item=>item.payload.rate===4));
+assert(cancelled.length>=4);
+const cancelledVoices=cancelled.map(id=>requests[id-1]).filter(item=>item.service==='audio' && item.payload.operation==='play').map(item=>item.payload.voice);
+assert(!requests.some(item=>item.service==='audio' && item.payload.operation==='release' && cancelledVoices.includes(item.payload.voice)),'The client released a voice whose creation request had been cancelled');
+console.log('River audio policy and owned request lifecycle passed.');

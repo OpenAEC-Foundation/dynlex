@@ -7,7 +7,7 @@ to stop website [program] {integer:index} in {a pointer to website state:state}:
     if index = 2:
         set editor to the address of (state's shader editor)
         if editor's source request != 0:
-            cancel website request (editor's source request) in state
+            ignore cancel website request (editor's source request) in state
             set editor's source request to 0
             set editor's source failed to true
             set the text of "IDE status" in (state's view's instance) to "Stopped."
@@ -21,7 +21,7 @@ to stop website [program] {integer:index} in {a pointer to website state:state}:
     if program's phase = 0:
         return nothing
     if program's phase != 3:
-        cancel website request (program's request) in state
+        ignore cancel website request (program's request) in state
     set program's phase to 0
     set program's request to 0
     set description to the item at index in (the website program descriptions)

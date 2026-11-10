@@ -13,9 +13,11 @@ set state's view to the address of view
 set instance's state to (the address of state) as a pointer
 initialize the website river in (the address of state)
 set state's river's artwork to 1
+set state's river's audio's status to 2
 require condition ((the UI element (the control labeled "River play" in (the address of instance)) is enabled in (the address of instance)) = false) reporting "A game without a trace allowed Replay"
 require condition (follow website river action (the string form of "action:river") in (the address of state)) reporting "The challenge action was not registered"
 require condition ((the value of "Challenge views" in (the address of instance)) = 1) reporting "Opening the river did not select its UI"
+set the text of "River source" in (the address of instance) to "get the sheep in the boat\nrow to the other side"
 ignore follow website river action (the string form of "action:river-step") in (the address of state)
 set index to the website program for source "River source"
 set program to state's programs + index
@@ -24,11 +26,13 @@ require condition ((the UI element (the control labeled "One instruction" in (th
 set reply to a JSON object containing [JSON number "status" is 0, JSON number "artifact" is 42, JSON number "milliseconds" is 0.5]
 receive website compilation reply for index in (the address of state)
 free reply
-set program's output to "RIVER|COMMAND|LOAD|SHEEP\nRIVER|ACTION|LOAD|SHEEP\nRIVER|COMMAND|CROSS\nRIVER|ACTION|CROSS|FAR\n"
+set program's output to "DYNLEX|TRACE|2|0|2|25|-1\nRIVER|COMMAND|LOAD|SHEEP\nRIVER|ACTION|LOAD|SHEEP\nDYNLEX|TRACE|3|0|3|21|-1\nRIVER|COMMAND|CROSS\nRIVER|ACTION|CROSS|FAR\n"
 set reply to a JSON object containing [JSON number "milliseconds" is 1]
 receive website execution reply for index in (the address of state)
 free reply
 require condition ((program's phase = 3) and (state's river's playing)) reporting "A valid trace did not begin its presentation"
+set annotation to (the UI value for (the control labeled "River source" in (the address of instance)) in (the address of instance))'s marks
+require condition ((annotation != @intrinsic("construct", a pointer to UI text mark)) and (annotation's start = 0)) reporting "The executing instruction was not marked in its source"
 advance website river playback (the address of (state's river)) by 0.56
 require condition ((state's river's paused) and (state's river's scene's cargo = 1)) reporting "The requested first step did not stop after loading"
 ignore follow website river action (the string form of "action:river-play") in (the address of state)
