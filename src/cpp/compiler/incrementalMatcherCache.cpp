@@ -6,6 +6,7 @@
 #include "patternDefinition.h"
 #include "patternReference.h"
 #include "section.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/BLAKE3.h"
 #include <algorithm>
@@ -267,7 +268,8 @@ std::string IncrementalMatcherCache::key(PatternReference &reference, bool track
 	requireCompilerInvariant(range.line && range.line->sourceFile, "incremental matcher reference has no source");
 	if (!reference.matcherKeyLiterals) {
 		auto literals = std::make_unique<MatcherKeyLiterals>();
-		std::vector<std::string_view> candidates;
+		// Punctuation and spaces create many duplicate substrings; sort only distinct candidates.
+		llvm::SmallDenseSet<llvm::StringRef, 64> candidateSet;
 		auto includeStartLiterals = [&](std::string_view text) {
 			for (size_t runStart = 0; runStart < text.size();) {
 				auto category = [](unsigned char character) {
@@ -281,11 +283,11 @@ std::string IncrementalMatcherCache::key(PatternReference &reference, bool track
 					runEnd++;
 				if (runCategory == 0) {
 					// Word elements are atomic; only Other elements can split during matching.
-					candidates.push_back(text.substr(runStart, runEnd - runStart));
+					candidateSet.insert(llvm::StringRef(text.data() + runStart, runEnd - runStart));
 				} else {
 					for (size_t start = runStart; start < runEnd; start++)
 						for (size_t end = start + 1; end <= runEnd; end++)
-							candidates.push_back(text.substr(start, end - start));
+							candidateSet.insert(llvm::StringRef(text.data() + start, end - start));
 				}
 				runStart = runEnd;
 			}
@@ -300,8 +302,11 @@ std::string IncrementalMatcherCache::key(PatternReference &reference, bool track
 					includeStartLiterals(*literals->numericSpellings.back());
 			}
 		}
+		std::vector<std::string_view> candidates;
+		candidates.reserve(candidateSet.size());
+		for (llvm::StringRef candidate : candidateSet)
+			candidates.emplace_back(candidate.data(), candidate.size());
 		std::sort(candidates.begin(), candidates.end());
-		candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
 		literals->possibleStartLiterals.reserve(candidates.size());
 		for (std::string_view candidate : candidates)
 			literals->possibleStartLiterals.emplace_back(candidate);
