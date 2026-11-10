@@ -837,10 +837,11 @@ reference's matcher input. Missing literal words exclude a path; numeric argumen
 use their matcher spelling. The specificity search uses the definition's indexed
 canonical paths after insertion. This keeps unrelated callers resolved during cold and
 edited builds while retaining rematches for genuinely competing patterns.
-Body references whose enclosing definitions have no pending implicit parameter
-candidate wait until definitions are indexed. They then resolve once against the
-completed tree, avoiding failed matches and later specificity retries. A
-single-word alternative can still promote an implicit parameter from its body,
+Body references whose parsed elements do not contain a pending implicit
+parameter candidate wait until definitions are indexed. A substring of another
+word is not a candidate. They resolve once against the completed tree, avoiding
+failed matches and later specificity retries. A single-word alternative can
+still promote an implicit parameter from its body,
 so early indexing alone does not make its references eligible to wait.
 Implicit-parameter candidate counts use one section-tree walk. Each body
 reference contributes once to candidate words in ancestor definition sections,

@@ -530,6 +530,21 @@ def check_independent_reference_delay(root, build):
         "top-level execution invalidated a function without global access"
     assert top_level[1:] == build(False, entry=main)[1:]
 
+    overlap = root / "candidate_substring_delay.dl"
+    overlap_source = ('to use it:\n'
+                      '    @intrinsic("discard", print)\n'
+                      'print means: 1\n'
+                      'to helper:\n'
+                      '    @intrinsic("discard", 1)\n'
+                      'use it\n')
+    overlap.write_text(overlap_source)
+    build(entry=overlap)
+    overlap.write_text(overlap_source.replace('"discard", 1', '"discard", 2'))
+    overlap_edit = build(entry=overlap)
+    assert overlap_edit[0]["deferred_match_keys_replayed"] >= 1, \
+        "a substring-only candidate delayed an unrelated body match"
+    assert overlap_edit[1:] == build(False, entry=overlap)[1:]
+
 
 def check_generated_accessor_graph_edges(root, build):
     main = root / "generated_accessor_graph.dl"

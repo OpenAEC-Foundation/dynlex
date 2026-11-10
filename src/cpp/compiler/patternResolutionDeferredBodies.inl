@@ -15,14 +15,12 @@ static bool bodyReferenceCanWaitForDefinitions(const PatternReference *reference
 				return false;
 			foundOrdinaryFunction = true;
 		}
-		for (PatternDefinition *definition : section->patternDefinitions) {
-			bool canClassifyParameter = false;
-			forEachLeafElement(definition->patternElements, [&](const DefinitionPatternElement &element) {
-				canClassifyParameter |= section->canPromoteImplicitParameter(*definition, element) &&
-										section->variableLikeCounts.at(element.text) != 0 &&
-										reference->pattern.text.find(element.text) != std::string::npos;
-			});
-			if (canClassifyParameter)
+		// The count map was populated only with promotable definition words.
+		for (const PatternElement &element : reference->patternElements) {
+			if (element.type != PatternElement::Type::VariableLike)
+				continue;
+			auto candidate = section->variableLikeCounts.find(element.text);
+			if (candidate != section->variableLikeCounts.end() && candidate->second != 0)
 				return false;
 		}
 	}
