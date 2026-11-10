@@ -1109,10 +1109,17 @@ Successful native builds persist direct section dependencies from resolved match
 and inferred call selections, with reverse edges for invalidation. When the next
 build has the same matching environment, an edited section marks only its reverse
 reachable callers dirty; a preinferred section with an unchanged interface stops
-that propagation. Missing graph entries use the current expression walk. Inference
-variants restored from cache carry their prior call dependencies forward, while
-newly inferred variants capture current calls. Imported LLVM functions also retain
-their prior variant dependencies when their bodies were not re-inferred.
+that propagation. Inference variants restored from cache carry their prior call
+dependencies forward, while newly inferred variants capture current calls.
+Imported LLVM functions retain their prior variant dependencies when their bodies
+were not re-inferred.
+
+The graph follows instantiated replacement bodies, caller bodies, static loop
+iterations, and data expressions, including compile-time-only callable queries.
+A callable signature records its candidate set and owning sections. Adding or
+removing a candidate dirties those sections even when their ordinary pattern
+matches are unchanged. Deleted sections also propagate invalidation through their
+saved reverse edges.
 The graph speeds preinference and codegen
 eligibility checks; section parsing and resolution still rebuild their state.
 The graph payload stores section paths once and indexes forward, reverse, and

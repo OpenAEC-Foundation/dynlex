@@ -1,26 +1,48 @@
-std::optional<std::unordered_set<std::string>> dirtySectionsFromSavedGraph(
+std::unordered_set<std::string> dirtySectionsFromSavedGraph(
 	const Json &graph, const std::map<std::string, Section *> &sections,
-	const std::unordered_map<const Section *, bool> &unchanged, const std::unordered_set<const Section *> &stableBoundaries
+	const std::unordered_map<const Section *, bool> &unchanged, const std::unordered_set<const Section *> &stableBoundaries,
+	bool matchingEnvironmentChanged
 ) {
 	const Json &forward = graph.at("forward");
 	const Json &reverse = graph.at("reverse");
-	if (forward.size() != sections.size())
-		return std::nullopt;
 	std::unordered_set<std::string> dirty;
 	std::vector<std::string> pending;
 	auto markDirty = [&](const std::string &path) {
 		auto found = sections.find(path);
-		if (found == sections.end())
-			return false;
-		if (!stableBoundaries.contains(found->second) && dirty.insert(path).second)
+		if ((found == sections.end() || !stableBoundaries.contains(found->second)) && dirty.insert(path).second)
 			pending.push_back(path);
-		return true;
 	};
+	std::unordered_map<const Section *, std::string_view> currentPaths;
+	if (matchingEnvironmentChanged)
+		for (const auto &[path, section] : sections)
+			currentPaths.emplace(section, path);
 	for (const auto &[path, section] : sections) {
-		if (!forward.contains(path))
-			return std::nullopt;
-		if (!unchanged.at(section) && !markDirty(path))
-			return std::nullopt;
+		if (!forward.contains(path) || !unchanged.at(section)) {
+			markDirty(path);
+			continue;
+		}
+		if (matchingEnvironmentChanged) {
+			std::vector<Section *> currentMatches;
+			collectMatchedSectionDependencies(section, currentMatches);
+			const Json &saved = forward.at(path);
+			if (std::ranges::any_of(currentMatches, [&](const Section *dependency) {
+					return std::ranges::none_of(saved, [&](const Json &edge) {
+						return edge.get_ref<const std::string &>() == currentPaths.at(dependency);
+					});
+				}))
+				markDirty(path);
+		}
+	}
+	for (const auto &[path, _] : forward.items())
+		if (!sections.contains(path))
+			markDirty(path);
+	if (matchingEnvironmentChanged) {
+		const Json &lookups = graph.at("callable_lookups");
+		Json candidates = callableCandidateSets(sections, lookups);
+		for (const auto &[signature, lookup] : lookups.items())
+			if (lookup.at("candidates") != candidates.at(signature))
+				for (const Json &owner : lookup.at("owners"))
+					markDirty(owner.get_ref<const std::string &>());
 	}
 	while (!pending.empty()) {
 		std::string path = std::move(pending.back());
@@ -28,8 +50,7 @@ std::optional<std::unordered_set<std::string>> dirtySectionsFromSavedGraph(
 		if (!reverse.contains(path))
 			continue;
 		for (const Json &caller : reverse.at(path))
-			if (!markDirty(caller.get<std::string>()))
-				return std::nullopt;
+			markDirty(caller.get_ref<const std::string &>());
 	}
 	return dirty;
 }
@@ -56,23 +77,16 @@ std::unordered_set<const Section *> eligibleCodegenSections(
 		unchanged[section] = (fullyCompatible || section != context.mainSection) &&
 							 (unchangedSectionBody(*section, path, priorProjection, currentProjection) ||
 							  interfaceStableChanges.contains(section));
-	if (fullyCompatible && previous.contains("section_dependency_graph")) {
-		auto dirty =
-			dirtySectionsFromSavedGraph(previous.at("section_dependency_graph"), sections, unchanged, interfaceStableChanges);
-		if (dirty) {
-			for (const auto &[path, section] : sections)
-				if (reusableCodegenSection(*section) && !interfaceStableChanges.contains(section) && !dirty->contains(path)) {
-					eligible.insert(section);
-					if (graphReused)
-						(*graphReused)++;
-				}
-			return eligible;
-		}
-	}
-	std::unordered_map<Section *, bool> memo;
-	for (const auto &[_, section] : sections)
+	auto dirty = dirtySectionsFromSavedGraph(
+		previous.at("section_dependency_graph"), sections, unchanged, interfaceStableChanges,
+		priorProjection.at("final_matcher_tree") != currentProjection.at("final_matcher_tree")
+	);
+	for (const auto &[path, section] : sections)
 		if (reusableCodegenSection(*section) && !interfaceStableChanges.contains(section) &&
-			functionDependenciesUnchanged(section, unchanged, memo, interfaceStableChanges))
+			!dirty.contains(path)) {
 			eligible.insert(section);
+			if (graphReused)
+				(*graphReused)++;
+		}
 	return eligible;
 }

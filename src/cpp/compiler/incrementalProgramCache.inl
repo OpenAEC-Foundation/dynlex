@@ -41,11 +41,17 @@ Json encodeSectionGraph(const Json &graph) {
 	Json encodedReverse = Json::array();
 	for (const auto &[path, callers] : graph.at("reverse").items())
 		encodedReverse.push_back(Json::array({ids.at(path), encodeEdges(callers)}));
+	Json encodedLookups = Json::object();
+	for (const auto &[signature, lookup] : graph.at("callable_lookups").items())
+		encodedLookups[signature] = Json{
+			{"owners", encodeEdges(lookup.at("owners"))}, {"candidates", lookup.at("candidates")}
+		};
 	return Json{
 		{"paths", std::move(paths)},
 		{"forward", std::move(encodedForward)},
 		{"reverse", std::move(encodedReverse)},
-		{"instantiations", std::move(encodedInstantiations)}
+		{"instantiations", std::move(encodedInstantiations)},
+		{"callable_lookups", std::move(encodedLookups)}
 	};
 }
 
@@ -62,7 +68,10 @@ Json decodeSectionGraph(const Json &encoded) {
 			result.push_back(paths.at(id.get<size_t>()));
 		return result;
 	};
-	Json graph{{"forward", Json::object()}, {"reverse", Json::object()}, {"instantiations", Json::object()}};
+	Json graph{
+		{"forward", Json::object()}, {"reverse", Json::object()}, {"instantiations", Json::object()},
+		{"callable_lookups", Json::object()}
+	};
 	for (size_t index = 0; index < paths.size(); index++) {
 		const std::string &path = paths.at(index).get_ref<const std::string &>();
 		graph["forward"][path] = decodeEdges(forward.at(index));
@@ -73,6 +82,10 @@ Json decodeSectionGraph(const Json &encoded) {
 	}
 	for (const Json &entry : encoded.at("reverse"))
 		graph["reverse"][paths.at(entry.at(0).get<size_t>()).get<std::string>()] = decodeEdges(entry.at(1));
+	for (const auto &[signature, lookup] : encoded.at("callable_lookups").items())
+		graph["callable_lookups"][signature] = Json{
+			{"owners", decodeEdges(lookup.at("owners"))}, {"candidates", lookup.at("candidates")}
+		};
 	return graph;
 }
 

@@ -20,6 +20,7 @@ from test_incremental_optimization_units import check_optimization_units
 from test_incremental_body_units import check_body_resolution_units
 from test_incremental_native_codegen import check_optimized_native_codegen
 from test_incremental_classification import check_recursive_classification_cascade
+from test_incremental_inferred_dependencies import check_inferred_section_dependencies
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -468,6 +469,7 @@ function left times right:
     check_header_parameter_constraint_owner(root, build)
     check_cross_file_typed_overload(root, build)
     check_reused_ir_dependency_graph_variants(root, build)
+    check_inferred_section_dependencies(root, build)
     check_leaf_dependency_cascade(root, build)
     check_resolved_declaration_snapshot_reuse(root, build)
     specific_main = root / "specific_addition.dl"

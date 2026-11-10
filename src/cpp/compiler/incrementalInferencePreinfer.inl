@@ -40,7 +40,10 @@ IncrementalPreinferPlan incrementalInferenceCandidates(
 		std::map<std::string, Section *> sections;
 		for (const auto &[section, path] : sectionPaths)
 			sections.emplace(path, const_cast<Section *>(section));
-		graphDirty = dirtySectionsFromSavedGraph(previous.at("section_dependency_graph"), sections, globalFree, {});
+		graphDirty = dirtySectionsFromSavedGraph(
+			previous.at("section_dependency_graph"), sections, globalFree, {},
+			prior.at("final_matcher_tree") != current.at("final_matcher_tree")
+		);
 	}
 	std::unordered_map<Section *, bool> globalFreeClosure;
 	for (const auto &[section, path] : sectionPaths) {
