@@ -245,6 +245,7 @@ bool hasNoGlobalAccess(const Section *section);
 
 #include "incrementalFunctionProjection.inl"
 #include "incrementalExecutionProjection.inl"
+#include "incrementalInactiveBodyResolution.inl"
 // clang-format on
 
 #include "incrementalSectionDependencies.inl"
@@ -367,9 +368,11 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalInferenceEffects.inl"
 #include "incrementalInferenceReuse.inl"
 
+// clang-format off: these includes depend on the declarations in the preceding files.
 #include "incrementalDependencyGraph.inl"
 #include "incrementalConstraintValue.inl"
 #include "incrementalConstraintProbeReuse.inl"
+// clang-format on
 
 #include "incrementalInferencePreinfer.inl"
 #include "incrementalStatisticsReport.inl"
@@ -521,6 +524,30 @@ bool compileIncrementally(
 				parserCache.recordDefinition(range, elements);
 			};
 			IncrementalMatcherCache matcherCache(context, previousMatches);
+			std::unordered_map<const Section *, const Json *> inactiveMatchEntries;
+			context.selectInactiveBodiesForResolutionReuse = [&]() {
+				if (!previous || previousMatches.empty() || context.options.emitDebugInfo || context.options.traceExecution ||
+					!previous->contains("inactive_projection") ||
+					!compatibleObservations(*previous, recording->observations, context))
+					return std::vector<Section *>{};
+				return selectInactiveBodiesForResolutionReuse(
+					context, recording->observations, previous->at("all_function_projection"),
+					previous->at("inactive_projection"), previous->at("diagnostic_sources").get<std::set<std::string>>(),
+					matcherCache, inactiveMatchEntries
+				);
+			};
+			context.inactiveBodyMatcherTreeUnchanged = [&]() {
+				return previous &&
+					   matcherTreeSignature(context) ==
+						   previous->at("all_function_projection").at("initial_matcher_tree").get_ref<const std::string &>();
+			};
+			context.retainInactiveBodyMatcherResults = [&](const std::vector<Section *> &sections) {
+				for (const Section *section : sections)
+					for (const Json &entry : *inactiveMatchEntries.at(section))
+						for (const char *field : {"key", "initial_key"})
+							if (entry.at(field).is_string())
+								matcherCache.retain(entry.at(field).get_ref<const std::string &>());
+			};
 			std::string initialMatcherTree;
 			Json initialMatcherRoots;
 			PriorMatchKeys precedenceKeys;
@@ -826,8 +853,8 @@ bool compileIncrementally(
 						retainedActiveFunctionPaths(functionReuse.get(), previous ? &*previous : nullptr);
 					result["inactive_projection"] = captureInactiveProjection(
 						result.at("all_function_projection").at("declarations"), compiled, recording->observations, nullptr,
-						&generatedFunctionPaths, &sections, priorInactiveSources,
-						&statistics.sourceProjectionWork, nullptr, &retainedActivePaths
+						&generatedFunctionPaths, &sections, priorInactiveSources, &statistics.sourceProjectionWork, nullptr,
+						&retainedActivePaths
 					);
 					Json globalTypes = captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
 					result["global_types"] = globalTypes;

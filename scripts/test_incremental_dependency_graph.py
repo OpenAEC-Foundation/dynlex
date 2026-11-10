@@ -405,6 +405,27 @@ def check_resolved_declaration_snapshot_reuse(root, build):
 
 
 def check_inactive_projection_refresh(root, build):
+    skipped = root / "inactive_resolution_skip.dl"
+    skipped_source = ('to live:\n'
+                      '    @intrinsic("discard", 1)\n'
+                      'to spare one:\n'
+                      '    live\n'
+                      'to spare two:\n'
+                      '    live\n'
+                      'live\n')
+    skipped.write_text(skipped_source)
+    cold = build(entry=skipped)
+    skipped.write_text(skipped_source.replace('"discard", 1', '"discard", 2'))
+    reused = build(entry=skipped)
+    assert reused[0]["inactive_body_resolution_references_skipped"] >= 2, \
+        "unchanged inactive bodies repeated pattern resolution"
+    assert reused[0]["body_resolution_reference_visits"] < cold[0]["body_resolution_reference_visits"]
+    assert reused[1:] == build(False, entry=skipped)[1:]
+    skipped.write_text(skipped.read_text().removesuffix('live\n') + 'spare one\n')
+    activated = build(entry=skipped)
+    assert activated[1:] == build(False, entry=skipped)[1:], \
+        "newly called inactive function kept its unresolved body"
+
     main = root / "inactive_projection_refresh.dl"
     integer = 'integer means: @intrinsic("type", "int")\n'
     live = 'to live: @intrinsic("discard", 1)\n'

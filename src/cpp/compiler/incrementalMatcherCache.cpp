@@ -170,6 +170,13 @@ std::string IncrementalMatcherCache::snapshot() const {
 	return result;
 }
 
+bool IncrementalMatcherCache::contains(std::string_view key) const { return previousEntries.contains(key); }
+
+void IncrementalMatcherCache::retain(std::string_view key) {
+	std::string_view value = previousEntries.at(key);
+	recorded[std::string(key)] = value;
+}
+
 std::optional<std::string_view> IncrementalMatcherCache::resultKey(const PatternReference *reference) const {
 	return reference->incrementalMatcherKey.empty() ? std::nullopt
 													: std::optional<std::string_view>(reference->incrementalMatcherKey);

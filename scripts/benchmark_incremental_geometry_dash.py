@@ -99,6 +99,7 @@ for name, samples in results.items():
                          "precedence_signature_ms", "precedence_rule_signature_ms",
                          "variable_like_count_references_scanned",
                          "body_resolution_reference_visits", "matcher_cache_hits",
+                         "inactive_body_resolution_references_skipped",
                          "body_references_in_instantiated_functions",
                          "body_references_in_uninstantiated_functions",
                          "body_references_in_flex_functions",

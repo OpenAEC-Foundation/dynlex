@@ -24,6 +24,8 @@ class IncrementalMatcherCache {
 	void
 	record(PatternReference *reference, MatchOptions options, const PatternMatch *match, const MatchDependencies *dependencies);
 	std::string snapshot() const;
+	bool contains(std::string_view key) const;
+	void retain(std::string_view key);
 	std::optional<std::string_view> resultKey(const PatternReference *reference) const;
 	size_t hits() const { return reusedCount; }
 	size_t precedenceHits() const { return reusedPrecedenceCount; }

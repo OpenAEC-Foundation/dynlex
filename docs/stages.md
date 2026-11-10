@@ -851,7 +851,7 @@ of `inference_stage_ms` measure declared constraints, pattern conflicts,
 incremental preinference, root inference, exposed and managed functions, and final
 variable and return validation, in that order.
 It reuses pointer-free matcher results from the previous build in both the initial
-resolution and precedence matching passes for unchanged references when the pattern-tree mutation history, the reference's
+resolution and precedence matching passes for unchanged references when the active pattern definitions, the reference's
 source line and position mapping, relative lexical declaration visibility, and
 non-message syntax configuration have the same fingerprints. Matcher keys cover wildcard patterns and
 literal starts that could occur in the reference, in its own pattern tree and the
@@ -915,6 +915,19 @@ instantiated them; a function whose IR was imported from cache therefore appears
 in the uninstantiated group. Flex, conversion, and other definitions are counted
 separately. These counters expose the work still done for bodies whose code was
 reused without current-process inference.
+For a successful prior build, unchanged, uninstantiated leaf function bodies can
+skip resolution when their parsed declaration already equals the prior resolved
+declaration, their prior matcher entries remain available, and their patterns
+cannot alter another reference's matcher key while definitions are indexed.
+The source projection and body digest establish that their text is unchanged.
+If a later match calls one of these functions, or the completed pattern tree
+differs, its references rejoin the resolver. The cache retains matcher entries
+for bodies that stay inactive. `inactive_body_resolution_references_skipped`
+counts their omitted reference visits. This path runs only when the potential
+skipped work is at least one twentieth of the program's references, so its
+selection work does not dominate small edits in larger programs. Pattern-tree
+keys combine active definition contributions independent of insertion order;
+removing and readding the same definition restores its earlier key.
 Unchanged references replay saved precedence-pass keys when their first-pass
 keys and precedence families still match. If the final indexed tree changed,
 the cache compares its wildcard and starting-literal mutations against each

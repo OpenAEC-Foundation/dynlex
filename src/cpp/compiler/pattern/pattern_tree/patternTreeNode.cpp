@@ -7,6 +7,8 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
 #include <algorithm>
+#include <array>
+#include <cstdint>
 #include <unordered_set>
 
 static void appendMutationField(llvm::SHA256 &hash, std::string_view value) {
@@ -17,7 +19,7 @@ static void appendMutationField(llvm::SHA256 &hash, std::string_view value) {
 
 static void appendMutationNumber(llvm::SHA256 &hash, size_t value) { appendMutationField(hash, std::to_string(value)); }
 
-static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *definition, std::string_view action) {
+static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *definition) {
 	if (!root->mutationState)
 		return;
 	requireCompilerInvariant(
@@ -27,7 +29,6 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 	const CodeLine *line = definition->range.line;
 	const Section *section = definition->section;
 	llvm::SHA256 hash;
-	appendMutationField(hash, action);
 	appendMutationField(hash, line->sourceFile->uri);
 	appendMutationNumber(hash, definition->range.start());
 	appendMutationNumber(hash, definition->range.end());
@@ -53,7 +54,7 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 			appendMutationNumber(hash, element.isArgumentPack);
 		}
 	}
-	std::string mutation = llvm::toHex(hash.final(), true);
+	std::array<std::uint8_t, 32> mutation = hash.final();
 	std::unordered_set<std::string_view> affectedLiterals;
 	bool affectsWildcard = definition->indexedPaths.empty();
 	for (const auto &path : definition->indexedPaths) {
@@ -62,16 +63,28 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 		else
 			affectedLiterals.insert(path.front().text);
 	}
-	auto advance = [&](std::string &state) {
-		llvm::SHA256 next;
-		appendMutationField(next, state);
-		appendMutationField(next, mutation);
-		state = llvm::toHex(next.final(), true);
+	// The root key describes the active definitions, independent of insertion order.
+	// Removing a definition applies the same contribution again.
+	auto toggle = [&](std::string &state) {
+		std::string bytes = state.empty() ? std::string(mutation.size(), '\0') : llvm::fromHex(state);
+		requireCompilerInvariant(bytes.size() == mutation.size(), "invalid pattern tree digest size");
+		for (size_t index = 0; index < mutation.size(); index++)
+			bytes[index] ^= static_cast<char>(mutation[index]);
+		if (std::ranges::all_of(bytes, [](char byte) {
+			return byte == '\0';
+		}))
+			state.clear();
+		else
+			state = llvm::toHex(llvm::StringRef(bytes), true);
 	};
 	if (affectsWildcard)
-		advance(root->mutationState->wildcardDigest);
-	for (std::string_view literal : affectedLiterals)
-		advance(root->mutationState->literalDigests[std::string(literal)]);
+		toggle(root->mutationState->wildcardDigest);
+	for (std::string_view literal : affectedLiterals) {
+		auto [entry, _] = root->mutationState->literalDigests.try_emplace(std::string(literal));
+		toggle(entry->second);
+		if (entry->second.empty())
+			root->mutationState->literalDigests.erase(entry);
+	}
 }
 
 static PatternTreeNode *addChild(PatternTreeNode *parent, const PatternElement &element, PatternDefinition *definition) {
@@ -311,7 +324,7 @@ void PatternTreeNode::addPatternDefinition(PatternDefinition *definition, Sectio
 			endpoint->endpointRevision++;
 		}
 	}
-	recordTreeMutation(this, definition, "add");
+	recordTreeMutation(this, definition);
 }
 
 // Recursively remove a definition from the tree, walking the element path.
@@ -370,7 +383,7 @@ void PatternTreeNode::removePatternDefinition(PatternDefinition *definition) {
 	requireCompilerInvariant(definition != nullptr, "pattern tree removal requires a definition");
 	requireCompilerInvariant(definition->indexedTree == this, "pattern tree removal used the wrong tree");
 	requirePatternDefinitionIndexed(definition);
-	recordTreeMutation(this, definition, "remove");
+	recordTreeMutation(this, definition);
 	std::vector<std::vector<PatternElement>> oldPaths = definition->indexedPaths;
 	for (const auto &path : oldPaths)
 		removeDefinitionPath(this, path, definition);
