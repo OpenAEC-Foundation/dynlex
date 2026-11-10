@@ -1,6 +1,7 @@
 #include "incrementalCompilation.h"
 #include "codegen/codegen.h"
 #include "codegen/native.h"
+#include "codegen/targetOptions.h"
 #include "compiler.h"
 #include "expression.h"
 #include "incrementalIRReuse.h"
@@ -16,7 +17,11 @@
 #include "syntaxConfig.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Analysis/ModuleSummaryAnalysis.h"
+#include "llvm/Analysis/ProfileSummaryInfo.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/DiagnosticInfo.h"
+#include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalIFunc.h"
 #include "llvm/IR/GlobalVariable.h"
@@ -24,11 +29,15 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
+#include "llvm/LTO/LTO.h"
+#include "llvm/Linker/Linker.h"
 #include "llvm/Object/BuildID.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/BLAKE3.h"
+#include "llvm/Support/Caching.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/SHA256.h"
+#include "llvm/Support/Threading.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
@@ -39,9 +48,11 @@
 #include <bit>
 #include <cctype>
 #include <chrono>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <set>
@@ -70,34 +81,7 @@ std::string digest(std::string_view text) {
 	return llvm::toHex(hash.final(), true);
 }
 
-std::string digestFile(const fs::path &path) {
-	std::ifstream input(path, std::ios::binary);
-	if (!input)
-		throw std::runtime_error("cannot read " + path.string());
-	llvm::SHA256 hash;
-	std::array<char, 65536> buffer;
-	while (input.read(buffer.data(), buffer.size()) || input.gcount())
-		hash.update(llvm::StringRef(buffer.data(), input.gcount()));
-	if (!input.eof())
-		throw std::runtime_error("failed reading " + path.string());
-	return llvm::toHex(hash.final(), true);
-}
-
-// Linker build IDs identify the complete linked compiler without hashing its
-// debug sections on every invocation. Formats without a build ID use the
-// exact executable content digest instead.
-std::string compilerBuildIdentity(const std::string &argv0) {
-	std::string executable = llvm::sys::fs::getMainExecutable(argv0.c_str(), reinterpret_cast<void *>(&compileIncrementally));
-	if (executable.empty())
-		throw std::runtime_error("cannot identify compiler executable");
-	auto object = llvm::object::ObjectFile::createObjectFile(executable);
-	if (!object)
-		throw std::runtime_error("cannot inspect compiler executable: " + llvm::toString(object.takeError()));
-	llvm::object::BuildIDRef buildId = llvm::object::getBuildID(object->getBinary());
-	if (!buildId.empty())
-		return "build-id:" + llvm::toHex(buildId, true);
-	return "sha256:" + digestFile(executable);
-}
+#include "incrementalCompilerIdentity.inl"
 
 std::string readFile(const fs::path &path) {
 	uintmax_t size = fs::file_size(path);
@@ -346,6 +330,10 @@ std::string renderModule(const llvm::Module &module) {
 
 #include "incrementalCompilationPartitions.inl"
 #include "incrementalInferenceTypes.inl"
+// clang-format off: the optimizer consumes the input descriptors.
+#include "incrementalOptimizationInputs.inl"
+#include "incrementalOptimization.inl"
+// clang-format on
 
 #include "incrementalInferenceEffects.inl"
 #include "incrementalInferenceReuse.inl"
@@ -925,6 +913,7 @@ bool compileIncrementally(
 						result["payload_keys"]["native_units"] = previous->at("payload_keys").at("native_units");
 					else
 						result["native_units"] = std::move(statistics.nativeUnits);
+					result["optimization_units"] = std::move(statistics.optimizationUnits);
 					result["linked_output"] = linkedOutputIdentity(compiled);
 					auto writeStart = Clock::now();
 					writeProgramEntry(programEntry, std::move(result), previous ? &*previous : nullptr);
@@ -937,6 +926,11 @@ bool compileIncrementally(
 					unoptimizedIR = serializeCachedModule(*generated.llvmModule);
 					statistics.unoptimizedIRSnapshotMilliseconds = elapsedMilliseconds(snapshotStart);
 					optimizationStart = Clock::now();
+				}, [&](ParseContext &generated) {
+					return optimizeIncrementalModule(
+						generated, directory, compilerIdentity, options, previous ? &*previous : nullptr, statistics,
+						functionReuse.get()
+					);
 				});
 				statistics.codegenMilliseconds = elapsedMilliseconds(stageStart);
 				statistics.reusedFunctionIR = functionReuse ? functionReuse->reusedCount() : 0;

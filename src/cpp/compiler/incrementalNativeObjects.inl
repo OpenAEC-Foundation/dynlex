@@ -35,6 +35,13 @@ struct BuildStatistics {
 	size_t nativeFunctionDependenciesReused = 0;
 	size_t nativeFunctionFingerprintsComputed = 0;
 	Json nativeUnits;
+	Json optimizationUnits = Json::object();
+	size_t optimizationInputUnitsBuilt = 0;
+	size_t optimizationInputUnitsReused = 0;
+	size_t optimizationUnitsBuilt = 0;
+	size_t optimizationUnitsReused = 0;
+	double optimizationInputMilliseconds = 0;
+	double optimizationCombineMilliseconds = 0;
 	size_t dependencyGraphSectionsReused = 0;
 	size_t preinferDependencyGraphSectionsChecked = 0;
 	size_t dependencyGraphEntriesReused = 0;

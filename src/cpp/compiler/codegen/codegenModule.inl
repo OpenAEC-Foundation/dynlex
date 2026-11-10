@@ -74,7 +74,7 @@ static llvm::OptimizationLevel optimizationLevel(const ParseContext::Options &op
 
 bool generateCode(
 	ParseContext &context, const std::function<bool(ParseContext &)> &nativeEmitter,
-	const std::function<void(ParseContext &)> &beforeOptimization
+	const std::function<void(ParseContext &)> &beforeOptimization, const std::function<bool(ParseContext &)> &optimizer
 ) {
 #ifdef DYNLEX_WEB
 	(void)nativeEmitter;
@@ -297,7 +297,10 @@ bool generateCode(
 		beforeOptimization(context);
 
 	// Optimization passes
-	if (context.options.optimizationLevel > 0) {
+	if (optimizer) {
+		if (!optimizer(context))
+			return false;
+	} else if (context.options.optimizationLevel > 0) {
 		llvm::LoopAnalysisManager lam;
 		llvm::FunctionAnalysisManager fam;
 		llvm::CGSCCAnalysisManager cgam;

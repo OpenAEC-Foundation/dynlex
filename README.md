@@ -205,7 +205,8 @@ Comment edits can reuse analyzed code, and diagnostic-message edits in `config.d
 warnings and errors without recompiling. After code edits, unaffected parser and
 matcher results can be restored. Without debug information or execution tracing,
 eligible functions also reuse inference summaries and generated LLVM bodies at all
-optimization levels. Restored bodies participate in the normal LLVM optimization pipeline. Native
+optimization levels. Optimized native builds cache LLVM optimization by symbol groups,
+including the callees imported into each group. Native
 partitions reuse cached objects, and an unchanged executable skips linking.
 This mode supports native executable output. Some stages still reconstruct shared
 state after code edits; the LSP retains its existing compilation pipeline.
