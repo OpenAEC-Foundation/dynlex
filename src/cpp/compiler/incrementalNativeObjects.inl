@@ -17,6 +17,8 @@ struct TemporaryObjects {
 };
 
 struct BuildStatistics {
+	std::string cacheDirectory;
+	std::string cacheEntry;
 	bool reusedFrontend = false;
 	bool reusedTypeInference = false;
 	bool linkedCachedObjects = false;

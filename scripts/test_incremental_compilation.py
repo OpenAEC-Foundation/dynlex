@@ -14,6 +14,7 @@ from test_incremental_match_replay import check_choice_declaration_replay, check
 from test_incremental_native_units import check_interned_literal_identity, check_native_partition_edits
 from test_incremental_typed_variants import check_typed_variant_dependency_retention
 from test_incremental_projection_stages import check_comment_inactive_active_sequence, check_nested_inactive_stage_retention
+from test_default_incremental_cache import check_default_cache
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -38,7 +39,9 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         build_target = target if incremental else target.with_name(target.name + ".clean")
         arguments = [str(compiler), str(entry), *optimization_flags, *flags, "-o", str(build_target)]
         if incremental:
-            arguments += ["--incremental", str(cache), "--incremental-stats"]
+            arguments += ["--cache-dir", str(cache), "--incremental-stats"]
+        else:
+            arguments += ["--no-incremental"]
         result = subprocess.run(arguments, cwd=root, capture_output=True, text=True, timeout=120)
         if (result.returncode == 0) != success:
             raise AssertionError(f"wrong build outcome: {arguments}\n{result.stdout}\n{result.stderr}")
@@ -58,6 +61,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         print("Incremental native integration builds passed")
         raise SystemExit(0)
 
+    check_default_cache(compiler, root / "automatic-cache")
     cold = build()
     assert not cold[0]["frontend_reused"] and not cold[0]["linked_cached_objects"]
     assert cold[0]["source_projection_mask_ms"] >= 0 and cold[0]["source_projection_files_ms"] >= 0

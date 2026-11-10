@@ -406,6 +406,8 @@ bool compileIncrementally(
 		RecordingFileSystem *recording = files.get();
 		context.fileSystem = std::move(files);
 		BuildStatistics statistics;
+		statistics.cacheDirectory = directory.string();
+		statistics.cacheEntry = programEntry.string();
 		bool success = false;
 		std::optional<Json> previous;
 		std::optional<Json> previousFailure;

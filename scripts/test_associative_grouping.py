@@ -13,7 +13,7 @@ def check_program(root, name, program, expected_exit, expected_output="", expect
     source = root / f"{name}.dl"
     source.write_text(program)
     output = root / (name + (".exe" if os.name == "nt" else ".out"))
-    built = subprocess.run([str(compiler), str(source), "-o", str(output)], capture_output=True, text=True)
+    built = subprocess.run([str(compiler), str(source), "--no-incremental", "-o", str(output)], capture_output=True, text=True)
     assert built.returncode == 0, (name, built.stdout + built.stderr)
     assert built.stderr.count("Warning:") == expected_warnings, (name, built.stderr)
     result = subprocess.run([str(output)], capture_output=True, text=True)

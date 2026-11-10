@@ -38,7 +38,9 @@ def compile_program(root, incremental):
     output = root / (("incremental" if incremental else "clean") + (".exe" if os.name == "nt" else ""))
     command = [str(compiler), str(game / "main.dl"), "-o", str(output)]
     if incremental:
-        command += ["--incremental", str(root / "cache"), "--incremental-stats"]
+        command += ["--cache-dir", str(root / "cache"), "--incremental-stats"]
+    else:
+        command += ["--no-incremental"]
     started = time.perf_counter()
     result = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=30)
     elapsed_ms = (time.perf_counter() - started) * 1000

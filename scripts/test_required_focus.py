@@ -63,6 +63,32 @@ run_with_timeout() { printf 'TIMED_SUITE:%s\\n' "$1"; }
                   if line.startswith(("COMPILER_BUILD", "UNEXPECTED_PREBUILD", "TIMED_SUITE:"))]
         if result.returncode != 0 or events != ["COMPILER_BUILD", "TIMED_SUITE:120"]:
             failures.append(f"{runner}: required budget must start immediately after the compiler build: {result.stdout}{result.stderr}")
+
+        compile_phase = source.split('    rm -f "$output_binary"\n', 1)[1].split('    compile_exit=$?', 1)[0]
+        stack_limit = Path(directory) / "stack_limit_kb.txt"
+        for suite in ("required", "integration"):
+            for constrained_stack in (False, True):
+                if constrained_stack:
+                    stack_limit.write_text("1024\n")
+                elif stack_limit.exists():
+                    stack_limit.unlink()
+                result = subprocess.run(
+                    [shell, "-c", '''
+COMPILER=compiler
+source_file=fixture.dl
+output_binary=$1/program.out
+stack_limit_file=$1/stack_limit_kb.txt
+suite=$2
+is_windows=false
+compile_timeout=10
+run_with_timeout() { printf '%s\\n' "$@"; }
+''' + compile_phase + '\nprintf "%s\\n" "$compile_output"\n',
+                     "fixture-cache-policy", Path(directory).as_posix(), suite],
+                    capture_output=True, text=True, timeout=10,
+                )
+                clean = "--no-incremental" in result.stdout.splitlines()
+                if result.returncode != 0 or clean != (suite == "required"):
+                    failures.append(f"{runner}: {suite} fixture cache policy is incorrect (stack limit: {constrained_stack}): {result.stdout}{result.stderr}")
     return failures
 
 

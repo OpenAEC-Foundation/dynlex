@@ -45,7 +45,7 @@ class ImportRootConsistencyTests(unittest.TestCase):
             )
             output = root / "main.out"
             result = subprocess.run(
-                [str(COMPILER), str(main), "-o", str(output)], cwd=root,
+                [str(COMPILER), str(main), "--no-incremental", "-o", str(output)], cwd=root,
                 capture_output=True, text=True, timeout=120
             )
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -69,7 +69,7 @@ class ImportRootConsistencyTests(unittest.TestCase):
 
             output = root / "main.out"
             compileResult = subprocess.run(
-                [str(COMPILER), str(main), "-o", str(output)],
+                [str(COMPILER), str(main), "--no-incremental", "-o", str(output)],
                 cwd=work,
                 capture_output=True,
                 text=True,
@@ -103,7 +103,7 @@ class ImportRootConsistencyTests(unittest.TestCase):
             )
             output = root / "main.out"
             compileResult = subprocess.run(
-                [str(COMPILER), str(main), "-o", str(output)],
+                [str(COMPILER), str(main), "--no-incremental", "-o", str(output)],
                 cwd=work,
                 capture_output=True,
                 text=True,

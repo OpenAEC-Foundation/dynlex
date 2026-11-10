@@ -813,8 +813,13 @@ function-local storage. The entry-point checker validates emitted shader modules
 
 # Incremental Native Builds
 
-The CLI accepts `--incremental <cache-directory>` for native executables and
-`--incremental-stats` to report reuse. A complete verified, optimized LLVM IR result
+Native executable file builds use incremental compilation automatically. The default
+cache lives under `dynlex/compiler` in the operating system's user cache directory:
+XDG cache storage on Unix, Darwin user cache storage on macOS, and LocalAppData
+on Windows. `--cache-dir <directory>` overrides that location, `--no-incremental`
+performs a clean build, and `--incremental-stats` reports the actual cache directory
+and reuse. Cache overrides and statistics apply only to native executable file builds.
+A complete verified, optimized LLVM IR result
 is reusable while every filesystem observation remains identical. Source edits that
 only add, remove or change comments or trailing whitespace also reuse the result when
 debug locations, execution traces and diagnostics cannot become stale. The semantic
