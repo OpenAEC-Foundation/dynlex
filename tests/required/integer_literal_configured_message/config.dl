@@ -1,3 +1,0 @@
-dynlex options:
-    messages:
-        unsigned integer literal out of range: "Configured unsigned integer range error"

@@ -17,7 +17,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as temporary_directory:
         llvm_path = pathlib.Path(temporary_directory) / "callable_lifecycle.ll"
         result = subprocess.run(
-            [str(compiler), str(source), "--emit-llvm", "-o", str(llvm_path)],
+            [str(compiler), str(source), "--emit-llvm", "-O0", "-o", str(llvm_path)],
             capture_output=True,
             text=True,
             check=False,

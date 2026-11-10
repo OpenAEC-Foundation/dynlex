@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from find_vulkan_icd import find_vulkan_icd, vulkan_driver_environment
+from find_vulkan_icd import find_vulkan_icd, isolated_x11_environment, vulkan_driver_environment
 
 
 if len(sys.argv) != 3:
@@ -38,7 +38,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-vulkan-runtime-") as temporary_d
     subprocess.run(
         [
             str(compiler),
-            str(project / "tests/games/passthrough_vertex.dl"),
+            str(project / "tests/runtime/graphics_shaders/vertex.dl"),
             "--emit-spirv",
             "--shader-stage=vertex",
             "-o",
@@ -50,7 +50,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-vulkan-runtime-") as temporary_d
     subprocess.run(
         [
             str(compiler),
-            str(project / "tests/games/plasma_shader.dl"),
+            str(project / "tests/runtime/graphics_shaders/fragment.dl"),
             "--emit-spirv",
             "--shader-stage=fragment",
             "-o",
@@ -68,15 +68,14 @@ with tempfile.TemporaryDirectory(prefix="dynlex-vulkan-runtime-") as temporary_d
         raise SystemExit(f"The Vulkan runtime test requires a Vulkan driver: {error}") from error
     environment = vulkan_driver_environment(vulkan_icd, environment)
     if sys.platform.startswith("linux"):
-        environment.pop("WAYLAND_DISPLAY", None)
-        environment.pop("WAYLAND_SOCKET", None)
-        environment["XDG_SESSION_TYPE"] = "x11"
+        environment = isolated_x11_environment(environment)
         xvfb_run = shutil.which("xvfb-run")
         if xvfb_run is None:
             raise SystemExit("The Vulkan runtime test requires xvfb-run on Linux")
         command = [
             xvfb_run,
             "--auto-servernum",
+            "--error-file=/dev/stderr",
             "--server-args=-screen 0 128x64x24",
             *command,
         ]

@@ -1,5 +1,0 @@
-import lib/shader.dl
-
-# Fullscreen passthrough vertex shader.
-
-set the output position with x the vertex x, y the vertex y, z the vertex z and w the vertex w

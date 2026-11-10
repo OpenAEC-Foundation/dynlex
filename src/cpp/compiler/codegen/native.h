@@ -8,6 +8,7 @@ class Module;
 } // namespace llvm
 
 std::unique_ptr<llvm::TargetMachine> createNativeTargetMachine(ParseContext &context, std::string &errorMessage);
+std::string nativeExecutablePath(const ParseContext::Options &options);
 
 // Emit a native object file from the LLVM module.
 // Returns true on success, false on error (errors added to context.diagnostics).

@@ -88,8 +88,9 @@ its scope.
 **Numeric literals.**
 - A literal without a decimal point leaves kind, sign and width unspecified.
 - A literal with a decimal point or exponent specifies the floating-point kind.
-- Built-in defaults apply after scope rules: integers are signed, integer literals use the smallest of 32 and 64 bit
-  that fits, and floating-point numbers are 64 bit, or 32 bit on GPU targets.
+- Built-in defaults apply after scope rules: integer literals use signed 32 or 64 bits when possible,
+  unsigned 64 bits through its range, and then a power-of-two signed width of at least 128 bits.
+  Floating-point numbers are 64 bit, or 32 bit on GPU targets.
 
 **Number type phrases**, such as `a number`, `an integer` or `a floating-point number`, in signatures, casts and
 other type positions.
@@ -101,11 +102,12 @@ other type positions.
 When a rule would give an integer literal a type that cannot represent it exactly,
 the literal uses the next larger type of the same kind and the compiler warns:
 
-- a 32 bit integer that does not fit becomes 64 bit;
+- a 32 bit integer that does not fit becomes 64 bit, with larger integers widening further as needed;
 - an integer above `2^24` that would become a 32 bit floating-point number becomes 64 bit.
 
-When no larger type exists, the literal is an error. Examples are an integer above `2^53` as a 64 bit floating-point
-number, or a value outside the 64 bit integer range.
+When no larger type can represent the value exactly, the literal is an error. For example,
+an integer with more than 53 significant binary digits cannot become a 64 bit floating-point
+number exactly. Integer widths are bounded by LLVM's integer type limit.
 
 ### Contradicting a rule
 

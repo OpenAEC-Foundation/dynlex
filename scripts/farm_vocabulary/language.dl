@@ -15,7 +15,7 @@ to get [the farm language number] {integer:value}:
     set literal to the string form of value
     if value < 0:
         set literal to "@intrinsic(\"negate\", " + (the string form of (0 - value)) + ")"
-    return "@intrinsic(\"cast\", " + literal + ", a farm number)"
+    return literal
 
 to get [the farm language constructor for] {a value:kind} [with] {an array:arguments}:
     set result to "@intrinsic(\"construct\", farm " + (the string form of kind)
@@ -98,6 +98,9 @@ set header to [
     "",
     "a farm number means: @intrinsic(\"type\", \"int\", 32)",
     "a farm text means: @intrinsic(\"type\", \"string\")",
+    "",
+    "in this file:",
+    "    @intrinsic(\"number rule\", a farm number)",
     "",
     "to emit farm text: @intrinsic(\"discard\", @intrinsic(\"variadic call\", \"libc\", \"printf\", a farm number, 1, \"%s\\n\", text))"
 ]

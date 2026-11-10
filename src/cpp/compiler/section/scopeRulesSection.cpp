@@ -147,7 +147,7 @@ bool ScopeRulesSection::processLine(ParseContext &context, CodeLine *line) {
 		if (slot) {
 			Diagnostic diagnostic(context, Diagnostic::Level::Error, "scope rule repeated", ruleRange, "rule", text);
 			diagnostic.relatedInfo.push_back(
-				{renderConfiguredMessage(syntax, "scope rule repeated", "related rule"), slot->range}
+				configuredRelatedInfo(context, ruleRange, "scope rule repeated", "related rule", slot->range)
 			);
 			context.addDiagnostic(std::move(diagnostic));
 			return false;
@@ -194,7 +194,7 @@ static bool applyDefinitionLocality(ParseContext &context, DefinitionSection *de
 			context, Diagnostic::Level::Error, "local modifier redundant", *localModifier, "modifier", syntax.localName
 		);
 		diagnostic.relatedInfo.push_back(
-			{renderConfiguredMessage(syntax, "local modifier redundant", "related rule"), rule->range}
+			configuredRelatedInfo(context, *localModifier, "local modifier redundant", "related rule", rule->range)
 		);
 		context.addDiagnostic(std::move(diagnostic));
 		return false;
@@ -205,7 +205,7 @@ static bool applyDefinitionLocality(ParseContext &context, DefinitionSection *de
 			syntax.publicName, "rule", rule->range.subString
 		);
 		diagnostic.relatedInfo.push_back(
-			{renderConfiguredMessage(syntax, "public modifier contradicts rule", "related rule"), rule->range}
+			configuredRelatedInfo(context, *publicModifier, "public modifier contradicts rule", "related rule", rule->range)
 		);
 		context.addDiagnostic(std::move(diagnostic));
 	}

@@ -25,6 +25,7 @@
 #include "type.h"
 #include <cassert>
 #include <cctype>
+#include <chrono>
 #include <climits>
 #include <cmath>
 #include <filesystem>
@@ -138,6 +139,10 @@ static void collectSectionsPreorder(Section *section, std::vector<Section *> &ou
 }
 
 static std::string formatCompileTimeValueForPurityReport(const CompileTimeValue &value) {
+	if (const auto *integer = std::get_if<WideInteger>(&value))
+		return integer->toString();
+	if (const auto *integer = std::get_if<std::uint64_t>(&value))
+		return std::to_string(*integer);
 	if (std::holds_alternative<std::monostate>(value))
 		return "?";
 	if (const auto *integer = std::get_if<std::int64_t>(&value))
@@ -591,7 +596,14 @@ void destroyTypeConstraintExpression(Expression *root) {
 	destroy(root);
 }
 
-bool compile(const std::string &path, ParseContext &context) {
+bool compileBeforeTypeInference(const std::string &path, ParseContext &context) {
+	auto stageStart = std::chrono::steady_clock::now();
+	size_t stageIndex = 0;
+	auto finishStage = [&]() {
+		context.frontendStageMilliseconds.at(stageIndex++) =
+			std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - stageStart).count();
+		stageStart = std::chrono::steady_clock::now();
+	};
 	context.compilationStage = ParseContext::CompilationStage::NotStarted;
 	if (!loadSourceFiles(path, context))
 		return false;
@@ -600,16 +612,19 @@ bool compile(const std::string &path, ParseContext &context) {
 	if (!expandDefinitionShorthands(context))
 		return false;
 	context.compilationStage = ParseContext::CompilationStage::ImportedFiles;
+	finishStage();
 
 	if (!analyzeSections(context))
 		return false;
 	context.compilationStage = ParseContext::CompilationStage::AnalyzedSections;
+	finishStage();
 
 	if (!resolvePatterns(context))
 		return false;
 	if (!prepareDataSectionCalls(context))
 		return false;
 	context.compilationStage = ParseContext::CompilationStage::ResolvedPatterns;
+	finishStage();
 
 	if (!validate(context))
 		return false;
@@ -617,12 +632,23 @@ bool compile(const std::string &path, ParseContext &context) {
 
 	if (!initializeTargetLayout(context))
 		return false;
+	finishStage();
+	return true;
+}
 
+bool finishTypeInference(ParseContext &context) {
+	requireCompilerInvariant(
+		context.compilationStage == ParseContext::CompilationStage::Validated, "type inference requires a validated program"
+	);
 	if (!inferTypes(context))
 		return false;
 	context.compilationStage = ParseContext::CompilationStage::InferredTypes;
 
 	return true;
+}
+
+bool compile(const std::string &path, ParseContext &context) {
+	return compileBeforeTypeInference(path, context) && finishTypeInference(context);
 }
 
 // resolutionRoot keeps nested imports in the tree selected by their importer.

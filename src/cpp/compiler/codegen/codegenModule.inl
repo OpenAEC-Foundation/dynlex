@@ -72,7 +72,36 @@ static llvm::OptimizationLevel optimizationLevel(const ParseContext::Options &op
 	crashCompilerBug("invalid IR optimization level");
 }
 
-bool generateCode(ParseContext &context, const std::function<bool(ParseContext &)> &nativeEmitter) {
+void optimizeLLVMModule(ParseContext &context, llvm::Module &module, bool prepareThinLTO) {
+	llvm::LoopAnalysisManager lam;
+	llvm::FunctionAnalysisManager fam;
+	llvm::CGSCCAnalysisManager cgam;
+	llvm::ModuleAnalysisManager mam;
+
+	llvm::PipelineTuningOptions pipelineTuningOptions;
+	if (context.options.loopVectorization)
+		pipelineTuningOptions.LoopVectorization = *context.options.loopVectorization;
+	if (context.options.slpVectorization)
+		pipelineTuningOptions.SLPVectorization = *context.options.slpVectorization;
+	if (context.options.loopUnrolling)
+		pipelineTuningOptions.LoopUnrolling = *context.options.loopUnrolling;
+	llvm::PassBuilder pb(context.targetMachine.get(), pipelineTuningOptions);
+	pb.registerModuleAnalyses(mam);
+	pb.registerCGSCCAnalyses(cgam);
+	pb.registerFunctionAnalyses(fam);
+	pb.registerLoopAnalyses(lam);
+	pb.crossRegisterProxies(lam, fam, cgam, mam);
+
+	llvm::OptimizationLevel level = optimizationLevel(context.options);
+	llvm::ModulePassManager mpm =
+		prepareThinLTO ? pb.buildThinLTOPreLinkDefaultPipeline(level) : pb.buildPerModuleDefaultPipeline(level);
+	mpm.run(module, mam);
+}
+
+bool generateCode(
+	ParseContext &context, const std::function<bool(ParseContext &)> &nativeEmitter,
+	const std::function<void(ParseContext &)> &beforeOptimization, const std::function<bool(ParseContext &)> &optimizer
+) {
 #ifdef DYNLEX_WEB
 	(void)nativeEmitter;
 #endif
@@ -224,6 +253,23 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 
 	if (!generateExposedFunctions(context, context.mainSection))
 		return false;
+	for (const auto &request : context.incrementalReplacementFunctions) {
+		Section *section = request.section;
+		InstantiationKey key;
+		key.argumentTypes = request.argumentTypes;
+		auto instantiation = section->instantiations.find(key);
+		requireCompilerInvariant(
+			instantiation != section->instantiations.end(), "incremental replacement lost its inferred instantiation"
+		);
+		std::vector<std::pair<std::string, Expression *>> bindings;
+		std::vector<llvm::Value *> arguments;
+		for (const std::string &name : request.parameterNames) {
+			bindings.emplace_back(name, nullptr);
+			arguments.push_back(llvm::UndefValue::get(builder.getPtrTy()));
+		}
+		if (!generateSpecializedFunction(context, section, bindings, instantiation->second, arguments))
+			return false;
+	}
 
 	if (mainFunc) {
 		if (!builder.GetInsertBlock()->hasTerminator()) {
@@ -254,6 +300,8 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 			context.llvmModule->getOrInsertNamedMetadata("spirv.ExecutionMode")->addOperand(execModeNode);
 		}
 	}
+	if (context.importReusedFunctions && !context.importReusedFunctions(context))
+		return false;
 
 	// Finalize debug info before verification
 	if (context.diBuilder)
@@ -273,29 +321,15 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 		return false;
 	}
 
+	if (beforeOptimization)
+		beforeOptimization(context);
+
 	// Optimization passes
-	if (context.options.optimizationLevel > 0) {
-		llvm::LoopAnalysisManager lam;
-		llvm::FunctionAnalysisManager fam;
-		llvm::CGSCCAnalysisManager cgam;
-		llvm::ModuleAnalysisManager mam;
-
-		llvm::PipelineTuningOptions pipelineTuningOptions;
-		if (context.options.loopVectorization)
-			pipelineTuningOptions.LoopVectorization = *context.options.loopVectorization;
-		if (context.options.slpVectorization)
-			pipelineTuningOptions.SLPVectorization = *context.options.slpVectorization;
-		if (context.options.loopUnrolling)
-			pipelineTuningOptions.LoopUnrolling = *context.options.loopUnrolling;
-		llvm::PassBuilder pb(context.targetMachine.get(), pipelineTuningOptions);
-		pb.registerModuleAnalyses(mam);
-		pb.registerCGSCCAnalyses(cgam);
-		pb.registerFunctionAnalyses(fam);
-		pb.registerLoopAnalyses(lam);
-		pb.crossRegisterProxies(lam, fam, cgam, mam);
-
-		llvm::ModulePassManager mpm = pb.buildPerModuleDefaultPipeline(optimizationLevel(context.options));
-		mpm.run(*context.llvmModule, mam);
+	if (optimizer) {
+		if (!optimizer(context))
+			return false;
+	} else if (context.options.optimizationLevel > 0) {
+		optimizeLLVMModule(context, *context.llvmModule);
 	}
 
 	if (context.options.emitSPIRV) {

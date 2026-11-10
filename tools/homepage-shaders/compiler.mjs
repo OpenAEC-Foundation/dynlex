@@ -113,9 +113,9 @@ export async function createHomepageShaderCompiler(projectDirectory) {
         [],
         []
       );
-      const uniformPayload = parseCompilerJson(
-        compiler.ccall("dynlex_web_get_shader_uniforms_json", "string", [], []),
-        "shader-uniform"
+      const reflection = parseCompilerJson(
+        compiler.ccall("dynlex_web_get_shader_reflection_json", "string", [], []),
+        "shader-reflection"
       );
       const semanticTokens = await semanticTokensFor(source);
       const spirvBytes = Uint8Array.from(Buffer.from(spirvBase64, "base64"));
@@ -127,14 +127,14 @@ export async function createHomepageShaderCompiler(projectDirectory) {
       if (glsl !== null && (!glsl.startsWith("#version 300 es") || !glsl.includes("void main"))) {
         throw new Error(`${sourceName} produced invalid WebGL2 ${stage} source`);
       }
-      if (!Array.isArray(uniformPayload.uniforms)) {
+      if (!Array.isArray(reflection.uniforms)) {
         throw new Error(`${sourceName} produced invalid shader-uniform reflection`);
       }
 
       return Object.freeze({
         wgsl,
         glsl,
-        uniforms: uniformPayload.uniforms,
+        uniforms: reflection.uniforms,
         semanticTokens,
         semanticLegend
       });

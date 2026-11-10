@@ -1,7 +1,8 @@
 static bool isWholeNumberLiteral(Expression *expr) {
 	if (!expr || expr->kind != Expression::Kind::Literal)
 		return false;
-	if (std::holds_alternative<std::int64_t>(expr->literalValue) ||
+	if (std::holds_alternative<std::int64_t>(expr->literalValue) || std::holds_alternative<std::uint64_t>(expr->literalValue) ||
+		std::holds_alternative<WideInteger>(expr->literalValue) ||
 		std::holds_alternative<MinimumSignedIntegerMagnitude>(expr->literalValue))
 		return true;
 	if (!std::holds_alternative<double>(expr->literalValue))
@@ -185,6 +186,11 @@ static std::string encodeCompileTimeValueForCacheKey(const CompileTimeValue &val
 		return "?";
 	if (const auto *integer = std::get_if<std::int64_t>(&value))
 		return "i" + std::to_string(*integer);
+	if (const auto *integer = std::get_if<std::uint64_t>(&value))
+		return "u" + std::to_string(*integer);
+	if (const auto *integer = std::get_if<WideInteger>(&value))
+		return "wide:" + std::to_string(integer->bits.getBitWidth()) + (integer->isUnsigned ? ":u:" : ":i:") +
+			   integer->toString();
 	if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
 		return "i9223372036854775808";
 	if (const auto *number = std::get_if<double>(&value))

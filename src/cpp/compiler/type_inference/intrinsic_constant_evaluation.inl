@@ -1,3 +1,8 @@
+#include "compileTimeFloatingValue.h"
+#include "function_inference_float_evaluation.inl"
+#include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/APSInt.h"
+
 static CompileTimePointer normalizeCompileTimePointer(std::uint64_t address, const ParseContext &context) {
 	requireCompilerInvariant(context.llvmModule != nullptr, "constant pointer evaluation requires the target layout");
 	unsigned width = context.llvmModule->getDataLayout().getPointerSizeInBits();
@@ -37,7 +42,7 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		if (expr->type.isAddress())
 			return CompileTimePointer{};
 		if (expr->type.isInteger())
-			return compileTimeIntegerFromBits(0, expr->type);
+			return compileTimeIntegerFromBits(llvm::APInt(expr->type.numericSize * 8, 0), expr->type);
 		if (expr->type.kind == DataType::Kind::Bool)
 			return false;
 		if (expr->type.kind == DataType::Kind::Float)
@@ -111,15 +116,15 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 			if (targetType.isAddress())
 				return *pointer;
 			if (targetType.isInteger())
-				return compileTimeIntegerFromBits(pointer->address, targetType);
+				return compileTimeIntegerFromBits(llvm::APInt(64, pointer->address), targetType);
 			return {};
 		}
 		if (targetType.isAddress()) {
-			auto integer = getCompileTimeUnsignedIntegerValue(value);
-			return integer ? CompileTimeValue(normalizeCompileTimePointer(
-								 normalizeIntegerBitsToType(*integer, expr->arguments[1]->type), parseContext
-							 ))
-						   : CompileTimeValue{};
+			unsigned width = parseContext.llvmModule->getDataLayout().getPointerSizeInBits();
+			auto integer = getCompileTimeIntegerBits(value, expr->arguments[1]->type.numericSize * 8);
+			return integer
+					   ? CompileTimeValue(normalizeCompileTimePointer(integer->zextOrTrunc(width).getZExtValue(), parseContext))
+					   : CompileTimeValue{};
 		}
 		if (targetType.kind == DataType::Kind::Bool) {
 			std::optional<bool> truthy = compileTimeTruthiness(value);
@@ -128,26 +133,20 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		if (!targetType.isNumeric())
 			return {};
 		if (const auto *number = std::get_if<double>(&value); number && targetType.isInteger()) {
-			double truncated = std::trunc(*number);
-			bool unsignedTarget = targetType.isUnsignedInteger();
-			double upperBound = std::ldexp(1.0, targetType.numericSize * 8 - (unsignedTarget ? 0 : 1));
-			double lowerBound = unsignedTarget ? 0.0 : -upperBound;
-			if (!std::isfinite(truncated) || truncated < lowerBound || truncated >= upperBound)
+			llvm::APSInt integer(targetType.numericSize * 8, targetType.isUnsignedInteger());
+			bool exact;
+			auto status = llvm::APFloat(*number).convertToInteger(integer, llvm::APFloat::rmTowardZero, &exact);
+			if (status & llvm::APFloat::opInvalidOp)
 				return {};
-			return unsignedTarget ? CompileTimeValue(static_cast<std::uint64_t>(truncated))
-								  : CompileTimeValue(static_cast<std::int64_t>(truncated));
+			return compileTimeIntegerFromBits(integer, targetType);
 		}
 		if (targetType.isInteger()) {
-			std::optional<std::uint64_t> integerValue = getCompileTimeUnsignedIntegerValue(value);
-			if (!integerValue) {
-				if (const auto *boolean = std::get_if<bool>(&value))
-					integerValue = *boolean ? 1 : 0;
-			}
+			auto integerValue = getCompileTimeIntegerBits(value, targetType.numericSize * 8);
 			return integerValue ? compileTimeIntegerFromBits(*integerValue, targetType) : CompileTimeValue{};
 		}
 		if (const auto *boolean = std::get_if<bool>(&value))
 			return *boolean ? 1.0 : 0.0;
-		std::optional<double> numericValue = getCompileTimeNumericValue(value);
+		std::optional<double> numericValue = getCompileTimeFloatingValue(value, targetType.numericSize * 8);
 		return numericValue ? CompileTimeValue(*numericValue) : CompileTimeValue{};
 	}
 	if (kind == IntrinsicKind::FunctionType || kind == IntrinsicKind::FunctionResultType ||
@@ -169,6 +168,10 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		DataType elementType = expr->type.numericElementType();
 		if (elementType.isUnsignedInteger() || (elementType.isInteger() && isRoundingIntrinsicKind(kind)))
 			return value;
+		if (elementType.isInteger()) {
+			auto integer = getCompileTimeIntegerBits(value, elementType.numericSize * 8);
+			return integer ? compileTimeIntegerFromBits(integer->abs(), elementType) : CompileTimeValue{};
+		}
 		const auto *number = std::get_if<double>(&value);
 		if (!number)
 			return {};
@@ -188,27 +191,16 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 	}
 	if (kind == IntrinsicKind::BitwiseNot) {
 		CompileTimeValue value = readArgumentValue(requireArgument(1, expr->intrinsicName));
-		if (expr->type.isUnsignedInteger()) {
-			std::optional<std::uint64_t> integerValue = getCompileTimeUnsignedIntegerValue(value);
-			return integerValue ? compileTimeIntegerFromBits(~*integerValue, expr->type) : CompileTimeValue{};
-		}
-		std::optional<std::int64_t> integerValue = getCompileTimeIntegerValue(value);
-		return integerValue.has_value() ? CompileTimeValue(compileTimeBitwiseNot(*integerValue)) : CompileTimeValue{};
+		auto integer = getCompileTimeIntegerBits(value, expr->type.numericSize * 8);
+		return integer ? compileTimeIntegerFromBits(~*integer, expr->type) : CompileTimeValue{};
 	}
 	if (kind == IntrinsicKind::Negate) {
 		CompileTimeValue value = readArgumentValue(requireArgument(1, expr->intrinsicName));
 		if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
 			return std::numeric_limits<std::int64_t>::min();
-		if (const auto *integer = std::get_if<std::int64_t>(&value)) {
-			std::int64_t negated = static_cast<std::int64_t>(std::uint64_t{0} - static_cast<std::uint64_t>(*integer));
-			if (expr->type.isInteger())
-				negated = normalizeSignedIntegerToType(negated, expr->type);
-			return negated;
-		}
-		if (const auto *integer = std::get_if<std::uint64_t>(&value)) {
-			if (!expr->type.isUnsignedInteger())
-				return {};
-			return compileTimeIntegerFromBits(std::uint64_t{0} - *integer, expr->type);
+		if (expr->type.isInteger()) {
+			auto integer = getCompileTimeIntegerBits(value, expr->type.numericSize * 8);
+			return integer ? compileTimeIntegerFromBits(-*integer, expr->type) : CompileTimeValue{};
 		}
 		if (const auto *number = std::get_if<double>(&value))
 			return -*number;
@@ -230,12 +222,13 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		DataType rightType = expr->arguments[2]->type;
 		if ((kind == IntrinsicKind::Add || kind == IntrinsicKind::Subtract) && expr->type.isPointer()) {
 			const auto *pointer = std::get_if<CompileTimePointer>(leftType.isPointer() ? &leftValue : &rightValue);
-			auto offset = getCompileTimeUnsignedIntegerValue(leftType.isPointer() ? rightValue : leftValue);
+			unsigned width = parseContext.llvmModule->getDataLayout().getPointerSizeInBits();
+			auto offset = getCompileTimeIntegerBits(leftType.isPointer() ? rightValue : leftValue, width);
 			DataType element = expr->type.dereferenced();
 			if (!pointer || !offset || !element.isConcrete())
 				return {};
-			std::uint64_t bytes =
-				*offset * element.getByteSize(parseContext.llvmModule->getDataLayout(), *parseContext.llvmContext);
+			std::uint64_t bytes = offset->getZExtValue() *
+								  element.getByteSize(parseContext.llvmModule->getDataLayout(), *parseContext.llvmContext);
 			return normalizeCompileTimePointer(
 				kind == IntrinsicKind::Add ? pointer->address + bytes : pointer->address - bytes, parseContext
 			);
@@ -249,6 +242,9 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 				 : DataType::promoteArithmetic(leftType, rightType, integerType));
 		if (integerOperation)
 			return evaluateIntegerBinaryIntrinsic(kind, leftValue, rightValue, integerType);
+		DataType floatingType;
+		if (DataType::promoteArithmetic(leftType, rightType, floatingType) && floatingType.kind == DataType::Kind::Float)
+			return evaluateFloatingBinaryIntrinsic(kind, leftValue, rightValue, floatingType);
 
 		if (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) {
 			if (const auto *left = std::get_if<CompileTimePointer>(&leftValue)) {
@@ -256,14 +252,6 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 				if (!right)
 					return {};
 				return kind == IntrinsicKind::Equal ? left->address == right->address : left->address != right->address;
-			}
-			if (leftType.isNumeric() && rightType.isNumeric()) {
-				std::optional<double> leftNumber = getCompileTimeNumericValue(leftValue);
-				std::optional<double> rightNumber = getCompileTimeNumericValue(rightValue);
-				if (!leftNumber || !rightNumber)
-					return {};
-				bool equal = *leftNumber == *rightNumber;
-				return kind == IntrinsicKind::Equal ? CompileTimeValue(equal) : CompileTimeValue(!equal);
 			}
 			bool result = false;
 			if (auto *leftText = std::get_if<std::string>(&leftValue)) {
@@ -281,33 +269,6 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 			}
 			return kind == IntrinsicKind::Equal ? CompileTimeValue(result) : CompileTimeValue(!result);
 		}
-
-		std::optional<double> leftNumber = getCompileTimeNumericValue(leftValue);
-		std::optional<double> rightNumber = getCompileTimeNumericValue(rightValue);
-		if (!leftNumber || !rightNumber)
-			return {};
-		if (kind == IntrinsicKind::Add)
-			return *leftNumber + *rightNumber;
-		if (kind == IntrinsicKind::Subtract)
-			return *leftNumber - *rightNumber;
-		if (kind == IntrinsicKind::Multiply)
-			return *leftNumber * *rightNumber;
-		if (kind == IntrinsicKind::Divide)
-			return *rightNumber == 0.0 ? CompileTimeValue{} : CompileTimeValue(*leftNumber / *rightNumber);
-		if (kind == IntrinsicKind::Modulo)
-			return *rightNumber == 0.0 ? CompileTimeValue{} : CompileTimeValue(std::fmod(*leftNumber, *rightNumber));
-		if (kind == IntrinsicKind::LessThan)
-			return *leftNumber < *rightNumber;
-		if (kind == IntrinsicKind::GreaterThan)
-			return *leftNumber > *rightNumber;
-		if (kind == IntrinsicKind::LessThanOrEqual)
-			return *leftNumber <= *rightNumber;
-		if (kind == IntrinsicKind::GreaterThanOrEqual)
-			return *leftNumber >= *rightNumber;
-		if (kind == IntrinsicKind::Min)
-			return std::min(*leftNumber, *rightNumber);
-		if (kind == IntrinsicKind::Max)
-			return std::max(*leftNumber, *rightNumber);
 	}
 
 	for (size_t index = 1; index < expr->arguments.size(); index++)

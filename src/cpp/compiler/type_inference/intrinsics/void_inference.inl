@@ -115,7 +115,7 @@ void ExpressionInferenceSupport::inferVoidIntrinsic(IntrinsicKind kind) {
 		conditionValue = resolveStoredCompileTimeValue(expr->arguments[1], flexBindingFrameStack, &context);
 		sectionConditionType = valueType;
 		if (kind == IntrinsicKind::Case &&
-			(!getCompileTimeIntegerValue(conditionValue) ||
+			(!getCompileTimeIntegerBits(conditionValue, valueType.numericSize * 8) ||
 			 !isStructurallyCompileTimeConstant(expr->arguments[1], flexBindingFrameStack, context))) {
 			failConfigured(expr->arguments[1]->range, "case value must be constant integer");
 			return;

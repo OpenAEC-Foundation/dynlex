@@ -457,6 +457,10 @@ uint64_t DataType::getABIAlignment(const llvm::DataLayout &dataLayout, llvm::LLV
 	return dataLayout.getABITypeAlign(llvmType).value();
 }
 
+bool isSupportedIntegerByteWidth(int byteWidth) {
+	return byteWidth > 0 && static_cast<unsigned>(byteWidth) <= llvm::IntegerType::MAX_INT_BITS / 8;
+}
+
 llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dataLayout) const {
 	// Any pointer type maps to opaque ptr
 	if (pointerDepth > 0)
@@ -483,18 +487,8 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dat
 		}
 	case Kind::Int:
 	case Kind::UInt:
-		switch (numericSize) {
-		case 1:
-			return llvm::Type::getInt8Ty(ctx);
-		case 2:
-			return llvm::Type::getInt16Ty(ctx);
-		case 4:
-			return llvm::Type::getInt32Ty(ctx);
-		case 8:
-			return llvm::Type::getInt64Ty(ctx);
-		default:
-			crashCompilerBug("Integer type must have a valid numericSize (1/2/4/8) before codegen");
-		}
+		requireCompilerInvariant(numericSize > 0, "integer type has no concrete width before codegen");
+		return llvm::IntegerType::get(ctx, numericSize * 8);
 	case Kind::Array:
 		requireCompilerInvariant(arrayElementType && arraySize >= 0, "Array type must have element type and size");
 		return llvm::ArrayType::get(arrayElementType->toLLVM(ctx, dataLayout), arraySize);
@@ -514,7 +508,6 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dat
 		);
 		ClassInstantiation &inst = classDefinition->instantiations[classInstIndex];
 		if (!inst.llvmStructType) {
-			inst.llvmStructType = llvm::StructType::create(ctx, "class");
 			std::vector<llvm::Type *> llvmFields;
 			llvmFields.reserve(inst.fieldTypes.size());
 			std::vector<uint64_t> fieldAlignments;
@@ -530,8 +523,8 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dat
 				llvmFields.push_back(fieldType);
 				fieldAlignments.push_back(fieldAlignment);
 			}
-			LLVMClassLayout layout =
-				layoutLLVMClass(ctx, dataLayout, *inst.llvmStructType, llvmFields, fieldAlignments, classDefinition->alignment);
+			LLVMClassLayout layout = layoutLLVMClass(ctx, dataLayout, llvmFields, fieldAlignments, classDefinition->alignment);
+			inst.llvmStructType = layout.structType;
 			inst.llvmFieldIndices = std::move(layout.fieldIndices);
 			inst.llvmABIAlignment = layout.abiAlignment;
 		}

@@ -231,7 +231,7 @@ generateBitwiseNotIntrinsic(ParseContext &context, const std::vector<Expression 
 	IntrinsicKind kind
 ) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	context.requiredLibraries.insert("m");
+	recordRequiredLibrary(context, "m");
 	llvm::Intrinsic::ID intrinsicId = mathIntrinsicId(kind);
 	if (intrinsicId != llvm::Intrinsic::not_intrinsic) {
 		DataType operandType = args.size() == 2 ? finalizedExpressionType(context, args[1]) : DataType{};

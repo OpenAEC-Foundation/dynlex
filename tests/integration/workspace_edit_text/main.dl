@@ -34,3 +34,15 @@ set source to the string form of "abcd"
 set result to the result of applying workspace text edits (the edits of change) to source using the workspace UTF-16 position encoding
 print lines (result succeeded) and (result's failure reason)
 free overlap
+
+set unordered to the required workspace edit parsed from "{\"changes\":{\"file:///alpha.txt\":[{\"range\":{\"start\":{\"line\":0,\"character\":2},\"end\":{\"line\":0,\"character\":3}},\"newText\":\"X\"},{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":1}},\"newText\":\"Y\"},{\"range\":{\"start\":{\"line\":0,\"character\":1},\"end\":{\"line\":0,\"character\":2}},\"newText\":\"Z\"}]}}"
+set change to the workspace change at index 0 in the changes of unordered's edit
+set result to the result of applying workspace text edits (the edits of change) to (the string form of "abcd") using the workspace UTF-16 position encoding
+print lines (result succeeded) and (result's text)
+free unordered
+
+set {unordered overlap} to the required workspace edit parsed from "{\"changes\":{\"file:///alpha.txt\":[{\"range\":{\"start\":{\"line\":0,\"character\":1},\"end\":{\"line\":0,\"character\":3}},\"newText\":\"X\"},{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":2}},\"newText\":\"Y\"}]}}"
+set change to the workspace change at index 0 in the changes of unordered overlap's edit
+set result to the result of applying workspace text edits (the edits of change) to (the string form of "abcd") using the workspace UTF-16 position encoding
+print lines (result succeeded) and (result's failure reason)
+free unordered overlap

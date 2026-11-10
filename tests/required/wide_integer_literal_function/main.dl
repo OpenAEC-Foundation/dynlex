@@ -1,0 +1,6 @@
+in this file:
+    @intrinsic("number rule", @intrinsic("type", "int", 128))
+function literal result:
+    execute:
+        @intrinsic("return", 9223372036854775808)
+@intrinsic("return", @intrinsic("cast", @intrinsic("not equal", literal result, 9223372036854775808), @intrinsic("type", "int", 32)))

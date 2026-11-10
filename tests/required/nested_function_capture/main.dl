@@ -1,0 +1,5 @@
+to use thing:
+    to inner:
+        @intrinsic("discard", thing)
+    inner
+use 1

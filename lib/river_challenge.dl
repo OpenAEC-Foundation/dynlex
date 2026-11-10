@@ -37,7 +37,7 @@ local function stop the river crossing with message:
 
 local function ensure {river passenger:passenger} is valid:
     execute:
-        if (passenger's identifier < 1) or (passenger's identifier > 3):
+        if passenger's identifier is not one of 1, 2 and 3:
             abort the program
 
 local function [the|] river side of {river passenger:passenger}:
@@ -64,65 +64,30 @@ local function place {river passenger:passenger} on the river side numbered {int
         else:
             set challenge's hay side to side
 
-local function report that {river passenger:passenger} is being loaded:
+local function the river passenger name of {river passenger:passenger}:
     execute:
         ensure passenger is valid
-        if passenger's identifier = 1:
-            print line "RIVER|COMMAND|LOAD|SHEEP"
-        else if passenger's identifier = 2:
-            print line "RIVER|COMMAND|LOAD|WOLF"
-        else:
-            print line "RIVER|COMMAND|LOAD|HAY"
+        return the item at (passenger's identifier - 1) in ["sheep", "wolf", "hay"]
 
-local function report that {river passenger:passenger} was loaded:
+local function the river passenger code of {river passenger:passenger}:
     execute:
         ensure passenger is valid
-        if passenger's identifier = 1:
-            print line "RIVER|ACTION|LOAD|SHEEP"
-        else if passenger's identifier = 2:
-            print line "RIVER|ACTION|LOAD|WOLF"
-        else:
-            print line "RIVER|ACTION|LOAD|HAY"
+        return the item at (passenger's identifier - 1) in ["SHEEP", "WOLF", "HAY"]
 
-local function report that {river passenger:passenger} is being unloaded:
+local function report river event {C string:phase} {C string:action} for {river passenger:passenger}:
     execute:
-        ensure passenger is valid
-        if passenger's identifier = 1:
-            print line "RIVER|COMMAND|UNLOAD|SHEEP"
-        else if passenger's identifier = 2:
-            print line "RIVER|COMMAND|UNLOAD|WOLF"
-        else:
-            print line "RIVER|COMMAND|UNLOAD|HAY"
-
-local function report that {river passenger:passenger} was unloaded:
-    execute:
-        ensure passenger is valid
-        if passenger's identifier = 1:
-            print line "RIVER|ACTION|UNLOAD|SHEEP"
-        else if passenger's identifier = 2:
-            print line "RIVER|ACTION|UNLOAD|WOLF"
-        else:
-            print line "RIVER|ACTION|UNLOAD|HAY"
+        set code to the river passenger code of passenger
+        print line formatted "RIVER|{phase}|{action}|{code}"
 
 local function stop because {river passenger:passenger} is missing:
     execute:
-        ensure passenger is valid
-        if passenger's identifier = 1:
-            stop the river crossing with "RIVER|ERROR|there is no sheep to pick up"
-        else if passenger's identifier = 2:
-            stop the river crossing with "RIVER|ERROR|there is no wolf to pick up"
-        else:
-            stop the river crossing with "RIVER|ERROR|there is no hay to pick up"
+        set name to the river passenger name of passenger
+        stop the river crossing with formatted "RIVER|ERROR|there is no {name} to pick up"
 
 local function stop because {river passenger:passenger} is not aboard:
     execute:
-        ensure passenger is valid
-        if passenger's identifier = 1:
-            stop the river crossing with "RIVER|ERROR|the sheep is not in the boat"
-        else if passenger's identifier = 2:
-            stop the river crossing with "RIVER|ERROR|the wolf is not in the boat"
-        else:
-            stop the river crossing with "RIVER|ERROR|the hay is not in the boat"
+        set name to the river passenger name of passenger
+        stop the river crossing with formatted "RIVER|ERROR|the {name} is not in the boat"
 
 local function check the river crossing:
     globals:
@@ -150,7 +115,7 @@ function:
         challenge
     execute:
         if challenge's activity:
-            report that passenger is being loaded
+            report river event "COMMAND" "LOAD" for passenger
             if challenge's cargo != 0:
                 stop the river crossing with "RIVER|ERROR|the boat is already carrying something"
             else if the river side of passenger != challenge's farmer side:
@@ -158,7 +123,7 @@ function:
             else:
                 set challenge's cargo to passenger's identifier
                 place passenger on the river side numbered -1
-                report that passenger was loaded
+                report river event "ACTION" "LOAD" for passenger
 
 function:
     patterns:
@@ -173,13 +138,13 @@ function:
         challenge
     execute:
         if challenge's activity:
-            report that passenger is being unloaded
+            report river event "COMMAND" "UNLOAD" for passenger
             if challenge's cargo != passenger's identifier:
                 stop because passenger is not aboard
             else:
                 set challenge's cargo to 0 as a 32 bit integer
                 place passenger on the river side numbered challenge's farmer side
-                report that passenger was unloaded
+                report river event "ACTION" "UNLOAD" for passenger
                 check the river crossing
 
 function:

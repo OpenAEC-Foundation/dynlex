@@ -135,12 +135,12 @@ static void seedInstantiationCompileTimeParameters(
 	size_t bindingCount = std::min(paramBindings.size(), argTypes.size());
 	for (size_t i = 0; i < bindingCount; i++) {
 		const auto &[name, argExpr] = paramBindings[i];
-		if (!argExpr)
-			crashCompilerBug("missing instantiation parameter expression while seeding compile-time values");
 		if (!parameterRequiresCompileTimeInstantiationValue(requiredCompileTimeParameters, name, argTypes[i])) {
 			instantiation.constantParameterValues.erase(name);
 			continue;
 		}
+		if (!argExpr)
+			crashCompilerBug("missing instantiation parameter expression while seeding compile-time values");
 		CompileTimeValue value = readCompileTimeValue(argExpr);
 		if (!isCompileTimeKnown(value) && argTypes[i].kind == DataType::Kind::Type)
 			value = TypeReferenceValue::exact(argTypes[i]);

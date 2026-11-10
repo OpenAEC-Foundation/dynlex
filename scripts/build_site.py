@@ -111,9 +111,10 @@ def main():
         shutil.copytree(site / 'platform', stage / 'platform')
         shutil.copytree(root / 'src/web/compiler', stage / 'compiler')
         compiler = root / 'src/web/ide/public/compiler'
-        for name in ['dynlex_web.js', 'dynlex_web.wasm', 'dynlex_wgsl_translator.wasm',
-                     'runtimeImports.js', 'runtimeFilesystem.js', 'runtimeHost.js', 'runtimeLayout.js']:
+        for name in ['dynlex_web.js', 'dynlex_web.wasm', 'dynlex_wgsl_translator.wasm']:
             shutil.copy2(compiler / name, stage / 'compiler' / name)
+        for path in sorted({compiler / 'runtimeImports.js', *compiler.glob('runtime*.js')}):
+            shutil.copy2(path, stage / 'compiler' / path.name)
         shutil.copy2(root / 'web/wgsl-translator.js', stage / 'compiler/wgsl-translator.js')
         write_routes(site, stage, pages, args.base)
         (stage / 'assets/shaders/index.json').write_text(json.dumps(scenes) + '\n')

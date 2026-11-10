@@ -26,8 +26,8 @@ def main() -> int:
     root = pathlib.Path(__file__).resolve().parent.parent
     server = default_server_path(root)
     documents = [
-        root / "tests" / "games" / "geometry_dash" / "debug_sim.dl",
-        root / "tests" / "games" / "shader_gallery.dl",
+        root / "lib" / "farm_challenge.dl",
+        root / "lib" / "river_challenge.dl",
     ]
     progress("Starting concurrent stdio language servers")
     sessions = [LspSession(server, root, False, False) for _ in documents]

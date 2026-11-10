@@ -10,6 +10,8 @@ struct DeclaredTypeConstraintWorkItem {
 	// A `numbers are ...` line of a scope rule block. Its expression is owned by the line.
 	CodeLine *numberRuleLine{};
 	TypeConstraint numberRuleConstraint;
+	bool expressionOmittedForReuse = false;
+	Section *sourceSection = nullptr;
 };
 
 enum class PatternTypeConstraintProbe { Ready, Deferred, Invalid, Impure };

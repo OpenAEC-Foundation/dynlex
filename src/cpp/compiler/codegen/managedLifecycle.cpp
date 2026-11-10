@@ -4,6 +4,7 @@
 #include "intrinsicInfo.h"
 #include "patternDefinition.h"
 #include "section.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include <algorithm>
@@ -279,6 +280,8 @@ bool finalizeManagedFunctionReturn(ParseContext &context) {
 	auto savedPoint = builder.saveIP();
 	llvm::DebugLoc savedLocation = builder.getCurrentDebugLocation();
 	builder.SetCurrentDebugLocation({});
+	if (llvm::DISubprogram *scope = context.managedReturnBlock->getParent()->getSubprogram())
+		builder.SetCurrentDebugLocation(llvm::DILocation::get(*context.llvmContext, 0, 0, scope, nullptr, true));
 	builder.SetInsertPoint(context.managedReturnBlock);
 	for (size_t index = context.managedFunctionStorage.size(); index-- > 0;)
 		if (!releaseInitializedStorage(context, context.managedFunctionStorage[index]))

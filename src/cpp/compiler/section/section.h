@@ -156,6 +156,7 @@ struct Instantiation : InstantiationExecutionEffects {
 	bool inferring = false;
 	bool needsReinfer = false;
 	bool valid = true;
+	bool inferenceReusedFromCache = false;
 };
 
 struct Section {

@@ -149,12 +149,15 @@ set frame to a new graphics frame in window
 use program in frame
 set uniform binding 0 in frame to 1
 set uniform binding 1 in frame to 64 as a 32 bit unsigned integer
-set uniform binding 2 in frame to -3
-set uniform binding 3 in frame to 4.25 as a 32 bit floating-point number
+set uniform binding 2 in frame to 64 as a 32 bit unsigned integer
+set uniform binding 3 in frame to 0.0 as a 32 bit floating-point number
+set uniform binding 4 in frame to 0
+set uniform binding 30 in frame to 4.25 as a 32 bit floating-point number
+set uniform binding 31 in frame to -3
 require condition ((the item at 0 in state's uniform_values) = 1.0) reporting "A signed integer uniform was not converted"
 require condition ((the item at 1 in state's uniform_values) = 64.0) reporting "An unsigned integer uniform was not converted"
-require condition ((the item at 2 in state's uniform_values) = -3.0) reporting "A negative integer uniform was not converted"
-require condition ((the item at 3 in state's uniform_values) = 4.25) reporting "A floating-point uniform changed during conversion"
+require condition ((the item at 31 in state's uniform_values) = -3.0) reporting "A negative integer uniform was not converted"
+require condition ((the item at 30 in state's uniform_values) = 4.25) reporting "A floating-point uniform changed during conversion"
 draw a fullscreen surface in frame
 if scenario = "release-active-pipeline":
     release program

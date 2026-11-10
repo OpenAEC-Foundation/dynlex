@@ -50,6 +50,14 @@ def vulkan_driver_environment(
     return environment
 
 
+def isolated_x11_environment(base_environment: Mapping[str, str]) -> dict[str, str]:
+    environment = dict(base_environment)
+    environment.pop("WAYLAND_DISPLAY", None)
+    environment.pop("WAYLAND_SOCKET", None)
+    environment["XDG_SESSION_TYPE"] = "x11"
+    return environment
+
+
 def homebrew_formula_prefix(formula: str) -> Path:
     try:
         result = subprocess.run(

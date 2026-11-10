@@ -1,0 +1,10 @@
+import lib/std.dl
+
+in this file:
+    numbers are a 128 bit integer
+
+print line the size of the type of 9223372036854775808
+print line the size of the type of -9223372036854775808
+print line 9223372036854775808
+print line -9223372036854775808
+print line 18446744073709551616

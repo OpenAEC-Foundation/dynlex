@@ -12,8 +12,8 @@ const compile=source=>{
   return call('dynlex_web_compile_and_emit_wasm','number');
 };
 for(const [kind,width,requirement] of [
-  ['int',24,'8, 16, 32, or 64'],['uint',128,'8, 16, 32, or 64'],['integer',40,'8, 16, 32, or 64'],
-  ['any',24,'8, 16, 32, or 64'],['float',8,'32 or 64'],['float',16,'32 or 64'],['float',128,'32 or 64'],
+  ['int',8388616,"LLVM's type limit"],['uint',8388616,"LLVM's type limit"],['integer',8388616,"LLVM's type limit"],
+  ['any',8388616,"LLVM's type limit"],['float',8,'32 or 64'],['float',16,'32 or 64'],['float',128,'32 or 64'],
   ['bool',8,'a numeric type kind that accepts a bit width']
 ]) {
   assert.equal(compile(`@intrinsic("discard", @intrinsic("type", "${kind}", ${width}))\n`),1);
@@ -22,7 +22,7 @@ for(const [kind,width,requirement] of [
   assert(diagnostics[0].message.includes(requirement),diagnostics[0].message);
 }
 let valid=0;
-for(const kind of ['int','uint','integer','float','any']) for(const width of (kind==='float'?[32,64]:[8,16,32,64])) {
+for(const kind of ['int','uint','integer','float','any']) for(const width of (kind==='float'?[32,64]:[8,16,24,32,40,64,128,256])) {
   const type=`@intrinsic("type", "${kind}", ${width})`;
   const target=kind==='any'?`@intrinsic("and", ${type}, @intrinsic("type", "int"))`:type;
   assert.equal(compile(`@intrinsic("store", value, @intrinsic("cast", 7, ${target}))\n`),0,

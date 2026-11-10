@@ -1,0 +1,48 @@
+import lib/shader.dl
+import lib/geometry.dl
+
+# Physical image bounds supplied by the host, including a canvas's origin.
+the study width means: @intrinsic("shader uniform", "study_width", 1)
+the study height means: @intrinsic("shader uniform", "study_height", 2)
+the study left means: @intrinsic("shader uniform", "study_left", 3)
+the study top means: @intrinsic("shader uniform", "study_top", 4)
+the study x means: the fragment x coordinate - the study left
+the study y means: the fragment y coordinate - the study top
+
+[a|] planar position means: a point
+[a|] complex number means: a point
+[a|] light color means: a color
+a planar position with x {floating-point number:x} and y {floating-point number:y} means: @intrinsic(
+    "construct",
+    a point,
+    @intrinsic("construct", an aggregate of 2 floating-point number values, x, y)
+)
+
+a complex number with real {floating-point number:real} and imaginary {floating-point number:imaginary} means: @intrinsic(
+    "construct",
+    a point,
+    @intrinsic("construct", an aggregate of 2 floating-point number values, real, imaginary)
+)
+
+a light color with red {floating-point number:red}, green {floating-point number:green}, blue {floating-point number:blue} and alpha {floating-point number:alpha} means: @intrinsic(
+    "construct",
+    a color,
+    @intrinsic("construct", an aggregate of 4 floating-point number values, red, green, blue, alpha)
+)
+
+function {complex number:value}'s real part:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        value's x
+
+function {complex number:value}'s imaginary part:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        value's y
+
+flex function set the real part of {complex number:value} to {a number:component}:
+    replacement:
+        set the x coordinate of value to component
+flex function set the imaginary part of {complex number:value} to {a number:component}:
+    replacement:
+        set the y coordinate of value to component

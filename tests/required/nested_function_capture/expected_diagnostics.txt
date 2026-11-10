@@ -1,0 +1,2 @@
+tests/required/nested_function_capture/main.dl:30-36: Error: Function cannot capture outer local variable 'thing'; pass it as an argument
+  note: Outer variable is defined here tests/required/nested_function_capture/main.dl:8-13

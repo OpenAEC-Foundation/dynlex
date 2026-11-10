@@ -9,7 +9,7 @@ import {observeAllocations} from './allocation_probe.mjs';
 const root=path.resolve(import.meta.dirname,'../..');
 const compiler=path.resolve(process.argv[2]??path.join(root,'build/dynlex'));
 const directory=await fs.mkdtemp(path.join(os.tmpdir(),'dynlex-library-values-'));
-const cases=['sequence_values','unicode_stream'];
+const cases=['sequence_values','unicode_stream','workspace_edit_text','workspace_text_plan'];
 const expected=new Map();
 async function runWasm(name,target) {
   const bytes=await fs.readFile(path.join(directory,name+'.wasm'));

@@ -108,6 +108,10 @@ static Expression *findVariableExpressionAtSource(Expression *expr, const std::s
 }
 
 static std::string formatCompileTimeValue(const CompileTimeValue &value) {
+	if (const auto *integer = std::get_if<WideInteger>(&value))
+		return integer->toString();
+	if (const auto *integer = std::get_if<std::uint64_t>(&value))
+		return std::to_string(*integer);
 	if (const auto *integer = std::get_if<std::int64_t>(&value))
 		return std::to_string(*integer);
 	if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))

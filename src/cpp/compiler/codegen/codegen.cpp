@@ -19,6 +19,7 @@
 #include "type.h"
 #include "variable.h"
 #include "wasm.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DebugInfoMetadata.h"
@@ -27,6 +28,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
+#include "llvm/Support/SHA256.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
@@ -86,7 +88,7 @@ static std::string encodeInstantiationKeyForFunctionName(const InstantiationKey 
 		else if (const auto *boolean = std::get_if<bool>(&value))
 			suffix += *boolean ? "true" : "false";
 		else if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value))
-			suffix += encodeLLVMNameComponent(typeRef->type.toString());
+			suffix += encodeLLVMNameComponent(typeRef->type.toReferencedType().toString());
 		else if (const auto *constraint = std::get_if<TypeConstraint>(&value))
 			suffix += encodeLLVMNameComponent(constraint->toInternalString());
 		else if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
@@ -208,6 +210,13 @@ llvm::Function *generateSpecializedFunction(
 
 	llvm::Function *func = llvm::Function::Create(funcType, llvm::Function::InternalLinkage, funcName, context.llvmModule);
 	activeInst.llvmFunctionsByParameterAddressSpaces.emplace(std::move(parameterAddressSpaces), func);
+	if (context.recordGeneratedFunction)
+		context.recordGeneratedFunction(section, &instantiationKey, func, false);
+	if (context.reuseGeneratedFunction && context.reuseGeneratedFunction(section, activeInst, func)) {
+		func->setLinkage(llvm::GlobalValue::ExternalLinkage);
+		return func;
+	}
+	requireCompilerInvariant(!activeInst.inferenceReusedFromCache, "cached inference summary lost its reusable LLVM function");
 
 	size_t argIdx = 0;
 	for (auto &arg : func->args()) {
@@ -413,6 +422,16 @@ static void finalizeFlexBodySectionControlFlow(ParseContext &context, ParseConte
 			llvm::BasicBlock *target = frame.branchBackBlock ? frame.branchBackBlock : frame.exitBlock;
 			builder.CreateBr(target);
 		}
+		// `else if` merge blocks only forward to the chain exit; drop the ones no branch reaches.
+		for (llvm::BasicBlock *forward = frame.branchBackBlock;
+			 forward && forward != frame.exitBlock && llvm::pred_empty(forward);) {
+			llvm::BasicBlock *next = forward->getSingleSuccessor();
+			requireCompilerInvariant(
+				next && forward->size() == 1, "unreachable section branch-back block is not a forwarding block"
+			);
+			forward->eraseFromParent();
+			forward = next;
+		}
 		if (llvm::pred_empty(frame.exitBlock)) {
 			requireCompilerInvariant(frame.exitBlock->empty(), "unreachable section exit block contains instructions");
 			frame.exitBlock->eraseFromParent();
@@ -499,22 +518,13 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 				!minimumMagnitude || minimumMagnitude->identity != nullptr,
 				"minimum integer magnitude reached literal codegen without an identity"
 			);
-			std::uint64_t magnitude = minimumMagnitude ? std::uint64_t{1} << 63
-									  : std::holds_alternative<std::uint64_t>(*number)
-										  ? std::get<std::uint64_t>(*number)
-										  : static_cast<std::uint64_t>(std::get<std::int64_t>(*number));
+			CompileTimeValue value = numericLiteralCompileTimeValue(*number);
 			// A number rule can make an integer literal floating-point; inference proved the value exact.
 			if (numType.kind == DataType::Kind::Float)
-				return llvm::ConstantFP::get(llvmType, static_cast<double>(magnitude));
+				return llvm::ConstantFP::get(llvmType, *getCompileTimeNumericValue(value));
 			requireCompilerInvariant(numType.isInteger(), "integer literal has a non-integer finalized type");
 			unsigned bitWidth = static_cast<unsigned>(numType.numericSize * 8);
-			requireCompilerInvariant(bitWidth > 0 && bitWidth <= 64, "integer literal has an unsupported finalized width");
-			unsigned valueBits = numType.kind == DataType::Kind::Int && !minimumMagnitude ? bitWidth - 1 : bitWidth;
-			requireCompilerInvariant(
-				valueBits >= 64 || magnitude < (std::uint64_t{1} << valueBits),
-				"integer literal does not fit its finalized integer type"
-			);
-			return llvm::ConstantInt::get(llvmType, magnitude, false);
+			return llvm::ConstantInt::get(llvmType, *getCompileTimeIntegerBits(value, bitWidth));
 		}
 		if (auto *strVal = std::get_if<std::string>(&expr->literalValue)) {
 			return generateStringConstant(context, *strVal);

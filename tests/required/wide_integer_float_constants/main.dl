@@ -1,0 +1,11 @@
+wide means: @intrinsic("type", "int", 128)
+real means: @intrinsic("type", "float", 64)
+single means: @intrinsic("type", "float", 32)
+constant means: @intrinsic("fix", wide)
+function known {constant:value}:
+    execute:
+        @intrinsic("return", value)
+@intrinsic("store", high, @intrinsic("shift left", @intrinsic("cast", 1, wide), 100))
+@intrinsic("store", result, known @intrinsic("cast", @intrinsic("cast", high, real), wide))
+@intrinsic("store", rounded, known @intrinsic("cast", @intrinsic("cast", 1267650675786093127411026624513, single), wide))
+@intrinsic("return", @intrinsic("cast", @intrinsic("or", @intrinsic("not equal", result, high), @intrinsic("not equal", rounded, 1267650751343956853325350043648)), @intrinsic("type", "int", 32)))

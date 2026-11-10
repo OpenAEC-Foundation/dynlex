@@ -151,6 +151,17 @@ NEGATIVE_SOURCES = {
         '@intrinsic("atomic load", the address of value, "relaxed")\n',
         "Atomic operation requires a supported concrete scalar pointee",
     ),
+    # Invalid floating widths fail at type construction, before atomic checking.
+    "float8": (
+        'set value to 0 as @intrinsic("type", "float", 8)\n'
+        '@intrinsic("atomic load", the address of value, "relaxed")\n',
+        "32 or 64 for a floating-point type",
+    ),
+    "float16": (
+        'set value to 0 as @intrinsic("type", "float", 16)\n'
+        '@intrinsic("atomic load", the address of value, "relaxed")\n',
+        "32 or 64 for a floating-point type",
+    ),
 }
 
 
@@ -300,7 +311,7 @@ def main() -> int:
             library.write_text(LIBRARY_SOURCE, encoding="utf-8")
             llvm_output = temporary / "atomics.ll"
             require_success(
-                run([str(compiler), str(library), "--emit-llvm", "--no-main", "-o", str(llvm_output)], repo_root)
+                run([str(compiler), str(library), "--emit-llvm", "--no-main", "-O0", "-o", str(llvm_output)], repo_root)
             )
             llvm_ir = llvm_output.read_text(encoding="utf-8")
             require_atomic_ir(llvm_ir)

@@ -44,10 +44,13 @@ static bool resolvePatternPrecedence(ParseContext &context) {
 		size_t incoming = 0;
 	};
 	std::unordered_map<PatternFamily *, FamilyEdges> graph;
+	size_t graphEdgeCount = 0;
 	auto addEdge = [&](PatternFamily *higher, PatternFamily *lower) {
 		graph.try_emplace(lower);
-		if (graph[higher].successors.insert(lower).second)
+		if (graph[higher].successors.insert(lower).second) {
 			graph.at(lower).incoming++;
+			graphEdgeCount++;
+		}
 	};
 	// "default" connects declarations before and after it without becoming a
 	// persistent syntax family or imposing an order on otherwise unrelated peers.
@@ -123,13 +126,20 @@ static bool resolvePatternPrecedence(ParseContext &context) {
 	std::vector<PatternFamily *> precedenceTargets;
 	for (const auto &[family, edges] : graph)
 		precedenceTargets.push_back(family);
-	for (PatternFamily *family : generatedAccessorFamilies) {
-		// All syntax families containing generated accessors bind before the
-		// authored graph, without creating automatic edges between those families.
+	// All generated accessor families precede the authored graph. A shared
+	// sentinel represents those edges without connecting accessor peers.
+	PatternFamily generatedAccessorSentinel;
+	bool hasAuthoredTarget = false;
+	if (!generatedAccessorFamilies.empty())
 		for (PatternFamily *target : precedenceTargets)
-			if (!generatedAccessorFamilies.contains(target))
-				addEdge(family, target);
-	}
+			if (!generatedAccessorFamilies.contains(target)) {
+				addEdge(&generatedAccessorSentinel, target);
+				hasAuthoredTarget = true;
+			}
+	if (hasAuthoredTarget)
+		for (PatternFamily *family : generatedAccessorFamilies)
+			addEdge(family, &generatedAccessorSentinel);
+	context.patternPrecedenceGraphEdges = graphEdgeCount;
 
 	std::queue<PatternFamily *> ready;
 	for (const auto &[family, edges] : graph)
@@ -153,10 +163,11 @@ static bool resolvePatternPrecedence(ParseContext &context) {
 	// once per family, never as the Cartesian product of individual overloads.
 	for (PatternFamily *family : std::views::reverse(order)) {
 		for (PatternFamily *successor : graph.at(family).successors) {
-			if (successor != &defaultSentinel)
+			if (successor != &defaultSentinel && successor != &generatedAccessorSentinel)
 				family->precedenceSuccessors.insert(successor);
 			family->precedenceSuccessors.insert(successor->precedenceSuccessors.begin(), successor->precedenceSuccessors.end());
 		}
 	}
+	context.patternPrecedenceRevision++;
 	return true;
 }

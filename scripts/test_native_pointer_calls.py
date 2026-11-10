@@ -130,7 +130,7 @@ def main() -> int:
             library = temporary / "library.dl"
             library.write_text(LIBRARY_SOURCE, encoding="utf-8")
             llvm_output = temporary / "library.ll"
-            require_success(run([str(compiler), str(library), "--emit-llvm", "--no-main", "-o", str(llvm_output)], repo_root))
+            require_success(run([str(compiler), str(library), "--emit-llvm", "--no-main", "-O0", "-o", str(llvm_output)], repo_root))
             llvm_ir = llvm_output.read_text(encoding="utf-8")
             add_symbol = exposed_symbol(llvm_ir, "call addition")
             increment_symbol = exposed_symbol(llvm_ir, "call increment")

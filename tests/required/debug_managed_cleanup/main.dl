@@ -1,0 +1,13 @@
+integer means: @intrinsic("type", "int", 32)
+class:
+    patterns:
+        owned
+    members:
+        number as integer
+    retain:
+        @intrinsic("discard", @intrinsic("lifecycle value"))
+    release:
+        @intrinsic("discard", @intrinsic("lifecycle value"))
+to inspect cleanup:
+    @intrinsic("store", item, @intrinsic("construct", owned, 1))
+inspect cleanup

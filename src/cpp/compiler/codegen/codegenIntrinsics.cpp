@@ -7,6 +7,7 @@
 #include "compilerUtils.h"
 #include "executionTrace.h"
 #include "intrinsicInfo.h"
+#include "libraryDependencies.h"
 #include "nativeScalarABI.h"
 #include "sectionFlexBody.h"
 #include "spirv.h"

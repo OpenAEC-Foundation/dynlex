@@ -1,0 +1,5 @@
+in this file:
+    @intrinsic("number rule", @intrinsic("type", "float", 32))
+@intrinsic("store", actual, @intrinsic("cast", 16777217.0, @intrinsic("type", "int", 32)))
+@intrinsic("store", expected, @intrinsic("cast", 16777216, @intrinsic("type", "int", 32)))
+@intrinsic("return", @intrinsic("cast", @intrinsic("not equal", actual, expected), @intrinsic("type", "int", 32)))

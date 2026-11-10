@@ -1,0 +1,10 @@
+import lib/farm_challenge.dl
+
+in this file:
+    @intrinsic("number rule", @intrinsic("type", "int", 64))
+
+loop 2 times:
+    walk to the barn
+    grab an axe
+    if i can reach the nearest tree:
+        chop the nearest tree down

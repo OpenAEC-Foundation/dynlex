@@ -57,9 +57,12 @@ int main() {
 	expect(
 		std::get<std::uint64_t>(parseNumericLiteral("18446744073709551615").value) == UINT64_MAX, "maximum unsigned integer"
 	);
-	expect(
-		parseNumericLiteral("18446744073709551616").error == NumericLiteralParseError::UnsignedIntegerOutOfRange,
-		"integer overflow"
-	);
+	for (std::string_view text :
+		 {"18446744073709551616", "170141183460469231731687303715884105727", "340282366920938463463374607431768211455",
+		  "1606938044258990275541962092341162602522202993782792835301376"}) {
+		NumericLiteralParseResult parsed = parseNumericLiteral(text);
+		expect(parsed && std::holds_alternative<WideInteger>(parsed.value), text);
+		expect(std::get<WideInteger>(parsed.value).toString() == text, text);
+	}
 	return 0;
 }

@@ -65,7 +65,7 @@ def main() -> int:
         # Their precedence must not be rebuilt for every class and overload pair.
         source.write_text(shared_member_program(512), encoding="utf-8")
         result = subprocess.run(
-            [str(compiler), str(source), "-o", str(executable)],
+            [str(compiler), str(source), "--no-incremental", "-o", str(executable)],
             capture_output=True, text=True, timeout=timeout,
         )
         assert result.returncode == 0, result.stdout + result.stderr

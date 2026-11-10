@@ -12,7 +12,7 @@ if len(sys.argv) != 2:
 project = Path(sys.argv[1]).resolve()
 build = project / "build"
 subprocess.run(
-    ["cmake", "--build", str(build), "--target", "dynlex_address_provenance_test"],
+    ["cmake", "--build", str(build), "--target", "dynlex_address_provenance_test", "--parallel", "2"],
     cwd=project,
     check=True,
 )

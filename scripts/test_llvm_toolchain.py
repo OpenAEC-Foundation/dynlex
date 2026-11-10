@@ -412,7 +412,7 @@ printf '%s\n%s\n' "$DYNLEX_LLVM_BOOTSTRAP_CC" "$DYNLEX_LLVM_BOOTSTRAP_CXX"
         self.assertIn("->hasTerminator()", source)
         self.assertNotIn("basicBlockHasTerminator", source)
         self.assertNotRegex(source, r"!\s*[^;\n]*->getTerminator\(\)")
-        self.assertIn("llvm::UncondBrInst", source)
+        self.assertIn("llvm::CondBrInst", source)
         self.assertNotIn("llvm::BranchInst", source)
         self.assertIn("llvm::Triple targetTriple", source)
         self.assertIn("llvm::ArrayRef<llvm::Metadata *>{}", source)

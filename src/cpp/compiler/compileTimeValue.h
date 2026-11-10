@@ -16,6 +16,8 @@ std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value);
 std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &value);
 std::optional<std::uint64_t> getCompileTimeUnsignedIntegerValue(const CompileTimeValue &value);
 std::optional<double> getCompileTimeNumericValue(const CompileTimeValue &value);
+std::optional<llvm::APInt> getCompileTimeIntegerBits(const CompileTimeValue &value, unsigned width);
+CompileTimeValue compileTimeIntegerFromBits(const llvm::APInt &bits, const DataType &type);
 std::optional<TypeReferenceValue> getCompileTimeTypeReferenceValue(const CompileTimeValue &value);
 std::optional<TypeConstraint> getCompileTimeConstraintValue(const CompileTimeValue &value);
 bool readTypeConstraintValue(

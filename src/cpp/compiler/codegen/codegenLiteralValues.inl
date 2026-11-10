@@ -1,4 +1,6 @@
-static llvm::Value *generateStringConstant(ParseContext &context, const std::string &value) {
+#include "compileTimeFloatingValue.h"
+
+llvm::Value *generateStringConstant(ParseContext &context, const std::string &value) {
 	// Strings are currently i8* pointers to constant data. Runtime string
 	// operations remain the responsibility of the string library.
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
@@ -9,11 +11,18 @@ static llvm::Value *generateStringConstant(ParseContext &context, const std::str
 			strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
 		);
 	}
-	std::string globalName = ".str." + std::to_string(context.stringConstants.size());
+	llvm::SHA256 hash;
+	hash.update(llvm::StringRef(value));
+	std::string globalName = ".dynlex.string." + llvm::toHex(hash.final(), true);
 	llvm::Constant *strConst = llvm::ConstantDataArray::getString(*context.llvmContext, value, true);
 	llvm::GlobalVariable *strGlobal = new llvm::GlobalVariable(
-		*context.llvmModule, strConst->getType(), true, llvm::GlobalValue::PrivateLinkage, strConst, globalName
+		*context.llvmModule, strConst->getType(), true, llvm::GlobalValue::LinkOnceODRLinkage, strConst, globalName
 	);
+	// Equal literal contents name the same immutable object, including when
+	// cached function bodies are linked into a partially regenerated module.
+	strGlobal->setVisibility(llvm::GlobalValue::HiddenVisibility);
+	if (context.llvmModule->getTargetTriple().supportsCOMDAT())
+		strGlobal->setComdat(context.llvmModule->getOrInsertComdat(globalName));
 	context.stringConstants[value] = strGlobal;
 	return builder.CreateInBoundsGEP(
 		strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
@@ -24,6 +33,12 @@ static CodegenResult
 generateCompileTimeRuntimeValue(ParseContext &context, const CompileTimeValue &value, const DataType &type) {
 	requireCompilerInvariant(type.isRuntimeValueType(), "compile-time-only type reached runtime value codegen");
 	llvm::Type *llvmType = getLLVMType(context, type);
+	if (std::holds_alternative<WideInteger>(value)) {
+		if (type.isInteger())
+			return llvm::ConstantInt::get(llvmType, *getCompileTimeIntegerBits(value, type.numericSize * 8));
+		if (type.kind == DataType::Kind::Float)
+			return llvm::ConstantFP::get(llvmType, *getCompileTimeFloatingValue(value, type.numericSize * 8));
+	}
 	if (const auto *function = std::get_if<CompileTimeFunction>(&value)) {
 		requireCompilerInvariant(type.isAddress(), "constant callable has a non-address runtime type");
 		llvm::Function *generated = nullptr;

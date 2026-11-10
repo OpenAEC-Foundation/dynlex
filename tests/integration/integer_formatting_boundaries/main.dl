@@ -1,0 +1,12 @@
+import lib/std.dl
+
+set maximum to @intrinsic("bitwise not", 0 as a 128 bit unsigned integer)
+set minimum to (1 as a 128 bit integer) << 127
+print line the count of decimal digits in (0 as a 128 bit unsigned integer)
+print line the count of decimal digits in maximum
+print line the count of decimal digits in minimum
+print line maximum padded to 40 digits
+set empty to 7 padded to 0 digits
+print line empty's length
+print line @intrinsic("dereference", the owner of empty)
+print line formatted "left{empty}right"

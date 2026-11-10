@@ -48,10 +48,21 @@ needed for source-level debugging.
 ./scripts/test.sh --integration
 ```
 
-The required suite checks focused compiler behavior and has a 120-second
-process-tree budget starting after the compiler build. Integration tests cover
-larger library and application programs separately. Release verification runs
-both suites. The CAD fixtures and their verifier live in dynlex-cadkernel.
+The required suite is the compiler's short iteration gate. Its 120-second
+process-tree budget starts immediately after the compiler build and includes
+compiling and running its DynLex fixtures and auxiliary checks. No test preparation
+is moved ahead of that timer. Required fixture builds and non-cache compiler
+checks disable incremental reuse; cache regressions start with fresh test projects.
+`--run-only` skips the compiler build and keeps the same process-tree budget.
+C++ unit checks for numeric parsing and class layout
+run in the integration suite and in separate Linux, macOS, and Windows CI steps.
+Integration tests also cover larger library and application programs. Release
+verification runs both suites. The CAD fixtures and their verifier live in dynlex-cadkernel.
+
+Integration compilations have a 30-second default budget (60 seconds on Windows)
+to include optimization of application libraries. Required fixtures retain their
+10-second default (20 seconds on Windows). Fixture-specific compilation budgets
+still apply through `compile_timeout_seconds.txt`.
 
 ## Browser Compiler
 
@@ -126,7 +137,7 @@ Compiler WASM C ABI exports:
 - `dynlex_web_get_output_wasm_ptr` / `dynlex_web_get_output_wasm_len`
 - `dynlex_web_get_output_wasm_base64`
 - `dynlex_web_get_output_shader_spirv_base64`
-- `dynlex_web_get_shader_uniforms_json`
+- `dynlex_web_get_shader_reflection_json`
 - `dynlex_web_get_compiler_log_json`
 - `dynlex_web_lsp_exchange_json`
 
@@ -177,20 +188,33 @@ Compile a source file:
 ./build/dynlex program.dl -o program.out && ./program.out
 ```
 
-Reuse native build results across invocations:
+Generated programs use `-O2` by default, including terminal source and WebAssembly
+output. Select `-O0` for unoptimized code or `-O3` for additional optimization;
+the last optimization flag wins. `-O2` does not enable fast math.
+For source-level debugging, use `-g -O0`; `-g` alone retains the default `-O2`.
+
+Native executable builds automatically reuse results from previous invocations.
+To inspect the cache location and compilation work:
 
 ```bash
-./build/dynlex program.dl --incremental .cache/dynlex --incremental-stats -o program.out
+./build/dynlex program.dl --incremental-stats -o program.out
 ```
 
-Unchanged source/configuration and compiler options reuse the complete analyzed LLVM
-IR. After edits, analysis runs again while unchanged native code partitions reuse
-cached objects. Every build links the executable against the current libraries.
-This mode supports native executable output; it does not yet reuse individual
-function inference results after an edit or change the LSP compilation pipeline.
+Unchanged source/configuration and compiler options reuse the complete compilation.
+Comment edits can reuse analyzed code, and diagnostic-message edits in `config.dl` update
+warnings and errors without recompiling. After code edits, unaffected parser and
+matcher results can be restored. Without debug information or execution tracing,
+eligible functions also reuse inference summaries and generated LLVM bodies at all
+optimization levels. Optimized native builds cache LLVM optimization by symbol groups,
+including the callees imported into each group. Native
+partitions reuse cached objects, and an unchanged executable skips linking.
+This mode supports native executable output. Some stages still reconstruct shared
+state after code edits; the LSP retains its existing compilation pipeline.
 The cache checks file contents (including imports and syntax configuration), compiler
 identity and target options. Corruption is reported as an error. Disk usage is limited
-to 512 MiB; deleting the cache is safe and makes the next build cold. Optional statistics
+to 512 MiB in the system user cache directory under `dynlex/compiler`.
+Use `--cache-dir <directory>` to choose a different location or `--no-incremental`
+to perform a clean build. Deleting the cache is safe and makes the next build cold. Optional statistics
 report frontend reuse and the numbers of reused/rebuilt objects on stderr.
 
 Emit a native object for a definition-only library. `--no-main` omits the

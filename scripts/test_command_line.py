@@ -44,6 +44,24 @@ class CommandLineSourceTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "5\n")
 
+    def test_default_optimization_and_explicit_overrides(self) -> None:
+        for flags, expected in (
+            ((), 2),
+            (("-g",), 2),
+            (("-O0",), 0),
+            (("-O1",), 1),
+            (("-O2",), 2),
+            (("-O3",), 3),
+            (("-Os",), 2),
+            (("-Oz",), 2),
+            (("-O3", "-O0"), 0),
+            (("-O0", "-O2"), 2),
+        ):
+            with self.subTest(flags=flags):
+                result = self.run_dynlex(*flags, "print line the build optimization level")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, f"{expected}\n")
+
     def test_multiline_source_is_executed_without_rewriting(self) -> None:
         result = self.run_dynlex(
             '''to get value doubled:

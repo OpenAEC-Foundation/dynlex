@@ -5,11 +5,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 suite=required
 run_only=false
+suite_worker=false
 build_args=()
 for arg in "$@"; do
     case "$arg" in
     --integration) suite=integration ;;
     --run-only) run_only=true ;;
+    --suite-worker) run_only=true; suite_worker=true ;;
     *) build_args+=("$arg") ;;
     esac
 done
@@ -107,10 +109,12 @@ append_test_result() {
 }
 
 normalize_output() {
-    printf "%s" "$1" | tr -d '\r'
+    local text="${1//$'\r'/}"
+    printf '%s' "$text"
 }
 
 normalize_diagnostics() {
+    [[ -n "$1" ]] || return 0
     local reject_line_numbers="${2:-false}"
     local arguments=("$PROJECT_DIR")
     if [[ "$reject_line_numbers" == "true" ]]; then
@@ -271,6 +275,47 @@ from process_error_mode import unattended_child_processes
 with unattended_child_processes():
     process = subprocess.Popen(cmd, **popen_options)
 
+def kill_posix_tree(pid):
+    # Nested watchdogs create separate sessions. Freeze the tree before killing
+    # parents so their descendants cannot fork or be reparented during discovery.
+    tracked = set()
+    try:
+        try:
+            os.killpg(pid, signal.SIGSTOP)
+        except ProcessLookupError:
+            pass
+        while True:
+            snapshot = subprocess.run(
+                ["ps", "-axo", "pid=,ppid=,pgid="],
+                capture_output=True, text=True, check=True,
+            )
+            rows = [tuple(map(int, row.split())) for row in snapshot.stdout.splitlines()]
+            descendants = tracked | {pid} | {child for child, _, group in rows if group == pid}
+            while True:
+                children = {child for child, parent, _ in rows if parent in descendants}
+                if children <= descendants:
+                    break
+                descendants.update(children)
+            newly_found = descendants - tracked
+            if not newly_found:
+                break
+            for child in newly_found:
+                try:
+                    os.kill(child, signal.SIGSTOP)
+                except ProcessLookupError:
+                    pass
+            tracked.update(newly_found)
+    finally:
+        for child in tracked:
+            try:
+                os.kill(child, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
 try:
     stdout, stderr = process.communicate(input=standard_input, timeout=timeout_seconds)
 except subprocess.TimeoutExpired:
@@ -287,7 +332,7 @@ except subprocess.TimeoutExpired:
             if process.poll() is None:
                 process.kill()
     else:
-        os.killpg(process.pid, signal.SIGKILL)
+        kill_posix_tree(process.pid)
 
     try:
         stdout, stderr = process.communicate(timeout=5)
@@ -341,15 +386,13 @@ if [[ "$run_only" != "true" ]]; then
         exit $build_exit
     fi
     printf '%s\n' "${GREEN}Compiler build complete.${NC}"
-    if [[ "$suite" == required ]]; then
-        run_with_timeout 120 "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --run-only
-        suite_exit=$?
-        if [[ $suite_exit -eq 124 ]]; then
-            printf '%s\n' "${RED}Required tests exceeded the 120-second budget.${NC}"
-        fi
-    else
-        "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --run-only --integration
-        suite_exit=$?
+fi
+
+if [[ "$suite" == required && "$suite_worker" != true ]]; then
+    run_with_timeout 120 "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --suite-worker
+    suite_exit=$?
+    if [[ $suite_exit -eq 124 ]]; then
+        printf '%s\n' "${RED}Required tests exceeded the 120-second budget.${NC}"
     fi
     exit "$suite_exit"
 fi
@@ -372,7 +415,7 @@ total_start_ms=$(now_ms)
 for test_dir in "$TESTS_DIR"/*/; do
     test_start_ms=$(now_ms)
     test_dir="${test_dir%/}"
-    test_name="$(basename "$test_dir")"
+    test_name="${test_dir##*/}"
     echo "Testing $test_name..."
     source_file="$test_dir/main.dl"
     expected_file="$test_dir/expected.txt"
@@ -415,10 +458,14 @@ for test_dir in "$TESTS_DIR"/*/; do
         has_expected_diagnostics=true
     fi
 
-    # Native Windows compiler processes have higher startup and I/O overhead.
+    # Integration applications include the optimizing backend's work on libraries.
     compile_timeout=10
+    if [[ "$suite" == integration ]]; then
+        compile_timeout=30
+    fi
+    # Native Windows compiler processes have higher startup and I/O overhead.
     if [[ "$is_windows" == "true" ]]; then
-        compile_timeout=20
+        compile_timeout=$((compile_timeout * 2))
     fi
     if ! compile_timeout=$(dynlex_fixture_compile_timeout "$test_dir" "$compile_timeout"); then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
@@ -428,6 +475,10 @@ for test_dir in "$TESTS_DIR"/*/; do
         continue
     fi
     rm -f "$output_binary"
+    compile_command=("$COMPILER" "$source_file" -o "$output_binary")
+    if [[ "$suite" == required ]]; then
+        compile_command+=(--no-incremental)
+    fi
     if [[ -f "$stack_limit_file" && "$is_windows" != "true" ]]; then
         stack_limit_kb=$(<"$stack_limit_file")
         if [[ ! "$stack_limit_kb" =~ ^[1-9][0-9]*$ ]]; then
@@ -437,9 +488,9 @@ for test_dir in "$TESTS_DIR"/*/; do
             failures+=("$test_name")
             continue
         fi
-        compile_output=$( (ulimit -s "$stack_limit_kb"; run_with_timeout "$compile_timeout" "$COMPILER" "$source_file" -o "$output_binary") 2>&1)
+        compile_output=$( (ulimit -s "$stack_limit_kb"; run_with_timeout "$compile_timeout" "${compile_command[@]}") 2>&1)
     else
-        compile_output=$(run_with_timeout "$compile_timeout" "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
+        compile_output=$(run_with_timeout "$compile_timeout" "${compile_command[@]}" 2>&1)
     fi
     compile_exit=$?
     if [[ $compile_exit -eq 124 ]]; then
@@ -612,7 +663,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     # Compare
     expected_output=""
     if [[ -f "$expected_file" ]]; then
-        expected_output=$(normalize_output "$(cat "$expected_file")")
+        expected_output=$(normalize_output "$(<"$expected_file")")
     fi
     normalized_actual_output=$(normalize_output "$actual_output")
     if [[ "$normalized_actual_output" == "$expected_output" ]]; then
@@ -632,7 +683,7 @@ run_auxiliary_test() {
     local test_name="$1"
     local required_test=false
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack)
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|incremental_compilation|data_declaration_cache|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout)
         required_test=true ;;
     esac
     if [[ "$suite" == required && "$required_test" != true ]] ||
@@ -709,7 +760,9 @@ run_auxiliary_test "import_root_consistency" 60 python3 -B "$SCRIPT_DIR/test_imp
 run_auxiliary_test "pattern_precedence" 60 python3 -B "$SCRIPT_DIR/test_pattern_precedence.py" "$COMPILER"
 run_auxiliary_test "associative_grouping" 30 python3 -B "$SCRIPT_DIR/test_associative_grouping.py" "$COMPILER"
 run_auxiliary_test "compiler_stack" 45 python3 -B "$SCRIPT_DIR/test_compiler_stack.py" "$COMPILER"
+run_auxiliary_test "nested_timeout" 10 python3 -B "$SCRIPT_DIR/test_nested_timeout.py"
 run_auxiliary_test "completion_visibility" 15 python3 -B "$SCRIPT_DIR/test_completion_visibility.py" "$COMPILER"
+run_auxiliary_test "data_declaration_cache" 30 python3 -B "$SCRIPT_DIR/test_data_declaration_cache.py" "$COMPILER"
 run_auxiliary_test \
     "lifecycle_codegen" 15 python3 -B "$SCRIPT_DIR/test_lifecycle_codegen.py" "$COMPILER" \
     "$TESTS_DIR/lifecycle_codegen_allocations/main.dl"
@@ -721,6 +774,7 @@ run_auxiliary_test \
     "$TESTS_DIR/inequality_uses_overloaded_equality/main.dl"
 run_auxiliary_test "spirv_main_return" 15 python3 -B "$SCRIPT_DIR/test_spirv_main_return.py" "$COMPILER"
 run_auxiliary_test "spirv_call_abi" 60 python3 -B "$SCRIPT_DIR/test_spirv_call_abi.py" "$COMPILER"
+run_auxiliary_test "if_chain_shader" 30 node "$PROJECT_DIR/tests/web/if_chain_shader.mjs" "$COMPILER"
 run_auxiliary_test "web_runtime_filesystem" 10 node "$PROJECT_DIR/tests/web/runtime_filesystem.mjs"
 run_auxiliary_test "web_runtime_host" 10 node "$PROJECT_DIR/tests/web/runtime_host.mjs"
 run_auxiliary_test "web_path_library" 30 node "$PROJECT_DIR/tests/web/path_library.mjs" "$COMPILER"
@@ -757,6 +811,8 @@ if [[ "$suite" == integration ]]; then
     run_auxiliary_test "farm_state_ownership" 300 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --group=ownership --shipped
     run_auxiliary_test "farm_vocabulary_generated" 30 python3 "$SCRIPT_DIR/generate_farm_vocabulary.py" --compiler "$COMPILER" --check
 fi
+run_auxiliary_test "wide_integers_wasm" 60 node "$PROJECT_DIR/tests/web/wide_integers.mjs" "$COMPILER"
+run_auxiliary_test "wide_integer_values" 60 python3 -B "$SCRIPT_DIR/test_wide_integers.py" "$COMPILER"
 run_auxiliary_test "float_math_codegen" 20 python3 -B "$SCRIPT_DIR/test_float_math_codegen.py" "$COMPILER"
 run_auxiliary_test "unary_arithmetic_types" 20 python3 -B "$SCRIPT_DIR/test_unary_arithmetic_types.py" "$COMPILER"
 run_auxiliary_test "mersenne_twister64_native_abi" 30 python3 -B "$SCRIPT_DIR/test_mersenne_twister64.py" "$COMPILER"
