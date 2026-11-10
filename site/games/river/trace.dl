@@ -144,9 +144,9 @@ to [read website river output] {website execution output:output} into {a pointer
     if trace's count = 0:
         set trace's error to "The river program produced no commands"
 
-to get [website river trace from] {string:stdout}:
+to get [website river trace from] {string:stdout} dropping {integer:prefix} source lines:
     set trace to a new website river trace
-    set output to website execution from stdout dropping 2 source lines
+    set output to website execution from stdout dropping prefix source lines
     if output's error's length > 0:
         set trace's error to output's error
     else:

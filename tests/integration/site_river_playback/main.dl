@@ -1,0 +1,35 @@
+import ../../../site/games/river/playback.dl
+
+set playback to a new website river playback
+set playback's speed to 1
+set playback's trace to website river trace from (the string form of "RIVER|COMMAND|LOAD|SHEEP\nRIVER|ACTION|LOAD|SHEEP\nRIVER|COMMAND|CROSS\nRIVER|ACTION|CROSS|FAR\nRIVER|COMMAND|UNLOAD|SHEEP\nRIVER|ACTION|UNLOAD|SHEEP\n") dropping 2 source lines
+require condition ((the website river trace error in (playback's trace))'s length = 0) reporting "A valid replay failed validation"
+begin website river replay in (the address of playback) stepping true
+advance website river playback (the address of playback) by 0.3
+require condition ((playback's scene's cargo = 0) and (playback's elapsed = 0.3)) reporting "A transition committed before its animation finished"
+advance website river playback (the address of playback) by 1.0
+require condition ((playback's paused) and ((playback's scene's cargo = 1) and (playback's position = 2))) reporting "Step crossed an instruction boundary"
+require condition ((playback's shown position = 1) and (playback's seconds = 0.56)) reporting "Step highlighted an instruction that had not run or consumed its time"
+advance website river playback (the address of playback) by 5.0
+require condition ((playback's scene's bank = 0) and (playback's elapsed = 0.0)) reporting "A paused replay advanced"
+set playback's paused to false
+set playback's stepping to false
+set playback's speed to 2
+advance website river playback (the address of playback) by 0.5
+require condition ((playback's scene's bank = 1) and (playback's scene's cargo = 1)) reporting "Playback speed did not control crossing time"
+advance website river playback (the address of playback) by 0.28
+require condition ((playback's playing = false) and ((playback's deliveries = 1) and (playback's passenger))) reporting "A safe unfinished plan did not stop or record its distinct goals"
+require condition ((playback's scene's bank = 1) and ((the item at 0 in (playback's scene's passengers)) = 1)) reporting "An incomplete plan reset the world"
+free website river trace the address of (playback's trace)
+set playback's trace to website river trace from (the string form of "RIVER|COMMAND|CROSS\nRIVER|ACTION|CROSS|FAR\nRIVER|DANGER|WOLF|SHEEP\nRIVER|ERROR|The wolf ate the sheep.\n") dropping 2 source lines
+begin website river replay in (the address of playback) stepping false
+set playback's speed to 1
+advance website river playback (the address of playback) by 2.5
+require condition ((playback's stage = 2) and (playback's scene's predator = 2)) reporting "A failure skipped its danger animation or reset delay"
+advance website river playback (the address of playback) by 2.4
+require condition ((playback's playing = false) and ((playback's scene's bank = 0) and (playback's message = "The wolf ate the sheep."))) reporting "A failed plan did not reset while retaining its feedback"
+free website river trace the address of (playback's trace)
+set playback's trace to website river trace from (the string form of "RIVER|COMMAND|LOAD|SHEEP\nRIVER|ACTION|LOAD|SHEEP\nRIVER|ACTION|LOAD|WOLF\n") dropping 2 source lines
+require condition ((the website river trace error in (playback's trace))'s length > 0) reporting "An inconsistent protocol was accepted before playback"
+free website river trace the address of (playback's trace)
+print line "River playback steps at instruction boundaries, pauses exactly, changes speed, records goals and resets failures after impact."

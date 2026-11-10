@@ -4,6 +4,7 @@ import lib/json_builders.dl
 import downloads/release.dl
 import programs/types.dl
 import editor/types.dl
+import games/river/playback.dl
 
 class:
     patterns:
@@ -35,6 +36,7 @@ class:
         language as website language state
         editor entry as a string
         shader editor as website shader editor
+        river as website river playback
 
 [the|] website state in {a pointer to UI instance:instance} means: instance's state as a pointer to website state
 

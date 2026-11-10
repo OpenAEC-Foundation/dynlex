@@ -4,7 +4,7 @@ import lib/filesystem.dl
 
 read the file at "/input.trace" and set input to it
 require condition (input succeeded) reporting "The replay needs its trace file"
-set trace to website river trace from (input's contents)
+set trace to website river trace from (input's contents) dropping 2 source lines
 require condition (trace's error's length = 0) reporting (the data of (trace's error))
 require condition (trace's outcome = 1) reporting "The actual river solution did not report success"
 set scene to the initial website river scene

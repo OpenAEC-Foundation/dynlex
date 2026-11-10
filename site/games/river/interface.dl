@@ -1,0 +1,120 @@
+import ../../appearance.dl
+
+appearance river panel appearance:
+    background is UI ink 20 35 39
+    text is UI ink 235 242 235
+    padding is 24
+    gap is 20
+    corner radius is 16
+    when viewport is below 700:
+        padding is 12
+
+appearance river card appearance:
+    background is UI ink 27 45 48
+    border is UI ink 61 82 81
+    border width is 1
+    corner radius is 10
+    padding is 16
+    gap is 14
+
+appearance river stage appearance:
+    aspect ratio is 16 by 9
+    corner radius is 8
+    background is UI ink 11 93 110
+
+appearance river code appearance:
+    use code appearance
+    background is UI ink 16 29 33
+    height is 300
+    font size is 14
+    padding is 14
+    when viewport is below 700:
+        height is 240
+
+appearance river signal appearance:
+    font is "assets/fonts/JetBrainsMono-400.ttf"
+    font size is 11
+    text is UI ink 178 202 186
+    line spacing is 1.4
+
+appearance river text appearance:
+    font size is 14
+    text is UI ink 216 230 218
+    line spacing is 1.5
+
+appearance river action appearance:
+    use link appearance
+    font size is 12
+    padding is 10
+    background is UI ink 51 74 70
+    text is UI ink 235 242 235
+    text is centered
+
+appearance river primary appearance:
+    use river action appearance
+    background is UI ink 220 177 83
+    text is UI ink 25 36 31
+
+appearance river controls appearance:
+    columns are 3
+    gap is 8
+
+appearance river diagnostics appearance:
+    font is "assets/fonts/JetBrainsMono-400.ttf"
+    font size is 12
+    text is UI ink 255 183 159
+    line spacing is 1.5
+
+appearance river hint appearance:
+    font size is 13
+    text is UI ink 198 216 201
+    line spacing is 1.5
+
+document river challenge using river panel appearance:
+    region "River header" using columns appearance:
+        paragraph "CHALLENGE_01 / RIVER CROSSING" using river signal appearance
+        link "← Choose a challenge" to "action:challenge-gallery" using river action appearance
+    region "River body" using columns appearance:
+        region "River plan" using river card appearance:
+            paragraph "YOUR PLAN / PLAIN ENGLISH, REAL DYNLEX" using river signal appearance
+            editor "River source" containing "# The official names are: sheep, wolf, and hay.\nget the hay in the boat\nrow to the other side" using river code appearance
+            paragraph "River execution" containing "Write a plan. Run it, or take one instruction at a time." using river text appearance
+            paragraph "River diagnostics" containing "" using river diagnostics appearance
+            region "River run actions" using columns appearance:
+                link "Run plan ▶" to "action:run-river" using river primary appearance
+                link "Stop plan ■" to "action:stop-river" using river action appearance
+            paragraph "River status" containing "Ready · Ctrl / ⌘ + Enter runs your plan" using river signal appearance
+        region "River world" using river card appearance:
+            paragraph "River world state" containing "THE RIVER / WAITING FOR A PLAN" using river signal appearance
+            surface "River scene" using river stage appearance
+            region "River playback controls" using river controls appearance:
+                link "River play" to "action:river-play" using river action appearance
+                link "One instruction" to "action:river-step" using river action appearance
+                link "River speed" to "action:river-speed" using river action appearance
+                link "Reset scene ↺" to "action:river-reset" using river action appearance
+                link "Retry artwork ↻" to "action:river-retry-art" using river action appearance
+            paragraph "River message" containing "The farmer can take one passenger at a time." using river text appearance
+    paragraph "OPTIONAL CODING GOALS" using river signal appearance
+    region "River goals" using cards appearance:
+        region "First passenger goal" using river card appearance:
+            paragraph "Your first passenger" using river text appearance
+            paragraph "River passenger count" containing "0 / 1" using river signal appearance
+            link "Passenger hint" to "action:river-hint-passenger" using river action appearance
+            view group "River passenger hint" using no UI appearance:
+                region "Passenger hint closed" using no UI appearance:
+                paragraph "The boat has room for one passenger. Who cannot be left with either of the others?" using river hint appearance
+        region "Deliveries goal" using river card appearance:
+            paragraph "Meet the far shore" using river text appearance
+            paragraph "River delivery count" containing "0 / 3" using river signal appearance
+            link "Delivery hint" to "action:river-hint-deliveries" using river action appearance
+            view group "River delivery hint" using no UI appearance:
+                region "Delivery hint closed" using no UI appearance:
+                paragraph "Rowing moves the boat. Let your passenger out. Sometimes someone needs to come back to keep everyone safe." using river hint appearance
+        region "Together goal" using river card appearance:
+            paragraph "Everyone together" using river text appearance
+            paragraph "River rescue count" containing "0 / 1" using river signal appearance
+            link "Rescue hint" to "action:river-hint-rescue" using river action appearance
+            view group "River rescue hint" using no UI appearance:
+                region "Rescue hint closed" using no UI appearance:
+                paragraph "Step through your plan. After each crossing, check who is alone on each shore. Name repeated commands with a function beginning with to." using river hint appearance
+    paragraph "PAINTED FOR DYNLEX / ORIGINAL GAME ART" using river signal appearance

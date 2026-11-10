@@ -2,6 +2,7 @@ import ../state.dl
 import ../shaders/program.dl
 import ../shaders/rendering.dl
 import ../packages/dynlex-ui/ui/texture_shapes.dl
+import ../programs/events.dl
 
 to load the website shader source in {a pointer to website state:state}:
     set editor to the address of (state's shader editor)
@@ -39,6 +40,7 @@ to receive website shader compilation {a pointer to JSON value:response} in {a p
         set the text of "IDE status" in (state's view's instance) to "Shader linking failed. Check the log."
         request "log" containing (a JSON object containing [JSON text "level" is "error", JSON text "message" is (linked's error)]) for purpose 0 indexed 0 in state
         set (state's programs + 2)'s phase to 0
+        notify website program 2 with result 2 in state
         return nothing
     set editor's pending program to linked's program
     set passes to the JSON member named "passes" in (editor's pending program)
@@ -54,6 +56,7 @@ to receive website shader compilation {a pointer to JSON value:response} in {a p
                 free editor's pending program
                 set editor's pending program to @intrinsic("construct", a pointer to JSON value)
                 set (state's programs + 2)'s phase to 0
+                notify website program 2 with result 2 in state
                 return nothing
             increment cursor
         increment index
@@ -84,6 +87,7 @@ to receive the website shader preview {a pointer to JSON value:response} in {a p
     set the text of "IDE status" in (state's view's instance) to (formatted "Shader compiled in {program's compile milliseconds} ms")
     set caption to "Resume preview" if (rendering's paused), else "Pause preview"
     set the text of "Pause preview" in (state's view's instance) to caption
+    notify website program 2 with result 1 in state
     request a UI redraw in (state's view)
 
 to toggle the website shader preview in {a pointer to website state:state}:

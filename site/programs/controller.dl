@@ -1,5 +1,6 @@
 import ../state.dl
 import ../editor/shader.dl
+import events.dl
 
 to stop website [program] {integer:index} in {a pointer to website state:state}:
     set program to state's programs + index
@@ -25,6 +26,7 @@ to stop website [program] {integer:index} in {a pointer to website state:state}:
     set program's request to 0
     set description to the item at index in (the website program descriptions)
     set the text of (description's status) in (state's view's instance) to "Stopped."
+    notify website program index with result 4 in state
 
 to run website [program] {integer:index} in {a pointer to website state:state}:
     if (index = 2) and (the website editor uses shaders in state):
@@ -44,6 +46,8 @@ to run website [program] {integer:index} in {a pointer to website state:state}:
     set editor to the active UI editor within (the control labeled (description's source) in instance) in instance
     require condition (editor != @intrinsic("construct", UI reference)) reporting "The program source has no active editor"
     set source to (the UI value for editor in instance)'s text
+    set program's source to source
+    set program's result to 0
     set program's output to ""
     increment state's invocation
     set program's invocation to state's invocation
@@ -51,7 +55,10 @@ to run website [program] {integer:index} in {a pointer to website state:state}:
     if (index != 2) or ((the website editor uses shaders in state) = false):
         set the text of (description's output) in instance to ""
     set the text of (description's status) in instance to "Compiling…"
-    set name to the string form of "main.dl"
+    if program's started != (0 as a pointer):
+        @intrinsic("call pointer", program's started, nothing, index, state)
+    set source to (the string form of (description's prefix)) + source
+    set name to the string form of (description's filename)
     if index = 2:
         set name to the website source filename in state
     set target to "wasm"
@@ -65,13 +72,13 @@ to run website [program] {integer:index} in {a pointer to website state:state}:
         set the text of "Pause preview" in instance to "Pause preview"
     request "compiler" containing (a JSON object containing [
         JSON text "operation" is "compile", JSON text "target" is target, JSON text "entry" is name,
-        JSON flag "traced" is false,
+        JSON flag "traced" is (description's traced),
         JSON child "stages" is stages,
         JSON child "sources" is (a JSON object containing [JSON text name is source])
     ]) for purpose 6 indexed index in state
     set program's request to state's requests' id
 
-to get the website [diagnostic] text in {a pointer to JSON value:response}:
+to get the website [diagnostic] text in {a pointer to JSON value:response} after {integer:prefix} lines of {string:entry}:
     set result to the string form of ""
     set diagnostics to the JSON member named "diagnostics" in response
     set index to 0
@@ -79,6 +86,8 @@ to get the website [diagnostic] text in {a pointer to JSON value:response}:
         set diagnostic to the JSON value at index index in diagnostics
         set file to the JSON text named "file" in diagnostic
         set line to (the JSON number named "line" in diagnostic) as an integer
+        if file = entry:
+            set line to the maximum of 1 and (line - prefix)
         set column to (the JSON number named "column" in diagnostic) as an integer
         set message to the JSON text named "message" in diagnostic
         set result to formatted "{result}{file}:{line}:{column}: {message}\n"
@@ -95,12 +104,16 @@ to receive website compilation {a pointer to JSON value:response} for {integer:i
     set the text of "Compilation measurement" in instance to (formatted "LAST COMPILE / {program's compile milliseconds} MS")
     if (the JSON number named "status" in response) != 0.0:
         set program's phase to 0
-        set program's output to the website diagnostic text in response
+        set name to the string form of (description's filename)
+        if index = 2:
+            set name to the website source filename in state
+        set program's output to the website diagnostic text in response after (the website prefix line count of description) lines of ("/workspace/" + name)
         if (index != 2) or ((the website editor uses shaders in state) = false):
             set the text of (description's output) in instance to (program's output)
         set the text of (description's status) in instance to "Compilation failed."
         if (index = 2) and (the website editor uses shaders in state):
             set the text of "IDE diagnostics" in instance to (program's output)
+        notify website program index with result 2 in state
         return nothing
     if (index = 2) and (the website editor uses shaders in state):
         receive website shader compilation response in state
@@ -122,6 +135,7 @@ to receive website execution {a pointer to JSON value:response} for {integer:ind
     set elapsed to the JSON number named "milliseconds" in response
     set status to formatted "Compiled in {program's compile milliseconds} ms · ran in {elapsed} ms"
     set the text of (description's status) in (state's view's instance) to status
+    notify website program index with result 1 in state
 
 to receive website [program] output {a pointer to JSON value:message} in {a pointer to website state:state}:
     set invocation to (the JSON number named "invocation" in message) as an integer
@@ -132,7 +146,8 @@ to receive website [program] output {a pointer to JSON value:message} in {a poin
         if (program's invocation = invocation) and (program's phase = 2):
             set program's output to program's output + (the JSON text named "output" in message)
             set description to the item at index in (the website program descriptions)
-            set the text of (description's output) in (state's view's instance) to (program's output)
+            if description's show output:
+                set the text of (description's output) in (state's view's instance) to (program's output)
             return nothing
         increment index
     # Output emitted immediately before cancellation can already be queued.
@@ -147,6 +162,7 @@ to fail website [program] {integer:index} in {a pointer to website state:state}:
     set program's request to 0
     set description to the item at index in (the website program descriptions)
     set the text of (description's status) in (state's view's instance) to "An error occurred. Check the log."
+    notify website program index with result 3 in state
 
 to discard website reply {a pointer to JSON value:response} in {a pointer to website state:state}:
     if response has JSON member named "artifact":

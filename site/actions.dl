@@ -2,10 +2,13 @@ import navigation.dl
 import shaders/hero.dl
 import programs/controller.dl
 import editor/language.dl
+import games/river/controller.dl
 
 to follow website link {a pointer to UI instance:instance}:
     set state to the website state in instance
     set destination to (the UI value for (instance's event target) in instance)'s destination
+    if follow website river action destination in state:
+        return nothing
     if destination = "action:next-shader":
         advance to the next website shader in state
         return nothing
@@ -15,14 +18,14 @@ to follow website link {a pointer to UI instance:instance}:
     if destination = "action:reset-preview":
         reset the website shader preview in state
         return nothing
-    set runs to ["action:run-square", "action:run-vocabulary", "action:run-ide", "action:run-studio"]
-    set stops to ["action:stop-square", "action:stop-vocabulary", "action:stop-ide", "action:stop-studio"]
+    set descriptions to the website program descriptions
     set index to 0
-    loop while index < the length of runs:
-        if destination = (the item at index in runs):
+    loop while index < the length of descriptions:
+        set description to the item at index in descriptions
+        if destination = description's run action:
             run website program index in state
             return nothing
-        if destination = (the item at index in stops):
+        if destination = description's stop action:
             stop website program index in state
             return nothing
         increment index

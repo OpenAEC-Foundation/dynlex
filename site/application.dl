@@ -1,5 +1,6 @@
 import interface.dl
 import actions.dl
+import games/river/rendering.dl
 
 # Replies have explicit owners and purposes. Browser services do not decide UI state.
 to get receive website reply {a pointer to JSON value:response} for {integer:job} indexed {integer:index} in {a pointer to website state:state}:
@@ -56,6 +57,7 @@ to read website input {a pointer to UI view:view}:
             set (state's shaders + index)'s active to false
             increment index
         set state's shader editor's preview's active to false
+        set state's river's active to false
     if (view's input kind != 11) and (view's input kind != 12):
         return nothing
     set state to the website state in (view's instance)
@@ -110,6 +112,7 @@ to read website input {a pointer to UI view:view}:
 to close the website {a pointer to UI view:view}:
     set instance to view's instance
     set state to the website state in instance
+    free website river trace the address of (state's river's trace)
     close view
     close instance
     set pending to state's requests
@@ -153,6 +156,8 @@ function open the DynLex website using {a pointer to UI driver:driver}:
         store 1.0 into (state's shader weights) at 0
         set state's route to "/index.html"
         set view's close action to (the function named "close the website $") as a pointer
+        initialize the website river in state
+        bind (the control labeled "River scene" in instance) in instance to (the function named "paint the website river $") for event 1
         bind website links in (instance's description) for instance
         bind (the control labeled "IDE source" in instance) in instance to (the function named "notice website source edit $") for event 0
         bind (the control labeled "Shader source" in instance) in instance to (the function named "notice website source edit $") for event 0

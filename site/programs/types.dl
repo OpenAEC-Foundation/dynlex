@@ -7,12 +7,19 @@ class:
         source as a C string
         output as a C string
         status as a C string
+        prefix as a C string
+        filename as a C string
+        traced as a boolean
+        show output as a boolean
+        run action as a C string
+        stop action as a C string
 
 the website program descriptions means: [
-    @intrinsic("construct", website program description, "Square field", "Square field output", "Square field status"),
-    @intrinsic("construct", website program description, "Vocabulary", "Vocabulary output", "Vocabulary status"),
-    @intrinsic("construct", website program description, "IDE modes", "IDE output", "IDE status"),
-    @intrinsic("construct", website program description, "Studio source", "Studio output", "Studio status")
+    @intrinsic("construct", website program description, "Square field", "Square field output", "Square field status", "", "main.dl", false, true, "action:run-square", "action:stop-square"),
+    @intrinsic("construct", website program description, "Vocabulary", "Vocabulary output", "Vocabulary status", "", "main.dl", false, true, "action:run-vocabulary", "action:stop-vocabulary"),
+    @intrinsic("construct", website program description, "IDE modes", "IDE output", "IDE status", "", "main.dl", false, true, "action:run-ide", "action:stop-ide"),
+    @intrinsic("construct", website program description, "Studio source", "Studio output", "Studio status", "", "main.dl", false, true, "action:run-studio", "action:stop-studio"),
+    @intrinsic("construct", website program description, "River source", "River diagnostics", "River status", "import lib/river_challenge.dl\n\n", "river.dl", true, false, "action:run-river", "action:stop-river")
 ]
 
 class:
@@ -24,3 +31,27 @@ class:
         invocation as an integer
         output as a string
         compile milliseconds as a floating-point number
+        source as a string
+        result as an integer
+        started as a pointer
+        finished as a pointer
+
+to get [the website program for source] {C string:source}:
+    set descriptions to the website program descriptions
+    set result to -1
+    set index to 0
+    loop while index < the length of descriptions:
+        if (the item at index in descriptions)'s source = source:
+            set result to index
+        increment index
+    require condition (result >= 0) reporting "A website program source is not registered"
+    return result
+
+to get [the website prefix line count of] {website program description:description}:
+    set result and index to 0
+    set size to the length of (description's prefix)
+    loop while index < size:
+        if (the character at index in (description's prefix)) = 10:
+            increment result
+        increment index
+    return result

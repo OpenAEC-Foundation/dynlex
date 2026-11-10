@@ -27,14 +27,17 @@ set scene's passengers to [1,1,1]
 set next to the website river scene after victory from scene
 require condition ((next's error's length = 0) and (next's scene's complete)) reporting "Everyone on the far bank did not complete the crossing"
 
-set trace to website river trace from (the string form of "DYNLEX|TRACE|2|0|2|22|-1\nRIVER|COMMAND|LOAD|SHEEP\nRIVER|ACTION|LOAD|SHEEP\nDYNLEX|TRACE|3|0|3|12|1\nRIVER|COMMAND|CROSS\nRIVER|ACTION|CROSS|FAR\nRIVER|DANGER|WOLF|HAY\nRIVER|ERROR|An example error\n")
+set trace to website river trace from (the string form of "DYNLEX|TRACE|2|0|2|22|-1\nRIVER|COMMAND|LOAD|SHEEP\nRIVER|ACTION|LOAD|SHEEP\nDYNLEX|TRACE|3|0|3|12|1\nRIVER|COMMAND|CROSS\nRIVER|ACTION|CROSS|FAR\nRIVER|DANGER|WOLF|HAY\nRIVER|ERROR|An example error\n") dropping 2 source lines
 require condition ((trace's error's length = 0) and (trace's count = 3)) reporting "A valid command/condition trace was rejected"
 require condition ((trace's first's source's start line = 0) and (trace's first's first's subject = 1)) reporting "The command lost its source or passenger"
 require condition ((trace's first's next's kind = 0) and (trace's first's next's branch = 1)) reporting "A condition was not retained as a step"
 require condition ((trace's outcome = 2) and (trace's message = "An example error")) reporting "A reported game error was lost"
 free website river trace the address of trace
 for each text in ["unexpected output", "RIVER|ACTION|LOAD|SHEEP", "RIVER|COMMAND|LOAD|DRAGON", "RIVER|COMMAND|CROSS|HOME", "RIVER|COMMAND|CROSS\nRIVER|ACTION|CROSS|BOAT", "RIVER|COMMAND|CROSS\nRIVER|DANGER|WOLF|", "RIVER|COMMAND|CROSS\nRIVER|ERROR|", "RIVER|COMMAND|CROSS\nRIVER|SUCCESS|extra", "DYNLEX|TRACE|2|0|2|3|-1"]:
-    set trace to website river trace from (the string form of text)
+    set trace to website river trace from (the string form of text) dropping 2 source lines
     require condition (trace's error's length > 0) reporting "A malformed river trace was accepted"
     free website river trace the address of trace
+set trace to website river trace from (the string form of "DYNLEX|TRACE|7|0|7|4|-1\nRIVER|COMMAND|CROSS\nRIVER|ACTION|CROSS|FAR\n") dropping 5 source lines
+require condition (trace's first's source's start line = 2) reporting "The trace reader assumed a fixed program prefix"
+free website river trace the address of trace
 print line "River traces preserve commands, conditions and source ranges; scene snapshots validate domain events."

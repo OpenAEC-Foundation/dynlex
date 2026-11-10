@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { recordWebsiteProgram } from './recording_runtime.mjs';
+const {output,requests,cancelled}=await recordWebsiteProgram(process.argv[2],{cancelRequest:()=>true});
+assert.equal(output,'Program owners receive start, success, compile failure, platform failure and Stop with traced prefixed sources.\n');
+assert.equal(requests[0].payload.entry,'river.dl');
+assert.equal(requests[0].payload.traced,true);
+assert(requests[0].payload.sources['river.dl'].startsWith('import lib/river_challenge.dl\n\n# The official names'));
+assert.equal(requests.length,5);
+assert.deepEqual(cancelled,[4]);
+console.log('Website program lifecycle, prefix diagnostics and protocol output tests passed.');

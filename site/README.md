@@ -55,11 +55,25 @@ python3 tests/web/site_runtime.py --case site_entry
 node tests/web/project_sources.mjs
 python3 tests/web/source_package.py
 node tests/web/site_games.mjs
+node tests/web/site_program_protocol.mjs
+```
+
+The River challenge uses `games/river/interface.dl` for its retained description,
+`controller.dl` for actions and program callbacks, `playback.dl` for its testable
+clock, and `rendering.dl` for its responsive world. Run, Stop, one-instruction
+steps, pause/resume, replay, speed, reset and coding hints use the shared UI.
+Its program prefix and tracing options live in `programs/types.dl`; protocol
+output is retained for replay instead of being shown as console text.
+
+The background interaction test requires Chrome and Xvfb:
+
+```bash
+env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET DYNLEX_BACKGROUND_BROWSER=1 XDG_SESSION_TYPE=x11 xvfb-run -a -s '-screen 0 1400x1000x24' node tests/web/site_river_browser.mjs build/site webgpu
 ```
 
 Migration is in progress. The current build contains the homepage, eleven
 documentation pages, downloads, an explicit missing page and the initial IDE,
 including live diagnostics, semantic colors and editable shader previews.
-Game/account flows, further editor features, accessibility and deployment
-migration remain.
+River audio, execution highlighting and saved progress, the farm/account flows,
+further editor features, accessibility and deployment migration remain.
 The existing deployment has not been replaced.
