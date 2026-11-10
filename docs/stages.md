@@ -826,6 +826,11 @@ unchanged. The saved dependency graph also invalidates a probe when an edited
 body can reach another candidate that could match its expression. Later-pass
 probes and probes after the first affected item run again so a changed
 constraint can resolve earlier and cascade in order.
+An edit confined to top-level execution can retain a probe whose recorded
+dependency roots exclude the top-level section. The nonexecution source
+projection checks that declarations and other ambient code are unchanged;
+probes that read top-level declarations, or call a function that reads globals,
+run again through the saved reverse dependency graph.
 Adding an ordinary function retains saved probes when prior function declarations
 and scope rules are unchanged, the source outside functions is unchanged, and the
 new pattern cannot match any saved constraint text or current pattern reference.

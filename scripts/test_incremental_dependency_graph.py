@@ -89,6 +89,29 @@ def check_independent_constraint_probes(root, build):
     assert changed[1:] == build(False, entry=main, success=False)[1:]
 
 
+def check_top_level_execution_constraint_probes(root, build):
+    main = root / "top_level_execution_constraint_probes.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'to accept {integer:value}: @intrinsic("discard", value)\n'
+              '@intrinsic("store", {counter}, 1)\n'
+              '@intrinsic("discard", 1)\n'
+              'accept 1\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('"discard", 1)', '"discard", 2)'))
+    edited = build(entry=main)
+    assert edited[0]["constraint_probes_reused"] >= 1, \
+        "top-level execution edit re-probed an independent type constraint"
+    assert edited[0]["constraint_values_reused"] >= 1, \
+        "top-level execution edit re-inferred an independent type constraint"
+    assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text().replace('{counter}, 1)', '{counter}, 2)'))
+    changed_global = build(entry=main)
+    assert changed_global[0]["constraint_probes_reused"] >= 1, \
+        "unrelated global initializer re-probed the type constraint"
+    assert changed_global[1:] == build(False, entry=main)[1:]
+
+
 def check_skipped_constraint_expression_retention(root, build):
     main = root / "constraint_expression_retention.dl"
     source = ('floating-point means: @intrinsic("type", "float")\n'

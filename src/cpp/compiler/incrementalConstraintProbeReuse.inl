@@ -4,7 +4,8 @@ bool stableConstraintProbePrelude(const Json &prior, const Json &current) {
 		if (prior.at(field) != current.at(field))
 			return false;
 	return sourceProjectionsEqual(prior.at("sources"), current.at("sources")) ||
-		   sourceProjectionsEqual(prior.at("ambient_sources"), current.at("ambient_sources"));
+		   sourceProjectionsEqual(prior.at("ambient_sources"), current.at("ambient_sources")) ||
+		   sourceProjectionsEqual(prior.at("ambient_nonexecution_sources"), current.at("ambient_nonexecution_sources"));
 }
 
 bool constraintDefinitionMayMatch(const Section &section, std::string_view loweredText) {
@@ -65,6 +66,23 @@ std::vector<bool> reusableConstraintProbes(
 	const auto texts = schedule.at("texts").get<std::vector<std::string>>();
 	const auto passes = schedule.at("passes").get<std::vector<int>>();
 	const Json &roots = schedule.at("roots");
+	bool topLevelExecutionChanged = !sourceProjectionsEqual(prior.at("ambient_sources"), current.at("ambient_sources"));
+	std::unordered_set<std::string> topLevelDependent;
+	if (topLevelExecutionChanged) {
+		std::vector<std::string> pending;
+		for (const auto &[path, section] : sections)
+			if (!section->parent || !section->globalVariables.empty())
+				pending.push_back(path);
+		while (!pending.empty()) {
+			std::string path = std::move(pending.back());
+			pending.pop_back();
+			if (!topLevelDependent.insert(path).second)
+				continue;
+			if (reverse.contains(path))
+				for (const Json &caller : reverse.at(path))
+					pending.push_back(caller.get<std::string>());
+		}
+	}
 	requireCompilerInvariant(
 		items.size() == texts.size() && items.size() == passes.size() && items.size() == roots.size(),
 		"saved type-constraint probe schedule has mismatched item records"
@@ -133,7 +151,7 @@ std::vector<bool> reusableConstraintProbes(
 			std::string path = root.get<std::string>();
 			if (!forward.contains(path))
 				return {};
-			if (dirtyClosure.contains(path))
+			if (dirtyClosure.contains(path) || topLevelDependent.contains(path))
 				dirty[index] = true;
 		}
 	for (const std::string &path : dirtyClosure) {
