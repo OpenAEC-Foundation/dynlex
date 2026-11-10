@@ -56,8 +56,8 @@ struct ResolvedFunctionMatches {
 };
 
 ResolvedFunctionMatches resolvedFunctionMatches(
-	const Section *section, const std::map<const Section *, std::string> &paths,
-	const IncrementalMatcherCache &matcherCache, const Json *priorEntries, size_t *reused
+	const Section *section, const std::map<const Section *, std::string> &paths, const IncrementalMatcherCache &matcherCache,
+	const Json *priorEntries, size_t *reused
 ) {
 	Json entries = Json::array();
 	Json identities = Json::array();
@@ -70,8 +70,7 @@ ResolvedFunctionMatches resolvedFunctionMatches(
 			auto [found, inserted] = priorByKey.emplace(key, &entry);
 			if (!inserted)
 				requireCompilerInvariant(
-					found->second->at("identity") == entry.at("identity") &&
-					found->second->at("shape") == entry.at("shape"),
+					found->second->at("identity") == entry.at("identity") && found->second->at("shape") == entry.at("shape"),
 					"identical matcher keys have different resolved references"
 				);
 		}
@@ -80,8 +79,7 @@ ResolvedFunctionMatches resolvedFunctionMatches(
 			Json shape = Json::array(
 				{reference->pattern.text, static_cast<int>(reference->patternType), static_cast<int>(reference->purpose)}
 			);
-			std::optional<std::string_view> key =
-				reference->match ? matcherCache.resultKey(reference) : std::nullopt;
+			std::optional<std::string_view> key = reference->match ? matcherCache.resultKey(reference) : std::nullopt;
 			auto old = key ? priorByKey.find(std::string(*key)) : priorByKey.end();
 			Json entry;
 			if (old != priorByKey.end() && old->second->at("shape") == shape) {
@@ -91,8 +89,11 @@ ResolvedFunctionMatches resolvedFunctionMatches(
 			} else {
 				Json identity = shape;
 				identity.push_back(reference->match ? resolvedMatchIdentity(*reference->match, paths) : Json(nullptr));
-				entry = Json{{"key", key ? Json(*key) : Json(nullptr)},
-							 {"shape", std::move(shape)}, {"identity", digest(identity.dump())}};
+				entry = Json{
+					{"key", key ? Json(*key) : Json(nullptr)},
+					{"shape", std::move(shape)},
+					{"identity", digest(identity.dump())}
+				};
 			}
 			entry["initial_key"] = reference->initialMatcherKey.empty() ? Json(nullptr) : Json(reference->initialMatcherKey);
 			identities.push_back(entry.at("identity"));
@@ -129,4 +130,16 @@ bool unchangedFunctionSource(const std::string &path, const Json &prior, const J
 		oldBodies.at(path) != newBodies.at(path))
 		return false;
 	return current.at("matches").at(path) == prior.at("matches").at(path);
+}
+
+bool unchangedSectionBody(const Section &section, const std::string &path, const Json &prior, const Json &current) {
+	if (reusableCodegenSection(section))
+		return unchangedFunctionSource(path, prior, current);
+	// Flex functions have no standalone native function, but their bodies are
+	// still inputs to their callers' inference summaries and generated code.
+	const Json &before = prior.at("bodies");
+	const Json &after = current.at("bodies");
+	if (after.contains(path))
+		return before.contains(path) && before.at(path) == after.at(path);
+	return !before.contains(path);
 }

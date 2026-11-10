@@ -96,7 +96,7 @@ for name, samples in results.items():
                          "constraint_probes_reused", "constraint_probes_run",
                          "constraint_values_reused", "constraint_expressions_reused",
                          "deferred_match_keys_replayed", "precedence_match_keys_replayed",
-                         "matcher_key_ms", "matcher_restore_ms", "matcher_snapshot_ms",
+                         "matcher_key_ms", "matcher_restore_ms", "matcher_snapshot_ms", "matcher_projection_ms",
                          "projection_ms", "projection_setup_ms", "projection_body_ms",
                          "projection_declarations_ms", "projection_matches_ms",
                          "projection_declaration_sections_reused",

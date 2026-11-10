@@ -10,17 +10,6 @@ bool hasNoGlobalAccess(const Section *section) {
 	return true;
 }
 
-bool hasNoPatternDependencies(const Section *section) {
-	if (std::ranges::any_of(section->patternReferences, [](const PatternReference *reference) {
-		return reference->match != nullptr;
-	}))
-		return false;
-	for (const Section *child : section->children)
-		if (child->runsInEnclosingBody() && !hasNoPatternDependencies(child))
-			return false;
-	return true;
-}
-
 bool isPortablePureValue(const CompileTimeValue &value) {
 	return std::holds_alternative<std::int64_t>(value) || std::holds_alternative<std::uint64_t>(value) ||
 		   std::holds_alternative<double>(value) || std::holds_alternative<std::string>(value) ||
@@ -29,12 +18,12 @@ bool isPortablePureValue(const CompileTimeValue &value) {
 
 Json encodePureReturnValues(const Section *section, const Instantiation &instantiation) {
 	Json results = Json::array();
-	if (instantiation.purity != InstantiationPurity::Pure || !hasNoGlobalAccess(section) ||
-		!hasNoPatternDependencies(section))
+	if (instantiation.purity != InstantiationPurity::Pure || !hasNoGlobalAccess(section))
 		return results;
 	for (const auto &[arguments, value] : instantiation.pureReturnValuesByArguments) {
-		if (!isPortablePureValue(value) ||
-			!std::ranges::all_of(arguments, [](const CompileTimeValue &argument) { return isPortablePureValue(argument); }))
+		if (!isPortablePureValue(value) || !std::ranges::all_of(arguments, [](const CompileTimeValue &argument) {
+			return isPortablePureValue(argument);
+		}))
 			continue;
 		Json encodedArguments = Json::array();
 		for (const CompileTimeValue &argument : arguments)
@@ -121,6 +110,8 @@ Json captureInferenceSummaries(
 				argumentTypes.push_back(*inferenceTypeIdentity(type, classPaths, visiting));
 			}
 			std::set<std::pair<const ClassDefinition *, int>> visiting;
+			Json pureValues = encodePureReturnValues(section, instantiation);
+			bool pureValuesComplete = pureValues.size() == instantiation.pureReturnValuesByArguments.size();
 			summaries[path][*inferenceSummaryKey(key, classPaths)] = Json{
 				{"argument_types", std::move(argumentTypes)},
 				{"return_type", *inferenceTypeIdentity(instantiation.returnType, classPaths, visiting)},
@@ -136,7 +127,8 @@ Json captureInferenceSummaries(
 				{"unknown_write", instantiation.writesThroughUnknownAddress},
 				{"unknown_escape", instantiation.externallyEscapesUnknownAddress},
 				{"needs_global_types", needsGlobalTypes},
-				{"pure_values", encodePureReturnValues(section, instantiation)},
+				{"pure_values", std::move(pureValues)},
+				{"pure_values_complete", pureValuesComplete},
 				{"global_effects", std::move(*globalEffects)}
 			};
 		}
@@ -165,7 +157,7 @@ class IncrementalInferenceReuse {
 		const Json &summary = summaries.at(path).at(*keyText);
 		auto returnType = decodeInferenceTypeIdentity(summary.at("return_type"), classPaths);
 		if (!returnType || (summary.at("purity").get<int>() == static_cast<int>(InstantiationPurity::Pure) &&
-							 returnType->kind != DataType::Kind::Void && !allowPureValueSummary))
+							returnType->kind != DataType::Kind::Void && !allowPureValueSummary))
 			return false;
 		bool needsGlobalTypes = summary.at("needs_global_types").get<bool>();
 		if (needsGlobalTypes) {

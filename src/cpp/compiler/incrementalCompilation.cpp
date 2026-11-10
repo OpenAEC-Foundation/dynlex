@@ -246,6 +246,7 @@ bool hasNoGlobalAccess(const Section *section);
 #include "incrementalFunctionProjection.inl"
 #include "incrementalExecutionProjection.inl"
 #include "incrementalInactiveBodyResolution.inl"
+#include "incrementalMatcherProjection.inl"
 // clang-format on
 
 #include "incrementalSectionDependencies.inl"
@@ -554,6 +555,7 @@ bool compileIncrementally(
 			};
 			std::string initialMatcherTree;
 			Json initialMatcherRoots;
+			InitialMatcherProjection initialMatcherProjection;
 			PriorMatchKeys precedenceKeys;
 			context.reuseMatcherResult = [&](PatternReference *reference, MatchOptions options,
 											 MatchDependencies *dependencies) {
@@ -564,6 +566,9 @@ bool compileIncrementally(
 				matcherCache.record(reference, options, match, dependencies);
 			};
 			context.prepareDeferredMatcherReplay = [&](const std::list<PatternReference *> &references) {
+				auto projectionStart = Clock::now();
+				initialMatcherProjection.capture(context, recording->observations, inactiveMatchEntries);
+				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
 				initialMatcherTree = matcherTreeSignature(context);
 				initialMatcherRoots = matcherTreeMutationSnapshot(context);
 				if (previous)
@@ -641,6 +646,9 @@ bool compileIncrementally(
 					previous && compatibleObservations(*previous, recording->observations, context)
 				);
 			if (compiled) {
+				auto projectionStart = Clock::now();
+				resolvedFunctionProjection["matcher_projection"] = initialMatcherProjection.finish(resolvedFunctionProjection);
+				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
 				const Json *priorLiteralProjection =
 					previous && compatibleObservations(*previous, recording->observations, context) &&
 							initialMatcherTree == previous->at("all_function_projection")
