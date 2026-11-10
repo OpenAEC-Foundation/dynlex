@@ -38,7 +38,9 @@ with tempfile.TemporaryDirectory(prefix="dynlex-wide-values-") as directory:
         entry.write_text(text)
         command = [str(compiler), str(entry), optimization, "-o", str(executable)]
         if cached:
-            command.extend(["--incremental", str(cache), "--incremental-stats"])
+            command.extend(["--cache-dir", str(cache), "--incremental-stats"])
+        else:
+            command.append("--no-incremental")
         result = subprocess.run(command, cwd=project, capture_output=True, text=True, timeout=30)
         assert result.returncode == 0, result.stdout + result.stderr
         run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
