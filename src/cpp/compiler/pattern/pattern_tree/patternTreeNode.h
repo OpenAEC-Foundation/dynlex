@@ -25,8 +25,7 @@ struct PatternTreeSignatureNode {
 };
 
 struct PatternTreeMutationState {
-	std::unordered_map<std::string, std::string, PatternLiteralHash, std::equal_to<>> literalDigests;
-	std::string wildcardDigest;
+	std::string definitionDigest;
 	PatternTreeSignatureNode signatures;
 };
 

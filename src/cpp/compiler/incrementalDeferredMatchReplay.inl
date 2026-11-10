@@ -182,7 +182,7 @@ void preparePrecedenceMatchReplay(
 	treeMilliseconds += elapsedMilliseconds(started);
 	std::optional<MatcherTreeChanges> treeChanges;
 	if (tree != prior.at("final_matcher_tree").get<std::string>())
-		treeChanges.emplace(prior.at("final_matcher_roots"), matcherTreeMutationSnapshot(context));
+		treeChanges.emplace(finalMatcherRootSnapshot(prior), matcherTreeMutationSnapshot(context));
 	started = Clock::now();
 	std::string rules = precedenceRulesSignature(*context.mainSection);
 	ruleMilliseconds += elapsedMilliseconds(started);

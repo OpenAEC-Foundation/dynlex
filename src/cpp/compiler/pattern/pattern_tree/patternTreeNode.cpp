@@ -55,14 +55,6 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 		}
 	}
 	std::array<std::uint8_t, 32> mutation = hash.final();
-	std::unordered_set<std::string_view> affectedLiterals;
-	bool affectsWildcard = definition->indexedPaths.empty();
-	for (const auto &path : definition->indexedPaths) {
-		if (path.empty() || path.front().type == PatternElement::Type::Variable || path.front().text.empty())
-			affectsWildcard = true;
-		else
-			affectedLiterals.insert(path.front().text);
-	}
 	// Modular addition preserves duplicate contributions while making insertion
 	// order irrelevant. Removal subtracts the same contribution.
 	auto update = [&](std::string &state) {
@@ -91,14 +83,7 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 		else
 			state = llvm::toHex(llvm::StringRef(bytes), true);
 	};
-	if (affectsWildcard)
-		update(root->mutationState->wildcardDigest);
-	for (std::string_view literal : affectedLiterals) {
-		auto [entry, _] = root->mutationState->literalDigests.try_emplace(std::string(literal));
-		update(entry->second);
-		if (entry->second.empty())
-			root->mutationState->literalDigests.erase(entry);
-	}
+	update(root->mutationState->definitionDigest);
 	auto recordSignature = [&](const std::vector<PatternElement> &path) {
 		std::vector<std::string_view> required;
 		for (size_t index = 0; index < path.size(); index++) {

@@ -967,13 +967,14 @@ argument; global variables remain accessible.
 For an unchanged ordinary function body, an edited build can replay the saved
 matcher key for those deferred references after checking the indexed pattern-tree
 signature, declarations of reusable functions, and source outside their bodies.
-When that whole-tree signature changes, the cache compares saved wildcard and
-starting-literal mutation digests per pattern tree. An unchanged top-level
+When that whole-tree signature changes, the cache compares saved digests for
+each set of required literals in the indexed paths. An unchanged top-level
 function may still replay its reference keys when its declaration, surrounding
-source, and root lexical declarations are stable and no changed starting literal
-occurs in its header, body, transformed references, or numeric arguments. A
-changed wildcard or possible starting literal computes the keys normally, so
-newly relevant overloads and failed lookups rematch.
+source, and root lexical declarations are stable, and each changed path requires
+a literal missing from its header, body, transformed references, and numeric
+arguments. A changed path with no required literals can affect every body.
+Potential matches compute keys normally, so newly relevant overloads and failed
+lookups rematch.
 The matcher still restores the result and its dependencies; changed bodies and
 changed matching environments compute
 their keys normally.
@@ -1022,7 +1023,7 @@ initial tree rebuilds the index from current references.
 `inactive_body_selection_ms` measures this decision.
 Unchanged references replay saved precedence-pass keys when their first-pass
 keys and precedence families still match. If the final indexed tree changed,
-the cache compares its wildcard and starting-literal mutations against each
+the cache compares the changed paths' required literals against each
 owning function before replay; a potentially affected function rematches.
 Changes that alter precedence rules or participating families also rematch. A precedence
 rebuild never carries replay keys into a later pass.
@@ -1131,7 +1132,7 @@ declaration invalidates saved caller matches even though its spelling is unchang
 When adding or changing a declaration prevents whole-program declaration reuse,
 unchanged top-level functions can still reuse their saved declaration entries.
 This checks their body and header, syntax configuration, scope rules, and the
-starting literals and wildcard paths changed in the initial and final indexed
+required literals of paths changed in the initial and final indexed
 pattern trees. Functions that declare root globals also require the same root
 binding positions; other functions cannot bind those globals. The whole-program
 declaration fingerprint includes new entries.

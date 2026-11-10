@@ -33,6 +33,22 @@ def check_body_resolution_units(root, build):
     main.write_text(edited_source)
     assert build(entry=main)[1:] == build(False, entry=main)[1:]
 
+    # A new definition sharing a common start is irrelevant if another
+    # required literal cannot occur in any of the unchanged bodies.
+    main = root / "body_unit_shared_pattern_start.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'to report {message}: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, message))\n'
+              'to first: report "first"\n'
+              'to second: report "second"\n'
+              'first\nsecond\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source + 'to report audit {message}: @intrinsic("discard", message)\n')
+    added = build(entry=main)
+    assert added[0]["body_resolution_units_reused"] >= 3, added[0]["body_resolution_units_reused"]
+    assert added[1:] == build(False, entry=main)[1:]
+    assert added[2].splitlines() == [b"first", b"second"]
+
     # Removing the last parameter use changes a declaration and its callers.
     main = root / "body_unit_classification.dl"
     source = ('to consume value: @intrinsic("discard", value)\n'

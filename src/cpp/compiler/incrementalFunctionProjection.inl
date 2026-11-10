@@ -126,7 +126,14 @@ Json captureAllFunctionProjection(
 	Json ambientDeclarationEntries = Json::array();
 	Json currentGlobalResolution = globalResolutionIdentity(*context.mainSection);
 	std::string finalMatcherTree = matcherTreeSignature(context);
-	Json finalMatcherRoots = matcherTreeMutationSnapshot(context);
+	Json finalMatcherRoots;
+	const Json *currentFinalMatcherRoots = &initialMatcherRoots;
+	if (finalMatcherTree != initialMatcherTree) {
+		finalMatcherRoots = prior && prior->at("final_matcher_tree") == finalMatcherTree
+								? finalMatcherRootSnapshot(*prior)
+								: matcherTreeMutationSnapshot(context);
+		currentFinalMatcherRoots = &finalMatcherRoots;
+	}
 	if (reuseDeclarations) {
 		declarations = prior->at("function_declarations");
 		if (projectionWork)
@@ -139,7 +146,7 @@ Json captureAllFunctionProjection(
 			if (initialMatcherTree != prior->at("initial_matcher_tree").get_ref<const std::string &>())
 				initialChanges.emplace(prior->at("initial_matcher_roots"), initialMatcherRoots);
 			if (finalMatcherTree != prior->at("final_matcher_tree").get_ref<const std::string &>())
-				finalChanges.emplace(prior->at("final_matcher_roots"), finalMatcherRoots);
+				finalChanges.emplace(finalMatcherRootSnapshot(*prior), *currentFinalMatcherRoots);
 		}
 		for (const auto &[path, section] : sections) {
 			bool reusableSection = reusable.contains(section);
@@ -175,7 +182,6 @@ Json captureAllFunctionProjection(
 		{"initial_matcher_tree", initialMatcherTree},
 		{"initial_matcher_roots", initialMatcherRoots},
 		{"final_matcher_tree", std::move(finalMatcherTree)},
-		{"final_matcher_roots", std::move(finalMatcherRoots)},
 		{"precedence_signature", matcherCache.precedenceSignature()},
 		{"precedence_rules", precedenceRulesSignature(*context.mainSection)},
 		{"inactive", std::move(selected)},
@@ -184,6 +190,8 @@ Json captureAllFunctionProjection(
 		{"sources", std::move(maskedSources)},
 		{"scope_rule_bodies", std::move(currentScopeRuleBodies)}
 	};
+	if (!finalMatcherRoots.is_null())
+		projection["final_matcher_roots"] = std::move(finalMatcherRoots);
 	if (projectionWork)
 		projectionWork->inactiveMilliseconds += elapsedMilliseconds(phaseStart);
 	phaseStart = Clock::now();

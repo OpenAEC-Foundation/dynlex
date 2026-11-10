@@ -546,7 +546,10 @@ bool compileIncrementally(
 				initialMatcherProjection.capture(context, recording->observations, inactiveMatchEntries, references, prior);
 				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
 				initialMatcherTree = matcherTreeSignature(context);
-				initialMatcherRoots = matcherTreeMutationSnapshot(context);
+				const Json *projection = previous ? &previous->at("all_function_projection") : nullptr;
+				initialMatcherRoots = projection && projection->at("initial_matcher_tree") == initialMatcherTree
+										  ? projection->at("initial_matcher_roots")
+										  : matcherTreeMutationSnapshot(context);
 				if (previous)
 					prepareDeferredMatchReplay(
 						context, *previous, recording->observations, initialMatcherTree, initialMatcherRoots,
