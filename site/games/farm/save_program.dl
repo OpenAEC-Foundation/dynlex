@@ -1,0 +1,220 @@
+import save_fields.dl
+import roles.dl
+import ../execution_json.dl
+
+# Source ranges use UTF-16 columns, just like the compiler and language service.
+to get [website farm saved range] {a pointer to JSON value:range} [is valid for] {string:source}:
+    if range is JSON null:
+        return true
+    if (website farm saved fields in range match [farm saved object "start", farm saved object "end"]) = false:
+        return false
+    set first to the JSON member named "start" in range
+    set last to the JSON member named "end" in range
+    set fields to [farm saved integer "line" between 0 and 2147483647, farm saved integer "character" between 0 and 2147483647]
+    if ((website farm saved fields in first match fields) and (website farm saved fields in last match fields)) = false:
+        return false
+    set row to the website farm saved integer named "line" in first
+    set {end row} to the website farm saved integer named "line" in last
+    set column to the website farm saved integer named "character" in first
+    set {end column} to the website farm saved integer named "character" in last
+    if (row > end row) or ((row = end row) and (column > end column)):
+        return false
+    scan lines in source and set scanned to it
+    if scanned failed:
+        return false
+    set lines to the line index of scanned
+    set valid to true
+    set index to 0
+    loop index from 0 to 2:
+        set line to row if index = 0, else end row
+        set offset to column if index = 0, else end column
+        set start to the start of line line in lines
+        set finish to the content end of line line in lines
+        if (start failed) or (finish failed):
+            set valid to false
+        else:
+            set text to the substring of source from (start's position) spanning (finish's position - start's position) bytes
+            set position to the UTF-8 byte offset of UTF-16 position offset in text
+            if position failed:
+                set valid to false
+    free lines
+    return valid
+
+to get [the website farm range from saved] {a pointer to JSON value:range}:
+    set result to a new website execution range
+    if range is not JSON null:
+        set first to the JSON member named "start" in range
+        set last to the JSON member named "end" in range
+        set result's known to true
+        set result's start line to the website farm saved integer named "line" in first
+        set result's start column to the website farm saved integer named "character" in first
+        set result's end line to the website farm saved integer named "line" in last
+        set result's end column to the website farm saved integer named "character" in last
+    return result
+
+to get [website farm saved instruction] {a pointer to JSON value:entry} [at] {integer:index} [in] {a pointer to JSON value:code} [is valid for] {string:source}:
+    if (website farm saved fields in entry match [farm saved text "op", farm saved nullable object "range"]) = false:
+        return false
+    if (website farm saved range (the JSON member named "range" in entry) is valid for source) = false:
+        return false
+    set op to the JSON text named "op" in entry
+    if (op = "action") or (op = "test"):
+        if (website farm saved fields in entry match [farm saved text "key", farm saved whole number "argument", farm saved whole number "amount", farm saved integer "target" between (-2) and 27, farm saved text "area"]) = false:
+            return false
+        set key to the JSON text named "key" in entry
+        set actions to the website farm actions
+        set conditions to the website farm conditions
+        set identifier to the website farm saved key index of key among actions
+        if op = "test":
+            set identifier to the website farm saved key index of key among conditions
+        if identifier < 0:
+            return false
+        set description to (the item at identifier in actions) if op = "action", else (the item at identifier in conditions)
+        set argument to the website farm saved integer named "argument" in entry
+        set amount to the website farm saved integer named "amount" in entry
+        set first to 0
+        set limit to 1
+        if (description's operands contains "items") or (description's operands = "stock"):
+            set first to the website farm subject items
+            set limit to the length of the website farm items
+        else if description's operands = "direction":
+            set limit to the length of the website farm directions
+        else if description's operands starts with "feature":
+            set limit to the length of the website farm features
+        else if description's operands = "role":
+            set limit to the length of the website farm roles
+        if (argument < first) or (argument >= limit):
+            return false
+        if (amount < -1) or ((description's operands = "stock") and (amount < 0)):
+            return false
+        set area to the JSON text named "area" in entry
+        set length to the UTF-16 position of UTF-8 byte offset (area's length) in area
+        if (length failed) or (the position of length > 40):
+            return false
+        if op = "action":
+            return true
+    else if op = "loop":
+        if (website farm saved fields in entry match [farm saved integer "count" between (-1) and 10000, farm saved integer "end" between (index + 2) and (code's length)]) = false:
+            return false
+        set end to the website farm saved integer named "end" in entry
+        set closing to the JSON value at index (end - 1) in code
+        if (website farm saved fields in closing match [farm saved text "op", farm saved integer "to" between index and index]) = false:
+            return false
+        return (the JSON text named "op" in closing) = "next"
+    else if op = "next":
+        if (website farm saved fields in entry match [farm saved integer "to" between 0 and (index - 1)]) = false:
+            return false
+        set opening to the JSON value at index (the website farm saved integer named "to" in entry) in code
+        if (website farm saved fields in opening match [farm saved text "op", farm saved integer "end" between (index + 1) and (index + 1)]) = false:
+            return false
+        return (the JSON text named "op" in opening) = "loop"
+    else if op != "jump":
+        return false
+    return website farm saved fields in entry match [farm saved integer "to" between (index + 1) and (code's length)]
+
+to get [website farm saved program] {a pointer to JSON value:code} [is valid for] {string:source}:
+    if (code is not a JSON array) or (code's length > 4096):
+        return false
+    set parents to a new integer array of 4097 items
+    set stack to a new integer array of 65 items
+    set depth and index to 0
+    set action to false
+    loop while index < code's length:
+        set entry to the JSON value at index index in code
+        if (website farm saved instruction entry at index in code is valid for source) = false:
+            return false
+        store ((the item at (depth - 1) in stack) if depth > 0, else (-1)) into parents at index
+        set op to the JSON text named "op" in entry
+        if op = "action":
+            set action to true
+        if op = "loop":
+            if depth = 64:
+                return false
+            store index into stack at depth
+            increment depth
+        if op = "next":
+            if depth = 0:
+                return false
+            decrement depth
+            if (the item at depth in stack) != (the website farm saved integer named "to" in entry):
+                return false
+        increment index
+    store -1 into parents at (code's length)
+    if (depth != 0) or (action = false):
+        return false
+    set index to 0
+    loop while index < code's length:
+        set entry to the JSON value at index index in code
+        set op to the JSON text named "op" in entry
+        if (op = "test") or (op = "jump"):
+            set target to the website farm saved integer named "to" in entry
+            # Forward branches may skip complete loops, but cannot enter or
+            # leave a loop whose frame would then be missing or left active.
+            if (the item at target in parents) != (the item at index in parents):
+                return false
+        increment index
+    return true
+
+to get [the website farm plan from saved] {a pointer to JSON value:code}:
+    set result to an empty website farm plan
+    set actions to the website farm actions
+    set conditions to the website farm conditions
+    set index to 0
+    loop while index < code's length:
+        set entry to the JSON value at index index in code
+        set op to the JSON text named "op" in entry
+        set instruction to a new website farm instruction
+        set instruction's source to the website farm range from saved (the JSON member named "range" in entry)
+        if (op = "action") or (op = "test"):
+            set instruction's operation to the website farm action operation if op = "action", else the website farm test operation
+            set key to the JSON text named "key" in entry
+            set instruction's identifier to (the website farm saved key index of key among actions) if op = "action", else (the website farm saved key index of key among conditions)
+            set instruction's argument to the website farm saved integer named "argument" in entry
+            set instruction's amount to the website farm saved integer named "amount" in entry
+            set instruction's target to the website farm saved integer named "target" in entry
+            set instruction's area to the JSON text named "area" in entry
+            if op = "test":
+                set instruction's destination to the website farm saved integer named "to" in entry
+        else if op = "loop":
+            set instruction's operation to the website farm loop operation
+            set instruction's count to the website farm saved integer named "count" in entry
+            set instruction's destination to the website farm saved integer named "end" in entry
+        else:
+            set instruction's operation to the website farm jump operation if op = "jump", else the website farm next operation
+            set instruction's destination to the website farm saved integer named "to" in entry
+        append instruction to result's code
+        increment index
+    return result
+
+to get [the website farm plan JSON of] {website farm plan:plan}:
+    set result to a new JSON value of kind the JSON array kind
+    set actions to the website farm actions
+    set conditions to the website farm conditions
+    set index to 0
+    loop while index < the length of (plan's code):
+        set entry to the item at index in (plan's code)
+        set record to a JSON object containing [JSON child "range" is (the website execution range JSON of (entry's source))]
+        if (entry's operation = the website farm action operation) or (entry's operation = the website farm test operation):
+            set action to entry's operation = the website farm action operation
+            set description to (the item at (entry's identifier) in actions) if action, else (the item at (entry's identifier) in conditions)
+            set JSON member (JSON text "op" is ("action" if action, else "test")) in record
+            set JSON member (JSON text "key" is (description's key)) in record
+            set JSON member (JSON number "argument" is (entry's argument)) in record
+            set JSON member (JSON number "amount" is (entry's amount)) in record
+            set JSON member (JSON number "target" is (entry's target)) in record
+            set JSON member (JSON text "area" is (entry's area)) in record
+            if action = false:
+                set JSON member (JSON number "to" is (entry's destination)) in record
+        else:
+            set op to "jump"
+            if entry's operation = the website farm loop operation:
+                set op to "loop"
+            if entry's operation = the website farm next operation:
+                set op to "next"
+            set JSON member (JSON text "op" is op) in record
+            set JSON member (JSON number ("end" if op = "loop", else "to") is (entry's destination)) in record
+            if op = "loop":
+                set JSON member (JSON number "count" is (entry's count)) in record
+        add record to the JSON array result
+        increment index
+    return result

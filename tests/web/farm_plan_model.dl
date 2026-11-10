@@ -1,42 +1,10 @@
-import site/games/farm/plan.dl
-import farm_test_json.dl
+import site/games/farm/save_program.dl
 import lib/filesystem.dl
 
 to get [the Farm plan test JSON for] {website farm plan:plan}:
     if plan's error is not empty:
         return a JSON object containing [JSON text "error" is (plan's error)]
-    set result to a new JSON value of kind the JSON array kind
-    set actions to the website farm actions
-    set conditions to the website farm conditions
-    set index to 0
-    loop while index < the length of (plan's code):
-        set entry to the item at index in (plan's code)
-        set record to a JSON object containing [JSON child "range" is (the Farm test range of (entry's source))]
-        if (entry's operation = the website farm action operation) or (entry's operation = the website farm test operation):
-            set action to entry's operation = the website farm action operation
-            set description to the item at (entry's identifier) in actions if action, else the item at (entry's identifier) in conditions
-            free record
-            set record to a JSON object containing [JSON text "op" is ("action" if action, else "test"), JSON text "key" is (description's key),
-                JSON number "argument" is (entry's argument), JSON number "amount" is (entry's amount), JSON number "target" is (entry's target),
-                JSON text "area" is (entry's area), JSON child "range" is (the Farm test range of (entry's source))]
-            if action = false:
-                add a JSON member named (the string form of "to") with value (a new JSON number from (entry's destination)) to record
-        else:
-            set opcode to "jump"
-            if entry's operation = the website farm loop operation:
-                set opcode to "loop"
-            if entry's operation = the website farm next operation:
-                set opcode to "next"
-            set property to JSON text "op" is opcode
-            add a JSON member named (property's name) with value (property's value) to record
-            if entry's operation = the website farm loop operation:
-                add a JSON member named (the string form of "count") with value (a new JSON number from (entry's count)) to record
-                add a JSON member named (the string form of "end") with value (a new JSON number from (entry's destination)) to record
-            else:
-                add a JSON member named (the string form of "to") with value (a new JSON number from (entry's destination)) to record
-        add record to the JSON array result
-        increment index
-    return result
+    return the website farm plan JSON of plan
 
 read the file at "input.farm" and set input to it
 require condition (input succeeded) reporting "The Farm model test needs input.farm."

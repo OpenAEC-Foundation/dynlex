@@ -1,0 +1,47 @@
+import site/games/farm/document.dl
+import site/games/farm/simulation.dl
+import site/games/progress/model.dl
+import lib/filesystem.dl
+
+read the file at "input.farm" and set input to it
+require condition (input succeeded) reporting "The Farm save model needs input.farm."
+parse (input's contents) as JSON and set parsed to it
+require condition (parsed succeeded) reporting "The Farm save test input is invalid."
+set cases to parsed's value
+print "["
+set index to 0
+loop while index < cases's length:
+    if index > 0:
+        print ","
+    parse (the JSON text at index index in cases) as JSON and set decoded to it
+    require condition (decoded succeeded) reporting "A Farm save test case is invalid."
+    set entry to decoded's value
+    set original to the JSON member named "data" in entry
+    set before to the compact JSON form of original
+    set data to a copy of JSON node original
+    if the JSON boolean named "progress" in entry:
+        set upgraded to website progress from (the compact JSON form of data)
+        require condition (upgraded's error is empty) reporting "A captured progress envelope must upgrade."
+        free data
+        set games to the JSON member named "games" in (upgraded's document)
+        set data to a copy of JSON node (the JSON member named "data" in (the JSON member named "farm" in games))
+        free upgraded's document
+    set loaded to the website farm document from data
+    set valid to loaded's error is empty
+    set result to a JSON object containing [JSON flag "valid" is valid]
+    if valid:
+        if entry has JSON member named "ticks":
+            set tick to 0
+            loop while tick < the JSON number named "ticks" in entry:
+                advance the website farm world (loaded's document's world) using roles (loaded's document's roles) with workers running true
+                increment tick
+        add a JSON member named (the string form of "data") with value (the website farm snapshot of (loaded's document)) to result
+        free website farm document (loaded's document)
+    require condition (before = the compact JSON form of original) reporting "Loading a Farm save mutated its input."
+    print the compact JSON form of result
+    free result
+    free data
+    free entry
+    increment index
+print line "]"
+free cases

@@ -1,0 +1,118 @@
+# Saved browser/cloud values are checked at this boundary. Readers below it
+# consume the validated schema directly, without defaults or repair paths.
+import world_types.dl
+import lib/json_edit.dl
+import lib/unicode.dl
+
+class:
+    patterns:
+        website farm save field
+    members:
+        name as a C string
+        kind as an integer
+        minimum as a floating-point number
+        maximum as a floating-point number
+
+[farm saved field] {C string:name} [of kind] {integer:kind} means: @intrinsic("construct", website farm save field, name, kind, 0.0, 0.0)
+[farm saved text] {C string:name} means: farm saved field name of kind 3
+[farm saved flag] {C string:name} means: farm saved field name of kind 1
+[farm saved number] {C string:name} means: farm saved field name of kind 2
+[farm saved array] {C string:name} means: farm saved field name of kind 4
+[farm saved object] {C string:name} means: farm saved field name of kind 5
+[farm saved nullable text] {C string:name} means: farm saved field name of kind 7
+[farm saved nullable object] {C string:name} means: farm saved field name of kind 8
+[farm saved nullable array] {C string:name} means: farm saved field name of kind 9
+[farm saved nullable flag] {C string:name} means: farm saved field name of kind 10
+[farm saved integer] {C string:name} [between] {a number:low} [and] {a number:high} means: @intrinsic("construct", website farm save field, name, 6, low as a floating-point number, high as a floating-point number)
+[farm saved count] {C string:name} means: farm saved integer name between 0 and 9007199254740991
+[farm saved serial] {C string:name} means: farm saved integer name between 1 and 9007199254740991
+[farm saved coordinate] {C string:name} means: farm saved integer name between 0 and 19
+[farm saved whole number] {C string:name} means: farm saved integer name between (-2147483648) and 2147483647
+
+to get [website farm saved object] {a pointer to JSON value:object} [has unique members]:
+    if object is not a JSON object:
+        return false
+    set index to 0
+    loop while index < object's length:
+        set name to (object's members + index)'s name
+        set cursor to 0
+        loop while cursor < index:
+            if (object's members + cursor)'s name = name:
+                return false
+            increment cursor
+        increment index
+    return true
+
+to get [website farm saved value] {a pointer to JSON value:value} [matches field] {website farm save field:field}:
+    set kind to field's kind
+    if kind = 6:
+        return (value is a JSON safe integer) and (field's minimum <= value's number <= field's maximum)
+    if (kind = 7) or ((kind = 8) or ((kind = 9) or (kind = 10))):
+        if value's kind = the JSON null kind:
+            return true
+        set kind to 3
+        if field's kind = 8:
+            set kind to 5
+        if field's kind = 9:
+            set kind to 4
+        if field's kind = 10:
+            set kind to 1
+    if value's kind != kind:
+        return false
+    if kind = the JSON text kind:
+        return value's text is valid UTF-8
+    if kind = the JSON number kind:
+        return value's number is finite
+    return true
+
+to get [website farm saved fields in] {a pointer to JSON value:object} [match] {an array:fields}:
+    if (website farm saved object object has unique members) = false:
+        return false
+    for each field in fields:
+        if object lacks JSON member named (field's name):
+            return false
+        if (website farm saved value (the JSON member named (field's name) in object) matches field field) = false:
+            return false
+    return true
+
+to get [website farm saved point] {a pointer to JSON value:point} [is valid]:
+    return website farm saved fields in point match [farm saved coordinate "x", farm saved coordinate "y"]
+
+to get [the website farm saved key index of] {string:key} [among] {an array:descriptions}:
+    set index to 0
+    loop while index < the length of descriptions:
+        if (the item at index in descriptions)'s key = key:
+            return index
+        increment index
+    return -1
+
+to get [the website farm saved text index of] {string:key} [among] {an array:names}:
+    set index to 0
+    loop while index < the length of names:
+        if (the item at index in names) = key:
+            return index
+        increment index
+    return -1
+
+to get [website farm saved text array] {a pointer to JSON value:values} [is valid]:
+    if values is not a JSON array:
+        return false
+    set index to 0
+    loop while index < values's length:
+        set value to the JSON value at index index in values
+        if value's kind != the JSON text kind:
+            return false
+        if (value's text is valid UTF-8) = false:
+            return false
+        increment index
+    return true
+
+to get [the website farm saved quantity named] {C string:name} [in] {a pointer to JSON value:object}:
+    return (the JSON number named name in object) as a website farm quantity
+
+to get [the website farm saved integer named] {C string:name} [in] {a pointer to JSON value:object}:
+    return (the JSON number named name in object) as an integer
+
+to get [the website farm saved optional text named] {C string:name} [in] {a pointer to JSON value:object}:
+    set value to the JSON member named name in object
+    return (the string form of "") if value's kind = the JSON null kind, else (value's text)

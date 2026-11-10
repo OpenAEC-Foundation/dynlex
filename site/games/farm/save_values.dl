@@ -1,0 +1,313 @@
+import save_program.dl
+
+class:
+    patterns:
+        website farm save identities
+    members:
+        maximum as a website farm quantity
+        serials as the type of (an empty list of a website farm quantity)
+        ids as the type of (an empty list of string)
+        animals as the type of (an empty list of string)
+
+to get [website farm saved serial] {a pointer to JSON value:value} [is valid as active] {boolean:active} [in] {a pointer to website farm save identities:identities}:
+    if (website farm saved value value matches field (farm saved serial "")) = false:
+        return false
+    set serial to value's number as a website farm quantity
+    set identities' maximum to the maximum of (identities' maximum) and serial
+    if active:
+        set index to 0
+        loop while index < the length of (identities' serials):
+            if (the item at index in (identities' serials)) = serial:
+                return false
+            increment index
+        append serial to identities' serials
+    return true
+
+to get [website farm saved identity] {string:id} [is new in] {a pointer to website farm save identities:identities}:
+    if id is empty:
+        return false
+    set index to 0
+    loop while index < the length of (identities' ids):
+        if (the item at index in (identities' ids)) = id:
+            return false
+        increment index
+    append id to identities' ids
+    return true
+
+to get [website farm saved reference] {a pointer to JSON value:reference} [is valid in] {a pointer to website farm save identities:identities}:
+    if reference is JSON null:
+        return true
+    if (website farm saved fields in reference match [farm saved text "kind"]) = false:
+        return false
+    set kind to the JSON text named "kind" in reference
+    set names to the website farm reference kinds
+    set index to the website farm saved text index of kind among names
+    if index <= 0:
+        return false
+    if (index = 1) or (index = 2):
+        return true
+    if (index = 3) or (index = 4):
+        if (website farm saved fields in reference match [farm saved text "id"]) = false:
+            return false
+        set id to the JSON text named "id" in reference
+        if id is empty:
+            return false
+        if index = 3:
+            return true
+        set descriptions to the website farm flags
+        if (the website farm saved key index of id among descriptions) < 0:
+            return false
+    else:
+        if (website farm saved point reference is valid) = false:
+            return false
+    if (index = 4) or ((index = 6) or (index = 7)):
+        if (website farm saved fields in reference match [farm saved serial "serial"]) = false:
+            return false
+        return website farm saved serial (the JSON member named "serial" in reference) is valid as active false in identities
+    if index = 8:
+        if (website farm saved fields in reference match [farm saved array "serials"]) = false:
+            return false
+        set serials to the JSON member named "serials" in reference
+        set cursor to 0
+        loop while cursor < serials's length:
+            if (website farm saved serial (the JSON value at index cursor in serials) is valid as active false in identities) = false:
+                return false
+            increment cursor
+    return true
+
+to get [website farm saved items] {a pointer to JSON value:items} [are valid for carrying] {boolean:carrying} [in] {a pointer to website farm save identities:identities}:
+    if items is not a JSON array:
+        return false
+    if carrying and (items's length > 2):
+        return false
+    set descriptions to the website farm items
+    set index to 0
+    loop while index < items's length:
+        set item to the JSON value at index index in items
+        if (website farm saved fields in item match [farm saved text "kind", farm saved count "count"]) = false:
+            return false
+        set kind to the website farm saved key index of (the JSON text named "kind" in item) among descriptions
+        if kind < 0:
+            return false
+        if carrying:
+            if (the JSON number named "count" in item) > (the item at kind in descriptions)'s capacity:
+                return false
+            if (kind = 2) and (item lacks JSON member named "water"):
+                return false
+        if item has JSON member named "water":
+            if (website farm saved fields in item match [farm saved integer "water" between 0 and 2147483647]) = false:
+                return false
+        if carrying = false:
+            if item lacks JSON member named "serial":
+                return false
+        if item has JSON member named "serial":
+            if (website farm saved serial (the JSON member named "serial" in item) is valid as active (carrying = false) in identities) = false:
+                return false
+        increment index
+    return true
+
+to get [website farm saved subject] {a pointer to JSON value:subject} [is valid in] {a pointer to website farm save identities:identities}:
+    if subject is JSON null:
+        return true
+    if (website farm saved fields in subject match [farm saved text "kind"]) = false:
+        return false
+    if subject lacks JSON member named "value":
+        return false
+    set kind to the JSON text named "kind" in subject
+    set value to the JSON member named "value" in subject
+    if kind = "target":
+        return website farm saved reference value is valid in identities
+    if kind != "items":
+        return false
+    return website farm saved fields in value match [farm saved integer "argument" between (-1) and 12, farm saved integer "amount" between (-1) and 9007199254740991]
+
+to get [website farm saved movement] {a pointer to JSON value:target} [is valid in] {a pointer to website farm save identities:identities}:
+    if target is JSON null:
+        return true
+    if (website farm saved fields in target match [farm saved coordinate "x", farm saved coordinate "y", farm saved flag "adjacent", farm saved nullable text "animal"]) = false:
+        return false
+    set animal to the JSON member named "animal" in target
+    if animal is not JSON null:
+        set index to 0
+        loop while index < the length of (identities' animals):
+            if (the item at index in (identities' animals)) = animal's text:
+                return true
+            increment index
+        return false
+    return true
+
+to get [website farm saved trace] {a pointer to JSON value:trace} [is valid for] {string:source}:
+    if trace is JSON null:
+        return true
+    if (website farm saved fields in trace match [farm saved nullable object "range", farm saved nullable flag "branch", farm saved text "message"]) = false:
+        return false
+    if (website farm saved range (the JSON member named "range" in trace) is valid for source) = false:
+        return false
+    if trace has JSON member named "condition":
+        set condition to the JSON member named "condition" in trace
+        if (website farm saved fields in condition match [farm saved nullable object "range", farm saved flag "branch"]) = false:
+            return false
+        if (website farm saved range (the JSON member named "range" in condition) is valid for source) = false:
+            return false
+    return true
+
+to get [website farm saved routine] {a pointer to JSON value:routine} [following] {a pointer to JSON value:code} [is valid for] {string:source} [in] {a pointer to website farm save identities:identities}:
+    set count to 0
+    if code's kind = the JSON array kind:
+        set count to code's length
+    if (website farm saved fields in routine match [farm saved integer "pc" between 0 and count, farm saved object "loops", farm saved flag "finished", farm saved nullable object "trace", farm saved nullable object "continuation"]) = false:
+        return false
+    set position to the website farm saved integer named "pc" in routine
+    if (the JSON boolean named "finished" in routine) and (position != count):
+        return false
+    if (website farm saved trace (the JSON member named "trace" in routine) is valid for source) = false:
+        return false
+    set loops to the JSON member named "loops" in routine
+    if (website farm saved object loops has unique members) = false:
+        return false
+    set index to 0
+    loop while index < loops's length:
+        set member to loops's members + index
+        set key to the website farm integer in (member's name)
+        if key's valid = false:
+            return false
+        set frame to key's value
+        if (frame < 0) or (frame >= count):
+            return false
+        if (the string form of frame) != member's name:
+            return false
+        if (member's value is a JSON safe integer) = false:
+            return false
+        set opening to the JSON value at index frame in code
+        if (the JSON text named "op" in opening) != "loop":
+            return false
+        if (position <= frame) or (position >= the website farm saved integer named "end" in opening):
+            return false
+        set remaining to member's value's number
+        set initial to the JSON number named "count" in opening
+        if initial = -1.0:
+            if remaining != -1.0:
+                return false
+        else if (remaining < 1.0) or (remaining > initial):
+            return false
+        increment index
+    set index to 0
+    loop while index < count:
+        set instruction to the JSON value at index index in code
+        if (the JSON text named "op" in instruction) = "loop":
+            if (index < position) and (position < the website farm saved integer named "end" in instruction):
+                if loops lacks JSON member named (the string form of index):
+                    return false
+        increment index
+    set continuation to the JSON member named "continuation" in routine
+    if continuation is not JSON null:
+        if position = count:
+            return false
+        set instruction to the JSON value at index position in code
+        if (the JSON text named "op" in instruction) != "action":
+            return false
+        set action to the JSON text named "key" in instruction
+        if (action != "walk") and (action != "chop"):
+            return false
+        if continuation lacks JSON member named "target":
+            return false
+        if (website farm saved reference (the JSON member named "target" in continuation) is valid in identities) = false:
+            return false
+    return true
+
+to get [the website farm reference from saved] {a pointer to JSON value:value}:
+    set result to a new website farm reference
+    if value is JSON null:
+        return result
+    set names to the website farm reference kinds
+    set result's kind to the website farm saved text index of (the JSON text named "kind" in value) among names
+    if (result's kind = 3) or (result's kind = 4):
+        set result's id to the JSON text named "id" in value
+    if result's kind >= 5:
+        set result's x to the website farm saved integer named "x" in value
+        set result's y to the website farm saved integer named "y" in value
+    if (result's kind = 4) or ((result's kind = 6) or (result's kind = 7)):
+        set result's serial to the website farm saved quantity named "serial" in value
+    if result's kind = 8:
+        set serials to the JSON member named "serials" in value
+        set builder to an empty list of a website farm quantity
+        set index to 0
+        loop while index < serials's length:
+            append ((the JSON number at index index in serials) as a website farm quantity) to builder
+            increment index
+        set result's serials to a sequence taking the items from builder
+        free builder
+    return result
+
+to get [the website farm item from saved] {a pointer to JSON value:value}:
+    set result to a new website farm item
+    set descriptions to the website farm items
+    set result's kind to the website farm saved key index of (the JSON text named "kind" in value) among descriptions
+    set result's count to the website farm saved quantity named "count" in value
+    set result's water present to value has JSON member named "water"
+    if result's water present:
+        set result's water to the website farm saved integer named "water" in value
+    if value has JSON member named "serial":
+        set result's serial to the website farm saved quantity named "serial" in value
+    return result
+
+to get [the website farm items from saved] {a pointer to JSON value:values}:
+    set result to an empty list of website farm item
+    set index to 0
+    loop while index < values's length:
+        append (the website farm item from saved (the JSON value at index index in values)) to result
+        increment index
+    return result
+
+to get [the website farm movement from saved] {a pointer to JSON value:value}:
+    set result to a new website farm movement target
+    if value is not JSON null:
+        set result's present to true
+        set result's x to the website farm saved integer named "x" in value
+        set result's y to the website farm saved integer named "y" in value
+        set result's adjacent to the JSON boolean named "adjacent" in value
+        set result's animal to the website farm saved optional text named "animal" in value
+    return result
+
+to get [the website farm subject from saved] {a pointer to JSON value:value}:
+    set result to a new website farm subject
+    if value is not JSON null:
+        set subject to the JSON member named "value" in value
+        if (the JSON text named "kind" in value) = "target":
+            set result's kind to 1
+            set result's reference to the website farm reference from saved subject
+        else:
+            set result's kind to 2
+            set result's argument to the website farm saved integer named "argument" in subject
+            set result's amount to the website farm saved quantity named "amount" in subject
+    return result
+
+to get [the website farm branch from saved] {a pointer to JSON value:value}:
+    if value is JSON null:
+        return -1
+    return 1 if value's boolean, else 0
+
+to [read saved website farm routine] {a pointer to JSON value:value} [into] {a pointer to website farm routine:routine}:
+    set routine's position to the website farm saved integer named "pc" in value
+    set routine's finished to the JSON boolean named "finished" in value
+    set loops to the JSON member named "loops" in value
+    set index to 0
+    loop while index < loops's length:
+        set member to loops's members + index
+        set key to the website farm integer in (member's name)
+        replace item at index (key's value) in (routine's loops) with (member's value's number as an integer)
+        increment index
+    set trace to the JSON member named "trace" in value
+    set routine's traced to trace is not JSON null
+    if routine's traced:
+        set routine's source to the website farm range from saved (the JSON member named "range" in trace)
+        set routine's branch to the website farm branch from saved (the JSON member named "branch" in trace)
+        set routine's message to the JSON text named "message" in trace
+        if trace has JSON member named "condition":
+            set condition to the JSON member named "condition" in trace
+            set routine's condition source to the website farm range from saved (the JSON member named "range" in condition)
+            set routine's condition branch to the website farm branch from saved (the JSON member named "branch" in condition)
+    set continuation to the JSON member named "continuation" in value
+    set routine's continuing to continuation is not JSON null
+    if routine's continuing:
+        set routine's continuation to the website farm reference from saved (the JSON member named "target" in continuation)

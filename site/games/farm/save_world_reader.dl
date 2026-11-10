@@ -1,0 +1,158 @@
+import save_world_validation.dl
+import world.dl
+
+# These readers consume only a document accepted by the save validator.
+to get [the website farm roles from saved] {a pointer to JSON value:values}:
+    set result to an empty list of a pointer to website farm role
+    set index to 0
+    loop while index < values's length:
+        set value to the JSON value at index index in values
+        set role to a website farm role identified by (the JSON text named "id" in value) named (the JSON text named "name" in value) containing (the JSON text named "source" in value)
+        set role's applied to the JSON text named "applied" in value
+        set role's needs rebuilding to the JSON boolean named "needsRebuild" in value
+        set code to the JSON member named "program" in value
+        set role's prepared to code is not JSON null
+        if role's prepared:
+            free website farm plan the address of (role's program)
+            set role's program to the website farm plan from saved code
+        append role to result
+        increment index
+    return result
+
+to get [the website farm actor from saved] {a pointer to JSON value:value} [using] {a value:roles}:
+    set result to a website farm worker named (the JSON text named "name" in value) identified by (the JSON text named "id" in value) at (the website farm saved integer named "x" in value) (the website farm saved integer named "y" in value)
+    set result's direction to the website farm saved integer named "direction" in value
+    free result's inventory
+    set result's inventory to the website farm items from saved (the JSON member named "inventory" in value)
+    set result's role to the website farm saved optional text named "role" in value
+    if result's role is not empty:
+        set role to the website farm role identified by (result's role) in roles
+        free website farm routine the address of (result's routine)
+        set result's routine to a website farm routine for (role's program) initially carrying (a new website farm reference)
+    read saved website farm routine (the JSON member named "routine" in value) into (the address of (result's routine))
+    set result's subject to the website farm subject from saved (the JSON member named "subject" in value)
+    set result's status to the JSON text named "status" in value
+    set result's target to the website farm movement from saved (the JSON member named "target" in value)
+    set result's paused to the JSON boolean named "paused" in value
+    # Pointer capture is transient, even when an older save recorded it.
+    set result's held to false
+    return result
+
+to get [the website farm animal from saved] {a pointer to JSON value:value} [as cow] {boolean:cow}:
+    set result to a new website farm animal
+    set result's id to the JSON text named "id" in value
+    set result's x to the website farm saved integer named "x" in value
+    set result's y to the website farm saved integer named "y" in value
+    set result's direction to the website farm saved integer named "direction" in value
+    set result's feed to the website farm saved integer named "feed" in value
+    set result's progress to the website farm saved integer named "progress" in value
+    if cow:
+        set result's produce to the website farm saved quantity named "produce" in value
+    return result
+
+to [read saved website farm tile] {a pointer to JSON value:value} [into] {a pointer to website farm tile:tile}:
+    set tile's height to the JSON number named "height" in value
+    set names to the website farm terrain names
+    set tile's terrain to the website farm saved text index of (the JSON text named "type" in value) among names
+    set tile's plot to the JSON boolean named "plot" in value
+    set tile's moisture to the JSON number named "moisture" in value
+    set tile's fertilizer to the website farm saved integer named "fertilizer" in value
+    set tile's water to the JSON boolean named "water" in value
+    free tile's items
+    set tile's items to the website farm items from saved (the JSON member named "items" in value)
+    set tree to the JSON member named "tree" in value
+    if tree is not JSON null:
+        set tile's tree's present to true
+        set tile's tree's serial to the website farm saved quantity named "serial" in tree
+        set tile's tree's hits to the website farm saved integer named "hits" in tree
+        set tile's tree's regrow to the website farm saved integer named "regrow" in tree
+    set crop to the JSON member named "crop" in value
+    if crop is not JSON null:
+        set tile's crop's present to true
+        set tile's crop's serial to the website farm saved quantity named "serial" in crop
+        set descriptions to the website farm items
+        set tile's crop's kind to the website farm saved key index of (the JSON text named "kind" in crop) among descriptions
+        set tile's crop's growth to the JSON number named "growth" in crop
+
+to get [the website farm world from saved] {a pointer to JSON value:value} [using] {a value:roles}:
+    set result to an empty website farm world with (the website farm actor from saved (the JSON member named "player" in value) using roles)
+    set rows to the JSON member named "tiles" in value
+    loop y from 0 to the website farm height:
+        set row to the JSON value at index y in rows
+        loop x from 0 to the website farm width:
+            read saved website farm tile (the JSON value at index x in row) into (the website farm square at x y in result)
+    set areas to the JSON member named "areas" in value
+    set index to 0
+    loop while index < areas's length:
+        set saved to the JSON value at index index in areas
+        set area to a new website farm area
+        set area's id to the JSON text named "id" in saved
+        set area's name to the JSON text named "name" in saved
+        set area's color to the JSON text named "color" in saved
+        set area's left to the website farm saved integer named "left" in saved
+        set area's top to the website farm saved integer named "top" in saved
+        set area's right to the website farm saved integer named "right" in saved
+        set area's bottom to the website farm saved integer named "bottom" in saved
+        append area to result's areas
+        increment index
+    free result's coding
+    set result's coding to a copy of JSON node (the JSON member named "coding" in value)
+    set result's tick to the website farm saved quantity named "tick" in value
+    set result's raining to the JSON boolean named "raining" in value
+    set result's expanded to the JSON boolean named "expanded" in value
+    set result's orders to the website farm saved quantity named "orders" in value
+    set delivered to the JSON member named "delivered" in value
+    set index to 0
+    loop while index < delivered's length:
+        append (the JSON text at index index in delivered) to result's delivered
+        increment index
+    set workers to the JSON member named "workers" in value
+    set index to 0
+    loop while index < workers's length:
+        append (the website farm actor from saved (the JSON value at index index in workers) using roles) to result's workers
+        increment index
+    set flags to the JSON member named "flags" in value
+    set descriptions to the website farm flags
+    set index to 0
+    loop while index < flags's length:
+        set saved to the JSON value at index index in flags
+        set flag to a new website farm flag
+        set flag's color to the website farm saved key index of (the JSON text named "id" in saved) among descriptions
+        set flag's serial to the website farm saved quantity named "serial" in saved
+        set flag's x to the website farm saved integer named "x" in saved
+        set flag's y to the website farm saved integer named "y" in saved
+        append flag to result's flags
+        increment index
+    set barn to the JSON member named "barn" in value
+    set result's barn to website farm point (the website farm saved integer named "x" in barn) (the website farm saved integer named "y" in barn)
+    set compost to the JSON member named "compost" in value
+    set result's compost's x to the website farm saved integer named "x" in compost
+    set result's compost's y to the website farm saved integer named "y" in compost
+    set result's compost's input to the website farm saved quantity named "input" in compost
+    set result's compost's ready to the website farm saved quantity named "ready" in compost
+    set result's compost's age to the website farm saved integer named "age" in compost
+    set pasture to the JSON member named "pasture" in value
+    set result's pasture to website farm point (the website farm saved integer named "x" in pasture) (the website farm saved integer named "y" in pasture)
+    set cow to the JSON member named "cow" in value
+    set result's cow present to cow is not JSON null
+    if result's cow present:
+        set result's cow to the website farm animal from saved cow as cow true
+    set chickens to the JSON member named "chickens" in value
+    set index to 0
+    loop while index < chickens's length:
+        append (the website farm animal from saved (the JSON value at index index in chickens) as cow false) to result's chickens
+        increment index
+    set stock to the JSON member named "stock" in value
+    set items to the website farm items
+    set index to 0
+    loop while index < the length of items:
+        set description to the item at index in items
+        store (the website farm saved quantity named (description's key) in stock) into (result's stock) at index
+        increment index
+    set notices to the JSON member named "notices" in value
+    set index to 0
+    loop while index < notices's length:
+        append (the JSON text at index index in notices) to result's notices
+        increment index
+    set result's next entity to the website farm saved quantity named "nextEntity" in value
+    return result

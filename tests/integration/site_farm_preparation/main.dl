@@ -1,0 +1,55 @@
+import site/games/farm/preparation.dl
+import site/games/farm/document.dl
+
+set document to the initial website farm document
+set world to document's world
+set role to the item at 0 in (document's roles)
+set worker to the item at 0 in (world's workers)
+set plan to the website farm plan from (the string form of "LOOP|-1\nDO|1|3|-1|-2|\nEND") dropping 0 source lines
+set source to the string form of "loop forever:\n    turn right"
+apply website farm plan plan from source to role for worker in world
+require condition ((worker's role = role's id) and ((role's prepared) and (role's applied = source))) reporting "Applying a Farm plan lost its source or assignment."
+advance the website farm world world using roles (document's roles) with workers running true
+set worker's paused to true
+set worker's held to true
+set role's needs rebuilding to true
+set role's source to source + "\n# A draft to keep"
+set marked to a copy of website farm plan plan
+set instruction to the item at 1 in (marked's code)
+set instruction's source's known to true
+set instruction's source's start line to 1
+set instruction's source's start column to 4
+set instruction's source's end line to 1
+set instruction's source's end column to 14
+replace item at index 1 in (marked's code) with instruction
+set error to rebuild website farm role role using plan marked
+require condition (error is empty) reporting "Source mapping rejected unchanged Farm control flow."
+require condition ((worker's routine's position = 2) and ((worker's direction = 1) and ((worker's paused) and (worker's held)))) reporting "Rebuilding reset a worker or its controls."
+require condition ((role's needs rebuilding = false) and (role's source ends with "# A draft to keep")) reporting "Rebuilding lost a draft or kept its pending flag."
+set changed to a copy of website farm plan marked
+set opening to the item at 0 in (changed's code)
+set opening's count to 2
+replace item at index 0 in (changed's code) with opening
+set role's needs rebuilding to true
+set error to rebuild website farm role role using plan changed
+require condition (error is not empty) reporting "Rebuilding accepted a changed loop count."
+require condition ((role's needs rebuilding) and ((the item at 0 in (role's program's code))'s count = -1)) reporting "A failed rebuild replaced the live plan."
+set worker's paused to false
+set worker's held to false
+advance the website farm world world using roles (document's roles) with workers running true
+require condition (worker's direction = 2) reporting "A rebuilt worker failed to resume its active loop."
+# Applying an edited role resets every assigned worker, while other roles keep
+# their own execution state. Paused/held controls are independent of assignment.
+set second to a website farm worker named "Grace" identified by "worker-2" at 5 12
+append second to world's workers
+assign website farm role role to second
+advance the website farm world world using roles (document's roles) with workers running true
+set worker's paused to true
+apply website farm plan changed from (the string form of "loop 2 times:\n    turn right") to role for second in world
+require condition ((worker's routine's position = 0) and (second's routine's position = 0)) reporting "Applying a shared role did not reset all assigned workers."
+require condition (worker's paused) reporting "Applying a role changed a worker's pause control."
+free website farm plan the address of plan
+free website farm plan the address of marked
+free website farm plan the address of changed
+free website farm document document
+print line "Farm applies shared roles and rebuilds source mappings without restarting saved worker state."

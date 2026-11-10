@@ -23,6 +23,7 @@ const jobs = request.jobs ?? [{ entry: request.entry, kind: 'wasm', output: path
 const output = request.jobs ? path.resolve(outputArgument) : path.dirname(path.resolve(outputArgument));
 let translator;
 for (const job of jobs) {
+  const started = performance.now();
   checked('dynlex_web_set_entry_file', ['string'], [job.entry]);
   const target = path.join(output, job.output);
   await mkdir(path.dirname(target), { recursive: true });
@@ -37,5 +38,5 @@ for (const job of jobs) {
     await writeFile(target + '.glsl', translator.translateGlsl(bytes, job.stage));
     await writeFile(target + '.json', JSON.stringify(json('dynlex_web_get_shader_uniforms_json')) + '\n');
   } else throw new Error(`Unknown output kind: ${job.kind}`);
-  console.log(`Compiled ${job.entry} → ${job.output}`);
+  console.log(`Compiled ${job.entry} → ${job.output} (${Math.round(performance.now() - started)} ms)`);
 }

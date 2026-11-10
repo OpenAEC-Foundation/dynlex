@@ -1,0 +1,51 @@
+import simulation.dl
+
+# Source mapping can change ranges and instruction operands during a language
+# migration. Worker positions and loop frames remain meaningful only when the
+# control-flow structure is unchanged.
+to get [website farm plan] {website farm plan:plan} [has the same control flow as] {website farm plan:other}:
+    if (the length of (plan's code)) != the length of (other's code):
+        return false
+    set index to 0
+    loop while index < the length of (plan's code):
+        set left to the item at index in (plan's code)
+        set right to the item at index in (other's code)
+        if left's operation != right's operation:
+            return false
+        if left's operation = the website farm loop operation:
+            if left's count != right's count:
+                return false
+        if left's operation != the website farm action operation:
+            if left's destination != right's destination:
+                return false
+        increment index
+    return true
+
+to get [rebuild website farm role] {a pointer to website farm role:role} [using plan] {website farm plan:plan}:
+    require condition (role's prepared) reporting "Rebuilding a Farm role needs its saved program."
+    if plan's error is not empty:
+        return plan's error
+    if (website farm plan plan has the same control flow as (role's program)) = false:
+        return the string form of "Upgrading a saved role changed its control flow."
+    set replacement to a copy of website farm plan plan
+    free website farm plan the address of (role's program)
+    set role's program to replacement
+    set role's needs rebuilding to false
+    return the string form of ""
+
+to [apply website farm plan] {website farm plan:plan} [from] {string:source} [to] {a pointer to website farm role:role} [for] {a pointer to website farm actor:actor} [in] {a pointer to website farm world:world}:
+    require condition (plan's error is empty) reporting "Applying a Farm role needs a valid program."
+    require condition (actor's id != "player") reporting "The player cannot be assigned an automated Farm role."
+    set replacement to a copy of website farm plan plan
+    free website farm plan the address of (role's program)
+    set role's program to replacement
+    set role's prepared to true
+    set role's applied to source
+    set role's needs rebuilding to false
+    assign website farm role role to actor
+    set index to 0
+    loop while index < the length of (world's workers):
+        set worker to the item at index in (world's workers)
+        if (worker != actor) and (worker's role = role's id):
+            assign website farm role role to worker
+        increment index

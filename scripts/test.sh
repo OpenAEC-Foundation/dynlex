@@ -749,7 +749,9 @@ if [[ "$suite" == integration ]]; then
     run_auxiliary_test "loop_cleanup_targets" 60 node "$PROJECT_DIR/tests/web/compiler_loops.mjs" "$COMPILER" --shipped
     run_auxiliary_test "library_values_targets" 60 node "$PROJECT_DIR/tests/web/library_values.mjs" "$COMPILER" --shipped
     # Includes 2,019 independent action/condition scenarios and a 900-turn team.
-    run_auxiliary_test "farm_models" 300 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --shipped
+    run_auxiliary_test "farm_models" 300 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --group=core --shipped
+    run_auxiliary_test "farm_saved_state" 300 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --group=state --shipped
+    run_auxiliary_test "farm_state_ownership" 300 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --group=ownership --shipped
     run_auxiliary_test "farm_vocabulary_generated" 30 python3 "$SCRIPT_DIR/generate_farm_vocabulary.py" --compiler "$COMPILER" --check
 fi
 run_auxiliary_test "float_math_codegen" 20 python3 -B "$SCRIPT_DIR/test_float_math_codegen.py" "$COMPILER"

@@ -18,8 +18,18 @@ const models=[
   {name:'simulation',entry:'tests/web/farm_world_model.dl',fixture:'farm-simulation.json'},
   {name:'goals',entry:'tests/integration/site_coding_goals/main.dl',expected:'tests/integration/site_coding_goals/expected.txt'},
   {name:'roles',entry:'tests/integration/site_farm_roles/main.dl',expected:'tests/integration/site_farm_roles/expected.txt'},
+  {name:'saves',group:'state',entry:'tests/web/farm_save_model.dl',fixture:'farm-saves.json'},
+  {name:'resume',group:'state',entry:'tests/web/farm_save_model.dl',fixture:'farm-resume.json'},
+  {name:'documents',group:'ownership',entry:'tests/integration/site_farm_document/main.dl',expected:'tests/integration/site_farm_document/expected.txt'},
+  {name:'preparation',group:'ownership',entry:'tests/integration/site_farm_preparation/main.dl',expected:'tests/integration/site_farm_preparation/expected.txt'},
 ];
 const selected=process.argv.find(argument=>argument.startsWith('--model='))?.slice(8);
+const group=process.argv.find(argument=>argument.startsWith('--group='))?.slice(8);
+if(group) {
+  assert(!selected,'Choose either --group or --model.');
+  assert(['core','state','ownership'].includes(group),`Unknown Farm test group ${group}`);
+  for(let index=models.length-1;index>=0;index--) if((models[index].group??'core')!==group) models.splice(index,1);
+}
 if(selected) {
   assert(models.some(model=>model.name===selected),`Unknown Farm model ${selected}`);
   for(let index=models.length-1;index>=0;index--) if(models[index].name!==selected) models.splice(index,1);
@@ -32,7 +42,10 @@ function check(model,output,target) {
   const actual=JSON.parse(output);
   const expected=model.name==='catalog'?model.data:model.data.expected;
   if(['world','actions','simulation'].includes(model.name)) compareWorld(actual,expected,`${model.name}: ${target}`);
-  else assert.deepEqual(actual,expected,`${model.name}: ${target}`);
+  else if(model.data.cases) {
+    assert.equal(actual.length,expected.length,`${model.name}: ${target}: case count`);
+    expected.forEach((value,index)=>assert.deepEqual(actual[index],value,`${model.name}: ${target}: case ${index} (${model.data.cases[index].name??'captured state'})`));
+  } else assert.deepEqual(actual,expected,`${model.name}: ${target}`);
   console.log(`PASS Farm ${model.name} ${target}${model.data.cases?`: ${model.data.cases.length} scenarios`:''}`);
 }
 
@@ -54,7 +67,7 @@ function compareWorld(actual,expected,location) {
 async function checkWasm(model,file,target) {
   const bytes=await fs.readFile(file);
   const filesystem=createRuntimeFilesystem();
-  filesystem.files.set('input.farm',{data:new TextEncoder().encode(JSON.stringify(model.data.cases??[])),modificationTime:filesystem.lastTimestamp});
+  filesystem.files.set('input.farm',{data:new TextEncoder().encode(modelInput(model)),modificationTime:filesystem.lastTimestamp});
   let output='';
   const runtime=buildRuntimeImports({push:chunk=>{output+=chunk;}},filesystem,inspectRuntimeWasmLayout(bytes));
   const allocation=observeAllocations(runtime,64*1024*1024);
@@ -65,12 +78,20 @@ async function checkWasm(model,file,target) {
   assert.equal(allocation.live,0,`${model.name} left owned allocations`);
   console.log(`Farm ${model.name}: ${allocation.peak} peak live bytes, every allocation released, ${Math.round(performance.now()-started)} ms.`);
 }
+
+function modelInput(model) {
+  const cases=model.data.cases??[];
+  // The save corpus contains hundreds of full worlds. Decode one saved
+  // document at a time, as the application does, rather than retaining all
+  // typed JSON trees merely to transport independent test cases.
+  return JSON.stringify(['saves','resume'].includes(model.name)?cases.map(value=>JSON.stringify(value)):cases);
+}
 try {
   const nativePrograms=new Map(),wasmPrograms=new Map();
   for(const model of models) {
     model.data=model.expected?{expected:await fs.readFile(path.join(root,model.expected),'utf8')}
       :JSON.parse(await fs.readFile(path.join(root,'tests/web/fixtures',model.fixture)));
-    const input=JSON.stringify(model.data.cases??[]);
+    const input=modelInput(model);
     await fs.writeFile(path.join(directory,'input.farm'),input);
     for(const optimization of ['O0','O2']) {
       const key=model.entry+':'+optimization;
@@ -106,7 +127,7 @@ try {
       jobs.push({entry:model.entry,kind:'wasm',output});
     }
     await fs.writeFile(request,JSON.stringify({sources,jobs}));
-    execFileSync(process.execPath,[path.join(root,'scripts/compile_project.mjs'),request,directory],{cwd:root,stdio:'inherit',timeout:120000});
+    execFileSync(process.execPath,[path.join(root,'scripts/compile_project.mjs'),request,directory],{cwd:root,stdio:'inherit',timeout:120000*jobs.length});
     for(const model of models) {
       await checkWasm(model,path.join(directory,outputs.get(model.entry)),'shipped compiler/Wasm');
     }

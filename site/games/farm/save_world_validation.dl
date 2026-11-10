@@ -1,0 +1,228 @@
+import save_values.dl
+
+# All lookups here inspect external data. The typed runtime uses its ordinary,
+# strict role lookup only after this boundary accepts the complete document.
+to get [the saved website farm role index named] {string:id} [in] {a pointer to JSON value:roles}:
+    set index to 0
+    loop while index < roles's length:
+        if (the JSON text named "id" in (the JSON value at index index in roles)) = id:
+            return index
+        increment index
+    return -1
+
+to get [website farm saved roles] {a pointer to JSON value:roles} [are valid]:
+    set index to 0
+    loop while index < roles's length:
+        set role to the JSON value at index index in roles
+        if (website farm saved fields in role match [farm saved text "id", farm saved text "name", farm saved text "source", farm saved text "applied", farm saved nullable array "program", farm saved flag "needsRebuild"]) = false:
+            return false
+        set id to the JSON text named "id" in role
+        if id is empty:
+            return false
+        set cursor to 0
+        loop while cursor < index:
+            if (the JSON text named "id" in (the JSON value at index cursor in roles)) = id:
+                return false
+            increment cursor
+        set code to the JSON member named "program" in role
+        if code is not JSON null:
+            if (website farm saved program code is valid for (the JSON text named "applied" in role)) = false:
+                return false
+        else if the JSON boolean named "needsRebuild" in role:
+            return false
+        increment index
+    return true
+
+to get [website farm saved animal] {a pointer to JSON value:animal} [is valid as cow] {boolean:cow} [in] {a pointer to website farm save identities:identities}:
+    if (website farm saved fields in animal match [farm saved text "id", farm saved coordinate "x", farm saved coordinate "y", farm saved integer "direction" between 0 and 3, farm saved whole number "feed", farm saved whole number "progress"]) = false:
+        return false
+    set id to the JSON text named "id" in animal
+    if cow:
+        if (id != "cow") or ((website farm saved fields in animal match [farm saved count "produce"]) = false):
+            return false
+    else:
+        if (id = "cow") or ((website farm saved fields in animal match [farm saved flag "held"]) = false):
+            return false
+    if (id = "player") or ((website farm saved identity id is new in identities) = false):
+        return false
+    append id to identities' animals
+    return true
+
+to get [website farm saved actor] {a pointer to JSON value:actor} [is valid as player] {boolean:player} [using] {a pointer to JSON value:roles} [in] {a pointer to website farm save identities:identities}:
+    if (website farm saved fields in actor match [farm saved text "id", farm saved text "name", farm saved coordinate "x", farm saved coordinate "y", farm saved integer "direction" between 0 and 3, farm saved array "inventory", farm saved nullable text "role", farm saved object "routine", farm saved nullable object "subject", farm saved text "status", farm saved nullable object "target", farm saved flag "held", farm saved flag "paused"]) = false:
+        return false
+    set id to the JSON text named "id" in actor
+    if (player and (id != "player")) or ((player = false) and ((id = "player") or (id = "cow"))):
+        return false
+    if (website farm saved identity id is new in identities) = false:
+        return false
+    if (website farm saved items (the JSON member named "inventory" in actor) are valid for carrying true in identities) = false:
+        return false
+    if (website farm saved subject (the JSON member named "subject" in actor) is valid in identities) = false:
+        return false
+    if (website farm saved movement (the JSON member named "target" in actor) is valid in identities) = false:
+        return false
+    set code to the JSON member named "role" in actor
+    set source to the string form of ""
+    if code is not JSON null:
+        set index to the saved website farm role index named (code's text) in roles
+        if index < 0:
+            return false
+        set role to the JSON value at index index in roles
+        set code to the JSON member named "program" in role
+        set source to the JSON text named "applied" in role
+    return website farm saved routine (the JSON member named "routine" in actor) following code is valid for source in identities
+
+to get [website farm saved tile] {a pointer to JSON value:tile} [at] {integer:x} {integer:y} [is valid in] {a pointer to website farm save identities:identities}:
+    if (website farm saved fields in tile match [farm saved coordinate "x", farm saved coordinate "y", farm saved number "height", farm saved text "type", farm saved flag "plot", farm saved nullable object "crop", farm saved number "moisture", farm saved whole number "fertilizer", farm saved nullable object "tree", farm saved array "items", farm saved flag "water"]) = false:
+        return false
+    if ((the JSON number named "x" in tile) != x) or ((the JSON number named "y" in tile) != y):
+        return false
+    set names to the website farm terrain names
+    if (the website farm saved text index of (the JSON text named "type" in tile) among names) < 0:
+        return false
+    set tree to the JSON member named "tree" in tile
+    if tree is not JSON null:
+        if (website farm saved fields in tree match [farm saved serial "serial", farm saved whole number "hits", farm saved whole number "regrow"]) = false:
+            return false
+        if (website farm saved serial (the JSON member named "serial" in tree) is valid as active true in identities) = false:
+            return false
+    set crop to the JSON member named "crop" in tile
+    if crop is not JSON null:
+        if (website farm saved fields in crop match [farm saved serial "serial", farm saved text "kind", farm saved number "growth"]) = false:
+            return false
+        set kind to the JSON text named "kind" in crop
+        if (kind != "carrots") and (kind != "wheat"):
+            return false
+        if (website farm saved serial (the JSON member named "serial" in crop) is valid as active true in identities) = false:
+            return false
+    return website farm saved items (the JSON member named "items" in tile) are valid for carrying false in identities
+
+to get [website farm saved areas] {a pointer to JSON value:areas} [are valid]:
+    set index to 0
+    loop while index < areas's length:
+        set area to the JSON value at index index in areas
+        if (website farm saved fields in area match [farm saved text "id", farm saved text "name", farm saved text "color", farm saved coordinate "left", farm saved coordinate "top", farm saved coordinate "right", farm saved coordinate "bottom"]) = false:
+            return false
+        set id to the JSON text named "id" in area
+        set name to the JSON text named "name" in area
+        set length to the UTF-16 position of UTF-8 byte offset (name's length) in name
+        if ((id is empty) or (name is empty)) or ((the position of length > 40) or ((name contains "\n") or (name contains "\r"))):
+            return false
+        if ((the JSON number named "left" in area) > (the JSON number named "right" in area)) or ((the JSON number named "top" in area) > (the JSON number named "bottom" in area)):
+            return false
+        set cursor to 0
+        loop while cursor < index:
+            set earlier to the JSON value at index cursor in areas
+            if ((the JSON text named "id" in earlier) = id) or ((the JSON text named "name" in earlier) = name):
+                return false
+            increment cursor
+        increment index
+    return true
+
+to get [website farm saved flags] {a pointer to JSON value:flags} [are valid in] {a pointer to website farm save identities:identities}:
+    set descriptions to the website farm flags
+    set used to a new boolean array of 9 items
+    set index to 0
+    loop while index < flags's length:
+        set flag to the JSON value at index index in flags
+        if (website farm saved fields in flag match [farm saved text "id", farm saved serial "serial", farm saved coordinate "x", farm saved coordinate "y"]) = false:
+            return false
+        set color to the website farm saved key index of (the JSON text named "id" in flag) among descriptions
+        if color < 0:
+            return false
+        if the item at color in used:
+            return false
+        store true into used at color
+        if (website farm saved serial (the JSON member named "serial" in flag) is valid as active true in identities) = false:
+            return false
+        increment index
+    return true
+
+to get [website farm saved world] {a pointer to JSON value:world} [using] {a pointer to JSON value:roles} [is valid in] {a pointer to website farm save identities:identities}:
+    if (website farm saved fields in world match [farm saved array "tiles", farm saved array "areas", farm saved object "coding", farm saved count "tick", farm saved flag "raining", farm saved flag "expanded", farm saved count "orders", farm saved array "delivered", farm saved object "player", farm saved array "workers", farm saved array "flags", farm saved object "barn", farm saved object "compost", farm saved object "pasture", farm saved nullable object "cow", farm saved array "chickens", farm saved object "stock", farm saved array "notices", farm saved serial "nextEntity"]) = false:
+        return false
+    if ((website farm saved point (the JSON member named "barn" in world) is valid) and (website farm saved point (the JSON member named "pasture" in world) is valid)) = false:
+        return false
+    if (website farm saved fields in (the JSON member named "compost" in world) match [farm saved coordinate "x", farm saved coordinate "y", farm saved count "input", farm saved count "ready", farm saved whole number "age"]) = false:
+        return false
+    if ((website farm saved text array (the JSON member named "delivered" in world) is valid) and (website farm saved text array (the JSON member named "notices" in world) is valid)) = false:
+        return false
+    if (the website coding progress error in (the JSON member named "coding" in world) for "farm") is not empty:
+        return false
+    if (website farm saved areas (the JSON member named "areas" in world) are valid) = false:
+        return false
+    set stock to the JSON member named "stock" in world
+    if ((website farm saved object stock has unique members) = false) or (stock's length != 13):
+        return false
+    set descriptions to the website farm items
+    for each description in descriptions:
+        if (website farm saved fields in stock match [farm saved count (description's key)]) = false:
+            return false
+    set rows to the JSON member named "tiles" in world
+    if rows's length != the website farm height:
+        return false
+    set y to 0
+    loop while y < the website farm height:
+        set row to the JSON value at index y in rows
+        if (row is not a JSON array) or (row's length != the website farm width):
+            return false
+        set x to 0
+        loop while x < the website farm width:
+            if (website farm saved tile (the JSON value at index x in row) at x y is valid in identities) = false:
+                return false
+            increment x
+        increment y
+    if (website farm saved flags (the JSON member named "flags" in world) are valid in identities) = false:
+        return false
+    set cow to the JSON member named "cow" in world
+    if cow is not JSON null:
+        if (website farm saved animal cow is valid as cow true in identities) = false:
+            return false
+    set chickens to the JSON member named "chickens" in world
+    set index to 0
+    loop while index < chickens's length:
+        if (website farm saved animal (the JSON value at index index in chickens) is valid as cow false in identities) = false:
+            return false
+        increment index
+    if (website farm saved actor (the JSON member named "player" in world) is valid as player true using roles in identities) = false:
+        return false
+    set workers to the JSON member named "workers" in world
+    set index to 0
+    loop while index < workers's length:
+        if (website farm saved actor (the JSON value at index index in workers) is valid as player false using roles in identities) = false:
+            return false
+        increment index
+    return (the website farm saved quantity named "nextEntity" in world) > identities' maximum
+
+to get [website farm saved document] {a pointer to JSON value:value} [is valid]:
+    if (website farm saved fields in value match [farm saved object "world", farm saved array "roles", farm saved text "selected", farm saved nullable text "roleId", farm saved integer "speed" between 1 and 2]) = false:
+        return false
+    set roles to the JSON member named "roles" in value
+    if (website farm saved roles roles are valid) = false:
+        return false
+    set active to the JSON member named "roleId" in value
+    if active is not JSON null:
+        if (the saved website farm role index named (active's text) in roles) < 0:
+            return false
+    set identities to a new website farm save identities
+    set identities' serials to an empty list of a website farm quantity
+    set identities' ids to an empty list of string
+    set identities' animals to an empty list of string
+    set world to the JSON member named "world" in value
+    set valid to website farm saved world world using roles is valid in (the address of identities)
+    set found to false
+    if valid:
+        set selected to the JSON text named "selected" in value
+        if (the JSON text named "id" in (the JSON member named "player" in world)) = selected:
+            set found to true
+        set workers to the JSON member named "workers" in world
+        set index to 0
+        loop while index < workers's length:
+            if (the JSON text named "id" in (the JSON value at index index in workers)) = selected:
+                set found to true
+            increment index
+    free identities' serials
+    free identities' ids
+    free identities' animals
+    return valid and found

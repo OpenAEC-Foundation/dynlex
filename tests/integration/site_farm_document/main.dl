@@ -1,0 +1,51 @@
+import site/games/farm/document.dl
+import site/games/farm/simulation.dl
+
+set original to the initial website farm document
+set invalid to the website farm snapshot of original
+set entry to the JSON value at index 0 in (the JSON member named "roles" in invalid)
+set JSON member (JSON flag "needsRebuild" is true) in entry
+set rejected to the website farm document from invalid
+require condition (rejected's error is not empty) reporting "A saved role requested rebuilding without a saved program."
+free invalid
+set worker to the item at 0 in (original's world's workers)
+set role to the item at 0 in (original's roles)
+set role's applied to "loop forever:\n    turn right"
+set role's source to role's applied + "\n# Keep this unapplied draft 🌽"
+free website farm plan the address of (role's program)
+set role's program to the website farm plan from (the string form of "LOOP|-1\nDO|1|3|-1|-2|\nEND") dropping 0 source lines
+set role's prepared to true
+set role's needs rebuilding to true
+set role's generation to 13
+assign website farm role role to worker
+advance the website farm world (original's world) using roles (original's roles) with workers running true
+set worker's held to true
+set original's world's player's held to true
+set (original's world's chickens' data)'s held to true
+set saved to the website farm snapshot of original
+require condition ((worker's held) and (original's world's player's held)) reporting "Saving released live pointer capture."
+require condition ((original's world's chickens' data)'s held) reporting "Saving released a live chicken."
+set {role data} to the JSON value at index 0 in (the JSON member named "roles" in saved)
+require condition (role data lacks JSON member named "generation") reporting "A save persisted a transient role request generation."
+set loaded to the website farm document from saved
+require condition (loaded's error is empty) reporting "A new Farm snapshot failed validation."
+free saved
+free website farm document original
+# The loaded game owns every string, list, plan and reference after both its
+# JSON source and the original game have been released.
+set document to loaded's document
+set worker to the item at 0 in (document's world's workers)
+set role to the item at 0 in (document's roles)
+require condition ((role's generation = 0) and (role's needs rebuilding)) reporting "Loading retained a request generation or lost pending rebuilding."
+require condition ((role's source ends with "# Keep this unapplied draft 🌽") and (role's applied = "loop forever:\n    turn right")) reporting "Loading lost an applied program or an unapplied draft."
+require condition ((worker's held = false) and ((document's world's player's held = false) and ((document's world's chickens' data)'s held = false))) reporting "Loading retained pointer capture."
+require condition ((worker's direction = 1) and (worker's routine's position = 2)) reporting "Loading restarted an active routine."
+advance the website farm world (document's world) using roles (document's roles) with workers running true
+require condition ((worker's direction = 2) and (document's world's tick = 2)) reporting "A loaded loop failed to resume."
+set snapshot to the website farm snapshot of document
+set another to the website farm document from snapshot
+require condition (another's error is empty) reporting "A resumed Farm snapshot failed validation."
+free snapshot
+free website farm document document
+free website farm document (another's document)
+print line "Farm snapshots preserve active programs and drafts, release transient capture, and own their loaded data."

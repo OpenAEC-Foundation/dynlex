@@ -1,0 +1,78 @@
+import save_world_reader.dl
+import world_json.dl
+
+class:
+    patterns:
+        website farm document
+    members:
+        world as a pointer to website farm world
+        roles as the type of (an empty list of a pointer to website farm role)
+        selected as a string
+        role id as a string
+        speed as an integer
+
+class:
+    patterns:
+        website farm document result
+    members:
+        document as a pointer to website farm document
+        error as a string
+
+to get [the initial website farm document]:
+    set result to storage for one slot initialized with (a new website farm document)
+    set result's world to the initial website farm world
+    set result's roles to the initial website farm roles
+    set result's selected to "worker-1"
+    set result's role id to "lumberjack"
+    set result's speed to 1
+    return result
+
+to get [the website farm document from] {a pointer to JSON value:value}:
+    set result to a new website farm document result
+    if (website farm saved document value is valid) = false:
+        set result's error to "The saved Farm document is invalid."
+        return result
+    set document to storage for one slot initialized with (a new website farm document)
+    set document's roles to the website farm roles from saved (the JSON member named "roles" in value)
+    set document's world to the website farm world from saved (the JSON member named "world" in value) using (document's roles)
+    set document's selected to the JSON text named "selected" in value
+    set document's role id to the website farm saved optional text named "roleId" in value
+    set document's speed to the website farm saved integer named "speed" in value
+    set result's document to document
+    return result
+
+to get [the website farm roles JSON of] {a value:roles}:
+    set result to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of roles:
+        set role to the item at index in roles
+        set program to a new JSON value of kind the JSON null kind
+        if role's prepared:
+            free program
+            set program to the website farm plan JSON of (role's program)
+        add (a JSON object containing [JSON text "id" is (role's id), JSON text "name" is (role's name), JSON text "source" is (role's source),
+            JSON text "applied" is (role's applied), JSON child "program" is program, JSON flag "needsRebuild" is (role's needs rebuilding)]) to the JSON array result
+        increment index
+    return result
+
+to get [the website farm snapshot of] {a pointer to website farm document:document}:
+    set world to the website farm world JSON of (document's world)
+    set JSON member (JSON flag "held" is false) in (the JSON member named "player" in world)
+    set workers to the JSON member named "workers" in world
+    set index to 0
+    loop while index < workers's length:
+        set JSON member (JSON flag "held" is false) in (the JSON value at index index in workers)
+        increment index
+    set chickens to the JSON member named "chickens" in world
+    set index to 0
+    loop while index < chickens's length:
+        set JSON member (JSON flag "held" is false) in (the JSON value at index index in chickens)
+        increment index
+    return a JSON object containing [JSON child "world" is world, JSON child "roles" is (the website farm roles JSON of (document's roles)),
+        JSON text "selected" is (document's selected), JSON child "roleId" is (the website farm optional text JSON of (document's role id)), JSON number "speed" is (document's speed)]
+
+to [free website farm document] {a pointer to website farm document:document}:
+    free website farm world (document's world)
+    free website farm roles (document's roles)
+    destroy the value at document
+    deallocate document

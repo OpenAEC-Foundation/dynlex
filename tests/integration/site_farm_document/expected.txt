@@ -1,0 +1,1 @@
+Farm snapshots preserve active programs and drafts, release transient capture, and own their loaded data.

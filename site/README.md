@@ -20,8 +20,10 @@ Page declarations live in `pages/`, with shared appearances in `appearance.dl`.
 `downloads/` and `shaders/` own behavior and retained state. `games/` contains
 the shared execution source reader and river event/scene model. The Farm world,
 routes, inventory, areas, environment, actions, worker roles and simulation live
-in `games/farm/`. Its saved-world loader, renderer and interface are still being
-connected to the application. `application.dl`
+in `games/farm/`. Its saved-world codec validates external data before reading
+typed state, keeps unapplied drafts and active routines, and omits transient
+pointer capture and request generations. The renderer and interface are still
+being connected to the application. `application.dl`
 connects the interface, controllers and platform event stream.
 
 To use changes from a dynlex-ui checkout, update the package and lock together:
@@ -83,6 +85,7 @@ env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET DYNLEX_BACKGROUND_BROWSER=1 XDG_SESSION
 Migration is in progress. The current build contains the homepage, eleven
 documentation pages, downloads, an explicit missing page and the initial IDE,
 including live diagnostics, semantic colors and editable shader previews.
-River saved progress and language-service integration, the farm/account flows,
-further editor features, accessibility and deployment migration remain.
+River playback and saves, account/profile isolation, cloud progress and recovery
+are implemented in DynLex. The Farm interface and renderer, further editor
+features, accessibility and deployment migration remain.
 The existing deployment has not been replaced.
