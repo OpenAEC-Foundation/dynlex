@@ -637,8 +637,9 @@ def check_deferred_match_key_replay(root, build):
               'caller\n')
     main.write_text(source)
     build(entry=main)
-    assert projection_for(root / "cache", main)["initial_matcher_tree"], \
-        "the indexed pattern tree signature was not persisted"
+    projection = projection_for(root / "cache", main)
+    assert projection["initial_matcher_tree"] and projection["initial_matcher_roots"], \
+        "the indexed pattern tree state was not persisted"
     main.write_text(source.replace('"discard", 3', '"discard", 4'))
     edited = build(entry=main)
     assert edited[0]["deferred_match_keys_replayed"] >= 1, \
@@ -646,8 +647,8 @@ def check_deferred_match_key_replay(root, build):
     assert edited[1:] == build(False, entry=main)[1:]
     main.write_text(main.read_text().replace('to independent:', 'to renamed independent:'))
     renamed = build(entry=main)
-    assert renamed[0]["deferred_match_keys_replayed"] == 0, \
-        "declaration edit replayed matches against a different pattern tree"
+    assert renamed[0]["deferred_match_keys_replayed"] >= 1, \
+        "an unrelated declaration edit recomputed unchanged references"
     assert renamed[0]["precedence_match_keys_replayed"] == 0, \
         "declaration edit replayed precedence matches against a different pattern tree"
     assert renamed[1:] == build(False, entry=main)[1:]

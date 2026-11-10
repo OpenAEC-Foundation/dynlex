@@ -19,6 +19,12 @@ runs = int(sys.argv[1]) if len(sys.argv) > 1 else 1
 cases = {
     "comment_in_physics": (game / "physics.dl", "return 84", "return 84 # benchmark comment"),
     "physics_constant": (game / "physics.dl", "return 84", "return 85"),
+    "unrelated_pattern": (
+        game / "physics.dl",
+        "\tif body's y > floor:\n\t\tset body's y to floor\n\t\tset body's velocity to 0.0\n",
+        "\tif body's y > floor:\n\t\tset body's y to floor\n\t\tset body's velocity to 0.0\n"
+        "\nto benchmark marker: @intrinsic(\"discard\", 1)\n",
+    ),
     "top_level_seed": (game / "main.dl", "fill plan using seed 1337", "fill plan using seed 1338"),
     "project_warning_message": (
         Path("config.dl"),
@@ -90,6 +96,7 @@ for name, samples in results.items():
                          "resolution_precedence_ms", "resolution_rematch_ms",
                          "variable_like_count_references_scanned",
                          "body_resolution_reference_visits", "matcher_cache_hits",
+                         "deferred_match_keys_replayed", "precedence_match_keys_replayed",
                          "matcher_key_ms", "matcher_restore_ms", "matcher_snapshot_ms",
                          "projection_ms", "projection_setup_ms", "projection_body_ms",
                          "projection_declarations_ms", "projection_matches_ms",

@@ -28,3 +28,15 @@ std::string matcherTreeSignature(const ParseContext &context) {
 	}
 	return llvm::toHex(hash.final(), true);
 }
+
+Json matcherTreeMutationSnapshot(const ParseContext &context) {
+	Json roots = Json::array();
+	for (const PatternTreeNode *root : context.patternTrees) {
+		requireCompilerInvariant(root && root->mutationState, "incremental pattern tree has no mutation state");
+		Json literals = Json::object();
+		for (const auto &[literal, digest] : root->mutationState->literalDigests)
+			literals[llvm::toHex(llvm::StringRef(literal), true)] = digest;
+		roots.push_back(Json{{"wildcard", root->mutationState->wildcardDigest}, {"literals", std::move(literals)}});
+	}
+	return roots;
+}

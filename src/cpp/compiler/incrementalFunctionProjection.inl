@@ -53,7 +53,8 @@ Json scopeRuleBodyPaths(const std::map<std::string, Section *> &sections) {
 
 Json captureAllFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
-	IncrementalMatcherCache &matcherCache, std::string_view initialMatcherTree, const Json *previous = nullptr,
+	IncrementalMatcherCache &matcherCache, std::string_view initialMatcherTree, const Json &initialMatcherRoots,
+	const Json *previous = nullptr,
 	SourceProjectionWork *projectionWork = nullptr
 ) {
 	auto phaseStart = Clock::now();
@@ -148,6 +149,7 @@ Json captureAllFunctionProjection(
 	}
 	Json projection{
 		{"initial_matcher_tree", initialMatcherTree},
+		{"initial_matcher_roots", initialMatcherRoots},
 		{"final_matcher_tree", matcherTreeSignature(context)},
 		{"precedence_signature", matcherCache.precedenceSignature()},
 		{"precedence_rules", precedenceRulesSignature(*context.mainSection)},

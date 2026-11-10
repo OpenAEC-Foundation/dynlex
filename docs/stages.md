@@ -857,6 +857,13 @@ argument; global variables remain accessible.
 For an unchanged ordinary function body, an edited build can replay the saved
 matcher key for those deferred references after checking the indexed pattern-tree
 signature, declarations of reusable functions, and source outside their bodies.
+When that whole-tree signature changes, the cache compares saved wildcard and
+starting-literal mutation digests per pattern tree. An unchanged top-level
+function may still replay its reference keys when its declaration, surrounding
+source, and root lexical declarations are stable and no changed starting literal
+occurs in its header, body, transformed references, or numeric arguments. A
+changed wildcard or possible starting literal computes the keys normally, so
+newly relevant overloads and failed lookups rematch.
 The matcher still restores the result and its dependencies; changed bodies and
 changed matching environments compute
 their keys normally.

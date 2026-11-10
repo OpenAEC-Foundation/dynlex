@@ -515,6 +515,7 @@ bool compileIncrementally(
 			};
 			IncrementalMatcherCache matcherCache(context, previousMatches);
 			std::string initialMatcherTree;
+			Json initialMatcherRoots;
 			PriorMatchKeys precedenceKeys;
 			context.reuseMatcherResult = [&](PatternReference *reference, MatchOptions options,
 											 MatchDependencies *dependencies) {
@@ -526,9 +527,11 @@ bool compileIncrementally(
 			};
 			context.prepareDeferredMatcherReplay = [&](const std::list<PatternReference *> &references) {
 				initialMatcherTree = matcherTreeSignature(context);
+				initialMatcherRoots = matcherTreeMutationSnapshot(context);
 				if (previous)
 					prepareDeferredMatchReplay(
-						context, *previous, recording->observations, initialMatcherTree, references, precedenceKeys
+						context, *previous, recording->observations, initialMatcherTree, initialMatcherRoots, references,
+						precedenceKeys
 					);
 			};
 			context.preparePrecedenceMatcherReplay = [&](const std::vector<PatternReference *> &references) {
@@ -603,7 +606,7 @@ bool compileIncrementally(
 				resolvedFunctionProjection = std::move(*refreshedProjection);
 			else if (compiled)
 				resolvedFunctionProjection = captureAllFunctionProjection(
-					context, recording->observations, sections, matcherCache, initialMatcherTree,
+					context, recording->observations, sections, matcherCache, initialMatcherTree, initialMatcherRoots,
 					previous ? &*previous : nullptr, &statistics.sourceProjectionWork
 				);
 			statistics.projectionMilliseconds = elapsedMilliseconds(stageStart);
