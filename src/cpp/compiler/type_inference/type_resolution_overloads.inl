@@ -411,7 +411,7 @@ struct InferenceContext {
 	std::vector<OperandGroupingWarning> *pendingOperandGroupingWarnings{};
 	std::vector<Expression *> expressionStack;
 	std::unordered_map<Expression *, CompileTimeValue> trialExpressionValues;
-	const std::unordered_map<Expression *, CompileTimeValue> *inheritedTrialExpressionValues{};
+	const InferenceContext *inheritedTrialContext{};
 	std::unordered_map<CodeLine *, TrialCodeLineGrouping> trialCodeLineGroupings;
 	std::unordered_map<PatternDefinition *, Instantiation *> trialCallableInstantiations;
 
@@ -575,13 +575,10 @@ struct InferenceContext {
 
 	CompileTimeValue lookupStoredExpressionValue(Expression *expression) const {
 		if (trial) {
-			auto trialIt = trialExpressionValues.find(expression);
-			if (trialIt != trialExpressionValues.end())
-				return trialIt->second;
-			if (inheritedTrialExpressionValues) {
-				auto inheritedIt = inheritedTrialExpressionValues->find(expression);
-				if (inheritedIt != inheritedTrialExpressionValues->end())
-					return inheritedIt->second;
+			for (const InferenceContext *scope = this; scope; scope = scope->inheritedTrialContext) {
+				auto value = scope->trialExpressionValues.find(expression);
+				if (value != scope->trialExpressionValues.end())
+					return value->second;
 			}
 		}
 		return getExpressionCompileTimeValue(expression);
@@ -593,10 +590,8 @@ struct InferenceContext {
 		if (trial) {
 			if (groupingTrialJournal)
 				groupingTrialJournal->recordExpressionValueWrite(trialExpressionValues, expression);
-			if (isCompileTimeKnown(value))
-				trialExpressionValues[expression] = value;
-			else
-				trialExpressionValues.erase(expression);
+			// An unknown result shadows any constant in an enclosing trial.
+			trialExpressionValues[expression] = value;
 			return;
 		}
 		setExpressionCompileTimeValue(expression, value);

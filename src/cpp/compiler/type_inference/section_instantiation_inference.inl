@@ -57,8 +57,7 @@ bool ensureSectionInstantiationInferred(
 	if (callerContext) {
 		// Cached instantiations cannot consume the caller's tracked constants.
 		// Only globals and instantiation-key parameter constants enter a pass.
-		context.inheritedTrialExpressionValues =
-			callerContext->trial ? &callerContext->trialExpressionValues : callerContext->inheritedTrialExpressionValues;
+		context.inheritedTrialContext = callerContext->trial ? callerContext : callerContext->inheritedTrialContext;
 		context.trialJournal = callerContext->trialJournal;
 		context.unresolvedPatternConstraintSignal = callerContext->unresolvedPatternConstraintSignal;
 		context.suppressDiagnostics = callerContext->suppressDiagnostics;

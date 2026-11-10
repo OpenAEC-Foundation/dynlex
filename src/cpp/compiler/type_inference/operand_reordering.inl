@@ -626,8 +626,7 @@ class GroupingInferenceTransaction {
 		  savedResolvedGroupingRoots(context.resolvedGroupingRoots),
 		  savedDetectGroupingAmbiguity(context.detectGroupingAmbiguity),
 		  savedPendingOperandGroupingWarnings(context.pendingOperandGroupingWarnings),
-		  savedExpressionStack(context.expressionStack),
-		  savedInheritedTrialExpressionValues(context.inheritedTrialExpressionValues),
+		  savedExpressionStack(context.expressionStack), savedInheritedTrialContext(context.inheritedTrialContext),
 		  trialFixedGroupingRoots(fixedGroupingRoots),
 		  trialFixedGroupingScope{trialFixedGroupingRoots, savedFixedGroupingRoots} {
 		context.trial = true;
@@ -739,7 +738,7 @@ class GroupingInferenceTransaction {
 	bool savedDetectGroupingAmbiguity;
 	std::vector<InferenceContext::OperandGroupingWarning> *savedPendingOperandGroupingWarnings;
 	std::vector<Expression *> savedExpressionStack;
-	const std::unordered_map<Expression *, CompileTimeValue> *savedInheritedTrialExpressionValues;
+	const InferenceContext *savedInheritedTrialContext;
 	std::unordered_set<Expression *> trialFixedGroupingRoots;
 	InferenceContext::FixedGroupingScope trialFixedGroupingScope;
 	std::vector<InferenceContext::OperandGroupingWarning> groupingWarnings;
@@ -754,7 +753,7 @@ class GroupingInferenceTransaction {
 		context.resolvedGroupingRoots = savedResolvedGroupingRoots;
 		context.detectGroupingAmbiguity = savedDetectGroupingAmbiguity;
 		context.pendingOperandGroupingWarnings = savedPendingOperandGroupingWarnings;
-		context.inheritedTrialExpressionValues = savedInheritedTrialExpressionValues;
+		context.inheritedTrialContext = savedInheritedTrialContext;
 	}
 
 	void restoreSavedState() {

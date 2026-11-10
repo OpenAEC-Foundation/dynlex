@@ -558,6 +558,9 @@ const explicitOperandFixture = new URL('../required/explicit_named_operator_oper
 assert.equal(await compileAndRun(await readFile(new URL('main.dl', explicitOperandFixture), 'utf8')),
   await readFile(new URL('expected.txt', explicitOperandFixture), 'utf8'));
 
+assert.equal(await compileAndRun(await readFile(
+  new URL('../required/nested_trial_constant_scope/main.dl', import.meta.url), 'utf8')), '');
+
 // Exercise the rebuilt compiler and its embedded standard library with the
 // same numeric and scope-rule regressions as the native compiler.
 for (const fixture of ["scope_rules_function_body", "numeric_library_patterns"]) {

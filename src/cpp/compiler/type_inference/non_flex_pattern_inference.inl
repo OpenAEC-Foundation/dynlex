@@ -112,17 +112,7 @@
 			inst.pureReturnValuesByArguments.clear();
 			seedInstantiationCompileTimeParameters(
 				inst, paramBindings, argTypes, inst.requiredCompileTimeParameters, [&](Expression *argumentExpression) {
-				if (context.trial) {
-					auto trialIt = context.trialExpressionValues.find(argumentExpression);
-					if (trialIt != context.trialExpressionValues.end())
-						return trialIt->second;
-					if (context.inheritedTrialExpressionValues) {
-						auto inheritedIt = context.inheritedTrialExpressionValues->find(argumentExpression);
-						if (inheritedIt != context.inheritedTrialExpressionValues->end())
-							return inheritedIt->second;
-					}
-				}
-				return getExpressionCompileTimeValue(argumentExpression);
+				return context.lookupStoredExpressionValue(argumentExpression);
 			}
 			);
 			inst.needsReinfer = false;

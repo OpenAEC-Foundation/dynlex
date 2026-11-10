@@ -1,0 +1,23 @@
+to get [one more than] value:
+    @intrinsic("return", @intrinsic("add", value, 1))
+
+to get [middle result for] flag:
+    if flag:
+        @intrinsic("discard", 0)
+    if @intrinsic("equal", one more than 3, 4):
+        @intrinsic("discard", 0)
+    @intrinsic("return", flag)
+
+to get [outer result for] flag:
+    @intrinsic("discard", one more than 1)
+    if flag:
+        @intrinsic("discard", 0)
+    if middle result for flag:
+        @intrinsic("discard", 0)
+    @intrinsic("return", flag)
+
+@intrinsic("store", input, @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 1))
+@intrinsic("return", @intrinsic("select", outer result for @intrinsic("equal", input, 1), 0, 1))
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)

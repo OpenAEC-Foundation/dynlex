@@ -111,6 +111,9 @@ When a child inference context retains a function instantiation during a trial, 
 expression constants, operand groupings, and callable selections join the caller's
 trial state. The outer transaction commits or discards those results together with
 the inferred body; retaining only types loses metadata needed by code generation.
+Nested trial contexts look up expression constants through the complete enclosing
+trial chain. Each context owns its writes, including unknown values that shadow
+an enclosing constant; committing or rolling back a trial preserves that ownership.
 
 Incremental inference summaries omit functions in sources named by inference-stage
 diagnostics and their notes. Warnings already produced during pattern resolution
