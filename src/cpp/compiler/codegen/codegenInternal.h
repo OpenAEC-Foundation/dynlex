@@ -72,7 +72,8 @@ void initializeManagedStorage(ParseContext &context, llvm::Value *address, const
 bool storeManagedValue(ParseContext &context, llvm::Value *address, const DataType &type, llvm::Value *ownedValue);
 bool releaseManagedTemporaryStorage(ParseContext &context, llvm::Value *address);
 bool releaseManagedStorageForSection(ParseContext &context, Section *ownerSection);
-bool releaseManagedStorageForReturn(ParseContext &context);
+bool emitManagedFunctionReturn(ParseContext &context, llvm::Value *value = nullptr);
+bool finalizeManagedFunctionReturn(ParseContext &context);
 bool releaseAllManagedStorage(ParseContext &context);
 
 struct FlexBindingScope {

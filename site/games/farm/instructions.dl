@@ -1,0 +1,38 @@
+import vocabulary.dl
+import ../execution.dl
+import lib/list.dl
+
+[the website farm action operation] means: 1
+[the website farm test operation] means: 2
+[the website farm jump operation] means: 3
+[the website farm loop operation] means: 4
+[the website farm next operation] means: 5
+
+class:
+    patterns:
+        website farm instruction
+    members:
+        operation as an integer
+        identifier as an integer
+        argument as an integer
+        amount as an integer
+        target as an integer
+        area as a string
+        source as website execution range
+        destination as an integer
+        count as an integer
+
+class:
+    patterns:
+        website farm plan
+    members:
+        code as the type of (an empty list of website farm instruction)
+        error as a string
+
+to get an empty website farm plan:
+    set result to a new website farm plan
+    set result's code to an empty list of website farm instruction
+    return result
+
+to free website farm plan {a pointer to website farm plan:plan}:
+    free plan's code

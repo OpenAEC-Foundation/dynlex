@@ -1,0 +1,135 @@
+import instructions.dl
+import lib/callbacks.dl
+
+class:
+    patterns:
+        website farm routine
+    members:
+        position as an integer
+        loops as the type of (an empty list of integer)
+        finished as a boolean
+        continuation
+        continuing as a boolean
+        source as website execution range
+        branch as an integer
+        message as a string
+        condition source as website execution range
+        condition branch as an integer
+        traced as a boolean
+
+class:
+    patterns:
+        website farm action request
+    members:
+        instruction as website farm instruction
+        continuation
+        continuing as a boolean
+        environment
+
+class:
+    patterns:
+        website farm action result
+    members:
+        done as a boolean
+        message as a string
+        continuation
+
+class:
+    patterns:
+        website farm routine step
+    members:
+        done as a boolean
+        message as a string
+
+[a website farm action reply] {boolean:done} [saying] {string:message} [carrying] {a value:continuation} means: @intrinsic("construct", website farm action result, done, message, continuation)
+[a website farm routine reply] {boolean:done} [saying] {string:message} means: @intrinsic("construct", website farm routine step, done, message)
+[the finished website farm role message] means: "Finished this role. Add loop forever to repeat."
+
+to get [a website farm routine for] {website farm plan:plan} [initially carrying] {a value:continuation}:
+    require condition (plan's error is empty) reporting "A Farm routine needs a valid plan."
+    set loops to an empty list of integer
+    set index to 0
+    loop while index < the length of (plan's code):
+        append -2 to loops
+        increment index
+    return @intrinsic("construct", website farm routine, 0, loops, false, continuation, false, a new website execution range, -1, the string form of "", a new website execution range, -1, false)
+
+to [free website farm routine] {a pointer to website farm routine:routine}:
+    free routine's loops
+
+to get [the next website farm step for] {a pointer to website farm routine:routine} [in] {website farm plan:plan} [sensing] {a callback:sense} [acting] {a callback:act} [with] {a value:environment}:
+    require condition (0 <= routine's position <= the length of (plan's code)) reporting "Invalid Farm program counter."
+    if (routine's finished) or (routine's position = the length of (plan's code)):
+        set routine's finished to true
+        return a website farm routine reply true saying (the string form of the finished website farm role message)
+    set instruction to the item at (routine's position) in (plan's code)
+    set routine's source to instruction's source
+    set routine's branch to -1
+    set routine's condition branch to -1
+    set routine's message to ""
+    set routine's traced to true
+    set request to @intrinsic("construct", website farm action request, instruction, routine's continuation, routine's continuing, environment)
+    if instruction's operation = the website farm action operation:
+        set result to @intrinsic("invoke", act, request)
+        set routine's continuing to result's done = false
+        if result's done:
+            set routine's continuation to @intrinsic("construct", the type of (routine's continuation))
+            increment routine's position
+        else:
+            set routine's continuation to result's continuation
+        set routine's message to result's message
+        set actions to the website farm actions
+        set entry to the item at (instruction's identifier) in actions
+        return a website farm routine reply (entry's instant = false) saying (result's message)
+    if instruction's operation = the website farm test operation:
+        set branch to @intrinsic("invoke", sense, request)
+        set routine's branch to 1 if branch, else 0
+        set routine's message to "Condition is true." if branch, else "Condition is false."
+        set routine's position to (routine's position + 1) if branch, else instruction's destination
+    else if instruction's operation = the website farm jump operation:
+        set routine's position to instruction's destination
+        set routine's message to "Continue after this branch."
+    else if instruction's operation = the website farm loop operation:
+        if instruction's count = 0:
+            set routine's position to instruction's destination
+        else:
+            if (the item at (routine's position) in (routine's loops)) = -2:
+                replace item at index (routine's position) in (routine's loops) with (instruction's count)
+            increment routine's position
+        set routine's message to "Skip this loop." if instruction's count = 0, else "Start this loop."
+    else:
+        require condition (instruction's operation = the website farm next operation) reporting "Unknown operation in a Farm routine."
+        set start to instruction's destination
+        set opening to the item at start in (plan's code)
+        set remaining to the item at start in (routine's loops)
+        require condition ((opening's operation = the website farm loop operation) and ((remaining = -1) or (remaining > 0))) reporting "A Farm loop ended without its active frame."
+        if remaining > 0:
+            decrement remaining
+            replace item at index start in (routine's loops) with remaining
+        if (remaining = -1) or (remaining > 0):
+            set routine's position to start + 1
+            set routine's message to "Repeat this loop."
+        else:
+            replace item at index start in (routine's loops) with -2
+            increment routine's position
+            set routine's message to "Loop finished."
+    return a website farm routine reply false saying (routine's message)
+
+to get [advance website farm routine] {a pointer to website farm routine:routine} [in] {website farm plan:plan} [sensing] {a callback:sense} [acting] {a callback:act} [with] {a value:environment}:
+    if routine's finished:
+        return the string form of the finished website farm role message
+    set source to a new website execution range
+    set branch to -1
+    set budget to 0
+    loop while budget < 128:
+        set result to the next website farm step for routine in plan sensing sense acting act with environment
+        if (routine's traced) and (routine's branch != -1):
+            set source to routine's source
+            set branch to routine's branch
+        if result's done:
+            if branch != -1:
+                set routine's condition source to source
+                set routine's condition branch to branch
+            return result's message
+        increment budget
+    return the string form of "Waiting for a condition. Put wait inside an empty loop."

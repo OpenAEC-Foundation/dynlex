@@ -1,0 +1,99 @@
+import site/games/farm/plan.dl
+import site/games/farm/routine.dl
+import farm_test_json.dl
+import lib/filesystem.dl
+
+class:
+    patterns:
+        Farm routine test environment
+    members:
+        scenario as a pointer to JSON value
+        calls as a pointer to JSON value
+        actions as an integer
+        senses as an integer
+
+the Farm routine test request means: the type of (@intrinsic("construct", website farm action request, a new website farm instruction, 0, false, @intrinsic("construct", a pointer to Farm routine test environment)))
+
+to get [sense the Farm routine test] {the Farm routine test request:request}:
+    set environment to request's environment
+    set senses to the JSON member named "senses" in (environment's scenario)
+    set entry to the JSON value at index ((environment's senses) % (senses's length)) in senses
+    increment environment's senses
+    return entry's boolean
+
+to get [act in the Farm routine test] {the Farm routine test request:request}:
+    set environment to request's environment
+    set actions to the JSON member named "actions" in (environment's scenario)
+    set entry to the JSON value at index ((environment's actions) % (actions's length)) in actions
+    increment environment's actions
+    set descriptions to the website farm actions
+    set description to the item at (request's instruction's identifier) in descriptions
+    set continuation to a new JSON value of kind the JSON null kind
+    if request's continuing:
+        free continuation
+        set continuation to a new JSON number from (request's continuation)
+    add (a JSON object containing [JSON text "key" is (description's key), JSON child "continuation" is continuation]) to the JSON array (environment's calls)
+    return a website farm action reply (the JSON boolean named "done" in entry) saying (the JSON text named "message" in entry) carrying ((the JSON number named "continuation" in entry) as an integer)
+
+to get [the Farm routine test snapshot of] {a pointer to website farm routine:routine}:
+    set loops to a new JSON value of kind the JSON object kind
+    set index to 0
+    loop while index < the length of (routine's loops):
+        set count to the item at index in (routine's loops)
+        if count != -2:
+            add a JSON member named (the string form of index) with value (a new JSON number from count) to loops
+        increment index
+    set trace to a new JSON value of kind the JSON null kind
+    if routine's traced:
+        free trace
+        set trace to a JSON object containing [JSON child "range" is (the Farm test range of (routine's source)),
+            JSON child "branch" is (the Farm test branch (routine's branch)), JSON text "message" is (routine's message)]
+        if routine's condition branch != -1:
+            add a JSON member named (the string form of "condition") with value (a JSON object containing [
+                JSON child "range" is (the Farm test range of (routine's condition source)),
+                JSON child "branch" is (the Farm test branch (routine's condition branch))]) to trace
+    set continuation to a new JSON value of kind the JSON null kind
+    if routine's continuing:
+        free continuation
+        set continuation to a new JSON number from (routine's continuation)
+    return a JSON object containing [JSON number "pc" is (routine's position), JSON child "loops" is loops,
+        JSON flag "finished" is (routine's finished), JSON child "trace" is trace, JSON child "continuation" is continuation]
+
+read the file at "input.farm" and set input to it
+require condition (input succeeded) reporting "The Farm routine test needs input.farm."
+parse (input's contents) as JSON and set parsed to it
+require condition (parsed succeeded) reporting "The Farm routine test input is invalid."
+set cases to parsed's value
+set results to a new JSON value of kind the JSON array kind
+set sense to the function named "sense the Farm routine test $"
+set act to the function named "act in the Farm routine test $"
+set index to 0
+loop while index < cases's length:
+    set entry to the JSON value at index index in cases
+    set plan to the website farm plan from (the JSON text named "stdout" in entry) dropping 2 source lines
+    require condition (plan's error is empty) reporting "A Farm routine test plan must parse."
+    set routine to a website farm routine for plan initially carrying 0
+    set environment to a new Farm routine test environment
+    set environment's scenario to entry
+    set environment's calls to a new JSON value of kind the JSON array kind
+    set snapshots to a new JSON value of kind the JSON array kind
+    set ticks to (the JSON number named "ticks" in entry) as an integer
+    loop ticks times:
+        set snapshot to a new JSON value of kind the JSON null kind
+        if (the JSON text named "mode" in entry) = "step":
+            set reply to the next website farm step for (the address of routine) in plan sensing sense acting act with (the address of environment)
+            free snapshot
+            set snapshot to a JSON object containing [JSON text "message" is (reply's message), JSON flag "done" is (reply's done),
+                JSON child "state" is (the Farm routine test snapshot of (the address of routine))]
+        else:
+            set message to advance website farm routine (the address of routine) in plan sensing sense acting act with (the address of environment)
+            free snapshot
+            set snapshot to a JSON object containing [JSON text "message" is message, JSON child "state" is (the Farm routine test snapshot of (the address of routine))]
+        add snapshot to the JSON array snapshots
+    add (a JSON object containing [JSON child "snapshots" is snapshots, JSON child "calls" is (environment's calls)]) to the JSON array results
+    free website farm routine the address of routine
+    free website farm plan the address of plan
+    increment index
+print line the compact JSON form of results
+free results
+free cases

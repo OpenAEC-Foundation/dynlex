@@ -390,7 +390,7 @@ We can reorder expressions based on types if this is the first valid instantiati
 
 **ALL** types of each previous line have to be deduced right away, except in recursive function code. we loop over the function code again if not all types were resolved. if no progress is being made, we emit diagnostics.
 
-Each loop pass walks its body once in execution order. Loop inference joins the entry state with the state produced by one body pass, then repeats the ordinary header and body walk until constants and the subject reach a fixed point. A statically true first header uses the first iteration's result as the fixed-point entry because that iteration is guaranteed; an unknown first header also retains the zero-iteration entry path. Assignments remain precise within each pass, and only values which actually differ across reachable iteration counts become unknown. A body proven unreachable by the header is not inferred and does not contribute variable, subject, or return-type state.
+Each loop pass walks its body once in execution order. Loop inference joins the entry state with the state produced by one body pass, then repeats the ordinary header and body walk until constants and the subject reach a fixed point. A statically true first header uses the first iteration's result as the fixed-point entry because that iteration is guaranteed; an unknown first header also retains the zero-iteration entry path. Assignments remain precise within each pass, and only values which actually differ across reachable iteration counts become unknown. A body proven unreachable by the header is not inferred and does not contribute variable, subject, or return-type state. Runtime body annotations join the first entry with every reachable later entry; a later returning pass cannot replace the first pass's branch choices. This annotation join is separate from the precise post-loop state established by a guaranteed first iteration.
 
 We infer top-down, left to right. So we infer the top-level expression. Before inferring it, we infer the arguments. If those arguments are expressions with arguments as well, no problem, since we infer recursively.
 
@@ -713,6 +713,13 @@ temporary composite types allow recursive pointers to refer to the completed
 record. Global variables carry the resulting debug expressions. Entering a new
 generated function clears the caller's instruction location, so an empty or
 fully folded body cannot inherit the caller's debug scope.
+
+Every generated function has one return cleanup exit. Its initialized owning slots are
+released in reverse registration order after the whole body has been generated, including
+subject slots introduced after an earlier return site. A loop can initialize such a slot
+on one iteration and return before its source declaration on the next. Scoped cleanup
+clears the same initialization flags; the shared exit releases each live value once.
+Returned owning values transfer their retained reference across that cleanup.
 
 Raw pointers are non-owning, regardless of their pointee type or pointer depth. Managed-lifecycle classification checks
 the pointer representation before inspecting array elements or class fields. Owning array values retain elements in forward

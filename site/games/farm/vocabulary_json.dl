@@ -1,0 +1,151 @@
+import examples.dl
+import lib/json_builders.dl
+
+to get [a website farm JSON text for] {a value:input}:
+    set value to a new JSON value of kind the JSON text kind
+    set value's text to the string form of input
+    return value
+
+# Empty strings in optional catalog fields mean that the spelling is absent.
+to get [an optional website farm JSON text for] {C string:input}:
+    if input is empty:
+        return a new JSON value of kind the JSON null kind
+    return a website farm JSON text for input
+
+to get [the website farm lines in] {C string:source}:
+    set text to the string form of source
+    set result to a new JSON value of kind the JSON array kind
+    set cursor and start to 0
+    loop while cursor <= text's length:
+        set end to cursor = text's length
+        if end = false:
+            set end to (the character at cursor in text) = 10
+        if end:
+            if cursor > start:
+                add (a website farm JSON text for (the substring of text from start spanning (cursor - start) bytes)) to the JSON array result
+            set start to cursor + 1
+        increment cursor
+    return result
+
+to get [the website farm command JSON for] {website farm command description:entry} at {integer:index}:
+    return a JSON object containing [JSON text "key" is (entry's key),
+        JSON child "patterns" is (the website farm lines in (entry's patterns)),
+        JSON text "operands" is (entry's operands), JSON child "defaults" is (a JSON object containing [
+            JSON number "argument" is (entry's argument), JSON number "amount" is (entry's amount), JSON number "target" is (entry's target)
+        ]), JSON child "subject" is (an optional website farm JSON text for (entry's subject)), JSON number "id" is index, JSON flag "instant" is (entry's instant)]
+
+to get the website farm vocabulary JSON:
+    set result to a JSON object containing [JSON number "SUBJECT_TARGET" is the website farm subject target,
+        JSON number "NO_TARGET" is the website farm absent target, JSON number "ALL_ITEMS" is the website farm all items,
+        JSON number "SUBJECT_ITEMS" is the website farm subject items]
+    set output to a new JSON value of kind the JSON array kind
+    set flags to the website farm flags
+    set index to 0
+    loop while index < the length of flags:
+        set entry to the item at index in flags
+        add (a JSON object containing [JSON text "id" is (entry's key), JSON text "color" is (entry's color)]) to the JSON array output
+        increment index
+    add a JSON member named (the string form of "FLAGS") with value output to result
+    set output to a new JSON value of kind the JSON array kind
+    set items to the website farm items
+    set index to 0
+    loop while index < the length of items:
+        set entry to the item at index in items
+        add (a JSON object containing [JSON number "id" is index, JSON text "key" is (entry's key),
+            JSON text "phrase" is (entry's phrase), JSON text "label" is (entry's label),
+            JSON number "capacity" is (entry's capacity), JSON child "aliases" is (the website farm lines in (entry's aliases))]) to the JSON array output
+        increment index
+    add a JSON member named (the string form of "ITEMS") with value output to result
+    set output to a new JSON value of kind the JSON array kind
+    set destinations to the website farm destinations
+    set index to 0
+    loop while index < the length of destinations:
+        set entry to the item at index in destinations
+        set phrase to the string form of (entry's literal)
+        if entry's literal is empty:
+            set phrase to "the nearest " + (the string form of (entry's kind))
+        add (a JSON object containing [JSON number "id" is index, JSON text "key" is (entry's key),
+            JSON child "literal" is (an optional website farm JSON text for (entry's literal)),
+            JSON child "kind" is (an optional website farm JSON text for (entry's kind)), JSON text "phrase" is phrase]) to the JSON array output
+        increment index
+    add a JSON member named (the string form of "DESTINATIONS") with value output to result
+    set directions to the website farm directions
+    set features to the website farm features
+    set roles to the website farm roles
+    set output to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of directions:
+        add (a website farm JSON text for (the item at index in directions)) to the JSON array output
+        increment index
+    add a JSON member named (the string form of "DIRECTIONS") with value output to result
+    set output to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of features:
+        add (a website farm JSON text for (the item at index in features)) to the JSON array output
+        increment index
+    add a JSON member named (the string form of "FEATURES") with value output to result
+    set output to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of roles:
+        add (a website farm JSON text for (the item at index in roles)) to the JSON array output
+        increment index
+    add a JSON member named (the string form of "ROLE_NAMES") with value output to result
+    set output to a new JSON value of kind the JSON array kind
+    set aliases to the website farm item aliases
+    set index to 0
+    loop while index < the length of aliases:
+        set entry to the item at index in aliases
+        set identifier to JSON number "" is (entry's identifier)
+        set amount to JSON number "" is (entry's amount)
+        add (a JSON array containing [a website farm JSON text for (entry's phrase), identifier's value, amount's value]) to the JSON array output
+        increment index
+    add a JSON member named (the string form of "ITEM_ALIASES") with value output to result
+    set output to a new JSON value of kind the JSON array kind
+    set targets to the website farm target aliases
+    set index to 0
+    loop while index < the length of targets:
+        set entry to the item at index in targets
+        add (a JSON array containing [a website farm JSON text for (entry's phrase), a website farm JSON text for (entry's key)]) to the JSON array output
+        increment index
+    add a JSON member named (the string form of "TARGET_ALIASES") with value output to result
+    set output to a new JSON value of kind the JSON array kind
+    set actions to the website farm actions
+    set index to 0
+    loop while index < the length of actions:
+        add (the website farm command JSON for (the item at index in actions) at index) to the JSON array output
+        increment index
+    add a JSON member named (the string form of "ACTIONS") with value output to result
+    set output to a new JSON value of kind the JSON array kind
+    set conditions to the website farm conditions
+    set index to 0
+    loop while index < the length of conditions:
+        add (the website farm command JSON for (the item at index in conditions) at index) to the JSON array output
+        increment index
+    add a JSON member named (the string form of "CONDITIONS") with value output to result
+    set output to a new JSON value of kind the JSON array kind
+    set tools to the website farm tools
+    set index to 0
+    loop while index < the length of tools:
+        set tool to the item at index in tools
+        set entry to the website farm action named (tool's command)
+        set argument to tool's argument if tool's selects, else entry's argument
+        set target to tool's target if tool's targets, else entry's target
+        set command to a JSON object containing [JSON text "op" is "action", JSON text "key" is (entry's key),
+            JSON number "argument" is argument, JSON number "amount" is (entry's amount), JSON number "target" is target,
+            JSON text "area" is "", JSON child "range" is (a new JSON value of kind the JSON null kind)]
+        add (a JSON object containing [JSON text "id" is (tool's key), JSON child "instruction" is command,
+            JSON text "label" is (the website farm example of entry selecting argument amount (entry's amount) at target explicitly targeted (tool's targets))]) to the JSON array output
+        increment index
+    add a JSON member named (the string form of "MANUAL_ACTIONS") with value output to result
+    set {action examples} to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of actions:
+        add (a website farm JSON text for (the website farm default example of (the item at index in actions))) to the JSON array action examples
+        increment index
+    set {condition examples} to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of conditions:
+        add (a website farm JSON text for (the website farm default example of (the item at index in conditions))) to the JSON array condition examples
+        increment index
+    add a JSON member named (the string form of "EXAMPLES") with value (a JSON object containing [JSON child "actions" is action examples, JSON child "conditions" is condition examples]) to result
+    return result

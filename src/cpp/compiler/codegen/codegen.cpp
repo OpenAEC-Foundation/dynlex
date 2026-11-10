@@ -249,6 +249,12 @@ llvm::Function *generateSpecializedFunction(
 	BindingFrameStack savedFlexBindingFrames = context.flexBindingFrames;
 	std::vector<ParseContext::ManagedStorageState> savedManagedLocalStorage = std::move(context.managedLocalStorage);
 	context.managedLocalStorage.clear();
+	auto savedFunctionStorage = std::move(context.managedFunctionStorage);
+	auto savedReturnBlock = context.managedReturnBlock;
+	auto savedReturnStorage = context.managedReturnStorage;
+	context.managedFunctionStorage.clear();
+	context.managedReturnBlock = nullptr;
+	context.managedReturnStorage = nullptr;
 	// Function bodies must not see caller-side flex bindings or blame their
 	// diagnostics on the caller's flex expansion.
 	context.flexBindingFrames = makeBindingFrameStack(BindingFrame{});
@@ -318,12 +324,12 @@ llvm::Function *generateSpecializedFunction(
 
 	// Add implicit void return if the function returns void
 	if (bodySucceeded && activeInst.returnType.kind == DataType::Kind::Void && !builder.GetInsertBlock()->hasTerminator()) {
-		bodySucceeded = releaseManagedStorageForReturn(context);
-		if (bodySucceeded)
-			builder.CreateRetVoid();
+		bodySucceeded = emitManagedFunctionReturn(context);
 	}
 
 	// Restore all codegen state
+	if (bodySucceeded)
+		bodySucceeded = finalizeManagedFunctionReturn(context);
 	context.flexBindingFrames = savedFlexBindingFrames;
 	context.flexCallSiteRangeStack = std::move(savedFlexCallSiteRanges);
 	context.codegenParameterBindings = std::move(savedCodegenParameterBindings);
@@ -334,6 +340,9 @@ llvm::Function *generateSpecializedFunction(
 	context.currentCodegenInstantiation = savedCodegenInstantiation;
 	context.currentDebugScope = savedDebugScope;
 	context.managedLocalStorage = std::move(savedManagedLocalStorage);
+	context.managedFunctionStorage = std::move(savedFunctionStorage);
+	context.managedReturnBlock = savedReturnBlock;
+	context.managedReturnStorage = savedReturnStorage;
 
 	if (savedBlock) {
 		builder.SetInsertPoint(savedBlock, savedPoint);

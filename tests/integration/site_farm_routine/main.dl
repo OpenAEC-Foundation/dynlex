@@ -1,0 +1,64 @@
+import site/games/farm/plan.dl
+import site/games/farm/routine.dl
+
+[the Farm routine request for this test] means: the type of (@intrinsic("construct", website farm action request, a new website farm instruction, 0, false, 0 as a pointer to integer))
+
+to get [sense a Farm test condition] {the Farm routine request for this test:request}:
+    return false
+
+to get [complete a Farm test action] {the Farm routine request for this test:request}:
+    set counter to request's environment
+    store (the value at counter) + 1 at counter
+    return a website farm action reply true saying (the string form of "Completed.") carrying 0
+
+to get [continue a Farm test action] {the Farm routine request for this test:request}:
+    set counter to request's environment
+    store (the value at counter) + 1 at counter
+    if (the value at counter) = 1:
+        require condition (request's continuing = false) reporting "A fresh action received a continuation."
+        return a website farm action reply false saying (the string form of "Working.") carrying 41
+    require condition ((request's continuing) and (request's continuation = 41)) reporting "An unfinished action lost its original target."
+    return a website farm action reply true saying (the string form of "Completed.") carrying 0
+
+set sense to the function named "sense a Farm test condition $"
+set act to the function named "complete a Farm test action $"
+set plan to the website farm plan from (the string form of "LOOP|2\nDO|17|0|-1|-2|\nEND") dropping 2 source lines
+set first to a website farm routine for plan initially carrying 0
+set second to a website farm routine for plan initially carrying 0
+set {first count} to 0
+set {second count} to 0
+loop 3 times:
+    ignore advance website farm routine (the address of first) in plan sensing sense acting act with (the address of first count)
+ignore advance website farm routine (the address of second) in plan sensing sense acting act with (the address of second count)
+require condition ((first count = 2) and (first's finished)) reporting "The first worker did not finish its own loop."
+require condition ((second count = 1) and (second's finished = false)) reporting "Workers shared loop progress."
+free website farm routine the address of first
+free website farm routine the address of second
+free website farm plan the address of plan
+
+set plan to the website farm plan from (the string form of "DO|3|0|-1|22|") dropping 2 source lines
+set first to a website farm routine for plan initially carrying 0
+set first count to 0
+set work to the function named "continue a Farm test action $"
+ignore advance website farm routine (the address of first) in plan sensing sense acting work with (the address of first count)
+require condition ((first's position = 0) and (first's continuing)) reporting "An unfinished action advanced the worker."
+ignore advance website farm routine (the address of first) in plan sensing sense acting work with (the address of first count)
+require condition ((first's position = 1) and (first's continuing = false)) reporting "A completed action kept a stale continuation."
+free website farm routine the address of first
+free website farm plan the address of plan
+
+set plan to the website farm plan from (the string form of "DO|18|0|-1|0|\nDO|19|-1|-1|-2|\nDO|17|0|-1|-2|") dropping 2 source lines
+set first to a website farm routine for plan initially carrying 0
+set first count to 0
+ignore advance website farm routine (the address of first) in plan sensing sense acting act with (the address of first count)
+require condition ((first count = 3) and (first's position = 3)) reporting "Remembering a subject consumed an extra Farm turn."
+free website farm routine the address of first
+free website farm plan the address of plan
+
+set plan to the website farm plan from (the string form of "LOOP|-1\nEND\nDO|17|0|-1|-2|") dropping 2 source lines
+set first to a website farm routine for plan initially carrying 0
+set message to advance website farm routine (the address of first) in plan sensing sense acting act with (the address of first count)
+require condition ((first's finished = false) and (message = "Waiting for a condition. Put wait inside an empty loop.")) reporting "An empty forever loop did not yield to the UI."
+free website farm routine the address of first
+free website farm plan the address of plan
+print line "Farm workers keep independent loops and continuations, remember subjects immediately, and yield to the UI."

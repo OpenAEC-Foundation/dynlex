@@ -1,0 +1,92 @@
+import vocabulary.dl
+import lib/text.dl
+
+to get the website farm action named {a value:key}:
+    set entries to the website farm actions
+    set cursor to 0
+    loop while cursor < the length of entries:
+        set entry to the item at cursor in entries
+        if entry's key = key:
+            return entry
+        increment cursor
+    require condition false reporting "Unknown Farm action in the vocabulary."
+    return the item at 0 in entries
+
+to get [the website farm example word] {string:name} selecting {integer:argument} amount {integer:amount} at {integer:target}:
+    if name = "items":
+        set word to the string form of ""
+        if argument = the website farm all items:
+            set word to "everything"
+        else if argument = the website farm subject items:
+            set word to "it"
+        else:
+            set entries to the website farm items
+            require condition (0 <= argument < the length of entries) reporting "Invalid item in a Farm example."
+            set entry to the item at argument in entries
+            set word to the string form of (entry's phrase)
+        if amount >= 0:
+            set word to (the string form of amount) + " " + word
+        return word
+    if name = "target":
+        if target < 0:
+            return the string form of "it"
+        set entries to the website farm destinations
+        require condition (target < the length of entries) reporting "Invalid target in a Farm example."
+        set entry to the item at target in entries
+        return the string form of (entry's literal) if entry's literal is not empty, else ("the nearest " + (the string form of (entry's kind)))
+    if name = "direction":
+        set entries to the website farm directions
+        return the string form of (the item at argument in entries)
+    if name = "feature":
+        set entries to the website farm features
+        return the string form of (the item at argument in entries)
+    if name = "role":
+        set entries to the website farm roles
+        return the string form of (the item at argument in entries)
+    if name = "count":
+        return the string form of "2" if amount < 0, else the string form of amount
+    require condition false reporting "Unknown operand in a Farm example."
+    return the string form of ""
+
+to get the website farm example of {website farm command description:entry} selecting {integer:argument} amount {integer:amount} at {integer:target} explicitly targeted {boolean:targeted}:
+    set spellings to entry's patterns split at "\n"
+    set pattern to the item at 0 in spellings
+    if targeted:
+        set index to 0
+        set found to false
+        loop while (index < the length of spellings) and (found = false):
+            set candidate to the item at index in spellings
+            if candidate contains ":target}":
+                set pattern to candidate
+                set found to true
+            increment index
+        require condition found reporting "A targeted Farm example needs a target operand."
+    free spellings
+    set result to the string form of ""
+    set cursor and start to 0
+    loop while cursor < pattern's length:
+        set character to the character at cursor in pattern
+        if character = 123:
+            set colon to the index of ":" in pattern starting at cursor
+            set end to the index of "}" in pattern starting at cursor
+            require condition (cursor < colon < end) reporting "Invalid operand in a Farm example pattern."
+            add (the substring of pattern from start spanning (cursor - start) bytes) to result
+            set name to the substring of pattern from (colon + 1) spanning ((end - colon) - 1) bytes
+            add (the website farm example word name selecting argument amount amount at target) to result
+            set cursor to end + 1
+            set start to cursor
+        else if character = 91:
+            set separator to the index of "|" in pattern starting at cursor
+            set end to the index of "]" in pattern starting at cursor
+            require condition (cursor < separator < end) reporting "Invalid alternatives in a Farm example pattern."
+            add (the substring of pattern from start spanning (cursor - start) bytes) to result
+            add (the substring of pattern from (cursor + 1) spanning ((separator - cursor) - 1) bytes) to result
+            set cursor to end + 1
+            set start to cursor
+        else:
+            increment cursor
+    add (the substring of pattern from start spanning (cursor - start) bytes) to result
+    return result
+
+to get the website farm default example of {website farm command description:entry}:
+    return the website farm example of entry selecting (entry's argument) amount (entry's amount) at (entry's target) explicitly targeted false

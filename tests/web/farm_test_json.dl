@@ -1,0 +1,16 @@
+import site/games/farm/instructions.dl
+import lib/json_builders.dl
+
+to get [the Farm test range of] {website execution range:source}:
+    if source's known = false:
+        return a new JSON value of kind the JSON null kind
+    return a JSON object containing [JSON child "start" is (a JSON object containing [
+        JSON number "line" is (source's start line), JSON number "character" is (source's start column)]),
+        JSON child "end" is (a JSON object containing [JSON number "line" is (source's end line), JSON number "character" is (source's end column)])]
+
+to get [the Farm test branch] {integer:branch}:
+    if branch = -1:
+        return a new JSON value of kind the JSON null kind
+    set result to a new JSON value of kind the JSON boolean kind
+    set result's boolean to branch = 1
+    return result

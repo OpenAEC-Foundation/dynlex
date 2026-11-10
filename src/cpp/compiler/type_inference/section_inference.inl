@@ -177,7 +177,8 @@ static bool inferSectionLineRange(
 				}
 				defaultBranch = branches.size();
 			} else if (!caseValues.insert(*caseValue).second) {
-				context.fail(Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
+				context.fail(
+					Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
 				);
 				return false;
 			}
@@ -433,6 +434,15 @@ static bool inferSectionLineRange(
 			auto constantsAfterFirstIteration = context.currentVariableValues;
 			auto addressesAfterFirstIteration = context.currentAddressState;
 			auto subjectAfterFirstIteration = context.currentSubject;
+			// The exit state can exploit a guaranteed first iteration. Runtime
+			// body annotations must still describe that first entry as well as
+			// every later entry, including a later pass which returns.
+			auto runtimeConstants = constantsAtLoopEntry;
+			auto runtimeAddresses = addressesAtLoopEntry;
+			auto runtimeSubject = subjectAtLoopEntry;
+			auto annotatedConstants = constantsAtLoopEntry;
+			auto annotatedAddresses = addressesAtLoopEntry;
+			auto annotatedSubject = subjectAtLoopEntry;
 			const auto &baseConstants = firstIterationGuaranteed ? constantsAfterFirstIteration : constantsAtLoopEntry;
 			const auto &baseAddresses = firstIterationGuaranteed ? addressesAfterFirstIteration : addressesAtLoopEntry;
 			const auto &baseSubject = firstIterationGuaranteed ? subjectAfterFirstIteration : subjectAtLoopEntry;
@@ -456,6 +466,21 @@ static bool inferSectionLineRange(
 				auto constantsAtIterationEntry = context.currentVariableValues;
 				auto addressesAtIterationEntry = context.currentAddressState;
 				auto subjectAtIterationEntry = context.currentSubject;
+				if (firstIterationGuaranteed) {
+					mergeExecutionStates(
+						context, {runtimeConstants, constantsAtIterationEntry}, {runtimeAddresses, addressesAtIterationEntry},
+						{runtimeSubject, subjectAtIterationEntry}
+					);
+					runtimeConstants = context.currentVariableValues;
+					runtimeAddresses = context.currentAddressState;
+					runtimeSubject = context.currentSubject;
+					context.currentVariableValues = constantsAtIterationEntry;
+					context.currentAddressState = addressesAtIterationEntry;
+					context.currentSubject = subjectAtIterationEntry;
+				}
+				annotatedConstants = constantsAtIterationEntry;
+				annotatedAddresses = addressesAtIterationEntry;
+				annotatedSubject = subjectAtIterationEntry;
 				bool iterationFallsThrough = true;
 				if (!inferSectionLineRange(
 						section, body, openingExpression, context, bindingFrameStack, startLineIndex, false,
@@ -486,6 +511,20 @@ static bool inferSectionLineRange(
 			}
 			if (firstIterationGuaranteed && sectionFallsThrough)
 				openingExpression->sectionOutcome.write().conditionValue = {};
+			if (firstIterationGuaranteed && (runtimeConstants != annotatedConstants || runtimeAddresses != annotatedAddresses ||
+											 runtimeSubject != annotatedSubject)) {
+				InferenceExecutionSnapshot exitState(context);
+				context.currentVariableValues = std::move(runtimeConstants);
+				context.currentAddressState = std::move(runtimeAddresses);
+				context.currentSubject = runtimeSubject;
+				bool runtimeBodyFallsThrough = true;
+				if (!inferSectionLineRange(
+						section, body, openingExpression, context, bindingFrameStack, startLineIndex, false,
+						&runtimeBodyFallsThrough, false
+					))
+					return false;
+				exitState.restoreState(context);
+			}
 		}
 	}
 	if (fallsThrough)

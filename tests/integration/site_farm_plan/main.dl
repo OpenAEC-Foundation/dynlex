@@ -1,0 +1,13 @@
+import site/games/farm/plan.dl
+
+set plan to the website farm plan from (the string form of "LOOP|2\nIF|4|0|-1|-2|\nDO|17|0|-1|-2|\nEND\nELSE\nDO|0|0|-1|-2|\nEND\nEND") dropping 2 source lines
+require condition (plan's error is empty) reporting "Nested Farm plan must parse."
+set entries to plan's code
+require condition (the length of entries = 6) reporting "Farm plan must linearize branches and loops."
+print line the length of entries
+set index to 0
+loop while index < the length of entries:
+    set entry to the item at index in entries
+    print line (the string form of (entry's operation)) + "|" + (the string form of (entry's destination))
+    increment index
+free website farm plan the address of plan

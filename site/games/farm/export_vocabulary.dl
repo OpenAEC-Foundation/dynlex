@@ -1,0 +1,5 @@
+import vocabulary_json.dl
+
+set vocabulary to the website farm vocabulary JSON
+print line the compact JSON form of vocabulary
+free vocabulary

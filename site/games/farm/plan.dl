@@ -1,0 +1,207 @@
+# Read the compiler's protocol, never the authored DynLex source.
+import instructions.dl
+import lib/text.dl
+import lib/unicode.dl
+
+class:
+    patterns:
+        website farm fields
+    members:
+        values as a string array of 6 items
+        count as an integer
+
+class:
+    patterns:
+        website farm command result
+    members:
+        instruction as website farm instruction
+        error as a string
+
+class:
+    patterns:
+        website farm plan reader
+    members:
+        lines as the type of (an empty list of website execution record)
+        cursor as an integer
+        actions as an integer
+
+to get [the website farm fields in] {string:text}:
+    set result to a new website farm fields
+    set start and cursor to 0
+    loop while cursor <= text's length:
+        set end to cursor = text's length
+        if end = false:
+            set end to (the character at cursor in text) = 124
+        if end:
+            store (the substring of text from start spanning (cursor - start) bytes) into (result's values) at (result's count)
+            increment result's count
+            set start to cursor + 1
+            if result's count = 5:
+                if cursor < text's length:
+                    store (the substring of text from start spanning (text's length - start) bytes) into (result's values) at 5
+                    set result's count to 6
+                return result
+        increment cursor
+    return result
+
+to get [the website farm integer in] {string:text}:
+    set result to the website execution integer at 0 in text
+    if result's next != text's length:
+        set result's valid to false
+    return result
+
+to get [the website farm command in] {website farm fields:fields} [from] {website execution range:source}:
+    set result to a new website farm command result
+    set values to fields' values
+    set opcode to the item at 0 in values
+    set identifier to the website farm integer in (the item at 1 in values)
+    set argument to the website farm integer in (the item at 2 in values)
+    set action to opcode = "DO"
+    set actions to the website farm actions
+    set conditions to the website farm conditions
+    set count to the length of actions if action, else the length of conditions
+    if ((identifier's valid = false) or (argument's valid = false)) or ((identifier's value < 0) or (identifier's value >= count)):
+        set result's error to "Unknown farm instruction."
+        return result
+    set entry to the item at (identifier's value) in actions if action, else the item at (identifier's value) in conditions
+    set items to (entry's operands contains "items") or (entry's operands = "stock")
+    set limit to -1
+    set first to 0
+    if items:
+        set limit to the length of the website farm items
+        set first to the website farm subject items
+    else if entry's operands = "direction":
+        set limit to the length of the website farm directions
+    else if entry's operands starts with "feature":
+        set limit to the length of the website farm features
+    else if entry's operands = "role":
+        set limit to the length of the website farm roles
+    set valid to argument's value = 0
+    if limit != -1:
+        set valid to first <= argument's value < limit
+    if valid = false:
+        set result's error to "Unknown farm argument."
+        return result
+    set amount to the website farm integer in (the item at 3 in values)
+    if (fields' count != 6) or ((amount's valid = false) or ((amount's value < -1) or ((entry's operands = "stock") and (amount's value < 0)))):
+        set result's error to "Use a nonnegative whole number of items."
+        return result
+    set target to the website farm integer in (the item at 4 in values)
+    if (target's valid = false) or ((target's value < the website farm absent target) or (target's value >= the length of the website farm destinations)):
+        set result's error to "Unknown farm target."
+        return result
+    set area to the item at 5 in values
+    set length to the UTF-16 position of UTF-8 byte offset (area's length) in area
+    if length failed:
+        set result's error to "Work area names must be valid text."
+        return result
+    if the position of length > 40:
+        set result's error to "Work area names have at most 40 characters."
+        return result
+    set instruction to a new website farm instruction
+    set instruction's operation to the website farm action operation if action, else the website farm test operation
+    set instruction's identifier to identifier's value
+    set instruction's argument to argument's value
+    set instruction's amount to amount's value
+    set instruction's target to target's value
+    set instruction's area to area
+    set instruction's source to source
+    set result's instruction to instruction
+    return result
+
+to [read website farm block with] {a pointer to website farm plan reader:reader} [into] {a pointer to website farm plan:plan} [nested] {boolean:nested} [at depth] {integer:depth}:
+    if depth > 64:
+        set plan's error to "Role blocks are nested too deeply."
+        return nothing
+    loop while reader's cursor < the length of (reader's lines):
+        set line to the item at (reader's cursor) in (reader's lines)
+        increment reader's cursor
+        set fields to the website farm fields in (line's text)
+        set opcode to the item at 0 in (fields' values)
+        if opcode = "END":
+            if (nested = false) or (fields' count != 1):
+                set plan's error to "Unexpected block ending."
+            return nothing
+        if (opcode = "DO") or (opcode = "IF"):
+            set command to the website farm command in fields from (line's source)
+            if command's error is not empty:
+                set plan's error to command's error
+                return nothing
+            set instruction to command's instruction
+            set index to the length of (plan's code)
+            append instruction to plan's code
+            if opcode = "DO":
+                increment reader's actions
+            else:
+                read website farm block with reader into plan nested true at depth (depth + 1)
+                if plan's error is not empty:
+                    return nothing
+                set otherwise to false
+                if reader's cursor < the length of (reader's lines):
+                    set following to the item at (reader's cursor) in (reader's lines)
+                    set otherwise to following's text = "ELSE"
+                if otherwise:
+                    set following to the item at (reader's cursor) in (reader's lines)
+                    increment reader's cursor
+                    set jump to a new website farm instruction
+                    set jump's operation to the website farm jump operation
+                    set jump's source to following's source
+                    set {jump index} to the length of (plan's code)
+                    append jump to plan's code
+                    set instruction's destination to the length of (plan's code)
+                    replace item at index index in (plan's code) with instruction
+                    read website farm block with reader into plan nested true at depth (depth + 1)
+                    set jump's destination to the length of (plan's code)
+                    replace item at index jump index in (plan's code) with jump
+                else:
+                    set instruction's destination to the length of (plan's code)
+                    replace item at index index in (plan's code) with instruction
+        else if opcode = "LOOP":
+            set count to the website farm integer in (the item at 1 in (fields' values))
+            if (fields' count != 2) or ((count's valid = false) or ((count's value < -1) or (count's value > 10000))):
+                set plan's error to "Use a loop count between 0 and 10000, or loop forever."
+                return nothing
+            set instruction to a new website farm instruction
+            set instruction's operation to the website farm loop operation
+            set instruction's count to count's value
+            set instruction's source to line's source
+            set index to the length of (plan's code)
+            append instruction to plan's code
+            read website farm block with reader into plan nested true at depth (depth + 1)
+            set next to a new website farm instruction
+            set next's operation to the website farm next operation
+            set next's destination to index
+            set next's source to line's source
+            append next to plan's code
+            set instruction's destination to the length of (plan's code)
+            replace item at index index in (plan's code) with instruction
+        else:
+            set plan's error to "Use farm commands inside the role."
+        if plan's error is not empty:
+            return nothing
+    if nested:
+        set plan's error to "Unclosed farm block."
+
+to get [the website farm plan from] {string:stdout} [dropping] {integer:prefix} [source lines]:
+    set result to an empty website farm plan
+    set output to website execution from stdout dropping prefix source lines
+    set reader to a new website farm plan reader
+    set reader's lines to an empty list of website execution record
+    set record to output's first
+    loop while record != @intrinsic("construct", a pointer to website execution record):
+        if record's branch = -1:
+            append (the value at record) to reader's lines
+        set record to record's next
+    set result's error to output's error
+    if result's error is empty:
+        if the length of (reader's lines) > 4096:
+            set result's error to "A role can contain at most 4096 instructions."
+        else:
+            read website farm block with (the address of reader) into (the address of result) nested false at depth 0
+            if (result's error is empty) and (reader's actions = 0):
+                set result's error to "Give this role an action, such as wait."
+    free reader's lines
+    free website execution the address of output
+    if result's error is not empty:
+        clear result's code
+    return result

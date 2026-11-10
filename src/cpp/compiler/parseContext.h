@@ -215,6 +215,11 @@ struct ParseContext {
 	// released from main after all user code has completed.
 	std::vector<ManagedStorageState> managedLocalStorage;
 	std::vector<ManagedStorageState> managedGlobalStorage;
+	// Return paths are emitted after the complete function's storage is known.
+	// A later subject assignment may still own a value from a preceding loop pass.
+	std::vector<ManagedStorageState> managedFunctionStorage;
+	llvm::BasicBlock *managedReturnBlock{};
+	llvm::Value *managedReturnStorage{};
 
 	// Libraries required for linking (collected from @intrinsic("call", ...) calls)
 	std::unordered_set<std::string> requiredLibraries;
@@ -406,8 +411,7 @@ inline void collectPatternCallBindingPairsForPath(
 	std::vector<std::pair<std::string, Expression *>> &outBindings
 ) {
 	forEachPatternCallBindingOnPath(
-		expr, definition, pathIndex,
-		[&](const std::string &parameterName, Expression *argumentExpression) {
+		expr, definition, pathIndex, [&](const std::string &parameterName, Expression *argumentExpression) {
 		outBindings.push_back({parameterName, argumentExpression});
 	}
 	);
@@ -508,8 +512,7 @@ inline ResolvedBindingLayers resolveThroughBindingLayers(
 	Expression *expression, BindingFrameStack bindingFrameStack, SelectFlexExpansionFn &&selectFlexExpansion
 ) {
 	return resolveThroughBindingLayers(
-		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion),
-		[](Expression *) {
+		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion), [](Expression *) {
 		return false;
 	}
 	);

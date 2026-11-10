@@ -23,6 +23,9 @@ node --check "$PROJECT_DIR/tests/web/game_progress_browser.mjs"
 node --check "$PROJECT_DIR/tests/web/game_cloud_browser.mjs"
 node --check "$PROJECT_DIR/tests/web/game_cloud_rules.mjs"
 for game_file in "$PROJECT_DIR"/web/game-*.js "$PROJECT_DIR/web/firebase-config.js"; do node --check "$game_file"; done
+python3 "$PROJECT_DIR/scripts/generate_farm_vocabulary.py" --check
+node "$PROJECT_DIR/tests/web/farm_vocabulary.mjs"
+node "$PROJECT_DIR/tests/web/farm_models.mjs" "$PROJECT_DIR/build/dynlex" --shipped
 node "$PROJECT_DIR/tests/web/farm.mjs"
 node "$PROJECT_DIR/tests/web/farm_arguments.mjs"
 node "$PROJECT_DIR/tests/web/farm_collection.mjs"

@@ -115,9 +115,13 @@ farm games share the instruction-highlighting and coding-goal interfaces.
 
 ## Execution and assets
 
-`web/farm-vocabulary.js` defines the command catalog. Run
-`node scripts/generate_farm_vocabulary.mjs` to generate
-`lib/farm_challenge.dl`. This domain library defines DynLex patterns for actions,
+`site/games/farm/vocabulary.dl` defines the command catalog and toolbar choices.
+Examples are rendered by `site/games/farm/examples.dl`. Run
+`python3 scripts/generate_farm_vocabulary.py` to generate
+`lib/farm_challenge.dl` and `web/farm-vocabulary.json`; `--check` verifies both.
+The generator itself is DynLex (`scripts/farm_vocabulary/language.dl`); Python
+only builds the two exporters and replaces their outputs. This domain library
+defines DynLex patterns for actions,
 conditions and control flow. It emits a structured cooperative plan through the
 real compiler, including nested branches, loops and reusable `to ...:` functions.
 It defines its own control-flow vocabulary rather than importing `std.dl`.
@@ -232,3 +236,16 @@ account imports guest progress. Cloud writes run every ten seconds while play
 changes, and when the page is hidden; each local edit is saved immediately.
 Concurrent cloud edits stop sync and offer an explicit choice of which game to
 keep. Network errors leave the browser copy intact and sync retries.
+
+
+The DynLex Farm backend reads compiled role output in
+`site/games/farm/plan.dl`, retaining the compiler's source ranges. Its worker
+routines live in `site/games/farm/routine.dl`: each worker owns its program
+counter, loop counters, continuation and trace. Typed callbacks provide sensing
+and actions. Remembering a subject runs immediately; other actions consume a
+Farm turn. Every turn has a 128-step control-flow budget so an empty loop yields
+to the UI. The existing world, simulation and renderer are still being migrated.
+
+`node tests/web/farm_models.mjs build/dynlex --shipped` checks the catalog,
+99 parser cases and 16 routine scenarios against independent snapshots in native
+O0/O2 builds and through the browser compiler.

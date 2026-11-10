@@ -73,7 +73,7 @@ export function stepRoutine(routine, code, sense, act) {
     routine.continuation = result.done ? null : result.continuation;
     if (result.done) routine.pc++;
     routine.trace.message = result.message;
-    return { message: result.message, done: !instruction.key.startsWith("focus") };
+    return { message: result.message, done: !ACTIONS.find(entry=>entry.key===instruction.key).instant };
   }
   if (instruction.op === "test") {
     const branch = sense(instruction);

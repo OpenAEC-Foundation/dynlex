@@ -70,6 +70,12 @@ bool ensureCallableFunctionGenerated(
 	llvm::DebugLoc savedDebugLocation = builder.getCurrentDebugLocation();
 	std::vector<ParseContext::ManagedStorageState> savedManagedStorage = std::move(context.managedLocalStorage);
 	context.managedLocalStorage.clear();
+	auto savedFunctionStorage = std::move(context.managedFunctionStorage);
+	auto savedReturnBlock = context.managedReturnBlock;
+	auto savedReturnStorage = context.managedReturnStorage;
+	context.managedFunctionStorage.clear();
+	context.managedReturnBlock = nullptr;
+	context.managedReturnStorage = nullptr;
 	builder.SetInsertPoint(entry);
 	builder.SetCurrentDebugLocation({});
 
@@ -118,6 +124,9 @@ bool ensureCallableFunctionGenerated(
 	if (succeeded)
 		requireCompilerInvariant(context.managedLocalStorage.empty(), "callable wrapper left managed storage unclosed");
 	context.managedLocalStorage = std::move(savedManagedStorage);
+	context.managedFunctionStorage = std::move(savedFunctionStorage);
+	context.managedReturnBlock = savedReturnBlock;
+	context.managedReturnStorage = savedReturnStorage;
 
 	if (savedBlock) {
 		builder.SetInsertPoint(savedBlock, savedPoint);

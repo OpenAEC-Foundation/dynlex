@@ -1,0 +1,18 @@
+integer means: @intrinsic("type", "int", 32)
+flex section loop while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+function return [nothing]:
+    replacement:
+        @intrinsic("return")
+to inspect iterations:
+    @intrinsic("store", index, 0)
+    loop while @intrinsic("less than", index, 2):
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", index))
+        if @intrinsic("equal", index, 1):
+            return nothing
+        @intrinsic("store", index, @intrinsic("add", index, 1))
+inspect iterations
