@@ -6,3 +6,11 @@ import ../../site/pages/ide.dl
 document website fixture:
     home page
     IDE page
+
+
+import ../../site/packages/dynlex-ui/platform/browser/shaders.dl
+
+to get [a website shader test driver]:
+    set driver to a new UI driver
+    set driver's shader operations to the browser UI shader operations
+    return driver

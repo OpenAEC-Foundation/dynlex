@@ -70,13 +70,14 @@ to receive the website shader preview {a pointer to JSON value:response} in {a p
     set rendering to the address of (editor's preview)
     require condition (editor's pending program != @intrinsic("construct", a pointer to JSON value)) reporting "A shader preview has no linked description"
     if rendering's resource != (0 as a pointer):
-        request "graphics" containing (a JSON object containing [JSON text "operation" is "release", JSON number "resource" is (rendering's resource as an integer)]) for purpose 0 indexed 0 in state
+        close UI shader (rendering's resource) in (state's view)
     if rendering's program != @intrinsic("construct", a pointer to JSON value):
         free rendering's program
     set rendering's resource to ((the JSON number named "resource" in response) as an integer) as a pointer
     set rendering's program to editor's pending program
     set editor's pending program to @intrinsic("construct", a pointer to JSON value)
     set rendering's geometry to editor's description's geometry
+    initialize loaded website shader data in rendering using (state's view)
     set rendering's seconds to 0.0
     set rendering's active to false
     set rendering's mesh width to 0
@@ -117,7 +118,7 @@ to paint the website shader preview {a pointer to UI canvas frame:painting}:
     set width to the maximum of 1 and ((painting's bounds' width * state's view's pixel scale) as an integer)
     set height to the maximum of 1 and ((painting's bounds' height * state's view's pixel scale) as an integer)
     set layout to the UI layout labeled "IDE shader preview" in (state's view's layout)
-    draw UI texture (the rendered website shader rendering sized width by height) in (painting's bounds) rounded by (layout's appearance's radius) in (UI ink 255 255 255) on (painting's frame)
+    draw UI texture (the rendered website shader rendering sized width by height in (state's view)) in (painting's bounds) rounded by (layout's appearance's radius) in (UI ink 255 255 255) on (painting's frame)
 
 to advance the website shader preview in {a pointer to website state:state}:
     set view to state's view

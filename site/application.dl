@@ -32,6 +32,7 @@ to get receive website reply {a pointer to JSON value:response} for {integer:job
     if job = 4:
         set resource to ((the JSON number named "resource" in response) as an integer) as a pointer
         set (state's shaders + index)'s resource to resource
+        initialize loaded website shader data in (state's shaders + index) using (state's view)
         request a UI redraw in (state's view)
     if job = 5:
         receive website release response in state

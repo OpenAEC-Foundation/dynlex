@@ -25,7 +25,7 @@ to paint the website shader {a pointer to UI canvas frame:painting}:
         set scene to state's shaders + index
         if (weight > 0.0) and (scene's resource != (0 as a pointer)):
             set coverage to coverage + weight
-            set texture to the rendered website shader scene sized width by height
+            set texture to the rendered website shader scene sized width by height in (state's view)
             draw UI texture texture in (painting's bounds) in (UI ink 255 255 255) with opacity ((255.0 * weight / coverage) as an integer) on (painting's frame)
         increment index
 

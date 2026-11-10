@@ -1,10 +1,10 @@
-import { createCompilerServices } from '/compiler/services.js';
-import { WorkerConnection } from '/compiler/client.js';
-
 const require = (condition, message) => { if (!condition) throw new Error(message); };
 
-export async function verifyWorkers() {
-  const provider = createCompilerServices(new URL('/compiler/', location.href), new URL('/sdk-sources.json', location.href));
+export async function verifyWorkers(base = new URL('/', location.href)) {
+  const [{ createCompilerServices }, { WorkerConnection }] = await Promise.all([
+    import(new URL('compiler/services.js', base)), import(new URL('compiler/client.js', base))
+  ]);
+  const provider = createCompilerServices(new URL('compiler/', base), new URL('sdk-sources.json', base));
   const deadline = new AbortController();
   const signal = deadline.signal;
   let phase = 'initial compile';

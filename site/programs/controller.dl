@@ -1,3 +1,4 @@
+import ../packages/dynlex-ui/ui/shaders.dl
 import ../state.dl
 import ../editor/shader.dl
 import events.dl
@@ -171,7 +172,7 @@ to discard website reply {a pointer to JSON value:response} for purpose {integer
         if response has JSON member named "artifact":
             request "compiler" containing (a JSON object containing [JSON text "operation" is "release", JSON number "artifact" is (the JSON number named "artifact" in response)]) for purpose 0 indexed 0 in state
     if (job = 4) or (job = 10):
-        request "graphics" containing (a JSON object containing [JSON text "operation" is "release", JSON number "resource" is (the JSON number named "resource" in response)]) for purpose 0 indexed 0 in state
+        close UI shader (((the JSON number named "resource" in response) as an integer) as a pointer) in (state's view)
     if job = 11:
         set decoded to the JSON member named "buffers" in response
         set buffers to a new JSON value of kind the JSON array kind

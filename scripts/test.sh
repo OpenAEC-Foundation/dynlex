@@ -749,6 +749,8 @@ run_auxiliary_test "json_decimal_oracle" 60 node "$PROJECT_DIR/tests/web/json_nu
 if [[ "$suite" == integration ]]; then
     run_auxiliary_test "loop_cleanup_targets" 60 node "$PROJECT_DIR/tests/web/compiler_loops.mjs" "$COMPILER" --shipped
     run_auxiliary_test "library_values_targets" 60 node "$PROJECT_DIR/tests/web/library_values.mjs" "$COMPILER" --shipped
+    run_auxiliary_test "site_shaders" 60 python3 -B "$PROJECT_DIR/tests/web/site_runtime.py" --compiler "$COMPILER" --case site_shader_program --case site_shader_buffers
+    run_auxiliary_test "site_routes" 10 python3 -B "$PROJECT_DIR/tests/web/site_routes.py"
     # Includes 2,019 independent action/condition scenarios and a 900-turn team.
     run_auxiliary_test "farm_models" 300 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --group=core --shipped
     run_auxiliary_test "farm_saved_state" 300 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --group=state --shipped

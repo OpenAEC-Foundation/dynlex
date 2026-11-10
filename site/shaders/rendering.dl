@@ -2,7 +2,8 @@
 import types.dl
 import program.dl
 import terrain.dl
-import ../packages/dynlex-ui/platform/browser/shaders.dl
+import ../packages/dynlex-ui/ui/shaders.dl
+import ../packages/dynlex-ui/ui/invalidation.dl
 import lib/json_builders.dl
 
 to get shader values for {a pointer to JSON value:program} at {floating-point number:seconds} sized {integer:width} by {integer:height}:
@@ -15,27 +16,53 @@ to get shader values for {a pointer to JSON value:program} at {floating-point nu
         increment index
     return result
 
-to get the rendered website shader {a pointer to website shader view:scene} sized {integer:width} by {integer:height}:
+to get the rendered website shader {a pointer to website shader view:scene} sized {integer:width} by {integer:height} in {a pointer to UI view:view}:
     if scene's texture's resource != (0 as a pointer):
         if ((scene's texture's width = width) and (scene's texture's height = height)) and (scene's rendered seconds = scene's seconds):
             return scene's texture
     if scene's geometry's kind = 1:
         if width != scene's mesh width:
             set mesh to a perspective terrain mesh from (scene's geometry) at width pixels
-            set browser UI shader (scene's resource) pass 0 to vertices (mesh's vertices) counting (mesh's vertex count) indexed by (mesh's indices) counting (mesh's index count)
+            set UI shader (scene's resource) pass 0 in view vertex buffer 0 from (mesh's vertices as a pointer) spanning (mesh's vertex count * 16) bytes
+            set UI shader (scene's resource) pass 0 in view to indices (mesh's indices) counting (mesh's index count)
+            set draws to [a UI shader draw counting (mesh's index count) instanced 1 starting at 0 with vertex offset 0 and instance offset 0 indexed true]
+            set UI shader (scene's resource) pass 0 in view to draws (draws + 0) counting 1
             release mesh
             set scene's mesh width to width
     set values to shader values for (scene's program) at (scene's seconds) sized width by height
     set payload to the compact JSON form of values
     free values
-    set scene's texture to the browser UI texture of shader (scene's resource) sized width by height using payload
+    set scene's texture to a UI texture from shader (scene's resource) sized width by height using payload in view
     set scene's rendered seconds to scene's seconds
     return scene's texture
+
+to [initialize loaded website shader data in] {a pointer to website shader view:scene} [using] {a pointer to UI view:view}:
+    set passes to the JSON member named "passes" in (scene's program)
+    set index to 0
+    loop while index < passes's length:
+        set pass to the JSON value at index index in passes
+        set buffers to the JSON member named "vertexBuffers" in pass
+        set slot to 0
+        set source to -1
+        loop while slot < buffers's length:
+            set buffer to the JSON value at index slot in buffers
+            if ((the JSON text named "stepMode" in buffer) = "vertex") and ((the JSON member named "source" in buffer) is not JSON null):
+                if source < 0:
+                    set source to slot
+            increment slot
+        if source >= 0:
+            set indexed to (the JSON member named "indices" in pass) is not JSON null
+            set count to the record count of UI shader (scene's resource) pass index buffer source in view
+            if indexed:
+                set count to the index count of UI shader (scene's resource) pass index in view
+            set draws to [a UI shader draw counting count instanced 1 starting at 0 with vertex offset 0 and instance offset 0 indexed indexed]
+            set UI shader (scene's resource) pass index in view to draws (draws + 0) counting 1
+        increment index
 
 to advance website shader {a pointer to website shader view:scene} visible {boolean:visible} in {a pointer to UI view:view}:
     set active to (visible and view's active) and ((scene's resource != (0 as a pointer)) and ((scene's paused = false) and (view's instance's reduced motion = false)))
     if active:
-        set active to shader program (scene's program) uses input "time"
+        set active to UI shader program (scene's program) uses input "time"
     if active and (scene's active):
         set scene's seconds to scene's seconds + (view's seconds - scene's last seconds)
     set scene's last seconds to view's seconds

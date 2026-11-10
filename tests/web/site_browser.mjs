@@ -8,7 +8,13 @@ import { setTimeout as pause } from 'node:timers/promises';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
 const graphicsMode = process.argv[3] || 'system';
+const assetBase = process.argv[4] || '/';
 assert(['system', 'webgpu', 'webgl-no-adapter', 'webgl-no-api'].includes(graphicsMode));
+assert(assetBase.startsWith('/') && assetBase.endsWith('/'));
+const pagePaths = new Set(['/']);
+for (const page of JSON.parse(await fs.readFile(path.join(directory, 'routes.json'), 'utf8'))) {
+  pagePaths.add(page.path); pagePaths.add(page.path.slice(0, page.path.lastIndexOf('/') + 1));
+}
 const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'dynlex-ui-chrome-'));
 await fs.mkdir('.cache', { recursive: true });
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json',
@@ -26,7 +32,10 @@ const server = http.createServer(async (request, response) => {
       response.end(await fs.readFile(new URL('./fixtures/delayed-worker.mjs', import.meta.url)));
       return;
     }
-    const filename = path.resolve(directory, '.' + new URL(request.url, 'http://localhost').pathname);
+    const pathname = new URL(request.url, 'http://localhost').pathname;
+    const asset = pathname.startsWith(assetBase);
+    if (!asset && !pagePaths.has(pathname)) throw new Error('Unversioned asset request');
+    const filename = path.resolve(directory, asset ? pathname.slice(assetBase.length) : '.' + pathname);
     if (!filename.startsWith(directory + '/') && filename !== directory) throw new Error('Path');
     const resolved = (await fs.stat(filename)).isDirectory() ? path.join(filename, 'index.html') : filename;
     response.setHeader('Content-Type', mime[path.extname(resolved)] || 'application/octet-stream');
@@ -219,7 +228,7 @@ try {
   const idle = await evaluate('window.siteProbe.paints');
   await pause(800);
   assert.equal(await evaluate('window.siteProbe.paints'),idle,'An unchanged documentation page kept repainting');
-  console.log('Worker checks:', await evaluate("import('/__tests__/workers.mjs').then(module => module.verifyWorkers())"));
+  console.log('Worker checks:', await evaluate(`import('/__tests__/workers.mjs').then(module => module.verifyWorkers(new URL(${JSON.stringify(assetBase)},location.href)))`));
   await click(1009,22);
   await waitFor('location.pathname === "/ide/index.html" && document.title === "DynLex Studio"');
   await waitFor('window.siteProbe.texts.includes("No problems found.")');

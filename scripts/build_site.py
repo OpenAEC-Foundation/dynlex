@@ -3,11 +3,13 @@
 import argparse
 import html
 import json
+import os
 import posixpath
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+from urllib.parse import unquote, urlsplit
 
 from source_package import SourcePackage
 
@@ -33,8 +35,19 @@ def run_json(root, program, payload=None):
     return json.loads(result.stdout)
 
 
-def write_routes(site, stage, pages):
-    template = (site / 'shell.html').read_text()
+def asset_base(value):
+    parsed = urlsplit(value)
+    decoded = unquote(value, errors='strict')
+    if (not value.startswith('/') or decoded.startswith('//') or not value.endswith('/')
+            or '\\' in decoded or any(ord(character) < 32 or ord(character) == 127 for character in decoded)
+            or parsed.path != value or parsed.query or parsed.fragment
+            or (decoded != '/' and posixpath.normpath(decoded) + '/' != decoded)):
+        raise ValueError('The asset base must be a normalized root-relative URL ending in /')
+    return value
+
+
+def write_routes(site, stage, pages, base):
+    template = (site / 'shell.html').read_text().replace('{{asset_root}}', html.escape(base, quote=True))
     for page in pages:
         route = page['path'].removeprefix('/')
         target = stage / route
@@ -42,7 +55,6 @@ def write_routes(site, stage, pages):
         source = template.replace('DynLex — Make the language part of the work', html.escape(page['title']))
         source = source.replace('Explore working sketches, invent project vocabulary, and run DynLex in the browser.',
                                 html.escape(page['description'], quote=True))
-        source = source.replace('./platform/start.js', posixpath.relpath('platform/start.js', posixpath.dirname(route) or '.'))
         target.write_text(source)
     (stage / 'routes.json').write_text(json.dumps(pages, indent=2) + '\n')
 
@@ -50,6 +62,7 @@ def write_routes(site, stage, pages):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=Path('build/site'))
+    parser.add_argument('--base', type=asset_base, default=os.environ.get('DYNLEX_WEB_BASE', '/'))
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     site = root / 'site'
@@ -102,7 +115,7 @@ def main():
                      'runtimeImports.js', 'runtimeFilesystem.js', 'runtimeHost.js', 'runtimeLayout.js']:
             shutil.copy2(compiler / name, stage / 'compiler' / name)
         shutil.copy2(root / 'web/wgsl-translator.js', stage / 'compiler/wgsl-translator.js')
-        write_routes(site, stage, pages)
+        write_routes(site, stage, pages, args.base)
         (stage / 'assets/shaders/index.json').write_text(json.dumps(scenes) + '\n')
         (stage / 'sdk-sources.json').write_text(json.dumps(sdk.source_files('packages/dynlex-ui')) + '\n')
         fonts = sorted(path.relative_to(stage).as_posix() for path in (stage / 'assets/fonts').glob('*.ttf'))
