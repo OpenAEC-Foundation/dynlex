@@ -65,6 +65,16 @@ node tests/web/site_games.mjs
 node tests/web/site_program_protocol.mjs
 ```
 
+Source editors use `dynlex-ui/ui/source_workspace.dl`. The workspace discovers
+source controls, retains one document model per control, synchronizes UI and
+programmatic edits, and schedules active editors through one language connection.
+`editor/language.dl` supplies website project metadata and transports the shared
+client's work to the compiler service. It contains no tokenizer or diagnostic
+coordinate conversion. Studio, River and the homepage sketches use this path.
+River's hidden vocabulary import is part of the analysis document; the shared
+mapper converts its UTF-16 results back to the visible UTF-8 source. Language
+results use separate presentation slots from River execution feedback.
+
 The River challenge uses `games/river/interface.dl` for its retained description,
 `controller.dl` for actions and program callbacks, `playback.dl` for its testable
 clock, and `rendering.dl` for its responsive world. Run, Stop, one-instruction

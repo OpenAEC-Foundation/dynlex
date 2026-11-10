@@ -122,6 +122,7 @@ try {
       fullVersionList: [{ brand: 'Chromium', version: '140.0.0.0' }], platform: 'Linux',
       platformVersion: '6.0.0', architecture: 'x86', model: '', mobile: false, bitness: '64', wow64: false }
   });
+  await command('Page.addScriptToEvaluateOnNewDocument', { source: await fs.readFile(new URL('./fixtures/ui-color-probe.js', import.meta.url), 'utf8') });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
     window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], commands: [], marks: [], requests: [], contexts: [], sources: [], decoded: 0, frames: new Set() };
     const scheduleFrame = requestAnimationFrame.bind(window), cancelFrame = cancelAnimationFrame.bind(window);
@@ -329,6 +330,9 @@ try {
   await waitFor('window.siteProbe.pictures.length >= 10');
   await waitFor('window.siteProbe.decoded === 7 && window.siteProbe.contexts[0].state === "running"');
   await waitFor('window.siteProbe.texts.includes("THE RIVER / WAITING FOR A PLAN")');
+  // Observe actual text draw colors, rather than just the server's token reply.
+  await waitFor(`window.colorProbe.some(item => item.text.includes('# The official names') && Math.abs(item.ink[0] - Math.pow((149/255+0.055)/1.055,2.4)) < 0.0001)`);
+  await waitFor(`window.colorProbe.some(item => item.text.includes('get') && Math.abs(item.ink[0] - Math.pow((104/255+0.055)/1.055,2.4)) < 0.0001)`);
   await pause(500); await capture('river-ready');
   const idle = await evaluate('window.siteProbe.paints');
   await pause(500);

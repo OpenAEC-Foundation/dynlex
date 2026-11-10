@@ -115,6 +115,7 @@ try {
       fullVersionList: [{ brand: 'Chromium', version: '140.0.0.0' }], platform: 'Linux',
       platformVersion: '6.0.0', architecture: 'x86', model: '', mobile: false, bitness: '64', wow64: false }
   });
+  await command('Page.addScriptToEvaluateOnNewDocument', { source: await fs.readFile(new URL('./fixtures/ui-color-probe.js', import.meta.url), 'utf8') });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
     window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [] };
     const instantiate = WebAssembly.instantiate.bind(WebAssembly);
@@ -251,6 +252,8 @@ try {
   await click(120,480); await key('KeyA','a',65,2);
   await command('Input.insertText',{text:'import lib/std.dl\nprint line "😀"'});
   await waitFor(`window.siteProbe.diagnostics.slice(${beforeValid}).some(result => result.diagnostics.length === 0)`);
+  await waitFor(`window.colorProbe.some(item => item.text.includes('😀') && Math.abs(item.ink[0] - Math.pow((230/255+0.055)/1.055,2.4)) < 0.0001)`);
+  await waitFor(`window.colorProbe.some(item => item.text.includes('print') && Math.abs(item.ink[0] - Math.pow((104/255+0.055)/1.055,2.4)) < 0.0001)`);
   await capture('ide-analysis');
   await pause(1000);
   const analyzed = await evaluate('window.siteProbe.paints');

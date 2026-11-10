@@ -106,8 +106,8 @@ to read website input {a pointer to UI view:view}:
                 if (pending's purpose = 6) or (pending's purpose = 7):
                     fail website program (pending's index) in state
                 if pending's purpose = 8:
-                    set state's language's phase to 8
-                    set the text of "IDE analysis" in (view's instance) to "An error occurred. Check the log."
+                    fail UI source workspace (state's language)
+                    present UI source workspace (state's language) using (the default UI source token theme)
                 if pending's purpose = 9:
                     fail the website shader source in state
                 if pending's purpose = 10:
@@ -133,6 +133,7 @@ to close the website {a pointer to UI view:view}:
     free state's progress's document
     free state's account's configuration
     free state's account's revision
+    free UI source workspace (state's language)
     close view
     close instance
     set pending to state's requests
@@ -151,8 +152,6 @@ to close the website {a pointer to UI view:view}:
         free state's shader editor's preview's program
     if state's shader editor's pending program != @intrinsic("construct", a pointer to JSON value):
         free state's shader editor's pending program
-    if state's language's token types != @intrinsic("construct", a pointer to JSON value):
-        free state's language's token types
     if state's release != @intrinsic("construct", a pointer to website release):
         free state's release
     destroy the value at state
@@ -177,6 +176,7 @@ function open the DynLex website using {a pointer to UI driver:driver}:
         set state's route to "/index.html"
         set view's close action to (the function named "close the website $") as a pointer
         initialize the website river in state
+        open website source editors in state
         open website progress in state
         open website account with (the website account configuration) in state
         bind (the control labeled "River scene" in instance) in instance to (the function named "paint the website river $") for event 1

@@ -2,17 +2,7 @@ import lib/sections.dl
 import lib/json.dl
 import ../shaders/types.dl
 
-class:
-    patterns:
-        website language state
-    members:
-        phase as an integer
-        version as an integer
-        snapshot as a string
-        edited at as a floating-point number
-        token types as a pointer to JSON value
-        uri as a string
-        profile as an integer
+import ../packages/dynlex-ui/ui/source_workspace.dl
 
 class:
     patterns:

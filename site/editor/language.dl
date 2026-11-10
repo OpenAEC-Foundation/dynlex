@@ -1,146 +1,74 @@
-# Async language service lifecycle and editor state belong to DynLex.
-import tokens.dl
-import lib/lsp_json.dl
+# Application metadata and browser transport. Editor behavior lives in dynlex-ui.
+import ../state.dl
 
-to install website language project at step {integer:step} in {a pointer to website state:state}:
-    set instance to state's view's instance
-    set source to the website source text in state
-    set name to the website source filename in state
+to [configure the website source editor] {C string:label} [named] {string:filename} [prefixed by] {string:prefix} [using] {a pointer to JSON value:profiles} [in] {a pointer to website state:state}:
+    set editor to the UI source editor labeled label in (state's language)
     set files to a new JSON-RPC object
-    add JSON-RPC member name containing (a new JSON-RPC text for source) to files
-    set state's language's uri to the website source URI in state
-    if step = 1:
-        set state's language's profile to the website analysis profile in state
-    set state's language's phase to step
-    request "language" containing (a JSON object containing [JSON text "operation" is "project", JSON child "sources" is files]) for purpose 8 indexed step in state
+    configure UI source document (editor's document) named filename at ("file:///workspace/" + filename) prefixed by prefix using profiles with files files
+    free files
 
-to send website language {C string:method} with {a pointer to JSON value:parameters} requesting {boolean:request} at step {integer:step} in {a pointer to website state:state}:
-    set message to a JSON object containing [JSON text "jsonrpc" is "2.0", JSON text "method" is method, JSON child "params" is parameters]
-    if request:
-        add a JSON member named "id" with value (a new JSON-RPC integer for step) to message
-    set state's language's phase to step
-    request "language" containing (a JSON object containing [JSON text "operation" is "exchange", JSON child "message" is message]) for purpose 8 indexed step in state
-
-to start website language analysis in {a pointer to website state:state}:
-    if state's language's phase != 0:
-        return nothing
-    set the text of "IDE analysis" in (state's view's instance) to "Starting language service…"
-    install website language project at step 1 in state
-
-to get the website language result numbered {integer:id} in {a pointer to JSON value:response}:
-    set index to 0
-    loop while index < response's length:
-        set message to the JSON value at index index in response
-        if message has JSON member named "id":
-            if (the JSON number named "id" in message) = (id as a floating-point number):
-                require condition ((message has JSON member named "error") = false) reporting "The language server rejected an editor request"
-                return the JSON member named "result" in message
-        increment index
-    require condition false reporting "The language server did not answer its request"
-    return a new JSON-RPC null
-
-to receive website diagnostics in {a pointer to JSON value:response} in {a pointer to website state:state}:
+to [open website source editors in] {a pointer to website state:state}:
     set instance to state's view's instance
-    if (the website source text in state) != state's language's snapshot:
-        return nothing
-    if state's language's uri != (the website source URI in state):
-        return nothing
-    if state's language's profile != (the website analysis profile in state):
-        return nothing
+    set state's language to a UI source workspace in instance rooted at "file:///workspace"
+    set description to the item at (the website program for source "River source") in (the website program descriptions)
+    configure the website source editor "River source" named (the string form of (description's filename)) prefixed by (the string form of (description's prefix)) using UI CPU analysis in state
+    set river to the UI source editor labeled "River source" in (state's language)
+    set river's diagnostics to the control labeled "River analysis diagnostics" in instance
+    set river's status to the control labeled "River analysis" in instance
+    set river's clean text to ""
+    set river's ready text to "Plan checked"
+    set labels to ["IDE source", "Shader source"]
     set index to 0
-    loop while index < response's length:
-        set message to the JSON value at index index in response
-        if message has JSON member named "method":
-            if (the JSON text named "method" in message) = "textDocument/publishDiagnostics":
-                set parameters to the JSON member named "params" in message
-                if (the JSON text named "uri" in parameters) = state's language's uri:
-                    set entries to the JSON member named "diagnostics" in parameters
-                    set text to the string form of ""
-                    set cursor to 0
-                    loop while cursor < entries's length:
-                        set diagnostic to the JSON value at index cursor in entries
-                        set position to the JSON member named "start" in (the JSON member named "range" in diagnostic)
-                        set line to ((the JSON number named "line" in position) as an integer) + 1
-                        set column to ((the JSON number named "character" in position) as an integer) + 1
-                        set detail to the JSON text named "message" in diagnostic
-                        set name to the website source filename in state
-                        set text to text + (formatted "{name}:{line}:{column}: {detail}\n")
-                        increment cursor
-                    if entries's length = 0:
-                        set text to "No problems found."
-                    set the text of "IDE diagnostics" in instance to text
-                    set count to entries's length
-                    set the text of "IDE analysis" in instance to (formatted "{count} problems · language service ready")
+    loop while index < the length of labels:
+        set editor to the UI source editor labeled (the item at index in labels) in (state's language)
+        set editor's diagnostics to the control labeled "IDE diagnostics" in instance
+        set editor's status to the control labeled "IDE analysis" in instance
         increment index
 
-to receive website language reply {a pointer to JSON value:response} at step {integer:step} in {a pointer to website state:state}:
-    require condition (state's language's phase = step) reporting "A language-service reply arrived out of order"
-    if step = 1:
-        set capabilities to the default LSP client capabilities
-        set profiles to a new JSON-RPC array
-        if state's language's profile = 0:
-            add (a JSON object containing [JSON text "target" is "cpu"]) to the JSON array profiles
-        else:
-            add (a JSON object containing [JSON text "target" is "spirv", JSON text "shaderStage" is "fragment"]) to the JSON array profiles
-            if state's language's profile = 2:
-                add (a JSON object containing [JSON text "target" is "spirv", JSON text "shaderStage" is "vertex"]) to the JSON array profiles
-        set options to a JSON object containing [JSON child "dynlex" is (a JSON object containing [JSON child "analysisProfiles" is profiles])]
-        set parameters to the LSP initialization parameters rooted at (the string form of "file:///workspace") with capabilities and initialization options options
-        free capabilities
-        free options
-        send website language "initialize" with parameters requesting true at step 2 in state
-    else if step = 2:
-        set result to the website language result numbered 2 in response
-        set provider to the JSON member named "semanticTokensProvider" in (the JSON member named "capabilities" in result)
-        set state's language's token types to a copy of JSON-RPC node (the JSON member named "tokenTypes" in (the JSON member named "legend" in provider))
-        send website language "initialized" with (a new JSON-RPC object) requesting false at step 3 in state
-    else if (step = 3) or (step = 10):
-        set state's language's snapshot to the website source text in state
-        set state's language's version to 1
-        set parameters to the LSP document opening parameters for URI (state's language's uri), language (the string form of "dynlex"), version 1 and text (state's language's snapshot)
-        send website language "textDocument/didOpen" with parameters requesting false at step 4 in state
-    else if (step = 4) or (step = 5):
-        receive website diagnostics in response in state
-        set parameters to a JSON object containing [JSON child "textDocument" is (an LSP text document identifier for (state's language's uri))]
-        send website language "textDocument/semanticTokens/full" with parameters requesting true at step 6 in state
-    else if step = 6:
-        receive website diagnostics in response in state
-        apply website semantic tokens (the website language result numbered 6 in response) in state
-        set state's language's phase to 7
-        animate UI view (state's view)
-    else if step = 9:
-        install website language project at step 10 in state
-    else if step = 11:
-        free state's language's token types
-        set state's language's token types to @intrinsic("construct", a pointer to JSON value)
-        set state's language's phase to 0
-        animate UI view (state's view)
+to [refresh website source editor metadata in] {a pointer to website state:state}:
+    set labels to ["IDE source", "Shader source"]
+    set names to ["IDE filename", "Shader filename"]
+    set index to 0
+    loop while index < the length of labels:
+        set editor to the UI source editor labeled (the item at index in labels) in (state's language)
+        set filename to (the UI value for (the control labeled (the item at index in names) in (state's view's instance)) in (state's view's instance))'s text
+        set changed to editor's document's filename != filename
+        if index = 1:
+            set count to 1 if (state's shader editor's description's geometry's kind = 0), else 2
+            set changed to changed or (editor's document's profiles' length != count)
+            set changed to changed or ((the JSON text named "target" in (the JSON value at index 0 in (editor's document's profiles))) != "spirv")
+        if changed:
+            set profiles to UI CPU analysis
+            if index = 1:
+                free profiles
+                set profiles to UI fragment analysis
+                if state's shader editor's description's geometry's kind != 0:
+                    free profiles
+                    set profiles to UI vertex and fragment analysis
+            configure the website source editor (the item at index in labels) named filename prefixed by "" using profiles in state
+        increment index
 
-to advance website language analysis in {a pointer to website state:state}:
-    if state's route != "/ide/index.html":
-        return nothing
-    start website language analysis in state
-    if state's language's phase != 7:
-        return nothing
-    if state's language's profile != (the website analysis profile in state):
-        set state's language's phase to 11
-        request "language" containing (a JSON object containing [JSON text "operation" is "reset"]) for purpose 8 indexed 11 in state
-        return nothing
-    if state's language's uri != (the website source URI in state):
-        send website language "textDocument/didClose" with (the LSP document closing parameters for URI (state's language's uri)) requesting false at step 9 in state
-        return nothing
-    set source to the website source text in state
-    if source = state's language's snapshot:
-        return nothing
-    if state's view's seconds < (state's language's edited at + 0.18):
-        animate UI view (state's view)
-        return nothing
-    set state's language's snapshot to source
-    increment state's language's version
-    set parameters to the LSP document change parameters for (state's language's uri) at (state's language's version) containing (a full LSP content change containing source)
-    send website language "textDocument/didChange" with parameters requesting false at step 5 in state
+to [send website language work] {UI language work:work} [in] {a pointer to website state:state}:
+    if work's step != 0:
+        request "language" containing (work's payload) for purpose 8 indexed (work's step) in state
 
-to notice website source edit {a pointer to UI instance:instance}:
+to [receive website language reply] {a pointer to JSON value:response} [at step] {integer:step} [in] {a pointer to website state:state}:
+    refresh website source editor metadata in state
+    synchronize UI source workspace (state's language) at (state's view's seconds) seconds
+    send website language work (the UI language reply response at step step in (state's language's client)) in state
+    present UI source workspace (state's language) using (the default UI source token theme)
+    animate UI view (state's view)
+
+to [advance website language analysis in] {a pointer to website state:state}:
+    refresh website source editor metadata in state
+    set view to state's view
+    set work to the next UI source workspace work in (state's language) focused on (the UI source focus in view for (state's language)) at (view's seconds) seconds
+    send website language work work in state
+    present UI source workspace (state's language) using (the default UI source token theme)
+    if UI source workspace (state's language) awaits an edit deadline at (view's seconds) seconds:
+        animate UI view view
+
+to [notice website source edit] {a pointer to UI instance:instance}:
     set state to the website state in instance
     if the website editor uses shaders in state:
         if state's shader editor's source request != 0:
@@ -148,6 +76,5 @@ to notice website source edit {a pointer to UI instance:instance}:
             set state's shader editor's source request to 0
         set state's shader editor's source failed to false
         set the text of "Run program ▶" in instance to "Recompile shader ↻"
-    set state's language's edited at to state's view's seconds
-    set the text of "IDE analysis" in instance to "Analyzing…"
+    synchronize UI source workspace (state's language) at (state's view's seconds) seconds
     animate UI view (state's view)

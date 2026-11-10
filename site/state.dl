@@ -35,7 +35,7 @@ class:
         download started as a boolean
         programs as website program state array of (the length of (the website program descriptions)) items
         invocation as an integer
-        language as website language state
+        language as a pointer to UI source workspace
         editor entry as a string
         shader editor as website shader editor
         river as website river playback
@@ -43,9 +43,6 @@ class:
         account as website account state
 
 [the|] website state in {a pointer to UI instance:instance} means: instance's state as a pointer to website state
-
-to get the website source URI in {a pointer to website state:state}:
-    return "file:///workspace/" + (the website source filename in state)
 
 to get the website editor uses shaders in {a pointer to website state:state}:
     return (the value of "IDE modes" in (state's view's instance)) = 1
@@ -61,11 +58,6 @@ to get the website source editor in {a pointer to website state:state}:
 
 to get the website source text in {a pointer to website state:state}:
     return (the UI value for (the website source editor in state) in (state's view's instance))'s text
-
-to get the website analysis profile in {a pointer to website state:state}:
-    if (the website editor uses shaders in state) = false:
-        return 0
-    return 1 if (state's shader editor's description's geometry's kind = 0), else 2
 
 to request {C string:service} containing {a pointer to JSON value:payload} for purpose {integer:job} indexed {integer:index} in {a pointer to website state:state}:
     set data to the compact JSON form of payload
