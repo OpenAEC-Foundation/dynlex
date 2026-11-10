@@ -54,8 +54,7 @@ Json scopeRuleBodyPaths(const std::map<std::string, Section *> &sections) {
 Json captureAllFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
 	IncrementalMatcherCache &matcherCache, std::string_view initialMatcherTree, const Json &initialMatcherRoots,
-	const Json *previous = nullptr,
-	SourceProjectionWork *projectionWork = nullptr
+	const Json *previous = nullptr, SourceProjectionWork *projectionWork = nullptr
 ) {
 	auto phaseStart = Clock::now();
 	const Json *prior =
@@ -90,14 +89,12 @@ Json captureAllFunctionProjection(
 		projectionWork->bodyMilliseconds += elapsedMilliseconds(phaseStart);
 	phaseStart = Clock::now();
 	Json maskedSources = sourceProjection(
-		context, observations, selectedSections, false, false, false, prior ? &prior->at("sources") : nullptr,
-		projectionWork
+		context, observations, selectedSections, false, false, false, prior ? &prior->at("sources") : nullptr, projectionWork
 	);
-	bool reuseDeclarations = prior && selected == prior->at("inactive") &&
-									 sourceProjectionsEqual(maskedSources, prior->at("sources")) &&
-									 currentScopeRuleBodies == prior->at("scope_rule_bodies") &&
-									 reusable.size() == prior->at("function_declarations").size() &&
-									 bodyDigests.size() == prior->at("bodies").size();
+	bool reuseDeclarations =
+		prior && selected == prior->at("inactive") && sourceProjectionsEqual(maskedSources, prior->at("sources")) &&
+		currentScopeRuleBodies == prior->at("scope_rule_bodies") &&
+		reusable.size() == prior->at("function_declarations").size() && bodyDigests.size() == prior->at("bodies").size();
 	size_t changedDeclarations = 0;
 	if (reuseDeclarations) {
 		for (const auto &[path, section] : sections) {
@@ -151,6 +148,7 @@ Json captureAllFunctionProjection(
 		{"initial_matcher_tree", initialMatcherTree},
 		{"initial_matcher_roots", initialMatcherRoots},
 		{"final_matcher_tree", matcherTreeSignature(context)},
+		{"final_matcher_roots", matcherTreeMutationSnapshot(context)},
 		{"precedence_signature", matcherCache.precedenceSignature()},
 		{"precedence_rules", precedenceRulesSignature(*context.mainSection)},
 		{"inactive", std::move(selected)},
@@ -199,12 +197,10 @@ Json captureAllFunctionProjection(
 			if (reuseGlobalMatches && !stableMatchingEnvironment && !hasNoGlobalAccess(section) && projectionWork)
 				projectionWork->globalMatchesReused++;
 		} else {
-			const Json *oldEntries = prior && prior->at("match_entries").contains(path)
-										 ? &prior->at("match_entries").at(path)
-										 : nullptr;
+			const Json *oldEntries =
+				prior && prior->at("match_entries").contains(path) ? &prior->at("match_entries").at(path) : nullptr;
 			ResolvedFunctionMatches result = resolvedFunctionMatches(
-				section, paths, matcherCache, oldEntries,
-				projectionWork ? &projectionWork->matchEntriesReused : nullptr
+				section, paths, matcherCache, oldEntries, projectionWork ? &projectionWork->matchEntriesReused : nullptr
 			);
 			matches[path] = std::move(result.fingerprint);
 			matchEntries[path] = std::move(result.entries);

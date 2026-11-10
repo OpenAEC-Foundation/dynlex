@@ -882,9 +882,11 @@ newly relevant overloads and failed lookups rematch.
 The matcher still restores the result and its dependencies; changed bodies and
 changed matching environments compute
 their keys normally.
-When the final indexed tree and precedence families also match, unchanged
-references replay their saved precedence-pass keys. Their first-pass keys must
-still match; a rule or overload change uses normal matching. A precedence
+Unchanged references replay saved precedence-pass keys when their first-pass
+keys and precedence families still match. If the final indexed tree changed,
+the cache compares its wildcard and starting-literal mutations against each
+owning function before replay; a potentially affected function rematches.
+Changes that alter precedence rules or participating families also rematch. A precedence
 rebuild never carries replay keys into a later pass.
 An edit confined to the bodies of ordinary functions that had no inferred
 instantiation in the prior build can stop after pattern resolution and validation.

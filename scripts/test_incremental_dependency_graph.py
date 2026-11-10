@@ -758,6 +758,12 @@ def check_precedence_match_key_replay(root, build):
         "unchanged precedence rules rebuilt their full signature"
     assert edited[0]["precedence_signature_ms"] == 0
     assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text().replace(
+        'to unrelated:', 'to distant: @intrinsic("discard", 9)\nto unrelated:'))
+    distant = build(entry=main)
+    assert distant[0]["precedence_match_keys_replayed"] >= 1, \
+        "unrelated pattern-tree addition recomputed precedence-sensitive matches"
+    assert distant[1:] == build(False, entry=main)[1:]
     main.write_text(main.read_text().replace('before: $ times $', 'after: $ times $'))
     changed_rule = build(entry=main)
     assert changed_rule[0]["precedence_match_keys_replayed"] == 0, \

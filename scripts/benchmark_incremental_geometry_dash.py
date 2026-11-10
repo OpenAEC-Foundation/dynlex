@@ -93,7 +93,10 @@ for name, samples in results.items():
         **{field: round(statistics.median(sample[2][field] for sample in samples), 1)
            for field in ("frontend_ms", "import_ms", "parse_ms", "resolve_ms", "resolution_setup_ms",
                          "resolution_definition_ms", "resolution_body_ms",
-                         "resolution_precedence_ms", "resolution_rematch_ms",
+                         "resolution_precedence_ms", "resolution_rematch_ms", "resolution_candidate_collection_ms",
+                         "resolution_candidate_sort_ms", "resolution_replay_setup_ms",
+                         "resolution_candidate_match_ms", "precedence_tree_signature_ms",
+                         "precedence_signature_ms", "precedence_rule_signature_ms",
                          "variable_like_count_references_scanned",
                          "body_resolution_reference_visits", "matcher_cache_hits",
                          "temporary_expression_parse_hits",

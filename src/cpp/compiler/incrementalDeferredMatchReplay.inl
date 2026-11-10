@@ -1,5 +1,9 @@
 // The program snapshot owns these entries throughout frontend compilation.
-using PriorMatchKeys = std::unordered_map<const PatternReference *, const Json *>;
+struct PriorMatchKey {
+	const Json *entry;
+	const Section *owner;
+};
+using PriorMatchKeys = std::unordered_map<const PatternReference *, PriorMatchKey>;
 
 struct MatcherTreeChanges {
 	bool wildcard = false;
@@ -59,8 +63,7 @@ struct MatcherTreeChanges {
 
 void prepareDeferredMatchReplay(
 	ParseContext &context, const Json &previous, const Json &observations, std::string_view initialMatcherTree,
-	const Json &initialMatcherRoots, const std::list<PatternReference *> &deferredReferences,
-	PriorMatchKeys &precedenceKeys
+	const Json &initialMatcherRoots, const std::list<PatternReference *> &deferredReferences, PriorMatchKeys &precedenceKeys
 ) {
 	if (!previous.contains("all_function_projection") || !compatibleObservations(previous, observations, context))
 		return;
@@ -104,8 +107,7 @@ void prepareDeferredMatchReplay(
 		if (scopeRuleBodies != prior.at("scope_rule_bodies"))
 			return;
 		for (const auto &[path, _] : scopeRuleBodies.items())
-			if (!bodies.contains(path) || !prior.at("bodies").contains(path) ||
-				bodies.at(path) != prior.at("bodies").at(path))
+			if (!bodies.contains(path) || !prior.at("bodies").contains(path) || bodies.at(path) != prior.at("bodies").at(path))
 				return;
 	}
 	std::unordered_set<const PatternReference *> deferred(deferredReferences.begin(), deferredReferences.end());
@@ -113,9 +115,8 @@ void prepareDeferredMatchReplay(
 		if (!reusable.contains(section) || !priorDeclarations.contains(path) ||
 			(treeChanges && sectionDeclaration(*section) != priorDeclarations.at(path)) ||
 			(treeChanges && (section->parent != context.mainSection || treeChanges->mayAffect(*section))) ||
-			(!stableAmbient && !hasNoGlobalAccess(section)) ||
-			!prior.at("bodies").contains(path) || !bodies.contains(path) || bodies.at(path) != prior.at("bodies").at(path) ||
-			!prior.at("match_entries").contains(path))
+			(!stableAmbient && !hasNoGlobalAccess(section)) || !prior.at("bodies").contains(path) || !bodies.contains(path) ||
+			bodies.at(path) != prior.at("bodies").at(path) || !prior.at("match_entries").contains(path))
 			continue;
 		const Json &entries = prior.at("match_entries").at(path);
 		std::vector<PatternReference *> references;
@@ -150,7 +151,7 @@ void prepareDeferredMatchReplay(
 			if (deferred.contains(reference))
 				reference->prevalidatedMatcherKey = initial;
 			if (entry.at("key").is_string() && entry.at("key") != entry.at("initial_key"))
-				precedenceKeys.emplace(reference, &entry);
+				precedenceKeys.emplace(reference, PriorMatchKey{&entry, section});
 		}
 	}
 }
@@ -165,12 +166,13 @@ void preparePrecedenceMatchReplay(
 	auto started = Clock::now();
 	std::string tree = matcherTreeSignature(context);
 	treeMilliseconds += elapsedMilliseconds(started);
+	std::optional<MatcherTreeChanges> treeChanges;
 	if (tree != prior.at("final_matcher_tree").get<std::string>())
-		return;
+		treeChanges.emplace(prior.at("final_matcher_roots"), matcherTreeMutationSnapshot(context));
 	started = Clock::now();
 	std::string rules = precedenceRulesSignature(*context.mainSection);
 	ruleMilliseconds += elapsedMilliseconds(started);
-	if (rules == prior.at("precedence_rules").get<std::string>()) {
+	if (!treeChanges && rules == prior.at("precedence_rules").get<std::string>()) {
 		matcherCache.reusePrecedenceSignature(prior.at("precedence_signature").get_ref<const std::string &>());
 		signaturesReused++;
 	} else {
@@ -180,11 +182,19 @@ void preparePrecedenceMatchReplay(
 		if (precedence != prior.at("precedence_signature").get<std::string>())
 			return;
 	}
+	std::unordered_map<const Section *, bool> affectedOwners;
 	for (PatternReference *reference : candidates) {
 		auto old = precedenceKeys.find(reference);
 		if (old == precedenceKeys.end())
 			continue;
-		const Json &entry = *old->second;
+		if (treeChanges) {
+			auto [affected, inserted] = affectedOwners.try_emplace(old->second.owner, false);
+			if (inserted)
+				affected->second = treeChanges->mayAffect(*old->second.owner);
+			if (affected->second)
+				continue;
+		}
+		const Json &entry = *old->second.entry;
 		if (reference->incrementalMatcherKey == entry.at("initial_key").get_ref<const std::string &>())
 			reference->prevalidatedMatcherKey = entry.at("key").get_ref<const std::string &>();
 	}
