@@ -368,9 +368,11 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalInferenceReuse.inl"
 
 #include "incrementalDependencyGraph.inl"
+#include "incrementalConstraintValue.inl"
 #include "incrementalConstraintProbeReuse.inl"
 
 #include "incrementalInferencePreinfer.inl"
+#include "incrementalStatisticsReport.inl"
 } // namespace
 
 bool compileIncrementally(
@@ -508,6 +510,9 @@ bool compileIncrementally(
 			context.recordParsedExpression = [&](Range range, SectionType patternType, bool registerReferences,
 												 const Expression *expression) {
 				parserCache.record(range, patternType, registerReferences, expression);
+			};
+			context.retainParsedTemporaryExpression = [&](Range range, SectionType patternType) {
+				parserCache.retainTemporary(range, patternType);
 			};
 			context.reuseParsedDefinition = [&](Range range, std::vector<DefinitionPatternElement> &elements) {
 				return parserCache.reuseDefinition(range, elements);
@@ -696,6 +701,7 @@ bool compileIncrementally(
 			statistics.definitionParseMisses = parserCache.definitionMissCount();
 			context.reuseParsedExpression = {};
 			context.recordParsedExpression = {};
+			context.retainParsedTemporaryExpression = {};
 			context.reuseParsedDefinition = {};
 			context.recordParsedDefinition = {};
 			statistics.reusedInferenceInstantiations = inferenceReuse ? inferenceReuse->reusedCount() : 0;
@@ -898,95 +904,7 @@ bool compileIncrementally(
 		statistics.cacheFinalizeMilliseconds = elapsedMilliseconds(finalizeStart);
 		statistics.totalMilliseconds = elapsedMilliseconds(compileStart);
 		if (showStatistics)
-			std::cerr << "incremental: "
-					  << Json{{"frontend_reused", statistics.reusedFrontend},
-							  {"type_inference_reused", statistics.reusedTypeInference},
-							  {"inference_instantiations_reused", statistics.reusedInferenceInstantiations},
-							  {"pure_value_summary_hits", context.pureValueSummaryHits},
-							  {"inference_summary_sections_reused", statistics.reusedInferenceSummarySections},
-							  {"preinferred_instantiations", statistics.preinferredInstantiations},
-							  {"functions_ir_reused", statistics.reusedFunctionIR},
-							  {"dependency_graph_sections_reused", statistics.dependencyGraphSectionsReused},
-							  {"preinfer_dependency_graph_sections_checked", statistics.preinferDependencyGraphSectionsChecked},
-							  {"dependency_graph_entries_reused", statistics.dependencyGraphEntriesReused},
-							  {"dependency_graph_reverse_nodes_updated", statistics.dependencyGraphReverseNodesUpdated},
-							  {"diagnostic_records_reused", statistics.reusedDiagnosticRecords},
-							  {"linked_cached_objects", statistics.linkedCachedObjects},
-							  {"objects_reused", statistics.reusedObjects},
-							  {"objects_built", statistics.builtObjects},
-							  {"matcher_cache_hits", statistics.matcherCacheHits},
-							  {"deferred_match_keys_replayed", statistics.deferredMatchKeysReplayed},
-							  {"precedence_match_keys_replayed", statistics.precedenceMatchKeysReplayed},
-							  {"precedence_matcher_cache_hits", statistics.precedenceMatcherCacheHits},
-							  {"expression_parse_hits", statistics.expressionParseHits},
-							  {"temporary_expression_parse_hits", statistics.temporaryExpressionParseHits},
-							  {"constraint_probes_reused", context.constraintProbesReused},
-							  {"constraint_probes_run", context.constraintProbesRun},
-							  {"expression_parse_misses", statistics.expressionParseMisses},
-							  {"definition_parse_hits", statistics.definitionParseHits},
-							  {"definition_parse_misses", statistics.definitionParseMisses},
-							  {"body_resolution_reference_visits", context.bodyResolutionReferenceVisits},
-							  {"body_resolution_match_cache_hits", context.bodyResolutionMatchCacheHits},
-							  {"body_resolution_match_computations", context.bodyResolutionMatchComputations},
-							  {"variable_like_count_references_scanned", context.variableLikeCountReferencesScanned},
-							  {"resolution_setup_ms", context.resolutionSetupMilliseconds},
-							  {"resolution_definition_ms", context.resolutionDefinitionMilliseconds},
-							  {"resolution_body_ms", context.resolutionBodyMilliseconds},
-							  {"resolution_precedence_ms", context.resolutionPrecedenceMilliseconds},
-							  {"resolution_rematch_ms", context.resolutionRematchMilliseconds},
-							  {"resolution_candidate_collection_ms", context.resolutionCandidateCollectionMilliseconds},
-							  {"resolution_candidate_sort_ms", context.resolutionCandidateSortMilliseconds},
-							  {"resolution_replay_setup_ms", context.resolutionReplaySetupMilliseconds},
-							  {"resolution_candidate_match_ms", context.resolutionCandidateMatchMilliseconds},
-							  {"precedence_graph_edges", context.patternPrecedenceGraphEdges},
-							  {"source_projections_reused", statistics.sourceProjectionWork.reused},
-							  {"source_projections_scanned", statistics.sourceProjectionWork.scanned},
-							  {"source_projection_mask_ms", statistics.sourceProjectionWork.maskMilliseconds},
-							  {"source_projection_files_ms", statistics.sourceProjectionWork.sourceMilliseconds},
-							  {"projection_setup_ms", statistics.sourceProjectionWork.setupMilliseconds},
-							  {"projection_body_ms", statistics.sourceProjectionWork.bodyMilliseconds},
-							  {"projection_declarations_ms", statistics.sourceProjectionWork.declarationMilliseconds},
-							  {"projection_matches_ms", statistics.sourceProjectionWork.matchMilliseconds},
-							  {"projection_global_matches_reused", statistics.sourceProjectionWork.globalMatchesReused},
-							  {"projection_top_level_sections_reused", statistics.topLevelProjectionSectionsReused},
-							  {"projection_match_entries_reused", statistics.sourceProjectionWork.matchEntriesReused},
-							  {"projection_declaration_sections_reused", statistics.sourceProjectionWork.declarationSectionsReused},
-							  {"projection_inactive_ms", statistics.sourceProjectionWork.inactiveMilliseconds},
-							  {"projection_ambient_ms", statistics.sourceProjectionWork.ambientMilliseconds},
-							  {"projection_compatibility_ms", statistics.sourceProjectionWork.compatibilityMilliseconds},
-							  {"matcher_key_ms", statistics.matcherKeyMilliseconds},
-							  {"matcher_restore_ms", statistics.matcherRestoreMilliseconds},
-							  {"precedence_tree_signature_ms", statistics.precedenceTreeSignatureMilliseconds},
-							  {"precedence_signature_ms", statistics.precedenceSignatureMilliseconds},
-							  {"precedence_rule_signature_ms", statistics.precedenceRuleSignatureMilliseconds},
-							  {"precedence_signature_reused", statistics.precedenceSignaturesReused},
-							  {"cache_load_ms", statistics.cacheLoadMilliseconds},
-							  {"cache_payload_load_ms", statistics.cachePayloadLoadMilliseconds},
-							  {"cache_payloads_loaded", statistics.cachePayloadsLoaded},
-							  {"cache_restore_ms", statistics.cacheRestoreMilliseconds},
-							  {"cache_finalize_ms", statistics.cacheFinalizeMilliseconds},
-							  {"total_ms", statistics.totalMilliseconds},
-							  {"frontend_ms", statistics.frontendMilliseconds},
-							  {"import_ms", context.frontendStageMilliseconds[0]},
-							  {"parse_ms", context.frontendStageMilliseconds[1]},
-							  {"resolve_ms", context.frontendStageMilliseconds[2]},
-							  {"validate_target_ms", context.frontendStageMilliseconds[3]},
-							  {"inference_ms", statistics.inferenceMilliseconds},
-							  {"projection_ms", statistics.projectionMilliseconds},
-							  {"inactive_projection_ms", statistics.inactiveProjectionMilliseconds},
-							  {"inactive_projection_matches_rechecked", statistics.inactiveProjectionMatchesRechecked},
-							  {"parser_snapshot_ms", statistics.parserSnapshotMilliseconds},
-							  {"matcher_snapshot_ms", statistics.matcherSnapshotMilliseconds},
-							  {"dependency_graph_ms", statistics.dependencyGraphMilliseconds},
-							  {"preinference_ms", statistics.preinferenceMilliseconds},
-							  {"ir_generation_ms", statistics.irGenerationMilliseconds},
-							  {"snapshot_ms", statistics.snapshotMilliseconds},
-							  {"cache_write_ms", statistics.cacheWriteMilliseconds},
-							  {"partition_ms", statistics.partitionMilliseconds},
-							  {"link_ms", statistics.linkMilliseconds},
-							  {"codegen_and_link_ms", statistics.codegenMilliseconds}}
-							 .dump()
-					  << '\n';
+			emitIncrementalStatistics(context, statistics);
 		return success;
 	} catch (const std::exception &error) {
 		std::cerr << "Incremental compilation failed: " << error.what() << '\n';

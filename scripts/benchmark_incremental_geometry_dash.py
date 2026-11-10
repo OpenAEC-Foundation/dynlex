@@ -102,6 +102,7 @@ for name, samples in results.items():
                          "body_resolution_match_cache_hits", "body_resolution_match_computations",
                          "temporary_expression_parse_hits",
                          "constraint_probes_reused", "constraint_probes_run",
+                         "constraint_values_reused", "constraint_expressions_reused",
                          "deferred_match_keys_replayed", "precedence_match_keys_replayed",
                          "matcher_key_ms", "matcher_restore_ms", "matcher_snapshot_ms",
                          "projection_ms", "projection_setup_ms", "projection_body_ms",
@@ -115,6 +116,10 @@ for name, samples in results.items():
                          "cache_payload_load_ms", "cache_write_ms")},
         "frontend_reused": all(sample[2]["frontend_reused"] for sample in samples),
         "functions_ir_reused": round(statistics.median(sample[2]["functions_ir_reused"] for sample in samples)),
+        "inference_stage_ms": [
+            round(statistics.median(sample[2]["inference_stage_ms"][stage] for sample in samples), 1)
+            for stage in range(6)
+        ],
         "projection_top_level_sections_reused": round(statistics.median(
             sample[2]["projection_top_level_sections_reused"] for sample in samples)),
     }, sort_keys=True))

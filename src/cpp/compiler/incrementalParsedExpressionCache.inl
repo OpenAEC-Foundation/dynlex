@@ -283,6 +283,16 @@ class IncrementalParsedExpressionCache {
 		current.insert_or_assign(expressionKey(range, patternType, registerPatternReferences), std::move(payload));
 	}
 
+	void retainTemporary(Range range, SectionType patternType) {
+		std::string key = expressionKey(range, patternType, false);
+		if (current.contains(key))
+			return;
+		if (auto found = prior.find(key); found != prior.end()) {
+			current.emplace(std::move(key), found->second);
+			hasCurrentTemporaryEntries = true;
+		}
+	}
+
 	bool reuseDefinition(Range range, std::vector<DefinitionPatternElement> &elements) {
 		std::string key = definitionKey(range);
 		std::string_view payload;

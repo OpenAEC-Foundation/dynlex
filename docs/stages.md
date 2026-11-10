@@ -832,9 +832,17 @@ new pattern cannot match any saved constraint text or current pattern reference.
 Potential matches rerun the probes. Global declaration identities use positions
 within their source files, so adding lines to an earlier imported file does not
 change the identity of an unchanged global declaration.
-The compiler still commits each constraint in the current inference context.
-`constraint_probes_reused` and
-`constraint_probes_run` report the skipped and executed speculative probes.
+The cache also records resolved constraint values and their dependency roots. When a
+probe is reusable and its result contains no process-local class or function identity,
+the compiler installs that result directly in the current declaration and carries
+forward its dependency roots. It also skips parsing that constraint expression when
+the saved probe schedule still matches. If the schedule changes, omitted expressions
+are parsed before inference. Other results are committed by inference as before.
+`constraint_probes_reused`, `constraint_probes_run`, `constraint_values_reused`, and
+`constraint_expressions_reused` report these separate decisions. The six entries
+of `inference_stage_ms` measure declared constraints, pattern conflicts,
+incremental preinference, root inference, exposed and managed functions, and final
+variable and return validation, in that order.
 It reuses pointer-free matcher results from the previous build in both the initial
 resolution and precedence matching passes for unchanged references when the pattern-tree mutation history, the reference's
 source line and position mapping, relative lexical declaration visibility, and

@@ -166,6 +166,29 @@ void prepareConstraintProbeReuse(
 	const Json &schedule = prior.at("constraint_probe_schedule");
 	context.priorConstraintProbeItems = schedule.at("items").get<std::vector<std::string>>();
 	context.priorConstraintProbePasses = schedule.at("passes").get<std::vector<int>>();
+	const Json &values = schedule.at("values");
+	const Json &roots = schedule.at("roots");
+	requireCompilerInvariant(
+		values.size() == reusable.size() && roots.size() == reusable.size(),
+		"saved type-constraint values and dependencies do not match the probe schedule"
+	);
+	context.priorConstraintProbeValues.resize(reusable.size());
+	context.priorConstraintProbeDependencies.resize(reusable.size());
+	for (size_t index = 0; index < reusable.size(); index++) {
+		if (!reusable[index])
+			continue;
+		for (const Json &root : roots.at(index)) {
+			auto section = sections.find(root.get<std::string>());
+			if (section == sections.end()) {
+				reusable[index] = false;
+				context.priorConstraintProbeDependencies[index].clear();
+				break;
+			}
+			context.priorConstraintProbeDependencies[index].insert(section->second);
+		}
+		if (reusable[index] && !values.at(index).is_null())
+			context.priorConstraintProbeValues[index] = decodePortableConstraintValue(values.at(index));
+	}
 	context.priorConstraintProbeReusable = std::move(reusable);
 	context.reuseDeclaredConstraintProbes = true;
 }
@@ -185,17 +208,26 @@ Json captureConstraintProbeSchedule(const ParseContext &context, const std::map<
 		context.constraintProbeItems.size() == context.constraintProbeDependencies.size(),
 		"type-constraint probe schedule has mismatched item and dependency counts"
 	);
+	requireCompilerInvariant(
+		context.constraintProbeItems.size() == context.constraintProbeValues.size(),
+		"type-constraint probe schedule has mismatched item and value counts"
+	);
 	Json roots = Json::array();
-	for (const auto &dependencies : context.constraintProbeDependencies) {
+	Json values = Json::array();
+	for (size_t index = 0; index < context.constraintProbeDependencies.size(); index++) {
+		const auto &dependencies = context.constraintProbeDependencies[index];
 		std::set<std::string> paths;
 		for (const Section *section : dependencies)
 			paths.insert(sectionPaths.at(section));
 		roots.push_back(paths);
+		const auto &value = context.constraintProbeValues[index];
+		values.push_back(value ? encodePortableConstraintValue(*value).value_or(Json(nullptr)) : Json(nullptr));
 	}
 	return Json{
 		{"items", context.constraintProbeItems},
 		{"texts", context.constraintProbeTexts},
 		{"passes", context.constraintProbePasses},
-		{"roots", roots}
+		{"roots", roots},
+		{"values", values}
 	};
 }

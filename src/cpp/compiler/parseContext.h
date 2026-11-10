@@ -49,6 +49,10 @@ struct ParseContext {
 		std::vector<std::string> parameterNames;
 		std::vector<DataType> argumentTypes;
 	};
+	struct IncrementalConstraintValue {
+		TypeConstraint constraint;
+		DataType parameterType;
+	};
 
 	struct ShaderUniform {
 		std::string name;
@@ -94,16 +98,22 @@ struct ParseContext {
 	std::vector<std::string> priorConstraintProbeItems;
 	std::vector<int> priorConstraintProbePasses;
 	std::vector<bool> priorConstraintProbeReusable;
+	std::vector<std::optional<IncrementalConstraintValue>> priorConstraintProbeValues;
+	std::vector<std::unordered_set<const Section *>> priorConstraintProbeDependencies;
 	std::vector<std::string> constraintProbeItems;
 	std::vector<std::string> constraintProbeTexts;
 	std::vector<int> constraintProbePasses;
+	std::vector<std::optional<IncrementalConstraintValue>> constraintProbeValues;
 	std::vector<std::unordered_set<const Section *>> constraintProbeDependencies;
 	size_t constraintProbesReused = 0;
 	size_t constraintProbesRun = 0;
+	size_t constraintValuesReused = 0;
+	size_t constraintExpressionsReused = 0;
 	// Parse cache entries contain only unresolved syntax. Restored executable
 	// expressions register references; temporary type expressions keep them local.
 	std::function<Expression *(Section *, Range, SectionType, bool)> reuseParsedExpression;
 	std::function<void(Range, SectionType, bool, const Expression *)> recordParsedExpression;
+	std::function<void(Range, SectionType)> retainParsedTemporaryExpression;
 	std::function<bool(Range, std::vector<DefinitionPatternElement> &)> reuseParsedDefinition;
 	std::function<void(Range, const std::vector<DefinitionPatternElement> &)> recordParsedDefinition;
 	// Native incremental builds may import a previously generated function body
@@ -116,6 +126,7 @@ struct ParseContext {
 	std::function<void(Section *, const InstantiationKey *, llvm::Function *, bool)> recordGeneratedFunction;
 	std::function<bool(ParseContext &)> importReusedFunctions;
 	std::array<double, 4> frontendStageMilliseconds{};
+	std::array<double, 6> inferenceStageMilliseconds{};
 	double resolutionSetupMilliseconds = 0;
 	double resolutionDefinitionMilliseconds = 0;
 	double resolutionBodyMilliseconds = 0;

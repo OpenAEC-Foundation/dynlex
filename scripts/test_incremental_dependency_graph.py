@@ -38,19 +38,23 @@ def check_temporary_expression_parse_reuse(root, build):
     body_edit = build(entry=main)
     assert body_edit[0]["constraint_probes_reused"] >= 1, \
         "unrelated active body edit re-probed an unchanged type constraint"
+    assert body_edit[0]["constraint_values_reused"] >= 1, \
+        "unrelated active body edit re-inferred an unchanged type constraint"
+    assert body_edit[0]["constraint_expressions_reused"] >= 1, \
+        "unrelated active body edit rebuilt an unchanged type expression"
     assert body_edit[1:] == build(False, entry=main)[1:]
     main.write_text(main.read_text().replace('use 1\n', 'use 2\n'))
     edited = build(entry=main)
-    assert edited[0]["temporary_expression_parse_hits"] >= 1, \
-        "unchanged temporary type expression was parsed again"
+    assert edited[0]["temporary_expression_parse_hits"] + edited[0]["constraint_expressions_reused"] >= 1, \
+        "unchanged temporary type expression was neither restored nor skipped"
     assert edited[1:] == build(False, entry=main)[1:]
     main.write_text(main.read_text().replace('"discard", 9)', '"discard", 8)'))
     inactive = build(entry=main)
     assert inactive[0]["type_inference_reused"], "unused function edit re-ran inference"
     main.write_text(main.read_text().replace('"discard", 2)', '"discard", 3)'))
     resumed = build(entry=main)
-    assert resumed[0]["temporary_expression_parse_hits"] >= 1, \
-        "skipped inference discarded unchanged temporary parse entries"
+    assert resumed[0]["temporary_expression_parse_hits"] + resumed[0]["constraint_expressions_reused"] >= 1, \
+        "skipped inference discarded unchanged temporary expression reuse"
     assert resumed[0]["constraint_probes_reused"] >= 1, \
         "skipped inference discarded the unchanged constraint dependency schedule"
     assert resumed[1:] == build(False, entry=main)[1:]
@@ -60,6 +64,10 @@ def check_temporary_expression_parse_reuse(root, build):
         "changed type provider reused its previous constraint probe"
     assert dependency_edit[0]["constraint_probes_run"] >= 1, \
         "changed type provider did not run the constraint probe"
+    assert dependency_edit[0]["constraint_values_reused"] == 0, \
+        "changed type provider retained its previous resolved constraint"
+    assert dependency_edit[0]["constraint_expressions_reused"] == 0, \
+        "changed type provider omitted its current type expression"
     assert dependency_edit[1:] == build(False, entry=main, success=False)[1:]
 
 
@@ -81,6 +89,27 @@ def check_independent_constraint_probes(root, build):
     assert changed[1:] == build(False, entry=main, success=False)[1:]
 
 
+def check_skipped_constraint_expression_retention(root, build):
+    main = root / "constraint_expression_retention.dl"
+    source = ('floating-point means: @intrinsic("type", "float")\n'
+              'integer means: @intrinsic("type", "int")\n'
+              'to accept float {floating-point:value}: @intrinsic("discard", value)\n'
+              'to accept integer {integer:value}: @intrinsic("discard", value)\n'
+              'accept float 1.0\naccept integer 1\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('"type", "int"', '"type", ("int")'))
+    first_edit = build(entry=main)
+    assert first_edit[0]["constraint_expressions_reused"] >= 1, \
+        "independent constraint expression was rebuilt after a provider edit"
+    assert first_edit[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text().replace('"type", "float"', '"type", ("float")'))
+    second_edit = build(entry=main)
+    assert second_edit[0]["temporary_expression_parse_hits"] >= 1, \
+        "skipped constraint expression was lost when another expression was parsed"
+    assert second_edit[1:] == build(False, entry=main)[1:]
+
+
 def check_unrelated_added_pattern_constraint_probes(root, build):
     main = root / "unrelated_added_pattern_constraint_probes.dl"
     source = ('integer means: @intrinsic("type", "int")\n'
@@ -94,6 +123,8 @@ def check_unrelated_added_pattern_constraint_probes(root, build):
         "an unrelated added pattern re-probed the existing type constraint"
     assert edited[0]["constraint_probes_run"] == 0, \
         "an unrelated added pattern executed an existing type-constraint probe"
+    assert edited[0]["constraint_values_reused"] >= 1, \
+        "an unrelated added pattern re-inferred an existing type constraint"
     assert edited[1:] == build(False, entry=main)[1:]
 
     relevant = root / "relevant_added_pattern_constraint_probes.dl"
