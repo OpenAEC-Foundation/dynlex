@@ -943,6 +943,13 @@ function leaves that function's identity and cached inference or IR intact.
 Declaration fingerprints include each resolved pattern element's classification.
 When a body edit removes the last use of an implicit parameter, the changed
 declaration invalidates saved caller matches even though its spelling is unchanged.
+When adding or changing a declaration prevents whole-program declaration reuse,
+unchanged top-level functions can still reuse their saved declaration entries.
+This checks their body and header, syntax configuration, scope rules, and the
+starting literals and wildcard paths changed in the initial and final indexed
+pattern trees. Functions that declare root globals also require the same root
+binding positions; other functions cannot bind those globals. The whole-program
+declaration fingerprint includes new entries.
 When the declaration and surrounding source projections are stable, an edited
 build carries resolved-match fingerprints forward for unchanged function bodies
 and recomputes fingerprints for edited bodies or changed matching environments.

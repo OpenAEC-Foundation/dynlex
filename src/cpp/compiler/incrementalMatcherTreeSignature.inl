@@ -40,3 +40,59 @@ Json matcherTreeMutationSnapshot(const ParseContext &context) {
 	}
 	return roots;
 }
+
+struct MatcherTreeChanges {
+	bool wildcard = false;
+	std::vector<std::string> literals;
+
+	MatcherTreeChanges(const Json &prior, const Json &current) {
+		requireCompilerInvariant(prior.size() == current.size(), "incremental matcher tree root count changed");
+		for (size_t index = 0; index < current.size(); index++) {
+			const Json &oldRoot = prior.at(index);
+			const Json &newRoot = current.at(index);
+			wildcard = wildcard || oldRoot.at("wildcard") != newRoot.at("wildcard");
+			const Json &oldLiterals = oldRoot.at("literals");
+			const Json &newLiterals = newRoot.at("literals");
+			for (const auto &[hex, digest] : oldLiterals.items())
+				if (!newLiterals.contains(hex) || newLiterals.at(hex) != digest)
+					literals.push_back(llvm::fromHex(hex));
+			for (const auto &[hex, _] : newLiterals.items())
+				if (!oldLiterals.contains(hex))
+					literals.push_back(llvm::fromHex(hex));
+		}
+		std::sort(literals.begin(), literals.end());
+		literals.erase(std::unique(literals.begin(), literals.end()), literals.end());
+	}
+
+	bool mayAffect(const Section &section) const {
+		if (wildcard)
+			return true;
+		const auto containsChangedStart = [&](std::string_view text) {
+			return std::ranges::any_of(literals, [&](const std::string &literal) {
+				return text.find(literal) != std::string_view::npos;
+			});
+		};
+		const auto visit = [&](auto &&self, const Section &body) -> bool {
+			if (body.openingLine && containsChangedStart(body.openingLine->fullText))
+				return true;
+			for (const CodeLine *line : body.codeLines)
+				if (containsChangedStart(line->fullText))
+					return true;
+			for (const PatternReference *reference : body.patternReferences) {
+				if (containsChangedStart(reference->pattern.text))
+					return true;
+				if (reference->expression)
+					for (size_t index = 0; index < reference->expression->arguments.size(); index++) {
+						std::optional<std::string> spelling = numericPatternArgumentSpelling(reference, index);
+						if (spelling && containsChangedStart(*spelling))
+							return true;
+					}
+			}
+			for (const Section *child : body.children)
+				if (child->patternDefinitions.empty() && self(self, *child))
+					return true;
+			return false;
+		};
+		return visit(visit, section);
+	}
+};

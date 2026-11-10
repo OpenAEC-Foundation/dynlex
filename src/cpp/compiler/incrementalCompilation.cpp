@@ -602,7 +602,8 @@ bool compileIncrementally(
 			else if (compiled)
 				resolvedFunctionProjection = captureAllFunctionProjection(
 					context, recording->observations, sections, matcherCache, initialMatcherTree, initialMatcherRoots,
-					previous ? &*previous : nullptr, &statistics.sourceProjectionWork
+					previous ? &*previous : nullptr, &statistics.sourceProjectionWork,
+					previous && compatibleObservations(*previous, recording->observations, context)
 				);
 			statistics.projectionMilliseconds = elapsedMilliseconds(stageStart);
 			std::map<const Section *, std::string> sectionPaths;

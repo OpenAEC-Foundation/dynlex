@@ -263,9 +263,29 @@ def check_resolved_declaration_snapshot_reuse(root, build):
     assert edited[1:] == build(False, entry=main)[1:]
     main.write_text(main.read_text() + 'to addition: @intrinsic("discard", 4)\n')
     added = build(entry=main)
-    assert added[0]["projection_declaration_sections_reused"] == 0, \
-        "a new declaration reused the old whole-program declaration snapshot"
+    addition_projection = projection_for(root / "cache", main)
+    assert added[0]["projection_declaration_sections_reused"] >= 1, \
+        "a new declaration rebuilt independent resolved declarations"
+    assert addition_projection["declarations"] != current["declarations"], \
+        "a new declaration retained the old whole-program declaration snapshot"
     assert added[1:] == build(False, entry=main)[1:]
+
+    imported = root / "declaration_import_helper.dl"
+    imported_main = root / "declaration_import_main.dl"
+    imported.write_text('to helper: @intrinsic("discard", 1)\n')
+    imported_main.write_text('import declaration_import_helper.dl\n'
+                             'to independent: @intrinsic("discard", 2)\n'
+                             '@intrinsic("store", value, 3)\nindependent\n')
+    build(entry=imported_main)
+    before_import_edit = projection_for(root / "cache", imported_main)
+    imported.write_text(imported.read_text() + 'to distant: @intrinsic("discard", 4)\n')
+    shifted = build(entry=imported_main)
+    after_import_edit = projection_for(root / "cache", imported_main)
+    assert before_import_edit["global_resolution"] != after_import_edit["global_resolution"], \
+        "import insertion did not shift the recorded global source position"
+    assert shifted[0]["projection_declaration_sections_reused"] >= 1, \
+        "a shifted root global position rebuilt an unrelated function declaration"
+    assert shifted[1:] == build(False, entry=imported_main)[1:]
 
 
 def check_inactive_projection_refresh(root, build):
@@ -763,6 +783,8 @@ def check_precedence_match_key_replay(root, build):
     distant = build(entry=main)
     assert distant[0]["precedence_match_keys_replayed"] >= 1, \
         "unrelated pattern-tree addition recomputed precedence-sensitive matches"
+    assert distant[0]["projection_declaration_sections_reused"] >= 1, \
+        "unrelated pattern-tree addition rebuilt an unchanged function declaration"
     assert distant[1:] == build(False, entry=main)[1:]
     main.write_text(main.read_text().replace('before: $ times $', 'after: $ times $'))
     changed_rule = build(entry=main)

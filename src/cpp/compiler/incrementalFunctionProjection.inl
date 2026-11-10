@@ -54,7 +54,7 @@ Json scopeRuleBodyPaths(const std::map<std::string, Section *> &sections) {
 Json captureAllFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
 	IncrementalMatcherCache &matcherCache, std::string_view initialMatcherTree, const Json &initialMatcherRoots,
-	const Json *previous = nullptr, SourceProjectionWork *projectionWork = nullptr
+	const Json *previous, SourceProjectionWork *projectionWork, bool compatibleSyntax
 ) {
 	auto phaseStart = Clock::now();
 	const Json *prior =
@@ -121,16 +121,40 @@ Json captureAllFunctionProjection(
 	Json declarations = Json::object();
 	Json allDeclarationEntries = Json::array();
 	Json ambientDeclarationEntries = Json::array();
+	Json currentGlobalResolution = globalResolutionIdentity(*context.mainSection);
+	std::string finalMatcherTree = matcherTreeSignature(context);
+	Json finalMatcherRoots = matcherTreeMutationSnapshot(context);
 	if (reuseDeclarations) {
 		declarations = prior->at("function_declarations");
 		if (projectionWork)
 			projectionWork->declarationSectionsReused += declarationSections - changedDeclarations;
 	} else {
+		bool stableDeclarationContext = prior && compatibleSyntax && currentScopeRuleBodies == prior->at("scope_rule_bodies");
+		bool stableRootBindings = stableDeclarationContext && currentGlobalResolution == prior->at("global_resolution");
+		std::optional<MatcherTreeChanges> initialChanges, finalChanges;
+		if (stableDeclarationContext) {
+			if (initialMatcherTree != prior->at("initial_matcher_tree").get_ref<const std::string &>())
+				initialChanges.emplace(prior->at("initial_matcher_roots"), initialMatcherRoots);
+			if (finalMatcherTree != prior->at("final_matcher_tree").get_ref<const std::string &>())
+				finalChanges.emplace(prior->at("final_matcher_roots"), finalMatcherRoots);
+		}
 		for (const auto &[path, section] : sections) {
 			bool reusableSection = reusable.contains(section);
 			if (!reusableSection && section->patternDefinitions.empty())
 				continue;
-			Json entry = sectionDeclaration(*section);
+			const Json *priorDeclaration =
+				stableDeclarationContext && reusableSection && section->type == SectionType::Function &&
+						section->parent == context.mainSection && (stableRootBindings || hasNoGlobalAccess(section)) &&
+						prior->at("function_declarations").contains(path) && prior->at("bodies").contains(path) &&
+						bodyDigests.contains(path) && bodyDigests.at(path) == prior->at("bodies").at(path)
+					? &prior->at("function_declarations").at(path)
+					: nullptr;
+			bool reuseSection = priorDeclaration && priorDeclaration->at("identity") == selected.at(path) &&
+								(!initialChanges || !initialChanges->mayAffect(*section)) &&
+								(!finalChanges || !finalChanges->mayAffect(*section));
+			Json entry = reuseSection ? *priorDeclaration : sectionDeclaration(*section);
+			if (reuseSection && projectionWork)
+				projectionWork->declarationSectionsReused++;
 			if (reusableSection)
 				declarations[path] = entry;
 			if (!section->patternDefinitions.empty()) {
@@ -147,13 +171,13 @@ Json captureAllFunctionProjection(
 	Json projection{
 		{"initial_matcher_tree", initialMatcherTree},
 		{"initial_matcher_roots", initialMatcherRoots},
-		{"final_matcher_tree", matcherTreeSignature(context)},
-		{"final_matcher_roots", matcherTreeMutationSnapshot(context)},
+		{"final_matcher_tree", std::move(finalMatcherTree)},
+		{"final_matcher_roots", std::move(finalMatcherRoots)},
 		{"precedence_signature", matcherCache.precedenceSignature()},
 		{"precedence_rules", precedenceRulesSignature(*context.mainSection)},
 		{"inactive", std::move(selected)},
 		{"declarations", reuseDeclarations ? prior->at("declarations") : Json(digest(allDeclarationEntries.dump()))},
-		{"global_resolution", globalResolutionIdentity(*context.mainSection)},
+		{"global_resolution", std::move(currentGlobalResolution)},
 		{"sources", std::move(maskedSources)},
 		{"scope_rule_bodies", std::move(currentScopeRuleBodies)}
 	};
