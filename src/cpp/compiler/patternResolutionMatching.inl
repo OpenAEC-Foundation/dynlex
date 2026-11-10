@@ -1,4 +1,5 @@
 #include "patternResolutionVariableDeclarations.inl"
+#include "patternResolutionVariableGroups.inl"
 
 static void removeVariableReferencesFromMatch(
 	ParseContext &context, PatternReference *reference, PatternMatch &match, std::vector<Section *> &affectedSections,
@@ -243,6 +244,8 @@ static bool resolveReferences(
 			);
 			reference->patternElements = {PatternElement(PatternElement::Type::Variable, *explicitVariableName, 0)};
 			reference->resolve();
+			reference->variableResolutionOffsets =
+				std::pair{variableRange.start() - reference->range().start(), variableRange.end() - reference->range().start()};
 			reference->range().section()->addVariableReference(
 				context, context.createVariableReference(variableRange, *explicitVariableName)
 			);
@@ -362,6 +365,7 @@ static bool resolveReferences(
 			// An unmatched word can only be a variable when another expression consumes it as an argument.
 			reference->patternElements[0].type = PatternElement::Type::Variable;
 			reference->resolve();
+			reference->variableResolutionOffsets = std::pair{0, static_cast<int>(reference->range().subString.size())};
 			reference->range().section()->addVariableReference(
 				context, context.createVariableReference(reference->range(), reference->patternElements[0].text)
 			);
@@ -382,6 +386,7 @@ static bool resolveReferences(
 }
 
 #include "patternPrecedenceMatching.inl"
+#include "patternResolutionCachedBodies.inl"
 
 // step 3: loop over code, resolve patterns and build up a pattern tree until all patterns are resolved
 bool resolvePatterns(ParseContext &context) {
@@ -827,6 +832,11 @@ bool resolvePatterns(ParseContext &context) {
 		}
 		if (context.prepareDeferredMatcherReplay && context.patternPrecedenceRevision == 0)
 			context.prepareDeferredMatcherReplay(deferredBodyReferences);
+		{
+			auto bodyStart = ResolutionClock::now();
+			restoreDeferredBodyReferences(context, deferredBodyReferences, definitionToReferences);
+			context.resolutionBodyMilliseconds += resolutionMilliseconds(bodyStart);
+		}
 		for (int iteration = 0; iteration < context.options.maxResolutionIterations && !deferredBodyReferences.empty();
 			 iteration++) {
 			auto bodyStart = ResolutionClock::now();
@@ -941,54 +951,6 @@ bool resolvePatterns(ParseContext &context) {
 		if (line->expression)
 			expandExpression(line->expression, line->section);
 	}
-	std::vector<std::string> unresolvedNames;
-	unresolvedNames.reserve(context.unresolvedVariableReferences.size());
-	for (auto &[name, _] : context.unresolvedVariableReferences)
-		unresolvedNames.push_back(name);
-	std::sort(unresolvedNames.begin(), unresolvedNames.end());
-
-	for (const std::string &name : unresolvedNames) {
-		auto refsIt = context.unresolvedVariableReferences.find(name);
-		if (refsIt == context.unresolvedVariableReferences.end())
-			continue;
-		auto &references = refsIt->second;
-		bool isGlobal = context.declaredGlobalVariables.contains(name);
-
-		std::unordered_map<VariableReference *, Section *> referenceOwners;
-		std::unordered_map<Section *, VariableReference *> earliestImplicitSectionReferences;
-		for (VariableReference *ref : references) {
-			Section *sec = ref->range.section();
-			if (Section *explicitSection = visibleExplicitVariableSection(sec, name, ref)) {
-				referenceOwners[ref] = explicitSection;
-				continue;
-			}
-			auto [existing, inserted] = earliestImplicitSectionReferences.emplace(sec, ref);
-			if (!inserted && variableReferenceSourcePosition(ref) < variableReferenceSourcePosition(existing->second))
-				existing->second = ref;
-		}
-		std::unordered_map<Section *, Section *> implicitSectionOwners;
-		for (const auto &[sec, _] : earliestImplicitSectionReferences) {
-			implicitSectionOwners[sec] = highestImplicitVariableSection(sec, name, earliestImplicitSectionReferences);
-		}
-		std::unordered_map<Section *, std::vector<VariableReference *>> groups;
-		for (VariableReference *ref : references) {
-			auto explicitOwner = referenceOwners.find(ref);
-			Section *owner =
-				explicitOwner != referenceOwners.end() ? explicitOwner->second : implicitSectionOwners.at(ref->range.section());
-			groups[owner].push_back(ref);
-		}
-		std::vector<Section *> orderedGroupSections;
-		orderedGroupSections.reserve(groups.size());
-		for (auto &[highestSection, _] : groups)
-			orderedGroupSections.push_back(highestSection);
-		std::sort(orderedGroupSections.begin(), orderedGroupSections.end(), sectionComesBefore);
-
-		for (Section *highestSection : orderedGroupSections) {
-			auto groupIt = groups.find(highestSection);
-			if (groupIt == groups.end())
-				continue;
-			materializeVariableGroup(name, highestSection, groupIt->second, isGlobal);
-		}
-	}
+	materializeVariableGroups(context);
 	return true;
 }

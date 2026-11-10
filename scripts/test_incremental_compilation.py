@@ -17,6 +17,7 @@ from test_incremental_projection_stages import check_comment_inactive_active_seq
 from test_default_incremental_cache import check_default_cache
 from test_incremental_optimized_ir import check_optimized_function_reuse
 from test_incremental_optimization_units import check_optimization_units
+from test_incremental_body_units import check_body_resolution_units
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -66,6 +67,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_default_cache(compiler, root / "automatic-cache")
     check_optimized_function_reuse(root, build)
     check_optimization_units(root, build)
+    check_body_resolution_units(root, build)
     cold = build()
     assert not cold[0]["frontend_reused"] and not cold[0]["linked_cached_objects"]
     assert cold[0]["source_projection_mask_ms"] >= 0 and cold[0]["source_projection_files_ms"] >= 0

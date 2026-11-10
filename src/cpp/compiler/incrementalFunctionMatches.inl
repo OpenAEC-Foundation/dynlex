@@ -89,13 +89,17 @@ ResolvedFunctionMatches resolvedFunctionMatches(
 			} else {
 				Json identity = shape;
 				identity.push_back(reference->match ? resolvedMatchIdentity(*reference->match, paths) : Json(nullptr));
+				if (!reference->match && reference->patternElements.size() == 1 &&
+					reference->patternElements.front().type == PatternElement::Type::Variable)
+					identity.push_back(reference->patternElements.front().text);
 				entry = Json{
 					{"key", key ? Json(*key) : Json(nullptr)},
 					{"shape", std::move(shape)},
 					{"identity", digest(identity.dump())}
 				};
 			}
-			entry["initial_key"] = reference->initialMatcherKey.empty() ? Json(nullptr) : Json(reference->initialMatcherKey);
+			entry["initial_key"] =
+				!reference->match || reference->initialMatcherKey.empty() ? Json(nullptr) : Json(reference->initialMatcherKey);
 			identities.push_back(entry.at("identity"));
 			entries.push_back(std::move(entry));
 		}

@@ -53,6 +53,11 @@ struct ParseContext {
 		TypeConstraint constraint;
 		DataType parameterType;
 	};
+	struct RestoredBodyReference {
+		PatternReference *reference;
+		std::unique_ptr<PatternMatch> match;
+		std::optional<std::tuple<PatternElement, int, int>> variable;
+	};
 
 	struct ShaderUniform {
 		std::string name;
@@ -91,6 +96,7 @@ struct ParseContext {
 	std::function<std::optional<PatternMatch *>(PatternReference *, MatchOptions, MatchDependencies *)> reuseMatcherResult;
 	std::function<void(PatternReference *, MatchOptions, const PatternMatch *, const MatchDependencies *)> recordMatcherResult;
 	std::function<void(const std::list<PatternReference *> &)> prepareDeferredMatcherReplay;
+	std::function<std::vector<RestoredBodyReference>()> restoreDeferredBodyUnits;
 	std::function<void(const std::vector<PatternReference *> &)> preparePrecedenceMatcherReplay;
 	std::function<std::vector<Section *>()> selectInactiveBodiesForResolutionReuse;
 	std::function<bool()> inactiveBodyMatcherTreeUnchanged;
@@ -141,6 +147,8 @@ struct ParseContext {
 	double resolutionReplaySetupMilliseconds = 0;
 	double resolutionCandidateMatchMilliseconds = 0;
 	size_t bodyResolutionReferenceVisits = 0;
+	size_t bodyResolutionUnitsReused = 0;
+	size_t bodyResolutionReferencesRestored = 0;
 	size_t bodyResolutionMatchCacheHits = 0;
 	size_t bodyResolutionMatchComputations = 0;
 	size_t variableLikeCountReferencesScanned = 0;

@@ -984,6 +984,17 @@ instantiated them; a function whose IR was imported from cache therefore appears
 in the uninstantiated group. Flex, conversion, and other definitions are counted
 separately. These counters expose the work still done for bodies whose code was
 reused without current-process inference.
+Unchanged deferred references in ordinary functions can also restore their initial
+resolution as a unit after declarations are indexed. References that classify
+implicit parameters run first. Reuse requires unchanged source, declarations and
+lexical bindings, and a matching environment that cannot affect the saved results.
+The existing binary matcher cache stores each unit's reference indices, direct
+variable outcomes, exact source spans and positive or failed lookup keys. The
+JSON projection stores only the unit's content key. Restored matches and variable
+references rejoin the ordinary expansion and precedence-invalidation machinery.
+Bodies with prior diagnostics run the normal resolver.
+`body_resolution_units_reused` and `body_resolution_references_restored`
+count this restoration, separately from references evaluated by the resolver.
 For a successful prior build, unchanged, uninstantiated ordinary functions without nested definitions can
 skip resolution when their parsed declaration already equals the prior resolved
 declaration, their prior matcher entries remain available, and their patterns

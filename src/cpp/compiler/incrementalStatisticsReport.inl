@@ -66,6 +66,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"definition_parse_hits", statistics.definitionParseHits},
 					  {"definition_parse_misses", statistics.definitionParseMisses},
 					  {"body_resolution_reference_visits", context.bodyResolutionReferenceVisits},
+					  {"body_resolution_units_reused", context.bodyResolutionUnitsReused},
+					  {"body_resolution_references_restored", context.bodyResolutionReferencesRestored},
 					  {"inactive_body_resolution_references_skipped", context.inactiveBodyResolutionReferencesSkipped},
 					  {"inactive_body_selection_ms", statistics.inactiveBodySelectionMilliseconds},
 					  {"matcher_projection_ms", statistics.matcherProjectionMilliseconds},

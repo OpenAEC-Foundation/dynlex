@@ -15,6 +15,6 @@ struct Range {
 	int end() const;
 	SourceLocation sourceStart() const;
 	SourceLocation sourceEnd() const;
-	Range subRange(int start, int end);
+	Range subRange(int start, int end) const;
 	Section *section() const;
 };

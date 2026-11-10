@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -26,6 +27,13 @@ class IncrementalMatcherCache {
 	std::string snapshot() const;
 	bool contains(std::string_view key) const;
 	void retain(std::string_view key);
+	struct BodyResolution {
+		size_t referenceIndex;
+		std::string matchKey;
+		std::optional<std::tuple<PatternElement, int, int>> variable;
+	};
+	std::optional<std::string> recordBodyResolution(const std::vector<std::pair<size_t, PatternReference *>> &references);
+	std::optional<std::vector<BodyResolution>> restoreBodyResolution(std::string_view key);
 	std::optional<std::string_view> resultKey(const PatternReference *reference) const;
 	size_t hits() const { return reusedCount; }
 	size_t precedenceHits() const { return reusedPrecedenceCount; }

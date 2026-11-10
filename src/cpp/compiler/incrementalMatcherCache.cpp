@@ -19,7 +19,7 @@
 
 namespace {
 using Json = IncrementalMatcherCache::Json;
-constexpr std::string_view matcherCacheHeader = "DynLex matcher results v4\n";
+constexpr std::string_view matcherCacheHeader = "DynLex matcher results v5\n";
 
 // A failed lookup can inspect an orphaned trie node left by a definition that
 // was removed during resolution. The next process may build the same active
@@ -181,6 +181,8 @@ void IncrementalMatcherCache::retain(std::string_view key) {
 	std::string_view value = previousEntries.at(key);
 	recorded[std::string(key)] = value;
 }
+
+#include "incrementalBodyResolutionCache.inl"
 
 std::optional<std::string_view> IncrementalMatcherCache::resultKey(const PatternReference *reference) const {
 	return reference->incrementalMatcherKey.empty() ? std::nullopt
@@ -605,7 +607,7 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 	try {
 		size_t position = 1;
 		if (value[0] == 0) {
-			reference->incrementalMatcherKey.clear();
+			reference->incrementalMatcherKey = cacheKey;
 			requireCompilerInvariant(dependencies != nullptr, "cached failure is missing dependency storage");
 			dependencies->clear();
 			std::uint64_t count = readLength(value, position);
@@ -680,5 +682,7 @@ void IncrementalMatcherCache::record(
 		appendNode(packed, dependency.node);
 		appendString(packed, dependency.literal);
 	}
-	recorded[key(*reference, true)] = std::move(packed);
+	std::string cacheKey = key(*reference, true);
+	reference->incrementalMatcherKey = cacheKey;
+	recorded[std::move(cacheKey)] = std::move(packed);
 }

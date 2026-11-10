@@ -29,6 +29,6 @@ SourceLocation Range::sourceStart() const { return line ? line->mapOffsetToSourc
 
 SourceLocation Range::sourceEnd() const { return line ? line->mapOffsetToSource(end()) : SourceLocation{}; }
 
-Range Range::subRange(int start, int end) { return Range(line, subString.substr(start, end - start)); }
+Range Range::subRange(int start, int end) const { return Range(line, subString.substr(start, end - start)); }
 
 Section *Range::section() const { return line->section; }

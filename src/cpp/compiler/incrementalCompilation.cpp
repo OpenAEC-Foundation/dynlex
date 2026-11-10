@@ -531,6 +531,7 @@ bool compileIncrementally(
 			Json initialMatcherRoots;
 			InitialMatcherProjection initialMatcherProjection;
 			PriorMatchKeys precedenceKeys;
+			std::vector<BodyResolutionUnit> bodyUnits;
 			context.reuseMatcherResult = [&](PatternReference *reference, MatchOptions options,
 											 MatchDependencies *dependencies) {
 				return matcherCache.reuse(reference, options, dependencies);
@@ -541,17 +542,22 @@ bool compileIncrementally(
 			};
 			context.prepareDeferredMatcherReplay = [&](const std::list<PatternReference *> &references) {
 				auto projectionStart = Clock::now();
-				initialMatcherProjection.capture(context, recording->observations, inactiveMatchEntries);
+				const Json *prior = previous ? &previous->at("all_function_projection").at("matcher_projection") : nullptr;
+				initialMatcherProjection.capture(context, recording->observations, inactiveMatchEntries, references, prior);
 				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
 				initialMatcherTree = matcherTreeSignature(context);
 				initialMatcherRoots = matcherTreeMutationSnapshot(context);
 				if (previous)
 					prepareDeferredMatchReplay(
-						context, *previous, recording->observations, initialMatcherTree, initialMatcherRoots, references,
-						precedenceKeys
+						context, *previous, recording->observations, initialMatcherTree, initialMatcherRoots,
+						initialMatcherProjection, precedenceKeys, bodyUnits
 					);
 			};
+			context.restoreDeferredBodyUnits = [&]() {
+				return restoreBodyResolutionUnits(context, matcherCache, bodyUnits);
+			};
 			context.preparePrecedenceMatcherReplay = [&](const std::vector<PatternReference *> &references) {
+				initialMatcherProjection.captureBodyUnits(matcherCache);
 				if (previous)
 					preparePrecedenceMatchReplay(
 						context, previous->at("all_function_projection"), matcherCache, precedenceKeys, references,
@@ -751,6 +757,7 @@ bool compileIncrementally(
 			context.reuseMatcherResult = {};
 			context.recordMatcherResult = {};
 			context.prepareDeferredMatcherReplay = {};
+			context.restoreDeferredBodyUnits = {};
 			context.preparePrecedenceMatcherReplay = {};
 			if (reuseTypeInference) {
 				statistics.reusedTypeInference = true;

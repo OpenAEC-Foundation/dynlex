@@ -800,7 +800,8 @@ def check_independent_body_resolution_order(root, build):
         "an independent body was matched before its callees were indexed"
     main.write_text(source.replace('alpha 1\n', 'alpha 2\n'))
     edited = build(entry=main)
-    assert edited[0]["body_resolution_reference_visits"] == 2
+    assert edited[0]["body_resolution_reference_visits"] + edited[0]["body_resolution_references_restored"] == 2
+    assert edited[0]["body_resolution_references_restored"] >= 1
     assert edited[1:] == build(False, entry=main)[1:]
 
     alternative = root / "single_word_alternative_promotion.dl"
@@ -923,7 +924,7 @@ def check_deferred_match_key_replay(root, build):
     edited = build(entry=main)
     assert edited[0]["deferred_match_keys_replayed"] >= 1, \
         "unchanged body matched after definitions were indexed instead of replaying its resolved reference"
-    assert edited[0]["body_resolution_match_cache_hits"] >= 1, \
+    assert edited[0]["body_resolution_match_cache_hits"] + edited[0]["body_resolution_references_restored"] >= 1, \
         "unchanged body reference ran the matcher instead of restoring its result"
     assert edited[0]["body_resolution_match_cache_hits"] + edited[0]["body_resolution_match_computations"] <= \
         edited[0]["body_resolution_reference_visits"]
