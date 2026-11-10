@@ -72,6 +72,32 @@ static llvm::OptimizationLevel optimizationLevel(const ParseContext::Options &op
 	crashCompilerBug("invalid IR optimization level");
 }
 
+void optimizeLLVMModule(ParseContext &context, llvm::Module &module, bool prepareThinLTO) {
+	llvm::LoopAnalysisManager lam;
+	llvm::FunctionAnalysisManager fam;
+	llvm::CGSCCAnalysisManager cgam;
+	llvm::ModuleAnalysisManager mam;
+
+	llvm::PipelineTuningOptions pipelineTuningOptions;
+	if (context.options.loopVectorization)
+		pipelineTuningOptions.LoopVectorization = *context.options.loopVectorization;
+	if (context.options.slpVectorization)
+		pipelineTuningOptions.SLPVectorization = *context.options.slpVectorization;
+	if (context.options.loopUnrolling)
+		pipelineTuningOptions.LoopUnrolling = *context.options.loopUnrolling;
+	llvm::PassBuilder pb(context.targetMachine.get(), pipelineTuningOptions);
+	pb.registerModuleAnalyses(mam);
+	pb.registerCGSCCAnalyses(cgam);
+	pb.registerFunctionAnalyses(fam);
+	pb.registerLoopAnalyses(lam);
+	pb.crossRegisterProxies(lam, fam, cgam, mam);
+
+	llvm::OptimizationLevel level = optimizationLevel(context.options);
+	llvm::ModulePassManager mpm =
+		prepareThinLTO ? pb.buildThinLTOPreLinkDefaultPipeline(level) : pb.buildPerModuleDefaultPipeline(level);
+	mpm.run(module, mam);
+}
+
 bool generateCode(
 	ParseContext &context, const std::function<bool(ParseContext &)> &nativeEmitter,
 	const std::function<void(ParseContext &)> &beforeOptimization, const std::function<bool(ParseContext &)> &optimizer
@@ -301,27 +327,7 @@ bool generateCode(
 		if (!optimizer(context))
 			return false;
 	} else if (context.options.optimizationLevel > 0) {
-		llvm::LoopAnalysisManager lam;
-		llvm::FunctionAnalysisManager fam;
-		llvm::CGSCCAnalysisManager cgam;
-		llvm::ModuleAnalysisManager mam;
-
-		llvm::PipelineTuningOptions pipelineTuningOptions;
-		if (context.options.loopVectorization)
-			pipelineTuningOptions.LoopVectorization = *context.options.loopVectorization;
-		if (context.options.slpVectorization)
-			pipelineTuningOptions.SLPVectorization = *context.options.slpVectorization;
-		if (context.options.loopUnrolling)
-			pipelineTuningOptions.LoopUnrolling = *context.options.loopUnrolling;
-		llvm::PassBuilder pb(context.targetMachine.get(), pipelineTuningOptions);
-		pb.registerModuleAnalyses(mam);
-		pb.registerCGSCCAnalyses(cgam);
-		pb.registerFunctionAnalyses(fam);
-		pb.registerLoopAnalyses(lam);
-		pb.crossRegisterProxies(lam, fam, cgam, mam);
-
-		llvm::ModulePassManager mpm = pb.buildPerModuleDefaultPipeline(optimizationLevel(context.options));
-		mpm.run(*context.llvmModule, mam);
+		optimizeLLVMModule(context, *context.llvmModule);
 	}
 
 	if (context.options.emitSPIRV) {

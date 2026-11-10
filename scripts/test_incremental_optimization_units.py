@@ -41,3 +41,18 @@ def check_optimization_units(root, build):
         for path, content in originals.items():
             path.write_bytes(content)
     assert build(entry=main, flags=flags)[1:] == build(False, entry=main, flags=flags)[1:]
+
+    # Raw loads/stores exceed ThinLTO's import budget; local simplification makes
+    # this body small enough to inline before the final liveness check.
+    main = root / "optimization_prelink.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'to report value:\n'
+              '    @intrinsic("store", local, value)\n' +
+              '    @intrinsic("store", local, @intrinsic("add", local, 0))\n' * 32 +
+              '    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d", local))\n'
+              'report @intrinsic("call", "libc", "rand", integer)\n')
+    main.write_text(source)
+    simplified = build(entry=main, flags=flags)
+    assert simplified[0]["native_function_fingerprints_computed"] == 1, \
+        "raw input size prevented importing a locally trivial function"
+    assert simplified[1:] == build(False, entry=main, flags=flags)[1:]

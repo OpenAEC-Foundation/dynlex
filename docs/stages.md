@@ -1040,7 +1040,9 @@ and whole-program reuse. At O0 the two module payloads share a content-addressed
 Optimized native builds form units from symbol groups constrained by aliases, COMDATs,
 resolvers and block-address users. Each unit records its raw definitions, referenced
 declaration interfaces and module environment. Unchanged units restore bitcode with its
-ThinLTO summary without cloning the module again. The combined ThinLTO index supplies
+ThinLTO summary without cloning the module again. Changed inputs run the ThinLTO pre-link
+pipeline before summary construction, so import decisions use simplified body sizes.
+The combined ThinLTO index supplies
 optimization cache keys that include imported callees, linkage decisions and target
 configuration. A changed callee therefore reoptimizes affected importing units. The
 single-worker backend stores verified optimized bitcode through its post-optimization

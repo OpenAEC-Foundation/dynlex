@@ -130,6 +130,7 @@ std::vector<OptimizationInput> captureOptimizationInputs(
 			part->setModuleIdentifier(identifier);
 			part->setModuleInlineAsm(assembly);
 			removeUnusedDeclarations(*part);
+			optimizeLLVMModule(context, *part, true);
 			sortModuleSymbols(*part);
 			llvm::ProfileSummaryInfo profile(*part);
 			auto summary = llvm::buildModuleSummaryIndex(*part, {}, &profile);
