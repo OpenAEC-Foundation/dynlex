@@ -119,28 +119,40 @@ static std::string declaredConstraintProbeIdentity(const DeclaredTypeConstraintW
 		   item.diagnosticRange.toString();
 }
 
+static std::unordered_map<const VariableReference *, const Section *> variableDefinitionOwners(const Section *root) {
+	std::unordered_map<const VariableReference *, const Section *> owners;
+	const auto visit = [&](auto &&self, const Section *section) -> void {
+		for (const auto &[name, definition] : section->variableDefinitions) {
+			(void)name;
+			requireCompilerInvariant(definition, "section variable definition is null");
+			auto [found, inserted] = owners.emplace(normalizeBindingReference(definition), section);
+			requireCompilerInvariant(inserted || found->second == section, "variable definition belongs to multiple sections");
+		}
+		for (const Section *child : section->children)
+			self(self, child);
+	};
+	visit(visit, root);
+	return owners;
+}
+
 static void recordDeclaredConstraintDependencies(
-	const DeclaredTypeConstraintWorkItem &item, ParseContext &context, std::unordered_set<const Section *> &dependencies
+	const DeclaredTypeConstraintWorkItem &item, ParseContext &context,
+	const std::unordered_map<const VariableReference *, const Section *> &variableOwners,
+	std::unordered_set<const Section *> &dependencies
 ) {
 	auto addVariableOwner = [&](VariableReference *reference) {
-		requireCompilerInvariant(reference && reference->range.line, "type-constraint variable has no source section");
-		Section *scope = reference->definition ? reference->definition->range.section() : reference->range.section();
-		requireCompilerInvariant(scope, "type-constraint variable has no lexical scope");
-		for (Section *section = scope; section; section = section->parent)
+		requireCompilerInvariant(reference, "type-constraint expression has a null variable reference");
+		auto owner = variableOwners.find(normalizeBindingReference(reference));
+		requireCompilerInvariant(owner != variableOwners.end(), "type-constraint variable has no owning section");
+		for (const Section *section = owner->second; section; section = section->parent)
 			if (section == context.mainSection ||
 				(section->type == SectionType::Function && !section->patternDefinitions.empty())) {
 				dependencies.insert(section);
 				break;
 			}
 	};
-	if (item.variableReference) {
+	if (item.variableReference)
 		addVariableOwner(item.variableReference);
-		for (Section *section = item.variableReference->range.section(); section; section = section->parent)
-			if (section->type == SectionType::Function && !section->patternDefinitions.empty()) {
-				dependencies.insert(section);
-				break;
-			}
-	}
 	auto visitMatch = [&](auto &&self, const PatternMatch &match) -> void {
 		for (const PatternDefinition *definition : match.matchingDefinitions)
 			dependencies.insert(definition->section);
@@ -293,6 +305,7 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 	size_t diagnosticsBeforeParsing = parseContext.diagnostics.size();
 	if (!collectDeclaredTypeConstraintWorkItems(parseContext, parseContext.mainSection, items))
 		return false;
+	const auto variableOwners = variableDefinitionOwners(parseContext.mainSection);
 	parseContext.constraintProbeItems.clear();
 	parseContext.constraintProbeTexts.clear();
 	parseContext.constraintProbePasses.assign(items.size(), 0);
@@ -390,7 +403,9 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 			}
 			commitDeclaredTypeConstraint(item, parseContext);
 			parseContext.constraintProbePasses[itemIndex] = pass;
-			recordDeclaredConstraintDependencies(item, parseContext, parseContext.constraintProbeDependencies[itemIndex]);
+			recordDeclaredConstraintDependencies(
+				item, parseContext, variableOwners, parseContext.constraintProbeDependencies[itemIndex]
+			);
 			if (item.numberRuleLine) {
 				if (!commitNumberRule(item, parseContext, item.numberRuleConstraint)) {
 					item.expression = nullptr;

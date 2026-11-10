@@ -817,7 +817,9 @@ restore source tokens. Expressions that emitted parse diagnostics are parsed aga
 `--incremental-stats` counts expression and definition parse hits and misses from
 the preceding compiler invocation, including temporary expression hits separately.
 After resolution, each successful type-constraint probe's pass and the sections
-read by its expression are saved with the function projection. A later build
+read by its expression are saved with the function projection. Variable
+definitions are mapped to their owning sections; their source ranges can lie
+on a function's header line, which belongs to its parent section. A later build
 reuses unaffected first-pass probes before the first affected item when declarations,
 pattern trees, precedence, scope rules, and source outside function bodies are
 unchanged. The saved dependency graph also invalidates a probe when an edited

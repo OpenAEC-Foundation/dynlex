@@ -81,6 +81,26 @@ def check_independent_constraint_probes(root, build):
     assert changed[1:] == build(False, entry=main, success=False)[1:]
 
 
+def check_header_parameter_constraint_owner(root, build):
+    main = root / "header_parameter_constraint_owner.dl"
+    source = ('a value means: @intrinsic("type", "any")\n'
+              'fixed means: @intrinsic("fix", a value)\n'
+              'fixed value means: @intrinsic("fix", value)\n'
+              'integer means: @intrinsic("type", "int")\n'
+              'to use {fixed integer:value}: @intrinsic("discard", value)\n'
+              'to touch: @intrinsic("discard", 1)\n'
+              'touch\nuse 1\n')
+    main.write_text(source)
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]
+    schedule = projection_for(root / "cache", main)["constraint_probe_schedule"]
+    assert "root" not in schedule["roots"][0], \
+        "a function parameter on its header line was assigned to the program root"
+    main.write_text(source.replace('"discard", 1)', '"discard", 2)'))
+    changed = build(entry=main)
+    assert changed[0]["constraint_probes_reused"] == 1
+    assert changed[1:] == build(False, entry=main)[1:]
+
+
 def check_cross_file_typed_overload(root, build):
     caller = root / "typed_caller.dl"
     overloads = root / "typed_overloads.dl"
