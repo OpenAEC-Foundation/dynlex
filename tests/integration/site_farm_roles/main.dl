@@ -1,0 +1,36 @@
+import site/games/farm/simulation.dl
+
+set roles to the initial website farm roles
+require condition (the length of roles = 1) reporting "The Farm gained an unsolicited example role."
+set original to the item at 0 in roles
+require condition ((original's id = "lumberjack") and ((original's name = "Lumberjack") and (original's prepared = false))) reporting "The initial Farm role changed."
+require condition (original's source starts with "# Bring logs back, keeping one hand for the axe.") reporting "The Lumberjack example lost its explanation."
+set original's source to original's source + "\n# An owned draft 🌽"
+set original's applied to "loop forever:\n    turn right"
+free website farm plan the address of (original's program)
+set original's program to the website farm plan from (the string form of "LOOP|-1\nDO|1|3|-1|-2|\nEND") dropping 2 source lines
+set original's prepared to true
+set original's generation to 7
+set copy to a copy of website farm role original identified by (the string form of "custom-a") among roles
+set another to a copy of website farm role original identified by (the string form of "custom-b") among roles
+require condition ((copy's name = "Lumberjack copy") and (another's name = "Lumberjack copy 2")) reporting "Copied Farm roles have duplicate names."
+require condition ((copy's generation = 0) and (copy's applied = original's applied)) reporting "A copied role retained its request generation or lost its applied code."
+set changed to the item at 1 in (copy's program's code)
+set changed's argument to 2
+replace item at index 1 in (copy's program's code) with changed
+set original's source to ""
+require condition ((the item at 1 in (original's program's code))'s argument = 3) reporting "Editing a copied plan changed its source role."
+require condition (copy's source ends with "# An owned draft 🌽") reporting "Editing a source role invalidated its copied draft."
+set world to the initial website farm world
+set worker to the item at 0 in (world's workers)
+assign website farm role original to worker
+advance the website farm world world using roles roles with workers running true
+require condition (worker's direction = 1) reporting "The original worker did not turn right."
+assign website farm role copy to worker
+advance the website farm world world using roles roles with workers running true
+require condition (worker's direction = 0) reporting "The copied worker did not use its own modified plan."
+clear the website farm role of worker
+require condition ((worker's role is empty) and ((worker's routine's position = 0) and (worker's subject's kind = 0))) reporting "Removing a role kept its execution state."
+free website farm world world
+free website farm roles roles
+print line "Farm role copies keep independent drafts, programs and names, and workers use the assigned plan."

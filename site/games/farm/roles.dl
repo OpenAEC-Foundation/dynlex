@@ -1,0 +1,85 @@
+import plan.dl
+
+class:
+    patterns:
+        website farm role
+    members:
+        id as a string
+        name as a string
+        source as a string
+        applied as a string
+        program as website farm plan
+        prepared as a boolean
+        generation as an integer
+        needs rebuilding as a boolean
+
+[the website farm lumberjack source] means: "# Bring logs back, keeping one hand for the axe.\nloop forever:\n    walk to the barn\n    store everything\n    grab an axe\n    walk to the nearest tree\n    if i can reach it:\n        chop it down\n        pick up nearby items"
+
+to get [a website farm role identified by] {a value:id} [named] {a value:name} [containing] {a value:source}:
+    set result to storage for one slot initialized with (a new website farm role)
+    set result's id to the string form of id
+    set result's name to the string form of name
+    set result's source to the string form of source
+    set result's program to an empty website farm plan
+    return result
+
+to [free website farm role] {a pointer to website farm role:role}:
+    free website farm plan the address of (role's program)
+    destroy the value at role
+    deallocate role
+
+to [free website farm roles] {a value:roles}:
+    set index to 0
+    loop while index < the length of roles:
+        free website farm role (the item at index in roles)
+        increment index
+    free roles
+
+to get [the initial website farm roles]:
+    set result to an empty list of a pointer to website farm role
+    append (a website farm role identified by "lumberjack" named "Lumberjack" containing the website farm lumberjack source) to result
+    return result
+
+to get [the website farm role identified by] {a value:id} [in] {a value:roles}:
+    set index to 0
+    loop while index < the length of roles:
+        set role to the item at index in roles
+        if role's id = id:
+            return role
+        increment index
+    require condition false reporting "A worker refers to an unknown Farm role."
+    return 0 as a pointer to website farm role
+
+to get [a copy of website farm plan] {website farm plan:plan}:
+    set result to an empty website farm plan
+    set result's error to plan's error
+    set index to 0
+    loop while index < the length of (plan's code):
+        append (the item at index in (plan's code)) to result's code
+        increment index
+    return result
+
+to get [a copy of website farm role] {a pointer to website farm role:original} [identified by] {string:id} [among] {a value:roles}:
+    set name to original's name + " copy"
+    set suffix to 2
+    set searching to true
+    loop while searching:
+        set duplicate to false
+        set index to 0
+        loop while index < the length of roles:
+            if (the item at index in roles)'s name = name:
+                set duplicate to true
+            increment index
+        if duplicate:
+            set name to original's name + " copy " + (the string form of suffix)
+            increment suffix
+        else:
+            set searching to false
+    set result to a website farm role identified by id named name containing (original's source)
+    set result's applied to original's applied
+    set result's prepared to original's prepared
+    set result's needs rebuilding to original's needs rebuilding
+    free website farm plan the address of (result's program)
+    set result's program to a copy of website farm plan (original's program)
+    append result to roles
+    return result

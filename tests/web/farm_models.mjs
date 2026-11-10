@@ -14,11 +14,24 @@ const models=[
   {name:'plans',entry:'tests/web/farm_plan_model.dl',fixture:'farm-plans.json'},
   {name:'routines',entry:'tests/web/farm_routine_model.dl',fixture:'farm-routines.json'},
   {name:'world',entry:'tests/web/farm_world_model.dl',fixture:'farm-world-cases.json'},
+  {name:'actions',entry:'tests/web/farm_world_model.dl',fixture:'farm-actions.json'},
+  {name:'simulation',entry:'tests/web/farm_world_model.dl',fixture:'farm-simulation.json'},
+  {name:'goals',entry:'tests/integration/site_coding_goals/main.dl',expected:'tests/integration/site_coding_goals/expected.txt'},
+  {name:'roles',entry:'tests/integration/site_farm_roles/main.dl',expected:'tests/integration/site_farm_roles/expected.txt'},
 ];
+const selected=process.argv.find(argument=>argument.startsWith('--model='))?.slice(8);
+if(selected) {
+  assert(models.some(model=>model.name===selected),`Unknown Farm model ${selected}`);
+  for(let index=models.length-1;index>=0;index--) if(models[index].name!==selected) models.splice(index,1);
+}
 function check(model,output,target) {
+  if(model.expected) {
+    assert.equal(output,model.data.expected,`${model.name}: ${target}`);
+    console.log(`PASS Farm ${model.name} ${target}`);return;
+  }
   const actual=JSON.parse(output);
   const expected=model.name==='catalog'?model.data:model.data.expected;
-  if(model.name==='world') compareWorld(actual,expected,`${model.name}: ${target}`);
+  if(['world','actions','simulation'].includes(model.name)) compareWorld(actual,expected,`${model.name}: ${target}`);
   else assert.deepEqual(actual,expected,`${model.name}: ${target}`);
   console.log(`PASS Farm ${model.name} ${target}${model.data.cases?`: ${model.data.cases.length} scenarios`:''}`);
 }
@@ -46,24 +59,37 @@ async function checkWasm(model,file,target) {
   const runtime=buildRuntimeImports({push:chunk=>{output+=chunk;}},filesystem,inspectRuntimeWasmLayout(bytes));
   const allocation=observeAllocations(runtime,64*1024*1024);
   const {instance}=await WebAssembly.instantiate(bytes,runtime);
+  const started=performance.now();
   instance.exports.main();
   check(model,output,target);
   assert.equal(allocation.live,0,`${model.name} left owned allocations`);
-  console.log(`Farm ${model.name}: ${allocation.peak} peak live bytes, every allocation released.`);
+  console.log(`Farm ${model.name}: ${allocation.peak} peak live bytes, every allocation released, ${Math.round(performance.now()-started)} ms.`);
 }
 try {
+  const nativePrograms=new Map(),wasmPrograms=new Map();
   for(const model of models) {
-    model.data=JSON.parse(await fs.readFile(path.join(root,'tests/web/fixtures',model.fixture)));
+    model.data=model.expected?{expected:await fs.readFile(path.join(root,model.expected),'utf8')}
+      :JSON.parse(await fs.readFile(path.join(root,'tests/web/fixtures',model.fixture)));
     const input=JSON.stringify(model.data.cases??[]);
     await fs.writeFile(path.join(directory,'input.farm'),input);
     for(const optimization of ['O0','O2']) {
-      const binary=path.join(directory,`${model.name}-${optimization}.out`);
-      execFileSync(compiler,[model.entry,`-${optimization}`,'-o',binary],{cwd:root,stdio:'inherit',timeout:60000});
-      check(model,execFileSync(binary,{cwd:directory,encoding:'utf8',maxBuffer:8*1024*1024,timeout:30000}),optimization);
+      const key=model.entry+':'+optimization;
+      if(!nativePrograms.has(key)) {
+        const binary=path.join(directory,`${model.name}-${optimization}.out`);
+        execFileSync(compiler,[model.entry,`-${optimization}`,'-o',binary],{cwd:root,stdio:'inherit',timeout:60000});
+        nativePrograms.set(key,binary);
+      }
+      const binary=nativePrograms.get(key);
+      const outputBudget=Math.max(8*1024*1024,2*Buffer.byteLength(JSON.stringify(model.data.expected??model.data)));
+      check(model,execFileSync(binary,{cwd:directory,encoding:'utf8',maxBuffer:outputBudget,timeout:30000}),optimization);
     }
     if(process.argv.includes('--native-wasm')) {
-      const wasm=path.join(directory,model.name+'.wasm');
-      execFileSync(compiler,[model.entry,'--emit-wasm','-O2','-o',wasm],{cwd:root,stdio:'inherit',timeout:60000});
+      if(!wasmPrograms.has(model.entry)) {
+        const wasm=path.join(directory,model.name+'.wasm');
+        execFileSync(compiler,[model.entry,'--emit-wasm','-O2','-o',wasm],{cwd:root,stdio:'inherit',timeout:60000});
+        wasmPrograms.set(model.entry,wasm);
+      }
+      const wasm=wasmPrograms.get(model.entry);
       await checkWasm(model,wasm,'native compiler/Wasm');
     }
   }
@@ -71,13 +97,18 @@ try {
     const sources={};
     for(const folder of ['site/games/farm','site/games/progress','site/games'])
       for(const name of await fs.readdir(path.join(root,folder))) if(name.endsWith('.dl')) sources[`${folder}/${name}`]=await fs.readFile(path.join(root,folder,name),'utf8');
-    for(const name of ['tests/web/farm_plan_model.dl','tests/web/farm_routine_model.dl','tests/web/farm_world_model.dl','tests/web/farm_test_json.dl'])
+    for(const name of new Set([...models.map(model=>model.entry),'tests/web/farm_world_test.dl','tests/web/farm_test_json.dl']))
       sources[name]=await fs.readFile(path.join(root,name),'utf8');
     const request=path.join(directory,'request.json');
-    await fs.writeFile(request,JSON.stringify({sources,jobs:models.map(model=>({entry:model.entry,kind:'wasm',output:model.name+'.wasm'}))}));
+    const outputs=new Map(),jobs=[];
+    for(const model of models) if(!outputs.has(model.entry)) {
+      const output=model.name+'.wasm';outputs.set(model.entry,output);
+      jobs.push({entry:model.entry,kind:'wasm',output});
+    }
+    await fs.writeFile(request,JSON.stringify({sources,jobs}));
     execFileSync(process.execPath,[path.join(root,'scripts/compile_project.mjs'),request,directory],{cwd:root,stdio:'inherit',timeout:120000});
     for(const model of models) {
-      await checkWasm(model,path.join(directory,model.name+'.wasm'),'shipped compiler/Wasm');
+      await checkWasm(model,path.join(directory,outputs.get(model.entry)),'shipped compiler/Wasm');
     }
   }
 } finally {await fs.rm(directory,{recursive:true,force:true});}

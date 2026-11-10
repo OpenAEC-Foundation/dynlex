@@ -1,0 +1,39 @@
+import actions.dl
+
+class:
+    patterns:
+        website farm route preview
+    members:
+        present as a boolean
+        target as website farm point
+        label as a string
+        route as website farm route
+
+to get [the planned website farm route for] {a pointer to website farm actor:actor} [in] {a pointer to website farm world:world} [following] {website farm plan:plan} [prepared] {boolean:prepared}:
+    set result to a new website farm route preview
+    set adjacent to (actor's target's adjacent) if actor's target's present, else true
+    set result's target to the website farm position of (actor's target)
+    set result's label to "Selected square"
+    if actor's id = "player":
+        if actor's target's present = false:
+            return result
+    else:
+        if (prepared = false) or (actor's routine's position = the length of (plan's code)):
+            return result
+        set instruction to the item at (actor's routine's position) in (plan's code)
+        if instruction's operation != the website farm action operation:
+            return result
+        set actions to the website farm actions
+        if (the item at (instruction's identifier) in actions)'s key != "walk":
+            return result
+        set reference to actor's routine's continuation
+        if actor's routine's continuing = false:
+            set reference to the website farm reference for target (instruction's target) within area (instruction's area) seen by actor in world
+        set target to the website farm target of reference in world
+        if target's present = false:
+            return result
+        set result's target to target's point
+        set result's label to the website farm label of instruction
+    set result's present to true
+    set result's route to the website farm route from actor to (result's target) in world adjacently adjacent
+    return result

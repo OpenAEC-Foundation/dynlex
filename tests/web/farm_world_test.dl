@@ -1,0 +1,522 @@
+import site/games/farm/environment.dl
+import site/games/farm/management.dl
+import site/games/farm/orders.dl
+import site/games/farm/targets.dl
+import site/games/farm/simulation.dl
+
+class:
+    patterns:
+        Farm world test context
+    members:
+        world as a pointer to website farm world
+        continuation as website farm reference
+        continuing as a boolean
+        roles as the type of (an empty list of a pointer to website farm role)
+import site/games/farm/world_json.dl
+
+local function number {a number:value}:
+    execute:
+        return a new JSON number from value
+local function text {a value:value}:
+    execute:
+        set property to JSON text "" is value
+        return property's value
+local function flag {boolean:value}:
+    execute:
+        set property to JSON flag "" is value
+        return property's value
+
+to get [the Farm world test point named] {C string:key} [in] {a pointer to JSON value:entry}:
+    set point to the JSON member named key in entry
+    return website farm point ((the JSON number named "x" in point) as an integer) ((the JSON number named "y" in point) as an integer)
+
+to get [the Farm world test area JSON of] {website farm area:area}:
+    return a JSON object containing [JSON text "id" is (area's id), JSON text "name" is (area's name), JSON text "color" is (area's color),
+        JSON number "left" is (area's left), JSON number "top" is (area's top), JSON number "right" is (area's right), JSON number "bottom" is (area's bottom)]
+
+to get [the Farm world test point JSON of] {website farm resolved target:target}:
+    if target's present = false:
+        return a new JSON value of kind the JSON null kind
+    return a JSON object containing [JSON number "x" is (target's point's x), JSON number "y" is (target's point's y)]
+
+to get [the Farm world test reference from] {a pointer to JSON value:entry}:
+    set result to a new website farm reference
+    if entry's kind = the JSON null kind:
+        return result
+    set names to the website farm reference kinds
+    set name to the JSON text named "kind" in entry
+    set index to 0
+    loop while index < the length of names:
+        if name = (the item at index in names):
+            set result's kind to index
+        increment index
+    require condition (result's kind != 0) reporting "Unknown reference in Farm test input."
+    if entry has JSON member named "id":
+        set result's id to the JSON text named "id" in entry
+    if entry has JSON member named "x":
+        set result's x to (the JSON number named "x" in entry) as an integer
+        set result's y to (the JSON number named "y" in entry) as an integer
+    if entry has JSON member named "serial":
+        set result's serial to (the JSON number named "serial" in entry) as a website farm quantity
+    if entry has JSON member named "serials":
+        set items to the JSON member named "serials" in entry
+        set serials to an empty list of a website farm quantity
+        set index to 0
+        loop while index < items's length:
+            append ((the JSON number at index index in items) as a website farm quantity) to serials
+            increment index
+        set result's serials to a sequence taking the items from serials
+        free serials
+    return result
+
+to get [the Farm action test instruction from] {a pointer to JSON value:entry} [as condition] {boolean:condition}:
+    set actions to the website farm actions
+    set conditions to the website farm conditions
+    set key to the JSON text named "key" in entry
+    set limit to (the length of conditions) if condition, else (the length of actions)
+    set index to 0
+    set found to false
+    set result to a new website farm instruction
+    set result's operation to the website farm test operation if condition, else the website farm action operation
+    loop while (index < limit) and (found = false):
+        set description to (the item at index in conditions) if condition, else (the item at index in actions)
+        if description's key = key:
+            set found to true
+            set result's identifier to index
+            set result's argument to description's argument
+            set result's amount to description's amount
+            set result's target to description's target
+        increment index
+    require condition found reporting "Unknown command in Farm action test input."
+    if entry has JSON member named "options":
+        set options to the JSON member named "options" in entry
+        if options has JSON member named "argument":
+            set result's argument to (the JSON number named "argument" in options) as an integer
+        if options has JSON member named "amount":
+            set result's amount to (the JSON number named "amount" in options) as an integer
+        if options has JSON member named "target":
+            set result's target to (the JSON number named "target" in options) as an integer
+        if options has JSON member named "area":
+            set result's area to the JSON text named "area" in options
+    return result
+
+to get [the Farm world test summary of] {a pointer to website farm world:world}:
+    set workers to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of (world's workers):
+        add (the website farm actor JSON of (the item at index in (world's workers))) to the JSON array workers
+        increment index
+    set chickens to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of (world's chickens):
+        add (the website farm animal JSON of (the item at index in (world's chickens)) as cow false) to the JSON array chickens
+        increment index
+    set cow to a new JSON value of kind the JSON null kind
+    if world's cow present:
+        free cow
+        set cow to the website farm animal JSON of (world's cow) as cow true
+    set descriptions to the website farm flags
+    set flags to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of (world's flags):
+        set entry to the item at index in (world's flags)
+        set {flag description} to the item at (entry's color) in descriptions
+        add (a JSON object containing [JSON text "id" is (flag description's key), JSON number "serial" is (entry's serial),
+            JSON number "x" is (entry's x), JSON number "y" is (entry's y)]) to the JSON array flags
+        increment index
+    set areas to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of (world's areas):
+        add (the Farm world test area JSON of (the item at index in (world's areas))) to the JSON array areas
+        increment index
+    set stock to a new JSON value of kind the JSON object kind
+    set items to the website farm items
+    set index to 0
+    loop while index < the length of items:
+        set description to the item at index in items
+        add a JSON member named (the string form of (description's key)) with value (number (the item at index in (world's stock))) to stock
+        increment index
+    set notices to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of (world's notices):
+        add (text (the item at index in (world's notices))) to the JSON array notices
+        increment index
+    set delivered to a new JSON value of kind the JSON array kind
+    set index to 0
+    loop while index < the length of (world's delivered):
+        add (text (the item at index in (world's delivered))) to the JSON array delivered
+        increment index
+    set crops to a new JSON value of kind the JSON array kind
+    set trees to a new JSON value of kind the JSON array kind
+    set piles to a new JSON value of kind the JSON array kind
+    set water to a new JSON value of kind the JSON array kind
+    loop index from 0 to the website farm square count:
+        set tile to world's tiles + index
+        if tile's crop's present:
+            add (the website farm tile JSON of tile) to the JSON array crops
+        if tile's tree's present:
+            add (the website farm tile JSON of tile) to the JSON array trees
+        if the length of (tile's items) > 0:
+            add (the website farm tile JSON of tile) to the JSON array piles
+        if tile's water:
+            add (number index) to the JSON array water
+    return a JSON object containing [JSON number "tick" is (world's tick), JSON flag "raining" is (world's raining),
+        JSON flag "expanded" is (world's expanded), JSON number "nextEntity" is (world's next entity),
+        JSON number "orders" is (world's orders), JSON child "delivered" is delivered,
+        JSON child "player" is (the website farm actor JSON of (world's player)), JSON child "workers" is workers,
+        JSON child "flags" is flags, JSON child "areas" is areas, JSON child "coding" is (a copy of JSON node (world's coding)),
+        JSON child "chickens" is chickens, JSON child "cow" is cow, JSON child "stock" is stock, JSON child "notices" is notices,
+        JSON child "compost" is (a JSON object containing [JSON number "x" is (world's compost's x), JSON number "y" is (world's compost's y),
+            JSON number "input" is (world's compost's input), JSON number "ready" is (world's compost's ready), JSON number "age" is (world's compost's age)]),
+        JSON child "crops" is crops, JSON child "trees" is trees, JSON child "piles" is piles, JSON child "water" is water]
+
+to get [the Farm world test operation] {a pointer to JSON value:entry} [in] {a pointer to Farm world test context:context}:
+    set world to context's world
+    set op to the JSON text named "op" in entry
+    set actor to world's player
+    if entry has JSON member named "actor":
+        set actor to the website farm actor identified by (the JSON text named "actor" in entry) in world
+    set properties to a new website farm item
+    if entry has JSON member named "waterPresent":
+        set properties' water present to the JSON boolean named "waterPresent" in entry
+        set properties' water to (the JSON number named "water" in entry) as an integer
+    if entry has JSON member named "serial":
+        set properties' serial to (the JSON number named "serial" in entry) as a website farm quantity
+    if (op = "give") or ((op = "take") or ((op = "drop") or (op = "capacity"))):
+        set kind to the website farm item number named (the JSON text named "kind" in entry)
+        if op = "capacity":
+            return number (the website farm carrying capacity of actor for kind)
+        set count to (the JSON number named "count" in entry) as a website farm quantity
+        if op = "give":
+            return number (give website farm actor actor item kind quantity count with properties properties)
+        if op = "take":
+            return flag (take website farm item kind quantity count from actor)
+        drop website farm item kind quantity count at (the Farm world test point named "point" in entry) with properties properties in world
+    else if op = "relocate":
+        return flag (relocate website farm entity (the JSON text named "id" in entry) to (the Farm world test point named "point" in entry) in world)
+    else if (op = "moveFlag") or ((op = "addFlag") or (op = "removeFlag")):
+        set color to the website farm flag number named (the JSON text named "id" in entry)
+        if op = "moveFlag":
+            return flag (move website farm flag color to (the Farm world test point named "point" in entry) in world)
+        if op = "addFlag":
+            return flag (add website farm flag color in world)
+        remove website farm flag color from world
+    else if (op = "area") or (op = "reshape"):
+        set start to the Farm world test point named "start" in entry
+        set end to the Farm world test point named "end" in entry
+        set id to the JSON text named "id" in entry
+        set result to a new website farm area result
+        if op = "area":
+            set result to add website farm area named (the JSON text named "name" in entry) identified by id from start to end in world
+        else:
+            set result to reshape website farm area id from start to end in world
+        if result's error is not empty:
+            return a JSON object containing [JSON text "error" is (result's error)]
+        return a JSON object containing [JSON child "area" is (the Farm world test area JSON of (result's area)), JSON text "error" is ""]
+    else if op = "removeArea":
+        remove website farm area (the JSON text named "id" in entry) from world
+    else if op = "notice":
+        notify website farm world saying (the JSON text named "text" in entry)
+    else if op = "expand":
+        set world's expanded to the JSON boolean named "value" in entry
+    else if op = "actor":
+        set position to the Farm world test point named "point" in entry
+        set actor's x to position's x
+        set actor's y to position's y
+        set actor's direction to (the JSON number named "direction" in entry) as an integer
+    else if op = "tile":
+        set point to the Farm world test point named "point" in entry
+        set tile to the website farm square at (point's x) (point's y) in world
+        set values to the JSON member named "values" in entry
+        if values has JSON member named "type":
+            set names to the website farm terrain names
+            set name to the JSON text named "type" in values
+            set index to 0
+            loop while index < the length of names:
+                if (the item at index in names) = name:
+                    set tile's terrain to index
+                increment index
+        if values has JSON member named "fertilizer":
+            set tile's fertilizer to (the JSON number named "fertilizer" in values) as an integer
+        if values has JSON member named "tree":
+            set tree to the JSON member named "tree" in values
+            set tile's tree's present to true
+            set tile's tree's serial to (the JSON number named "serial" in tree) as a website farm quantity
+            set tile's tree's hits to (the JSON number named "hits" in tree) as an integer
+            set tile's tree's regrow to (the JSON number named "regrow" in tree) as an integer
+    else if op = "compost":
+        set values to the JSON member named "values" in entry
+        set world's compost's input to (the JSON number named "input" in values) as a website farm quantity
+        set world's compost's ready to (the JSON number named "ready" in values) as a website farm quantity
+        set world's compost's age to (the JSON number named "age" in values) as an integer
+    else if op = "animal":
+        set animal to (world's chickens' data) + ((the JSON number named "index" in entry) as an integer)
+        set values to the JSON member named "values" in entry
+        if values has JSON member named "feed":
+            set animal's feed to (the JSON number named "feed" in values) as an integer
+        if values has JSON member named "held":
+            set animal's held to the JSON boolean named "held" in values
+        if values has JSON member named "x":
+            set animal's x to (the JSON number named "x" in values) as an integer
+            set animal's y to (the JSON number named "y" in values) as an integer
+    else if op = "cow":
+        set world's cow present to true
+        set world's cow's id to "cow"
+        set world's cow's x to world's pasture's x
+        set world's cow's y to world's pasture's y
+        set world's cow's direction to 2
+        set world's cow's feed to (the JSON number named "feed" in entry) as an integer
+        set world's cow's produce to (the JSON number named "produce" in entry) as a website farm quantity
+    else if op = "environment":
+        set count to (the JSON number named "count" in entry) as an integer
+        loop count times:
+            increment world's tick
+            update website farm environment in world
+    else if op = "move":
+        set target to the Farm world test point named "point" in entry
+        set adjacent to the JSON boolean named "adjacent" in entry
+        set count to (the JSON number named "count" in entry) as an integer
+        set moved to a new website farm routine step
+        loop count times:
+            set moved to move website farm actor actor towards target in world adjacently adjacent
+        return a JSON object containing [JSON flag "done" is (moved's done), JSON text "message" is (moved's message)]
+    else if op = "stock":
+        set values to the JSON member named "values" in entry
+        set index to 0
+        loop while index < values's length:
+            set member to values's members + index
+            set kind to the website farm item number named (member's name)
+            set value to member's value
+            store (value's number as a website farm quantity) into (world's stock) at kind
+            increment index
+    else if op = "order":
+        set order to the current website farm order in world
+        set descriptions to the website farm items
+        set first to the item at (order's first item) in descriptions
+        set second to the item at (order's second item) in descriptions
+        set items to a JSON object containing [JSON number (first's key) is (order's first count), JSON number (second's key) is (order's second count)]
+        return a JSON object containing [JSON child "order" is (a JSON object containing [JSON text "title" is (order's title), JSON child "items" is items]),
+            JSON flag "available" is (website farm world world can deliver its order), JSON text "reward" is (the website farm order reward in world)]
+    else if op = "deliver":
+        return flag (deliver the website farm order in world)
+    else if op = "target":
+        set value to the JSON member named "value" in entry
+        set actor's target's present to true
+        set actor's target's x to (the JSON number named "x" in value) as an integer
+        set actor's target's y to (the JSON number named "y" in value) as an integer
+        set actor's target's adjacent to the JSON boolean named "adjacent" in value
+        set tracking to the JSON member named "animal" in value
+        if tracking's kind = the JSON text kind:
+            set actor's target's animal to tracking's text
+    else if op = "advancePlayer":
+        set count to (the JSON number named "count" in entry) as an integer
+        loop count times:
+            if world's player's target's present:
+                advance the website farm player in world
+    else if op = "block":
+        loop index from 0 to the website farm square count:
+            set tile to world's tiles + index
+            set occupied to false
+            loop cursor from 0 to the website farm actor count in world:
+                set person to the website farm actor at cursor in world
+                if (person's x = tile's x) and (person's y = tile's y):
+                    set occupied to true
+            if occupied = false:
+                set tile's terrain to 1
+    else if op = "resolve":
+        set reference to the website farm reference for target ((the JSON number named "target" in entry) as an integer) within area (the JSON text named "area" in entry) seen by actor in world
+        set resolved to the website farm target of reference in world
+        if the JSON boolean named "remember" in entry:
+            remember website farm target reference for actor
+        return a JSON object containing [JSON child "reference" is (the website farm reference JSON of reference), JSON child "point" is (the Farm world test point JSON of resolved)]
+    else if op = "probe":
+        set reference to the Farm world test reference from (the JSON member named "reference" in entry)
+        return the Farm world test point JSON of (the website farm target of reference in world)
+    else if op = "label":
+        set instruction to a new website farm instruction
+        set instruction's target to (the JSON number named "target" in entry) as an integer
+        set instruction's area to the JSON text named "area" in entry
+        return text (the website farm label of instruction)
+    else if op = "empty":
+        free actor's inventory
+        set actor's inventory to an empty list of website farm item
+    else if op = "role":
+        set actor's role to the JSON text named "value" in entry
+    else if op = "worker":
+        set position to the Farm world test point named "point" in entry
+        append (a website farm worker named (the JSON text named "name" in entry) identified by (the JSON text named "id" in entry) at (position's x) (position's y)) to world's workers
+    else if op = "sense":
+        set instruction to the Farm action test instruction from entry as condition true
+        return flag (sense website farm instruction instruction for actor in world)
+    else if op = "perform":
+        set instruction to the Farm action test instruction from entry as condition false
+        set continuing to false
+        if entry has JSON member named "continue":
+            set continuing to (the JSON boolean named "continue" in entry) and (context's continuing)
+        set performed to perform website farm instruction instruction for actor in world continuing continuing with (context's continuation)
+        set context's continuation to performed's continuation
+        set context's continuing to performed's continuation's kind != 0
+        set continuation to a new JSON value of kind the JSON null kind
+        if context's continuing:
+            free continuation
+            set continuation to a JSON object containing [JSON child "target" is (the website farm reference JSON of (performed's continuation))]
+        return a JSON object containing [JSON text "message" is (performed's message), JSON flag "done" is (performed's done), JSON child "continuation" is continuation]
+    else if op = "clearWorkers":
+        set index to 0
+        loop while index < the length of (world's workers):
+            free website farm actor (the item at index in (world's workers))
+            increment index
+        clear world's workers
+    else if op = "assign":
+        set {role value} to the JSON member named "role" in entry
+        if role value's kind = the JSON null kind:
+            clear the website farm role of actor
+        else:
+            assign website farm role (the website farm role identified by (role value's text) in (context's roles)) to actor
+    else if op = "pause":
+        set actor's paused to the JSON boolean named "value" in entry
+    else if op = "held":
+        set actor's held to the JSON boolean named "value" in entry
+    else if op = "tick":
+        set count to (the JSON number named "count" in entry) as an integer
+        set running to the JSON boolean named "running" in entry
+        set delivered to (the JSON number named "deliver" in entry) as a website farm quantity
+        loop count times:
+            advance the website farm world world using roles (context's roles) with workers running running
+            if (world's orders < delivered) and (website farm world world can deliver its order):
+                ignore deliver the website farm order in world
+    else if op = "stepWorker":
+        step website farm worker actor in world using roles (context's roles)
+    else if op = "snapshot":
+        return the Farm world test summary of world
+    else if op = "playerTarget":
+        set value to the JSON member named "value" in entry
+        set world's player's target's present to true
+        set world's player's target's x to (the JSON number named "x" in value) as an integer
+        set world's player's target's y to (the JSON number named "y" in value) as an integer
+        set world's player's target's adjacent to the JSON boolean named "adjacent" in value
+        set tracking to the JSON member named "animal" in value
+        if tracking's kind = the JSON text kind:
+            set world's player's target's animal to tracking's text
+    else if op = "preview":
+        set plan to an empty website farm plan
+        set prepared to false
+        if actor's role is not empty:
+            set role to the website farm role identified by (actor's role) in (context's roles)
+            set prepared to role's prepared
+            free website farm plan the address of plan
+            set plan to a copy of website farm plan (role's program)
+        set preview to the planned website farm route for actor in world following plan prepared prepared
+        free website farm plan the address of plan
+        if preview's present = false:
+            return a new JSON value of kind the JSON null kind
+        set point to a JSON object containing [JSON number "x" is (preview's target's x), JSON number "y" is (preview's target's y)]
+        if actor's id = "player":
+            set JSON member (JSON flag "adjacent" is (actor's target's adjacent)) in point
+            set JSON member (JSON child "animal" is (the website farm optional text JSON of (actor's target's animal))) in point
+        set path to a new JSON value of kind the JSON null kind
+        if preview's route's reachable:
+            free path
+            set path to a new JSON value of kind the JSON array kind
+            set index to 0
+            loop while index < the length of (preview's route's steps):
+                set step to the item at index in (preview's route's steps)
+                add (a JSON object containing [JSON number "x" is (step's x), JSON number "y" is (step's y)]) to the JSON array path
+                increment index
+        return a JSON object containing [JSON child "target" is point, JSON text "label" is (preview's label), JSON child "path" is path]
+    else:
+        require condition false reporting "Unknown Farm test operation."
+    return a new JSON value of kind the JSON null kind
+
+to get [the Farm world test case] {a pointer to JSON value:entry}:
+    set mode to the JSON text named "mode" in entry
+    set world to the initial website farm world
+    set context to a new Farm world test context
+    set context's world to world
+    set context's roles to an empty list of a pointer to website farm role
+    if entry has JSON member named "roles":
+        set roles to the JSON member named "roles" in entry
+        set index to 0
+        loop while index < roles's length:
+            set description to the JSON value at index index in roles
+            set role to a website farm role identified by (the JSON text named "id" in description) named (the JSON text named "name" in description) containing (the JSON text named "source" in description)
+            set stdout to the JSON member named "stdout" in description
+            if stdout's kind = the JSON text kind:
+                free website farm plan the address of (role's program)
+                set role's program to the website farm plan from (stdout's text) dropping 2 source lines
+                require condition (role's program's error is empty) reporting "The captured Farm role is invalid."
+                set role's prepared to true
+                set role's applied to role's source
+            append role to context's roles
+            increment index
+    set result to a new JSON value of kind the JSON null kind
+    if mode = "world":
+        free result
+        set result to the website farm world JSON of world
+    if (mode = "scenario") or ((mode = "orders") or (mode = "simulation")):
+        set ops to the JSON member named "ops" in entry
+        set results to a new JSON value of kind the JSON array kind
+        set index to 0
+        loop while index < ops's length:
+            add (the Farm world test operation (the JSON value at index index in ops) in (the address of context)) to the JSON array results
+            increment index
+        free result
+        set snapshot to (the website farm world JSON of world) if mode = "orders", else (the Farm world test summary of world)
+        set result to a JSON object containing [JSON child "results" is results, JSON child "world" is snapshot]
+    if mode = "crossings":
+        set world's expanded to the JSON boolean named "expanded" in entry
+        set animal to the JSON boolean named "animal" in entry
+        free result
+        set result to a new JSON value of kind the JSON array kind
+        set directions to the website farm directions as points
+        loop y from -1 to 21:
+            loop x from -1 to 21:
+                for each step in directions:
+                    set from to website farm point x y
+                    set to to website farm point (x + step's x) (y + step's y)
+                    add (flag (website farm travel from from to to is allowed in world for an animal animal)) to the JSON array result
+    if mode = "fences":
+        set world's expanded to the JSON boolean named "expanded" in entry
+        set queries to the JSON member named "queries" in entry
+        free result
+        set result to a new JSON value of kind the JSON array kind
+        set index to 0
+        loop while index < queries's length:
+            set query to the JSON value at index index in queries
+            set from to the Farm world test point named "from" in query
+            set to to the Farm world test point named "to" in query
+            set fence to the website farm fence from from to to in world
+            set value to a new JSON value of kind the JSON null kind
+            if fence's present:
+                free value
+                set value to a JSON object containing [JSON child "start" is (a JSON array containing [number (fence's start x), number (fence's start y)]),
+                    JSON child "end" is (a JSON array containing [number (fence's end x), number (fence's end y)]), JSON flag "gate" is (fence's gate), JSON flag "locked" is (fence's locked)]
+            add value to the JSON array result
+            increment index
+    if mode = "routes":
+        set world's expanded to the JSON boolean named "expanded" in entry
+        set adjacent to the JSON boolean named "adjacent" in entry
+        set position to the Farm world test point named "position" in entry
+        set world's player's x to position's x
+        set world's player's y to position's y
+        set targets to the JSON member named "targets" in entry
+        free result
+        set result to a new JSON value of kind the JSON array kind
+        set index to 0
+        loop while index < targets's length:
+            set target to the JSON value at index index in targets
+            set route to the website farm route from (world's player) to (website farm point ((the JSON number named "x" in target) as an integer) ((the JSON number named "y" in target) as an integer)) in world adjacently adjacent
+            set path to a new JSON value of kind the JSON null kind
+            if route's reachable:
+                free path
+                set path to a new JSON value of kind the JSON array kind
+                set cursor to 0
+                loop while cursor < the length of (route's steps):
+                    set point to the item at cursor in (route's steps)
+                    add (a JSON object containing [JSON number "x" is (point's x), JSON number "y" is (point's y)]) to the JSON array path
+                    increment cursor
+            add path to the JSON array result
+            increment index
+    free website farm world world
+    free website farm roles (context's roles)
+    return result

@@ -1,0 +1,153 @@
+import work.dl
+
+class:
+    patterns:
+        website farm storage environment
+    members:
+        world as a pointer to website farm world
+        target as website farm resolved target
+        reference as website farm reference
+
+[the website farm storage request] means: the type of (@intrinsic("construct", website farm transfer request, a new website farm item, 0 as a website farm quantity, a new website farm storage environment))
+
+to get [accept a website farm storage transfer] {the website farm storage request:request}:
+    return accept website farm item (request's item) quantity (request's count) at (request's environment's target) referenced by (request's environment's reference) in (request's environment's world)
+
+to get [accept a website farm dropped item] {the website farm storage request:request}:
+    drop website farm item (request's item's kind) quantity (request's count) at (request's environment's target's point) with properties (request's item) in (request's environment's world)
+    return request's count
+
+to get [the website farm transfer message] {C string:verb} [for quantity] {a website farm quantity:count} [or] {C string:empty}:
+    if count = 0:
+        return the string form of empty
+    set suffix to "" if count = 1, else "s"
+    return (the string form of verb) + " " + (the string form of count) + " item" + (the string form of suffix) + "."
+
+to get [fill website farm buckets selected by] {website farm item selection:selection} [for] {a pointer to website farm actor:actor} [in] {a pointer to website farm world:world}:
+    if (selection's argument != the website farm all items) and (selection's argument != 2):
+        return a completed website farm action saying "Only buckets can be filled with water."
+    set beside to (the website farm square at (actor's x) (actor's y) in world)'s water
+    set directions to the website farm directions as points
+    for each step in directions:
+        set point to website farm point (actor's x + step's x) (actor's y + step's y)
+        if website farm land at (point's x) (point's y) exists:
+            if ((the website farm square at (point's x) (point's y) in world)'s water) and (website farm travel from (the website farm position of actor) to point is allowed in world for an animal false):
+                set beside to true
+    if beside = false:
+        return a completed website farm action saying "Walk beside the pond or a flowing channel."
+    set count to 0 as a website farm quantity
+    set index to 0
+    loop while index < the length of (actor's inventory):
+        set slot to actor's inventory's data + index
+        if ((slot's kind = 2) and (slot's water < 4)) and ((selection's amount = -1) or (count < selection's amount)):
+            set slot's water to 4
+            increment count
+        increment index
+    if count = 0:
+        return a completed website farm action saying "No empty bucket to fill."
+    set suffix to "" if count = 1, else "s"
+    return a completed website farm action saying ("Filled " + (the string form of count) + " bucket" + (the string form of suffix) + ".")
+
+to get [perform website farm instruction] {website farm instruction:instruction} [for] {a pointer to website farm actor:actor} [in] {a pointer to website farm world:world} [continuing] {boolean:continuing} [with] {website farm reference:continuation}:
+    set actions to the website farm actions
+    set entry to the item at (instruction's identifier) in actions
+    set key to entry's key
+    set reference to continuation
+    if continuing = false:
+        set reference to the website farm reference for target (instruction's target) within area (instruction's area) seen by actor in world
+    set target to the website farm target of reference in world
+    set selection to a new website farm item selection
+    if entry's operands contains "items":
+        set selection to the website farm item selection for instruction held by actor
+    if entry's subject = "target":
+        remember website farm target reference for actor
+    if (entry's subject = "items") and (selection's present):
+        remember website farm item selection selection for actor
+    if key = "focusTarget":
+        return a completed website farm action saying ("Remembering this target." if target's present, else "That target is no longer there.")
+    if key = "focusItems":
+        return a completed website farm action saying ("Remembering these items." if selection's present, else "There is no remembered item selection.")
+    if key = "wait":
+        return a completed website farm action saying "Waiting."
+    if key = "turn":
+        set relative to [0, 2, 3, 1]
+        set actor's direction to (actor's direction + (the item at (instruction's argument) in relative)) % 4
+        return a completed website farm action saying "Turning."
+    if key = "step":
+        set point to the website farm step relative to (instruction's argument) for actor
+        if ((website farm land at (point's x) (point's y) is walkable in world except actor actor) = false) or ((website farm travel from (the website farm position of actor) to point is allowed in world for an animal false) = false):
+            return a completed website farm action saying "That square is blocked."
+        set actor's x to point's x
+        set actor's y to point's y
+        return a completed website farm action saying "Stepping."
+    if key = "walk":
+        if target's present = false:
+            if (instruction's target = the website farm subject target) or continuing:
+                return a completed website farm action saying "That target is no longer there."
+            return a completed website farm action saying ("No " + (the website farm label of instruction) + " to walk to.")
+        set moved to move website farm actor actor towards (target's point) in world adjacently true
+        set message to moved's message
+        if moved's done:
+            set message to "At " + (the website farm label of instruction) + "."
+        return a website farm action reply (moved's done) saying message carrying reference
+    if (entry's operands contains "items") and (selection's present = false):
+        return a completed website farm action saying "There is no remembered item selection."
+    if (key = "store") or ((key = "add") or (key = "give")):
+        if (target's present = false) or ((website farm position (the website farm position of actor) reaches (target's point) in world adjacently true) = false):
+            return a completed website farm action saying "Walk beside the chosen storage or person first."
+        if (key = "give") and ((target's actor = (0 as a pointer to website farm actor)) or (target's actor = actor)):
+            return a completed website farm action saying "Choose another person to give items to."
+        set environment to @intrinsic("construct", website farm storage environment, world, target, reference)
+        set accept to the function named "accept a website farm storage transfer $"
+        set count to transfer website farm selection selection from (actor's inventory) accepting accept with environment
+        remove empty website farm items from (actor's inventory)
+        return a completed website farm action saying (the website farm transfer message "Transferred" for quantity count or "No selected items can be transferred here.")
+    if key = "drop":
+        set ground to a new website farm resolved target
+        set ground's point to the website farm position of actor
+        set environment to @intrinsic("construct", website farm storage environment, world, ground, a new website farm reference)
+        set accept to the function named "accept a website farm dropped item $"
+        set count to transfer website farm selection selection from (actor's inventory) accepting accept with environment
+        remove empty website farm items from (actor's inventory)
+        return a completed website farm action saying (the website farm transfer message "Put down" for quantity count or "None of those items to put down.")
+    if key = "collect":
+        set explicit to instruction's target != the website farm absent target
+        if explicit and (target's present = false):
+            return a completed website farm action saying "That source is no longer there."
+        if explicit and ((website farm position (the website farm position of actor) reaches (target's point) in world adjacently true) = false):
+            return a completed website farm action saying "That source is out of reach. Walk closer first."
+        if target's actor = actor:
+            return a completed website farm action saying "Those items are already in my hands."
+        set references to an empty list of website farm reference
+        if explicit:
+            append reference to references
+        else:
+            free references
+            set references to the nearby website farm item references for actor in world
+        set count to collect website farm selection selection for actor from references in world
+        free references
+        return a completed website farm action saying (the website farm transfer message "Collected" for quantity count or "No selected items I can carry nearby.")
+    if key = "fill":
+        return fill website farm buckets selected by selection for actor in world
+    if target's present = false:
+        return a completed website farm action saying "That target is no longer there."
+    if (website farm position (the website farm position of actor) reaches (target's point) in world adjacently true) = false:
+        return a completed website farm action saying "That target is out of reach. Walk closer first."
+    face website farm entity actor towards (target's point)
+    if key = "feed":
+        if target's animal = (0 as a pointer to website farm animal):
+            return a completed website farm action saying "Choose an animal to feed."
+        set animal to target's animal
+        set food to 8 if animal's id = "cow", else 7
+        if animal's feed >= 4:
+            return a completed website farm action saying "Already well fed."
+        if (take website farm item food quantity 1 from actor) = false:
+            return a completed website farm action saying ("I need " + (the string form of ("hay" if food = 8, else "wheat")) + ".")
+        increment animal's feed
+        return a completed website farm action saying "Fed the animal."
+    if (target's tile = (0 as a pointer to website farm tile)) or ((website farm land at (target's point's x) (target's point's y) is unlocked in world) = false):
+        return a completed website farm action saying "Choose available ground for this job."
+    return perform website farm ground work key selecting selection for actor at (target's tile) referenced by reference in world
+
+to get [perform website farm instruction] {website farm instruction:instruction} [for] {a pointer to website farm actor:actor} [in] {a pointer to website farm world:world}:
+    return perform website farm instruction instruction for actor in world continuing false with (a new website farm reference)

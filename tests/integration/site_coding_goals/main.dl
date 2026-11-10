@@ -1,0 +1,19 @@
+import site/games/progress/goals.dl
+
+set coding to new website coding progress for "farm"
+require condition ((record website coding goal "eggs" amount 0 in coding) = false) reporting "Zero collected eggs changed progress."
+require condition (record website coding goal "eggs" amount 4 in coding) reporting "Collected eggs were not counted."
+require condition (record website coding goal "eggs" amount 2 in coding) reporting "Another collection was treated as a duplicate."
+require condition ((record website coding goal "eggs" amount (-1) in coding) = false) reporting "Negative progress changed a goal."
+require condition (((the website coding count of "eggs" in coding) = 6) and ((the JSON member named "seen" in (the JSON member named "eggs" in coding))'s length = 0)) reporting "Unkeyed goals acquired deduplication keys."
+require condition (record website coding goal "planting" using key "🌽,north" in coding) reporting "A distinct Unicode bed was not counted."
+require condition ((record website coding goal "planting" using key "🌽,north" in coding) = false) reporting "A planted bed was counted twice."
+require condition ((the website coding count of "planting" in coding) = 1) reporting "Unique bed counts changed."
+require condition (record website coding goal "watering" amount (4294967296 as a 64 bit integer) in coding) reporting "A portable 64-bit goal quantity was lost."
+require condition ((the website coding count of "watering" in coding) = (4294967296 as a 64 bit integer)) reporting "Goal quantities were truncated on this target."
+free coding
+set river to new website coding progress for "river"
+require condition (record website coding goal "passenger" using key "sheep" in river) reporting "The River goal API stopped recording passengers."
+require condition ((record website coding goal "passenger" using key "sheep" in river) = false) reporting "The River goal API stopped deduplicating passengers."
+free river
+print line "Coding goals count collected quantities and distinct Unicode targets without changing River progress."

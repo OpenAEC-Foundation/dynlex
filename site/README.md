@@ -19,9 +19,9 @@ Page declarations live in `pages/`, with shared appearances in `appearance.dl`.
 `interface.dl` composes the pages. Controllers in `programs/`, `editor/`,
 `downloads/` and `shaders/` own behavior and retained state. `games/` contains
 the shared execution source reader and river event/scene model. The Farm world,
-routes, inventory, areas, environment, orders and entity references live in
-`games/farm/`; their simulation and renderer are still being connected to the
-application. `application.dl`
+routes, inventory, areas, environment, actions, worker roles and simulation live
+in `games/farm/`. Its saved-world loader, renderer and interface are still being
+connected to the application. `application.dl`
 connects the interface, controllers and platform event stream.
 
 To use changes from a dynlex-ui checkout, update the package and lock together:

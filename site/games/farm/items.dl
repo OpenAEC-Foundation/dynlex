@@ -1,0 +1,229 @@
+import targets.dl
+
+class:
+    patterns:
+        website farm item selection
+    members:
+        present as a boolean
+        argument as an integer
+        amount as a website farm quantity
+
+to get [the website farm item selection for] {website farm instruction:instruction} [held by] {a pointer to website farm actor:actor}:
+    set result to @intrinsic("construct", website farm item selection, true, instruction's argument, instruction's amount as a website farm quantity)
+    if instruction's argument = the website farm subject items:
+        if actor's subject's kind != 2:
+            set result's present to false
+        else:
+            set result's argument to actor's subject's argument
+            if instruction's amount = -1:
+                set result's amount to actor's subject's amount
+    return result
+
+to [remember website farm item selection] {website farm item selection:selection} [for] {a pointer to website farm actor:actor}:
+    require condition (selection's present) reporting "Remembering Farm items needs a selection."
+    set actor's subject to a new website farm subject
+    set actor's subject's kind to 2
+    set actor's subject's argument to selection's argument
+    set actor's subject's amount to selection's amount
+
+to get [website farm selection] {website farm item selection:selection} [matches] {website farm item:item}:
+    return (selection's argument = the website farm all items) or (selection's argument = item's kind)
+
+to get [the website farm count selected by] {website farm item selection:selection} [in] {a value:items}:
+    set result to 0 as a website farm quantity
+    set index to 0
+    loop while index < the length of items:
+        set item to the item at index in items
+        if website farm selection selection matches item:
+            add (item's count) to result
+        increment index
+    return result
+
+class:
+    patterns:
+        website farm transfer request
+    members:
+        item as website farm item
+        count as a website farm quantity
+        environment
+
+# Receivers may append to the source inventory, but do not remove or reorder
+# its slots. Reacquire the slot after the callback because appending can grow it.
+to get [transfer website farm selection] {website farm item selection:selection} [from] {a value:items} [accepting] {a callback:accept} [with] {a value:environment}:
+    set remaining to selection's amount
+    set moved to 0 as a website farm quantity
+    set index to 0
+    loop while index < the length of items:
+        set item to the item at index in items
+        if (website farm selection selection matches item) and (remaining != 0):
+            set count to item's count if remaining = -1, else (the minimum of (item's count) and remaining)
+            set request to @intrinsic("construct", website farm transfer request, item, count, environment)
+            set accepted to @intrinsic("invoke", accept, request)
+            require condition (0 <= accepted <= count) reporting "A Farm transfer receiver returned an invalid quantity."
+            set slot to items' data + index
+            subtract accepted from slot's count
+            if remaining != -1:
+                subtract accepted from remaining
+            add accepted to moved
+        increment index
+    return moved
+
+class:
+    patterns:
+        website farm item source
+    members:
+        present as a boolean
+        kind as an integer
+        target as website farm resolved target
+        items as the type of (an empty list of website farm item)
+        owned as a boolean
+
+to get [the website farm item source for] {website farm resolved target:target} [referenced by] {website farm reference:reference} [in] {a pointer to website farm world:world}:
+    set result to a new website farm item source
+    set result's target to target
+    set result's kind to reference's kind
+    if (reference's kind = 1) or ((reference's kind = 2) or ((target's animal != (0 as a pointer to website farm animal)) and (reference's id = "cow"))):
+        set result's present to true
+        set result's owned to true
+        set result's items to an empty list of website farm item
+        set item to a new website farm item
+        if reference's kind = 1:
+            loop index from 0 to the length of the website farm items:
+                set item's kind to index
+                set item's count to the item at index in (world's stock)
+                append item to result's items
+        else:
+            set item's kind to 12 if reference's kind = 2, else 10
+            set item's count to world's compost's ready if reference's kind = 2, else (target's animal's produce)
+            append item to result's items
+    else if target's actor != (0 as a pointer to website farm actor):
+        set result's present to true
+        set result's items to target's actor's inventory
+    else if target's tile != (0 as a pointer to website farm tile):
+        set result's present to true
+        set result's items to target's tile's items
+    return result
+
+to [commit website farm item source] {website farm item source:source} [in] {a pointer to website farm world:world}:
+    if source's owned:
+        if source's kind = 1:
+            loop index from 0 to the length of the website farm items:
+                store ((the item at index in (source's items))'s count) into (world's stock) at index
+        else if source's kind = 2:
+            set world's compost's ready to (the item at 0 in (source's items))'s count
+        else:
+            set source's target's animal's produce to (the item at 0 in (source's items))'s count
+    else:
+        remove empty website farm items from (source's items)
+
+to [free website farm item source] {website farm item source:source}:
+    if source's owned:
+        free source's items
+
+to get [accept website farm item] {website farm item:item} [quantity] {a website farm quantity:count} [at] {website farm resolved target:target} [referenced by] {website farm reference:reference} [in] {a pointer to website farm world:world}:
+    if reference's kind = 1:
+        add count to (the item at (item's kind) in (world's stock))
+        return count
+    if reference's kind = 2:
+        if item's kind != 11:
+            return 0 as a website farm quantity
+        add count to world's compost's input
+        return count
+    if target's actor != (0 as a pointer to website farm actor):
+        return give website farm actor (target's actor) item (item's kind) quantity count with properties item
+    if target's tile != (0 as a pointer to website farm tile):
+        drop website farm item (item's kind) quantity count at (target's point) with properties item in world
+        return count
+    return 0 as a website farm quantity
+
+class:
+    patterns:
+        website farm collection environment
+    members:
+        world as a pointer to website farm world
+        actor as a pointer to website farm actor
+        ground as a boolean
+
+[the website farm collection request] means: the type of (@intrinsic("construct", website farm transfer request, a new website farm item, 0 as a website farm quantity, a new website farm collection environment))
+
+to get [accept a website farm collection] {the website farm collection request:request}:
+    set actor to request's environment's actor
+    set item to request's item
+    set count to give website farm actor actor item (item's kind) quantity (request's count) with properties item
+    if (request's environment's ground) and ((actor's id != "player") and (item's kind = 9)):
+        ignore record website coding goal "eggs" amount count in (request's environment's world's coding)
+    return count
+
+to get [the nearby website farm item references for] {a pointer to website farm actor:actor} [in] {a pointer to website farm world:world}:
+    set result to an empty list of website farm reference
+    set points to an empty list of website farm point
+    append (the website farm position of actor) to points
+    set directions to the website farm directions as points
+    for each step in directions:
+        set point to website farm point (actor's x + step's x) (actor's y + step's y)
+        if website farm land at (point's x) (point's y) exists:
+            append point to points
+    set index to 0
+    loop while index < the length of points:
+        set point to the item at index in points
+        append (a website farm tile reference for (the website farm square at (point's x) (point's y) in world) as "ground") to result
+        increment index
+    free points
+    set reference to a new website farm reference
+    set reference's kind to 1
+    append reference to result
+    set reference's kind to 2
+    append reference to result
+    if world's cow present:
+        append (a website farm entity reference for "cow") to result
+    set index to (the length of result) - 1
+    loop while index >= 0:
+        set reference to the item at index in result
+        set target to the website farm target of reference in world
+        if (website farm position (the website farm position of actor) reaches (target's point) in world adjacently true) = false:
+            remove item index from result
+        decrement index
+    # Stable insertion sort preserves self/N/E/S/W/storage order at equal distance.
+    set index to 1
+    loop while index < the length of result:
+        set reference to the item at index in result
+        set target to the website farm target of reference in world
+        set distance to the website farm distance from (the website farm position of actor) to (target's point)
+        set cursor to index
+        set moving to true
+        loop while (cursor > 0) and moving:
+            set previous to the item at (cursor - 1) in result
+            set before to the website farm target of previous in world
+            if (the website farm distance from (the website farm position of actor) to (before's point)) <= distance:
+                set moving to false
+            else:
+                replace item at index cursor in result with previous
+                decrement cursor
+        replace item at index cursor in result with reference
+        increment index
+    return result
+
+to get [collect website farm selection] {website farm item selection:selection} [for] {a pointer to website farm actor:actor} [from] {a value:references} [in] {a pointer to website farm world:world}:
+    set remaining to selection's amount
+    if (remaining = -1) and (selection's argument != the website farm all items):
+        set descriptions to the website farm items
+        set remaining to (the item at (selection's argument) in descriptions)'s capacity as a website farm quantity
+    set count to 0 as a website farm quantity
+    set index to 0
+    set accept to the function named "accept a website farm collection $"
+    loop while (index < the length of references) and (remaining != 0):
+        set reference to the item at index in references
+        set target to the website farm target of reference in world
+        set source to the website farm item source for target referenced by reference in world
+        if source's present:
+            set requested to selection
+            set requested's amount to remaining
+            set environment to @intrinsic("construct", website farm collection environment, world, actor, target's tile != (0 as a pointer to website farm tile))
+            set taken to transfer website farm selection requested from (source's items) accepting accept with environment
+            commit website farm item source source in world
+            free website farm item source source
+            add taken to count
+            if remaining != -1:
+                subtract taken from remaining
+        increment index
+    return count

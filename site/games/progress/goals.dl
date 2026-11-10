@@ -36,20 +36,35 @@ to get [the website coding progress error in] {a pointer to JSON value:coding} f
     free template
     return error
 
-to get [record website coding goal] {C string:name} using key {C string:key} in {a pointer to JSON value:coding}:
+to get [record website coding goal] {C string:name} amount {an integer:amount} using key {string:key} uniquely {boolean:unique} in {a pointer to JSON value:coding}:
+    if amount <= 0:
+        return false
+    require condition (amount <= 9007199254740991) reporting "A coding goal needs an exact quantity"
+    set quantity to amount as a 64 bit integer
     set goal to the JSON member named name in coding
     set seen to the JSON member named "seen" in goal
-    set index to 0
-    loop while index < seen's length:
-        if (the JSON text at index index in seen) = key:
-            return false
-        increment index
+    if unique:
+        set index to 0
+        loop while index < seen's length:
+            if (the JSON text at index index in seen) = key:
+                return false
+            increment index
     set count to (the JSON number named "count" in goal) as a 64 bit integer
-    require condition (count < 9007199254740991) reporting "The coding goal count cannot be incremented exactly"
-    set item to a new JSON value of kind the JSON text kind
-    set item's text to key
-    add item to the JSON array seen
-    set JSON member (JSON number "count" is (count + 1)) in goal
+    require condition (count <= 9007199254740991 - quantity) reporting "The coding goal count cannot be incremented exactly"
+    if unique:
+        set item to a new JSON value of kind the JSON text kind
+        set item's text to key
+        add item to the JSON array seen
+    set JSON member (JSON number "count" is (count + quantity)) in goal
     return true
+
+to get [record website coding goal] {C string:name} using key {C string:key} in {a pointer to JSON value:coding}:
+    return record website coding goal name amount 1 using key (the string form of key) uniquely true in coding
+
+to get [record website coding goal] {C string:name} using key {string:key} in {a pointer to JSON value:coding}:
+    return record website coding goal name amount 1 using key key uniquely true in coding
+
+to get [record website coding goal] {C string:name} amount {an integer:amount} in {a pointer to JSON value:coding}:
+    return record website coding goal name amount amount using key (the string form of "") uniquely false in coding
 
 the website coding count of {C string:name} in {a pointer to JSON value:coding} means: (the JSON number named "count" in (the JSON member named name in coding)) as a 64 bit integer

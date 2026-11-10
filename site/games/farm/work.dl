@@ -1,0 +1,107 @@
+import conditions.dl
+
+[a completed website farm action saying] {a value:message} means: a website farm action reply true saying (the string form of message) carrying (a new website farm reference)
+
+to get [website farm actor] {a pointer to website farm actor:actor} [carries item] {integer:kind}:
+    set index to 0
+    loop while index < the length of (actor's inventory):
+        if (the item at index in (actor's inventory))'s kind = kind:
+            return true
+        increment index
+    return false
+
+to [harvest website farm item] {integer:kind} [quantity] {integer:count} [for] {a pointer to website farm actor:actor} [at] {website farm point:point} [in] {a pointer to website farm world:world}:
+    set accepted to give website farm actor actor item kind quantity count
+    drop website farm item kind quantity (count - accepted) at point in world
+
+to get [perform website farm ground work] {C string:key} [selecting] {website farm item selection:selection} [for] {a pointer to website farm actor:actor} [at] {a pointer to website farm tile:tile} [referenced by] {website farm reference:reference} [in] {a pointer to website farm world:world}:
+    if (key = "plow") or ((key = "dig") or (key = "plant")):
+        set point to the website farm position of tile
+        if ((the website farm pen at (tile's x) (tile's y)) != -1) or (((point's x = world's barn's x) and (point's y = world's barn's y)) or ((point's x = world's compost's x) and (point's y = world's compost's y))):
+            return a completed website farm action saying "That square is occupied. Choose clear ground."
+    if key = "chop":
+        if (website farm actor actor carries item 0) = false:
+            return a completed website farm action saying "I need an axe."
+        if (website farm tile tile has a standing tree) = false:
+            return a completed website farm action saying "Choose a standing tree to chop."
+        decrement tile's tree's hits
+        if tile's tree's hits > 0:
+            return a website farm action reply false saying (the string form of "Chopping…") carrying reference
+        set tile's tree's regrow to 180
+        drop website farm item 5 quantity 2 at (the website farm position of tile) in world
+        return a completed website farm action saying "Timber! Two logs are ready to collect."
+    if key = "plow":
+        if (website farm actor actor carries item 1) = false:
+            return a completed website farm action saying "I need a hoe."
+        if tile's terrain = 3:
+            return a completed website farm action saying "Already plowed."
+        if (tile's terrain != 0) or (tile's tree's present):
+            return a completed website farm action saying "This ground cannot be plowed."
+        set tile's terrain to 3
+        set tile's plot to true
+        return a completed website farm action saying "Plowed a new planting bed."
+    if key = "plant":
+        if (selection's argument != 6) and (selection's argument != 7):
+            return a completed website farm action saying "Plant carrots or wheat."
+        if selection's amount = 0:
+            return a completed website farm action saying "No crops requested."
+        if (tile's terrain != 3) or (tile's crop's present):
+            return a completed website farm action saying "Choose an empty, plowed bed."
+        if (take website farm item 4 quantity 1 from actor) = false:
+            return a completed website farm action saying "I need seeds from the barn."
+        set tile's crop to a new website farm crop
+        set tile's crop's present to true
+        set tile's crop's serial to the next website farm entity in world
+        set tile's crop's kind to selection's argument
+        if actor's id != "player":
+            set {goal key} to formatted "{tile's x},{tile's y}"
+            ignore record website coding goal "planting" using key {goal key} in (world's coding)
+        set descriptions to the website farm items
+        set description to the item at (selection's argument) in descriptions
+        return a completed website farm action saying ("Planted " + (the string form of (description's key)) + ".")
+    if key = "water":
+        set bucket to 0 as a pointer to website farm item
+        set index to 0
+        loop while (index < the length of (actor's inventory)) and (bucket = (0 as a pointer to website farm item)):
+            set slot to actor's inventory's data + index
+            if (slot's kind = 2) and (slot's water > 0):
+                set bucket to slot
+            increment index
+        if bucket = (0 as a pointer to website farm item):
+            return a completed website farm action saying "I need a bucket filled at the pond."
+        if tile's terrain != 3:
+            return a completed website farm action saying "Choose a planting bed."
+        decrement bucket's water
+        if (actor's id != "player") and ((tile's crop's present) and (tile's moisture < 10.0)):
+            set {goal key} to formatted "{tile's x},{tile's y}"
+            ignore record website coding goal "watering" using key {goal key} in (world's coding)
+        set tile's moisture to 10.0
+        return a completed website farm action saying "Watered this bed."
+    if key = "harvest":
+        if (tile's crop's present = false) or (tile's crop's growth < 1.0):
+            return a completed website farm action saying "These crops aren't ripe yet."
+        set kind to tile's crop's kind
+        harvest website farm item kind quantity 2 for actor at (the website farm position of tile) in world
+        harvest website farm item 11 quantity 1 for actor at (the website farm position of tile) in world
+        if kind = 7:
+            harvest website farm item 8 quantity 1 for actor at (the website farm position of tile) in world
+        add 2 to (the item at 4 in (world's stock))
+        set tile's crop to a new website farm crop
+        set tile's fertilizer to 0
+        return a completed website farm action saying "Harvested crops and scraps. Saved two seeds in the barn."
+    if key = "fertilize":
+        if tile's terrain != 3:
+            return a completed website farm action saying "Choose a planting bed."
+        if (take website farm item 12 quantity 1 from actor) = false:
+            return a completed website farm action saying "I need finished compost."
+        set tile's fertilizer to 1
+        return a completed website farm action saying "Fertilized this bed: crops grow twice as fast."
+    require condition (key = "dig") reporting "Unknown Farm ground work."
+    if (website farm actor actor carries item 3) = false:
+        return a completed website farm action saying "I need a shovel."
+    if tile's terrain = 2:
+        return a completed website farm action saying "A channel is already here."
+    if (tile's terrain != 0) or ((tile's tree's present) or (tile's crop's present)):
+        return a completed website farm action saying "Dig channels through clear grass."
+    set tile's terrain to 2
+    return a completed website farm action saying "Dug a channel. Connect it to the pond for water."

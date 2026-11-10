@@ -1,0 +1,67 @@
+import roles.dl
+import preview.dl
+import orders.dl
+
+class:
+    patterns:
+        website farm worker context
+    members:
+        world as a pointer to website farm world
+        actor as a pointer to website farm actor
+
+[the website farm worker request] means: the type of (@intrinsic("construct", website farm action request, a new website farm instruction, a new website farm reference, false, a new website farm worker context))
+
+to get [sense a website farm worker request] {the website farm worker request:request}:
+    return sense website farm instruction (request's instruction) for (request's environment's actor) in (request's environment's world)
+
+to get [perform a website farm worker request] {the website farm worker request:request}:
+    return perform website farm instruction (request's instruction) for (request's environment's actor) in (request's environment's world) continuing (request's continuing) with (request's continuation)
+
+to [reset website farm worker] {a pointer to website farm actor:actor} [with plan] {website farm plan:plan}:
+    free website farm routine the address of (actor's routine)
+    set actor's routine to a website farm routine for plan initially carrying (a new website farm reference)
+    set actor's subject to a new website farm subject
+    set actor's target to a new website farm movement target
+
+to [assign website farm role] {a pointer to website farm role:role} [to] {a pointer to website farm actor:actor}:
+    reset website farm worker actor with plan (role's program)
+    set actor's role to role's id
+    set actor's status to "Starting my role."
+
+to [clear the website farm role of] {a pointer to website farm actor:actor}:
+    set plan to an empty website farm plan
+    reset website farm worker actor with plan plan
+    free website farm plan the address of plan
+    set actor's role to ""
+    set actor's status to "Choose a role for me."
+
+to [advance the website farm world] {a pointer to website farm world:world} [using roles] {a value:roles} [with workers running] {boolean:running}:
+    increment world's tick
+    update website farm environment in world
+    if world's player's target's present:
+        advance the website farm player in world
+    if running = false:
+        return nothing
+    set sense to the function named "sense a website farm worker request $"
+    set act to the function named "perform a website farm worker request $"
+    set index to 0
+    loop while index < the length of (world's workers):
+        set worker to the item at index in (world's workers)
+        if (worker's role is not empty) and ((worker's held = false) and (worker's paused = false)):
+            set role to the website farm role identified by (worker's role) in roles
+            if role's prepared = false:
+                set worker's status to "Apply this role's code to start working."
+            else:
+                set environment to @intrinsic("construct", website farm worker context, world, worker)
+                set worker's status to advance website farm routine (the address of (worker's routine)) in (role's program) sensing sense acting act with environment
+        increment index
+
+to [step website farm worker] {a pointer to website farm actor:worker} [in] {a pointer to website farm world:world} [using roles] {a value:roles}:
+    set worker's paused to true
+    set role to the website farm role identified by (worker's role) in roles
+    require condition (role's prepared) reporting "Stepping a Farm worker needs a prepared role."
+    set sense to the function named "sense a website farm worker request $"
+    set act to the function named "perform a website farm worker request $"
+    set environment to @intrinsic("construct", website farm worker context, world, worker)
+    set result to the next website farm step for (the address of (worker's routine)) in (role's program) sensing sense acting act with environment
+    set worker's status to result's message

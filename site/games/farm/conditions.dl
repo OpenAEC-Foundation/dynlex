@@ -1,0 +1,107 @@
+import items.dl
+
+to get [the website farm step relative to] {integer:direction} [for] {a pointer to website farm actor:actor}:
+    set relative to [0, 2, 3, 1]
+    set directions to the website farm directions as points
+    set step to the item at ((actor's direction + (the item at direction in relative)) % 4) in directions
+    return website farm point (actor's x + step's x) (actor's y + step's y)
+
+to get [website farm selection] {website farm item selection:selection} [is full in] {a pointer to website farm actor:actor}:
+    if selection's argument = the website farm all items:
+        return (the length of (actor's inventory)) = 2
+    set matches to 0
+    set descriptions to the website farm items
+    set index to 0
+    loop while index < the length of (actor's inventory):
+        set item to the item at index in (actor's inventory)
+        if website farm selection selection matches item:
+            increment matches
+            if item's kind = 2:
+                if item's water != 4:
+                    return false
+            else:
+                set description to the item at (item's kind) in descriptions
+                if item's count != description's capacity:
+                    return false
+        increment index
+    return matches > 0
+
+to get [website farm selection] {website farm item selection:selection} [is empty in] {a pointer to website farm actor:actor}:
+    if selection's argument = the website farm all items:
+        return (the length of (actor's inventory)) = 0
+    set index to 0
+    loop while index < the length of (actor's inventory):
+        set item to the item at index in (actor's inventory)
+        if website farm selection selection matches item:
+            set count to (item's water as a website farm quantity) if item's kind = 2, else (item's count)
+            if count != 0:
+                return false
+        increment index
+    return true
+
+to get [sense website farm instruction] {website farm instruction:instruction} [for] {a pointer to website farm actor:actor} [in] {a pointer to website farm world:world}:
+    set conditions to the website farm conditions
+    set entry to the item at (instruction's identifier) in conditions
+    set key to entry's key
+    set reference to the website farm reference for target (instruction's target) within area (instruction's area) seen by actor in world
+    set target to the website farm target of reference in world
+    set selection to a new website farm item selection
+    if (entry's operands contains "items") or (entry's operands = "stock"):
+        set selection to the website farm item selection for instruction held by actor
+    if entry's subject = "target":
+        remember website farm target reference for actor
+    if (entry's subject = "items") and (selection's present):
+        remember website farm item selection selection for actor
+    if key = "exists":
+        return target's present
+    if key = "reach":
+        return (target's present) and (website farm position (the website farm position of actor) reaches (target's point) in world adjacently true)
+    if key = "rain":
+        return world's raining
+    if key = "role":
+        set roles to the website farm roles
+        return actor's role = (the item at (instruction's argument) in roles)
+    if key = "canStep":
+        set point to the website farm step relative to (instruction's argument) for actor
+        return (website farm land at (point's x) (point's y) is walkable in world except actor actor) and (website farm travel from (the website farm position of actor) to point is allowed in world for an animal false)
+    if (key = "stockAtLeast") or (key = "stockFewer"):
+        if (selection's present = false) or (target's present = false):
+            return false
+        set source to the website farm item source for target referenced by reference in world
+        if source's present = false:
+            return false
+        set count to the website farm count selected by selection in (source's items)
+        free website farm item source source
+        return (count >= instruction's amount) if key = "stockAtLeast", else (count < instruction's amount)
+    if (key = "full") or ((key = "empty") or ((key = "carrying") or (key = "notCarrying"))):
+        if selection's present = false:
+            return false
+        if (key = "carrying") or (key = "notCarrying"):
+            set count to the website farm count selected by selection in (actor's inventory)
+            set required to (1 as a website farm quantity) if selection's amount = -1, else (selection's amount)
+            set carrying to (count > 0) and (count >= required)
+            return carrying if key = "carrying", else (carrying = false)
+        if key = "full":
+            return website farm selection selection is full in actor
+        return website farm selection selection is empty in actor
+    if target's present = false:
+        return false
+    if key = "hungry":
+        return (target's animal != (0 as a pointer to website farm animal)) and (target's animal's feed < 2)
+    if key = "ready":
+        if reference's kind = 2:
+            return world's compost's ready > 0
+        if (target's animal != (0 as a pointer to website farm animal)) and (reference's id = "cow"):
+            return target's animal's produce > 0
+        return (target's tile != (0 as a pointer to website farm tile)) and ((target's tile's crop's present) and (target's tile's crop's growth >= 1.0))
+    if target's tile = (0 as a pointer to website farm tile):
+        return false
+    set tile to target's tile
+    if key = "dry":
+        return tile's moisture < 3.0
+    if key = "ripe":
+        return (tile's crop's present) and (tile's crop's growth >= 1.0)
+    if key = "bare":
+        return ((tile's crop's present = false) and ((website farm tile tile has a standing tree) = false)) and ((tile's terrain = 0) or (tile's terrain = 3))
+    require condition (key = "unplowed") reporting "Unknown Farm condition."
+    return (tile's terrain = 0) and ((website farm tile tile has a standing tree) = false)
