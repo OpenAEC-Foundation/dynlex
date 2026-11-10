@@ -11,6 +11,9 @@ from pathlib import Path
 from test_incremental_dependency_graph import check_cross_file_typed_overload, check_deferred_match_key_replay, check_independent_constraint_probes, check_skipped_constraint_expression_retention, check_class_constraint_value_reuse, check_header_parameter_constraint_owner, check_precedence_match_key_replay, check_folded_value_remains_active, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_resolved_declaration_snapshot_reuse, check_reused_ir_dependency_graph_variants, check_runtime_pure_value_summary, check_temporary_expression_parse_reuse, check_top_level_projection_reuse, check_top_level_execution_constraint_probes, check_unrelated_added_pattern_constraint_probes
 from test_incremental_program_cache import check_integration_builds, check_program_payloads
 from test_incremental_match_replay import check_choice_declaration_replay, check_deferred_body_match_replay, check_flex_body_match_replay
+from test_incremental_native_units import check_interned_literal_identity, check_native_partition_edits
+from test_incremental_typed_variants import check_typed_variant_dependency_retention
+from test_incremental_projection_stages import check_comment_inactive_active_sequence, check_nested_inactive_stage_retention
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -690,30 +693,11 @@ function left times right:
     assert library_edit[0]["functions_ir_reused"] > 0, "external-call function IR was regenerated"
     assert library_edit[1:] == build(False, entry=library_main)[1:], "reused function lost its link library"
 
-    partition_main = root / "partition_main.dl"
-    partition_main.write_text('integer means: @intrinsic("type", "int")\n' +
-                              ''.join(f'import part{i:02d}.dl\n' for i in range(20)) +
-                              ''.join(f'part{i:02d}\n' for i in range(20)))
-    for index in range(20):
-        (root / f"part{index:02d}.dl").write_text(
-            f"to part{index:02d}:\n" +
-            ''.join('    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, '
-                    f'"part{index:02d}-{line:02d}"))\n' for line in range(5)))
-    build(entry=partition_main)
-    edited_partition = root / "part07.dl"
-    edited_partition.write_text(edited_partition.read_text().replace('"part07-00"', '"changed"'))
-    partition_edit = build(entry=partition_main)
-    assert partition_edit[0]["inference_instantiations_reused"] >= 19, f"unchanged function bodies were re-inferred: {partition_edit[0]}"
-    assert partition_edit[0]["functions_ir_reused"] == 19
-    assert partition_edit[0]["objects_built"] <= 3, f"one function edit rebuilt unrelated object partitions: {partition_edit[0]}"
-    assert partition_edit[1:] == build(False, entry=partition_main)[1:]
-    for index in (8, 9):
-        path = root / f"part{index:02d}.dl"
-        path.write_text(path.read_text().replace(f'"part{index:02d}-00"', f'"updated-{index}"'))
-    multi_file_edit = build(entry=partition_main)
-    assert multi_file_edit[0]["inference_instantiations_reused"] == 18
-    assert multi_file_edit[0]["functions_ir_reused"] == 18
-    assert multi_file_edit[1:] == build(False, entry=partition_main)[1:]
+    check_interned_literal_identity(root, build)
+    check_comment_inactive_active_sequence(root, build)
+    check_nested_inactive_stage_retention(root, build)
+    check_typed_variant_dependency_retention(root, build)
+    check_native_partition_edits(root, build)
 
     class_main = root / "class_main.dl"
     class_source = ('integer means: @intrinsic("type", "int")\n'

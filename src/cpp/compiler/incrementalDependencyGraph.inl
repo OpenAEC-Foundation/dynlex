@@ -1,3 +1,7 @@
+// Inference summaries require portable argument values. Dependency edges do
+// not: variants without such keys retain their complete union under this key.
+constexpr const char *aggregateGraphVariant = "*";
+
 struct RetainedGraphVariants {
 	std::map<std::string, std::set<std::string>> keysByPath;
 	std::set<std::string> unkeyedPaths;
@@ -27,22 +31,13 @@ Json captureSectionDependencyGraph(
 	size_t *reused = nullptr, size_t *reverseUpdated = nullptr
 ) {
 	const bool hadPrevious = previous != nullptr;
-	Json graph = hadPrevious ? std::move(*previous)
-							 : Json{
-								   {"forward", Json::object()},
-								   {"reverse", Json::object()},
-								   {"instantiations", Json::object()},
-								   {"unknown", Json::array()}
-							   };
+	Json graph = hadPrevious
+					 ? std::move(*previous)
+					 : Json{{"forward", Json::object()}, {"reverse", Json::object()}, {"instantiations", Json::object()}};
 	Json &forward = graph.at("forward");
 	Json &reverse = graph.at("reverse");
 	Json &instantiations = graph.at("instantiations");
 	ClassIdentityPaths classPaths = classIdentityPaths(paths);
-	std::unordered_set<std::string> priorUnknown;
-	if (hadPrevious)
-		for (const Json &path : graph.at("unknown"))
-			priorUnknown.insert(path.get<std::string>());
-	Json unknown = Json::array();
 	std::unordered_set<std::string> currentPaths;
 	struct DependencyChange {
 		std::string caller;
@@ -58,8 +53,13 @@ Json captureSectionDependencyGraph(
 	};
 	for (const auto &[section, path] : paths) {
 		currentPaths.insert(path);
-		bool reuseEntry = hadPrevious && stable.contains(section) && forward.contains(path) && instantiations.contains(path) &&
-						  instantiations.at(path).size() == section->instantiations.size();
+		std::set<std::string> retainedKeys;
+		if (auto keys = retained.keysByPath.find(path); keys != retained.keysByPath.end())
+			retainedKeys = keys->second;
+		if (retained.unkeyedPaths.contains(path))
+			retainedKeys.insert(aggregateGraphVariant);
+		bool reuseEntry = hadPrevious && stable.contains(section) && forward.contains(path) && instantiations.contains(path);
+		std::set<std::string> currentKeys = retainedKeys;
 		if (reuseEntry)
 			for (const auto &[key, instantiation] : section->instantiations) {
 				std::optional<std::string> identity = inferenceSummaryKey(key, classPaths);
@@ -67,10 +67,14 @@ Json captureSectionDependencyGraph(
 					reuseEntry = false;
 					break;
 				}
+				currentKeys.insert(*identity);
 			}
+		if (reuseEntry)
+			reuseEntry = currentKeys.size() == instantiations.at(path).size() &&
+						 std::ranges::all_of(currentKeys, [&](const std::string &key) {
+				return instantiations.at(path).contains(key);
+			});
 		if (reuseEntry) {
-			if (priorUnknown.contains(path))
-				unknown.push_back(path);
 			if (reused)
 				(*reused)++;
 			continue;
@@ -81,15 +85,16 @@ Json captureSectionDependencyGraph(
 		for (Section *dependency : matched)
 			direct.insert(paths.at(dependency));
 		Json variants = Json::object();
-		bool incomplete = false;
+		std::set<std::string> aggregateDependencies;
+		bool hasAggregateVariant = retained.unkeyedPaths.contains(path);
 		for (const auto &[key, instantiation] : section->instantiations) {
 			std::optional<std::string> keyText = inferenceSummaryKey(key, classPaths);
 			Json selected = Json::array();
 			if (instantiation.inferenceReusedFromCache) {
-				if (!keyText || !hadPrevious || !instantiations.contains(path) || !instantiations.at(path).contains(*keyText)) {
-					incomplete = true;
-					continue;
-				}
+				requireCompilerInvariant(
+					keyText && hadPrevious && instantiations.contains(path) && instantiations.at(path).contains(*keyText),
+					"reused inference has no saved dependency variant"
+				);
 				selected = instantiations.at(path).at(*keyText);
 			} else {
 				std::vector<Section *> inferred;
@@ -103,24 +108,30 @@ Json captureSectionDependencyGraph(
 				direct.insert(dependency.get<std::string>());
 			if (keyText)
 				variants[*keyText] = std::move(selected);
-		}
-		if (auto retainedKeys = retained.keysByPath.find(path); retainedKeys != retained.keysByPath.end()) {
-			for (const std::string &key : retainedKeys->second) {
-				if (variants.contains(key))
-					continue;
-				if (!hadPrevious || !instantiations.contains(path) || !instantiations.at(path).contains(key)) {
-					incomplete = true;
-					continue;
-				}
-				const Json &selected = instantiations.at(path).at(key);
+			else {
+				hasAggregateVariant = true;
 				for (const Json &dependency : selected)
-					direct.insert(dependency.get<std::string>());
-				variants[key] = selected;
+					aggregateDependencies.insert(dependency.get<std::string>());
 			}
 		}
-		incomplete |= retained.unkeyedPaths.contains(path);
-		if (incomplete)
-			unknown.push_back(path);
+		for (const std::string &key : retainedKeys) {
+			if (variants.contains(key))
+				continue;
+			requireCompilerInvariant(
+				hadPrevious && instantiations.contains(path) && instantiations.at(path).contains(key),
+				"reused IR has no saved dependency variant"
+			);
+			const Json &selected = instantiations.at(path).at(key);
+			for (const Json &dependency : selected)
+				direct.insert(dependency.get<std::string>());
+			if (key == aggregateGraphVariant)
+				for (const Json &dependency : selected)
+					aggregateDependencies.insert(dependency.get<std::string>());
+			else
+				variants[key] = selected;
+		}
+		if (hasAggregateVariant)
+			variants[aggregateGraphVariant] = aggregateDependencies;
 		std::set<std::string> before = forward.contains(path) ? dependencySet(forward.at(path)) : std::set<std::string>{};
 		if (before != direct)
 			changes.push_back({path, std::move(before), direct});
@@ -169,6 +180,5 @@ Json captureSectionDependencyGraph(
 		for (const auto &[path, dependents] : callers)
 			reverse[path] = dependents;
 	}
-	graph["unknown"] = std::move(unknown);
 	return graph;
 }

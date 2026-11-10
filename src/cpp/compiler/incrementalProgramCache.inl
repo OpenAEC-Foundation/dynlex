@@ -1,5 +1,5 @@
-constexpr std::array<const char *, 4> programPayloadFields{
-	"all_function_projection", "section_dependency_graph", "inference_summaries", "ir"
+constexpr std::array<const char *, 5> programPayloadFields{
+	"all_function_projection", "section_dependency_graph", "inference_summaries", "ir", "native_units"
 };
 
 fs::path programPayloadPath(const fs::path &directory, std::string_view key) {
@@ -42,8 +42,7 @@ Json encodeSectionGraph(const Json &graph) {
 		{"paths", std::move(paths)},
 		{"forward", std::move(encodedForward)},
 		{"reverse", std::move(encodedReverse)},
-		{"instantiations", std::move(encodedInstantiations)},
-		{"unknown", encodeEdges(graph.at("unknown"))}
+		{"instantiations", std::move(encodedInstantiations)}
 	};
 }
 
@@ -51,8 +50,8 @@ Json decodeSectionGraph(const Json &encoded) {
 	const Json &paths = encoded.at("paths");
 	const Json &forward = encoded.at("forward");
 	const Json &instantiations = encoded.at("instantiations");
-	if (!paths.is_array() || !forward.is_array() || !instantiations.is_array() ||
-		paths.size() != forward.size() || paths.size() != instantiations.size())
+	if (!paths.is_array() || !forward.is_array() || !instantiations.is_array() || paths.size() != forward.size() ||
+		paths.size() != instantiations.size())
 		throw std::runtime_error("invalid section dependency cache shape");
 	auto decodeEdges = [&](const Json &edges) {
 		Json result = Json::array();
@@ -60,10 +59,7 @@ Json decodeSectionGraph(const Json &encoded) {
 			result.push_back(paths.at(id.get<size_t>()));
 		return result;
 	};
-	Json graph{{"forward", Json::object()},
-			   {"reverse", Json::object()},
-			   {"instantiations", Json::object()},
-			   {"unknown", decodeEdges(encoded.at("unknown"))}};
+	Json graph{{"forward", Json::object()}, {"reverse", Json::object()}, {"instantiations", Json::object()}};
 	for (size_t index = 0; index < paths.size(); index++) {
 		const std::string &path = paths.at(index).get_ref<const std::string &>();
 		graph["forward"][path] = decodeEdges(forward.at(index));
@@ -122,11 +118,10 @@ void writeProgramEntry(const fs::path &path, Json program, const Json *prior = n
 				prior->at("payload_keys").contains(field)) {
 				keys[field] = prior->at("payload_keys").at(field);
 			} else {
-				std::string payload = std::string_view(field) == "ir"
-											? program.at(field).get<std::string>()
-							: std::string_view(field) == "section_dependency_graph"
-								? encodeSectionGraph(program.at(field)).dump()
-								: program.at(field).dump();
+				std::string payload = std::string_view(field) == "ir" ? program.at(field).get<std::string>()
+									  : std::string_view(field) == "section_dependency_graph"
+										  ? encodeSectionGraph(program.at(field)).dump()
+										  : program.at(field).dump();
 				std::string key = digest(payload);
 				writeEntry(programPayloadPath(path.parent_path(), key), payload);
 				keys[field] = std::move(key);

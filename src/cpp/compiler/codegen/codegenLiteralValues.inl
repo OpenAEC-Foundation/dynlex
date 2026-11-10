@@ -14,8 +14,13 @@ llvm::Value *generateStringConstant(ParseContext &context, const std::string &va
 	std::string globalName = ".dynlex.string." + llvm::toHex(hash.final(), true);
 	llvm::Constant *strConst = llvm::ConstantDataArray::getString(*context.llvmContext, value, true);
 	llvm::GlobalVariable *strGlobal = new llvm::GlobalVariable(
-		*context.llvmModule, strConst->getType(), true, llvm::GlobalValue::PrivateLinkage, strConst, globalName
+		*context.llvmModule, strConst->getType(), true, llvm::GlobalValue::LinkOnceODRLinkage, strConst, globalName
 	);
+	// Equal literal contents name the same immutable object, including when
+	// cached function bodies are linked into a partially regenerated module.
+	strGlobal->setVisibility(llvm::GlobalValue::HiddenVisibility);
+	if (context.llvmModule->getTargetTriple().supportsCOMDAT())
+		strGlobal->setComdat(context.llvmModule->getOrInsertComdat(globalName));
 	context.stringConstants[value] = strGlobal;
 	return builder.CreateInBoundsGEP(
 		strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"

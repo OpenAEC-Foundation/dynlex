@@ -128,6 +128,15 @@ endforeach()
 set(DYNLEX_REQUIRED_LLVM_VERSION "${DYNLEX_LLVM_MAJOR}")
 
 find_package(LLVM REQUIRED CONFIG)
+if(NOT LLVM_ENABLE_RTTI)
+    # LLVM's ValueMap callback subclasses must use the library's RTTI setting.
+    # Other compiler files use RTTI for DynLex's own section hierarchy.
+    if(MSVC)
+        set_property(SOURCE src/cpp/compiler/incrementalCompilation.cpp APPEND PROPERTY COMPILE_OPTIONS /GR-)
+    else()
+        set_property(SOURCE src/cpp/compiler/incrementalCompilation.cpp APPEND PROPERTY COMPILE_OPTIONS -fno-rtti)
+    endif()
+endif()
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 

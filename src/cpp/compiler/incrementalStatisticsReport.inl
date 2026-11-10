@@ -130,6 +130,11 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"snapshot_ms", statistics.snapshotMilliseconds},
 					  {"cache_write_ms", statistics.cacheWriteMilliseconds},
 					  {"partition_ms", statistics.partitionMilliseconds},
+					  {"native_dependency_ms", statistics.nativeDependencyMilliseconds},
+					  {"native_partition_modules_built", statistics.nativePartitionModulesBuilt},
+					  {"native_partition_modules_skipped", statistics.nativePartitionModulesSkipped},
+					  {"native_function_dependencies_reused", statistics.nativeFunctionDependenciesReused},
+					  {"native_function_fingerprints_computed", statistics.nativeFunctionFingerprintsComputed},
 					  {"link_ms", statistics.linkMilliseconds},
 					  {"codegen_and_link_ms", statistics.codegenMilliseconds}}
 					 .dump()

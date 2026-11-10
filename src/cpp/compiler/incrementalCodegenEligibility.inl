@@ -22,9 +22,6 @@ std::optional<std::unordered_set<std::string>> dirtySectionsFromSavedGraph(
 		if (!unchanged.at(section) && !markDirty(path))
 			return std::nullopt;
 	}
-	for (const Json &path : graph.at("unknown"))
-		if (!markDirty(path.get<std::string>()))
-			return std::nullopt;
 	while (!pending.empty()) {
 		std::string path = std::move(pending.back());
 		pending.pop_back();
