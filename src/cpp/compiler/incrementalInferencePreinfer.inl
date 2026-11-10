@@ -17,7 +17,7 @@ IncrementalPreinferPlan incrementalInferenceCandidates(
 	const std::map<const Section *, std::string> &sectionPaths, const Json &current
 ) {
 	IncrementalPreinferPlan result;
-	if (context.options.optimizationLevel || context.options.emitDebugInfo || context.options.traceExecution ||
+	if (context.options.emitDebugInfo || context.options.traceExecution ||
 		!compatibleObservations(previous, observations, context))
 		return result;
 	const Json &prior = previous.at("all_function_projection");

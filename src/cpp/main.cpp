@@ -12,6 +12,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
 #include <algorithm>
@@ -48,9 +49,28 @@ void printUsage(std::ostream &output) {
 		   << "  -fvectorize|-fno-vectorize  -fslp-vectorize|-fno-slp-vectorize\n"
 		   << "  -funroll-loops|-fno-unroll-loops\n"
 		   << "  -o <output>  -g|--debug  --trace-execution\n"
-		   << "  --incremental <cache-directory>  --incremental-stats (native executables)\n"
+		   << "  --no-incremental  --cache-dir <directory>  --incremental-stats\n"
 		   << "  --lsp [--port PORT]  --stdio  --dap  --lsp-trace[=PATH]\n"
-		   << "  --version  --help\n";
+		   << "  --version  --help\n\n"
+		   << "Native executable file builds use the system user cache automatically.\n";
+}
+
+std::optional<std::string> defaultCacheDirectory() {
+	llvm::SmallString<256> directory;
+	bool useHomeCache = false;
+#if !defined(_WIN32) && !defined(__APPLE__)
+	// XDG specifies that empty and relative hints are ignored. LLVM returns
+	// those hints verbatim, so select the standard home-based path explicitly.
+	const auto requested = llvm::sys::Process::GetEnv("XDG_CACHE_HOME");
+	useHomeCache = requested && !llvm::sys::path::is_absolute(*requested);
+#endif
+	bool found = useHomeCache ? llvm::sys::path::home_directory(directory) : llvm::sys::path::cache_directory(directory);
+	if (!found || !llvm::sys::path::is_absolute(directory))
+		return std::nullopt;
+	if (useHomeCache)
+		llvm::sys::path::append(directory, ".cache");
+	llvm::sys::path::append(directory, "dynlex", "compiler");
+	return directory.str().str();
 }
 
 bool hasErrors(const ParseContext &context) {
@@ -195,6 +215,7 @@ int main(int argumentCount, char *argumentValues[]) {
 	bool dumpPurity = false;
 	bool dumpDependencies = false;
 	bool incrementalStatistics = false;
+	bool disableIncremental = false;
 	std::string incrementalDirectory;
 	bool enableLspTrace = false;
 	bool showHelp = false;
@@ -218,12 +239,14 @@ int main(int argumentCount, char *argumentValues[]) {
 			break;
 		} else if (arg == "--help" || arg == "-h") {
 			showHelp = true;
-		} else if (arg == "--incremental") {
+		} else if (arg == "--cache-dir") {
 			if (++argumentIndex >= args.size() || args[argumentIndex].empty() || args[argumentIndex].starts_with("-")) {
-				std::cerr << "Missing cache directory for --incremental" << std::endl;
+				std::cerr << "Missing cache directory for --cache-dir" << std::endl;
 				return 1;
 			}
 			incrementalDirectory = args[argumentIndex];
+		} else if (arg == "--no-incremental") {
+			disableIncremental = true;
 		} else if (arg == "--incremental-stats") {
 			incrementalStatistics = true;
 		} else if (arg == "--wait-debugger") {
@@ -462,14 +485,15 @@ int main(int argumentCount, char *argumentValues[]) {
 		}
 	}
 
-	if (incrementalStatistics && incrementalDirectory.empty()) {
-		std::cerr << "--incremental-stats requires --incremental" << std::endl;
+	if (disableIncremental && (!incrementalDirectory.empty() || incrementalStatistics)) {
+		std::cerr << "--no-incremental cannot be combined with --cache-dir or --incremental-stats" << std::endl;
 		return 1;
 	}
-	if (!incrementalDirectory.empty() && (inputFile.empty() || runLSP || runDAP || useStdio || commandSourceStart ||
-										  context.options.emitLLVM || context.options.emitObject || context.options.emitWASM ||
-										  context.options.emitSPIRV || emitCompletions || dumpPurity)) {
-		std::cerr << "Incremental compilation requires a .dl file and native executable output" << std::endl;
+	const bool nativeFileBuild = !inputFile.empty() && !runLSP && !runDAP && !useStdio && !commandSourceStart &&
+								 !context.options.emitLLVM && !context.options.emitObject && !context.options.emitWASM &&
+								 !context.options.emitSPIRV && !emitCompletions && !dumpPurity && !dumpDependencies;
+	if ((!incrementalDirectory.empty() || incrementalStatistics) && !nativeFileBuild) {
+		std::cerr << "Cache options require a .dl file and native executable output" << std::endl;
 		return 1;
 	}
 
@@ -519,7 +543,16 @@ int main(int argumentCount, char *argumentValues[]) {
 
 	if (!inputFile.empty()) {
 		context.options.inputPath = inputFile;
-		if (!incrementalDirectory.empty()) {
+		if (nativeFileBuild && !disableIncremental) {
+			if (incrementalDirectory.empty()) {
+				auto directory = defaultCacheDirectory();
+				if (!directory) {
+					std::cerr << "Cannot determine the user cache directory; use --cache-dir <directory> or --no-incremental"
+							  << std::endl;
+					return 1;
+				}
+				incrementalDirectory = std::move(*directory);
+			}
 			bool succeeded = compileIncrementally(context, incrementalDirectory, argumentValues[0], incrementalStatistics);
 			context.printDiagnostics();
 			return succeeded && !hasErrors(context) ? 0 : 1;

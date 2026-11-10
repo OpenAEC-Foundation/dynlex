@@ -51,7 +51,10 @@ needed for source-level debugging.
 The required suite is the compiler's short iteration gate. Its 120-second
 process-tree budget starts immediately after the compiler build and includes
 compiling and running its DynLex fixtures and auxiliary checks. No test preparation
-is moved ahead of that timer. C++ unit checks for numeric parsing and class layout
+is moved ahead of that timer. Required fixture builds and non-cache compiler
+checks disable incremental reuse; cache regressions start with fresh test projects.
+`--run-only` skips the compiler build and keeps the same process-tree budget.
+C++ unit checks for numeric parsing and class layout
 run in the integration suite and in separate Linux, macOS, and Windows CI steps.
 Integration tests also cover larger library and application programs. Release
 verification runs both suites. The CAD fixtures and their verifier live in dynlex-cadkernel.
@@ -190,23 +193,27 @@ output. Select `-O0` for unoptimized code or `-O3` for additional optimization;
 the last optimization flag wins. `-O2` does not enable fast math.
 For source-level debugging, use `-g -O0`; `-g` alone retains the default `-O2`.
 
-Reuse native build results across invocations:
+Native executable builds automatically reuse results from previous invocations.
+To inspect the cache location and compilation work:
 
 ```bash
-./build/dynlex program.dl --incremental .cache/dynlex --incremental-stats -o program.out
+./build/dynlex program.dl --incremental-stats -o program.out
 ```
 
 Unchanged source/configuration and compiler options reuse the complete compilation.
 Comment edits can reuse analyzed code, and diagnostic-message edits in `config.dl` update
 warnings and errors without recompiling. After code edits, unaffected parser and
-matcher results can be restored. With explicit `-O0`, without debug information or execution
-tracing, eligible functions also reuse inference summaries and LLVM bodies. Native
+matcher results can be restored. Without debug information or execution tracing,
+eligible functions also reuse inference summaries and generated LLVM bodies at all
+optimization levels. Restored bodies participate in the normal LLVM optimization pipeline. Native
 partitions reuse cached objects, and an unchanged executable skips linking.
 This mode supports native executable output. Some stages still reconstruct shared
 state after code edits; the LSP retains its existing compilation pipeline.
 The cache checks file contents (including imports and syntax configuration), compiler
 identity and target options. Corruption is reported as an error. Disk usage is limited
-to 512 MiB; deleting the cache is safe and makes the next build cold. Optional statistics
+to 512 MiB in the system user cache directory under `dynlex/compiler`.
+Use `--cache-dir <directory>` to choose a different location or `--no-incremental`
+to perform a clean build. Deleting the cache is safe and makes the next build cold. Optional statistics
 report frontend reuse and the numbers of reused/rebuilt objects on stderr.
 
 Emit a native object for a definition-only library. `--no-main` omits the

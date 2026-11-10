@@ -31,9 +31,9 @@ bool emitPartitions(
 	std::unordered_set<std::string> reusedFunctions;
 	std::string prefix = "__dynlex_" + digest(fs::absolute(context.options.inputPath).lexically_normal().string()) + "_";
 	for (llvm::GlobalValue &value : context.llvmModule->global_values()) {
-		bool reused =
-			llvm::isa<llvm::Function>(value) && !value.isDeclaration() &&
-			(restoredModule || (functionReuse && functionReuse->reusedFunctionNames().contains(value.getName().str())));
+		bool reused = llvm::isa<llvm::Function>(value) && !value.isDeclaration() &&
+					  (restoredModule || (!context.options.optimizationLevel && functionReuse &&
+										  functionReuse->reusedFunctionNames().contains(value.getName().str())));
 		if (value.hasLocalLinkage()) {
 			value.setName(prefix + value.getName().str());
 			value.setLinkage(llvm::GlobalValue::ExternalLinkage);

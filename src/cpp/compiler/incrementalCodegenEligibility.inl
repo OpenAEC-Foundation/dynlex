@@ -40,9 +40,8 @@ std::unordered_set<const Section *> eligibleCodegenSections(
 	size_t *graphReused = nullptr
 ) {
 	std::unordered_set<const Section *> eligible;
-	if (context.options.optimizationLevel || context.options.emitDebugInfo || context.options.traceExecution ||
-		!previous.contains("all_function_projection") || !previous.contains("function_sections") ||
-		!compatibleObservations(previous, currentObservations, context))
+	if (context.options.emitDebugInfo || context.options.traceExecution || !previous.contains("all_function_projection") ||
+		!previous.contains("function_sections") || !compatibleObservations(previous, currentObservations, context))
 		return eligible;
 	const Json &priorProjection = previous.at("all_function_projection");
 	bool fullyCompatible = compatibleFunctionProjection(priorProjection, currentProjection);

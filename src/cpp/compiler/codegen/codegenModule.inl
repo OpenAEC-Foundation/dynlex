@@ -72,7 +72,10 @@ static llvm::OptimizationLevel optimizationLevel(const ParseContext::Options &op
 	crashCompilerBug("invalid IR optimization level");
 }
 
-bool generateCode(ParseContext &context, const std::function<bool(ParseContext &)> &nativeEmitter) {
+bool generateCode(
+	ParseContext &context, const std::function<bool(ParseContext &)> &nativeEmitter,
+	const std::function<void(ParseContext &)> &beforeOptimization
+) {
 #ifdef DYNLEX_WEB
 	(void)nativeEmitter;
 #endif
@@ -284,10 +287,14 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 		llvm::errs() << "\n=== Invalid LLVM IR (for debugging) ===\n";
 		context.llvmModule->print(llvm::errs(), nullptr);
 		llvm::errs() << "=== End Invalid LLVM IR ===\n\n";
-		context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "llvm verification failed", Range(), "error", error)
+		context.addDiagnostic(
+			Diagnostic(context, Diagnostic::Level::Error, "llvm verification failed", Range(), "error", error)
 		);
 		return false;
 	}
+
+	if (beforeOptimization)
+		beforeOptimization(context);
 
 	// Optimization passes
 	if (context.options.optimizationLevel > 0) {

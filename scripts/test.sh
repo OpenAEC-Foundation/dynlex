@@ -5,11 +5,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 suite=required
 run_only=false
+suite_worker=false
 build_args=()
 for arg in "$@"; do
     case "$arg" in
     --integration) suite=integration ;;
     --run-only) run_only=true ;;
+    --suite-worker) run_only=true; suite_worker=true ;;
     *) build_args+=("$arg") ;;
     esac
 done
@@ -341,15 +343,13 @@ if [[ "$run_only" != "true" ]]; then
         exit $build_exit
     fi
     printf '%s\n' "${GREEN}Compiler build complete.${NC}"
-    if [[ "$suite" == required ]]; then
-        run_with_timeout 120 "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --run-only
-        suite_exit=$?
-        if [[ $suite_exit -eq 124 ]]; then
-            printf '%s\n' "${RED}Required tests exceeded the 120-second budget.${NC}"
-        fi
-    else
-        "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --run-only --integration
-        suite_exit=$?
+fi
+
+if [[ "$suite" == required && "$suite_worker" != true ]]; then
+    run_with_timeout 120 "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --suite-worker
+    suite_exit=$?
+    if [[ $suite_exit -eq 124 ]]; then
+        printf '%s\n' "${RED}Required tests exceeded the 120-second budget.${NC}"
     fi
     exit "$suite_exit"
 fi
@@ -432,6 +432,10 @@ for test_dir in "$TESTS_DIR"/*/; do
         continue
     fi
     rm -f "$output_binary"
+    compile_command=("$COMPILER" "$source_file" -o "$output_binary")
+    if [[ "$suite" == required ]]; then
+        compile_command+=(--no-incremental)
+    fi
     if [[ -f "$stack_limit_file" && "$is_windows" != "true" ]]; then
         stack_limit_kb=$(<"$stack_limit_file")
         if [[ ! "$stack_limit_kb" =~ ^[1-9][0-9]*$ ]]; then
@@ -441,9 +445,9 @@ for test_dir in "$TESTS_DIR"/*/; do
             failures+=("$test_name")
             continue
         fi
-        compile_output=$( (ulimit -s "$stack_limit_kb"; run_with_timeout "$compile_timeout" "$COMPILER" "$source_file" -o "$output_binary") 2>&1)
+        compile_output=$( (ulimit -s "$stack_limit_kb"; run_with_timeout "$compile_timeout" "${compile_command[@]}") 2>&1)
     else
-        compile_output=$(run_with_timeout "$compile_timeout" "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
+        compile_output=$(run_with_timeout "$compile_timeout" "${compile_command[@]}" 2>&1)
     fi
     compile_exit=$?
     if [[ $compile_exit -eq 124 ]]; then

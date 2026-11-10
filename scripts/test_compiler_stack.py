@@ -38,7 +38,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-compiler-stack-") as directory:
         output = Path(directory) / (name + (".exe" if os.name == "nt" else ".out"))
         source.write_text(program)
         result = subprocess.run(
-            [str(compiler), str(source), "-o", str(output)],
+            [str(compiler), str(source), "--no-incremental", "-o", str(output)],
             capture_output=True, text=True, timeout=30, **options,
         )
         assert result.returncode == 0, (name, result.returncode, result.stdout + result.stderr)
