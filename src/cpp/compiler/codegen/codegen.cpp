@@ -413,6 +413,16 @@ static void finalizeFlexBodySectionControlFlow(ParseContext &context, ParseConte
 			llvm::BasicBlock *target = frame.branchBackBlock ? frame.branchBackBlock : frame.exitBlock;
 			builder.CreateBr(target);
 		}
+		// `else if` merge blocks only forward to the chain exit; drop the ones no branch reaches.
+		for (llvm::BasicBlock *forward = frame.branchBackBlock;
+			 forward && forward != frame.exitBlock && llvm::pred_empty(forward);) {
+			llvm::BasicBlock *next = forward->getSingleSuccessor();
+			requireCompilerInvariant(
+				next && forward->size() == 1, "unreachable section branch-back block is not a forwarding block"
+			);
+			forward->eraseFromParent();
+			forward = next;
+		}
 		if (llvm::pred_empty(frame.exitBlock)) {
 			requireCompilerInvariant(frame.exitBlock->empty(), "unreachable section exit block contains instructions");
 			frame.exitBlock->eraseFromParent();
