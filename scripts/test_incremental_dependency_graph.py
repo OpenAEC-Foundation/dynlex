@@ -2,6 +2,7 @@
 
 import json
 from test_incremental_program_cache import read_program
+from test_incremental_inactive_selection import check_literal_inactive_body
 
 
 def graph_for(cache, entry):
@@ -405,6 +406,7 @@ def check_resolved_declaration_snapshot_reuse(root, build):
 
 
 def check_inactive_projection_refresh(root, build):
+    check_literal_inactive_body(root, build)
     skipped = root / "inactive_resolution_skip.dl"
     skipped_source = ('to live:\n'
                       '    @intrinsic("discard", 1)\n'

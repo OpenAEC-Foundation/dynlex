@@ -27,6 +27,19 @@ static bool inactiveDefinitionCanChangeAnotherMatcherKey(
 	for (const PatternDefinition *definition : candidate.patternDefinitions) {
 		if (definition->patternElements.empty())
 			return true;
+		auto hasPromotable = [&](auto &&self, const std::vector<DefinitionPatternElement> &elements) -> bool {
+			for (const DefinitionPatternElement &element : elements) {
+				if (element.type == PatternElement::Type::Choice) {
+					for (const auto &alternative : element.alternatives)
+						if (self(self, alternative))
+							return true;
+				} else if (candidate.canPromoteImplicitParameter(*definition, element))
+					return true;
+			}
+			return false;
+		};
+		if (!hasPromotable(hasPromotable, definition->patternElements))
+			continue;
 		const DefinitionPatternElement &start = definition->patternElements.front();
 		if (start.type == PatternElement::Type::Variable || start.text.empty() || !start.alternatives.empty() ||
 			priorLiterals.contains(llvm::toHex(llvm::StringRef(start.text), true)) || changedLiterals.contains(start.text))

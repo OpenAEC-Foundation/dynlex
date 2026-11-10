@@ -945,6 +945,9 @@ Changes that alter precedence rules or participating families also rematch. A pr
 rebuild never carries replay keys into a later pass.
 An edit confined to the bodies of ordinary functions that had no inferred
 instantiation in the prior build can stop after pattern resolution and validation.
+An unchanged inactive body with no remaining implicit-parameter candidates can
+skip resolution even when its pattern begins with a word used by other calls;
+its declaration cannot change through body-driven parameter promotion.
 The cache compares declarations and all source text outside those bodies. It
 compares the current preinference diagnostics with their saved records and
 reuses later warnings when their source files were not edited; pending scope-rule
