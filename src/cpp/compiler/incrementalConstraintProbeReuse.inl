@@ -187,7 +187,7 @@ void prepareConstraintProbeReuse(
 			context.priorConstraintProbeDependencies[index].insert(section->second);
 		}
 		if (reusable[index] && !values.at(index).is_null())
-			context.priorConstraintProbeValues[index] = decodePortableConstraintValue(values.at(index));
+			context.priorConstraintProbeValues[index] = decodePortableConstraintValue(values.at(index), sections);
 	}
 	context.priorConstraintProbeReusable = std::move(reusable);
 	context.reuseDeclaredConstraintProbes = true;
@@ -214,6 +214,7 @@ Json captureConstraintProbeSchedule(const ParseContext &context, const std::map<
 	);
 	Json roots = Json::array();
 	Json values = Json::array();
+	ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
 	for (size_t index = 0; index < context.constraintProbeDependencies.size(); index++) {
 		const auto &dependencies = context.constraintProbeDependencies[index];
 		std::set<std::string> paths;
@@ -221,7 +222,7 @@ Json captureConstraintProbeSchedule(const ParseContext &context, const std::map<
 			paths.insert(sectionPaths.at(section));
 		roots.push_back(paths);
 		const auto &value = context.constraintProbeValues[index];
-		values.push_back(value ? encodePortableConstraintValue(*value).value_or(Json(nullptr)) : Json(nullptr));
+		values.push_back(value ? encodePortableConstraintValue(*value, classPaths).value_or(Json(nullptr)) : Json(nullptr));
 	}
 	return Json{
 		{"items", context.constraintProbeItems},

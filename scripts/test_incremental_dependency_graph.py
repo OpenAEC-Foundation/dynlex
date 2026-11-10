@@ -110,6 +110,43 @@ def check_skipped_constraint_expression_retention(root, build):
     assert second_edit[1:] == build(False, entry=main)[1:]
 
 
+def check_class_constraint_value_reuse(root, build):
+    main = root / "class_constraint_value_reuse.dl"
+    source = ('class:\n'
+              '    patterns:\n'
+              '        a point\n'
+              '    members:\n'
+              '        x\n'
+              'to consume {a point:value}: @intrinsic("discard", value)\n'
+              'to touch: @intrinsic("discard", 1)\n'
+              'touch\n'
+              'consume (@intrinsic("construct", a point, 1))\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('"discard", 1)', '"discard", 2)'))
+    edited = build(entry=main)
+    assert edited[0]["constraint_values_reused"] >= 1, \
+        "unchanged class constraint did not reuse its resolved value"
+    assert edited[0]["constraint_expressions_reused"] >= 1, \
+        "unchanged class constraint was parsed again"
+    assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text().replace('        x\n', '        y\n'))
+    changed_layout = build(entry=main)
+    assert changed_layout[0]["constraint_values_reused"] == 0, \
+        "class layout edit retained the previous class constraint"
+    assert changed_layout[1:] == build(False, entry=main)[1:]
+
+    typed = root / "instantiated_class_constraint.dl"
+    typed_source = ('integer means: @intrinsic("type", "int")\n' + source.replace('        x\n', '        x as integer\n'))
+    typed.write_text(typed_source)
+    build(entry=typed)
+    typed.write_text(typed_source.replace('"discard", 1)', '"discard", 2)'))
+    instantiated = build(entry=typed)
+    assert instantiated[0]["constraint_values_reused"] == 0, \
+        "instantiated class constraint reused an unbuilt class layout"
+    assert instantiated[1:] == build(False, entry=typed)[1:]
+
+
 def check_unrelated_added_pattern_constraint_probes(root, build):
     main = root / "unrelated_added_pattern_constraint_probes.dl"
     source = ('integer means: @intrinsic("type", "int")\n'
