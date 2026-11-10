@@ -11,9 +11,9 @@ bool hasNoGlobalAccess(const Section *section) {
 }
 
 bool isPortablePureValue(const CompileTimeValue &value) {
-	return std::holds_alternative<std::int64_t>(value) || std::holds_alternative<std::uint64_t>(value) ||
-		   std::holds_alternative<double>(value) || std::holds_alternative<std::string>(value) ||
-		   std::holds_alternative<bool>(value);
+	return std::holds_alternative<WideInteger>(value) || std::holds_alternative<std::int64_t>(value) ||
+		   std::holds_alternative<std::uint64_t>(value) || std::holds_alternative<double>(value) ||
+		   std::holds_alternative<std::string>(value) || std::holds_alternative<bool>(value);
 }
 
 Json encodePureReturnValues(const Section *section, const Instantiation &instantiation) {

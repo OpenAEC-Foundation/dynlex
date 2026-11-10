@@ -53,7 +53,7 @@ struct DataType {
 	};
 
 	Kind kind = Kind::Unresolved;
-	int numericSize = 0;						// Int/UInt/Float: 1/2/4/8, others: 0
+	int numericSize = 0;						// Integer byte width; Float: 4/8; others: 0
 	int pointerDepth = 0;						// 0=value, 1=ptr, 2=ptr-to-ptr, ...
 	ClassDefinition *classDefinition = nullptr; // For Kind::Class and Kind::Type (class type refs)
 	int classInstIndex = -1;					// Index into classDefinition->instantiations
@@ -487,8 +487,12 @@ inline int defaultFloatByteSize(bool emitSPIRV) { return emitSPIRV ? 4 : 8; }
 
 inline DataType defaultFloatType(bool emitSPIRV) { return {DataType::Kind::Float, defaultFloatByteSize(emitSPIRV)}; }
 
+bool isSupportedIntegerByteWidth(int byteWidth);
+
 inline std::optional<DataType>
 makeBuiltinTypeReference(std::string_view kindName, bool emitSPIRV, std::optional<int> numericByteSize = std::nullopt) {
+	if (numericByteSize && !isSupportedIntegerByteWidth(*numericByteSize))
+		return std::nullopt;
 	DataType result{DataType::Kind::Type};
 	if (kindName == "int" || kindName == "integer") {
 		result.referencedKind = DataType::Kind::Int;
@@ -497,6 +501,8 @@ makeBuiltinTypeReference(std::string_view kindName, bool emitSPIRV, std::optiona
 		result.referencedKind = DataType::Kind::UInt;
 		result.numericSize = numericByteSize.value_or(4);
 	} else if (kindName == "float") {
+		if (numericByteSize && *numericByteSize != 4 && *numericByteSize != 8)
+			return std::nullopt;
 		result.referencedKind = DataType::Kind::Float;
 		result.numericSize = numericByteSize.value_or(defaultFloatByteSize(emitSPIRV));
 	} else if (kindName == "bool") {

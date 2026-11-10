@@ -1,0 +1,35 @@
+integer means: @intrinsic("type", "int", 32)
+wide means: @intrinsic("type", "int", 128)
+unsigned wide means: @intrinsic("type", "uint", 128)
+huge means: @intrinsic("type", "int", 256)
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+square value means: @intrinsic("multiply", value, value)
+function squared value:
+    execute:
+        @intrinsic("return", square value)
+to show value:
+    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", @intrinsic("cast", value, integer)))
+
+set one to @intrinsic("cast", 1, wide)
+set high to @intrinsic("shift left", one, 100)
+set negative to @intrinsic("negate", high)
+set maximum to @intrinsic("bitwise not", @intrinsic("cast", 0, unsigned wide))
+show @intrinsic("equal", @intrinsic("shift right", high, 100), one)
+show @intrinsic("equal", squared high, @intrinsic("cast", 0, wide))
+show @intrinsic("less than", negative, one)
+show @intrinsic("equal", @intrinsic("divide", negative, high), @intrinsic("cast", @intrinsic("negate", 1), wide))
+show @intrinsic("equal", @intrinsic("modulo", @intrinsic("add", high, 7), high), 7)
+show @intrinsic("equal", @intrinsic("add", maximum, 1), @intrinsic("cast", 0, unsigned wide))
+show @intrinsic("greater than", maximum, @intrinsic("cast", high, unsigned wide))
+show @intrinsic("equal", @intrinsic("cast", negative, @intrinsic("type", "int", 8)), 0)
+show @intrinsic("equal", @intrinsic("cast", @intrinsic("cast", @intrinsic("negate", 1), wide), huge), @intrinsic("cast", @intrinsic("negate", 1), huge))
+show @intrinsic("equal", @intrinsic("cast", @intrinsic("cast", high, @intrinsic("type", "float", 64)), wide), high)
+show @intrinsic("equal", @intrinsic("cast", high, @intrinsic("type", "bool")), @intrinsic("equal", 1, 1))
+
+# Runtime inputs must exercise backend arithmetic rather than constant folding.
+set runtime to @intrinsic("cast", @intrinsic("add", @intrinsic("command line argument count"), 1), huge)
+set runtimeHigh to @intrinsic("shift left", runtime, 150)
+show @intrinsic("equal", @intrinsic("divide", runtimeHigh, runtime), runtimeHigh)
+show @intrinsic("equal", @intrinsic("modulo", runtimeHigh, 7), @intrinsic("cast", 1, huge))

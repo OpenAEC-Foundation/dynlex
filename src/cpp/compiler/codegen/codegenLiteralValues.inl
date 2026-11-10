@@ -1,3 +1,5 @@
+#include "compileTimeFloatingValue.h"
+
 llvm::Value *generateStringConstant(ParseContext &context, const std::string &value) {
 	// Strings are currently i8* pointers to constant data. Runtime string
 	// operations remain the responsibility of the string library.
@@ -31,6 +33,12 @@ static CodegenResult
 generateCompileTimeRuntimeValue(ParseContext &context, const CompileTimeValue &value, const DataType &type) {
 	requireCompilerInvariant(type.isRuntimeValueType(), "compile-time-only type reached runtime value codegen");
 	llvm::Type *llvmType = getLLVMType(context, type);
+	if (std::holds_alternative<WideInteger>(value)) {
+		if (type.isInteger())
+			return llvm::ConstantInt::get(llvmType, *getCompileTimeIntegerBits(value, type.numericSize * 8));
+		if (type.kind == DataType::Kind::Float)
+			return llvm::ConstantFP::get(llvmType, *getCompileTimeFloatingValue(value, type.numericSize * 8));
+	}
 	if (const auto *function = std::get_if<CompileTimeFunction>(&value)) {
 		requireCompilerInvariant(type.isAddress(), "constant callable has a non-address runtime type");
 		llvm::Function *generated = nullptr;

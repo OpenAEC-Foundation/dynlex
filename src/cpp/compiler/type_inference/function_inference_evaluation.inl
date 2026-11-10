@@ -206,16 +206,6 @@ static CompileTimeValue pureExecutionImmediateValue(Expression *expr) {
 	if (!expr)
 		return {};
 	switch (expr->kind) {
-	case Expression::Kind::Literal:
-		if (const auto *integer = std::get_if<std::int64_t>(&expr->literalValue))
-			return *integer;
-		if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&expr->literalValue))
-			return *minimumMagnitude;
-		if (const auto *number = std::get_if<double>(&expr->literalValue))
-			return *number;
-		if (const auto *text = std::get_if<std::string>(&expr->literalValue))
-			return *text;
-		return {};
 	case Expression::Kind::Variable:
 		if (expr->variable) {
 			if (std::optional<CompileTimeValue> numericLiteral = parseCompileTimeNumericToken(expr->variable->name))
@@ -305,7 +295,11 @@ static PureExpressionExecutionResult evaluatePureExpression(
 		return {immediateValue, false, {}};
 
 	switch (expr->kind) {
-	case Expression::Kind::Literal:
+	case Expression::Kind::Literal: {
+		CompileTimeValue value = pureExecutionStoredValue(expr, state);
+		requireCompilerInvariant(isCompileTimeKnown(value), "pure execution lost an inferred literal value");
+		return {value, false, {}};
+	}
 	case Expression::Kind::TypedPlaceholder:
 	case Expression::Kind::Pending:
 	case Expression::Kind::ArrayLiteral:
@@ -533,12 +527,12 @@ static PureExpressionExecutionResult executePureSection(
 		PureExpressionExecutionResult headerResult = evaluatePureExpression(openingExpression, state, frame, bindingFrameStack);
 		if (headerResult.returned)
 			crashCompilerBug("switch selector evaluation returned unexpectedly during pure execution");
-		std::optional<std::int64_t> selector = getCompileTimeIntegerValue(headerResult.sectionOutcome.read().conditionValue);
-		if (!selector)
-			return {};
 		DataType selectorType = headerResult.sectionOutcome.read().conditionType;
 		requireCompilerInvariant(selectorType.isInteger(), "pure switch selector has no integer type");
-		selector = normalizeSignedIntegerToType(*selector, selectorType);
+		auto selector =
+			getCompileTimeIntegerBits(headerResult.sectionOutcome.read().conditionValue, selectorType.numericSize * 8);
+		if (!selector)
+			return {};
 		ScopedPureActiveBody activeBody(state, body);
 		std::optional<size_t> defaultLineIndex;
 		for (size_t index = 0; index < section->codeLines.size(); index++) {
@@ -554,8 +548,9 @@ static PureExpressionExecutionResult executePureSection(
 				caseResult.sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Case,
 				"pure switch execution encountered invalid case metadata"
 			);
-			std::optional<std::int64_t> caseValue = getCompileTimeIntegerValue(caseResult.sectionOutcome.read().conditionValue);
-			if (!caseValue || normalizeSignedIntegerToType(*caseValue, selectorType) != selector)
+			auto caseValue =
+				getCompileTimeIntegerBits(caseResult.sectionOutcome.read().conditionValue, selectorType.numericSize * 8);
+			if (caseValue != selector)
 				continue;
 			CodeLine *caseLine = section->codeLines[index];
 			InstantiatedSectionBody *caseBody = body->bodyForChild(caseLine->sectionOpening);

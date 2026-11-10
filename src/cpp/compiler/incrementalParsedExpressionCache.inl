@@ -95,6 +95,11 @@ void appendParsedExpression(std::string &output, Range root, const Expression &e
 				appendParseWord(output, std::bit_cast<std::uint64_t>(value));
 			else if constexpr (std::is_same_v<Value, std::string>)
 				appendParseString(output, value);
+			else if constexpr (std::is_same_v<Value, WideInteger>) {
+				appendParseLength(output, value.bits.getBitWidth());
+				appendParseByte(output, value.isUnsigned);
+				appendParseString(output, value.toString(16));
+			}
 		}, expression.literalValue);
 		break;
 	case Expression::Kind::Variable: {
@@ -163,6 +168,12 @@ Expression *restoreParsedExpression(
 		case 5:
 			expression->literalValue = std::string(readParseString(input, position));
 			break;
+		case 6: {
+			unsigned width = readParseLength(input, position);
+			bool isUnsigned = readParseByte(input, position) != 0;
+			expression->literalValue = WideInteger{llvm::APInt(width, readParseString(input, position), 16), isUnsigned};
+			break;
+		}
 		default:
 			throw std::runtime_error("invalid parsed expression literal kind");
 		}

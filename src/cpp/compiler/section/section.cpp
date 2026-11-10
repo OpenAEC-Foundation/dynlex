@@ -521,8 +521,8 @@ Expression *Section::detectPatternsRecursively(
 				relativeRange.subRange(reference->pattern.getLinePos(pos), reference->pattern.getLinePos(endPos));
 			std::string_view diagnosticKey;
 			switch (parsed.error) {
-			case NumericLiteralParseError::UnsignedIntegerOutOfRange:
-				diagnosticKey = "unsigned integer literal out of range";
+			case NumericLiteralParseError::IntegerOutOfRange:
+				diagnosticKey = "integer literal out of range";
 				break;
 			case NumericLiteralParseError::FloatingPointOutOfRange:
 				diagnosticKey = "floating point literal out of range";

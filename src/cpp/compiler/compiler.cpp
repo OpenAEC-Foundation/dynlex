@@ -139,6 +139,10 @@ static void collectSectionsPreorder(Section *section, std::vector<Section *> &ou
 }
 
 static std::string formatCompileTimeValueForPurityReport(const CompileTimeValue &value) {
+	if (const auto *integer = std::get_if<WideInteger>(&value))
+		return integer->toString();
+	if (const auto *integer = std::get_if<std::uint64_t>(&value))
+		return std::to_string(*integer);
 	if (std::holds_alternative<std::monostate>(value))
 		return "?";
 	if (const auto *integer = std::get_if<std::int64_t>(&value))

@@ -34,6 +34,7 @@ src/web/ide/public/compiler/*
 !src/web/ide/public/compiler/runtimeImports.js
 !src/web/ide/public/compiler/runtimeLayout.js
 !src/web/ide/public/compiler/runtimeHost.js
+!src/web/ide/public/compiler/runtimeWideIntegers.js
 web/assets/
 web/compiler/
 web/ide/

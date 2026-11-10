@@ -1,7 +1,10 @@
 #include "numericLiteral.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/IR/DerivedTypes.h"
 #include "llvm/Support/Error.h"
+#include <algorithm>
+#include <bit>
 #include <charconv>
 #include <limits>
 #include <system_error>
@@ -43,8 +46,19 @@ NumericLiteralParseResult parseNumericLiteral(std::string_view text) {
 		text.find('E') == std::string_view::npos) {
 		std::uint64_t magnitude = 0;
 		auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), magnitude);
-		if (error == std::errc::result_out_of_range)
-			return {{std::int64_t{0}}, NumericLiteralParseError::UnsignedIntegerOutOfRange};
+		if (error == std::errc::result_out_of_range) {
+			if (!std::ranges::all_of(text, [](char character) {
+				return character >= '0' && character <= '9';
+			}))
+				return {{std::int64_t{0}}, NumericLiteralParseError::Invalid};
+			llvm::APInt bits;
+			if (llvm::StringRef(text.data(), text.size()).getAsInteger(10, bits))
+				return {{std::int64_t{0}}, NumericLiteralParseError::Invalid};
+			unsigned width = std::bit_ceil(bits.getActiveBits() + 1);
+			if (width > llvm::IntegerType::MAX_INT_BITS)
+				return {{std::int64_t{0}}, NumericLiteralParseError::IntegerOutOfRange};
+			return {{WideInteger{bits.zextOrTrunc(width), false}}, NumericLiteralParseError::None};
+		}
 		if (error != std::errc{} || end != text.data() + text.size())
 			return {{std::int64_t{0}}, NumericLiteralParseError::Invalid};
 		constexpr std::uint64_t maximumSignedInteger = static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
@@ -74,6 +88,10 @@ NumericLiteralParseResult parseNumericLiteral(std::string_view text) {
 }
 
 DataType numericLiteralType(const NumericLiteralValue &value, bool emitSPIRV) {
+	if (const auto *integer = std::get_if<WideInteger>(&value))
+		return {
+			integer->isUnsigned ? DataType::Kind::UInt : DataType::Kind::Int, static_cast<int>(integer->bits.getBitWidth() / 8)
+		};
 	if (const auto *integer = std::get_if<std::int64_t>(&value)) {
 		int byteSize =
 			*integer >= std::numeric_limits<std::int32_t>::min() && *integer <= std::numeric_limits<std::int32_t>::max() ? 4
@@ -88,6 +106,8 @@ DataType numericLiteralType(const NumericLiteralValue &value, bool emitSPIRV) {
 }
 
 CompileTimeValue numericLiteralCompileTimeValue(const NumericLiteralValue &value) {
+	if (const auto *integer = std::get_if<WideInteger>(&value))
+		return *integer;
 	if (const auto *integer = std::get_if<std::int64_t>(&value))
 		return *integer;
 	if (const auto *integer = std::get_if<std::uint64_t>(&value))

@@ -191,7 +191,7 @@ generateSwitchIntrinsic(ParseContext &context, Expression *callExpr, const std::
 
 	// Ensure the value is an integer (LLVM switch requires integer operand)
 	DataType switchType = finalizedExpressionType(context, args[1]);
-	if (switchType.kind != DataType::Kind::Int && switchType.kind != DataType::Kind::Bool) {
+	if (!switchType.isInteger() && switchType.kind != DataType::Kind::Bool) {
 		context.addDiagnostic(
 			Diagnostic(context, Diagnostic::Level::Error, "switch requires integer", args[1] ? args[1]->range : Range())
 		);
@@ -239,11 +239,12 @@ generateCaseIntrinsic(ParseContext &context, Expression *callExpr, const std::ve
 
 	llvm::Function *func = builder.GetInsertBlock()->getParent();
 
-	std::optional<std::int64_t> caseValue =
-		getCompileTimeIntegerValue(resolveStoredCompileTimeValue(args[1], context.flexBindingFrames));
-	requireCompilerInvariant(caseValue.has_value(), "case reached codegen without an inferred constant integer value");
 	llvm::Type *switchType = context.currentSwitchInst->getCondition()->getType();
-	llvm::ConstantInt *caseConst = llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(switchType), *caseValue, true);
+	auto caseValue = getCompileTimeIntegerBits(
+		resolveStoredCompileTimeValue(args[1], context.flexBindingFrames), switchType->getIntegerBitWidth()
+	);
+	requireCompilerInvariant(caseValue.has_value(), "case reached codegen without an inferred constant integer value");
+	llvm::ConstantInt *caseConst = llvm::ConstantInt::get(*context.llvmContext, *caseValue);
 
 	llvm::BasicBlock *caseBlock = llvm::BasicBlock::Create(*context.llvmContext, "case", func);
 	context.currentSwitchInst->addCase(caseConst, caseBlock);

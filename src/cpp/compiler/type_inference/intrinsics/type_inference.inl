@@ -27,7 +27,7 @@ void ExpressionInferenceSupport::inferTypeIntrinsic() {
 		numericByteSize = bitCount / 8;
 		typeRefType = makeBuiltinTypeReference(kindStr, context.parseContext.options.emitSPIRV, numericByteSize);
 		if (!typeRefType) {
-			failIntrinsicArgumentRequirement(2, "a numeric type kind that accepts a bit width");
+			failIntrinsicArgumentRequirement(2, "a supported bit width for the requested numeric type kind");
 			return;
 		}
 	}

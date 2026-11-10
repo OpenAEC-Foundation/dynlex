@@ -2,10 +2,11 @@ function runtimeDependencyUrl(path) {
   return new URL(path, import.meta.url).href;
 }
 
-const [filesystemModule, hostModule, layoutModule] = await Promise.all([
+const [filesystemModule, hostModule, layoutModule, wideIntegerModule] = await Promise.all([
   import(runtimeDependencyUrl("./runtimeFilesystem.js")),
   import(runtimeDependencyUrl("./runtimeHost.js")),
-  import(runtimeDependencyUrl("./runtimeLayout.js"))
+  import(runtimeDependencyUrl("./runtimeLayout.js")),
+  import(runtimeDependencyUrl("./runtimeWideIntegers.js"))
 ]);
 const {
   createFileImports,
@@ -15,6 +16,7 @@ const {
 } = filesystemModule;
 const { createHostImports } = hostModule;
 const { inspectRuntimeWasmLayout } = layoutModule;
+const { createWideIntegerImports, wideIntegerImportNames } = wideIntegerModule;
 
 // LLVM lowers these floating-point intrinsics to C ABI imports in WebAssembly.
 // Share the definitions with import validation so the IDE accepts the same runtime.
@@ -47,6 +49,7 @@ const mathImports = {
 
 const supportedEnvImports = new Set([
   ...Object.keys(mathImports),
+  ...wideIntegerImportNames,
   "__linear_memory",
   "abort",
   "calloc",
@@ -642,6 +645,7 @@ export function buildRuntimeImports(stdoutChunks, filesystem, layout) {
     time() {
       return BigInt(Math.floor(Date.now() / 1000));
     },
+    ...createWideIntegerImports(memory),
     ...createFileImports(memory, filesystem),
     ...createHostImports(memory)
   };

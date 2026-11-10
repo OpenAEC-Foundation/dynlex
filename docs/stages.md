@@ -59,11 +59,12 @@ is an ordinary expression. The parser does not recognize domain-specific child s
 See `docs/data_sections.md`.
 
 Integer literals are parsed exactly rather than through floating-point storage.
-Signed values use 32 or 64 bits, and positive values through `2^64 - 1` use
-unsigned 64 bits. The `2^63` boundary is unsigned in ordinary expressions;
+Values fitting the existing scalar ranges use signed 32 or 64 bits or unsigned
+64 bits. Larger positive values use the smallest power-of-two signed width that
+holds the magnitude, starting at 128 bits. The `2^63` boundary is unsigned in ordinary expressions;
 direct unary negation produces signed 64-bit minimum. Stored unsigned values,
-including that boundary, use ordinary wrapping negation. Larger magnitudes are
-rejected during parsing. Explicit floating-point literals remain 64-bit
+including that boundary, use ordinary wrapping negation. Integer literals retain
+their exact bits through parsing and incremental caches. Explicit floating-point literals remain 64-bit
 floating-point values, rounded to nearest with ties to even independently of the
 host floating-point environment. Representable subnormal values are accepted;
 overflow and nonzero magnitudes that round to zero are rejected.
@@ -286,9 +287,16 @@ Without number rules, an integer literal uses a 32-bit signed integer type when 
 64-bit signed integer type through the signed range, and an unsigned 64-bit
 integer type above that range. The exact magnitude of signed 64-bit minimum is
 also accepted so unary negation can form that signed value; it can be explicitly
-cast to an unsigned 64-bit integer. Explicit `8`, `16`, `32`, and `64` bit unsigned
-integer type values preserve wrapping arithmetic, logical right shifts, and
-unsigned comparison, division, and remainder at compile time and runtime.
+cast to an unsigned 64-bit integer. Native and WebAssembly integer type values accept positive whole-byte
+widths within LLVM's integer type limit, including 128, 256 and non-power-of-two
+widths. Signed and unsigned arithmetic, casts, shifts, comparisons, division,
+remainder and control-flow cases use the declared width at compile time and runtime.
+Constant evaluation uses arbitrary-width integer bits and preserves signedness.
+Pure execution reads each literal's finalized inferred value, including number-rule
+typing. Integer-to-float casts round directly to the selected IEEE precision.
+Specialization keys, editor value displays and persisted inference values retain
+the complete value and width. Decimal formatting and digit counting operate on
+the original integer type, without narrowing to a machine word.
 Integer casts retain the target-width bits. Floating-point to integer casts
 truncate toward zero and are compile-time-known only when the truncated value
 fits the target signed or unsigned width, matching the native LLVM conversion.
@@ -796,6 +804,11 @@ including any BSS that has no active data segment. The module defines its own st
 `__indirect_function_table`, so host imports can retain and invoke typed callbacks after `main` returns. The
 browser runtime supplies linear memory and host functions, reads that linked heap boundary, and allocates from it;
 it does not compute another stack or static-data layout. Relocatable objects are never treated as executable modules.
+
+LLVM expands wide arithmetic according to the selected target. The browser runtime
+provides LLVM's i128 compiler-runtime arithmetic and numeric conversion imports
+using exact BigInt limbs. Floating-point conversions round directly to the target
+precision, including f32 halfway cases, and wide results use the WebAssembly sret ABI.
 
 Function references retain their symbolic definition, pattern path and inferred
 callable instantiation as compile-time values. Pure calls and address casts preserve

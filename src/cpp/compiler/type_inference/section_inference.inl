@@ -131,7 +131,7 @@ static bool inferSectionLineRange(
 	if (openingExpression && openingExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Switch) {
 		struct SwitchBranch {
 			size_t lineIndex;
-			std::optional<std::int64_t> value;
+			std::optional<llvm::APInt> value;
 			bool isDefault;
 		};
 		auto entryConstants = context.currentVariableValues;
@@ -139,7 +139,7 @@ static bool inferSectionLineRange(
 		InferenceContext::SubjectState entrySubject = context.currentSubject;
 		std::vector<SwitchBranch> branches;
 		std::optional<size_t> defaultBranch;
-		std::unordered_set<std::int64_t> caseValues;
+		std::unordered_set<std::string> caseValues;
 		DataType selectorType = openingExpression->sectionOutcome.read().conditionType;
 		requireCompilerInvariant(selectorType.isInteger(), "inferred switch outcome has no integer selector type");
 		for (size_t index = 0; index < section->codeLines.size(); index++) {
@@ -157,9 +157,11 @@ static bool inferSectionLineRange(
 				return false;
 			}
 			bool isDefault = kind == Expression::SectionOutcome::Kind::DefaultCase;
-			std::optional<std::int64_t> caseValue;
+			std::optional<llvm::APInt> caseValue;
 			if (!isDefault) {
-				caseValue = getCompileTimeIntegerValue(lineExpression->sectionOutcome.read().conditionValue);
+				caseValue = getCompileTimeIntegerBits(
+					lineExpression->sectionOutcome.read().conditionValue, selectorType.numericSize * 8
+				);
 				if (!caseValue) {
 					context.fail(Diagnostic(
 						context.parseContext, Diagnostic::Level::Error, "case value must be constant integer",
@@ -167,7 +169,6 @@ static bool inferSectionLineRange(
 					));
 					return false;
 				}
-				caseValue = normalizeSignedIntegerToType(*caseValue, selectorType);
 			}
 			if (isDefault) {
 				if (defaultBranch) {
@@ -177,18 +178,17 @@ static bool inferSectionLineRange(
 					return false;
 				}
 				defaultBranch = branches.size();
-			} else if (!caseValues.insert(*caseValue).second) {
-				context.fail(Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
+			} else if (!caseValues.insert(WideInteger{*caseValue, true}.toString(16)).second) {
+				context.fail(
+					Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
 				);
 				return false;
 			}
 			branches.push_back({index, caseValue, isDefault});
 		}
 
-		std::optional<std::int64_t> selector =
-			getCompileTimeIntegerValue(openingExpression->sectionOutcome.read().conditionValue);
-		if (selector)
-			selector = normalizeSignedIntegerToType(*selector, selectorType);
+		auto selector =
+			getCompileTimeIntegerBits(openingExpression->sectionOutcome.read().conditionValue, selectorType.numericSize * 8);
 		bool selectionKnown = selector.has_value();
 		std::optional<size_t> selectedBranch;
 		if (selectionKnown) {

@@ -216,9 +216,7 @@ llvm::Function *generateSpecializedFunction(
 		func->setLinkage(llvm::GlobalValue::ExternalLinkage);
 		return func;
 	}
-	requireCompilerInvariant(
-		!activeInst.inferenceReusedFromCache, "cached inference summary lost its reusable LLVM function"
-	);
+	requireCompilerInvariant(!activeInst.inferenceReusedFromCache, "cached inference summary lost its reusable LLVM function");
 
 	size_t argIdx = 0;
 	for (auto &arg : func->args()) {
@@ -501,22 +499,13 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 				!minimumMagnitude || minimumMagnitude->identity != nullptr,
 				"minimum integer magnitude reached literal codegen without an identity"
 			);
-			std::uint64_t magnitude = minimumMagnitude ? std::uint64_t{1} << 63
-									  : std::holds_alternative<std::uint64_t>(*number)
-										  ? std::get<std::uint64_t>(*number)
-										  : static_cast<std::uint64_t>(std::get<std::int64_t>(*number));
+			CompileTimeValue value = numericLiteralCompileTimeValue(*number);
 			// A number rule can make an integer literal floating-point; inference proved the value exact.
 			if (numType.kind == DataType::Kind::Float)
-				return llvm::ConstantFP::get(llvmType, static_cast<double>(magnitude));
+				return llvm::ConstantFP::get(llvmType, *getCompileTimeNumericValue(value));
 			requireCompilerInvariant(numType.isInteger(), "integer literal has a non-integer finalized type");
 			unsigned bitWidth = static_cast<unsigned>(numType.numericSize * 8);
-			requireCompilerInvariant(bitWidth > 0 && bitWidth <= 64, "integer literal has an unsupported finalized width");
-			unsigned valueBits = numType.kind == DataType::Kind::Int && !minimumMagnitude ? bitWidth - 1 : bitWidth;
-			requireCompilerInvariant(
-				valueBits >= 64 || magnitude < (std::uint64_t{1} << valueBits),
-				"integer literal does not fit its finalized integer type"
-			);
-			return llvm::ConstantInt::get(llvmType, magnitude, false);
+			return llvm::ConstantInt::get(llvmType, *getCompileTimeIntegerBits(value, bitWidth));
 		}
 		if (auto *strVal = std::get_if<std::string>(&expr->literalValue)) {
 			return generateStringConstant(context, *strVal);

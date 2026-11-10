@@ -1,0 +1,6 @@
+octet means: @intrinsic("type", "int", 8)
+address means: @intrinsic("add pointer depth", @intrinsic("type", "int", 32))
+@intrinsic("store", byteValue, @intrinsic("cast", 255, octet))
+@intrinsic("store", pointerBits, @intrinsic("cast", @intrinsic("cast", byteValue, address), @intrinsic("type", "uint", 64)))
+@intrinsic("store", unsignedByte, @intrinsic("cast", 511, @intrinsic("type", "uint", 8)))
+@intrinsic("return", @intrinsic("cast", @intrinsic("or", @intrinsic("not equal", pointerBits, 255), @intrinsic("not equal", unsignedByte, 255)), @intrinsic("type", "int", 32)))

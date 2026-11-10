@@ -1,6 +1,7 @@
 #pragma once
 #include "typeConstraint.h"
 #include "typeReferenceValue.h"
+#include "wideInteger.h"
 #include <compare>
 #include <cstdint>
 #include <memory>
@@ -49,4 +50,4 @@ struct CompileTimeFunction {
 
 using CompileTimeValue = std::variant<
 	std::monostate, std::int64_t, std::uint64_t, MinimumSignedIntegerMagnitude, double, std::string, bool, TypeReferenceValue,
-	TypeConstraint, CompileTimePointer, CompileTimeFunction, ExpressionCapture, ArgumentPackValue>;
+	TypeConstraint, CompileTimePointer, CompileTimeFunction, ExpressionCapture, ArgumentPackValue, WideInteger>;

@@ -151,15 +151,16 @@ NEGATIVE_SOURCES = {
         '@intrinsic("atomic load", the address of value, "relaxed")\n',
         "Atomic operation requires a supported concrete scalar pointee",
     ),
+    # Invalid floating widths fail at type construction, before atomic checking.
     "float8": (
         'set value to 0 as @intrinsic("type", "float", 8)\n'
         '@intrinsic("atomic load", the address of value, "relaxed")\n',
-        "Atomic operation requires a supported concrete scalar pointee",
+        "a supported bit width for the requested numeric type kind",
     ),
     "float16": (
         'set value to 0 as @intrinsic("type", "float", 16)\n'
         '@intrinsic("atomic load", the address of value, "relaxed")\n',
-        "Atomic operation requires a supported concrete scalar pointee",
+        "a supported bit width for the requested numeric type kind",
     ),
 }
 

@@ -457,6 +457,10 @@ uint64_t DataType::getABIAlignment(const llvm::DataLayout &dataLayout, llvm::LLV
 	return dataLayout.getABITypeAlign(llvmType).value();
 }
 
+bool isSupportedIntegerByteWidth(int byteWidth) {
+	return byteWidth > 0 && static_cast<unsigned>(byteWidth) <= llvm::IntegerType::MAX_INT_BITS / 8;
+}
+
 llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dataLayout) const {
 	// Any pointer type maps to opaque ptr
 	if (pointerDepth > 0)
@@ -483,18 +487,8 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dat
 		}
 	case Kind::Int:
 	case Kind::UInt:
-		switch (numericSize) {
-		case 1:
-			return llvm::Type::getInt8Ty(ctx);
-		case 2:
-			return llvm::Type::getInt16Ty(ctx);
-		case 4:
-			return llvm::Type::getInt32Ty(ctx);
-		case 8:
-			return llvm::Type::getInt64Ty(ctx);
-		default:
-			crashCompilerBug("Integer type must have a valid numericSize (1/2/4/8) before codegen");
-		}
+		requireCompilerInvariant(numericSize > 0, "integer type has no concrete width before codegen");
+		return llvm::IntegerType::get(ctx, numericSize * 8);
 	case Kind::Array:
 		requireCompilerInvariant(arrayElementType && arraySize >= 0, "Array type must have element type and size");
 		return llvm::ArrayType::get(arrayElementType->toLLVM(ctx, dataLayout), arraySize);

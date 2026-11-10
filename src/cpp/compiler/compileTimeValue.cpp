@@ -1,8 +1,10 @@
 #include "compileTimeValue.h"
+#include "compileTimeFloatingValue.h"
 #include "expression.h"
 #include "numericLiteral.h"
 #include "parseContext.h"
 #include "pattern/pattern_tree/patternElement.h"
+#include "llvm/ADT/APFloat.h"
 #include "llvm/TargetParser/Host.h"
 #include "llvm/TargetParser/Triple.h"
 #include <cmath>
@@ -22,6 +24,11 @@ std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value) {
 }
 
 std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &value) {
+	if (const auto *integer = std::get_if<WideInteger>(&value)) {
+		if (integer->isUnsigned ? integer->bits.getActiveBits() <= 63 : integer->bits.isSignedIntN(64))
+			return integer->bits.sextOrTrunc(64).getSExtValue();
+		return std::nullopt;
+	}
 	if (auto *integer = std::get_if<std::int64_t>(&value))
 		return *integer;
 	if (auto *integer = std::get_if<std::uint64_t>(&value)) {
@@ -46,6 +53,11 @@ std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &v
 }
 
 std::optional<std::uint64_t> getCompileTimeUnsignedIntegerValue(const CompileTimeValue &value) {
+	if (const auto *integer = std::get_if<WideInteger>(&value)) {
+		if (integer->bits.isIntN(64) || (!integer->isUnsigned && integer->bits.isSignedIntN(64)))
+			return integer->bits.zextOrTrunc(64).getZExtValue();
+		return std::nullopt;
+	}
 	if (auto *integer = std::get_if<std::uint64_t>(&value))
 		return *integer;
 	if (auto *integer = std::get_if<std::int64_t>(&value))
@@ -66,13 +78,50 @@ std::optional<std::uint64_t> getCompileTimeUnsignedIntegerValue(const CompileTim
 }
 
 std::optional<double> getCompileTimeNumericValue(const CompileTimeValue &value) {
+	return getCompileTimeFloatingValue(value, 64);
+}
+
+std::optional<double> getCompileTimeFloatingValue(const CompileTimeValue &value, unsigned bitWidth) {
+	requireCompilerInvariant(bitWidth == 32 || bitWidth == 64, "constant floating-point conversion has no supported precision");
+	const auto &semantics = bitWidth == 32 ? llvm::APFloat::IEEEsingle() : llvm::APFloat::IEEEdouble();
+	llvm::APFloat converted(semantics);
+	if (const auto *number = std::get_if<double>(&value)) {
+		converted = llvm::APFloat(*number);
+		bool losesInformation;
+		converted.convert(semantics, llvm::APFloat::rmNearestTiesToEven, &losesInformation);
+	} else if (const auto *integer = std::get_if<WideInteger>(&value)) {
+		converted.convertFromAPInt(integer->bits, !integer->isUnsigned, llvm::APFloat::rmNearestTiesToEven);
+	} else {
+		if (std::holds_alternative<bool>(value))
+			return std::nullopt;
+		auto bits = getCompileTimeIntegerBits(value, 64);
+		if (!bits)
+			return std::nullopt;
+		converted.convertFromAPInt(*bits, std::holds_alternative<std::int64_t>(value), llvm::APFloat::rmNearestTiesToEven);
+	}
+	return bitWidth == 32 ? static_cast<double>(converted.convertToFloat()) : converted.convertToDouble();
+}
+
+std::optional<llvm::APInt> getCompileTimeIntegerBits(const CompileTimeValue &value, unsigned width) {
+	if (const auto *integer = std::get_if<WideInteger>(&value))
+		return integer->isUnsigned ? integer->bits.zextOrTrunc(width) : integer->bits.sextOrTrunc(width);
 	if (const auto *integer = std::get_if<std::int64_t>(&value))
-		return static_cast<double>(*integer);
-	if (std::holds_alternative<std::uint64_t>(value) || std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
-		return static_cast<double>(*getCompileTimeUnsignedIntegerValue(value));
-	if (const auto *floatingPoint = std::get_if<double>(&value))
-		return *floatingPoint;
+		return llvm::APInt(64, static_cast<std::uint64_t>(*integer), true).sextOrTrunc(width);
+	if (const auto *integer = std::get_if<std::uint64_t>(&value))
+		return llvm::APInt(64, *integer).zextOrTrunc(width);
+	if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
+		return llvm::APInt(64, std::uint64_t{1} << 63).zextOrTrunc(width);
+	if (const auto *boolean = std::get_if<bool>(&value))
+		return llvm::APInt(width, *boolean);
 	return std::nullopt;
+}
+
+CompileTimeValue compileTimeIntegerFromBits(const llvm::APInt &bits, const DataType &type) {
+	requireCompilerInvariant(type.isInteger() && type.numericSize > 0, "integer constant has no concrete type");
+	llvm::APInt normalized = bits.zextOrTrunc(static_cast<unsigned>(type.numericSize * 8));
+	if (normalized.getBitWidth() > 64)
+		return WideInteger{std::move(normalized), type.isUnsignedInteger()};
+	return type.isUnsignedInteger() ? CompileTimeValue(normalized.getZExtValue()) : CompileTimeValue(normalized.getSExtValue());
 }
 
 std::optional<TypeReferenceValue> getCompileTimeTypeReferenceValue(const CompileTimeValue &value) {
@@ -137,6 +186,8 @@ void setExpressionCompileTimeValue(Expression *expr, const CompileTimeValue &val
 CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr) {
 	switch (expr->kind) {
 	case Expression::Kind::Literal:
+		if (const auto *integer = std::get_if<WideInteger>(&expr->literalValue))
+			return *integer;
 		if (const auto *integer = std::get_if<std::int64_t>(&expr->literalValue))
 			return *integer;
 		if (const auto *integer = std::get_if<std::uint64_t>(&expr->literalValue))

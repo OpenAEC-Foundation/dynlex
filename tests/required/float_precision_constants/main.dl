@@ -1,0 +1,12 @@
+single means: @intrinsic("type", "float", 32)
+constant means: @intrinsic("fix", @intrinsic("type", "bool"))
+function known {constant:value}:
+    execute:
+        @intrinsic("return", value)
+function scaled value:
+    execute:
+        @intrinsic("return", @intrinsic("multiply", value, @intrinsic("cast", 1000, single)))
+@intrinsic("store", tiny, @intrinsic("cast", 1e-3, single))
+@intrinsic("store", scaledCorrectly, known @intrinsic("equal", scaled tiny, @intrinsic("cast", 1, single)))
+@intrinsic("store", comparedCorrectly, known @intrinsic("equal", 16777217, @intrinsic("cast", 16777216, single)))
+@intrinsic("return", @intrinsic("cast", @intrinsic("not", @intrinsic("and", scaledCorrectly, comparedCorrectly)), @intrinsic("type", "int", 32)))

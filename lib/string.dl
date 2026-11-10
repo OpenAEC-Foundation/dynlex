@@ -164,9 +164,9 @@ to copy {string:source} into target at offset {integer:offset}:
         increment index
 
 to get the count of decimal digits in {integer:value}:
-    set remaining to value as a word sized integer
+    set remaining to value / (10 as (the type of value))
     set total to 1
-    loop while (remaining <= -10) or (remaining >= 10):
+    loop while remaining != 0:
         set remaining to (remaining / (10 as (the type of remaining)))
         set total to (total + 1)
     return total
@@ -174,20 +174,16 @@ to get the count of decimal digits in {integer:value}:
 to get {integer:value} padded to {integer:width} digits:
     set result to a new string buffer containing width bytes
     set data to the data of result
-    set remaining to value as a word sized integer
-    set index to width - 1
-    set writing to true
-    loop while writing:
+    set remaining to value
+    set index to width
+    loop while index > 0:
+        decrement index
         set digit to remaining mod 10
         if digit < 0:
             set digit to -digit
         set character to ((digit + 48) as a byte)
         store character into data at index
         set remaining to remaining / 10
-        if index = 0:
-            set writing to false
-        else:
-            decrement index
     return result
 
 to get the string form of {integer:value}:
@@ -198,7 +194,7 @@ to get the string form of {integer:value}:
         increment length
     set result to a new string buffer containing length bytes
     set data to the data of result
-    set remaining to value as a word sized integer
+    set remaining to value
     set index to length - 1
     set writing to true
     loop while writing:

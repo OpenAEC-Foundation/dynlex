@@ -735,7 +735,7 @@ SyntaxConfig::Messages::Messages() {
 		"Argument packs preserve source expressions and can only be passed to replacement definitions");
 	set("unknown section", "message", "Unknown section: {section}");
 	set("unexpected class line", "message", "unexpected line in class definition");
-	set("integer literal out of range", "message", "Integer literal exceeds the signed 64-bit range");
+	set("integer literal out of range", "message", "Integer literal exceeds the supported integer width");
 	set("floating point literal out of range", "message", "Floating-point literal exceeds the supported range");
 	set("invalid numeric literal", "message", "Invalid numeric literal");
 	set("function has missing return path", "message", "Function '{function}' does not return a value on every reachable path");

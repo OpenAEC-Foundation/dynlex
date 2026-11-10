@@ -1,0 +1,21 @@
+wide means: @intrinsic("type", "int", 128)
+flex section switch value:
+    replacement:
+        @intrinsic("switch", value)
+flex section case value:
+    replacement:
+        @intrinsic("case", value)
+flex section otherwise:
+    replacement:
+        @intrinsic("default case")
+to get choice for value:
+    switch value:
+        case 1267650600228229401496703205376:
+            @intrinsic("return", 1)
+        case 340282366920938463463374607431768211455:
+            @intrinsic("return", 2)
+        otherwise:
+            @intrinsic("return", 3)
+@intrinsic("store", high, @intrinsic("add", 1267650600228229401496703205376, @intrinsic("cast", @intrinsic("command line argument count"), wide)))
+@intrinsic("store", maximum, @intrinsic("cast", 340282366920938463463374607431768211455, @intrinsic("type", "uint", 128)))
+@intrinsic("return", @intrinsic("cast", @intrinsic("or", @intrinsic("not equal", choice for high, 1), @intrinsic("not equal", choice for maximum, 2)), @intrinsic("type", "int", 32)))

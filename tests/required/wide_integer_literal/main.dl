@@ -1,0 +1,1 @@
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int"), 1, "%d %d\n", @intrinsic("equal", 18446744073709551616, @intrinsic("shift left", @intrinsic("cast", 1, @intrinsic("type", "int", 128)), 64)), @intrinsic("equal", @intrinsic("divide", 340282366920938463463374607431768211455, 18446744073709551616), 18446744073709551615)))

@@ -1,0 +1,17 @@
+import lib/std.dl
+
+square value means: value * value
+print line formatted "{square square square square square (2 as a 128 bit integer)}"
+set high to (1 as a 128 bit integer) << 100
+print line formatted "{high} {-high}"
+set maximum to @intrinsic("bitwise not", 0 as a 128 bit unsigned integer)
+print line maximum
+set minimum to (1 as a 128 bit integer) << 127
+print line minimum
+print line 18446744073709551616
+print line high padded to 35 digits
+set runtime to (@intrinsic("command line argument count") + 1) as a 256 bit integer
+set huge to runtime << 200
+print line huge
+print line huge / (3 as a 256 bit integer)
+print line huge mod (3 as a 256 bit integer)

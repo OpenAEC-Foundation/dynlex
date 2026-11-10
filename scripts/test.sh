@@ -748,6 +748,8 @@ run_auxiliary_test "native_pointer_calls" 20 python3 -B "$SCRIPT_DIR/test_native
 run_auxiliary_test "typed_callbacks" 120 python3 -B "$SCRIPT_DIR/test_typed_callbacks.py" "$PROJECT_DIR" "$COMPILER"
 run_auxiliary_test "native_atomics" 30 python3 -B "$SCRIPT_DIR/test_native_atomics.py" "$COMPILER"
 run_auxiliary_test "json_integer64" 30 python3 -B "$SCRIPT_DIR/test_json_integer64.py" "$COMPILER"
+run_auxiliary_test "wide_integers_wasm" 60 node "$PROJECT_DIR/tests/web/wide_integers.mjs" "$COMPILER"
+run_auxiliary_test "wide_integer_values" 60 python3 -B "$SCRIPT_DIR/test_wide_integers.py" "$COMPILER"
 run_auxiliary_test "float_math_codegen" 20 python3 -B "$SCRIPT_DIR/test_float_math_codegen.py" "$COMPILER"
 run_auxiliary_test "unary_arithmetic_types" 20 python3 -B "$SCRIPT_DIR/test_unary_arithmetic_types.py" "$COMPILER"
 run_auxiliary_test "mersenne_twister64_native_abi" 30 python3 -B "$SCRIPT_DIR/test_mersenne_twister64.py" "$COMPILER"

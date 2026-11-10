@@ -1,10 +1,13 @@
 #include "numberScopeRules.h"
 #include "codeLine.h"
+#include "compileTimeFloatingValue.h"
+#include "compileTimeValue.h"
 #include "expression.h"
 #include "parseContext.h"
 #include "typeReferenceValue.h"
 #include "variable.h"
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <limits>
 
@@ -45,32 +48,33 @@ bool isFloatWidth(int byteWidth) { return byteWidth == 4 || byteWidth == 8; }
 
 bool absoluteSource(const ScopeRuleSource *source) { return source && source->absolute; }
 
-std::optional<std::uint64_t> integerLiteralMagnitude(const NumericLiteralValue &value) {
+std::optional<llvm::APInt> integerLiteralMagnitude(const NumericLiteralValue &value) {
+	if (const auto *integer = std::get_if<WideInteger>(&value))
+		return integer->bits;
 	if (const auto *integer = std::get_if<std::int64_t>(&value))
-		return static_cast<std::uint64_t>(*integer);
+		return llvm::APInt(64, static_cast<std::uint64_t>(*integer));
 	if (const auto *integer = std::get_if<std::uint64_t>(&value))
-		return *integer;
+		return llvm::APInt(64, *integer);
 	if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
-		return std::uint64_t{1} << 63;
+		return llvm::APInt(64, std::uint64_t{1} << 63);
 	return std::nullopt;
 }
 
-bool floatHoldsInteger(std::uint64_t magnitude, int byteWidth) {
-	const double rounded = byteWidth == 4 ? static_cast<double>(static_cast<float>(magnitude)) : static_cast<double>(magnitude);
-	return rounded < 18446744073709551616.0 && static_cast<std::uint64_t>(rounded) == magnitude;
+bool floatHoldsInteger(const llvm::APInt &magnitude, int byteWidth) {
+	unsigned precision = byteWidth == 4 ? 24 : 53;
+	unsigned maximumExponent = byteWidth == 4 ? 128 : 1024;
+	return magnitude.getActiveBits() <= maximumExponent &&
+		   (magnitude.isZero() || magnitude.getActiveBits() - magnitude.countr_zero() <= precision);
 }
 
-bool integerHolds(std::uint64_t magnitude, DataType::Kind sign, int byteWidth) {
-	const int bits = byteWidth * 8;
-	if (sign == DataType::Kind::UInt)
-		return bits >= 64 || magnitude < (std::uint64_t{1} << bits);
-	return magnitude < (std::uint64_t{1} << (bits - 1));
+bool integerHolds(const llvm::APInt &magnitude, DataType::Kind sign, int byteWidth) {
+	return magnitude.getActiveBits() <= static_cast<unsigned>(byteWidth * 8 - (sign == DataType::Kind::Int));
 }
 
 CompileTimeValue integerLiteralValue(const NumericLiteralValue &value, const DataType &type) {
 	if (type.kind == DataType::Kind::Float)
-		return static_cast<double>(*integerLiteralMagnitude(value));
-	return numericLiteralCompileTimeValue(value);
+		return *getCompileTimeNumericValue(numericLiteralCompileTimeValue(value));
+	return compileTimeIntegerFromBits(*integerLiteralMagnitude(value), type);
 }
 
 } // namespace
@@ -78,6 +82,8 @@ CompileTimeValue integerLiteralValue(const NumericLiteralValue &value, const Dat
 std::optional<NumericLiteralValue> numericLiteralValueOf(const Expression &expression) {
 	if (expression.kind != Expression::Kind::Literal)
 		return std::nullopt;
+	if (const auto *integer = std::get_if<WideInteger>(&expression.literalValue))
+		return NumericLiteralValue{*integer};
 	if (const auto *integer = std::get_if<std::int64_t>(&expression.literalValue))
 		return NumericLiteralValue{*integer};
 	if (const auto *integer = std::get_if<std::uint64_t>(&expression.literalValue))
@@ -166,6 +172,8 @@ TypeConstraint applyNumberRule(
 NumericLiteralTyping typeNumericLiteral(const ParseContext &context, const CodeLine *line, const NumericLiteralValue &value) {
 	const bool emitSPIRV = context.options.emitSPIRV;
 	NumericLiteralTyping result{numericLiteralType(value, emitSPIRV), numericLiteralCompileTimeValue(value)};
+	if (std::holds_alternative<double>(value))
+		result.value = *getCompileTimeFloatingValue(result.value, result.type.numericSize * 8);
 	std::optional<EffectiveNumberRule> rule = effectiveNumberRule(context, line);
 	if (!rule)
 		return result;
@@ -176,12 +184,13 @@ NumericLiteralTyping typeNumericLiteral(const ParseContext &context, const CodeL
 			result.contradicted = rule->kindSource;
 		if (rule->byteWidth && isFloatWidth(*rule->byteWidth))
 			result.type.numericSize = *rule->byteWidth;
+		result.value = *getCompileTimeFloatingValue(numericLiteralCompileTimeValue(value), result.type.numericSize * 8);
 	} else {
-		const std::uint64_t magnitude = *integerLiteralMagnitude(value);
+		const llvm::APInt magnitude = *integerLiteralMagnitude(value);
 		const bool floatingPoint = rule->integerKind && !*rule->integerKind;
 		// The magnitude of the signed 64 bit minimum only exists to be negated into that signed value.
 		if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value) && !floatingPoint &&
-			rule->sign.value_or(DataType::Kind::Int) == DataType::Kind::Int)
+			rule->sign.value_or(DataType::Kind::Int) == DataType::Kind::Int && rule->byteWidth.value_or(8) <= 8)
 			return result;
 		if (floatingPoint) {
 			int byteWidth =
@@ -196,16 +205,14 @@ NumericLiteralTyping typeNumericLiteral(const ParseContext &context, const CodeL
 			}
 			result.type = {DataType::Kind::Float, byteWidth};
 		} else if (rule->sign || rule->byteWidth) {
-			DataType::Kind sign = rule->sign.value_or(result.type.kind);
+			DataType::Kind sign = rule->sign.value_or(
+				rule->byteWidth && *rule->byteWidth > result.type.numericSize ? DataType::Kind::Int : result.type.kind
+			);
 			int byteWidth = rule->byteWidth.value_or(sign == result.type.kind ? result.type.numericSize : 4);
 			if (!integerHolds(magnitude, sign, byteWidth)) {
-				if (byteWidth == 8 || !integerHolds(magnitude, sign, 8)) {
-					result.unrepresentableBy = rule->sign ? rule->signSource : rule->widthSource;
-					return result;
-				}
 				if (rule->byteWidth)
 					result.widenedBy = rule->widthSource;
-				byteWidth = 8;
+				byteWidth = std::max(8u, std::bit_ceil(magnitude.getActiveBits() + (sign == DataType::Kind::Int)) / 8);
 			}
 			result.type = {sign, byteWidth};
 		}
@@ -220,7 +227,7 @@ std::optional<NumericLiteralTyping> numericLiteralTypingForParameter(
 ) {
 	const bool emitSPIRV = context.options.emitSPIRV;
 	DataType builtinType = numericLiteralType(value, emitSPIRV);
-	std::optional<std::uint64_t> magnitude = integerLiteralMagnitude(value);
+	std::optional<llvm::APInt> magnitude = integerLiteralMagnitude(value);
 	if (std::optional<TypeReferenceValue> parameterType = TypeReferenceValue::forConstraint(parameterConstraint, emitSPIRV)) {
 		DataType type = parameterType->type.toReferencedType();
 		bool holds = false;

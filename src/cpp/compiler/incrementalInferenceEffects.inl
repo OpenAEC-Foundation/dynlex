@@ -44,6 +44,8 @@ AddressProvenance decodeAddressProvenance(Section *section, const Json &encoded)
 }
 
 std::optional<Json> encodeGlobalConstant(const CompileTimeValue &value) {
+	if (const auto *integer = std::get_if<WideInteger>(&value))
+		return Json::array({"wide", integer->bits.getBitWidth(), integer->isUnsigned, integer->toString(16)});
 	if (const auto *integer = std::get_if<std::int64_t>(&value))
 		return Json::array({"signed", *integer});
 	if (const auto *integer = std::get_if<std::uint64_t>(&value))
@@ -61,6 +63,10 @@ std::optional<Json> encodeGlobalConstant(const CompileTimeValue &value) {
 
 CompileTimeValue decodeGlobalConstant(const Json &encoded) {
 	const std::string kind = encoded.at(0).get<std::string>();
+	if (kind == "wide")
+		return WideInteger{
+			llvm::APInt(encoded.at(1).get<unsigned>(), encoded.at(3).get<std::string>(), 16), encoded.at(2).get<bool>()
+		};
 	if (kind == "signed")
 		return encoded.at(1).get<std::int64_t>();
 	if (kind == "unsigned")
