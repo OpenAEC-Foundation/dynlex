@@ -6,8 +6,7 @@ struct NativePartitionDependencies {
 
 	NativePartitionDependencies(
 		llvm::Module &module, const Json *previous, const std::unordered_set<std::string> &reusedFunctions,
-		const std::map<std::string, const OptimizedFunctionOrigin *> &optimizedOrigins,
-		const std::map<std::string, std::string> &renames, BuildStatistics &statistics
+		BuildStatistics &statistics
 	)
 		: layout(module), previous(previous) {
 		bodiesUnchanged.fill(true);
@@ -45,29 +44,12 @@ struct NativePartitionDependencies {
 			owned[partition].insert(name);
 			const Json *old = previous && previous->at("symbols").contains(name) ? &previous->at("symbols").at(name) : nullptr;
 			Json definition = nullptr;
-			Json optimizedInput = nullptr;
 			bool bodyUnchanged;
 			std::set<std::string> references;
 			if (llvm::isa<llvm::Function>(value)) {
 				statistics.nativeFunctions++;
-				auto origin = optimizedOrigins.find(name);
-				if (origin != optimizedOrigins.end()) {
-					Json bindings = Json::object();
-					for (const auto &[canonical, original] : origin->second->bindings) {
-						auto current = original ? renames.find(*original) : renames.end();
-						bindings[canonical] = current == renames.end() ? Json(nullptr) : Json(current->second);
-					}
-					optimizedInput = digest(origin->second->inputKey + bindings.dump());
-					statistics.nativeOptimizedBindings += origin->second->bindings.size();
-				}
-				if (old && !optimizedInput.is_null() && optimizedInput == old->at("optimized_input")) {
+				if (old && reusedFunctions.contains(name)) {
 					definition = old->at("definition");
-					bodyUnchanged = true;
-					statistics.nativeOptimizedFunctionProofs++;
-				} else if (old && reusedFunctions.contains(name)) {
-					definition = old->at("definition");
-					if (optimizedInput.is_null())
-						optimizedInput = old->at("optimized_input");
 					bodyUnchanged = true;
 				} else {
 					definition = nativeSymbolFingerprint(value, true);
@@ -87,9 +69,7 @@ struct NativePartitionDependencies {
 			bodiesUnchanged[partition] = bodiesUnchanged[partition] && bodyUnchanged;
 			dependencies[partition].insert(references.begin(), references.end());
 			dependencies[partition].insert(name);
-			snapshot["symbols"][name] = Json{
-				{"definition", std::move(definition)}, {"references", references}, {"optimized_input", std::move(optimizedInput)}
-			};
+			snapshot["symbols"][name] = Json{{"definition", std::move(definition)}, {"references", references}};
 		}
 		for (unsigned index = 0; index < partitionCount; index++) {
 			std::vector<std::string> pending(dependencies[index].begin(), dependencies[index].end());

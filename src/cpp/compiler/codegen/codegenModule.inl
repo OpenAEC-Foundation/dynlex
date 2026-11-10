@@ -98,13 +98,7 @@ void optimizeLLVMModule(ParseContext &context, llvm::Module &module, bool prepar
 	mpm.run(module, mam);
 }
 
-bool generateCode(
-	ParseContext &context, const std::function<bool(ParseContext &)> &nativeEmitter,
-	const std::function<void(ParseContext &)> &beforeOptimization, const std::function<bool(ParseContext &)> &optimizer
-) {
-#ifdef DYNLEX_WEB
-	(void)nativeEmitter;
-#endif
+bool generateCode(ParseContext &context, const std::function<bool(ParseContext &)> &nativeEmitter) {
 	requireCompilerInvariant(
 		context.llvmContext && context.llvmModule && !context.llvmBuilder,
 		"code generation requires one initialized target layout"
@@ -319,16 +313,11 @@ bool generateCode(
 		return false;
 	}
 
-	if (beforeOptimization)
-		beforeOptimization(context);
-
-	// Optimization passes
-	if (optimizer) {
-		if (!optimizer(context))
-			return false;
-	} else if (context.options.optimizationLevel > 0) {
+	// The incremental native emitter owns optimization and object lowering.
+	if (nativeEmitter)
+		return nativeEmitter(context);
+	if (context.options.optimizationLevel > 0)
 		optimizeLLVMModule(context, *context.llvmModule);
-	}
 
 	if (context.options.emitSPIRV) {
 		if (!emitSPIRVModule(context))
@@ -358,7 +347,7 @@ bool generateCode(
 		if (!emitNativeObject(context))
 			return false;
 	} else {
-		if (!(nativeEmitter ? nativeEmitter(context) : emitNativeExecutable(context)))
+		if (!emitNativeExecutable(context))
 			return false;
 	}
 #endif

@@ -1,9 +1,9 @@
-constexpr std::array<const char *, 7> programPayloadFields{
-	"all_function_projection", "section_dependency_graph", "inference_summaries", "unoptimized_ir", "ir", "native_units",
+constexpr std::array<const char *, 6> programPayloadFields{
+	"all_function_projection", "section_dependency_graph", "inference_summaries", "generated_ir", "native_units",
 	"optimization_units"
 };
 
-bool isModulePayload(std::string_view field) { return field == "ir" || field == "unoptimized_ir"; }
+bool isModulePayload(std::string_view field) { return field == "generated_ir"; }
 
 fs::path programPayloadPath(const fs::path &directory, std::string_view key) {
 	return directory / ("payload-" + std::string(key) + ".entry");
@@ -98,13 +98,6 @@ bool hydrateProgramField(Json &program, const fs::path &directory, const char *f
 	if (program.contains(field))
 		return false;
 	std::string key = program.at("payload_keys").at(field).get<std::string>();
-	if (isModulePayload(field)) {
-		const char *other = std::string_view(field) == "ir" ? "unoptimized_ir" : "ir";
-		if (program.contains(other) && program.at("payload_keys").at(other) == key) {
-			program[field] = program.at(other);
-			return false;
-		}
-	}
 	fs::path path = programPayloadPath(directory, key);
 	auto payload = readEntry(path);
 	if (!payload)

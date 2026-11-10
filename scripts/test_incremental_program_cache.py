@@ -98,7 +98,7 @@ def read_program(cache, entry):
             continue
         for field, key in program["payload_keys"].items():
             payload = (directory / f"payload-{key}.entry").read_bytes().split(b"\n", 2)[2]
-            if field in ("ir", "unoptimized_ir"):
+            if field == "generated_ir":
                 program[field] = payload
             elif field == "section_dependency_graph":
                 program[field] = decode_graph(json.loads(payload))
@@ -121,12 +121,10 @@ def check_program_payloads(root, build):
                          if str(main) in json.loads(path.read_bytes().split(b"\n", 2)[2])["files"])
     manifest = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
     assert set(manifest["payload_keys"]) == {
-        "all_function_projection", "section_dependency_graph", "inference_summaries", "unoptimized_ir", "ir", "native_units",
+        "all_function_projection", "section_dependency_graph", "inference_summaries", "generated_ir", "native_units",
         "optimization_units"
     }
     assert all(field not in manifest for field in manifest["payload_keys"])
-    assert manifest["payload_keys"]["ir"] == manifest["payload_keys"]["unoptimized_ir"], \
-        "unoptimized builds stored duplicate module payloads"
     payloads = [directory / f"payload-{key}.entry" for key in manifest["payload_keys"].values()]
     assert manifest_path.stat().st_size < sum(path.stat().st_size for path in payloads)
     before = {path: (path.stat().st_ino, path.read_bytes()) for path in payloads}
@@ -140,7 +138,7 @@ def check_program_payloads(root, build):
     edited = build(entry=main)
     assert edited[0]["cache_payloads_loaded"] == 5
     assert edited[1:] == build(False, entry=main)[1:]
-    assert read_program(root / "cache", main)["ir"].startswith(b"BC\xc0\xde")
+    assert read_program(root / "cache", main)["generated_ir"].startswith(b"BC\xc0\xde")
     updated = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
     graph_blob = directory / f"payload-{updated['payload_keys']['section_dependency_graph']}.entry"
     assert isinstance(json.loads(graph_blob.read_bytes().split(b"\n", 2)[2])["forward"], list)

@@ -16,11 +16,6 @@ struct TemporaryObjects {
 	}
 };
 
-struct OptimizedFunctionOrigin {
-	std::string inputKey;
-	std::map<std::string, std::optional<std::string>> bindings;
-};
-
 struct BuildStatistics {
 	std::string cacheDirectory;
 	std::string cacheEntry;
@@ -40,23 +35,19 @@ struct BuildStatistics {
 	size_t nativeFunctionDependenciesReused = 0;
 	size_t nativeFunctionFingerprintsComputed = 0;
 	size_t nativeFunctions = 0;
-	size_t nativeOptimizedFunctionProofs = 0;
-	size_t optimizationFunctionRecordsReused = 0;
-	size_t optimizationFunctionRecordsComputed = 0;
-	size_t nativeOptimizedBindings = 0;
-	double optimizationRecordDecodeMilliseconds = 0;
-	double optimizationFunctionRecordMilliseconds = 0;
-	double optimizationOriginCaptureMilliseconds = 0;
-	double optimizationOriginBindMilliseconds = 0;
-	std::map<std::string, OptimizedFunctionOrigin> optimizedFunctionOrigins;
+	size_t nativeFunctionsLowered = 0;
+	size_t nativeUnreachableUnits = 0;
+	double nativeReachabilityMilliseconds = 0;
+	double nativeUnitMilliseconds = 0;
 	Json nativeUnits;
-	Json optimizationUnits = Json::object();
+	Json optimizationUnits;
 	size_t optimizationInputUnitsBuilt = 0;
 	size_t optimizationInputUnitsReused = 0;
 	size_t optimizationUnitsBuilt = 0;
 	size_t optimizationUnitsReused = 0;
 	double optimizationInputMilliseconds = 0;
-	double optimizationCombineMilliseconds = 0;
+	double optimizationIndexMilliseconds = 0;
+	double optimizationBackendMilliseconds = 0;
 	size_t dependencyGraphSectionsReused = 0;
 	size_t preinferDependencyGraphSectionsChecked = 0;
 	size_t dependencyGraphEntriesReused = 0;
@@ -96,7 +87,7 @@ struct BuildStatistics {
 	double preinferenceMilliseconds = 0;
 	double codegenMilliseconds = 0;
 	double irGenerationMilliseconds = 0;
-	double unoptimizedIRSnapshotMilliseconds = 0;
+	double generatedIRSnapshotMilliseconds = 0;
 	double optimizationMilliseconds = 0;
 	double snapshotMilliseconds = 0;
 	double cacheWriteMilliseconds = 0;
@@ -133,11 +124,11 @@ std::optional<bool> linkCachedObjects(
 	return linked;
 }
 
-void restoreCachedModule(ParseContext &context, const Json &cached, const fs::path &entry) {
+void restoreGeneratedModule(ParseContext &context, const Json &cached, const fs::path &entry) {
 	delete context.llvmModule;
 	context.llvmModule = nullptr;
 	std::unique_ptr<llvm::Module> module =
-		parseCachedModule(cached.at("ir").get_ref<const std::string &>(), *context.llvmContext);
+		parseCachedModule(cached.at("generated_ir").get_ref<const std::string &>(), *context.llvmContext);
 	if (llvm::verifyModule(*module))
 		throw std::runtime_error("invalid cached LLVM IR: " + entry.string());
 	module->setModuleIdentifier(cached.at("module_id").get<std::string>());

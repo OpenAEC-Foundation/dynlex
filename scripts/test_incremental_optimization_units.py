@@ -1,8 +1,5 @@
 """LLVM optimization rechecks changed units and their imported callees."""
 
-from test_incremental_program_cache import read_program
-
-
 def check_optimization_units(root, build):
     main = root / "optimization_units.dl"
     source = ('integer means: @intrinsic("type", "int")\n' +
@@ -10,6 +7,9 @@ def check_optimization_units(root, build):
                       f'integer, "part{index}"))\n' for index in range(6)) +
               ''.join(f'part{index}\n' for index in range(6)))
     flags = ("-O2",)
+    directory = root / "cache" / "native-v1"
+    record_pattern = "optimization-" + "?" * 64 + ".entry"
+    previous_records = set(directory.glob(record_pattern))
     main.write_text(source)
     cold = build(entry=main, flags=flags)
     assert cold[0]["optimization_units_built"] >= 6
@@ -27,9 +27,8 @@ def check_optimization_units(root, build):
     assert repeated[0]["optimization_units_reused"] >= 4, repeated[0]
     assert repeated[1:] == build(False, entry=main, flags=flags)[1:]
 
-    snapshot = read_program(root / "cache", main)["optimization_units"]
-    directory = root / "cache" / "native-v1"
-    paths = {directory / f"optimization-{key}.entry" for key in snapshot["outputs"].values()}
+    paths = set(directory.glob(record_pattern)) - previous_records
+    assert paths, "the program did not write optimization records"
     originals = {path: path.read_bytes() for path in paths}
     try:
         for path, content in originals.items():

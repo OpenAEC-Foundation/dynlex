@@ -27,11 +27,13 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Mangler.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/LTO/LTO.h"
 #include "llvm/Linker/Linker.h"
 #include "llvm/Object/BuildID.h"
+#include "llvm/Object/ModuleSymbolTable.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/BLAKE3.h"
 #include "llvm/Support/Caching.h"
@@ -41,7 +43,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
-#include "llvm/Transforms/IPO/GlobalDCE.h"
 #include "llvm/Transforms/IPO/StripDeadPrototypes.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include <algorithm>
@@ -345,6 +346,7 @@ std::string renderModule(const llvm::Module &module) {
 // clang-format off: the optimizer consumes the input descriptors.
 #include "incrementalOptimizationInputs.inl"
 #include "incrementalOptimization.inl"
+#include "incrementalOptimizedNativeUnits.inl"
 // clang-format on
 
 #include "incrementalInferenceEffects.inl"
@@ -425,10 +427,10 @@ bool compileIncrementally(
 			}
 		} else if (reusePreviousFrontend) {
 			statistics.reusedFrontend = true;
-			std::vector<std::string> objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 			std::cerr << cachedDiagnostics;
 			if (linkedOutputUnchanged(context, *previous)) {
 				success = true;
+				statistics.objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 			} else {
 				context.llvmContext = new llvm::LLVMContext();
 				context.llvmModule = new llvm::Module("dynlex_cached_link", *context.llvmContext);
@@ -438,34 +440,21 @@ bool compileIncrementally(
 					throw std::runtime_error(error);
 				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
 				context.requiredLibraries.insert(libraries.begin(), libraries.end());
-				std::optional<bool> cachedLink = linkCachedObjects(context, directory, objectKeys, libraries, statistics);
-				if (cachedLink) {
-					success = *cachedLink;
-				} else {
-					auto payloadStart = Clock::now();
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
-					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
-					restoreCachedModule(context, *previous, programEntry);
-					success = emitPartitions(
-						context, directory, compilerIdentity, options, libraries, statistics, &*previous, nullptr, true
-					);
-					if (success)
-						(*previous)["object_keys"] = statistics.objectKeys;
-				}
+				success = linkOrRestoreNativeOutput(
+					context, directory, programEntry, compilerIdentity, options, libraries, statistics, *previous
+				);
 			}
-			if (success) {
-				bool updateEntry = configOnlyChange;
-				if (!linkedOutputUnchanged(context, *previous)) {
-					(*previous)["linked_output"] = linkedOutputIdentity(context);
-					updateEntry = true;
-				}
+			if (success &&
+				(configOnlyChange || !statistics.nativeUnits.is_null() || !linkedOutputUnchanged(context, *previous))) {
+				Json result = *previous;
+				recordNativeOutput(result, statistics, &*previous);
+				result["linked_output"] = linkedOutputIdentity(context);
 				if (configOnlyChange) {
-					(*previous)["files"] = recording->observations;
-					(*previous)["diagnostics"] = cachedDiagnostics;
-					recordSemanticSources(*previous, *recording, context);
+					result["files"] = recording->observations;
+					result["diagnostics"] = cachedDiagnostics;
+					recordSemanticSources(result, *recording, context);
 				}
-				if (updateEntry)
-					writeProgramEntry(programEntry, *previous, &*previous);
+				writeProgramEntry(programEntry, std::move(result), &*previous);
 			}
 		} else {
 			if (previous) {
@@ -663,8 +652,7 @@ bool compileIncrementally(
 					auto payloadStart = Clock::now();
 					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "section_dependency_graph");
 					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "inference_summaries");
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "unoptimized_ir");
+					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "generated_ir");
 					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 					if (compatibleObservations(*previous, recording->observations, context))
 						prepareConstraintProbeReuse(
@@ -717,7 +705,7 @@ bool compileIncrementally(
 						for (const Section *section : stable)
 							replacementPaths.insert(sectionPaths.at(section));
 						functionReuse = std::make_unique<IncrementalIRReuse>(
-							inferred, previous->at("unoptimized_ir").get_ref<const std::string &>(),
+							inferred, previous->at("generated_ir").get_ref<const std::string &>(),
 							previous->at("function_sections"), previous->at("callable_functions"),
 							previous->at("function_instantiations"), sectionPaths, eligible, std::move(replacementPaths)
 						);
@@ -774,24 +762,13 @@ bool compileIncrementally(
 				statistics.reusedTypeInference = true;
 				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
 				context.requiredLibraries.insert(libraries.begin(), libraries.end());
-				std::vector<std::string> objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 				if (linkedOutputUnchanged(context, *previous)) {
 					success = true;
-					statistics.objectKeys = objectKeys;
+					statistics.objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 				} else {
-					std::optional<bool> cachedLink = linkCachedObjects(context, directory, objectKeys, libraries, statistics);
-					if (cachedLink) {
-						success = *cachedLink;
-						statistics.objectKeys = objectKeys;
-					} else {
-						auto payloadStart = Clock::now();
-						statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
-						statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
-						restoreCachedModule(context, *previous, programEntry);
-						success = emitPartitions(
-							context, directory, compilerIdentity, options, libraries, statistics, &*previous, nullptr, true
-						);
-					}
+					success = linkOrRestoreNativeOutput(
+						context, directory, programEntry, compilerIdentity, options, libraries, statistics, *previous
+					);
 				}
 				if (success) {
 					std::cerr << previous->at("diagnostics").get_ref<const std::string &>();
@@ -804,7 +781,7 @@ bool compileIncrementally(
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
 					result["matcher_key"] = saveMatcher();
 					result["parser_key"] = saveParser();
-					result["object_keys"] = statistics.objectKeys;
+					recordNativeOutput(result, statistics, &*previous);
 					recordSemanticSources(result, *recording, context);
 					result["linked_output"] = linkedOutputIdentity(context);
 					auto writeStart = Clock::now();
@@ -838,12 +815,13 @@ bool compileIncrementally(
 					};
 				}
 				stageStart = Clock::now();
-				std::string unoptimizedIR;
-				auto optimizationStart = stageStart;
 				success = generateCode(context, [&](ParseContext &compiled) {
-					statistics.optimizationMilliseconds = elapsedMilliseconds(optimizationStart);
-					auto snapshotStart = Clock::now();
+					statistics.irGenerationMilliseconds = elapsedMilliseconds(stageStart);
+					auto irStart = Clock::now();
 					sortModuleSymbols(*compiled.llvmModule);
+					std::string generatedIR = serializeCachedModule(*compiled.llvmModule);
+					statistics.generatedIRSnapshotMilliseconds = elapsedMilliseconds(irStart);
+					auto snapshotStart = Clock::now();
 					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
 					std::string diagnostics;
 					std::set<std::string> diagnosticSources;
@@ -852,8 +830,7 @@ bool compileIncrementally(
 						diagnosticSourcesAfter(compiled, frontendDiagnosticCount);
 					Json result{
 						{"files", recording->observations},
-						{"ir", serializeCachedModule(*compiled.llvmModule)},
-						{"unoptimized_ir", std::move(unoptimizedIR)},
+						{"generated_ir", std::move(generatedIR)},
 						{"module_id", compiled.llvmModule->getModuleIdentifier()},
 						{"libraries", libraries},
 						{"diagnostics", diagnostics},
@@ -904,52 +881,29 @@ bool compileIncrementally(
 					statistics.dependencyGraphMilliseconds = elapsedMilliseconds(graphStart);
 					recordSemanticSources(result, *recording, compiled);
 					statistics.snapshotMilliseconds = elapsedMilliseconds(snapshotStart);
-					bool reusedGeneratedCode = false;
-					if (previous && previous->at("ir") == result.at("ir")) {
-						std::vector<std::string> priorObjects = previous->at("object_keys").get<std::vector<std::string>>();
+					bool emitted;
+					if (previous && previous->at("generated_ir") == result.at("generated_ir")) {
 						if (previous->at("libraries") == libraries && linkedOutputUnchanged(compiled, *previous)) {
-							statistics.objectKeys = std::move(priorObjects);
-							reusedGeneratedCode = true;
-						} else {
-							std::optional<bool> cachedLink =
-								linkCachedObjects(compiled, directory, priorObjects, libraries, statistics);
-							if (cachedLink) {
-								if (!*cachedLink)
-									return false;
-								statistics.objectKeys = std::move(priorObjects);
-								reusedGeneratedCode = true;
-							}
-						}
-					}
-					if (!reusedGeneratedCode && !emitPartitions(
-													compiled, directory, compilerIdentity, options, libraries, statistics,
-													previous ? &*previous : nullptr, functionReuse.get(),
-													previous && previous->at("ir") == result.at("ir")
-												))
+							statistics.objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
+							emitted = true;
+						} else
+							emitted = linkOrRestoreNativeOutput(
+								compiled, directory, programEntry, compilerIdentity, options, libraries, statistics, *previous,
+								true
+							);
+					} else
+						emitted = buildNativeOutput(
+							compiled, directory, compilerIdentity, options, libraries, statistics,
+							previous ? &*previous : nullptr, functionReuse.get()
+						);
+					if (!emitted)
 						return false;
-					result["object_keys"] = statistics.objectKeys;
-					if (reusedGeneratedCode)
-						result["payload_keys"]["native_units"] = previous->at("payload_keys").at("native_units");
-					else
-						result["native_units"] = std::move(statistics.nativeUnits);
-					result["optimization_units"] = std::move(statistics.optimizationUnits);
+					recordNativeOutput(result, statistics, previous ? &*previous : nullptr);
 					result["linked_output"] = linkedOutputIdentity(compiled);
 					auto writeStart = Clock::now();
 					writeProgramEntry(programEntry, std::move(result), previous ? &*previous : nullptr);
 					statistics.cacheWriteMilliseconds = elapsedMilliseconds(writeStart);
 					return true;
-				}, [&](ParseContext &generated) {
-					statistics.irGenerationMilliseconds = elapsedMilliseconds(stageStart);
-					auto snapshotStart = Clock::now();
-					sortModuleSymbols(*generated.llvmModule);
-					unoptimizedIR = serializeCachedModule(*generated.llvmModule);
-					statistics.unoptimizedIRSnapshotMilliseconds = elapsedMilliseconds(snapshotStart);
-					optimizationStart = Clock::now();
-				}, [&](ParseContext &generated) {
-					return optimizeIncrementalModule(
-						generated, directory, compilerIdentity, options, previous ? &*previous : nullptr, statistics,
-						functionReuse.get()
-					);
 				});
 				statistics.codegenMilliseconds = elapsedMilliseconds(stageStart);
 				statistics.reusedFunctionIR = functionReuse ? functionReuse->reusedCount() : 0;

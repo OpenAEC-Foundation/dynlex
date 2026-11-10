@@ -838,8 +838,7 @@ XDG cache storage on Unix, Darwin user cache storage on macOS, and LocalAppData
 on Windows. `--cache-dir <directory>` overrides that location, `--no-incremental`
 performs a clean build, and `--incremental-stats` reports the actual cache directory
 and reuse. Cache overrides and statistics apply only to native executable file builds.
-A complete verified, optimized LLVM IR result
-is reusable while every filesystem observation remains identical. Source edits that
+A complete native result is reusable while every filesystem observation remains identical. Source edits that
 only add, remove or change comments or trailing whitespace also reuse the result when
 debug locations, execution traces and diagnostics cannot become stale. The semantic
 comparison uses each source file's configured comment prefix and retains line boundaries
@@ -851,17 +850,17 @@ configured message keys, variants and placeholders. Comment edits relocate their
 source locations without rebuilding the frontend. An edit confined to messages in an
 existing `config.dl` rerenders those diagnostics without recompiling.
 The program entry is a small manifest of observations, diagnostics, object keys,
-and content-addressed keys for generated and optimized LLVM bitcode, function projection, dependency
-graph, inference summaries, native partition dependencies, and optimization-unit inputs.
+and content-addressed keys for generated LLVM bitcode, function projection, dependency
+graph, inference summaries, native units, and optimization-unit inputs.
 Unchanged and comment-only builds inspect the
 manifest without parsing these larger payloads; they load LLVM bitcode only if an object
 must be rebuilt. Executable source edits first load the function projection.
-They load the dependency graph, inference summaries, and both LLVM stages only if type
-inference must run again; missing objects load LLVM bitcode when they must be rebuilt.
+They load the dependency graph, inference summaries, and generated IR only if type
+inference must run again. Missing optimized objects load only their own optimized bitcode.
 `cache_payloads_loaded` reports the
 number of payloads read on a build.
-An evicted payload invalidates the program entry, so the next build recompiles
-from source.
+An evicted manifest payload invalidates the program entry. Evicting an individual
+optimized unit or object only affects builds that need that artifact.
 Failed builds that reached section analysis or later store diagnostic records and
 failed pattern lookups separately from the last successful native result. An
 unchanged source or message-only configuration edit replays the errors without
@@ -1052,8 +1051,8 @@ again during the current build.
 For native builds without debug or execution tracing, the compiler
 can import cached generated LLVM bodies of unchanged functions after a code edit at every
 optimization level. Generated bodies are saved after target attributes and verification,
-before LLVM optimization. Optimized bitcode is stored separately for object regeneration
-and whole-program reuse. At O0 the two module payloads share a content-addressed entry.
+before LLVM optimization. The program saves that generated module once. Each optimized
+unit stores its bitcode separately for native lowering and object regeneration.
 Optimized native builds form units from symbol groups constrained by aliases, COMDATs,
 resolvers and block-address users. Each unit records its raw definitions, referenced
 declaration interfaces and module environment. Unchanged units restore bitcode with its
@@ -1062,42 +1061,31 @@ pipeline before summary construction, so import decisions use simplified body si
 The combined ThinLTO index supplies
 optimization cache keys that include imported callees, linkage decisions and target
 configuration. A changed callee therefore reoptimizes affected importing units. The
-single-worker backend stores verified optimized bitcode through its post-optimization
-hook, leaving native emission as a separate query. Internal optimizer-generated symbols
-receive stable unit namespaces before the optimized modules are combined.
-Unit preparation keeps link-once definitions available for references from other units.
-Combination restores the original names, linkage and visibility of definitions.
-A final liveness pass removes exports whose callers were fully inlined in other units,
-before native partitions are fingerprinted.
-Native object reuse identifies resulting optimized bodies independently of
-generated-body reuse. Verified optimization outputs carry reference records.
-The native body query records the optimization unit's input identity and each
-referenced symbol's actual final name, after LLVM linking, liveness and native
-namespace assignment. Equal query inputs reuse the saved body fingerprint and
-dependencies without cloning or printing the body. Changed inputs fingerprint
-only the live function; an unchanged result still retains its object. Functions
-removed by optimization never need a native body fingerprint. Private names
-with cross-unit collisions require the ordinary body fingerprint. Declaration
-interfaces and module settings are still checked separately.
-`optimization_function_records_reused` and
-`optimization_function_records_computed` count saved output dependency records;
-`native_optimized_function_proofs` counts native bodies whose query inputs reused
-their fingerprint this way.
-`native_functions` counts surviving function definitions independently of whether
-their native body fingerprint needed computing.
-`optimization_function_record_ms`, `optimization_record_decode_ms`,
-`optimization_origin_capture_ms`, and `optimization_origin_bind_ms` separate
-collecting references for new optimized units, decoding saved records, collecting unit
-ownership, and rebinding live functions. `native_optimized_bindings` counts the
-symbol bindings checked by native body queries. Their temporary origin data is
-consumed by native emission rather than retained through final cache writes.
-`ir_generation_ms`, `unoptimized_ir_snapshot_ms`, and `optimization_ms` separate these
-costs. `optimization_input_units_built`, `optimization_input_units_reused`,
-`optimization_units_built`, and `optimization_units_reused` expose the independent input
-and optimization cache decisions. `optimization_input_ms` and `optimization_combine_ms`
-measure input preparation and combining the optimized results. Whole-index construction
-and final module combination still visit the unit set on active edits; the backend
-optimizes only cache misses.
+single-worker backend stores optimized bitcode and a separate summary of each unit's
+definitions and references. The native emitter follows these summaries from the
+original exported roots. It omits units whose callers were fully inlined, without
+combining their LLVM modules or lowering their bodies. Unit preparation keeps
+link-once definitions available to other units; the root decision still uses the
+original linkage. References use target symbol names, including references from
+module assembly. Imported bodies that native code can still refer to contribute
+their dependencies; unused imports do not keep other units live.
+
+Each live optimized unit's bitcode and target configuration identify its native
+object query. An unchanged optimized result skips native lowering even when its
+input had to be optimized again. A missing object can be regenerated from that
+unit's bitcode. If that bitcode was also evicted, only demanded units reenter the
+optimizer. Object keys identify the emitted bytes, so an unchanged native result
+can stop invalidation before linking.
+
+`ir_generation_ms`, `generated_ir_snapshot_ms`, `optimization_input_ms`,
+`optimization_index_ms`, `optimization_backend_ms`, `native_reachability_ms`, and
+`native_unit_ms` separate these costs. `optimization_input_units_built`,
+`optimization_input_units_reused`, `optimization_units_built`, and
+`optimization_units_reused` expose input and optimization reuse. Index construction
+still visits the input set on active edits. `native_functions` counts function
+definitions in live units; `native_functions_lowered` counts those handed to native
+code generation. `native_unreachable_units` counts optimized units that need no
+native object.
 The compiler compares
 each function body separately, so changing one function does not invalidate its
 unchanged neighbors in the same file. A newly added or removed ordinary function
@@ -1214,7 +1202,7 @@ anew and linked to them. A changed interface continues through callers until an
 equivalent interface is found or the entry point is reached. This path compares
 inferred results rather than guessing from edited source text.
 
-Native emission divides the finalized IR
+At O0, native emission divides the generated IR
 into deterministic, independently linkable partitions. Local symbols receive a stable
 program namespace and hidden external linkage. Aliases, resolvers, COMDAT groups, and
 block-address users remain together. The native dependency snapshot records each
@@ -1229,10 +1217,11 @@ loaded only when native partition processing is required.
 Interned string literals use content-derived names and hidden ODR linkage, with
 COMDAT selection on supported targets, so importing cached bodies preserves the
 same literal objects instead of introducing renamed duplicates.
-Each affected partition's complete IR and target
+Each affected O0 partition's complete IR and target
 configuration identify its object cache entry; code changes, changed declarations,
 inlined callees, globals and debug metadata are reflected in that identity. Unchanged
-objects are reused. If the ordered object keys and required libraries are unchanged,
+objects are reused. The linker receives multiple object paths through a response file.
+If the ordered object keys and required libraries are unchanged,
 and the existing executable still matches the recorded output digest, an edited build
 skips linking. An unchanged, comment-only, or message-only configuration build also
 skips linking while that output identity matches. This is native partition reuse, matcher query reuse, the unused-body
@@ -1241,7 +1230,7 @@ inference and code generation for eligible unchanged functions during active edi
 The program cache records its ordered object keys. An unchanged or
 comment-only build with a missing or changed output links those cached objects directly
 without parsing or splitting the LLVM IR. If an object was evicted, the saved IR
-regenerates the missing partition before linking. The cache tracks DynLex source,
+regenerates the missing unit or O0 partition before linking. The cache tracks DynLex source,
 compiler, and output identities; changes made solely to native linker inputs are
 outside its invalidation model.
 After an executable edit, a successful frontend and code generation pass whose

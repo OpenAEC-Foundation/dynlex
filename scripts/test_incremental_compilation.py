@@ -18,7 +18,7 @@ from test_default_incremental_cache import check_default_cache
 from test_incremental_optimized_ir import check_optimized_function_reuse
 from test_incremental_optimization_units import check_optimization_units
 from test_incremental_body_units import check_body_resolution_units
-from test_incremental_native_proofs import check_optimized_native_dependencies
+from test_incremental_native_codegen import check_optimized_native_codegen
 from test_incremental_classification import check_recursive_classification_cascade
 
 project = Path(sys.argv[1]).resolve()
@@ -71,7 +71,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_optimized_function_reuse(root, build)
     check_optimization_units(root, build)
     check_body_resolution_units(root, build)
-    check_optimized_native_dependencies(root, build)
+    check_optimized_native_codegen(root, build)
     check_recursive_classification_cascade(root, build)
     cold = build()
     assert not cold[0]["frontend_reused"] and not cold[0]["linked_cached_objects"]

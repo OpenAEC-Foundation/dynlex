@@ -10,6 +10,7 @@
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/FileUtilities.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/TargetSelect.h"
@@ -514,10 +515,43 @@ bool emitNativeExecutableWithObjects(
 		commandStorage.push_back("-Wl,-rpath,@executable_path");
 	}
 #endif
+	llvm::FileRemover responseCleanup;
 	if (objectPaths.empty())
 		commandStorage.push_back(objectPath);
-	else
-		commandStorage.insert(commandStorage.end(), objectPaths.begin(), objectPaths.end());
+	else if (objectPaths.size() == 1)
+		commandStorage.push_back(objectPaths.front());
+	else {
+		llvm::SmallString<256> responsePath;
+		int descriptor;
+		if (std::error_code error = llvm::sys::fs::createTemporaryFile("dynlex-objects", "rsp", descriptor, responsePath)) {
+			pushPlainError("failed to create linker response file: " + error.message());
+			return false;
+		}
+		responseCleanup.setFile(responsePath);
+		llvm::raw_fd_ostream response(descriptor, true);
+		for (const std::string &path : objectPaths) {
+			response << '"';
+			for (char character : path) {
+#ifdef _WIN32
+				// Forward slashes are accepted by both Windows response parsers.
+				if (character == '\\')
+					character = '/';
+#endif
+				if (character == '\\' || character == '"')
+					response << '\\';
+				response << character;
+			}
+			response << "\"\n";
+		}
+		response.close();
+		if (response.has_error()) {
+			std::string message = response.error().message();
+			response.clear_error();
+			pushPlainError("failed to write linker response file: " + message);
+			return false;
+		}
+		commandStorage.push_back("@" + responsePath.str().str());
+	}
 	commandStorage.push_back("-o");
 	commandStorage.push_back(outputPath);
 
