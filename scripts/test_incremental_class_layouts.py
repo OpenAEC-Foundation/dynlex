@@ -54,11 +54,15 @@ def check_class_layout_restoration(root, build):
               'to observe {floating:value}: @intrinsic("discard", value)\n'
               'to consume {a point:value}: @intrinsic("discard", value)\n'
               'observe 1.0\n'
-              'consume (@intrinsic("construct", a point, 1))\n')
+              'consume (@intrinsic("construct", a point, 1))\n'
+              '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", '
+              '@intrinsic("type", "int", 32), 1, "%lld\\n", '
+              '@intrinsic("size of", @intrinsic("type of", @intrinsic("construct", a point, 1)))))\n')
     provider.write_text(source)
-    build(entry=provider)
+    initial = build(entry=provider)
     provider.write_text(source.replace('"type", "int"', '"type", "float"'))
     changed = build(entry=provider)
     assert changed[0]["constraint_probes_run"] >= 1, \
         "changed class field type was not re-evaluated"
+    assert changed[2] != initial[2], "class field type edit did not change its runtime layout"
     assert changed[1:] == build(False, entry=provider)[1:]
