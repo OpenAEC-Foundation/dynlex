@@ -5,6 +5,7 @@
 #include "expression.h"
 #include "incrementalIRReuse.h"
 #include "incrementalMatcherCache.h"
+#include "incrementalModuleBitcode.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
 #include "pathUtils.h"
@@ -15,7 +16,6 @@
 #include "syntaxConfig.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
-#include "llvm/AsmParser/Parser.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
@@ -24,7 +24,6 @@
 #include "llvm/Support/BLAKE3.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/SHA256.h"
-#include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
@@ -790,7 +789,7 @@ bool compileIncrementally(
 						diagnosticSourcesAfter(compiled, frontendDiagnosticCount);
 					Json result{
 						{"files", recording->observations},
-						{"ir", renderModule(*compiled.llvmModule)},
+						{"ir", serializeCachedModule(*compiled.llvmModule)},
 						{"module_id", compiled.llvmModule->getModuleIdentifier()},
 						{"libraries", libraries},
 						{"diagnostics", diagnostics},

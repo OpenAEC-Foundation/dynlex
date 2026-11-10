@@ -787,12 +787,12 @@ configured message keys, variants and placeholders. Comment edits relocate their
 source locations without rebuilding the frontend. An edit confined to messages in an
 existing `config.dl` rerenders those diagnostics without recompiling.
 The program entry is a small manifest of observations, diagnostics, object keys,
-and content-addressed keys for the saved LLVM IR, function projection, dependency
+and content-addressed keys for the saved LLVM bitcode, function projection, dependency
 graph, and inference summaries. Unchanged and comment-only builds inspect the
-manifest without parsing these larger payloads; they load LLVM IR only if an object
+manifest without parsing these larger payloads; they load LLVM bitcode only if an object
 must be rebuilt. Executable source edits first load the function projection.
-They load the dependency graph, inference summaries, and LLVM IR only if type
-inference must run again; missing objects load LLVM IR when they must be rebuilt.
+They load the dependency graph, inference summaries, and LLVM bitcode only if type
+inference must run again; missing objects load LLVM bitcode when they must be rebuilt.
 `cache_payloads_loaded` reports the
 number of payloads read on a build.
 An evicted payload invalidates the program entry, so the next build recompiles

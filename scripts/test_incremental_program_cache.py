@@ -28,7 +28,7 @@ def read_program(cache, entry):
         for field, key in program["payload_keys"].items():
             payload = (directory / f"payload-{key}.entry").read_bytes().split(b"\n", 2)[2]
             if field == "ir":
-                program[field] = payload.decode()
+                program[field] = payload
             elif field == "section_dependency_graph":
                 program[field] = decode_graph(json.loads(payload))
             else:
@@ -66,7 +66,7 @@ def check_program_payloads(root, build):
     edited = build(entry=main)
     assert edited[0]["cache_payloads_loaded"] == 4
     assert edited[1:] == build(False, entry=main)[1:]
-    assert read_program(root / "cache", main)["ir"]
+    assert read_program(root / "cache", main)["ir"].startswith(b"BC\xc0\xde")
     updated = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
     graph_blob = directory / f"payload-{updated['payload_keys']['section_dependency_graph']}.entry"
     assert isinstance(json.loads(graph_blob.read_bytes().split(b"\n", 2)[2])["forward"], list)

@@ -1,7 +1,7 @@
 #include "incrementalIRReuse.h"
 #include "codegen/libraryDependencies.h"
+#include "incrementalModuleBitcode.h"
 #include "parseContext.h"
-#include "llvm/AsmParser/Parser.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalAlias.h"
@@ -9,7 +9,6 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Linker/Linker.h"
-#include "llvm/Support/SourceMgr.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include <set>
 #include <stdexcept>
@@ -59,10 +58,7 @@ IncrementalIRReuse::IncrementalIRReuse(
 	: currentModule(context.llvmModule), previousFunctions(previousFunctions),
 	  previousCallableFunctions(previousCallableFunctions), sectionPaths(std::move(sectionPaths)),
 	  eligibleSections(std::move(eligibleSections)), replacementPaths(std::move(replacementPaths)) {
-	llvm::SMDiagnostic diagnostic;
-	previousModule = llvm::parseAssemblyString(previousIR, diagnostic, *context.llvmContext);
-	if (!previousModule)
-		throw std::runtime_error("invalid cached LLVM IR for function reuse");
+	previousModule = parseCachedModule(previousIR, *context.llvmContext);
 	if (previousModule->getDataLayout() != context.llvmModule->getDataLayout() ||
 		previousModule->getTargetTriple() != context.llvmModule->getTargetTriple())
 		throw std::runtime_error("cached LLVM target differs from the current target");

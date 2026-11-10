@@ -102,10 +102,9 @@ std::optional<bool> linkCachedObjects(
 void restoreCachedModule(ParseContext &context, const Json &cached, const fs::path &entry) {
 	delete context.llvmModule;
 	context.llvmModule = nullptr;
-	llvm::SMDiagnostic diagnostic;
 	std::unique_ptr<llvm::Module> module =
-		llvm::parseAssemblyString(cached.at("ir").get<std::string>(), diagnostic, *context.llvmContext);
-	if (!module || llvm::verifyModule(*module))
+		parseCachedModule(cached.at("ir").get_ref<const std::string &>(), *context.llvmContext);
+	if (llvm::verifyModule(*module))
 		throw std::runtime_error("invalid cached LLVM IR: " + entry.string());
 	module->setModuleIdentifier(cached.at("module_id").get<std::string>());
 	context.llvmModule = module.release();
