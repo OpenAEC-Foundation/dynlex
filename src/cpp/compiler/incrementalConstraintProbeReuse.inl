@@ -181,6 +181,8 @@ void prepareConstraintProbeReuse(
 		return value;
 	}))
 		return;
+	if (!restoreClassInstantiations(prior.at("class_instantiations"), sections))
+		return;
 	const Json &schedule = prior.at("constraint_probe_schedule");
 	context.priorConstraintProbeItems = schedule.at("items").get<std::vector<std::string>>();
 	context.priorConstraintProbePasses = schedule.at("passes").get<std::vector<int>>();

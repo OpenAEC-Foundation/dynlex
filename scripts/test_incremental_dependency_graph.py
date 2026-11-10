@@ -3,6 +3,7 @@
 import json
 from test_incremental_program_cache import read_program
 from test_incremental_inactive_selection import check_literal_inactive_body
+from test_incremental_class_layouts import check_class_layout_restoration
 
 
 def graph_for(cache, entry):
@@ -135,6 +136,7 @@ def check_skipped_constraint_expression_retention(root, build):
 
 
 def check_class_constraint_value_reuse(root, build):
+    check_class_layout_restoration(root, build)
     main = root / "class_constraint_value_reuse.dl"
     source = ('class:\n'
               '    patterns:\n'
@@ -166,8 +168,8 @@ def check_class_constraint_value_reuse(root, build):
     build(entry=typed)
     typed.write_text(typed_source.replace('"discard", 1)', '"discard", 2)'))
     instantiated = build(entry=typed)
-    assert instantiated[0]["constraint_values_reused"] == 0, \
-        "instantiated class constraint reused an unbuilt class layout"
+    assert instantiated[0]["constraint_values_reused"] >= 1, \
+        "instantiated class constraint did not restore its class layout and resolved value"
     assert instantiated[1:] == build(False, entry=typed)[1:]
 
 

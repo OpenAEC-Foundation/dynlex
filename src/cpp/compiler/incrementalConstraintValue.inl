@@ -4,9 +4,26 @@ ClassDefinition *constraintClassForPath(const Json &path, const std::map<std::st
 	return static_cast<ClassSection *>(section)->classDefinition;
 }
 
+std::optional<Json> encodePortableConstraintType(const DataType &type, const ClassIdentityPaths &classPaths);
+
+std::optional<Json> encodePortableFunctionSignature(
+	const FunctionSignature &signature, const ClassIdentityPaths &classPaths
+) {
+	auto result = encodePortableConstraintType(signature.result, classPaths);
+	if (!result)
+		return std::nullopt;
+	Json parameters = Json::array();
+	for (const DataType &parameter : signature.parameters) {
+		auto encoded = encodePortableConstraintType(parameter, classPaths);
+		if (!encoded)
+			return std::nullopt;
+		parameters.push_back(std::move(*encoded));
+	}
+	return Json::array({std::move(*result), std::move(parameters)});
+}
+
 std::optional<Json> encodePortableConstraintType(const DataType &type, const ClassIdentityPaths &classPaths) {
-	if (type.kind == DataType::Kind::Function || type.typeExpression || type.functionSignature ||
-		type.referencedKind == DataType::Kind::Function || type.classInstIndex != -1)
+	if (type.typeExpression || type.classInstIndex < -1)
 		return std::nullopt;
 	Json classPath = nullptr;
 	if (type.classDefinition) {
@@ -24,10 +41,29 @@ std::optional<Json> encodePortableConstraintType(const DataType &type, const Cla
 			return std::nullopt;
 		element = std::move(*encoded);
 	}
+	Json signature = nullptr;
+	if (type.functionSignature) {
+		auto encoded = encodePortableFunctionSignature(*type.functionSignature, classPaths);
+		if (!encoded)
+			return std::nullopt;
+		signature = std::move(*encoded);
+	}
 	return Json::array(
 		{static_cast<int>(type.kind), type.numericSize, type.pointerDepth, static_cast<int>(type.referencedKind),
-		 type.arraySize, type.matrixRowCount, std::move(element), std::move(classPath)}
+		 type.arraySize, type.matrixRowCount, std::move(element), std::move(classPath), type.classInstIndex,
+		 std::move(signature)}
 	);
+}
+
+DataType decodePortableConstraintType(const Json &encoded, const std::map<std::string, Section *> &sections);
+
+std::shared_ptr<const FunctionSignature>
+decodePortableFunctionSignature(const Json &encoded, const std::map<std::string, Section *> &sections) {
+	DataType result = decodePortableConstraintType(encoded.at(0), sections);
+	std::vector<DataType> parameters;
+	for (const Json &parameter : encoded.at(1))
+		parameters.push_back(decodePortableConstraintType(parameter, sections));
+	return std::make_shared<FunctionSignature>(std::move(result), std::move(parameters));
 }
 
 DataType decodePortableConstraintType(const Json &encoded, const std::map<std::string, Section *> &sections) {
@@ -42,11 +78,19 @@ DataType decodePortableConstraintType(const Json &encoded, const std::map<std::s
 		type.arrayElementType = std::make_shared<DataType>(decodePortableConstraintType(encoded.at(6), sections));
 	if (!encoded.at(7).is_null())
 		type.classDefinition = constraintClassForPath(encoded.at(7), sections);
+	type.classInstIndex = encoded.at(8).get<int>();
+	if (type.classInstIndex >= 0)
+		requireCompilerInvariant(
+			type.classDefinition && type.classInstIndex < static_cast<int>(type.classDefinition->instantiations.size()),
+			"saved constraint type refers to an unrestored class instantiation"
+		);
+	if (!encoded.at(9).is_null())
+		type.functionSignature = decodePortableFunctionSignature(encoded.at(9), sections);
 	return type;
 }
 
 std::optional<Json> encodePortableConstraint(const TypeConstraint &constraint, const ClassIdentityPaths &classPaths) {
-	if (!constraint.isResolved() || constraint.classInstantiationIndex || constraint.functionSignature)
+	if (!constraint.isResolved())
 		return std::nullopt;
 	Json classPath = nullptr;
 	if (constraint.classDefinition) {
@@ -64,6 +108,13 @@ std::optional<Json> encodePortableConstraint(const TypeConstraint &constraint, c
 			return std::nullopt;
 		element = std::move(*encoded);
 	}
+	Json signature = nullptr;
+	if (constraint.functionSignature) {
+		auto encoded = encodePortableFunctionSignature(*constraint.functionSignature, classPaths);
+		if (!encoded)
+			return std::nullopt;
+		signature = std::move(*encoded);
+	}
 	auto optionalInt = [](std::optional<int> value) -> Json {
 		return value ? Json(*value) : Json(nullptr);
 	};
@@ -71,7 +122,8 @@ std::optional<Json> encodePortableConstraint(const TypeConstraint &constraint, c
 		{constraint.kind ? Json(static_cast<int>(*constraint.kind)) : Json(nullptr), optionalInt(constraint.numericSize),
 		 optionalInt(constraint.pointerDepth), optionalInt(constraint.arraySize), optionalInt(constraint.matrixRows),
 		 optionalInt(constraint.matrixColumns), constraint.requiresNumeric, constraint.requiresInteger,
-		 constraint.requiresCompileTimeValue, std::move(element), std::move(classPath)}
+		 constraint.requiresCompileTimeValue, std::move(element), std::move(classPath),
+		 optionalInt(constraint.classInstantiationIndex), std::move(signature)}
 	);
 }
 
@@ -96,6 +148,15 @@ TypeConstraint decodePortableConstraint(const Json &encoded, const std::map<std:
 		constraint.constrainsClassDefinition = true;
 		constraint.classDefinition = constraintClassForPath(encoded.at(10), sections);
 	}
+	constraint.classInstantiationIndex = optionalInt(encoded.at(11));
+	if (constraint.classInstantiationIndex)
+		requireCompilerInvariant(
+			constraint.classDefinition &&
+				*constraint.classInstantiationIndex < static_cast<int>(constraint.classDefinition->instantiations.size()),
+			"saved constraint refers to an unrestored class instantiation"
+		);
+	if (!encoded.at(12).is_null())
+		constraint.functionSignature = decodePortableFunctionSignature(encoded.at(12), sections);
 	return constraint;
 }
 

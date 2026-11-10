@@ -371,6 +371,7 @@ std::string renderModule(const llvm::Module &module) {
 // clang-format off: these includes depend on the declarations in the preceding files.
 #include "incrementalDependencyGraph.inl"
 #include "incrementalConstraintValue.inl"
+#include "incrementalClassInstantiations.inl"
 #include "incrementalConstraintProbeReuse.inl"
 // clang-format on
 
@@ -734,8 +735,10 @@ bool compileIncrementally(
 			if (compiled && !reuseTypeInference)
 				compiled = finishTypeInference(context);
 			statistics.inferenceMilliseconds = elapsedMilliseconds(stageStart);
-			if (compiled && !reuseTypeInference)
+			if (compiled && !reuseTypeInference) {
 				resolvedFunctionProjection["constraint_probe_schedule"] = captureConstraintProbeSchedule(context, sectionPaths);
+				resolvedFunctionProjection["class_instantiations"] = captureClassInstantiations(sectionPaths);
+			}
 			statistics.expressionParseHits = parserCache.hits();
 			statistics.temporaryExpressionParseHits = parserCache.temporaryHitCount();
 			statistics.expressionParseMisses = parserCache.missCount();

@@ -845,8 +845,12 @@ installs that result directly in the current declaration and carries
 forward its dependency roots. It also skips parsing that constraint expression when
 the saved probe schedule still matches. If the schedule changes, omitted expressions
 are parsed before inference. Other results are committed by inference as before.
-Generic class references are keyed by stable class-section paths; class
-instantiations and function signatures still use current-process inference.
+Class references are keyed by stable class-section paths. Committed class
+instantiation field types and function signatures are saved with the constraint
+probe schedule. When the class declaration still has the same fields, the
+compiler restores its instantiation table before decoding reusable constraint
+values, including recursive class layouts. An edited class declaration makes
+its saved constraint values ineligible for reuse.
 `constraint_probes_reused`, `constraint_probes_run`, `constraint_values_reused`, and
 `constraint_expressions_reused` report these separate decisions. The six entries
 of `inference_stage_ms` measure declared constraints, pattern conflicts,
