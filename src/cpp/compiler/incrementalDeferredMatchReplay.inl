@@ -13,7 +13,7 @@ struct BodyResolutionUnit {
 
 void prepareDeferredMatchReplay(
 	ParseContext &context, const Json &previous, const Json &observations, std::string_view initialMatcherTree,
-	const Json &initialMatcherRoots, const InitialMatcherProjection &currentProjection, PriorMatchKeys &precedenceKeys,
+	MatcherPathSnapshots &matcherPaths, const InitialMatcherProjection &currentProjection, PriorMatchKeys &precedenceKeys,
 	std::vector<BodyResolutionUnit> &bodyUnits
 ) {
 	if (!previous.contains("all_function_projection") || !compatibleObservations(previous, observations, context))
@@ -21,10 +21,10 @@ void prepareDeferredMatchReplay(
 	const Json &projection = previous.at("all_function_projection");
 	const Json &prior = projection.at("matcher_projection");
 	const Json &current = currentProjection.value;
-	bool sameTree = projection.at("initial_matcher_tree").get_ref<const std::string &>() == initialMatcherTree;
-	std::optional<MatcherTreeChanges> treeChanges;
-	if (!sameTree)
-		treeChanges.emplace(projection.at("initial_matcher_roots"), initialMatcherRoots);
+	auto treeChanges = matcherPaths.compare(
+		projection.at("initial_matcher_tree").get_ref<const std::string &>(), initialMatcherTree
+	);
+	bool sameTree = !treeChanges;
 	const Json &priorDeclarations = prior.at("declaration_digests");
 	if (sameTree && current.at("declaration_digests") != priorDeclarations)
 		return;
@@ -172,7 +172,7 @@ bool changedTreeMayAffectPrecedenceRules(const MatcherTreeChanges &changes, cons
 
 void preparePrecedenceMatchReplay(
 	ParseContext &context, const Json &prior, IncrementalMatcherCache &matcherCache, const PriorMatchKeys &precedenceKeys,
-	const std::vector<PatternReference *> &candidates, double &treeMilliseconds, double &precedenceMilliseconds,
+	MatcherPathSnapshots &matcherPaths, const std::vector<PatternReference *> &candidates, double &treeMilliseconds, double &precedenceMilliseconds,
 	double &ruleMilliseconds, size_t &signaturesReused
 ) {
 	if (precedenceKeys.empty() || context.patternPrecedenceRevision != 1)
@@ -180,9 +180,8 @@ void preparePrecedenceMatchReplay(
 	auto started = Clock::now();
 	std::string tree = matcherTreeSignature(context);
 	treeMilliseconds += elapsedMilliseconds(started);
-	std::optional<MatcherTreeChanges> treeChanges;
-	if (tree != prior.at("final_matcher_tree").get<std::string>())
-		treeChanges.emplace(finalMatcherRootSnapshot(prior), matcherTreeMutationSnapshot(context));
+	matcherPaths.retain(tree, context);
+	auto treeChanges = matcherPaths.compare(prior.at("final_matcher_tree").get_ref<const std::string &>(), tree);
 	started = Clock::now();
 	std::string rules = precedenceRulesSignature(*context.mainSection);
 	ruleMilliseconds += elapsedMilliseconds(started);

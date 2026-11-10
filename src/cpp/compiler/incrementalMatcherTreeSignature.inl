@@ -42,15 +42,12 @@ Json matcherTreeMutationSnapshot(const ParseContext &context) {
 	return roots;
 }
 
-const Json &finalMatcherRootSnapshot(const Json &projection) {
-	if (projection.at("final_matcher_tree") == projection.at("initial_matcher_tree"))
-		return projection.at("initial_matcher_roots");
-	return projection.at("final_matcher_roots");
-}
-
 struct MatcherTreeChanges {
 	bool wildcard = false;
 	std::vector<std::vector<std::string>> paths;
+
+	// Without a prior snapshot every body must validate its matcher inputs.
+	MatcherTreeChanges() : wildcard(true) {}
 
 	MatcherTreeChanges(const Json &prior, const Json &current) {
 		requireCompilerInvariant(prior.size() == current.size(), "incremental matcher tree root count changed");
@@ -114,4 +111,59 @@ struct MatcherTreeChanges {
 				return true;
 		return false;
 	}
+};
+
+class MatcherPathSnapshots {
+  public:
+	MatcherPathSnapshots(const fs::path &directory, const std::string &compilerIdentity)
+		: directory(directory), compilerIdentity(compilerIdentity) {}
+
+	size_t pathsBuilt() const { return built; }
+	size_t pathsLoaded() const { return loaded; }
+
+	void retain(std::string_view tree, const ParseContext &context) {
+		if (!retained.emplace(tree).second)
+			return;
+		fs::path path = entryPath(tree);
+		if (recordCacheAccess(path))
+			return;
+		Json roots = matcherTreeMutationSnapshot(context);
+		writeEntry(path, roots.dump());
+		snapshots.emplace(tree, std::move(roots));
+		built++;
+	}
+
+	std::optional<MatcherTreeChanges> compare(std::string_view previous, std::string_view current) {
+		if (previous == current)
+			return std::nullopt;
+		const Json *old = load(previous);
+		const Json *now = load(current);
+		if (!old || !now)
+			return MatcherTreeChanges();
+		return MatcherTreeChanges(*old, *now);
+	}
+
+  private:
+	fs::path entryPath(std::string_view tree) const {
+		std::string identity = compilerIdentity;
+		identity.append(tree);
+		return directory / ("matcher-paths-" + digest(identity) + ".entry");
+	}
+
+	const Json *load(std::string_view tree) {
+		if (auto found = snapshots.find(tree); found != snapshots.end())
+			return &found->second;
+		auto bytes = readEntry(entryPath(tree));
+		if (!bytes)
+			return nullptr;
+		loaded++;
+		return &snapshots.emplace(tree, Json::parse(*bytes)).first->second;
+	}
+
+	const fs::path &directory;
+	const std::string &compilerIdentity;
+	size_t built = 0;
+	size_t loaded = 0;
+	std::set<std::string> retained;
+	std::map<std::string, Json, std::less<>> snapshots;
 };

@@ -975,6 +975,10 @@ a literal missing from its header, body, transformed references, and numeric
 arguments. A changed path with no required literals can affect every body.
 Potential matches compute keys normally, so newly relevant overloads and failed
 lookups rematch.
+Path snapshots are stored by compiler and tree fingerprint. An edit that keeps
+the initial and final trees identical reuses their fingerprints without reading
+or rebuilding the path lists. A changed tree loads the prior lists on demand.
+`matcher_path_snapshots_loaded` and `matcher_path_snapshots_built` count that work.
 The matcher still restores the result and its dependencies; changed bodies and
 changed matching environments compute
 their keys normally.

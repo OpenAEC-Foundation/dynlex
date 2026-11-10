@@ -78,6 +78,8 @@ struct BuildStatistics {
 	double frontendMilliseconds = 0;
 	double inactiveBodySelectionMilliseconds = 0;
 	double matcherProjectionMilliseconds = 0;
+	size_t matcherPathSnapshotsBuilt = 0;
+	size_t matcherPathSnapshotsLoaded = 0;
 	double inferenceMilliseconds = 0;
 	double projectionMilliseconds = 0;
 	double inactiveProjectionMilliseconds = 0;

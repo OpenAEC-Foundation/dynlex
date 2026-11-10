@@ -530,7 +530,7 @@ bool compileIncrementally(
 								matcherCache.retain(entry.at(field).get_ref<const std::string &>());
 			};
 			std::string initialMatcherTree;
-			Json initialMatcherRoots;
+			MatcherPathSnapshots matcherPaths(directory, compilerIdentity);
 			InitialMatcherProjection initialMatcherProjection;
 			PriorMatchKeys precedenceKeys;
 			std::vector<BodyResolutionUnit> bodyUnits;
@@ -548,14 +548,11 @@ bool compileIncrementally(
 				initialMatcherProjection.capture(context, recording->observations, inactiveMatchEntries, references, prior);
 				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
 				initialMatcherTree = matcherTreeSignature(context);
-				const Json *projection = previous ? &previous->at("all_function_projection") : nullptr;
-				initialMatcherRoots = projection && projection->at("initial_matcher_tree") == initialMatcherTree
-										  ? projection->at("initial_matcher_roots")
-										  : matcherTreeMutationSnapshot(context);
+				matcherPaths.retain(initialMatcherTree, context);
 				if (previous)
 					prepareDeferredMatchReplay(
-						context, *previous, recording->observations, initialMatcherTree, initialMatcherRoots,
-						initialMatcherProjection, precedenceKeys, bodyUnits
+						context, *previous, recording->observations, initialMatcherTree, matcherPaths, initialMatcherProjection,
+						precedenceKeys, bodyUnits
 					);
 			};
 			context.restoreDeferredBodyUnits = [&]() {
@@ -565,8 +562,8 @@ bool compileIncrementally(
 				initialMatcherProjection.captureBodyUnits(matcherCache);
 				if (previous)
 					preparePrecedenceMatchReplay(
-						context, previous->at("all_function_projection"), matcherCache, precedenceKeys, references,
-						statistics.precedenceTreeSignatureMilliseconds, statistics.precedenceSignatureMilliseconds,
+						context, previous->at("all_function_projection"), matcherCache, precedenceKeys, matcherPaths,
+						references, statistics.precedenceTreeSignatureMilliseconds, statistics.precedenceSignatureMilliseconds,
 						statistics.precedenceRuleSignatureMilliseconds, statistics.precedenceSignaturesReused
 					);
 			};
@@ -591,8 +588,12 @@ bool compileIncrementally(
 			bool compiled = compileBeforeTypeInference(context.options.inputPath, context);
 			statistics.frontendMilliseconds = elapsedMilliseconds(stageStart);
 			std::map<std::string, Section *> sections;
-			if (compiled)
+			std::string finalMatcherTree;
+			if (compiled) {
 				collectSections(context.mainSection, "root", sections);
+				finalMatcherTree = matcherTreeSignature(context);
+				matcherPaths.retain(finalMatcherTree, context);
+			}
 			std::string frontendDiagnosticText;
 			std::set<std::string> frontendDiagnosticSources;
 			Json frontendDiagnosticRecords =
@@ -608,12 +609,15 @@ bool compileIncrementally(
 			statistics.inactiveProjectionMilliseconds = elapsedMilliseconds(stageStart);
 			stageStart = Clock::now();
 			std::optional<Json> refreshedProjection;
-			if (reuseTypeInference)
-				refreshedProjection = refreshInactiveFunctionProjection(
-					context, recording->observations, sections, matcherCache, previous->at("all_function_projection"),
-					previous->at("inactive_projection"), statistics.inactiveProjectionMatchesRechecked,
-					statistics.sourceProjectionWork.matchEntriesReused
-				);
+			if (reuseTypeInference) {
+				const Json &prior = previous->at("all_function_projection");
+				if (initialMatcherTree == prior.at("initial_matcher_tree").get_ref<const std::string &>() &&
+					finalMatcherTree == prior.at("final_matcher_tree").get_ref<const std::string &>())
+					refreshedProjection = refreshInactiveFunctionProjection(
+						context, recording->observations, sections, matcherCache, prior, previous->at("inactive_projection"),
+						statistics.inactiveProjectionMatchesRechecked, statistics.sourceProjectionWork.matchEntriesReused
+					);
+			}
 			if (compiled && !refreshedProjection && previous &&
 				compatibleObservations(*previous, recording->observations, context))
 				refreshedProjection = refreshTopLevelExecutionProjection(
@@ -626,8 +630,8 @@ bool compileIncrementally(
 				resolvedFunctionProjection = std::move(*refreshedProjection);
 			else if (compiled)
 				resolvedFunctionProjection = captureAllFunctionProjection(
-					context, recording->observations, sections, matcherCache, initialMatcherTree, initialMatcherRoots,
-					previous ? &*previous : nullptr, &statistics.sourceProjectionWork,
+					context, recording->observations, sections, matcherCache, matcherPaths, initialMatcherTree,
+					finalMatcherTree, previous ? &*previous : nullptr, &statistics.sourceProjectionWork,
 					previous && compatibleObservations(*previous, recording->observations, context)
 				);
 			if (compiled) {
@@ -753,6 +757,8 @@ bool compileIncrementally(
 			context.reuseInferredInstantiation = {};
 			context.runIncrementalPreinference = {};
 			statistics.matcherCacheHits = matcherCache.hits();
+			statistics.matcherPathSnapshotsBuilt = matcherPaths.pathsBuilt();
+			statistics.matcherPathSnapshotsLoaded = matcherPaths.pathsLoaded();
 			statistics.deferredMatchKeysReplayed = matcherCache.deferredKeyReplays();
 			statistics.precedenceMatchKeysReplayed = matcherCache.precedenceKeyReplays();
 			statistics.precedenceMatcherCacheHits = matcherCache.precedenceHits();

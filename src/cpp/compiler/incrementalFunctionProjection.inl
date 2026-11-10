@@ -56,7 +56,8 @@ Json scopeRuleBodyPaths(const std::map<std::string, Section *> &sections) {
 
 Json captureAllFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
-	IncrementalMatcherCache &matcherCache, std::string_view initialMatcherTree, const Json &initialMatcherRoots,
+	IncrementalMatcherCache &matcherCache, MatcherPathSnapshots &matcherPaths, std::string_view initialMatcherTree,
+	std::string_view finalMatcherTree,
 	const Json *previous, SourceProjectionWork *projectionWork, bool compatibleSyntax
 ) {
 	auto phaseStart = Clock::now();
@@ -125,15 +126,6 @@ Json captureAllFunctionProjection(
 	Json allDeclarationEntries = Json::array();
 	Json ambientDeclarationEntries = Json::array();
 	Json currentGlobalResolution = globalResolutionIdentity(*context.mainSection);
-	std::string finalMatcherTree = matcherTreeSignature(context);
-	Json finalMatcherRoots;
-	const Json *currentFinalMatcherRoots = &initialMatcherRoots;
-	if (finalMatcherTree != initialMatcherTree) {
-		finalMatcherRoots = prior && prior->at("final_matcher_tree") == finalMatcherTree
-								? finalMatcherRootSnapshot(*prior)
-								: matcherTreeMutationSnapshot(context);
-		currentFinalMatcherRoots = &finalMatcherRoots;
-	}
 	if (reuseDeclarations) {
 		declarations = prior->at("function_declarations");
 		if (projectionWork)
@@ -143,10 +135,8 @@ Json captureAllFunctionProjection(
 		bool stableRootBindings = stableDeclarationContext && currentGlobalResolution == prior->at("global_resolution");
 		std::optional<MatcherTreeChanges> initialChanges, finalChanges;
 		if (stableDeclarationContext) {
-			if (initialMatcherTree != prior->at("initial_matcher_tree").get_ref<const std::string &>())
-				initialChanges.emplace(prior->at("initial_matcher_roots"), initialMatcherRoots);
-			if (finalMatcherTree != prior->at("final_matcher_tree").get_ref<const std::string &>())
-				finalChanges.emplace(finalMatcherRootSnapshot(*prior), *currentFinalMatcherRoots);
+			initialChanges = matcherPaths.compare(prior->at("initial_matcher_tree").get_ref<const std::string &>(), initialMatcherTree);
+			finalChanges = matcherPaths.compare(prior->at("final_matcher_tree").get_ref<const std::string &>(), finalMatcherTree);
 		}
 		for (const auto &[path, section] : sections) {
 			bool reusableSection = reusable.contains(section);
@@ -180,8 +170,7 @@ Json captureAllFunctionProjection(
 	}
 	Json projection{
 		{"initial_matcher_tree", initialMatcherTree},
-		{"initial_matcher_roots", initialMatcherRoots},
-		{"final_matcher_tree", std::move(finalMatcherTree)},
+		{"final_matcher_tree", finalMatcherTree},
 		{"precedence_signature", matcherCache.precedenceSignature()},
 		{"precedence_rules", precedenceRulesSignature(*context.mainSection)},
 		{"inactive", std::move(selected)},
@@ -190,8 +179,6 @@ Json captureAllFunctionProjection(
 		{"sources", std::move(maskedSources)},
 		{"scope_rule_bodies", std::move(currentScopeRuleBodies)}
 	};
-	if (!finalMatcherRoots.is_null())
-		projection["final_matcher_roots"] = std::move(finalMatcherRoots);
 	if (projectionWork)
 		projectionWork->inactiveMilliseconds += elapsedMilliseconds(phaseStart);
 	phaseStart = Clock::now();
