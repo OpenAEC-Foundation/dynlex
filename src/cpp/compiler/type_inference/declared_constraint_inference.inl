@@ -112,6 +112,54 @@ static void commitDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, P
 	}
 }
 
+static std::string declaredConstraintProbeIdentity(const DeclaredTypeConstraintWorkItem &item) {
+	requireCompilerInvariant(item.diagnosticRange.line, "type-constraint probe has no source location");
+	std::string_view kind = item.numberRuleLine ? "rule" : item.element ? "element" : "variable";
+	return std::string(kind) + ":" + std::to_string(item.typeConstraintName.size()) + ":" + item.typeConstraintName + ":" +
+		   item.diagnosticRange.toString();
+}
+
+static void recordDeclaredConstraintDependencies(
+	const DeclaredTypeConstraintWorkItem &item, ParseContext &context, std::unordered_set<const Section *> &dependencies
+) {
+	auto addVariableOwner = [&](VariableReference *reference) {
+		requireCompilerInvariant(reference && reference->range.line, "type-constraint variable has no source section");
+		Section *scope = reference->definition ? reference->definition->range.section() : reference->range.section();
+		requireCompilerInvariant(scope, "type-constraint variable has no lexical scope");
+		for (Section *section = scope; section; section = section->parent)
+			if (section == context.mainSection ||
+				(section->type == SectionType::Function && !section->patternDefinitions.empty())) {
+				dependencies.insert(section);
+				break;
+			}
+	};
+	if (item.variableReference) {
+		addVariableOwner(item.variableReference);
+		for (Section *section = item.variableReference->range.section(); section; section = section->parent)
+			if (section->type == SectionType::Function && !section->patternDefinitions.empty()) {
+				dependencies.insert(section);
+				break;
+			}
+	}
+	auto visitMatch = [&](auto &&self, const PatternMatch &match) -> void {
+		for (const PatternDefinition *definition : match.matchingDefinitions)
+			dependencies.insert(definition->section);
+		for (const PatternMatch &child : match.subMatches)
+			self(self, child);
+	};
+	visitExpressionTree(item.expression, [&](Expression *expression) {
+		for (const PatternDefinition *definition :
+			 {expression->selectedPatternDefinition, expression->selectedCallableDefinition})
+			if (definition)
+				dependencies.insert(definition->section);
+		if (expression->patternMatch)
+			visitMatch(visitMatch, *expression->patternMatch);
+		if (expression->kind == Expression::Kind::Variable)
+			addVariableOwner(expression->variable);
+		return false;
+	});
+}
+
 static bool classifyPatternTypeConstraintDependencies(
 	ParseContext &parseContext, PatternDefinition &definition, DefinitionPatternElement &element, Expression *expression
 ) {
@@ -245,6 +293,19 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 	size_t diagnosticsBeforeParsing = parseContext.diagnostics.size();
 	if (!collectDeclaredTypeConstraintWorkItems(parseContext, parseContext.mainSection, items))
 		return false;
+	parseContext.constraintProbeItems.clear();
+	parseContext.constraintProbeTexts.clear();
+	parseContext.constraintProbePasses.assign(items.size(), 0);
+	parseContext.constraintProbeDependencies.clear();
+	parseContext.constraintProbeDependencies.resize(items.size());
+	for (const DeclaredTypeConstraintWorkItem &item : items) {
+		parseContext.constraintProbeItems.push_back(declaredConstraintProbeIdentity(item));
+		parseContext.constraintProbeTexts.push_back(item.typeConstraintName);
+	}
+	bool reuseProbes = parseContext.reuseDeclaredConstraintProbes &&
+					   parseContext.priorConstraintProbeItems == parseContext.constraintProbeItems &&
+					   parseContext.priorConstraintProbePasses.size() == items.size() &&
+					   parseContext.priorConstraintProbeReusable.size() == items.size();
 	auto destroyExpressions = [&]() {
 		for (DeclaredTypeConstraintWorkItem &item : items) {
 			if (!item.expression)
@@ -267,15 +328,27 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 	}
 
 	size_t unresolvedCount = items.size();
+	int pass = 0;
 	while (unresolvedCount > 0) {
+		pass++;
 		if (!initializePatternPathSignatures(parseContext)) {
 			destroyExpressions();
 			return false;
 		}
 		bool madeProgress = false;
-		for (DeclaredTypeConstraintWorkItem &item : items) {
+		for (size_t itemIndex = 0; itemIndex < items.size(); itemIndex++) {
+			DeclaredTypeConstraintWorkItem &item = items[itemIndex];
 			if (!item.expression)
 				continue;
+			bool reuseItem = reuseProbes && parseContext.priorConstraintProbeReusable[itemIndex];
+			if (reuseItem) {
+				requireCompilerInvariant(
+					parseContext.priorConstraintProbePasses[itemIndex] >= pass,
+					"reused type-constraint probe passed before its pending item"
+				);
+				if (parseContext.priorConstraintProbePasses[itemIndex] > pass)
+					continue;
+			}
 			if ((!item.definition || !item.element) && (!item.variable || !item.variableReference) && !item.numberRuleLine) {
 				destroyExpressions();
 				crashCompilerBug("declared type-constraint work item lost its target");
@@ -285,10 +358,18 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 				const CodeLine *governedLine = item.element ? item.definition->range.line : item.variableReference->range.line;
 				bool numberRulePending = false;
 				effectiveNumberRule(parseContext, governedLine, &numberRulePending);
-				if (numberRulePending)
+				if (numberRulePending) {
+					requireCompilerInvariant(!reuseItem, "reused type-constraint pass still waits for a number rule");
 					continue;
+				}
 			}
-			PatternTypeConstraintProbe probe = probeDeclaredTypeConstraint(item, parseContext);
+			PatternTypeConstraintProbe probe = PatternTypeConstraintProbe::Ready;
+			if (reuseItem)
+				parseContext.constraintProbesReused++;
+			else {
+				probe = probeDeclaredTypeConstraint(item, parseContext);
+				parseContext.constraintProbesRun++;
+			}
 			if (probe == PatternTypeConstraintProbe::Deferred)
 				continue;
 			if (probe == PatternTypeConstraintProbe::Invalid || probe == PatternTypeConstraintProbe::Impure) {
@@ -308,6 +389,8 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 				return false;
 			}
 			commitDeclaredTypeConstraint(item, parseContext);
+			parseContext.constraintProbePasses[itemIndex] = pass;
+			recordDeclaredConstraintDependencies(item, parseContext, parseContext.constraintProbeDependencies[itemIndex]);
 			if (item.numberRuleLine) {
 				if (!commitNumberRule(item, parseContext, item.numberRuleConstraint)) {
 					item.expression = nullptr;

@@ -88,6 +88,18 @@ struct ParseContext {
 	std::function<void(PatternReference *, MatchOptions, const PatternMatch *, const MatchDependencies *)> recordMatcherResult;
 	std::function<void(const std::list<PatternReference *> &)> prepareDeferredMatcherReplay;
 	std::function<void(const std::vector<PatternReference *> &)> preparePrecedenceMatcherReplay;
+	// A native build may reuse the successful ordering of type-constraint probes
+	// when its saved dependency closure and matching environment are unchanged.
+	bool reuseDeclaredConstraintProbes = false;
+	std::vector<std::string> priorConstraintProbeItems;
+	std::vector<int> priorConstraintProbePasses;
+	std::vector<bool> priorConstraintProbeReusable;
+	std::vector<std::string> constraintProbeItems;
+	std::vector<std::string> constraintProbeTexts;
+	std::vector<int> constraintProbePasses;
+	std::vector<std::unordered_set<const Section *>> constraintProbeDependencies;
+	size_t constraintProbesReused = 0;
+	size_t constraintProbesRun = 0;
 	// Parse cache entries contain only unresolved syntax. Restored executable
 	// expressions register references; temporary type expressions keep them local.
 	std::function<Expression *(Section *, Range, SectionType, bool)> reuseParsedExpression;

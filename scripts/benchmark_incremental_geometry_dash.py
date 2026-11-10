@@ -97,6 +97,7 @@ for name, samples in results.items():
                          "variable_like_count_references_scanned",
                          "body_resolution_reference_visits", "matcher_cache_hits",
                          "temporary_expression_parse_hits",
+                         "constraint_probes_reused", "constraint_probes_run",
                          "deferred_match_keys_replayed", "precedence_match_keys_replayed",
                          "matcher_key_ms", "matcher_restore_ms", "matcher_snapshot_ms",
                          "projection_ms", "projection_setup_ms", "projection_body_ms",

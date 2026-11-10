@@ -816,6 +816,17 @@ references unregistered and resolve against the current tree when evaluated. Bot
 restore source tokens. Expressions that emitted parse diagnostics are parsed again.
 `--incremental-stats` counts expression and definition parse hits and misses from
 the preceding compiler invocation, including temporary expression hits separately.
+After resolution, each successful type-constraint probe's pass and the sections
+read by its expression are saved with the function projection. A later build
+reuses unaffected first-pass probes before the first affected item when declarations,
+pattern trees, precedence, scope rules, and source outside function bodies are
+unchanged. The saved dependency graph also invalidates a probe when an edited
+body can reach another candidate that could match its expression. Later-pass
+probes and probes after the first affected item run again so a changed
+constraint can resolve earlier and cascade in order.
+The compiler still commits each constraint in the current inference context.
+`constraint_probes_reused` and
+`constraint_probes_run` report the skipped and executed speculative probes.
 It reuses pointer-free matcher results from the previous build in both the initial
 resolution and precedence matching passes for unchanged references when the pattern-tree mutation history, the reference's
 source line and position mapping, relative lexical declaration visibility, and

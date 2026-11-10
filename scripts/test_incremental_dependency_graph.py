@@ -29,23 +29,56 @@ def check_temporary_expression_parse_reuse(root, build):
     main = root / "temporary_expression_parse.dl"
     source = ('integer means: @intrinsic("type", "int")\n'
               'to use {integer:value}: @intrinsic("discard", value)\n'
-              'to idle: @intrinsic("discard", 1)\n'
-              'use 1\n')
+              'to touch: @intrinsic("discard", 1)\n'
+              'to idle: @intrinsic("discard", 9)\n'
+              'touch\nuse 1\n')
     main.write_text(source)
     build(entry=main)
-    main.write_text(source.replace('use 1\n', 'use 2\n'))
+    main.write_text(source.replace('"discard", 1)', '"discard", 2)'))
+    body_edit = build(entry=main)
+    assert body_edit[0]["constraint_probes_reused"] >= 1, \
+        "unrelated active body edit re-probed an unchanged type constraint"
+    assert body_edit[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text().replace('use 1\n', 'use 2\n'))
     edited = build(entry=main)
     assert edited[0]["temporary_expression_parse_hits"] >= 1, \
         "unchanged temporary type expression was parsed again"
     assert edited[1:] == build(False, entry=main)[1:]
-    main.write_text(main.read_text().replace('"discard", 1)', '"discard", 2)'))
+    main.write_text(main.read_text().replace('"discard", 9)', '"discard", 8)'))
     inactive = build(entry=main)
     assert inactive[0]["type_inference_reused"], "unused function edit re-ran inference"
-    main.write_text(main.read_text().replace('use 2\n', 'use 3\n'))
+    main.write_text(main.read_text().replace('"discard", 2)', '"discard", 3)'))
     resumed = build(entry=main)
     assert resumed[0]["temporary_expression_parse_hits"] >= 1, \
         "skipped inference discarded unchanged temporary parse entries"
+    assert resumed[0]["constraint_probes_reused"] >= 1, \
+        "skipped inference discarded the unchanged constraint dependency schedule"
     assert resumed[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text().replace('"type", "int"', '"type", "float"'))
+    dependency_edit = build(entry=main, success=False)
+    assert dependency_edit[0]["constraint_probes_reused"] == 0, \
+        "changed type provider reused its previous constraint probe"
+    assert dependency_edit[0]["constraint_probes_run"] >= 1, \
+        "changed type provider did not run the constraint probe"
+    assert dependency_edit[1:] == build(False, entry=main, success=False)[1:]
+
+
+def check_independent_constraint_probes(root, build):
+    main = root / "independent_constraint_probes.dl"
+    source = ('floating-point means: @intrinsic("type", "float")\n'
+              'integer means: @intrinsic("type", "int")\n'
+              'to accept float {floating-point:value}: @intrinsic("discard", value)\n'
+              'to accept integer {integer:value}: @intrinsic("discard", value)\n'
+              'accept float 1.0\naccept integer 1\n')
+    main.write_text(source)
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]
+    main.write_text(source.replace('"type", "int"', '"type", "float"'))
+    changed = build(entry=main, success=False)
+    assert changed[0]["constraint_probes_reused"] >= 1, \
+        "changed type provider re-probed the independent constraint"
+    assert changed[0]["constraint_probes_run"] >= 1, \
+        "changed type provider did not probe the affected constraint"
+    assert changed[1:] == build(False, entry=main, success=False)[1:]
 
 
 def check_cross_file_typed_overload(root, build):

@@ -369,6 +369,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalInferenceReuse.inl"
 
 #include "incrementalDependencyGraph.inl"
+#include "incrementalConstraintProbeReuse.inl"
 
 #include "incrementalInferencePreinfer.inl"
 } // namespace
@@ -617,6 +618,11 @@ bool compileIncrementally(
 					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "inference_summaries");
 					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
 					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
+					if (compatibleObservations(*previous, recording->observations, context))
+						prepareConstraintProbeReuse(
+							context, previous->at("all_function_projection"), resolvedFunctionProjection,
+							previous->at("section_dependency_graph"), sections
+						);
 					IncrementalPreinferPlan plan = incrementalInferenceCandidates(
 						context, *previous, recording->observations, sectionPaths, resolvedFunctionProjection
 					);
@@ -681,6 +687,8 @@ bool compileIncrementally(
 			if (compiled && !reuseTypeInference)
 				compiled = finishTypeInference(context);
 			statistics.inferenceMilliseconds = elapsedMilliseconds(stageStart);
+			if (compiled && !reuseTypeInference)
+				resolvedFunctionProjection["constraint_probe_schedule"] = captureConstraintProbeSchedule(context, sectionPaths);
 			statistics.expressionParseHits = parserCache.hits();
 			statistics.temporaryExpressionParseHits = parserCache.temporaryHitCount();
 			statistics.expressionParseMisses = parserCache.missCount();
@@ -912,6 +920,8 @@ bool compileIncrementally(
 							  {"precedence_matcher_cache_hits", statistics.precedenceMatcherCacheHits},
 							  {"expression_parse_hits", statistics.expressionParseHits},
 							  {"temporary_expression_parse_hits", statistics.temporaryExpressionParseHits},
+							  {"constraint_probes_reused", context.constraintProbesReused},
+							  {"constraint_probes_run", context.constraintProbesRun},
 							  {"expression_parse_misses", statistics.expressionParseMisses},
 							  {"definition_parse_hits", statistics.definitionParseHits},
 							  {"definition_parse_misses", statistics.definitionParseMisses},
