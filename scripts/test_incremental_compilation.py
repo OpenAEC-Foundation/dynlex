@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 from test_incremental_dependency_graph import check_cross_file_typed_overload, check_deferred_match_key_replay, check_independent_constraint_probes, check_skipped_constraint_expression_retention, check_class_constraint_value_reuse, check_header_parameter_constraint_owner, check_precedence_match_key_replay, check_folded_value_remains_active, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_resolved_declaration_snapshot_reuse, check_reused_ir_dependency_graph_variants, check_runtime_pure_value_summary, check_temporary_expression_parse_reuse, check_top_level_projection_reuse, check_top_level_execution_constraint_probes, check_unrelated_added_pattern_constraint_probes
 from test_incremental_program_cache import check_integration_builds, check_program_payloads
+from test_incremental_match_replay import check_choice_declaration_replay, check_deferred_body_match_replay, check_flex_body_match_replay
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -79,14 +80,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     assert same_file_edit[0]["matcher_cache_hits"] > 0, "code edit discarded unchanged same-file matches"
     assert same_file_edit[0]["definition_parse_hits"] >= 3, "code edit reparsed unchanged declarations"
     assert same_file_edit[1:] == build(False)[1:], "same-file match reuse differs from clean build"
-    choice_main = root / "choice_main.dl"
-    choice_output = root / "choice_program"
-    choice_main.write_text('to [alpha|beta]: @intrinsic("discard", 1)\nalpha\n')
-    build(entry=choice_main, target=choice_output)
-    choice_main.write_text('to [alpha|beta]: @intrinsic("discard", 1)\nbeta\n')
-    choice_edit = build(entry=choice_main, target=choice_output)
-    assert choice_edit[0]["definition_parse_hits"] > 0, "choice declaration was reparsed after a call edit"
-    assert choice_edit[1:] == build(False, entry=choice_main, target=choice_output)[1:]
+    check_choice_declaration_replay(root, build)
     rematch_main = root / "rematch_main.dl"
     rematch_output = root / "rematch_program"
     rematch_source = ('the shutdown code for item and user means: @intrinsic("add", item, user)\n'
@@ -903,6 +897,8 @@ function left times right:
     check_generated_accessor_graph_edges(root, build)
     check_global_reader_after_top_level_edit(root, build)
     check_deferred_match_key_replay(root, build)
+    check_flex_body_match_replay(root, build)
+    check_deferred_body_match_replay(root, build)
     check_precedence_match_key_replay(root, build)
 
     for flags in [("-O2",), ("-g",), ("-ffast-math",), ("--trace-execution",)]:

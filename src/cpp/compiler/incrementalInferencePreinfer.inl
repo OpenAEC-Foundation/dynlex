@@ -25,7 +25,7 @@ IncrementalPreinferPlan incrementalInferenceCandidates(
 	if (!fullyCompatible && !compatibleGlobalFreeProjection(prior, current))
 		return result;
 	for (const auto &[section, path] : sectionPaths)
-		result.bodyUnchanged[section] = !reusableCodegenSection(*section) || unchangedFunctionSource(path, prior, current);
+		result.bodyUnchanged[section] = unchangedSectionBody(*section, path, prior, current);
 	const Json &summaries = previous.at("inference_summaries");
 	ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
 	std::map<std::string, size_t> generatedFunctionCounts;
@@ -134,6 +134,7 @@ std::unordered_set<const Section *> stableIncrementalReplacements(
 			key.argumentTypes = request.argumentTypes;
 			const std::string keyText = *inferenceSummaryKey(key, classPaths);
 			if (!same || !currentSummaries.at(path).contains(keyText) ||
+				!priorSummaries.at(path).at(keyText).at("pure_values_complete").get<bool>() ||
 				currentSummaries.at(path).at(keyText) != priorSummaries.at(path).at(keyText)) {
 				same = false;
 				break;

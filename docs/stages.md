@@ -145,6 +145,18 @@ until definitions are indexed, even when another reference in the same function 
 classify that candidate. Unchanged functions without global access can replay their
 matcher keys after a top-level execution edit when the nonexecution source projection
 is unchanged.
+An edit inside a flex function can also preserve other functions' matcher keys:
+matching checks the resolved pattern signatures and lexical declarations separately
+from the flex's executable body. Scope-rule edits still invalidate that proof, and
+body-driven parameter reclassification invalidates callers through the changed tree.
+The saved matcher projection describes the boundary before receiver bodies become
+generated functions. It stores declaration digests and only the match entries that
+differ from the expanded projection; `matcher_projection_ms` reports its capture cost.
+Flex bodies also participate in inference and native-code invalidation even though
+they have no standalone native function. Inference summaries retain observed pure
+call results; a changed function becomes a stable dependency boundary only when
+those results, types, and effects are all preserved. Unserializable observed results
+leave that boundary unproven, so callers are checked again.
 
 Incremental matcher keys reuse each parsed reference's candidate literal spellings and numeric literal arguments.
 Each indexed definition contributes to a tree of its required literal words. A reference fingerprints only

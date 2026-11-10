@@ -57,6 +57,7 @@ struct BuildStatistics {
 	double totalMilliseconds = 0;
 	double frontendMilliseconds = 0;
 	double inactiveBodySelectionMilliseconds = 0;
+	double matcherProjectionMilliseconds = 0;
 	double inferenceMilliseconds = 0;
 	double projectionMilliseconds = 0;
 	double inactiveProjectionMilliseconds = 0;

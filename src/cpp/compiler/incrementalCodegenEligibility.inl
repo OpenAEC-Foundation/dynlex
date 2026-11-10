@@ -57,10 +57,9 @@ std::unordered_set<const Section *> eligibleCodegenSections(
 	// Global readers remain candidates: summary replay checks current global
 	// types, and IR import checks the finalized global types and initializers.
 	for (const auto &[path, section] : sections)
-		unchanged[section] =
-			(fullyCompatible || section != context.mainSection) &&
-			(!reusableCodegenSection(*section) || unchangedFunctionSource(path, priorProjection, currentProjection) ||
-			 interfaceStableChanges.contains(section));
+		unchanged[section] = (fullyCompatible || section != context.mainSection) &&
+							 (unchangedSectionBody(*section, path, priorProjection, currentProjection) ||
+							  interfaceStableChanges.contains(section));
 	if (fullyCompatible && previous.contains("section_dependency_graph")) {
 		auto dirty =
 			dirtySectionsFromSavedGraph(previous.at("section_dependency_graph"), sections, unchanged, interfaceStableChanges);

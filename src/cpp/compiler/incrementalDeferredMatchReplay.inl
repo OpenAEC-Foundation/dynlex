@@ -11,42 +11,62 @@ void prepareDeferredMatchReplay(
 ) {
 	if (!previous.contains("all_function_projection") || !compatibleObservations(previous, observations, context))
 		return;
-	const Json &prior = previous.at("all_function_projection");
-	bool sameTree = prior.at("initial_matcher_tree").get_ref<const std::string &>() == initialMatcherTree;
+	const Json &projection = previous.at("all_function_projection");
+	const Json &prior = projection.at("matcher_projection");
+	bool sameTree = projection.at("initial_matcher_tree").get_ref<const std::string &>() == initialMatcherTree;
 	std::optional<MatcherTreeChanges> treeChanges;
 	if (!sameTree)
-		treeChanges.emplace(prior.at("initial_matcher_roots"), initialMatcherRoots);
+		treeChanges.emplace(projection.at("initial_matcher_roots"), initialMatcherRoots);
 	std::map<std::string, Section *> sections;
 	collectSections(context.mainSection, "root", sections);
 	std::unordered_set<const Section *> reusable;
-	for (const auto &[_, section] : sections)
+	std::unordered_set<const Section *> functionBodies;
+	Json selected = Json::object();
+	for (const auto &[path, section] : sections) {
 		if (reusableCodegenSection(*section))
 			reusable.insert(section);
-	const Json &priorDeclarations = prior.at("function_declarations");
+		if (section->type == SectionType::Function && !section->patternDefinitions.empty() &&
+			!containsNestedDefinition(*section)) {
+			functionBodies.insert(section);
+			selected[path] = sectionIdentity(*section);
+		}
+	}
+	const Json &priorDeclarations = prior.at("declaration_digests");
 	if (sameTree && reusable.size() != priorDeclarations.size())
 		return;
 	for (const auto &[path, section] : sections)
 		if (sameTree && reusable.contains(section) &&
-			(!priorDeclarations.contains(path) || sectionDeclaration(*section) != priorDeclarations.at(path)))
+			(!priorDeclarations.contains(path) ||
+			 digest(sectionDeclaration(*section).dump()) != priorDeclarations.at(path).get_ref<const std::string &>()))
 			return;
-	Json ambient = sourceProjection(context, observations, reusable, true, true, false, &prior.at("ambient_sources"));
-	bool stableAmbient = sourceProjectionsEqual(ambient, prior.at("ambient_sources"));
-	if (!stableAmbient) {
-		if (treeChanges)
-			return;
-		Json nonexecution =
-			sourceProjection(context, observations, reusable, true, true, true, &prior.at("ambient_nonexecution_sources"));
-		if (!sourceProjectionsEqual(nonexecution, prior.at("ambient_nonexecution_sources")))
-			return;
+	// Matching consumes declarations and lexical bindings, not flex execution.
+	// The active tree below already accounts for body-driven parameter promotion.
+	bool stableBindings =
+		digest(selected.dump()) == prior.at("selected_digest").get_ref<const std::string &>() &&
+		sourceProjectionsEqual(
+			sourceProjection(context, observations, functionBodies, false, false, false, &prior.at("sources")),
+			prior.at("sources")
+		);
+	if (!stableBindings) {
+		Json ambient = sourceProjection(context, observations, reusable, true, true, false, &prior.at("ambient_sources"));
+		stableBindings = sourceProjectionsEqual(ambient, prior.at("ambient_sources"));
+		if (!stableBindings) {
+			if (treeChanges)
+				return;
+			Json nonexecution =
+				sourceProjection(context, observations, reusable, true, true, true, &prior.at("ambient_nonexecution_sources"));
+			if (!sourceProjectionsEqual(nonexecution, prior.at("ambient_nonexecution_sources")))
+				return;
+		}
 	}
-	if (treeChanges) {
+	if (treeChanges || stableBindings) {
 		Json rootDeclarations = globalResolutionIdentity(*context.mainSection);
 		const Json &priorRoot = prior.at("global_resolution");
 		if (rootDeclarations.at(0) != priorRoot.at(0) || rootDeclarations.at(2) != priorRoot.at(2))
 			return;
 	}
 	Json bodies = functionBodyDigests(context, sections);
-	if (treeChanges) {
+	{
 		Json scopeRuleBodies = scopeRuleBodyPaths(sections);
 		if (scopeRuleBodies != prior.at("scope_rule_bodies"))
 			return;
@@ -57,12 +77,14 @@ void prepareDeferredMatchReplay(
 	std::unordered_set<const PatternReference *> deferred(deferredReferences.begin(), deferredReferences.end());
 	for (const auto &[path, section] : sections) {
 		if (!reusable.contains(section) || !priorDeclarations.contains(path) ||
-			(treeChanges && sectionDeclaration(*section) != priorDeclarations.at(path)) ||
+			(treeChanges &&
+			 digest(sectionDeclaration(*section).dump()) != priorDeclarations.at(path).get_ref<const std::string &>()) ||
 			(treeChanges && (section->parent != context.mainSection || treeChanges->mayAffect(*section))) ||
-			(!stableAmbient && !hasNoGlobalAccess(section)) || !prior.at("bodies").contains(path) || !bodies.contains(path) ||
-			bodies.at(path) != prior.at("bodies").at(path) || !prior.at("match_entries").contains(path))
+			(!stableBindings && !hasNoGlobalAccess(section)) || !prior.at("bodies").contains(path) || !bodies.contains(path) ||
+			bodies.at(path) != prior.at("bodies").at(path))
 			continue;
-		const Json &entries = prior.at("match_entries").at(path);
+		const Json &entries = prior.at("match_overrides").contains(path) ? prior.at("match_overrides").at(path)
+																		 : projection.at("match_entries").at(path);
 		std::vector<PatternReference *> references;
 		const auto collect = [&](auto &&self, Section *body) -> void {
 			references.insert(references.end(), body->patternReferences.begin(), body->patternReferences.end());
