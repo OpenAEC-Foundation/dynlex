@@ -1,0 +1,92 @@
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+flex section else if condition:
+    replacement:
+        @intrinsic("else if", condition)
+
+flex section else:
+    replacement:
+        @intrinsic("else")
+
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function left = right:
+    execute:
+        @intrinsic("return", @intrinsic("equal", left, right))
+
+[an|] integer means: @intrinsic("type", "int")
+
+value as [a|] {fixed integer:bits} bit integer means: @intrinsic("cast", value, @intrinsic("type", "int", bits))
+
+to print line {an integer:message}:
+    ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%ld\n", message as a 64 bit integer)
+
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+to get the chained level for {an integer:kind}:
+    set amount to 50
+    if kind = 1:
+        set amount to 100
+    else if kind = 2:
+        set amount to 25
+    else if kind = 3:
+        set amount to 75
+    @intrinsic("return", amount)
+
+to get the closed level for {an integer:kind}:
+    set amount to 0
+    if kind = 1:
+        set amount to 10
+    else if kind = 2:
+        set amount to 20
+    else if kind = 3:
+        set amount to 30
+    else:
+        set amount to 40
+    @intrinsic("return", amount)
+
+to get the returned level for {an integer:kind}:
+    if kind = 1:
+        @intrinsic("return", 1)
+    else if kind = 2:
+        @intrinsic("return", 2)
+    else:
+        @intrinsic("return", 3)
+
+to get the nested level for {an integer:outer} and {an integer:inner}:
+    set amount to 0
+    if outer = 1:
+        if inner = 1:
+            set amount to 11
+        else if inner = 2:
+            set amount to 12
+    else if outer = 2:
+        if inner = 1:
+            set amount to 21
+        else:
+            set amount to 22
+    @intrinsic("return", amount)
+
+print line the chained level for 1
+print line the chained level for 2
+print line the chained level for 3
+print line the chained level for 4
+print line the closed level for 1
+print line the closed level for 2
+print line the closed level for 3
+print line the closed level for 4
+print line the returned level for 1
+print line the returned level for 2
+print line the returned level for 3
+print line the nested level for 1 and 1
+print line the nested level for 1 and 2
+print line the nested level for 1 and 3
+print line the nested level for 2 and 1
+print line the nested level for 2 and 2
+print line the nested level for 3 and 1

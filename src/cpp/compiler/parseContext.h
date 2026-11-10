@@ -274,6 +274,9 @@ struct ParseContext {
 	// Switches whose default block was already claimed by an `otherwise`
 	// branch; keyed by identity so scoped state restoration cannot revive it.
 	std::unordered_set<llvm::SwitchInst *> switchesWithDefaultCase;
+	// For each `if` chain, keyed by the block where code after the chain continues: the block that the
+	// last condition's false edge enters. `else if` and `else` nest their selection on that edge.
+	std::unordered_map<llvm::BasicBlock *, llvm::BasicBlock *> ifChainFalseTargets;
 	// Global variables (module-level, accessible across all DynLex files in the program)
 	std::unordered_map<std::string, llvm::GlobalVariable *> globalLLVMVariables;
 	std::unordered_map<const Expression *, llvm::Value *> dataLLVMValues;

@@ -111,6 +111,7 @@ generateIfIntrinsic(ParseContext &context, Expression *callExpr, const std::vect
 		crashCompilerBug("if condition must be boolean after type inference");
 	emitExecutionTrace(context, activeSectionFlexBodyFrame(context).openingExpression->range, condValue);
 	builder.CreateCondBr(condValue, thenBlock, exitBlock);
+	context.ifChainFalseTargets[exitBlock] = exitBlock;
 
 	builder.SetInsertPoint(thenBlock);
 	ParseContext::SectionFlexBodyFrame &bodyFrame = activeSectionFlexBodyFrame(context);
@@ -132,27 +133,38 @@ generateIfIntrinsic(ParseContext &context, Expression *callExpr, const std::vect
 		return CodegenResult::failure();
 	}
 
+	// Every alternative nests a selection on the false edge of the previous condition, so each condition gets
+	// its own merge block and structured targets (SPIR-V) need no restructuring:
+	//   if c1: A / else if c2: B / else if c3: C  becomes  if c1 { A } else { if c2 { B } else { if c3 { C } } }
+	// Code after the chain keeps continuing in the `if`'s exit block; inner merge blocks forward to it.
 	llvm::Function *func = builder.GetInsertBlock()->getParent();
-	llvm::BasicBlock *currentBlock = builder.GetInsertBlock();
+	llvm::BasicBlock *chainExitBlock = builder.GetInsertBlock();
+	auto falseTargetEntry = context.ifChainFalseTargets.find(chainExitBlock);
+	requireCompilerInvariant(
+		falseTargetEntry != context.ifChainFalseTargets.end(), "else branch is not positioned after an if chain"
+	);
+	llvm::BasicBlock *falseTarget = falseTargetEntry->second;
 
-	// Create new exit block — if/elif bodies will jump here (skipping the else)
-	llvm::BasicBlock *newExitBlock = llvm::BasicBlock::Create(*context.llvmContext, "else_exit", func);
-
-	// Redirect all unconditional branch predecessors to the new exit block.
-	// Unconditional branches come from if/elif bodies (they should skip the else).
-	// Conditional false-path branches come from if/elif conditions (they should fall through here).
-	llvm::SmallVector<llvm::BasicBlock *, 4> uncondPreds;
-	for (llvm::BasicBlock *pred : llvm::predecessors(currentBlock)) {
-		if (llvm::isa<llvm::UncondBrInst>(pred->getTerminator())) {
-			uncondPreds.push_back(pred);
-		}
+	llvm::CondBrInst *falseBranch = nullptr;
+	for (llvm::BasicBlock *pred : llvm::predecessors(falseTarget)) {
+		auto *condBranch = llvm::dyn_cast<llvm::CondBrInst>(pred->getTerminator());
+		if (!condBranch || condBranch->getSuccessor(1) != falseTarget || condBranch == falseBranch)
+			continue;
+		requireCompilerInvariant(!falseBranch, "if chain has more than one pending false edge");
+		falseBranch = condBranch;
 	}
-	for (llvm::BasicBlock *pred : uncondPreds) {
-		pred->getTerminator()->replaceUsesOfWith(currentBlock, newExitBlock);
-	}
+	requireCompilerInvariant(falseBranch, "if chain has no pending false edge");
 
+	llvm::BasicBlock *alternativeBlock = llvm::BasicBlock::Create(
+		*context.llvmContext, kind == IntrinsicKind::ElseIf ? "elif_cond" : "else_body", func
+	);
+	falseBranch->setSuccessor(1, alternativeBlock);
+	builder.SetInsertPoint(alternativeBlock);
+
+	ParseContext::SectionFlexBodyFrame *bodyFrame = nullptr;
 	if (kind == IntrinsicKind::ElseIf) {
 		llvm::BasicBlock *elifThenBlock = llvm::BasicBlock::Create(*context.llvmContext, "elif_then", func);
+		llvm::BasicBlock *elifMergeBlock = llvm::BasicBlock::Create(*context.llvmContext, "elif_merge", func);
 
 		llvm::Value *condValue = nullptr;
 		if (!generateIntrinsicRuntimeValue(context, args[1], condValue))
@@ -161,14 +173,23 @@ generateIfIntrinsic(ParseContext &context, Expression *callExpr, const std::vect
 		if (condType.kind != DataType::Kind::Bool)
 			crashCompilerBug("else if condition must be boolean after type inference");
 		emitExecutionTrace(context, activeSectionFlexBodyFrame(context).openingExpression->range, condValue);
-		builder.CreateCondBr(condValue, elifThenBlock, newExitBlock);
+		builder.CreateCondBr(condValue, elifThenBlock, elifMergeBlock);
+
+		builder.SetInsertPoint(elifMergeBlock);
+		builder.CreateBr(falseTarget);
+		context.ifChainFalseTargets[chainExitBlock] = elifMergeBlock;
 
 		builder.SetInsertPoint(elifThenBlock);
+		// Generating a condition can grow the frame stack through lazy function codegen.
+		bodyFrame = &activeSectionFlexBodyFrame(context);
+		bodyFrame->branchBackBlock = elifMergeBlock;
+	} else {
+		context.ifChainFalseTargets.erase(chainExitBlock);
+		bodyFrame = &activeSectionFlexBodyFrame(context);
+		bodyFrame->branchBackBlock = falseTarget == chainExitBlock ? nullptr : falseTarget;
 	}
 
-	ParseContext::SectionFlexBodyFrame &bodyFrame = activeSectionFlexBodyFrame(context);
-	bodyFrame.exitBlock = newExitBlock;
-	bodyFrame.branchBackBlock = nullptr;
+	bodyFrame->exitBlock = chainExitBlock;
 
 	return nullptr;
 }
