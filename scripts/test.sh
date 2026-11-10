@@ -109,10 +109,12 @@ append_test_result() {
 }
 
 normalize_output() {
-    printf "%s" "$1" | tr -d '\r'
+    local text="${1//$'\r'/}"
+    printf '%s' "$text"
 }
 
 normalize_diagnostics() {
+    [[ -n "$1" ]] || return 0
     local reject_line_numbers="${2:-false}"
     local arguments=("$PROJECT_DIR")
     if [[ "$reject_line_numbers" == "true" ]]; then
@@ -273,6 +275,47 @@ from process_error_mode import unattended_child_processes
 with unattended_child_processes():
     process = subprocess.Popen(cmd, **popen_options)
 
+def kill_posix_tree(pid):
+    # Nested watchdogs create separate sessions. Freeze the tree before killing
+    # parents so their descendants cannot fork or be reparented during discovery.
+    tracked = set()
+    try:
+        try:
+            os.killpg(pid, signal.SIGSTOP)
+        except ProcessLookupError:
+            pass
+        while True:
+            snapshot = subprocess.run(
+                ["ps", "-axo", "pid=,ppid=,pgid="],
+                capture_output=True, text=True, check=True,
+            )
+            rows = [tuple(map(int, row.split())) for row in snapshot.stdout.splitlines()]
+            descendants = tracked | {pid} | {child for child, _, group in rows if group == pid}
+            while True:
+                children = {child for child, parent, _ in rows if parent in descendants}
+                if children <= descendants:
+                    break
+                descendants.update(children)
+            newly_found = descendants - tracked
+            if not newly_found:
+                break
+            for child in newly_found:
+                try:
+                    os.kill(child, signal.SIGSTOP)
+                except ProcessLookupError:
+                    pass
+            tracked.update(newly_found)
+    finally:
+        for child in tracked:
+            try:
+                os.kill(child, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
 try:
     stdout, stderr = process.communicate(input=standard_input, timeout=timeout_seconds)
 except subprocess.TimeoutExpired:
@@ -289,7 +332,7 @@ except subprocess.TimeoutExpired:
             if process.poll() is None:
                 process.kill()
     else:
-        os.killpg(process.pid, signal.SIGKILL)
+        kill_posix_tree(process.pid)
 
     try:
         stdout, stderr = process.communicate(timeout=5)
@@ -372,7 +415,7 @@ total_start_ms=$(now_ms)
 for test_dir in "$TESTS_DIR"/*/; do
     test_start_ms=$(now_ms)
     test_dir="${test_dir%/}"
-    test_name="$(basename "$test_dir")"
+    test_name="${test_dir##*/}"
     echo "Testing $test_name..."
     source_file="$test_dir/main.dl"
     expected_file="$test_dir/expected.txt"
@@ -620,7 +663,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     # Compare
     expected_output=""
     if [[ -f "$expected_file" ]]; then
-        expected_output=$(normalize_output "$(cat "$expected_file")")
+        expected_output=$(normalize_output "$(<"$expected_file")")
     fi
     normalized_actual_output=$(normalize_output "$actual_output")
     if [[ "$normalized_actual_output" == "$expected_output" ]]; then
@@ -640,7 +683,7 @@ run_auxiliary_test() {
     local test_name="$1"
     local required_test=false
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|incremental_compilation|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack)
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|incremental_compilation|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout)
         required_test=true ;;
     esac
     if [[ "$suite" == required && "$required_test" != true ]] ||
@@ -717,6 +760,7 @@ run_auxiliary_test "import_root_consistency" 60 python3 -B "$SCRIPT_DIR/test_imp
 run_auxiliary_test "pattern_precedence" 60 python3 -B "$SCRIPT_DIR/test_pattern_precedence.py" "$COMPILER"
 run_auxiliary_test "associative_grouping" 30 python3 -B "$SCRIPT_DIR/test_associative_grouping.py" "$COMPILER"
 run_auxiliary_test "compiler_stack" 45 python3 -B "$SCRIPT_DIR/test_compiler_stack.py" "$COMPILER"
+run_auxiliary_test "nested_timeout" 10 python3 -B "$SCRIPT_DIR/test_nested_timeout.py"
 run_auxiliary_test "completion_visibility" 15 python3 -B "$SCRIPT_DIR/test_completion_visibility.py" "$COMPILER"
 run_auxiliary_test \
     "lifecycle_codegen" 15 python3 -B "$SCRIPT_DIR/test_lifecycle_codegen.py" "$COMPILER" \
