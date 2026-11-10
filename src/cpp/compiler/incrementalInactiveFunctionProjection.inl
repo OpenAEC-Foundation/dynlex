@@ -31,6 +31,7 @@ std::optional<Json> refreshInactiveFunctionProjection(
 		if (!oldBodies.contains(path))
 			return std::nullopt;
 	Json refreshed = prior;
+	refreshed["scope_rule_bodies"] = scopeRuleBodyPaths(sections);
 	refreshed["precedence_rules"] = precedenceRulesSignature(*context.mainSection);
 	for (const auto &[path, body] : bodies.items()) {
 		if (body == oldBodies.at(path))

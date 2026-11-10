@@ -143,6 +143,10 @@ is unchanged.
 Incremental matcher keys reuse each parsed reference's candidate literal spellings and numeric literal arguments.
 The pattern tree and lexical scope are fingerprinted again for every lookup, so a newly indexed overload or a
 new declaration can invalidate the previous match.
+Resolved declaration snapshots are reused after a function-body edit when the source outside function bodies is
+unchanged and each edited body retains its resolved declaration. Scope-rule bodies and nested definitions exclude
+this reuse, since their changes can affect declarations outside the edited function. The projection reuse counter
+counts declarations carried forward without serializing them again.
 
 We discover what is a variable based on these principles:
 

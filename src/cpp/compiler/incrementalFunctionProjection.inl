@@ -35,6 +35,22 @@ Json globalResolutionIdentity(const Section &root) {
 	return Json::array({std::move(explicitDeclarations), std::move(variableDefinitions), dataDeclarations});
 }
 
+bool containsScopeRuleSection(const Section &section) {
+	for (const Section *child : section.children)
+		if (child->type == SectionType::ScopeRules || containsScopeRuleSection(*child))
+			return true;
+	return false;
+}
+
+Json scopeRuleBodyPaths(const std::map<std::string, Section *> &sections) {
+	Json paths = Json::object();
+	for (const auto &[path, section] : sections)
+		if (section->type == SectionType::Function && !section->patternDefinitions.empty() &&
+			!containsNestedDefinition(*section) && containsScopeRuleSection(*section))
+			paths[path] = true;
+	return paths;
+}
+
 Json captureAllFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
 	IncrementalMatcherCache &matcherCache, std::string_view initialMatcherTree, const Json *previous = nullptr,
@@ -44,14 +60,12 @@ Json captureAllFunctionProjection(
 	const Json *prior =
 		previous && previous->contains("all_function_projection") ? &previous->at("all_function_projection") : nullptr;
 	Json selected = Json::object();
-	Json declarations = Json::object();
-	Json allDeclarationEntries = Json::array();
-	Json ambientDeclarationEntries = Json::array();
 	Json matches = Json::object();
 	Json matchEntries = Json::object();
 	std::map<const Section *, std::string> paths;
 	std::unordered_set<const Section *> reusable;
 	std::unordered_set<const Section *> selectedSections;
+	size_t declarationSections = 0;
 	for (const auto &[path, section] : sections) {
 		paths.emplace(section, path);
 		if (section->type == SectionType::Function && !section->patternDefinitions.empty()) {
@@ -63,7 +77,61 @@ Json captureAllFunctionProjection(
 		bool reusableSection = reusableCodegenSection(*section);
 		if (reusableSection)
 			reusable.insert(section);
-		if (reusableSection || !section->patternDefinitions.empty()) {
+		if (reusableSection || !section->patternDefinitions.empty())
+			declarationSections++;
+	}
+	if (projectionWork)
+		projectionWork->setupMilliseconds += elapsedMilliseconds(phaseStart);
+	phaseStart = Clock::now();
+	Json bodyDigests = functionBodyDigests(context, sections);
+	Json currentScopeRuleBodies = scopeRuleBodyPaths(sections);
+	if (projectionWork)
+		projectionWork->bodyMilliseconds += elapsedMilliseconds(phaseStart);
+	phaseStart = Clock::now();
+	Json maskedSources = sourceProjection(
+		context, observations, selectedSections, false, false, false, prior ? &prior->at("sources") : nullptr,
+		projectionWork
+	);
+	bool reuseDeclarations = prior && selected == prior->at("inactive") &&
+									 sourceProjectionsEqual(maskedSources, prior->at("sources")) &&
+									 currentScopeRuleBodies == prior->at("scope_rule_bodies") &&
+									 reusable.size() == prior->at("function_declarations").size() &&
+									 bodyDigests.size() == prior->at("bodies").size();
+	size_t changedDeclarations = 0;
+	if (reuseDeclarations) {
+		for (const auto &[path, section] : sections) {
+			if (reusable.contains(section) && !prior->at("function_declarations").contains(path)) {
+				reuseDeclarations = false;
+				break;
+			}
+			if (!bodyDigests.contains(path))
+				continue;
+			if (!prior->at("bodies").contains(path)) {
+				reuseDeclarations = false;
+				break;
+			}
+			if (bodyDigests.at(path) == prior->at("bodies").at(path))
+				continue;
+			if (!reusable.contains(section) || currentScopeRuleBodies.contains(path) ||
+				sectionDeclaration(*section) != prior->at("function_declarations").at(path)) {
+				reuseDeclarations = false;
+				break;
+			}
+			changedDeclarations++;
+		}
+	}
+	Json declarations = Json::object();
+	Json allDeclarationEntries = Json::array();
+	Json ambientDeclarationEntries = Json::array();
+	if (reuseDeclarations) {
+		declarations = prior->at("function_declarations");
+		if (projectionWork)
+			projectionWork->declarationSectionsReused += declarationSections - changedDeclarations;
+	} else {
+		for (const auto &[path, section] : sections) {
+			bool reusableSection = reusable.contains(section);
+			if (!reusableSection && section->patternDefinitions.empty())
+				continue;
 			Json entry = sectionDeclaration(*section);
 			if (reusableSection)
 				declarations[path] = entry;
@@ -78,32 +146,24 @@ Json captureAllFunctionProjection(
 			}
 		}
 	}
-	if (projectionWork)
-		projectionWork->setupMilliseconds += elapsedMilliseconds(phaseStart);
-	phaseStart = Clock::now();
-	Json bodyDigests = functionBodyDigests(context, sections);
-	if (projectionWork)
-		projectionWork->bodyMilliseconds += elapsedMilliseconds(phaseStart);
-	phaseStart = Clock::now();
 	Json projection{
 		{"initial_matcher_tree", initialMatcherTree},
 		{"final_matcher_tree", matcherTreeSignature(context)},
 		{"precedence_signature", matcherCache.precedenceSignature()},
 		{"precedence_rules", precedenceRulesSignature(*context.mainSection)},
 		{"inactive", std::move(selected)},
-		{"declarations", digest(allDeclarationEntries.dump())},
+		{"declarations", reuseDeclarations ? prior->at("declarations") : Json(digest(allDeclarationEntries.dump()))},
 		{"global_resolution", globalResolutionIdentity(*context.mainSection)},
-		{"sources", sourceProjection(
-						context, observations, selectedSections, false, false, false, prior ? &prior->at("sources") : nullptr,
-						projectionWork
-					)}
+		{"sources", std::move(maskedSources)},
+		{"scope_rule_bodies", std::move(currentScopeRuleBodies)}
 	};
 	if (projectionWork)
 		projectionWork->inactiveMilliseconds += elapsedMilliseconds(phaseStart);
 	phaseStart = Clock::now();
 	projection["bodies"] = std::move(bodyDigests);
 	projection["function_declarations"] = std::move(declarations);
-	projection["ambient_declarations"] = digest(ambientDeclarationEntries.dump());
+	projection["ambient_declarations"] =
+		reuseDeclarations ? prior->at("ambient_declarations") : Json(digest(ambientDeclarationEntries.dump()));
 	if (projectionWork)
 		projectionWork->declarationMilliseconds += elapsedMilliseconds(phaseStart);
 	phaseStart = Clock::now();

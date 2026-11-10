@@ -931,6 +931,7 @@ bool compileIncrementally(
 							  {"projection_global_matches_reused", statistics.sourceProjectionWork.globalMatchesReused},
 							  {"projection_top_level_sections_reused", statistics.topLevelProjectionSectionsReused},
 							  {"projection_match_entries_reused", statistics.sourceProjectionWork.matchEntriesReused},
+							  {"projection_declaration_sections_reused", statistics.sourceProjectionWork.declarationSectionsReused},
 							  {"projection_inactive_ms", statistics.sourceProjectionWork.inactiveMilliseconds},
 							  {"projection_ambient_ms", statistics.sourceProjectionWork.ambientMilliseconds},
 							  {"projection_compatibility_ms", statistics.sourceProjectionWork.compatibilityMilliseconds},

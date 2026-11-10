@@ -93,6 +93,7 @@ for name, samples in results.items():
                          "matcher_key_ms", "matcher_restore_ms", "matcher_snapshot_ms",
                          "projection_ms", "projection_setup_ms", "projection_body_ms",
                          "projection_declarations_ms", "projection_matches_ms",
+                         "projection_declaration_sections_reused",
                          "projection_inactive_ms", "projection_ambient_ms",
                          "preinference_ms", "inference_ms", "snapshot_ms",
                          "dependency_graph_ms", "codegen_and_link_ms",

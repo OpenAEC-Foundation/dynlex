@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from test_incremental_dependency_graph import check_cross_file_typed_overload, check_deferred_match_key_replay, check_precedence_match_key_replay, check_folded_value_remains_active, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_reused_ir_dependency_graph_variants, check_runtime_pure_value_summary, check_top_level_projection_reuse
+from test_incremental_dependency_graph import check_cross_file_typed_overload, check_deferred_match_key_replay, check_precedence_match_key_replay, check_folded_value_remains_active, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_resolved_declaration_snapshot_reuse, check_reused_ir_dependency_graph_variants, check_runtime_pure_value_summary, check_top_level_projection_reuse
 from test_incremental_program_cache import check_program_payloads
 
 project = Path(sys.argv[1]).resolve()
@@ -463,6 +463,7 @@ function left times right:
     check_cross_file_typed_overload(root, build)
     check_reused_ir_dependency_graph_variants(root, build)
     check_leaf_dependency_cascade(root, build)
+    check_resolved_declaration_snapshot_reuse(root, build)
 
     specific_main = root / "specific_addition.dl"
     specific_base = ('integer means: @intrinsic("type", "int")\n'

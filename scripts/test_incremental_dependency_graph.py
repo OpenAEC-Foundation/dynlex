@@ -168,6 +168,30 @@ def check_leaf_dependency_cascade(root, build):
         "cached inference reused a specialization whose LLVM function was removed"
 
 
+def check_resolved_declaration_snapshot_reuse(root, build):
+    main = root / "declaration_snapshot_reuse.dl"
+    source = ('to active:\n'
+              '    @intrinsic("discard", 1)\n'
+              'to independent:\n'
+              '    @intrinsic("discard", 3)\n'
+              'active\nindependent\n')
+    main.write_text(source)
+    build(entry=main)
+    prior = projection_for(root / "cache", main)
+    main.write_text(source.replace('"discard", 1', '"discard", 2'))
+    edited = build(entry=main)
+    current = projection_for(root / "cache", main)
+    assert edited[0]["projection_declaration_sections_reused"] >= 1, \
+        "an active body edit reserialized an independent resolved declaration"
+    assert current["declarations"] == prior["declarations"]
+    assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text() + 'to addition: @intrinsic("discard", 4)\n')
+    added = build(entry=main)
+    assert added[0]["projection_declaration_sections_reused"] == 0, \
+        "a new declaration reused the old whole-program declaration snapshot"
+    assert added[1:] == build(False, entry=main)[1:]
+
+
 def check_inactive_projection_refresh(root, build):
     main = root / "inactive_projection_refresh.dl"
     integer = 'integer means: @intrinsic("type", "int")\n'
@@ -455,6 +479,8 @@ def check_implicit_parameter_classification_cascade(root, build):
     main.write_text('to use thing:\n' + literal_body + caller)
     edited = build(entry=main)
     after = projection_for(root / "cache", main)
+    assert edited[0]["projection_declaration_sections_reused"] == 0, \
+        "implicit parameter reclassification reused a stale declaration snapshot"
     assert edited[0]["variable_like_count_references_scanned"] >= 2
     assert before["declarations"] != after["declarations"], \
         "implicit parameter removal kept the old declaration dependency"
