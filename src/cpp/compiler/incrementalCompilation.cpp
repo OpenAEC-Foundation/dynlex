@@ -639,6 +639,18 @@ bool compileIncrementally(
 					previous ? &*previous : nullptr, &statistics.sourceProjectionWork,
 					previous && compatibleObservations(*previous, recording->observations, context)
 				);
+			if (compiled) {
+				const Json *priorLiteralProjection =
+					previous && compatibleObservations(*previous, recording->observations, context) &&
+							initialMatcherTree == previous->at("all_function_projection")
+													  .at("initial_matcher_tree")
+													  .get_ref<const std::string &>()
+						? &previous->at("all_function_projection")
+						: nullptr;
+				refreshReferenceLiteralIndex(
+					resolvedFunctionProjection, context, recording->observations, sections, priorLiteralProjection
+				);
+			}
 			statistics.projectionMilliseconds = elapsedMilliseconds(stageStart);
 			std::map<const Section *, std::string> sectionPaths;
 			for (const auto &[path, section] : sections)

@@ -19,31 +19,17 @@ static void addMatcherStartLiterals(std::string_view text, std::unordered_set<st
 	}
 }
 
-static std::unordered_set<std::string_view> referenceStartLiterals(const std::map<std::string, Section *> &sections) {
-	std::unordered_set<std::string_view> literals;
-	std::unordered_set<const CodeLine *> lines;
-	for (const auto &[_, section] : sections)
-		for (const PatternReference *reference : section->patternReferences) {
-			if (lines.insert(reference->range().line).second)
-				addMatcherStartLiterals(reference->range().line->fullText, literals);
-			addMatcherStartLiterals(reference->pattern.text, literals);
-			if (reference->expression)
-				for (const Expression *argument : reference->expression->arguments)
-					if (argument && argument->range.line && lines.insert(argument->range.line).second)
-						addMatcherStartLiterals(argument->range.line->fullText, literals);
-		}
-	return literals;
-}
+#include "incrementalMatcherLiteralIndex.inl"
 
 static bool inactiveDefinitionCanChangeAnotherMatcherKey(
-	const Section &candidate, const std::unordered_set<std::string_view> &referenceLiterals
+	const Section &candidate, const Json &priorLiterals, const std::unordered_set<std::string_view> &changedLiterals
 ) {
 	for (const PatternDefinition *definition : candidate.patternDefinitions) {
 		if (definition->patternElements.empty())
 			return true;
 		const DefinitionPatternElement &start = definition->patternElements.front();
 		if (start.type == PatternElement::Type::Variable || start.text.empty() || !start.alternatives.empty() ||
-			referenceLiterals.contains(start.text))
+			priorLiterals.contains(llvm::toHex(llvm::StringRef(start.text), true)) || changedLiterals.contains(start.text))
 			return true;
 	}
 	return false;
@@ -85,15 +71,28 @@ std::vector<Section *> selectInactiveBodiesForResolutionReuse(
 	}
 	if (candidates.empty() || possibleSkippedReferences * 20 < totalReferences || selected != prior.at("inactive"))
 		return {};
+	std::set<std::string> changedSources = changedReferenceLiteralSources(context, observations, prior);
+	ReferenceLiteralsBySource changedBySource = referenceStartLiteralsBySource(sections, changedSources);
+	std::unordered_set<std::string_view> changedLiterals;
+	for (const auto &[_, literals] : changedBySource)
+		changedLiterals.insert(literals.begin(), literals.end());
+	std::erase_if(candidates, [&](const Candidate &candidate) {
+		return inactiveDefinitionCanChangeAnotherMatcherKey(
+			*candidate.section, prior.at("reference_literals_global"), changedLiterals
+		);
+	});
+	size_t safeReferences = 0;
+	for (const Candidate &candidate : candidates)
+		safeReferences += candidate.entries->size();
+	if (safeReferences * 20 < totalReferences)
+		return {};
 	Json sources = sourceProjection(context, observations, selectedSections, false, false, false, &prior.at("sources"));
 	if (!sourceProjectionsEqual(sources, prior.at("sources")))
 		return {};
 	Json bodies = functionBodyDigests(context, sections);
-	std::unordered_set<std::string_view> referenceLiterals = referenceStartLiterals(sections);
 	std::vector<Section *> result;
 	for (const Candidate &candidate : candidates) {
-		if (!bodies.contains(candidate.path) || bodies.at(candidate.path) != prior.at("bodies").at(candidate.path) ||
-			inactiveDefinitionCanChangeAnotherMatcherKey(*candidate.section, referenceLiterals))
+		if (!bodies.contains(candidate.path) || bodies.at(candidate.path) != prior.at("bodies").at(candidate.path))
 			continue;
 		bool available = true;
 		for (const Json &entry : *candidate.entries) {

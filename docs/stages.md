@@ -928,6 +928,13 @@ skipped work is at least one twentieth of the program's references, so its
 selection work does not dominate small edits in larger programs. Pattern-tree
 keys combine active definition contributions independent of insertion order;
 removing and readding the same definition restores its earlier key.
+The cache records matcher input literals as hex-encoded byte sequences by
+source file. When the initial pattern tree is unchanged, an edited build scans
+references from changed files and carries the unchanged files' literal sets
+forward. It considers both the previous and current literals when selecting
+inactive bodies, then writes the current sets for the next build. A changed
+initial tree rebuilds the index from current references.
+`inactive_body_selection_ms` measures this decision.
 Unchanged references replay saved precedence-pass keys when their first-pass
 keys and precedence families still match. If the final indexed tree changed,
 the cache compares its wildcard and starting-literal mutations against each
