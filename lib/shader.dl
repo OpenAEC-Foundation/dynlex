@@ -17,6 +17,8 @@ function set the fragment color with a red channel of {a value:red}, a green cha
 
 # Vertex shader I/O
 
+[the|] vertex input named {a value:name} at location {a value:location} of type {type:kind} means: @intrinsic("shader vertex input", name, location, kind)
+
 the vertex position means: @intrinsic("shader input", "Position")
 the vertex x means: the element at 0 in @intrinsic("shader input", "Position")
 the vertex y means: the element at 1 in @intrinsic("shader input", "Position")

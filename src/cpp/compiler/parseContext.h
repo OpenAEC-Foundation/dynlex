@@ -48,6 +48,12 @@ struct ParseContext {
 		std::uint32_t binding = 0;
 		Range range;
 	};
+	struct ShaderVertexInput {
+		std::string name;
+		std::uint32_t location = 0;
+		DataType type;
+		Range range;
+	};
 
 	struct SectionFlexBodyFrame {
 		Section *definitionSection = nullptr;
@@ -229,6 +235,7 @@ struct ParseContext {
 
 	// Shader uniforms used by the selected stage, with explicit descriptor-set-zero bindings.
 	std::vector<ShaderUniform> shaderUniforms;
+	std::vector<ShaderVertexInput> shaderVertexInputs;
 	std::vector<std::string> shaderInterpolantNames;
 
 	// imported source files by path (also prevents circular imports)
@@ -292,6 +299,7 @@ struct ParseContext {
 	void printDiagnostics();
 	PatternMatch *match(PatternReference *reference, MatchOptions options = {}, MatchDependencies *dependencies = nullptr);
 	void registerShaderUniform(std::string uniformName, std::uint32_t binding, Range range);
+	void registerShaderVertexInput(std::string name, std::uint32_t location, DataType type, Range range);
 	void registerShaderInterpolantName(const std::string &interpolantName);
 	VariableReference *createVariableReference(Range range, const std::string &name);
 	std::shared_ptr<ExpressionAllocationStats> expressionAllocationStats = std::make_shared<ExpressionAllocationStats>();

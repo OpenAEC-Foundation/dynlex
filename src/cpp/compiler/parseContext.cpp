@@ -145,6 +145,10 @@ void ParseContext::registerShaderUniform(std::string uniformName, std::uint32_t 
 	shaderUniforms.push_back({std::move(uniformName), binding, std::move(range)});
 }
 
+void ParseContext::registerShaderVertexInput(std::string name, std::uint32_t location, DataType type, Range range) {
+	shaderVertexInputs.push_back({std::move(name), location, std::move(type), std::move(range)});
+}
+
 void ParseContext::registerShaderInterpolantName(const std::string &interpolantName) {
 	if (interpolantName.empty())
 		return;

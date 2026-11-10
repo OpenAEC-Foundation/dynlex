@@ -439,8 +439,9 @@ CodegenResult generateIntrinsicCode(
 		return generateConstructIntrinsic(context, args, resultType);
 	if (kind == IntrinsicKind::Property)
 		return generatePropertyIntrinsic(context, callExpr, args);
-	if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpolantInput)
-		return generateShaderInputIntrinsic(context, args, kind);
+	if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderVertexInput ||
+		kind == IntrinsicKind::ShaderInterpolantInput)
+		return generateShaderInputIntrinsic(context, callExpr, args, kind);
 	if (kind == IntrinsicKind::ShaderUniform)
 		return generateShaderUniformIntrinsic(context, callExpr, args);
 	if (kind == IntrinsicKind::ShaderOutput || kind == IntrinsicKind::ShaderInterpolantOutput)

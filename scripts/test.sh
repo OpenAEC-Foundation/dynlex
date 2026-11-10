@@ -733,6 +733,7 @@ run_auxiliary_test \
 run_auxiliary_test "process_windows_quoting" 10 python3 -B "$SCRIPT_DIR/test_process_windows_quoting.py"
 run_auxiliary_test "command_line_argument_targets" 10 python3 -B "$SCRIPT_DIR/test_command_line_argument_targets.py" "$COMPILER"
 run_auxiliary_test "shader_intrinsic_targets" 20 python3 -B "$SCRIPT_DIR/test_shader_intrinsic_targets.py" "$COMPILER"
+run_auxiliary_test "shader_vertex_inputs" 30 python3 -B "$SCRIPT_DIR/test_shader_vertex_inputs.py" "$COMPILER"
 run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"
 run_auxiliary_test "native_platform_targets" 30 python3 -B "$SCRIPT_DIR/test_native_platform_targets.py" "$PROJECT_DIR" "$COMPILER"

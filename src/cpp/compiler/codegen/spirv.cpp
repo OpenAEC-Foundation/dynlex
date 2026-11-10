@@ -29,12 +29,14 @@ static constexpr uint32_t spvOpName = 5;
 static constexpr uint32_t spvOpVariable = 59;
 static constexpr uint32_t spvOpFunction = 54;
 static constexpr uint32_t spvOpTypeInt = 21;
+static constexpr uint32_t spvOpTypeVector = 23;
 static constexpr uint32_t spvOpTypePointer = 32;
 static constexpr uint32_t spvOpTypeStruct = 30;
 static constexpr uint32_t spvOpConstant = 43;
 static constexpr uint32_t spvOpLoad = 61;
 static constexpr uint32_t spvOpStore = 62;
 static constexpr uint32_t spvOpAccessChain = 65;
+static constexpr uint32_t spvOpBitcast = 124;
 
 // SPIR-V constants
 static constexpr uint32_t spvCapabilityLinkage = 5;
@@ -50,15 +52,25 @@ static constexpr uint32_t spvStorageClassInput = 1;
 static constexpr uint32_t spvStorageClassUniform = 2;
 static constexpr uint32_t spvStorageClassOutput = 3;
 
-std::string shaderInterpolantGlobalName(std::string_view interpolantName) {
+static std::string namedShaderGlobal(std::string_view prefix, std::string_view name) {
 	static constexpr char hexadecimalDigits[] = "0123456789abcdef";
-	std::string globalName = "dynlex_interpolant_";
-	globalName.reserve(globalName.size() + interpolantName.size() * 2);
-	for (unsigned char byte : interpolantName) {
+	std::string globalName(prefix);
+	globalName.reserve(globalName.size() + name.size() * 2);
+	for (unsigned char byte : name) {
 		globalName.push_back(hexadecimalDigits[byte >> 4]);
 		globalName.push_back(hexadecimalDigits[byte & 0x0f]);
 	}
 	return globalName;
+}
+
+std::string shaderInterpolantGlobalName(std::string_view name) { return namedShaderGlobal("dynlex_interpolant_", name); }
+
+std::string shaderVertexInputGlobalName(std::string_view name, std::uint32_t location, const DataType &type) {
+	const DataType &scalar = type.kind == DataType::Kind::Vector ? type.aggregateElementType() : type;
+	const int width = type.kind == DataType::Kind::Vector ? type.arraySize : 1;
+	return namedShaderGlobal("dynlex_vertex_", name) + "_" + std::to_string(location) + "_" +
+		   std::to_string(static_cast<int>(scalar.kind)) + "_" + std::to_string(scalar.numericSize) + "_" +
+		   std::to_string(width);
 }
 
 static llvm::Constant *defineVectorConstant(llvm::Constant *constant) {
@@ -204,15 +216,18 @@ static std::vector<uint32_t> encodeSpvString(const std::string &str) {
 
 // Decoration info for a shader I/O variable
 struct ShaderIoVar {
-	std::string name;		   // LLVM global name (e.g. "gl_FragCoord", "in_Position", "ubo_time")
-	uint32_t id = 0;		   // SPIR-V result ID (found by scanning OpName)
-	uint32_t structTypeId = 0; // struct type ID (for UBO vars, found via OpTypePointer → OpTypeStruct)
-	uint32_t storageClass;	   // target storage class (Input, Output, or Uniform)
-	bool isBuiltIn;			   // true = BuiltIn decoration, false = Location decoration
-	uint32_t decorationValue;  // BuiltIn ID or Location number
-	bool isUBO = false;		   // true = Uniform block (needs Block/Binding/DescriptorSet/Offset decorations)
-	uint32_t binding = 0;	   // UBO binding point
+	std::string name;			   // LLVM global name (e.g. "gl_FragCoord", "in_Position", "ubo_time")
+	uint32_t id = 0;			   // SPIR-V result ID (found by scanning OpName)
+	uint32_t structTypeId = 0;	   // struct type ID (for UBO vars, found via OpTypePointer → OpTypeStruct)
+	uint32_t storageClass;		   // target storage class (Input, Output, or Uniform)
+	bool isBuiltIn;				   // true = BuiltIn decoration, false = Location decoration
+	uint32_t decorationValue;	   // BuiltIn ID or Location number
+	bool isUBO = false;			   // true = Uniform block (needs Block/Binding/DescriptorSet/Offset decorations)
+	uint32_t binding = 0;		   // UBO binding point
+	uint32_t signedComponents = 0; // Signed input scalar (1) or vector width (2..4).
 };
+
+#include "spirvVertexInputs.inl"
 
 // Post-process SPIR-V binary to convert exported functions to shader entry points.
 // The LLVM SPIR-V backend emits functions with Export linkage instead of entry points.
@@ -376,6 +391,8 @@ static bool patchShaderBinary(
 
 		pos += wc;
 	}
+
+	patchSignedVertexInputs(output, vars);
 
 	// Find insertion point for decorations (before first OpType instruction)
 	size_t decorInsertPos = output.size();
@@ -616,12 +633,46 @@ static bool collectShaderUniforms(ParseContext &context, std::vector<ParseContex
 	return true;
 }
 
+static bool collectShaderVertexInputs(ParseContext &context, std::vector<ParseContext::ShaderVertexInput> &inputs) {
+	for (const auto &input : context.shaderVertexInputs) {
+		bool duplicate = false;
+		for (const auto &previous : inputs) {
+			if (previous.name == input.name) {
+				if (previous.location != input.location || previous.type != input.type) {
+					context.addDiagnostic(Diagnostic(
+						context, Diagnostic::Level::Error, "shader vertex input inconsistent", input.range, "name", input.name
+					));
+					return false;
+				}
+				duplicate = true;
+				break;
+			}
+			if (previous.location == input.location) {
+				context.addDiagnostic(Diagnostic(
+					context, Diagnostic::Level::Error, "shader vertex input duplicate", input.range, "location",
+					std::to_string(input.location), "first", previous.name, "second", input.name
+				));
+				return false;
+			}
+		}
+		if (!duplicate)
+			inputs.push_back(input);
+	}
+	std::sort(inputs.begin(), inputs.end(), [](const auto &left, const auto &right) {
+		return left.location < right.location;
+	});
+	return true;
+}
+
 bool emitSPIRVModule(ParseContext &context) {
 	std::string outputPath = context.options.outputPath;
 	if (outputPath.empty())
 		outputPath = context.options.inputPath + ".spv";
 	std::vector<ParseContext::ShaderUniform> shaderUniforms;
 	if (!collectShaderUniforms(context, shaderUniforms))
+		return false;
+	std::vector<ParseContext::ShaderVertexInput> vertexInputs;
+	if (!collectShaderVertexInputs(context, vertexInputs))
 		return false;
 
 	requireCompilerInvariant(context.targetMachine != nullptr, "SPIR-V emission requires an initialized target machine");
@@ -665,7 +716,15 @@ bool emitSPIRVModule(ParseContext &context) {
 
 	std::vector<ShaderIoVar> ioVars;
 	if (isVertex) {
-		ioVars.push_back(makeIoVar("in_Position", spvStorageClassInput, false, 0));
+		for (const auto &input : vertexInputs) {
+			auto variable = makeIoVar(
+				shaderVertexInputGlobalName(input.name, input.location, input.type), spvStorageClassInput, false, input.location
+			);
+			DataType scalar = input.type.kind == DataType::Kind::Vector ? input.type.aggregateElementType() : input.type;
+			if (scalar.kind == DataType::Kind::Int)
+				variable.signedComponents = input.type.kind == DataType::Kind::Vector ? input.type.arraySize : 1;
+			ioVars.push_back(std::move(variable));
+		}
 		ioVars.push_back(makeIoVar("gl_Position", spvStorageClassOutput, true, 0));
 	} else if (!isCompute) {
 		ioVars.push_back(makeIoVar("gl_FragCoord", spvStorageClassInput, true, 15));

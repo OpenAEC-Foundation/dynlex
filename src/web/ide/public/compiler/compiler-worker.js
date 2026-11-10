@@ -179,16 +179,16 @@ function compileShaderStage(source, version, stage, rendererBackend) {
     [],
     []
   );
-  const uniformPayload = parseCompilerJson(
-    module.ccall("dynlex_web_get_shader_uniforms_json", "string", [], []),
-    "shader uniform"
+  const reflection = parseCompilerJson(
+    module.ccall("dynlex_web_get_shader_reflection_json", "string", [], []),
+    "shader"
   );
 
   if (status === 0 && (typeof spirvBase64 !== "string" || spirvBase64.length === 0)) {
     throw new Error("Successful shader compilation returned no SPIR-V artifact");
   }
-  if (!Array.isArray(uniformPayload.uniforms)) {
-    throw new Error("Successful shader compilation returned invalid uniform reflection");
+  if (!Array.isArray(reflection.uniforms) || !Array.isArray(reflection.vertexInputs)) {
+    throw new Error("Successful shader compilation returned invalid reflection");
   }
 
   const spirvBytes = status === 0 ? decodeBase64ToBytes(spirvBase64) : null;
@@ -205,7 +205,8 @@ function compileShaderStage(source, version, stage, rendererBackend) {
     ...feedback,
     compilationMilliseconds,
     sources,
-    uniforms: status === 0 ? uniformPayload.uniforms : []
+    uniforms: status === 0 ? reflection.uniforms : [],
+    vertexInputs: status === 0 ? reflection.vertexInputs : []
   };
 }
 

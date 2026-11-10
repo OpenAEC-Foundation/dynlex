@@ -127,13 +127,15 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 		llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
 		bool isVertex = context.options.shaderStage == ParseContext::ShaderStage::Vertex;
 
-		// Input global (address space 7 = SPIR-V Input storage class)
-		std::string inputName = isVertex ? "in_Position" : "gl_FragCoord";
-		shaderInputGlobal = new llvm::GlobalVariable(
-			*context.llvmModule, vec4Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, inputName, nullptr,
-			llvm::GlobalValue::NotThreadLocal, spirvInputAddressSpace
-		);
-		shaderInputGlobal->setInitializer(llvm::Constant::getNullValue(vec4Ty));
+		// Vertex inputs are declared when their typed intrinsic is used. A vertex
+		// shader is not required to consume a conventional position at location zero.
+		if (!isVertex) {
+			shaderInputGlobal = new llvm::GlobalVariable(
+				*context.llvmModule, vec4Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, "gl_FragCoord", nullptr,
+				llvm::GlobalValue::NotThreadLocal, spirvInputAddressSpace
+			);
+			shaderInputGlobal->setInitializer(llvm::Constant::getNullValue(vec4Ty));
+		}
 
 		// Output global (address space 8 = SPIR-V Output storage class)
 		std::string outputName = isVertex ? "gl_Position" : "gl_FragColor";
@@ -265,7 +267,8 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 		llvm::errs() << "\n=== Invalid LLVM IR (for debugging) ===\n";
 		context.llvmModule->print(llvm::errs(), nullptr);
 		llvm::errs() << "=== End Invalid LLVM IR ===\n\n";
-		context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "llvm verification failed", Range(), "error", error)
+		context.addDiagnostic(
+			Diagnostic(context, Diagnostic::Level::Error, "llvm verification failed", Range(), "error", error)
 		);
 		return false;
 	}

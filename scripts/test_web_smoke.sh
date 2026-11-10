@@ -11,3 +11,4 @@ fi
 
 "$SCRIPT_DIR/build_web.sh"
 node "$PROJECT_DIR/tests/web/smoke.mjs" "$PROJECT_DIR/build-web"
+node "$PROJECT_DIR/tests/web/shader_vertex_inputs.mjs" "$PROJECT_DIR/build-web"

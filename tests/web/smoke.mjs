@@ -327,7 +327,7 @@ const shaderSpirvBase64 = moduleInstance.ccall(
   [],
   []
 );
-const shaderUniformsJson = moduleInstance.ccall("dynlex_web_get_shader_uniforms_json", "string", [], []);
+const shaderReflectionJson = moduleInstance.ccall("dynlex_web_get_shader_reflection_json", "string", [], []);
 if (shaderStatus !== 0) {
   throw new Error(`Shader compile status ${shaderStatus}. Diagnostics: ${shaderDiagnosticsJson}`);
 }
@@ -335,16 +335,16 @@ const shaderWgsl = translator.translate(Uint8Array.from(Buffer.from(shaderSpirvB
 if (!shaderWgsl.includes("@fragment") || !shaderWgsl.includes("fn main")) {
   throw new Error(`Expected WebGPU fragment source, got: ${shaderWgsl}`);
 }
-const shaderUniforms = JSON.parse(shaderUniformsJson);
+const shaderUniforms = JSON.parse(shaderReflectionJson);
 if (!Array.isArray(shaderUniforms.uniforms) || shaderUniforms.uniforms.length !== 1) {
-  throw new Error(`Expected one reflected shader uniform, got: ${shaderUniformsJson}`);
+  throw new Error(`Expected one reflected shader uniform, got: ${shaderReflectionJson}`);
 }
 if (
   shaderUniforms.uniforms[0].name !== "time"
   || shaderUniforms.uniforms[0].group !== 0
   || shaderUniforms.uniforms[0].binding !== 0
 ) {
-  throw new Error(`Unexpected reflected shader uniform: ${shaderUniformsJson}`);
+  throw new Error(`Unexpected reflected shader uniform: ${shaderReflectionJson}`);
 }
 
 moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [

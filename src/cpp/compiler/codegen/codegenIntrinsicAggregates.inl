@@ -4,8 +4,7 @@ generateStaticReferenceIntrinsic(ParseContext &context, Expression *callExpr, co
 		return cached->second;
 	DataType valueType = finalizedExpressionType(context, args[1]);
 	auto *global = new llvm::GlobalVariable(
-		*context.llvmModule, getLLVMType(context, valueType), true, llvm::GlobalValue::InternalLinkage,
-		nullptr, "section.data"
+		*context.llvmModule, getLLVMType(context, valueType), true, llvm::GlobalValue::InternalLinkage, nullptr, "section.data"
 	);
 	global->setAlignment(getLLVMABIAlignment(context, valueType));
 	context.staticLLVMValues[callExpr] = global;
@@ -183,18 +182,48 @@ generatePropertyIntrinsic(ParseContext &context, Expression *callExpr, const std
 	return fieldValue;
 }
 
-[[gnu::noinline]] static CodegenResult
-generateShaderInputIntrinsic(ParseContext &context, const std::vector<Expression *> &args, IntrinsicKind kind) {
+static CodegenResult
+generateShaderVertexInput(ParseContext &context, Expression *callExpr, const std::string &name, std::uint32_t location) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	DataType type = finalizedExpressionType(context, callExpr);
+	context.registerShaderVertexInput(name, location, type, intrinsicDiagnosticRange(context, callExpr));
+	std::string globalName = shaderVertexInputGlobalName(name, location, type);
+	llvm::Type *valueType = getLLVMType(context, type);
+	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
+	if (!global) {
+		constexpr unsigned spirvInputAddressSpace = 7;
+		global = new llvm::GlobalVariable(
+			*context.llvmModule, valueType, false, llvm::GlobalValue::ExternalLinkage, llvm::Constant::getNullValue(valueType),
+			globalName, nullptr, llvm::GlobalValue::NotThreadLocal, spirvInputAddressSpace
+		);
+	}
+	requireCompilerInvariant(global->getValueType() == valueType, "vertex input symbol has a conflicting LLVM type");
+	llvm::LoadInst *input = builder.CreateLoad(valueType, global, name);
+	input->setVolatile(true);
+	return input;
+}
+
+[[gnu::noinline]] static CodegenResult generateShaderInputIntrinsic(
+	ParseContext &context, Expression *callExpr, const std::vector<Expression *> &args, IntrinsicKind kind
+) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	std::string inputName = getCompileTimeString(context, args[1]);
+	if (kind == IntrinsicKind::ShaderVertexInput) {
+		auto location = getCompileTimeIntegerValue(resolveStoredCompileTimeValue(args[2], context.flexBindingFrames));
+		requireCompilerInvariant(
+			location && *location >= 0 && static_cast<std::uint64_t>(*location) <= UINT32_MAX,
+			"vertex input reached codegen without its validated location"
+		);
+		return generateShaderVertexInput(context, callExpr, inputName, static_cast<std::uint32_t>(*location));
+	}
+	if (kind == IntrinsicKind::ShaderInput && inputName == "Position")
+		return generateShaderVertexInput(context, callExpr, inputName, 0);
 	std::string globalName;
 	if (kind == IntrinsicKind::ShaderInterpolantInput) {
 		globalName = shaderInterpolantGlobalName(inputName);
 		context.registerShaderInterpolantName(inputName);
 	} else if (inputName == "FragCoord") {
 		globalName = "gl_FragCoord";
-	} else if (inputName == "Position") {
-		globalName = "in_Position";
 	} else {
 		crashCompilerBug("unknown shader input reached codegen after type inference");
 	}

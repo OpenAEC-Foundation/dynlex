@@ -1,16 +1,18 @@
 static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind, InferenceContext &context) {
-	const bool hasNamedShaderResource = kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpolantInput ||
+	const bool hasNamedShaderResource = kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderVertexInput ||
+										kind == IntrinsicKind::ShaderInterpolantInput ||
 										kind == IntrinsicKind::ShaderInterpolantOutput || kind == IntrinsicKind::ShaderUniform;
 	if (hasNamedShaderResource) {
 		CompileTimeValue nameValue = context.lookupExpressionValue(expr->arguments[1]);
 		const std::string *name = std::get_if<std::string>(&nameValue);
 		if (!name || ((kind == IntrinsicKind::ShaderInterpolantInput || kind == IntrinsicKind::ShaderInterpolantOutput ||
-					   kind == IntrinsicKind::ShaderUniform) &&
+					   kind == IntrinsicKind::ShaderUniform || kind == IntrinsicKind::ShaderVertexInput) &&
 					  name->empty())) {
-			std::string_view diagnosticKey = kind == IntrinsicKind::ShaderInput ? "shader input requires string literal"
-											 : kind == IntrinsicKind::ShaderUniform
-												 ? "shader uniform requires string literal"
-												 : "shader interpolant requires string literal";
+			std::string_view diagnosticKey =
+				kind == IntrinsicKind::ShaderInput		   ? "shader input requires string literal"
+				: kind == IntrinsicKind::ShaderVertexInput ? "shader vertex input requires string literal"
+				: kind == IntrinsicKind::ShaderUniform	   ? "shader uniform requires string literal"
+														   : "shader interpolant requires string literal";
 			context.fail(
 				Diagnostic(context.parseContext, Diagnostic::Level::Error, diagnosticKey, expr->arguments[1]->range), 0, false
 			);
@@ -50,6 +52,32 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 				);
 				context.setTypeFailure(detail);
 				context.fail(buildFailureDetailDiagnostic(expr->arguments[2]->range, detail), 0);
+				return false;
+			}
+		}
+		if (kind == IntrinsicKind::ShaderVertexInput) {
+			auto location = getCompileTimeIntegerValue(context.lookupExpressionValue(expr->arguments[2]));
+			if (!location || *location < 0 || static_cast<std::uint64_t>(*location) > UINT32_MAX) {
+				failWithDetail("shader vertex input location invalid");
+				return false;
+			}
+			auto reference = getCompileTimeTypeReferenceValue(context.lookupExpressionValue(expr->arguments[3]));
+			DataType valueType = reference ? reference->type.toReferencedType() : DataType{};
+			DataType scalar = valueType;
+			bool shape = !valueType.isPointer();
+			if (valueType.kind == DataType::Kind::Vector) {
+				shape = shape && valueType.arraySize >= 2 && valueType.arraySize <= 4;
+				scalar = valueType.aggregateElementType();
+			}
+			bool numeric = scalar.kind == DataType::Kind::Float || scalar.kind == DataType::Kind::Int ||
+						   scalar.kind == DataType::Kind::UInt;
+			if (!reference || !shape || !numeric || scalar.isPointer() || scalar.numericSize != 4) {
+				failWithDetail("shader vertex input type invalid");
+				return false;
+			}
+			if (context.parseContext.options.emitSPIRV &&
+				context.parseContext.options.shaderStage != ParseContext::ShaderStage::Vertex) {
+				failWithDetail("shader vertex input unavailable");
 				return false;
 			}
 		}

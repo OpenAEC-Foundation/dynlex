@@ -80,6 +80,7 @@ enum class IntrinsicTargets { All, Native, NativeOrWasm };
 	X(DefaultCase, "default case", 1, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                              \
 	X(ShaderOutput, "shader output", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                          \
 	X(ShaderInput, "shader input", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                          \
+	X(ShaderVertexInput, "shader vertex input", 4, IntrinsicReturnKind::Custom, 1, 3, IntrinsicPurityKind::Impure)             \
 	X(ShaderInterpolantOutput, "shader interpolant output", 6, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)   \
 	X(ShaderInterpolantInput, "shader interpolant input", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)   \
 	X(ShaderUniform, "shader uniform", 3, IntrinsicReturnKind::Float, 1, 2, IntrinsicPurityKind::Impure)                       \
@@ -331,9 +332,9 @@ constexpr IntrinsicPurityKind intrinsicPurityKind(IntrinsicKind kind) {
 constexpr bool isAlwaysPureIntrinsicKind(IntrinsicKind kind) { return intrinsicPurityKind(kind) == IntrinsicPurityKind::Pure; }
 
 constexpr bool isShaderRuntimeIntrinsicKind(IntrinsicKind kind) {
-	return kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpolantInput ||
-		   kind == IntrinsicKind::ShaderInterpolantOutput || kind == IntrinsicKind::ShaderUniform ||
-		   kind == IntrinsicKind::ShaderOutput;
+	return kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderVertexInput ||
+		   kind == IntrinsicKind::ShaderInterpolantInput || kind == IntrinsicKind::ShaderInterpolantOutput ||
+		   kind == IntrinsicKind::ShaderUniform || kind == IntrinsicKind::ShaderOutput;
 }
 
 static_assert(isAlwaysPureIntrinsicKind(IntrinsicKind::Multiply));

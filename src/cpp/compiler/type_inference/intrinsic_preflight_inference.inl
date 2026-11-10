@@ -26,62 +26,8 @@ bool ExpressionInferenceSupport::validateIntrinsic(IntrinsicKind kind, const Int
 		if (!context.typesValid)
 			return false;
 	}
-	if (isShaderRuntimeIntrinsicKind(kind)) {
-		if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderUniform) {
-			CompileTimeValue nameValue = context.lookupExpressionValue(expr->arguments[1]);
-			const std::string *name = std::get_if<std::string>(&nameValue);
-			if (!name || (kind == IntrinsicKind::ShaderUniform && name->empty())) {
-				std::string_view diagnosticKey = kind == IntrinsicKind::ShaderInput ? "shader input requires string literal"
-																					: "shader uniform requires string literal";
-				context.fail(
-					Diagnostic(context.parseContext, Diagnostic::Level::Error, diagnosticKey, expr->arguments[1]->range), 0,
-					false
-				);
-				return false;
-			}
-			if (kind == IntrinsicKind::ShaderInput) {
-				bool knownInput = *name == "FragCoord" || *name == "Position";
-				if (!knownInput) {
-					failWithDetail(
-						expr->arguments[1]->range,
-						renderConfiguredMessage(
-							syntaxConfigForRange(context.parseContext, expr->arguments[1]->range), "unknown shader input",
-							"message", {{"name", *name}}
-						),
-						0
-					);
-					return false;
-				}
-				if (context.parseContext.options.emitSPIRV) {
-					bool stageProvidesInput = context.parseContext.options.shaderStage != ParseContext::ShaderStage::Compute &&
-											  (*name == "Position") == (context.parseContext.options.shaderStage ==
-																		ParseContext::ShaderStage::Vertex);
-					if (!stageProvidesInput) {
-						failWithDetail(
-							expr->arguments[1]->range,
-							renderConfiguredMessage(
-								syntaxConfigForRange(context.parseContext, expr->arguments[1]->range),
-								"shader input unavailable", "message", {{"name", *name}}
-							),
-							0
-						);
-						return false;
-					}
-				}
-			}
-		}
-		if (!context.parseContext.options.emitSPIRV) {
-			failWithDetail(
-				expr->range,
-				renderConfiguredMessage(
-					syntaxConfigForRange(context.parseContext, expr->range), "shader operation unavailable", "message",
-					{{"operation", expr->intrinsicName}}
-				),
-				0
-			);
-			return false;
-		}
-	}
+	if (isShaderRuntimeIntrinsicKind(kind) && !validateShaderRuntimeIntrinsic(expr, kind, context))
+		return false;
 
 	if (kind == IntrinsicKind::DestroyAt) {
 		DataType pointerType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);

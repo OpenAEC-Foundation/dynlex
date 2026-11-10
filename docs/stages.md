@@ -756,6 +756,17 @@ must ensure the runtime pointer and stated signature match, and should keep this
 that obtains the symbol from the relevant loader, so application code calls the wrapper rather than spelling ABI metadata at each use
 site.
 
+Vertex shaders declare typed inputs using `@intrinsic("shader vertex input", name, location, type)`.
+The name, unsigned 32-bit location and type are compile-time values. Inputs accept 32-bit signed
+integers, unsigned integers and floats, either scalar or vectors of two, three or four elements.
+Names and locations identify one consistent interface across all reachable calls. The conventional
+`Position` input uses the same interface at location zero and is declared only when read; a shader
+can instead use its own position format or no vertex buffers. Conflicting names, locations and types
+produce source diagnostics before SPIR-V emission. Volatile loads preserve actual GPU inputs.
+Browser reflection exposes logical input names, locations and emitted scalar/vector formats alongside
+uniform bindings; it resets for each compiled stage. `lib/shader.dl` supplies the natural-language
+input declaration, while the renderer owns buffer strides and offsets.
+
 Atomic scalar access uses `@intrinsic("atomic load", pointer, order)`, `atomic store`, `atomic exchange`, `atomic fetch add`,
 and `atomic fetch sub`. Orders are literal `relaxed`, `acquire`, `release`, `acq_rel`, or `seq_cst`; loads cannot use release or
 acq_rel, and stores cannot use acquire or acq_rel. Operations are CPU-only. The pointee must be a concrete naturally aligned scalar:

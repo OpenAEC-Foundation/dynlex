@@ -1,4 +1,10 @@
 void ExpressionInferenceSupport::inferCustomIntrinsic(IntrinsicKind kind) {
+	if (kind == IntrinsicKind::ShaderVertexInput) {
+		auto reference = getCompileTimeTypeReferenceValue(context.lookupExpressionValue(expr->arguments[3]));
+		requireCompilerInvariant(reference.has_value(), "validated vertex input is missing its type reference");
+		expr->type = reference->type.toReferencedType();
+		return;
+	}
 	if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpolantInput) {
 		inferShaderInputIntrinsic();
 		return;

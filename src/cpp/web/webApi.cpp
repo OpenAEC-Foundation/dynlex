@@ -2,6 +2,7 @@
 #ifdef DYNLEX_WEB
 
 #include "codegen/codegen.h"
+#include "codegen/spirv.h"
 #include "compiler/compiler.h"
 #include "lsp/dynlexServer.h"
 #include "lsp/fileSystem.h"
@@ -151,7 +152,7 @@ struct WebCompilerState {
 	std::string outputWasmBase64;
 	std::vector<uint8_t> outputShaderSpirv;
 	std::string outputShaderSpirvBase64;
-	std::string shaderUniformsJson = R"({"uniforms":[]})";
+	std::string shaderReflectionJson = R"({"uniforms":[],"vertexInputs":[]})";
 	std::vector<CompilerLogEntry> compilerLog;
 	std::string diagnosticsJson = R"({"diagnostics":[]})";
 	std::string compilerLogJson = R"({"messages":[]})";
@@ -166,8 +167,8 @@ WebCompilerState &webState() {
 
 std::filesystem::path relativeSourcePath(const std::string &name) {
 	const std::filesystem::path path(name);
-	if (name.empty() || name.find('\0') != std::string::npos || path.is_absolute() || path.filename().empty() ||
-		path == "." || *path.begin() == ".." || path.lexically_normal().generic_string() != name)
+	if (name.empty() || name.find('\0') != std::string::npos || path.is_absolute() || path.filename().empty() || path == "." ||
+		*path.begin() == ".." || path.lexically_normal().generic_string() != name)
 		throw std::invalid_argument("A source needs a normalized relative filename");
 	return path;
 }
@@ -321,7 +322,9 @@ std::string encodeBase64(const std::vector<uint8_t> &bytes) {
 	return encoded;
 }
 
-bool reflectShaderSpirv(const std::vector<uint8_t> &spirvBytes, std::string &uniformsJson, std::string &errorMessage) {
+bool reflectShaderSpirv(
+	const std::vector<uint8_t> &spirvBytes, const ParseContext &context, std::string &reflectionJson, std::string &errorMessage
+) {
 	if (spirvBytes.size() < 20 || spirvBytes.size() % sizeof(uint32_t) != 0) {
 		errorMessage = "emitted SPIR-V is not a complete word stream";
 		return false;
@@ -361,7 +364,46 @@ bool reflectShaderSpirv(const std::vector<uint8_t> &spirvBytes, std::string &uni
 		});
 		nlohmann::json reflection;
 		reflection["uniforms"] = std::move(uniforms);
-		uniformsJson = reflection.dump();
+		nlohmann::json inputs = nlohmann::json::array();
+		if (context.options.shaderStage == ParseContext::ShaderStage::Vertex) {
+			for (const auto &input : resources.stage_inputs) {
+				const std::string symbol = compiler.get_name(input.id);
+				auto declared =
+					std::find_if(context.shaderVertexInputs.begin(), context.shaderVertexInputs.end(), [&](const auto &entry) {
+					return shaderVertexInputGlobalName(entry.name, entry.location, entry.type) == symbol;
+				});
+				if (declared == context.shaderVertexInputs.end() ||
+					!compiler.has_decoration(input.id, spv::DecorationLocation)) {
+					errorMessage = "Emitted vertex input is missing its declared interface";
+					return false;
+				}
+				const auto &type = compiler.get_type(input.base_type_id);
+				std::string format;
+				if (type.basetype == spirv_cross::SPIRType::Float)
+					format = "float32";
+				else if (type.basetype == spirv_cross::SPIRType::Int)
+					format = "sint32";
+				else if (type.basetype == spirv_cross::SPIRType::UInt)
+					format = "uint32";
+				if (format.empty() || type.width != 32 || type.columns != 1 || type.vecsize < 1 || type.vecsize > 4 ||
+					!type.array.empty()) {
+					errorMessage = "Emitted vertex input has an unsupported GPU format";
+					return false;
+				}
+				if (type.vecsize > 1)
+					format += "x" + std::to_string(type.vecsize);
+				inputs.push_back(
+					{{"name", declared->name},
+					 {"location", compiler.get_decoration(input.id, spv::DecorationLocation)},
+					 {"format", format}}
+				);
+			}
+			std::sort(inputs.begin(), inputs.end(), [](const auto &left, const auto &right) {
+				return left.at("location") < right.at("location");
+			});
+		}
+		reflection["vertexInputs"] = std::move(inputs);
+		reflectionJson = reflection.dump();
 		return true;
 	} catch (const std::exception &error) {
 		errorMessage = error.what();
@@ -381,7 +423,7 @@ int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderSta
 	state.outputWasmBase64.clear();
 	state.outputShaderSpirv.clear();
 	state.outputShaderSpirvBase64.clear();
-	state.shaderUniformsJson = R"({"uniforms":[]})";
+	state.shaderReflectionJson = R"({"uniforms":[],"vertexInputs":[]})";
 	state.compilerLog.clear();
 	appendCompilerLog("info", "compile request started");
 
@@ -448,7 +490,7 @@ int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderSta
 			return WebCompileStatusInternalError;
 		}
 		std::string reflectionError;
-		if (!reflectShaderSpirv(state.outputShaderSpirv, state.shaderUniformsJson, reflectionError)) {
+		if (!reflectShaderSpirv(state.outputShaderSpirv, context, state.shaderReflectionJson, reflectionError)) {
 			std::cerr << "Shader reflection failed: " << reflectionError << '\n';
 			appendCompilerLog("error", "An error occurred. Check the browser log.");
 			flushCompilerLogJson();
@@ -617,7 +659,7 @@ EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_output_shader_spirv_base64() {
 	return webState().outputShaderSpirvBase64.c_str();
 }
 
-EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_shader_uniforms_json() { return webState().shaderUniformsJson.c_str(); }
+EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_shader_reflection_json() { return webState().shaderReflectionJson.c_str(); }
 
 EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_compiler_log_json() { return webState().compilerLogJson.c_str(); }
 

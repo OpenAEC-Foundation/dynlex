@@ -36,7 +36,7 @@ for (const job of jobs) {
     const bytes = Buffer.from(call('dynlex_web_get_output_shader_spirv_base64', 'string'), 'base64');
     await writeFile(target + '.wgsl', translator.translate(bytes));
     await writeFile(target + '.glsl', translator.translateGlsl(bytes, job.stage));
-    await writeFile(target + '.json', JSON.stringify(json('dynlex_web_get_shader_uniforms_json')) + '\n');
+    await writeFile(target + '.json', JSON.stringify(json('dynlex_web_get_shader_reflection_json')) + '\n');
   } else throw new Error(`Unknown output kind: ${job.kind}`);
   console.log(`Compiled ${job.entry} → ${job.output} (${Math.round(performance.now() - started)} ms)`);
 }
