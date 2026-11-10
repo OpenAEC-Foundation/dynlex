@@ -5,11 +5,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 suite=required
 run_only=false
+suite_worker=false
 build_args=()
 for arg in "$@"; do
     case "$arg" in
     --integration) suite=integration ;;
     --run-only) run_only=true ;;
+    --suite-worker) run_only=true; suite_worker=true ;;
     *) build_args+=("$arg") ;;
     esac
 done
@@ -341,15 +343,13 @@ if [[ "$run_only" != "true" ]]; then
         exit $build_exit
     fi
     printf '%s\n' "${GREEN}Compiler build complete.${NC}"
-    if [[ "$suite" == required ]]; then
-        run_with_timeout 120 "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --run-only
-        suite_exit=$?
-        if [[ $suite_exit -eq 124 ]]; then
-            printf '%s\n' "${RED}Required tests exceeded the 120-second budget.${NC}"
-        fi
-    else
-        "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --run-only --integration
-        suite_exit=$?
+fi
+
+if [[ "$suite" == required && "$suite_worker" != true ]]; then
+    run_with_timeout 120 "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --suite-worker
+    suite_exit=$?
+    if [[ $suite_exit -eq 124 ]]; then
+        printf '%s\n' "${RED}Required tests exceeded the 120-second budget.${NC}"
     fi
     exit "$suite_exit"
 fi
