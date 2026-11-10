@@ -326,14 +326,26 @@ std::string IncrementalMatcherCache::key(PatternReference &reference, bool track
 	if (precedencePhase)
 		fingerprint.string(precedenceDigest());
 	auto appendTreeState = [&](const PatternTreeNode *root) {
-		fingerprint.string(root->mutationState->wildcardDigest);
-		for (const std::string &literal : literals.possibleStartLiterals) {
-			auto found = root->mutationState->literalDigests.find(literal);
-			if (found == root->mutationState->literalDigests.end())
-				continue;
-			fingerprint.string(literal);
-			fingerprint.string(found->second);
-		}
+		Fingerprint treeFingerprint;
+		std::vector<std::string_view> path;
+		auto visit = [&](auto &&self, const PatternTreeSignatureNode &node) -> void {
+			if (!node.digest.empty()) {
+				treeFingerprint.number(path.size());
+				for (std::string_view literal : path)
+					treeFingerprint.string(literal);
+				treeFingerprint.string(node.digest);
+			}
+			for (const std::string &literal : literals.possibleStartLiterals) {
+				auto found = node.children.find(literal);
+				if (found == node.children.end())
+					continue;
+				path.push_back(literal);
+				self(self, *found->second);
+				path.pop_back();
+			}
+		};
+		visit(visit, root->mutationState->signatures);
+		fingerprint.string(treeFingerprint.finish());
 	};
 	const PatternTreeNode *root = context.patternTrees[static_cast<size_t>(reference.patternType)];
 	const PatternTreeNode *functions = context.patternTrees[static_cast<size_t>(SectionType::Function)];

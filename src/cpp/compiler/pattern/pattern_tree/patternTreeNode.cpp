@@ -99,6 +99,48 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 		if (entry->second.empty())
 			root->mutationState->literalDigests.erase(entry);
 	}
+	auto recordSignature = [&](const std::vector<PatternElement> &path) {
+		std::vector<std::string_view> required;
+		for (size_t index = 0; index < path.size(); index++) {
+			const PatternElement &element = path[index];
+			if (!element.text.empty() &&
+				(element.type == PatternElement::Type::VariableLike ||
+				 (index == 0 && element.type != PatternElement::Type::Variable)))
+				required.push_back(element.text);
+		}
+		std::sort(required.begin(), required.end());
+		required.erase(std::unique(required.begin(), required.end()), required.end());
+		PatternTreeSignatureNode *node = &root->mutationState->signatures;
+		std::vector<std::pair<PatternTreeSignatureNode *, std::string_view>> parents;
+		for (std::string_view literal : required) {
+			if (adding) {
+				auto &child = node->children[std::string(literal)];
+				if (!child)
+					child = std::make_unique<PatternTreeSignatureNode>();
+				parents.emplace_back(node, literal);
+				node = child.get();
+			} else {
+				auto found = node->children.find(literal);
+				requireCompilerInvariant(found != node->children.end(), "pattern signature removal lost a literal");
+				parents.emplace_back(node, literal);
+				node = found->second.get();
+			}
+		}
+		update(node->digest);
+		if (!adding) {
+			for (auto it = parents.rbegin(); it != parents.rend(); ++it) {
+				auto found = it->first->children.find(it->second);
+				if (!found->second->digest.empty() || !found->second->children.empty())
+					break;
+				it->first->children.erase(found);
+			}
+		}
+	};
+	if (definition->indexedPaths.empty())
+		recordSignature({});
+	else
+		for (const auto &path : definition->indexedPaths)
+			recordSignature(path);
 }
 
 static PatternTreeNode *addChild(PatternTreeNode *parent, const PatternElement &element, PatternDefinition *definition) {

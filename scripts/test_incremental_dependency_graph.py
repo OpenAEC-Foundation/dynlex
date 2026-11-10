@@ -937,6 +937,18 @@ def check_deferred_match_key_replay(root, build):
     changed_tree = build(entry=main, success=False)
     assert changed_tree[1] == build(False, entry=main, success=False)[1]
 
+    overlap = root / "shared_start_match_key.dl"
+    overlap_source = ('to the active: @intrinsic("discard", 1)\n'
+                      'to caller: the active\n'
+                      'caller\n')
+    overlap.write_text(overlap_source)
+    build(entry=overlap)
+    overlap.write_text('to the unused: @intrinsic("discard", 2)\n' + overlap_source)
+    edited = build(entry=overlap)
+    assert edited[0]["body_resolution_match_computations"] == 0, \
+        "a new pattern requiring a missing word rematched an unchanged body call"
+    assert edited[1:] == build(False, entry=overlap)[1:]
+
 
 def check_precedence_match_key_replay(root, build):
     main = root / "precedence_key_replay.dl"

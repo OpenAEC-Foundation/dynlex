@@ -19,9 +19,15 @@ struct PatternDefinitionOccurrence {
 	bool operator==(const PatternDefinitionOccurrence &) const = default;
 };
 
+struct PatternTreeSignatureNode {
+	std::unordered_map<std::string, std::unique_ptr<PatternTreeSignatureNode>, PatternLiteralHash, std::equal_to<>> children;
+	std::string digest;
+};
+
 struct PatternTreeMutationState {
 	std::unordered_map<std::string, std::string, PatternLiteralHash, std::equal_to<>> literalDigests;
 	std::string wildcardDigest;
+	PatternTreeSignatureNode signatures;
 };
 
 struct PatternTreeNode : public PatternElement {

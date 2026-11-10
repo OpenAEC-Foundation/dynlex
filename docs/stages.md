@@ -141,8 +141,10 @@ matcher keys after a top-level execution edit when the nonexecution source proje
 is unchanged.
 
 Incremental matcher keys reuse each parsed reference's candidate literal spellings and numeric literal arguments.
-The pattern tree and lexical scope are fingerprinted again for every lookup, so a newly indexed overload or a
-new declaration can invalidate the previous match.
+Each indexed definition contributes to a tree of its required literal words. A reference fingerprints only
+the signatures whose words occur in its matcher input, including wildcard-start patterns. A new overload
+therefore invalidates a cached result when it could match that input, even if the previous result was a failure.
+Lexical scope is fingerprinted again for every lookup, so a new declaration can invalidate the previous match.
 Resolved declaration snapshots are reused after a function-body edit when the source outside function bodies is
 unchanged and each edited body retains its resolved declaration. Scope-rule bodies and nested definitions exclude
 this reuse, since their changes can affect declarations outside the edited function. The projection reuse counter
