@@ -10,6 +10,7 @@
 #include "syntaxConfig.h"
 #include "variableStorage.h"
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <list>
@@ -43,6 +44,16 @@ class TargetMachine;
 } // namespace llvm
 
 struct ParseContext {
+	struct IncrementalFunctionRequest {
+		Section *section;
+		std::vector<std::string> parameterNames;
+		std::vector<DataType> argumentTypes;
+	};
+	struct IncrementalConstraintValue {
+		TypeConstraint constraint;
+		DataType parameterType;
+	};
+
 	struct ShaderUniform {
 		std::string name;
 		std::uint32_t binding = 0;
@@ -76,6 +87,65 @@ struct ParseContext {
 	// definition-to-reference index. Indexed pattern elements may be changed
 	// only through this transaction.
 	std::function<void(PatternDefinition &, const std::function<void()> &)> indexedPatternDefinitionMutation;
+	// Installed by native incremental builds while the frontend is being compiled.
+	std::function<std::optional<PatternMatch *>(PatternReference *, MatchOptions, MatchDependencies *)> reuseMatcherResult;
+	std::function<void(PatternReference *, MatchOptions, const PatternMatch *, const MatchDependencies *)> recordMatcherResult;
+	std::function<void(const std::list<PatternReference *> &)> prepareDeferredMatcherReplay;
+	std::function<void(const std::vector<PatternReference *> &)> preparePrecedenceMatcherReplay;
+	std::function<std::vector<Section *>()> selectInactiveBodiesForResolutionReuse;
+	std::function<bool()> inactiveBodyMatcherTreeUnchanged;
+	std::function<void(const std::vector<Section *> &)> retainInactiveBodyMatcherResults;
+	size_t inactiveBodyResolutionReferencesSkipped = 0;
+	// A native build may reuse the successful ordering of type-constraint probes
+	// when its saved dependency closure and matching environment are unchanged.
+	bool reuseDeclaredConstraintProbes = false;
+	std::vector<std::string> priorConstraintProbeItems;
+	std::vector<int> priorConstraintProbePasses;
+	std::vector<bool> priorConstraintProbeReusable;
+	std::vector<std::optional<IncrementalConstraintValue>> priorConstraintProbeValues;
+	std::vector<std::unordered_set<const Section *>> priorConstraintProbeDependencies;
+	std::vector<std::string> constraintProbeItems;
+	std::vector<std::string> constraintProbeTexts;
+	std::vector<int> constraintProbePasses;
+	std::vector<std::optional<IncrementalConstraintValue>> constraintProbeValues;
+	std::vector<std::unordered_set<const Section *>> constraintProbeDependencies;
+	size_t constraintProbesReused = 0;
+	size_t constraintProbesRun = 0;
+	size_t constraintValuesReused = 0;
+	size_t constraintExpressionsReused = 0;
+	// Parse cache entries contain only unresolved syntax. Restored executable
+	// expressions register references; temporary type expressions keep them local.
+	std::function<Expression *(Section *, Range, SectionType, bool)> reuseParsedExpression;
+	std::function<void(Range, SectionType, bool, const Expression *)> recordParsedExpression;
+	std::function<void(Range, SectionType)> retainParsedTemporaryExpression;
+	std::function<bool(Range, std::vector<DefinitionPatternElement> &)> reuseParsedDefinition;
+	std::function<void(Range, const std::vector<DefinitionPatternElement> &)> recordParsedDefinition;
+	// Native incremental builds may import a previously generated function body
+	// after this compilation has inferred its current types and selected calls.
+	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;
+	std::function<bool(Section *, const InstantiationKey &, Instantiation &, bool)> reuseInferredInstantiation;
+	std::function<void(ParseContext &, const std::function<bool(const IncrementalFunctionRequest &)> &)>
+		runIncrementalPreinference;
+	std::vector<IncrementalFunctionRequest> incrementalReplacementFunctions;
+	std::function<void(Section *, const InstantiationKey *, llvm::Function *, bool)> recordGeneratedFunction;
+	std::function<bool(ParseContext &)> importReusedFunctions;
+	std::array<double, 4> frontendStageMilliseconds{};
+	std::array<double, 6> inferenceStageMilliseconds{};
+	double resolutionSetupMilliseconds = 0;
+	double resolutionDefinitionMilliseconds = 0;
+	double resolutionBodyMilliseconds = 0;
+	double resolutionPrecedenceMilliseconds = 0;
+	double resolutionRematchMilliseconds = 0;
+	double resolutionCandidateCollectionMilliseconds = 0;
+	double resolutionCandidateSortMilliseconds = 0;
+	double resolutionReplaySetupMilliseconds = 0;
+	double resolutionCandidateMatchMilliseconds = 0;
+	size_t bodyResolutionReferenceVisits = 0;
+	size_t bodyResolutionMatchCacheHits = 0;
+	size_t bodyResolutionMatchComputations = 0;
+	size_t variableLikeCountReferencesScanned = 0;
+	size_t patternPrecedenceGraphEdges = 0;
+	size_t pureValueSummaryHits = 0;
 	// On-demand signature probes are scoped to this compilation and never committed.
 	std::set<std::tuple<PatternDefinition *, size_t, size_t>> activePatternConstraintProbes;
 	std::map<std::tuple<PatternDefinition *, size_t, size_t>, TypeConstraint> provisionalConstraintDomains;
@@ -253,6 +323,8 @@ struct ParseContext {
 	// this is to prevent having to search all pattern trees of every scope, or merging trees per scope.
 	PatternTreeNode *patternTrees[(int)SectionType::Count]{};
 	std::vector<std::unique_ptr<PatternFamily>> patternFamilies;
+	// Incremented when precedence families are rebuilt during pattern resolution.
+	std::uint64_t patternPrecedenceRevision = 0;
 	// variable references that don't correspond to any pattern element
 	std::unordered_map<std::string, std::list<VariableReference *>> unresolvedVariableReferences;
 	// Owns all VariableReference instances for this compilation.
@@ -285,7 +357,10 @@ struct ParseContext {
 		sourceTokenAnnotations.push_back({range, kind, referencedPatternType});
 	}
 	void printDiagnostics();
-	PatternMatch *match(PatternReference *reference, MatchOptions options = {}, MatchDependencies *dependencies = nullptr);
+	PatternMatch *match(
+		PatternReference *reference, MatchOptions options = {}, MatchDependencies *dependencies = nullptr,
+		bool countBodyResolution = false
+	);
 	void registerShaderUniform(std::string uniformName, std::uint32_t binding, Range range);
 	void registerShaderInterpolantName(const std::string &interpolantName);
 	VariableReference *createVariableReference(Range range, const std::string &name);
@@ -405,8 +480,7 @@ inline void collectPatternCallBindingPairsForPath(
 	std::vector<std::pair<std::string, Expression *>> &outBindings
 ) {
 	forEachPatternCallBindingOnPath(
-		expr, definition, pathIndex,
-		[&](const std::string &parameterName, Expression *argumentExpression) {
+		expr, definition, pathIndex, [&](const std::string &parameterName, Expression *argumentExpression) {
 		outBindings.push_back({parameterName, argumentExpression});
 	}
 	);
@@ -507,8 +581,7 @@ inline ResolvedBindingLayers resolveThroughBindingLayers(
 	Expression *expression, BindingFrameStack bindingFrameStack, SelectFlexExpansionFn &&selectFlexExpansion
 ) {
 	return resolveThroughBindingLayers(
-		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion),
-		[](Expression *) {
+		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion), [](Expression *) {
 		return false;
 	}
 	);

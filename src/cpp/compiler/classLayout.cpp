@@ -18,9 +18,8 @@ uint64_t fixedAllocationSize(const llvm::DataLayout &dataLayout, llvm::Type *typ
 } // namespace
 
 LLVMClassLayout layoutLLVMClass(
-	llvm::LLVMContext &context, const llvm::DataLayout &dataLayout, llvm::StructType &structType,
-	const std::vector<llvm::Type *> &fieldTypes, const std::vector<uint64_t> &requestedFieldAlignments,
-	uint64_t requestedClassAlignment
+	llvm::LLVMContext &context, const llvm::DataLayout &dataLayout, const std::vector<llvm::Type *> &fieldTypes,
+	const std::vector<uint64_t> &requestedFieldAlignments, uint64_t requestedClassAlignment
 ) {
 	requireCompilerInvariant(fieldTypes.size() == requestedFieldAlignments.size(), "class layout field count mismatch");
 
@@ -56,15 +55,15 @@ LLVMClassLayout layoutLLVMClass(
 		requireCompilerInvariant(result.allocationSize > offset, "class tail padding does not follow its fields");
 		llvmFields.push_back(llvm::ArrayType::get(llvm::Type::getInt8Ty(context), result.allocationSize - offset));
 	}
-	structType.setBody(llvmFields);
+	result.structType = llvm::StructType::get(context, llvmFields);
 
-	const llvm::StructLayout *layout = dataLayout.getStructLayout(&structType);
+	const llvm::StructLayout *layout = dataLayout.getStructLayout(result.structType);
 	requireCompilerInvariant(
-		fixedAllocationSize(dataLayout, &structType) == result.allocationSize,
+		fixedAllocationSize(dataLayout, result.structType) == result.allocationSize,
 		"LLVM class allocation size differs from the DynLex layout"
 	);
 	requireCompilerInvariant(
-		dataLayout.getABITypeAlign(&structType).value() <= result.abiAlignment,
+		dataLayout.getABITypeAlign(result.structType).value() <= result.abiAlignment,
 		"LLVM class ABI alignment exceeds the DynLex layout"
 	);
 	for (size_t fieldIndex = 0; fieldIndex < result.fieldOffsets.size(); fieldIndex++) {

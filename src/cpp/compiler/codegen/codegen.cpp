@@ -19,6 +19,7 @@
 #include "type.h"
 #include "variable.h"
 #include "wasm.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DebugInfoMetadata.h"
@@ -27,6 +28,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
+#include "llvm/Support/SHA256.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
@@ -86,7 +88,7 @@ static std::string encodeInstantiationKeyForFunctionName(const InstantiationKey 
 		else if (const auto *boolean = std::get_if<bool>(&value))
 			suffix += *boolean ? "true" : "false";
 		else if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value))
-			suffix += encodeLLVMNameComponent(typeRef->type.toString());
+			suffix += encodeLLVMNameComponent(typeRef->type.toReferencedType().toString());
 		else if (const auto *constraint = std::get_if<TypeConstraint>(&value))
 			suffix += encodeLLVMNameComponent(constraint->toInternalString());
 		else if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
@@ -208,6 +210,15 @@ llvm::Function *generateSpecializedFunction(
 
 	llvm::Function *func = llvm::Function::Create(funcType, llvm::Function::InternalLinkage, funcName, context.llvmModule);
 	activeInst.llvmFunctionsByParameterAddressSpaces.emplace(std::move(parameterAddressSpaces), func);
+	if (context.recordGeneratedFunction)
+		context.recordGeneratedFunction(section, &instantiationKey, func, false);
+	if (context.reuseGeneratedFunction && context.reuseGeneratedFunction(section, activeInst, func)) {
+		func->setLinkage(llvm::GlobalValue::ExternalLinkage);
+		return func;
+	}
+	requireCompilerInvariant(
+		!activeInst.inferenceReusedFromCache, "cached inference summary lost its reusable LLVM function"
+	);
 
 	size_t argIdx = 0;
 	for (auto &arg : func->args()) {

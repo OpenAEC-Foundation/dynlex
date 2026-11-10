@@ -1,0 +1,8 @@
+lights means: 2
+
+the shutdown code for item and user means: @intrinsic("add", item, user)
+the lights shutdown code means: the shutdown code for lights and 4
+other shutdown code means: the shutdown code for 3 and 5
+the shutdown code for lights and user means: helper user
+helper value means: @intrinsic("multiply", value, 3)
+@intrinsic("return", @intrinsic("subtract", @intrinsic("add", the lights shutdown code, other shutdown code), 20))

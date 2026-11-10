@@ -221,6 +221,9 @@ dynlex options:
         deferred callback captures local:
             message: "Deferred callback cannot capture local variable '{name}'"
             related definition: "Local variable is defined here"
+        function captures local:
+            message: "Function cannot capture outer local variable '{name}'; pass it as an argument"
+            related definition: "Outer variable is defined here"
         arithmetic operator operand invalid: "Arithmetic operator '{operator}' requires a numeric scalar or vector operand, got '{value_type}'"
         incompatible operand types: "Incompatible operand types '{left_type}' and '{right_type}'"
         class scope rules misplaced: "'{scope}' requires an enclosing class definition"

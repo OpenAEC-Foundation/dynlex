@@ -222,6 +222,23 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 
 	if (!generateExposedFunctions(context, context.mainSection))
 		return false;
+	for (const auto &request : context.incrementalReplacementFunctions) {
+		Section *section = request.section;
+		InstantiationKey key;
+		key.argumentTypes = request.argumentTypes;
+		auto instantiation = section->instantiations.find(key);
+		requireCompilerInvariant(
+			instantiation != section->instantiations.end(), "incremental replacement lost its inferred instantiation"
+		);
+		std::vector<std::pair<std::string, Expression *>> bindings;
+		std::vector<llvm::Value *> arguments;
+		for (const std::string &name : request.parameterNames) {
+			bindings.emplace_back(name, nullptr);
+			arguments.push_back(llvm::UndefValue::get(builder.getPtrTy()));
+		}
+		if (!generateSpecializedFunction(context, section, bindings, instantiation->second, arguments))
+			return false;
+	}
 
 	if (mainFunc) {
 		if (!builder.GetInsertBlock()->hasTerminator()) {
@@ -252,6 +269,8 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 			context.llvmModule->getOrInsertNamedMetadata("spirv.ExecutionMode")->addOperand(execModeNode);
 		}
 	}
+	if (context.importReusedFunctions && !context.importReusedFunctions(context))
+		return false;
 
 	// Finalize debug info before verification
 	if (context.diBuilder)

@@ -1,6 +1,7 @@
 #pragma once
 #include "patternElement.h"
 #include "sectionType.h"
+#include <memory>
 #include <string_view>
 #include <unordered_map>
 
@@ -18,7 +19,21 @@ struct PatternDefinitionOccurrence {
 	bool operator==(const PatternDefinitionOccurrence &) const = default;
 };
 
+struct PatternTreeSignatureNode {
+	std::unordered_map<std::string, std::unique_ptr<PatternTreeSignatureNode>, PatternLiteralHash, std::equal_to<>> children;
+	std::string digest;
+};
+
+struct PatternTreeMutationState {
+	std::unordered_map<std::string, std::string, PatternLiteralHash, std::equal_to<>> literalDigests;
+	std::string wildcardDigest;
+	PatternTreeSignatureNode signatures;
+};
+
 struct PatternTreeNode : public PatternElement {
+	// Only incremental root nodes allocate mutation state. Child nodes are never removed.
+	std::unique_ptr<PatternTreeMutationState> mutationState;
+	PatternTreeNode *parentNode = nullptr;
 	// Incremented whenever active definitions at this endpoint change.
 	size_t endpointRevision = 0;
 	// the pattern definitions that end at this node (multiple when overloaded via type constraints)
@@ -40,7 +55,7 @@ struct PatternTreeNode : public PatternElement {
 	void removePatternDefinition(PatternDefinition *definition);
 	// Assert that the definition snapshot, endpoints, and all trie metadata agree.
 	void requirePatternDefinitionIndexed(const PatternDefinition *definition) const;
-	// Find definitions already in the tree that are less specific than the given definition.
+	// Find definitions already in the tree that are less specific than an indexed definition.
 	// A definition is less specific if it has an argument slot where the new definition has a literal.
-	std::vector<PatternDefinition *> findLessSpecificDefinitions(std::vector<DefinitionPatternElement> &elements);
+	std::vector<PatternDefinition *> findLessSpecificDefinitions(const PatternDefinition &definition);
 };

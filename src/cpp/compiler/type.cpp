@@ -514,7 +514,6 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dat
 		);
 		ClassInstantiation &inst = classDefinition->instantiations[classInstIndex];
 		if (!inst.llvmStructType) {
-			inst.llvmStructType = llvm::StructType::create(ctx, "class");
 			std::vector<llvm::Type *> llvmFields;
 			llvmFields.reserve(inst.fieldTypes.size());
 			std::vector<uint64_t> fieldAlignments;
@@ -530,8 +529,8 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dat
 				llvmFields.push_back(fieldType);
 				fieldAlignments.push_back(fieldAlignment);
 			}
-			LLVMClassLayout layout =
-				layoutLLVMClass(ctx, dataLayout, *inst.llvmStructType, llvmFields, fieldAlignments, classDefinition->alignment);
+			LLVMClassLayout layout = layoutLLVMClass(ctx, dataLayout, llvmFields, fieldAlignments, classDefinition->alignment);
+			inst.llvmStructType = layout.structType;
 			inst.llvmFieldIndices = std::move(layout.fieldIndices);
 			inst.llvmABIAlignment = layout.abiAlignment;
 		}

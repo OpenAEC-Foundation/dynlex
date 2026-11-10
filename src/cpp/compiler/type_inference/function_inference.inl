@@ -419,6 +419,7 @@ static bool runInstantiationReinferenceLoop(
 	InferenceContext &context, Instantiation &instantiation, PatternDefinition *definition, const Range &fallbackRange,
 	std::string functionName, bool canDeferToCaller, InferPassFn &&inferPass
 ) {
+	instantiation.inferenceReusedFromCache = false;
 	size_t reinferPass = 0;
 	constexpr size_t maxReinferPasses = 32;
 	while (true) {

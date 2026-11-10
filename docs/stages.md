@@ -106,6 +106,10 @@ expression constants, operand groupings, and callable selections join the caller
 trial state. The outer transaction commits or discards those results together with
 the inferred body; retaining only types loses metadata needed by code generation.
 
+Incremental inference summaries omit functions in sources named by inference-stage
+diagnostics and their notes. Warnings already produced during pattern resolution
+do not exclude unrelated function summaries in the same file.
+
 After the pattern trees stabilize, definitions connected through shared trie
 endpoints form one syntax family, including transitive connections through choice
 alternatives. Precedence is a partial order between these families. Each family's
@@ -116,6 +120,11 @@ later than its parent, including operands inside variadic captures. If implicit
 parameter discovery changes a declaration during this pass, resolution rebuilds
 the families and repeats to a fixed point. Operand grouping also consumes that
 same family order during type inference.
+The rematch pass sorts only references whose current match can be affected by
+precedence, preserving source order among equal locations.
+Generated class accessors precede authored syntax through a shared graph node,
+so graph edges grow with accessor families and precedence targets rather than
+their product. Incremental build statistics report the resulting edge count.
 
 All pattern definitions are stored in a pattern tree, a trie structure containing pattern elements.
 
@@ -127,6 +136,25 @@ shared group, so revisiting a memoized state cannot lose a subsequently discover
 parent. Inline storage grows when needed and never limits matching alternatives.
 
 We match with multiple iterations. This makes sure that patterns earlier in the file can call functions later in the file.
+Failed body matches wait on the specific trie edges and endpoints inspected by the matcher.
+Adding a definition wakes a waiting reference only when one of those conditions changes;
+deadlock recovery still sees all waiting references. This avoids rescanning every failed
+reference on each resolution pass.
+An expression reference that cannot mention a live implicit parameter candidate waits
+until definitions are indexed, even when another reference in the same function must
+classify that candidate. Unchanged functions without global access can replay their
+matcher keys after a top-level execution edit when the nonexecution source projection
+is unchanged.
+
+Incremental matcher keys reuse each parsed reference's candidate literal spellings and numeric literal arguments.
+Each indexed definition contributes to a tree of its required literal words. A reference fingerprints only
+the signatures whose words occur in its matcher input, including wildcard-start patterns. A new overload
+therefore invalidates a cached result when it could match that input, even if the previous result was a failure.
+Lexical scope is fingerprinted again for every lookup, so a new declaration can invalidate the previous match.
+Resolved declaration snapshots are reused after a function-body edit when the source outside function bodies is
+unchanged and each edited body retains its resolved declaration. Scope-rule bodies and nested definitions exclude
+this reuse, since their changes can affect declarations outside the edited function. The projection reuse counter
+counts declarations carried forward without serializing them again.
 
 We discover what is a variable based on these principles:
 
@@ -778,18 +806,324 @@ comparison uses each source file's configured comment prefix and retains line bo
 between executable text. Observations include source/config contents, canonical source
 identities and failed lookup candidates; a newly created higher-priority import or
 configuration therefore invalidates the result.
+The cache records structured warnings and notes, including source locations and
+configured message keys, variants and placeholders. Comment edits relocate their
+source locations without rebuilding the frontend. An edit confined to messages in an
+existing `config.dl` rerenders those diagnostics without recompiling.
+The program entry is a small manifest of observations, diagnostics, object keys,
+and content-addressed keys for the saved LLVM bitcode, function projection, dependency
+graph, and inference summaries. Unchanged and comment-only builds inspect the
+manifest without parsing these larger payloads; they load LLVM bitcode only if an object
+must be rebuilt. Executable source edits first load the function projection.
+They load the dependency graph, inference summaries, and LLVM bitcode only if type
+inference must run again; missing objects load LLVM bitcode when they must be rebuilt.
+`cache_payloads_loaded` reports the
+number of payloads read on a build.
+An evicted payload invalidates the program entry, so the next build recompiles
+from source.
+Failed builds that reached section analysis or later store diagnostic records and
+failed pattern lookups separately from the last successful native result. An
+unchanged source or message-only configuration edit replays the errors without
+rerunning the frontend. A later code edit reuses a failed lookup only while its
+source and candidate pattern tree are equivalent; a successful build retires the
+failed snapshot.
 The compiler linker build ID (or executable content digest when the format has no
 build ID), effective compiler options and host CPU features identify the computation. Modification timestamps are never a correctness criterion.
 
-After source changes the frontend runs again. Native emission divides the finalized IR
+After an executable source edit, the frontend reconstructs sections and pattern trees.
+The native cache restores unresolved expression trees for unchanged expression text
+before section analysis and for temporary type-constraint expressions during inference.
+It also restores parsed declaration elements before pattern resolution. Every range
+is rebased onto the current logical line. Ordinary expressions register their current
+section's pattern references and explicit captures; temporary expressions keep their
+references unregistered and resolve against the current tree when evaluated. Both
+restore source tokens. Expressions that emitted parse diagnostics are parsed again.
+`--incremental-stats` counts expression and definition parse hits and misses from
+the preceding compiler invocation, including temporary expression hits separately.
+After resolution, each successful type-constraint probe's pass and the sections
+read by its expression are saved with the function projection. Variable
+definitions are mapped to their owning sections; their source ranges can lie
+on a function's header line, which belongs to its parent section. A later build
+reuses unaffected first-pass probes before the first affected item when declarations,
+pattern trees, precedence, scope rules, and source outside function bodies are
+unchanged. The saved dependency graph also invalidates a probe when an edited
+body can reach another candidate that could match its expression. Later-pass
+probes and probes after the first affected item run again so a changed
+constraint can resolve earlier and cascade in order.
+An edit confined to top-level execution can retain a probe whose recorded
+dependency roots exclude the top-level section. The nonexecution source
+projection checks that declarations and other ambient code are unchanged;
+probes that read top-level declarations, or call a function that reads globals,
+run again through the saved reverse dependency graph.
+Adding an ordinary function retains saved probes when prior function declarations
+and scope rules are unchanged, the source outside functions is unchanged, and the
+new pattern cannot match any saved constraint text or current pattern reference.
+Potential matches rerun the probes. Global declaration identities use positions
+within their source files, so adding lines to an earlier imported file does not
+change the identity of an unchanged global declaration.
+The cache also records resolved constraint values and their dependency roots. When a
+probe is reusable and its result has a portable type identity, the compiler
+installs that result directly in the current declaration and carries
+forward its dependency roots. It also skips parsing that constraint expression when
+the saved probe schedule still matches. If the schedule changes, omitted expressions
+are parsed before inference. Other results are committed by inference as before.
+Class references are keyed by stable class-section paths. Committed class
+instantiation field types and function signatures are saved with the constraint
+probe schedule. When the class declaration still has the same fields, the
+compiler restores its instantiation table before decoding reusable constraint
+values, including recursive class layouts. An edited class declaration makes
+its saved constraint values ineligible for reuse.
+`constraint_probes_reused`, `constraint_probes_run`, `constraint_values_reused`, and
+`constraint_expressions_reused` report these separate decisions. The six entries
+of `inference_stage_ms` measure declared constraints, pattern conflicts,
+incremental preinference, root inference, exposed and managed functions, and final
+variable and return validation, in that order.
+It reuses pointer-free matcher results from the previous build in both the initial
+resolution and precedence matching passes for unchanged references when the active pattern definitions, the reference's
+source line and position mapping, relative lexical declaration visibility, and
+non-message syntax configuration have the same fingerprints. Matcher keys cover wildcard patterns and
+literal starts that could occur in the reference, in its own pattern tree and the
+function tree used for nested matches. Adding an unrelated pattern can therefore keep
+matches in unchanged calls, even when the added source line shifts their line numbers.
+Definition fingerprints use pattern content and order without absolute line numbers, so
+inserting an executable line before unchanged definitions also keeps their matches.
+Matcher results live in a separate content-addressed cache entry with a compact index
+and individually encoded results. An unchanged or comment-only build reads only the
+program manifest, so it does not parse matcher results merely to relink the executable.
+An evicted matcher entry causes
+matching to run normally on the next code edit.
+Successful matches are rebound to the new tree and expression objects. Failed matches
+restore their trie dependencies, so later definition insertions still retry them.
+New or removed matching overloads change the relevant tree fingerprint and invalidate
+cached matches from that point in resolution. Precedence-pass results also include
+the syntax families participating in associativity or precedence reachability in
+their fingerprint, so a changed precedence rule cannot reuse a stale grouping and
+an unrelated definition with no precedence relation leaves the fingerprint intact.
+Within a compilation, a newly indexed more-specific definition requeues callers of
+less-specific patterns only when at least one canonical path can occur in that
+reference's matcher input. Missing literal words exclude a path; numeric arguments
+use their matcher spelling. The specificity search uses the definition's indexed
+canonical paths after insertion. This keeps unrelated callers resolved during cold and
+edited builds while retaining rematches for genuinely competing patterns.
+Body references whose parsed elements do not contain a pending implicit
+parameter candidate wait until definitions are indexed. A substring of another
+word is not a candidate. They resolve once against the completed tree, avoiding
+failed matches and later specificity retries. A single-word alternative can
+still promote an implicit parameter from its body,
+so early indexing alone does not make its references eligible to wait.
+Implicit-parameter candidate counts use one section-tree walk. Each body
+reference contributes once to candidate words in ancestor definition sections,
+including nested definitions. `variable_like_count_references_scanned` counts
+those references.
+An ordinary nested function has no implicit closure. Validation reports a
+reference to an outer runtime local and directs the author to pass it as an
+argument; global variables remain accessible.
+For an unchanged ordinary function body, an edited build can replay the saved
+matcher key for those deferred references after checking the indexed pattern-tree
+signature, declarations of reusable functions, and source outside their bodies.
+When that whole-tree signature changes, the cache compares saved wildcard and
+starting-literal mutation digests per pattern tree. An unchanged top-level
+function may still replay its reference keys when its declaration, surrounding
+source, and root lexical declarations are stable and no changed starting literal
+occurs in its header, body, transformed references, or numeric arguments. A
+changed wildcard or possible starting literal computes the keys normally, so
+newly relevant overloads and failed lookups rematch.
+The matcher still restores the result and its dependencies; changed bodies and
+changed matching environments compute
+their keys normally.
+`body_resolution_reference_visits` counts references examined by the resolution
+loop, including restored matches. `body_resolution_match_cache_hits` counts
+restored successful and failed matcher results, while
+`body_resolution_match_computations` counts actual matcher executions. The
+remaining visits include explicit-variable handling and references waiting on
+unchanged failed-match dependencies.
+The body-reference ownership counters split parsed references by their nearest
+definition. Ordinary functions are grouped by whether this compiler process
+instantiated them; a function whose IR was imported from cache therefore appears
+in the uninstantiated group. Flex, conversion, and other definitions are counted
+separately. These counters expose the work still done for bodies whose code was
+reused without current-process inference.
+For a successful prior build, unchanged, uninstantiated ordinary functions without nested definitions can
+skip resolution when their parsed declaration already equals the prior resolved
+declaration, their prior matcher entries remain available, and their patterns
+cannot alter another reference's matcher key while definitions are indexed.
+The source projection and body digest establish that their text is unchanged.
+If a later match calls one of these functions, or the completed pattern tree
+differs, its references rejoin the resolver. The cache retains matcher entries
+for bodies that stay inactive. `inactive_body_resolution_references_skipped`
+counts their omitted reference visits. This path runs only when the potential
+skipped work is at least one twentieth of the program's references, so its
+selection work does not dominate small edits in larger programs. Pattern-tree
+keys combine active definition contributions independent of insertion order;
+removing and readding the same definition restores its earlier key.
+The cache records matcher input literals as hex-encoded byte sequences by
+source file. When the initial pattern tree is unchanged, an edited build scans
+references from changed files and carries the unchanged files' literal sets
+forward. It considers both the previous and current literals when selecting
+inactive bodies, then writes the current sets for the next build. A changed
+initial tree rebuilds the index from current references.
+`inactive_body_selection_ms` measures this decision.
+Unchanged references replay saved precedence-pass keys when their first-pass
+keys and precedence families still match. If the final indexed tree changed,
+the cache compares its wildcard and starting-literal mutations against each
+owning function before replay; a potentially affected function rematches.
+Changes that alter precedence rules or participating families also rematch. A precedence
+rebuild never carries replay keys into a later pass.
+An edit confined to the bodies of ordinary functions that had no inferred
+instantiation in the prior build can stop after pattern resolution and validation.
+An unchanged inactive body with no remaining implicit-parameter candidates can
+skip resolution even when its pattern begins with a word used by other calls;
+its declaration cannot change through body-driven parameter promotion.
+The cache compares declarations and all source text outside those bodies. It
+compares the current preinference diagnostics with their saved records and
+reuses later warnings when their source files were not edited; pending scope-rule
+warnings still prevent this path.
+For inline functions, the source projection masks the mapped body span while retaining
+the declaration on the same physical line.
+It refreshes body and resolved-match fingerprints for edited inactive functions,
+then reuses the prior inferred result and linked objects. Active function edits
+traverse type inference again; eligible unchanged instantiations reuse cached summaries.
+A compile-time-folded function may have no emitted LLVM body. When its caller's
+LLVM body is reused, the snapshot retains the folded callee as active through
+the saved section-dependency graph, even if that callee was not instantiated
+again during the current build.
+
+For native, unoptimized builds without debug or execution tracing, the compiler
+can import cached LLVM bodies of unchanged functions after a code edit. It compares
+each function body separately, so changing one function does not invalidate its
+unchanged neighbors in the same file. A newly added or removed ordinary function
+does not invalidate an existing function when its own declaration, body, and
+resolved reference matches are unchanged. The cache compares nonfunction
+declarations and executable source outside ordinary function bodies separately;
+changed overloads invalidate functions whose resolved matches change. Calls to other generated functions form a
+reuse closure: every cached callee must also be unchanged. Cached functions that
+read mutable globals are linked to the current globals only when their LLVM types
+and initializers match. Class layouts use structural LLVM structs so
+cached function imports do not renumber type identities or invalidate unrelated
+object partitions. Reused function IR
+retains the native libraries required by external calls, so a caller edit cannot
+drop a link dependency.
+Dependency reachability handles recursive call cycles; an unchanged cycle remains
+reusable when none of its reachable functions changed. Generated function names
+include the destination of compile-time type arguments so overloads retain stable
+identities across edited builds.
+Successful native builds persist direct section dependencies from resolved matches
+and inferred call selections, with reverse edges for invalidation. When the next
+build has the same matching environment, an edited section marks only its reverse
+reachable callers dirty; a preinferred section with an unchanged interface stops
+that propagation. Missing graph entries use the current expression walk. Inference
+variants restored from cache carry their prior call dependencies forward, while
+newly inferred variants capture current calls. Imported LLVM functions also retain
+their prior variant dependencies when their bodies were not re-inferred. Functions
+without a serializable variant key remain unknown to graph-based invalidation.
+The graph speeds preinference and codegen
+eligibility checks; section parsing and resolution still rebuild their state.
+The graph payload stores section paths once and indexes forward, reverse, and
+per-instantiation edges by path number. Loading it restores the same graph used
+by the dependency checks while avoiding repeated long path strings in the cache.
+Section cache identities use source URI, normalized header, section type, and a
+same-identity sibling ordinal. Inserting a different definition before an existing
+function leaves that function's identity and cached inference or IR intact.
+Declaration fingerprints include each resolved pattern element's classification.
+When a body edit removes the last use of an implicit parameter, the changed
+declaration invalidates saved caller matches even though its spelling is unchanged.
+When adding or changing a declaration prevents whole-program declaration reuse,
+unchanged top-level functions can still reuse their saved declaration entries.
+This checks their body and header, syntax configuration, scope rules, and the
+starting literals and wildcard paths changed in the initial and final indexed
+pattern trees. Functions that declare root globals also require the same root
+binding positions; other functions cannot bind those globals. The whole-program
+declaration fingerprint includes new entries.
+When the declaration and surrounding source projections are stable, an edited
+build carries resolved-match fingerprints forward for unchanged function bodies
+and recomputes fingerprints for edited bodies or changed matching environments.
+Edited bodies retain a fingerprint
+per reference and the matcher dependency key that produced it. A reference with
+the same key after a later edit reuses its fingerprint; changed references are
+fingerprinted again. The function fingerprint is assembled from those reference
+fingerprints, so a later overload addition can still compare the edited body.
+Precedence matcher-key replay compares the current matcher tree and a compact
+signature of precedence-bearing declarations with their saved versions. When
+both agree, it carries forward the saved full precedence fingerprint. A rule
+edit recomputes the full fingerprint before any saved final matcher key is used.
+If an added literal pattern cannot occur in any precedence-bearing declaration
+or its rule text, the saved fingerprint also remains valid; wildcard changes
+still trigger the full check.
+If top-level execution changes but its global declarations keep the same names
+and locations, directly declared functions also retain their resolved-match
+fingerprints. Their inference and generated code still follow the ordinary
+dependency checks for changed global values.
+When only top-level execution changes, the all-function projection first compares
+function-body digests, indexed pattern-tree signatures, precedence, global declaration
+identity, and source with top-level execution masked. If those inputs agree, it
+retains saved declaration and match fingerprints and refreshes only source views
+that include execution. The reuse count is reported by `projection_top_level_sections_reused`.
+These source projections use the configured comment scanner and ignore blank
+lines and trailing whitespace, so a comment-only build does not invalidate the
+next executable edit.
+Each file's projection also stores its source digest and the section-mask
+fingerprint. An edited build reuses the projection of an unchanged imported file
+when both fingerprints match. `--incremental-stats` reports reused and scanned
+source projections; semantic compatibility compares the projected text digest,
+so a comment insertion does not invalidate the next executable edit.
+
+For active edits, the native cache also persists inference summaries for functions
+with concrete runtime argument and return types, including class pointers. A pure
+function returning a value reuses its summary when its call arguments are not all
+known at compile time. A call with known arguments uses a saved return value when
+available; otherwise it infers the body for compile-time evaluation.
+For a pure function without global access or matched function dependencies, the
+cache also stores scalar return values by scalar argument values. A repeated
+known-argument call can use that value without reinferring the body; a new
+argument still infers the body and evaluates the call normally.
+Summaries record return address provenance and storage-parameter relationships, plus
+writes, known constants, address provenance, and address escapes for global variables.
+Class type identities include the current instantiation's field types; a changed layout
+prevents reuse. A summary that accesses globals requires the same structural global
+types as the previous build. A summary
+is reused only if its source body, pattern declarations, every matched function
+dependency and its cached IR closure are unchanged. Other instantiations still
+run ordinary inference. A function in a file with diagnostics gets no inference
+summary, so its warnings are regenerated. Functions imported from cached IR count as active when
+deciding whether an edited body can be ignored. This prevents a later callee edit
+from reusing the preceding build's type inference and executable.
+An edit to top-level executable code can retain global-reading function summaries
+when those functions and their dependencies are unchanged. Replay compares the
+current inferred global types; IR import separately compares the emitted global
+types and initializers. The changed top-level body is inferred and generated.
+
+For functions with one pattern path, restorable concrete argument types, and no transitive
+global access, the compiler can infer affected instantiations in dependency order.
+It compares every instantiation's return type and execution effects with the prior
+summary. An equivalent interface stops invalidation at that function: higher callers
+retain their inference summaries and LLVM bodies, while the function is generated
+anew and linked to them. A changed interface continues through callers until an
+equivalent interface is found or the entry point is reached. This path compares
+inferred results rather than guessing from edited source text.
+
+Native emission divides the finalized IR
 into deterministic, independently linkable partitions. Local symbols receive a stable
 program namespace before LLVM externalizes them. Each partition's complete IR and target
 configuration identify its object cache entry; code changes, changed declarations,
 inlined callees, globals and debug metadata are reflected in that identity. Unchanged
-objects are reused and the executable is always linked again, including current runtime
-libraries. This is native partition reuse, not per-function frontend query reuse.
+objects are reused. If the ordered object keys and required libraries are unchanged,
+and the existing executable still matches the recorded output digest, an edited build
+skips linking. An unchanged, comment-only, or message-only configuration build also
+skips linking while that output identity matches. This is native partition reuse, matcher query reuse, the unused-body
+fast path, function IR reuse, and inference-summary reuse. The last two paths skip
+inference and code generation for eligible unchanged functions during active edits.
+The program cache records its ordered object keys. An unchanged or
+comment-only build with a missing or changed output links those cached objects directly
+without parsing or splitting the LLVM IR. If an object was evicted, the saved IR
+regenerates the missing partition before linking. The cache tracks DynLex source,
+compiler, and output identities; changes made solely to native linker inputs are
+outside its invalidation model.
+After an executable edit, a successful frontend and code generation pass whose
+LLVM IR is identical to the prior result also reuses the cached object keys, and links
+only if the required libraries or output identity differ.
+This still validates the edited source and updates diagnostics and matcher data.
 
-Cache entries carry SHA-256 integrity checks and are published with atomic rename.
+Cache entries carry BLAKE3 integrity checks and are published with atomic rename.
 Invalid entries and I/O failures are explicit errors. Linking uses private temporary
 copies so cache eviction cannot remove linker inputs. Entries are limited to 256 MiB;
 the disk cache is trimmed to 512 MiB after a build. The LSP and other output modes retain

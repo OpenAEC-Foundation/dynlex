@@ -36,6 +36,23 @@ struct ConfigNode {
 	std::vector<std::unique_ptr<ConfigNode>> children;
 };
 
+void appendStructuralConfig(const ConfigNode &node, std::string &identity) {
+	auto append = [&](std::string_view value) {
+		identity += std::to_string(value.size()) + ':';
+		identity.append(value);
+	};
+	append(node.key);
+	identity += node.value ? '1' : '0';
+	if (node.value)
+		append(*node.value);
+	for (const auto &child : node.children) {
+		if (node.key == "dynlex options" && child->key == "messages")
+			continue;
+		appendStructuralConfig(*child, identity);
+	}
+	identity += ';';
+}
+
 std::string trim(std::string_view text) {
 	size_t start = 0;
 	while (start < text.size() && std::isspace(static_cast<unsigned char>(text[start])))
@@ -556,6 +573,7 @@ bool loadSyntaxConfigFile(ParseContext &context, const std::string &path, Syntax
 		addConfigError(context, path, shorthandNode ? shorthandNode->lineNumber : root.children[0]->lineNumber, *error);
 		return false;
 	}
+	appendStructuralConfig(root, config.nonMessageIdentity);
 	return true;
 }
 

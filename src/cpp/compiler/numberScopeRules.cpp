@@ -314,12 +314,13 @@ void emitScopeRuleWarnings(ParseContext &context) {
 		return left->range.subString.data() < right->range.subString.data();
 	});
 	for (const ParseContext::ScopeRuleWarning *warning : kept) {
-		const SyntaxConfig &syntax = syntaxConfigForRange(context, warning->range);
 		Diagnostic diagnostic;
 		diagnostic.level = Diagnostic::Level::Warning;
 		diagnostic.range = warning->range;
-		diagnostic.message = renderConfiguredMessage(syntax, warning->key, "message", warning->placeholders);
-		diagnostic.relatedInfo.push_back({renderConfiguredMessage(syntax, warning->key, "related rule"), warning->ruleRange});
+		diagnostic.setConfiguredMessage(context, warning->range, warning->key, "message", warning->placeholders);
+		diagnostic.relatedInfo.push_back(
+			configuredRelatedInfo(context, warning->range, warning->key, "related rule", warning->ruleRange)
+		);
 		context.diagnostics.push_back(std::move(diagnostic));
 	}
 }

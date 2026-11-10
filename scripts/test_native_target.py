@@ -12,7 +12,7 @@ if len(sys.argv) != 2:
 project = Path(sys.argv[1]).resolve()
 build = project / "build"
 subprocess.run(
-    ["cmake", "--build", str(build), "--target", "dynlex_native_target_test"],
+    ["cmake", "--build", str(build), "--target", "dynlex_native_target_test", "--parallel", "2"],
     check=True,
 )
 executable = build / ("dynlex_native_target_test.exe" if sys.platform == "win32" else "dynlex_native_target_test")

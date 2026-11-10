@@ -30,15 +30,41 @@ static bool samePatternMatchSyntax(const PatternMatch &left, const PatternMatch 
 
 using PrecedenceMatchChanges = std::vector<std::pair<PatternReference *, std::unique_ptr<PatternMatch>>>;
 
+static bool matchMayChangeWithPrecedence(const PatternMatch &match) {
+	// The precedence pass only rejects matched definitions that outrank an operand.
+	for (const PatternDefinition *definition : match.matchingDefinitions) {
+		requireCompilerInvariant(definition->family != nullptr, "precedence candidate has no syntax family");
+		if (!definition->family->precedenceSuccessors.empty())
+			return true;
+	}
+	for (const PatternMatch &subMatch : match.subMatches)
+		if (matchMayChangeWithPrecedence(subMatch))
+			return true;
+	return false;
+}
+
 static bool collectPrecedenceMatchChanges(ParseContext &context, PrecedenceMatchChanges &changes) {
+	auto collectionStart = ResolutionClock::now();
 	std::list<PatternReference *> bodyReferences, globalReferences;
 	std::list<Section *> sections;
 	context.mainSection->collectPatternReferencesAndSections(bodyReferences, globalReferences, sections);
 	bodyReferences.splice(bodyReferences.end(), globalReferences);
-	bodyReferences.sort(referenceComesBefore);
+	std::vector<PatternReference *> candidates;
+	candidates.reserve(bodyReferences.size());
 	for (PatternReference *reference : bodyReferences) {
-		if (!reference->match)
-			continue; // Single-variable references have no matched function.
+		if (reference->match && matchMayChangeWithPrecedence(*reference->match))
+			candidates.push_back(reference);
+	}
+	context.resolutionCandidateCollectionMilliseconds += resolutionMilliseconds(collectionStart);
+	auto sortStart = ResolutionClock::now();
+	std::stable_sort(candidates.begin(), candidates.end(), referenceComesBefore);
+	context.resolutionCandidateSortMilliseconds += resolutionMilliseconds(sortStart);
+	auto replayStart = ResolutionClock::now();
+	if (context.preparePrecedenceMatcherReplay)
+		context.preparePrecedenceMatcherReplay(candidates);
+	context.resolutionReplaySetupMilliseconds += resolutionMilliseconds(replayStart);
+	auto matchStart = ResolutionClock::now();
+	for (PatternReference *reference : candidates) {
 		auto match = std::unique_ptr<PatternMatch>(context.match(reference));
 		if (!match) {
 			context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range()));
@@ -47,6 +73,7 @@ static bool collectPrecedenceMatchChanges(ParseContext &context, PrecedenceMatch
 		if (!samePatternMatchSyntax(*reference->match, *match))
 			changes.emplace_back(reference, std::move(match));
 	}
+	context.resolutionCandidateMatchMilliseconds += resolutionMilliseconds(matchStart);
 	return true;
 }
 

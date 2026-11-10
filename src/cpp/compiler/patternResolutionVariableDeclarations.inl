@@ -39,10 +39,19 @@ static bool indexDataDeclarationNames(ParseContext &context, const std::list<Pat
 static const std::string *findVisibleExplicitWholeVariableName(const PatternReference *reference) {
 	if (!reference || !reference->range().line)
 		return nullptr;
+	Section *sourceScope = reference->matchingScope ? reference->matchingScope : reference->range().section();
+	bool hasExplicitDeclarations = false;
+	for (Section *section = sourceScope; section; section = section->parent) {
+		if (!section->explicitVariableDeclarations.empty()) {
+			hasExplicitDeclarations = true;
+			break;
+		}
+	}
+	if (!hasExplicitDeclarations)
+		return nullptr;
 	std::optional<std::string> sourceName = explicitWholeVariableSourceName(reference);
 	if (!sourceName)
 		return nullptr;
-	Section *sourceScope = reference->matchingScope ? reference->matchingScope : reference->range().section();
 	for (Section *section = sourceScope; section; section = section->parent) {
 		auto declaration = section->explicitVariableDeclarations.find(*sourceName);
 		if (declaration == section->explicitVariableDeclarations.end())

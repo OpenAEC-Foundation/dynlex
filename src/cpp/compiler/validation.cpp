@@ -154,18 +154,15 @@ static void validateSection(ParseContext &context, Section *section) {
 		if (!problem)
 			continue;
 
-		const SyntaxConfig &syntax = syntaxConfigForRange(context, warnRef->range);
 		Diagnostic diag(
 			context, Diagnostic::Level::Warning, "variable usage warning",
 			isPatternArg ? "pattern argument assigned before read" : "variable read before assigned", warnRef->range, "name",
 			name
 		);
-		diag.relatedInfo.push_back(
-			{renderConfiguredMessage(
-				 syntax, "variable usage warning", isPatternArg ? "related argument definition" : "related assignment"
-			 ),
-			 defRef->range}
-		);
+		diag.relatedInfo.push_back(configuredRelatedInfo(
+			context, warnRef->range, "variable usage warning",
+			isPatternArg ? "related argument definition" : "related assignment", defRef->range
+		));
 		context.diagnostics.push_back(std::move(diag));
 	}
 
@@ -180,27 +177,36 @@ static bool isWithinSection(const Section *section, const Section *ancestor) {
 	return false;
 }
 
-static bool validateDeferredCaptures(ParseContext &context, Section *function) {
-	if (!function->receiverParameter)
+static bool validateFunctionCaptures(ParseContext &context, Section *function) {
+	bool deferredCallback = function->receiverParameter != nullptr;
+	if (!deferredCallback && (function->type != SectionType::Function || function->isFlex))
 		return true;
 	const auto inspectBody = [&](auto &&self, Section *body) -> bool {
 		for (const auto &[name, references] : body->variableReferences) {
 			(void)name;
 			for (VariableReference *reference : references) {
-				requireCompilerInvariant(reference && reference->range.line, "deferred body has an invalid variable reference");
+				requireCompilerInvariant(reference && reference->range.line, "function body has an invalid variable reference");
 				VariableReference *definition = normalizeBindingReference(reference);
-				requireCompilerInvariant(definition && definition->range.line, "deferred body variable has no definition");
+				requireCompilerInvariant(definition && definition->range.line, "function body variable has no definition");
 				Variable *variable = reference->range.section()->findVariable(reference);
-				requireCompilerInvariant(variable, "deferred body variable is absent from its scope");
-				if (variable->isGlobal || isWithinSection(definition->range.section(), function))
+				requireCompilerInvariant(variable, "function body variable is absent from its scope");
+				Section *owner = reference->range.section();
+				while (owner) {
+					auto found = owner->variables.find(variable->name);
+					if (found != owner->variables.end() && found->second == variable)
+						break;
+					owner = owner->parent;
+				}
+				requireCompilerInvariant(owner, "resolved function variable has no owning scope");
+				if (variable->isGlobal || isWithinSection(owner, function))
 					continue;
+				const char *key = deferredCallback ? "deferred callback captures local" : "function captures local";
 				Diagnostic diagnostic(
-					context, Diagnostic::Level::Error, "deferred callback captures local", reference->range, "name",
-					variable->name
+					context, Diagnostic::Level::Error, key, reference->range, "name", variable->name
 				);
 				const SyntaxConfig &syntax = syntaxConfigForRange(context, reference->range);
 				diagnostic.relatedInfo.push_back(
-					{renderConfiguredMessage(syntax, "deferred callback captures local", "related definition"),
+					{renderConfiguredMessage(syntax, key, "related definition"),
 					 definition->range}
 				);
 				context.addDiagnostic(std::move(diagnostic));
@@ -221,7 +227,7 @@ static bool validateDeferredCaptures(ParseContext &context, Section *function) {
 bool validate(ParseContext &context) {
 	validateSection(context, context.mainSection);
 	const auto validateCallbacks = [&](auto &&self, Section *section) -> bool {
-		if (!validateDeferredCaptures(context, section))
+		if (!validateFunctionCaptures(context, section))
 			return false;
 		for (Section *child : section->children)
 			if (!self(self, child))

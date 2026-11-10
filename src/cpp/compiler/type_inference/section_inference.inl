@@ -4,6 +4,7 @@
 #include "operand_reordering.inl"
 #include "scopeRulesSection.h"
 #include "section_inference_helpers.inl"
+#include <chrono>
 #include <unordered_set>
 
 static bool inferStaticLoopIterations(
@@ -575,6 +576,13 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 }
 
 bool inferTypes(ParseContext &parseContext) {
+	auto stageStart = std::chrono::steady_clock::now();
+	size_t stageIndex = 0;
+	auto finishStage = [&]() {
+		parseContext.inferenceStageMilliseconds.at(stageIndex++) =
+			std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - stageStart).count();
+		stageStart = std::chrono::steady_clock::now();
+	};
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
 	struct ScopeRuleWarningEmission {
 		ParseContext &context;
@@ -582,8 +590,32 @@ bool inferTypes(ParseContext &parseContext) {
 	} scopeRuleWarningEmission{parseContext};
 	if (!inferDeclaredTypeConstraints(parseContext))
 		return false;
+	finishStage();
 	if (!validatePatternDefinitionConflicts(parseContext))
 		return false;
+	finishStage();
+	if (parseContext.runIncrementalPreinference) {
+		auto inferRequest = [&](const ParseContext::IncrementalFunctionRequest &request) {
+			Section *section = request.section;
+			requireCompilerInvariant(
+				section->type == SectionType::Function && !section->patternDefinitions.empty(),
+				"incremental preinference requires a function definition"
+			);
+			std::vector<std::pair<std::string, Expression *>> bindings;
+			for (const std::string &name : request.parameterNames)
+				bindings.emplace_back(name, nullptr);
+			size_t diagnosticCount = parseContext.diagnostics.size();
+			bool inferred = ensureSectionInstantiationInferred(
+				parseContext, section, section->patternDefinitions.front(), bindings, request.argumentTypes, {}, nullptr,
+				nullptr
+			);
+			if (!inferred)
+				parseContext.diagnostics.resize(diagnosticCount);
+			return inferred;
+		};
+		parseContext.runIncrementalPreinference(parseContext, inferRequest);
+	}
+	finishStage();
 	if (parseContext.options.noMain) {
 		for (CodeLine *line : parseContext.mainSection->codeLines) {
 			if (!line || !line->expression)
@@ -602,6 +634,7 @@ bool inferTypes(ParseContext &parseContext) {
 		emitPendingInferenceFailure(context);
 		return false;
 	}
+	finishStage();
 	std::function<bool(Section *)> inferExposedFunctions = [&](Section *section) {
 		if (!section)
 			return true;
@@ -632,6 +665,7 @@ bool inferTypes(ParseContext &parseContext) {
 		emitPendingInferenceFailure(context);
 		return false;
 	}
+	finishStage();
 
 	// Validate variables — all must have deduced types
 	// Skip definition body sections: their variables are inferred when the definition is instantiated/expanded.
@@ -697,6 +731,7 @@ bool inferTypes(ParseContext &parseContext) {
 			validateReturnTypes(child);
 	};
 	validateReturnTypes(parseContext.mainSection);
+	finishStage();
 
 	return valid;
 }
