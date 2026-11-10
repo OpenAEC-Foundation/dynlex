@@ -532,6 +532,8 @@ bool resolvePatterns(ParseContext &context) {
 	// Helper: after adding a definition to the tree, find less-specific definitions
 	// and unresolve any references that matched them so they can re-match the more specific one.
 	auto invalidateStaleMatches = [&](PatternDefinition *definition, SectionType treeType) {
+		if (definitionToReferences.empty() && !activeResolvingReference)
+			return;
 		auto lessSpecific = context.patternTrees[(size_t)treeType]->findLessSpecificDefinitions(*definition);
 		for (PatternTreeNode *endNode : definition->endNodes) {
 			for (PatternDefinition *candidate : endNode->matchingDefinitions) {
