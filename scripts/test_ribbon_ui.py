@@ -13,7 +13,7 @@ import tempfile
 import time
 
 from find_vulkan_icd import find_vulkan_icd, vulkan_driver_environment
-from native_ui_test import click, close_window, image_region, named_window, press_key, save_png, screenshot, window_geometry, window_size_hints, x11_library
+from native_ui_test import click, close_window, image_region, named_window, press_key, private_x11_environment, save_png, screenshot, window_geometry, window_size_hints, x11_library
 
 
 TABS = ["File", "Home", "Insert", "Design", "Transitions", "Animations", "Slide Show", "Review", "View"]
@@ -362,7 +362,8 @@ def main():
         command = [xvfb, "--auto-servernum", "--server-args=-screen 0 2560x1600x24", sys.executable, str(Path(__file__).resolve()), str(project), str(compiler), "--drive", str(executable)]
         if snapshots:
             command += ["--snapshots", str(snapshots)]
-        subprocess.run(command, cwd=project, env=vulkan_driver_environment(find_vulkan_icd(), os.environ), check=True, timeout=120)
+        environment = private_x11_environment(vulkan_driver_environment(find_vulkan_icd(), os.environ))
+        subprocess.run(command, cwd=project, env=environment, check=True, timeout=120)
 
 
 if __name__ == "__main__":

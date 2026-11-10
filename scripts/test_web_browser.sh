@@ -90,7 +90,10 @@ fi
 SERVER_PID="$!"
 if [[ "$GRAPHICS_BACKEND" = webgpu ]]; then
     VULKAN_ICD="$(python3 "$SCRIPT_DIR/find_vulkan_icd.py")"
-    VK_DRIVER_FILES="$VULKAN_ICD" VK_ICD_FILENAMES="$VULKAN_ICD" setsid xvfb-run -a -s "-screen 0 1440x1000x24" \
+    # Keep Chromium on the private Xvfb display even in a Wayland desktop session.
+    env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET XDG_SESSION_TYPE=x11 \
+        VK_DRIVER_FILES="$VULKAN_ICD" VK_ICD_FILENAMES="$VULKAN_ICD" \
+        setsid xvfb-run -a -s "-screen 0 1440x1000x24" \
         google-chrome --no-sandbox --no-first-run --no-default-browser-check --mute-audio \
         --disable-background-networking --enable-unsafe-webgpu \
         --enable-features=Vulkan,WebGPU --use-vulkan=native --use-angle=vulkan \

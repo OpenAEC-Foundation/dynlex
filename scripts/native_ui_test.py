@@ -5,6 +5,15 @@ import struct
 import time
 import zlib
 
+
+def private_x11_environment(environment):
+    """Make Xvfb's DISPLAY win over the caller's Wayland session."""
+    selected = dict(environment)
+    selected["XDG_SESSION_TYPE"] = "x11"
+    selected.pop("WAYLAND_DISPLAY", None)
+    selected.pop("WAYLAND_SOCKET", None)
+    return selected
+
 class XButton(c.Structure):
     _fields_ = [
         ("type", c.c_int), ("serial", c.c_ulong), ("send_event", c.c_int),
