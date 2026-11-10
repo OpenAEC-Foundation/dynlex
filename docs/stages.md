@@ -897,6 +897,9 @@ their prior variant dependencies when their bodies were not re-inferred. Functio
 without a serializable variant key remain unknown to graph-based invalidation.
 The graph speeds preinference and codegen
 eligibility checks; section parsing and resolution still rebuild their state.
+The graph payload stores section paths once and indexes forward, reverse, and
+per-instantiation edges by path number. Loading it restores the same graph used
+by the dependency checks while avoiding repeated long path strings in the cache.
 Section cache identities use source URI, normalized header, section type, and a
 same-identity sibling ordinal. Inserting a different definition before an existing
 function leaves that function's identity and cached inference or IR intact.

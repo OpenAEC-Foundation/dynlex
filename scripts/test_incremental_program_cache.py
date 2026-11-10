@@ -3,6 +3,21 @@
 import json
 
 
+def decode_graph(encoded):
+    paths = encoded["paths"]
+    assert len(paths) == len(encoded["forward"]) == len(encoded["instantiations"])
+    return {
+        "forward": {path: [paths[index] for index in edges]
+                    for path, edges in zip(paths, encoded["forward"])},
+        "reverse": {paths[index]: [paths[caller] for caller in callers]
+                    for index, callers in encoded["reverse"]},
+        "instantiations": {path: {key: [paths[index] for index in edges]
+                                  for key, edges in variants.items()}
+                           for path, variants in zip(paths, encoded["instantiations"])},
+        "unknown": [paths[index] for index in encoded["unknown"]],
+    }
+
+
 def read_program(cache, entry):
     matches = []
     directory = cache / "native-v1"
@@ -12,7 +27,12 @@ def read_program(cache, entry):
             continue
         for field, key in program["payload_keys"].items():
             payload = (directory / f"payload-{key}.entry").read_bytes().split(b"\n", 2)[2]
-            program[field] = payload.decode() if field == "ir" else json.loads(payload)
+            if field == "ir":
+                program[field] = payload.decode()
+            elif field == "section_dependency_graph":
+                program[field] = decode_graph(json.loads(payload))
+            else:
+                program[field] = json.loads(payload)
         matches.append(program)
     assert len(matches) == 1, "expected one cached program"
     return matches[0]
@@ -49,6 +69,7 @@ def check_program_payloads(root, build):
     assert read_program(root / "cache", main)["ir"]
     updated = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
     graph_blob = directory / f"payload-{updated['payload_keys']['section_dependency_graph']}.entry"
+    assert isinstance(json.loads(graph_blob.read_bytes().split(b"\n", 2)[2])["forward"], list)
     graph_blob.unlink()
     main.write_text("# comment\n" + source.replace('"first"', '"third"'))
     evicted = build(entry=main)
