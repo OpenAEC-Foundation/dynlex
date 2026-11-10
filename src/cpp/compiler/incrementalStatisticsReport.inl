@@ -1,4 +1,39 @@
+struct BodyReferenceOwnership {
+	size_t instantiated = 0;
+	size_t uninstantiated = 0;
+	size_t flex = 0;
+	size_t conversion = 0;
+	size_t other = 0;
+};
+
+BodyReferenceOwnership bodyReferenceOwnership(const Section *root) {
+	BodyReferenceOwnership counts;
+	if (!root)
+		return counts;
+	auto visit = [&](auto &&self, const Section *section, const Section *owner) -> void {
+		if (!section->patternDefinitions.empty())
+			owner = section;
+		if (owner && owner->type == SectionType::Function) {
+			if (owner->isFlex)
+				counts.flex += section->patternReferences.size();
+			else if (owner->isConversion)
+				counts.conversion += section->patternReferences.size();
+			else if (owner->instantiations.empty())
+				counts.uninstantiated += section->patternReferences.size();
+			else
+				counts.instantiated += section->patternReferences.size();
+		} else if (owner) {
+			counts.other += section->patternReferences.size();
+		}
+		for (const Section *child : section->children)
+			self(self, child, owner);
+	};
+	visit(visit, root, nullptr);
+	return counts;
+}
+
 template <typename Statistics> void emitIncrementalStatistics(const ParseContext &context, const Statistics &statistics) {
+	BodyReferenceOwnership bodyReferences = bodyReferenceOwnership(context.mainSection);
 	std::cerr << "incremental: "
 			  << Json{{"frontend_reused", statistics.reusedFrontend},
 					  {"type_inference_reused", statistics.reusedTypeInference},
@@ -29,6 +64,11 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"definition_parse_hits", statistics.definitionParseHits},
 					  {"definition_parse_misses", statistics.definitionParseMisses},
 					  {"body_resolution_reference_visits", context.bodyResolutionReferenceVisits},
+					  {"body_references_in_instantiated_functions", bodyReferences.instantiated},
+					  {"body_references_in_uninstantiated_functions", bodyReferences.uninstantiated},
+					  {"body_references_in_flex_functions", bodyReferences.flex},
+					  {"body_references_in_conversion_functions", bodyReferences.conversion},
+					  {"body_references_in_other_definitions", bodyReferences.other},
 					  {"body_resolution_match_cache_hits", context.bodyResolutionMatchCacheHits},
 					  {"body_resolution_match_computations", context.bodyResolutionMatchComputations},
 					  {"variable_like_count_references_scanned", context.variableLikeCountReferencesScanned},

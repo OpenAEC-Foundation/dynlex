@@ -909,6 +909,12 @@ restored successful and failed matcher results, while
 `body_resolution_match_computations` counts actual matcher executions. The
 remaining visits include explicit-variable handling and references waiting on
 unchanged failed-match dependencies.
+The body-reference ownership counters split parsed references by their nearest
+definition. Ordinary functions are grouped by whether this compiler process
+instantiated them; a function whose IR was imported from cache therefore appears
+in the uninstantiated group. Flex, conversion, and other definitions are counted
+separately. These counters expose the work still done for bodies whose code was
+reused without current-process inference.
 Unchanged references replay saved precedence-pass keys when their first-pass
 keys and precedence families still match. If the final indexed tree changed,
 the cache compares its wildcard and starting-literal mutations against each
