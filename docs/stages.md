@@ -716,6 +716,12 @@ changing optimization, while DAP compilation explicitly requests `-O0`.
 
 We already know which patterns call which instantiations, the type of every variable, etc. But now, we branch off into compilation target: browser, machine code, SPIR-V, etc.
 
+Conditional alternatives nest on the previous condition's false edge. Each `else if`
+owns a merge block that forwards to its enclosing merge, while execution after the
+chain continues at the original `if` exit. This preserves nested selections for
+SPIR-V and its WGSL/GLSL translators. Terminating alternatives remove unreachable
+forwarding blocks before the section exit is finalized.
+
 Array literals and class construction compose SSA aggregate values directly, allowing
 LLVM to fold static operands into constant aggregates. Named data declarations refer
 to their inferred initializer instead of mutable variable storage. `static reference`

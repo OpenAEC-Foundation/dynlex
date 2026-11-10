@@ -20,6 +20,8 @@ function left = right:
 
 [an|] integer means: @intrinsic("type", "int")
 
+fixed value means: @intrinsic("fix", value)
+
 value as [a|] {fixed integer:bits} bit integer means: @intrinsic("cast", value, @intrinsic("type", "int", bits))
 
 to print line {an integer:message}:
@@ -73,20 +75,22 @@ to get the nested level for {an integer:outer} and {an integer:inner}:
             set amount to 22
     @intrinsic("return", amount)
 
-print line the chained level for 1
-print line the chained level for 2
-print line the chained level for 3
-print line the chained level for 4
-print line the closed level for 1
-print line the closed level for 2
-print line the closed level for 3
-print line the closed level for 4
-print line the returned level for 1
-print line the returned level for 2
-print line the returned level for 3
-print line the nested level for 1 and 1
-print line the nested level for 1 and 2
-print line the nested level for 1 and 3
-print line the nested level for 2 and 1
-print line the nested level for 2 and 2
-print line the nested level for 3 and 1
+runtime value means: @intrinsic("add", value, @intrinsic("command line argument count"))
+
+print line the chained level for runtime 1
+print line the chained level for runtime 2
+print line the chained level for runtime 3
+print line the chained level for runtime 4
+print line the closed level for runtime 1
+print line the closed level for runtime 2
+print line the closed level for runtime 3
+print line the closed level for runtime 4
+print line the returned level for runtime 1
+print line the returned level for runtime 2
+print line the returned level for runtime 3
+print line the nested level for runtime 1 and runtime 1
+print line the nested level for runtime 1 and runtime 2
+print line the nested level for runtime 1 and runtime 3
+print line the nested level for runtime 2 and runtime 1
+print line the nested level for runtime 2 and runtime 2
+print line the nested level for runtime 3 and runtime 1

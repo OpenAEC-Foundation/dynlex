@@ -155,9 +155,8 @@ generateIfIntrinsic(ParseContext &context, Expression *callExpr, const std::vect
 	}
 	requireCompilerInvariant(falseBranch, "if chain has no pending false edge");
 
-	llvm::BasicBlock *alternativeBlock = llvm::BasicBlock::Create(
-		*context.llvmContext, kind == IntrinsicKind::ElseIf ? "elif_cond" : "else_body", func
-	);
+	llvm::BasicBlock *alternativeBlock =
+		llvm::BasicBlock::Create(*context.llvmContext, kind == IntrinsicKind::ElseIf ? "elif_cond" : "else_body", func);
 	falseBranch->setSuccessor(1, alternativeBlock);
 	builder.SetInsertPoint(alternativeBlock);
 
