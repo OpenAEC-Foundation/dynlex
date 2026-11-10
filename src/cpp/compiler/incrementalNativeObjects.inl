@@ -74,6 +74,8 @@ struct BuildStatistics {
 	double preinferenceMilliseconds = 0;
 	double codegenMilliseconds = 0;
 	double irGenerationMilliseconds = 0;
+	double unoptimizedIRSnapshotMilliseconds = 0;
+	double optimizationMilliseconds = 0;
 	double snapshotMilliseconds = 0;
 	double cacheWriteMilliseconds = 0;
 	double partitionMilliseconds = 0;

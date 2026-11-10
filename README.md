@@ -53,6 +53,7 @@ process-tree budget starts immediately after the compiler build and includes
 compiling and running its DynLex fixtures and auxiliary checks. No test preparation
 is moved ahead of that timer. Required fixture builds and non-cache compiler
 checks disable incremental reuse; cache regressions start with fresh test projects.
+`--run-only` skips the compiler build and keeps the same process-tree budget.
 C++ unit checks for numeric parsing and class layout
 run in the integration suite and in separate Linux, macOS, and Windows CI steps.
 Integration tests also cover larger library and application programs. Release
@@ -202,8 +203,9 @@ To inspect the cache location and compilation work:
 Unchanged source/configuration and compiler options reuse the complete compilation.
 Comment edits can reuse analyzed code, and diagnostic-message edits in `config.dl` update
 warnings and errors without recompiling. After code edits, unaffected parser and
-matcher results can be restored. With explicit `-O0`, without debug information or execution
-tracing, eligible functions also reuse inference summaries and LLVM bodies. Native
+matcher results can be restored. Without debug information or execution tracing,
+eligible functions also reuse inference summaries and generated LLVM bodies at all
+optimization levels. Restored bodies participate in the normal LLVM optimization pipeline. Native
 partitions reuse cached objects, and an unchanged executable skips linking.
 This mode supports native executable output. Some stages still reconstruct shared
 state after code edits; the LSP retains its existing compilation pipeline.

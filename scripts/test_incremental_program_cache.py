@@ -44,7 +44,7 @@ def read_program(cache, entry):
             continue
         for field, key in program["payload_keys"].items():
             payload = (directory / f"payload-{key}.entry").read_bytes().split(b"\n", 2)[2]
-            if field == "ir":
+            if field in ("ir", "unoptimized_ir"):
                 program[field] = payload
             elif field == "section_dependency_graph":
                 program[field] = decode_graph(json.loads(payload))
@@ -67,9 +67,11 @@ def check_program_payloads(root, build):
                          if str(main) in json.loads(path.read_bytes().split(b"\n", 2)[2])["files"])
     manifest = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
     assert set(manifest["payload_keys"]) == {
-        "all_function_projection", "section_dependency_graph", "inference_summaries", "ir", "native_units"
+        "all_function_projection", "section_dependency_graph", "inference_summaries", "unoptimized_ir", "ir", "native_units"
     }
     assert all(field not in manifest for field in manifest["payload_keys"])
+    assert manifest["payload_keys"]["ir"] == manifest["payload_keys"]["unoptimized_ir"], \
+        "unoptimized builds stored duplicate module payloads"
     payloads = [directory / f"payload-{key}.entry" for key in manifest["payload_keys"].values()]
     assert manifest_path.stat().st_size < sum(path.stat().st_size for path in payloads)
     before = {path: path.stat().st_mtime_ns for path in payloads}

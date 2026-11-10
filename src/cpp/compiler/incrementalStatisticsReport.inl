@@ -129,6 +129,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"dependency_graph_ms", statistics.dependencyGraphMilliseconds},
 					  {"preinference_ms", statistics.preinferenceMilliseconds},
 					  {"ir_generation_ms", statistics.irGenerationMilliseconds},
+					  {"unoptimized_ir_snapshot_ms", statistics.unoptimizedIRSnapshotMilliseconds},
+					  {"optimization_ms", statistics.optimizationMilliseconds},
 					  {"snapshot_ms", statistics.snapshotMilliseconds},
 					  {"cache_write_ms", statistics.cacheWriteMilliseconds},
 					  {"partition_ms", statistics.partitionMilliseconds},

@@ -1,6 +1,8 @@
-constexpr std::array<const char *, 5> programPayloadFields{
-	"all_function_projection", "section_dependency_graph", "inference_summaries", "ir", "native_units"
+constexpr std::array<const char *, 6> programPayloadFields{
+	"all_function_projection", "section_dependency_graph", "inference_summaries", "unoptimized_ir", "ir", "native_units"
 };
+
+bool isModulePayload(std::string_view field) { return field == "ir" || field == "unoptimized_ir"; }
 
 fs::path programPayloadPath(const fs::path &directory, std::string_view key) {
 	return directory / ("payload-" + std::string(key) + ".entry");
@@ -95,13 +97,20 @@ bool hydrateProgramField(Json &program, const fs::path &directory, const char *f
 	if (program.contains(field))
 		return false;
 	std::string key = program.at("payload_keys").at(field).get<std::string>();
+	if (isModulePayload(field)) {
+		const char *other = std::string_view(field) == "ir" ? "unoptimized_ir" : "ir";
+		if (program.contains(other) && program.at("payload_keys").at(other) == key) {
+			program[field] = program.at(other);
+			return false;
+		}
+	}
 	fs::path path = programPayloadPath(directory, key);
 	auto payload = readEntry(path);
 	if (!payload)
 		throw std::runtime_error("program payload disappeared: " + path.string());
 	if (digest(*payload) != key)
 		throw std::runtime_error("corrupt program payload: " + path.string());
-	if (std::string_view(field) == "ir")
+	if (isModulePayload(field))
 		program[field] = std::move(*payload);
 	else if (std::string_view(field) == "section_dependency_graph")
 		program[field] = decodeSectionGraph(Json::parse(*payload));
@@ -118,7 +127,7 @@ void writeProgramEntry(const fs::path &path, Json program, const Json *prior = n
 				prior->at("payload_keys").contains(field)) {
 				keys[field] = prior->at("payload_keys").at(field);
 			} else {
-				std::string payload = std::string_view(field) == "ir" ? program.at(field).get<std::string>()
+				std::string payload = isModulePayload(field) ? program.at(field).get<std::string>()
 									  : std::string_view(field) == "section_dependency_graph"
 										  ? encodeSectionGraph(program.at(field)).dump()
 										  : program.at(field).dump();

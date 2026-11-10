@@ -324,36 +324,7 @@ bool compatibleObservations(const Json &previous, const Json &current, const Par
 #include "incrementalInactiveFunctionProjection.inl"
 #include "incrementalObservationReuse.inl"
 
-Json optionIdentity(const ParseContext::Options &options) {
-	auto optionalBool = [](std::optional<bool> value) -> Json {
-		return value ? Json(*value) : Json(nullptr);
-	};
-	llvm::StringMap<bool> hostFeatures = llvm::sys::getHostCPUFeatures();
-	std::map<std::string, bool> sortedFeatures;
-	for (const auto &feature : hostFeatures)
-		sortedFeatures[feature.first().str()] = feature.second;
-	return Json{
-		{"input", options.inputPath},
-		{"cwd", fs::current_path().string()},
-		{"no_main", options.noMain},
-		{"optimization", options.optimizationLevel},
-		{"size", static_cast<int>(options.optimizationSize)},
-		{"fast_math", options.fastMath},
-		{"contract", static_cast<int>(options.floatingPointContract)},
-		{"vectorize", optionalBool(options.loopVectorization)},
-		{"slp", optionalBool(options.slpVectorization)},
-		{"unroll", optionalBool(options.loopUnrolling)},
-		{"cpu", options.targetCPU},
-		{"tune", options.targetTuneCPU},
-		{"features", options.targetFeatures},
-		{"explicit_target", options.hasExplicitTargetConfiguration},
-		{"debug", options.emitDebugInfo},
-		{"trace", options.traceExecution},
-		{"resolution_limit", options.maxResolutionIterations},
-		{"host_cpu", llvm::sys::getHostCPUName().str()},
-		{"host_features", sortedFeatures}
-	};
-}
+#include "incrementalOptions.inl"
 
 std::string renderModule(const llvm::Module &module) {
 	std::string result;
@@ -687,6 +658,7 @@ bool compileIncrementally(
 					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "section_dependency_graph");
 					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "inference_summaries");
 					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
+					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "unoptimized_ir");
 					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 					if (compatibleObservations(*previous, recording->observations, context))
 						prepareConstraintProbeReuse(
@@ -739,9 +711,9 @@ bool compileIncrementally(
 						for (const Section *section : stable)
 							replacementPaths.insert(sectionPaths.at(section));
 						functionReuse = std::make_unique<IncrementalIRReuse>(
-							inferred, previous->at("ir").get_ref<const std::string &>(), previous->at("function_sections"),
-							previous->at("callable_functions"), previous->at("function_instantiations"), sectionPaths, eligible,
-							std::move(replacementPaths)
+							inferred, previous->at("unoptimized_ir").get_ref<const std::string &>(),
+							previous->at("function_sections"), previous->at("callable_functions"),
+							previous->at("function_instantiations"), sectionPaths, eligible, std::move(replacementPaths)
 						);
 						inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
 							priorSummaries, previous->at("global_types"), *functionReuse, sectionPaths, std::move(eligible)
@@ -859,8 +831,10 @@ bool compileIncrementally(
 					};
 				}
 				stageStart = Clock::now();
+				std::string unoptimizedIR;
+				auto optimizationStart = stageStart;
 				success = generateCode(context, [&](ParseContext &compiled) {
-					statistics.irGenerationMilliseconds = elapsedMilliseconds(stageStart);
+					statistics.optimizationMilliseconds = elapsedMilliseconds(optimizationStart);
 					auto snapshotStart = Clock::now();
 					sortModuleSymbols(*compiled.llvmModule);
 					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
@@ -872,6 +846,7 @@ bool compileIncrementally(
 					Json result{
 						{"files", recording->observations},
 						{"ir", serializeCachedModule(*compiled.llvmModule)},
+						{"unoptimized_ir", std::move(unoptimizedIR)},
 						{"module_id", compiled.llvmModule->getModuleIdentifier()},
 						{"libraries", libraries},
 						{"diagnostics", diagnostics},
@@ -955,6 +930,13 @@ bool compileIncrementally(
 					writeProgramEntry(programEntry, std::move(result), previous ? &*previous : nullptr);
 					statistics.cacheWriteMilliseconds = elapsedMilliseconds(writeStart);
 					return true;
+				}, [&](ParseContext &generated) {
+					statistics.irGenerationMilliseconds = elapsedMilliseconds(stageStart);
+					auto snapshotStart = Clock::now();
+					sortModuleSymbols(*generated.llvmModule);
+					unoptimizedIR = serializeCachedModule(*generated.llvmModule);
+					statistics.unoptimizedIRSnapshotMilliseconds = elapsedMilliseconds(snapshotStart);
+					optimizationStart = Clock::now();
 				});
 				statistics.codegenMilliseconds = elapsedMilliseconds(stageStart);
 				statistics.reusedFunctionIR = functionReuse ? functionReuse->reusedCount() : 0;

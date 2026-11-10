@@ -832,11 +832,11 @@ configured message keys, variants and placeholders. Comment edits relocate their
 source locations without rebuilding the frontend. An edit confined to messages in an
 existing `config.dl` rerenders those diagnostics without recompiling.
 The program entry is a small manifest of observations, diagnostics, object keys,
-and content-addressed keys for the saved LLVM bitcode, function projection, dependency
+and content-addressed keys for generated and optimized LLVM bitcode, function projection, dependency
 graph, inference summaries, and native partition dependencies. Unchanged and comment-only builds inspect the
 manifest without parsing these larger payloads; they load LLVM bitcode only if an object
 must be rebuilt. Executable source edits first load the function projection.
-They load the dependency graph, inference summaries, and LLVM bitcode only if type
+They load the dependency graph, inference summaries, and both LLVM stages only if type
 inference must run again; missing objects load LLVM bitcode when they must be rebuilt.
 `cache_payloads_loaded` reports the
 number of payloads read on a build.
@@ -1012,8 +1012,17 @@ LLVM body is reused, the snapshot retains the folded callee as active through
 the saved section-dependency graph, even if that callee was not instantiated
 again during the current build.
 
-For native, unoptimized builds without debug or execution tracing, the compiler
-can import cached LLVM bodies of unchanged functions after a code edit. It compares
+For native builds without debug or execution tracing, the compiler
+can import cached generated LLVM bodies of unchanged functions after a code edit at every
+optimization level. Generated bodies are saved after target attributes and verification,
+before LLVM optimization. Optimized bitcode is stored separately for object regeneration
+and whole-program reuse. At O0 the two module payloads share a content-addressed entry.
+Restored generated bodies run through the normal whole-module optimization pipeline;
+inlining and other changes to optimized callers are therefore recomputed. Native object
+reuse fingerprints the resulting optimized bodies, independently of generated-body reuse.
+`ir_generation_ms`, `unoptimized_ir_snapshot_ms`, and `optimization_ms` separate these
+costs. LLVM optimization itself still traverses the module after active code edits.
+The compiler compares
 each function body separately, so changing one function does not invalidate its
 unchanged neighbors in the same file. A newly added or removed ordinary function
 does not invalidate an existing function when its own declaration, body, and

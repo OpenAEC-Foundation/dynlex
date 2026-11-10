@@ -15,11 +15,12 @@ from test_incremental_native_units import check_interned_literal_identity, check
 from test_incremental_typed_variants import check_typed_variant_dependency_retention
 from test_incremental_projection_stages import check_comment_inactive_active_sequence, check_nested_inactive_stage_retention
 from test_default_incremental_cache import check_default_cache
+from test_incremental_optimized_ir import check_optimized_function_reuse
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
-# Reuse-counter checks exercise the O0-only function cache; integration cases
-# exercise the normal optimization default and its program/object caches.
+# Most counter checks use O0 so native body dependency shortcuts are observable.
+# Dedicated optimized checks also exercise function reuse at every optimized level.
 optimization_flags = () if integration_mode else ("-O0",)
 compiler = project / "build" / ("dynlex.exe" if os.name == "nt" else "dynlex")
 source = '''integer means: @intrinsic("type", "int")
@@ -62,6 +63,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         raise SystemExit(0)
 
     check_default_cache(compiler, root / "automatic-cache")
+    check_optimized_function_reuse(root, build)
     cold = build()
     assert not cold[0]["frontend_reused"] and not cold[0]["linked_cached_objects"]
     assert cold[0]["source_projection_mask_ms"] >= 0 and cold[0]["source_projection_files_ms"] >= 0
