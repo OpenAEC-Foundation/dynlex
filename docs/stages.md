@@ -870,6 +870,12 @@ source and candidate pattern tree are equivalent; a successful build retires the
 failed snapshot.
 The compiler linker build ID (or executable content digest when the format has no
 build ID), effective compiler options and host CPU features identify the computation. Modification timestamps are never a correctness criterion.
+The cache's size limit evicts entries by successful access time. Reading a
+verified entry refreshes its cache-file timestamp, so repeated reuse keeps hot
+optimization units ahead of older results that no longer participate in builds.
+Validating a program manifest also records access to its payload references,
+without loading their contents. Comment and unused-body edits can therefore
+retain lazy payloads under cache pressure without evicting their current result.
 
 After an executable source edit, the frontend reconstructs sections and pattern trees.
 The native cache restores unresolved expression trees for unchanged expression text
@@ -1063,7 +1069,28 @@ Unit preparation keeps link-once definitions available for references from other
 Combination restores the original names, linkage and visibility of definitions.
 A final liveness pass removes exports whose callers were fully inlined in other units,
 before native partitions are fingerprinted.
-Native object reuse fingerprints the resulting optimized bodies independently of generated-body reuse.
+Native object reuse identifies resulting optimized bodies independently of
+generated-body reuse. Verified optimization outputs carry reference records.
+The native body query records the optimization unit's input identity and each
+referenced symbol's actual final name, after LLVM linking, liveness and native
+namespace assignment. Equal query inputs reuse the saved body fingerprint and
+dependencies without cloning or printing the body. Changed inputs fingerprint
+only the live function; an unchanged result still retains its object. Functions
+removed by optimization never need a native body fingerprint. Private names
+with cross-unit collisions require the ordinary body fingerprint. Declaration
+interfaces and module settings are still checked separately.
+`optimization_function_records_reused` and
+`optimization_function_records_computed` count saved output dependency records;
+`native_optimized_function_proofs` counts native bodies whose query inputs reused
+their fingerprint this way.
+`native_functions` counts surviving function definitions independently of whether
+their native body fingerprint needed computing.
+`optimization_function_record_ms`, `optimization_record_decode_ms`,
+`optimization_origin_capture_ms`, and `optimization_origin_bind_ms` separate
+collecting references for new optimized units, decoding saved records, collecting unit
+ownership, and rebinding live functions. `native_optimized_bindings` counts the
+symbol bindings checked by native body queries. Their temporary origin data is
+consumed by native emission rather than retained through final cache writes.
 `ir_generation_ms`, `unoptimized_ir_snapshot_ms`, and `optimization_ms` separate these
 costs. `optimization_input_units_built`, `optimization_input_units_reused`,
 `optimization_units_built`, and `optimization_units_reused` expose the independent input

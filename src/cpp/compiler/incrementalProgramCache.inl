@@ -88,7 +88,7 @@ std::optional<Json> readProgramManifest(const fs::path &path) {
 	for (const char *field : programPayloadFields) {
 		if (manifest.contains(field) || !keys.contains(field) || !keys.at(field).is_string())
 			throw std::runtime_error("invalid program cache manifest: " + path.string());
-		if (!fs::exists(programPayloadPath(path.parent_path(), keys.at(field).get_ref<const std::string &>())))
+		if (!recordCacheAccess(programPayloadPath(path.parent_path(), keys.at(field).get_ref<const std::string &>())))
 			return std::nullopt;
 	}
 	return manifest;

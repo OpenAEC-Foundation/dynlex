@@ -147,6 +147,15 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"native_partition_modules_skipped", statistics.nativePartitionModulesSkipped},
 					  {"native_function_dependencies_reused", statistics.nativeFunctionDependenciesReused},
 					  {"native_function_fingerprints_computed", statistics.nativeFunctionFingerprintsComputed},
+					  {"native_functions", statistics.nativeFunctions},
+					  {"native_optimized_function_proofs", statistics.nativeOptimizedFunctionProofs},
+					  {"optimization_function_records_reused", statistics.optimizationFunctionRecordsReused},
+					  {"optimization_function_records_computed", statistics.optimizationFunctionRecordsComputed},
+					  {"native_optimized_bindings", statistics.nativeOptimizedBindings},
+					  {"optimization_record_decode_ms", statistics.optimizationRecordDecodeMilliseconds},
+					  {"optimization_function_record_ms", statistics.optimizationFunctionRecordMilliseconds},
+					  {"optimization_origin_capture_ms", statistics.optimizationOriginCaptureMilliseconds},
+					  {"optimization_origin_bind_ms", statistics.optimizationOriginBindMilliseconds},
 					  {"link_ms", statistics.linkMilliseconds},
 					  {"codegen_and_link_ms", statistics.codegenMilliseconds}}
 					 .dump()

@@ -4,6 +4,41 @@ import json
 import os
 
 
+def check_recent_cache_entries(root, build):
+    active = ('integer means: @intrinsic("type", "int")\n'
+              'exposed function preserved:\n    execute:\n'
+              '        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "preserved"))\n'
+              '@intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "before"))\n')
+    inactive = 'to unused: @intrinsic("discard", 1)\n@intrinsic("discard", 0)\n'
+    for case, source, changed in (
+        ("active", active, active.replace('"before"', '"after"')),
+        ("inactive", inactive, inactive.replace('"discard", 1', '"discard", 2')),
+        ("comment", inactive, "# comment\n" + inactive),
+    ):
+        main = root / ("recent_cache_" + case + ".dl")
+        main.write_text(source)
+        build(entry=main, flags=("-O2",))
+        directory = root / "cache" / "native-v1"
+        for entry in directory.glob("*.entry"):
+            os.utime(entry, (1, 1))
+        filler = directory / ("object-" + "f" * 64 + ".entry")
+        assert not filler.exists()
+        with filler.open("wb") as sparse:
+            sparse.truncate(512 * 1024 * 1024)
+        os.utime(filler, (2, 2))
+        main.write_text(changed)
+        edited = build(entry=main, flags=("-O2",))
+        if case == "active":
+            assert edited[0]["optimization_units_reused"] > 0, edited[0]
+        elif case == "inactive":
+            assert edited[0]["type_inference_reused"] and edited[0]["cache_payloads_loaded"] == 1, edited[0]
+        else:
+            assert edited[0]["frontend_reused"] and edited[0]["cache_payloads_loaded"] == 0, edited[0]
+        repeated = build(entry=main, flags=("-O2",))
+        assert repeated[0]["frontend_reused"], f"eviction removed retained dependencies after {case} edit"
+        assert repeated[1:] == edited[1:] and not filler.exists()
+
+
 def check_cache_eviction(root, build):
     namespace = root / "cache" / "native-v1"
     unrelated = namespace / "notes.entry"
@@ -94,11 +129,11 @@ def check_program_payloads(root, build):
         "unoptimized builds stored duplicate module payloads"
     payloads = [directory / f"payload-{key}.entry" for key in manifest["payload_keys"].values()]
     assert manifest_path.stat().st_size < sum(path.stat().st_size for path in payloads)
-    before = {path: path.stat().st_mtime_ns for path in payloads}
+    before = {path: (path.stat().st_ino, path.read_bytes()) for path in payloads}
     main.write_text("# comment\n" + source)
     commented = build(entry=main)
     assert commented[0]["frontend_reused"] and commented[0]["objects_built"] == 0
-    assert before == {path: path.stat().st_mtime_ns for path in payloads}, \
+    assert before == {path: (path.stat().st_ino, path.read_bytes()) for path in payloads}, \
         "comment edit rewrote unchanged program payloads"
     assert commented[1:] == build(False, entry=main)[1:]
     main.write_text("# comment\n" + source.replace('"first"', '"second"'))

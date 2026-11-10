@@ -13,7 +13,7 @@ def check_optimization_units(root, build):
     main.write_text(source)
     cold = build(entry=main, flags=flags)
     assert cold[0]["optimization_units_built"] >= 6
-    assert cold[0]["native_function_fingerprints_computed"] < 6, \
+    assert cold[0]["native_functions"] < 6, \
         "fully inlined internal functions survived optimization"
     main.write_text(source.replace('"part2"', '"edited"'))
     edited = build(entry=main, flags=flags)
@@ -53,6 +53,6 @@ def check_optimization_units(root, build):
               'report @intrinsic("call", "libc", "rand", integer)\n')
     main.write_text(source)
     simplified = build(entry=main, flags=flags)
-    assert simplified[0]["native_function_fingerprints_computed"] == 1, \
+    assert simplified[0]["native_functions"] == 1, \
         "raw input size prevented importing a locally trivial function"
     assert simplified[1:] == build(False, entry=main, flags=flags)[1:]

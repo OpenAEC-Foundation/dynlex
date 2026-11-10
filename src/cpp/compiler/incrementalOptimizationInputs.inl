@@ -1,6 +1,7 @@
 struct OptimizationInput {
 	std::string name;
 	std::string bitcode;
+	std::set<std::string> ownedSymbols;
 };
 
 void removeUnusedDeclarations(llvm::Module &module) {
@@ -153,7 +154,7 @@ std::vector<OptimizationInput> captureOptimizationInputs(
 		}
 		current["input_key"] = key;
 		snapshot["units"][unit] = std::move(current);
-		inputs.push_back({std::move(identifier), std::move(*bitcode)});
+		inputs.push_back({std::move(identifier), std::move(*bitcode), names});
 	}
 	statistics.optimizationUnits = std::move(snapshot);
 	return inputs;

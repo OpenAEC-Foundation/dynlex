@@ -98,6 +98,14 @@ std::string readFile(const fs::path &path) {
 	return result;
 }
 
+bool recordCacheAccess(const fs::path &path) {
+	std::error_code error;
+	fs::last_write_time(path, fs::file_time_type::clock::now(), error);
+	if (error && error != std::errc::no_such_file_or_directory)
+		throw fs::filesystem_error("cannot record cache access", path, error);
+	return !error;
+}
+
 std::optional<std::string> readEntry(const fs::path &path) {
 	std::error_code error;
 	if (!fs::exists(path, error)) {
@@ -117,6 +125,9 @@ std::optional<std::string> readEntry(const fs::path &path) {
 	if (entry.size() < payloadOffset || !entry.starts_with(cacheHeader) || entry[payloadOffset - 1] != '\n' ||
 		digest(std::string_view(entry).substr(payloadOffset)) != entry.substr(cacheHeader.size(), 64))
 		throw std::runtime_error("corrupt cache entry: " + path.string());
+	// Cache eviction tracks successful access, including reused optimization
+	// units whose contents need no rewrite during an edited build.
+	recordCacheAccess(path);
 	return entry.substr(payloadOffset);
 }
 

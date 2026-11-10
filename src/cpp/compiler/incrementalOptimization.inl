@@ -1,3 +1,5 @@
+#include "incrementalOptimizationOrigins.inl"
+
 bool optimizeIncrementalModule(
 	ParseContext &context, const fs::path &directory, const std::string &compilerIdentity, const Json &options, Json *previous,
 	BuildStatistics &statistics, const IncrementalIRReuse *functionReuse
@@ -18,11 +20,14 @@ bool optimizeIncrementalModule(
 	std::vector<OptimizationInput> inputs = captureOptimizationInputs(
 		context, directory, previous ? &previous->at("optimization_units") : nullptr, statistics, functionReuse, preserved
 	);
+	std::map<std::string, const std::set<std::string> *> owners;
+	for (const OptimizationInput &input : inputs)
+		owners.emplace(input.name, &input.ownedSymbols);
 	statistics.optimizationInputMilliseconds = elapsedMilliseconds(inputStart);
 	std::mutex mutex;
 	std::exception_ptr failure;
 	std::map<unsigned, std::pair<std::string, std::string>> tasks;
-	std::map<std::string, std::string> optimizedModules;
+	std::map<std::string, OptimizationOutput> optimizedModules;
 	std::string cacheIdentity = compilerIdentity + options.dump();
 	llvm::lto::Config configuration;
 	configuration.CPU = context.targetMachine->getTargetCPU().str();
@@ -71,9 +76,18 @@ bool optimizeIncrementalModule(
 					value.setName(prefix + value.getName().str());
 			sortModuleSymbols(*result);
 			std::string bitcode = serializeCachedModule(*result);
-			writeEntry(directory / ("optimization-" + identity.first + ".entry"), bitcode);
+			auto recordStart = Clock::now();
+			Json functions = Json::object();
+			for (const llvm::Function &function : *result)
+				if (!function.isDeclarationForLinker())
+					functions[function.getName().str()] = NativeSymbolReferences{}.collect(function);
+			double recordMilliseconds = elapsedMilliseconds(recordStart);
+			std::string payload = std::string(optimizationOutputHeader) + functions.dump() + '\n' + bitcode;
+			writeEntry(directory / ("optimization-" + identity.first + ".entry"), payload);
 			std::lock_guard lock(mutex);
-			optimizedModules.emplace(identity.second, std::move(bitcode));
+			statistics.optimizationFunctionRecordMilliseconds += recordMilliseconds;
+			statistics.optimizationFunctionRecordsComputed += functions.size();
+			optimizedModules.emplace(identity.second, OptimizationOutput{std::move(bitcode), std::move(functions)});
 			statistics.optimizationUnitsBuilt++;
 		} catch (...) {
 			std::lock_guard lock(mutex);
@@ -111,10 +125,15 @@ bool optimizeIncrementalModule(
 		try {
 			std::string identity = digest(cacheIdentity + key.str());
 			std::string name = module.str();
-			if (auto bitcode = readEntry(directory / ("optimization-" + identity + ".entry"))) {
+			if (auto payload = readEntry(directory / ("optimization-" + identity + ".entry"))) {
+				auto decodeStart = Clock::now();
+				OptimizationOutput output = decodeOptimizationOutput(*payload);
+				double decodeMilliseconds = elapsedMilliseconds(decodeStart);
 				std::lock_guard lock(mutex);
+				statistics.optimizationRecordDecodeMilliseconds += decodeMilliseconds;
 				statistics.optimizationUnits["outputs"][name] = identity;
-				optimizedModules.emplace(std::move(name), std::move(*bitcode));
+				statistics.optimizationFunctionRecordsReused += output.functions.size();
+				optimizedModules.emplace(std::move(name), std::move(output));
 				statistics.optimizationUnitsReused++;
 				return llvm::AddStreamFn{};
 			}
@@ -147,30 +166,41 @@ bool optimizeIncrementalModule(
 	combined->setDataLayout(context.llvmModule->getDataLayout());
 	combined->setTargetTriple(context.llvmModule->getTargetTriple());
 	llvm::Linker linker(*combined);
-	for (const auto &[_, bitcode] : optimizedModules) {
-		auto part = parseCachedModule(bitcode, *context.llvmContext);
+	OptimizationOrigins origins;
+	for (const auto &[name, output] : optimizedModules) {
+		auto part = parseCachedModule(output.bitcode, *context.llvmContext);
+		auto captureStart = Clock::now();
+		origins.capture(
+			*part, name, statistics.optimizationUnits.at("outputs").at(name).get_ref<const std::string &>(),
+			*owners.at(name), output.functions
+		);
+		statistics.optimizationOriginCaptureMilliseconds += elapsedMilliseconds(captureStart);
 		requireCompilerInvariant(!linker.linkInModule(std::move(part)), "optimized units disagree");
 	}
 	std::map<std::string, std::string> originalNames;
 	for (const auto &[original, normalized] : statistics.optimizationUnits.at("names").items())
 		originalNames.emplace(normalized.get<std::string>(), original);
+	std::map<std::string, std::string> renames;
 	for (llvm::GlobalValue &value : combined->global_values()) {
-		if (value.isDeclaration())
-			continue;
+		std::string canonical = value.getName().str();
 		auto original = originalNames.find(value.getName().str());
 		std::string name = original == originalNames.end() ? value.getName().str() : original->second;
 		auto symbol = originalSymbols.find(name);
-		if (symbol == originalSymbols.end())
-			continue;
-		const auto &[linkage, visibility] = symbol->second;
-		value.setLinkage(linkage);
-		value.setVisibility(visibility);
-		value.setName(name);
+		if (!value.isDeclaration() && symbol != originalSymbols.end()) {
+			const auto &[linkage, visibility] = symbol->second;
+			value.setLinkage(linkage);
+			value.setVisibility(visibility);
+			value.setName(name);
+		}
+		renames.emplace(std::move(canonical), value.getName().str());
 	}
 	// Cross-unit imports can inline every call while retaining the exporting
 	// definition. Its original local linkage makes that definition removable.
 	llvm::ModuleAnalysisManager analyses;
 	llvm::GlobalDCEPass{}.run(*combined, analyses);
+	auto bindStart = Clock::now();
+	origins.bind(*combined, renames, statistics);
+	statistics.optimizationOriginBindMilliseconds += elapsedMilliseconds(bindStart);
 	sortModuleSymbols(*combined);
 	requireCompilerInvariant(!llvm::verifyModule(*combined), "combined optimized module is invalid");
 	delete context.llvmModule;

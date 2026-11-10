@@ -16,6 +16,11 @@ struct TemporaryObjects {
 	}
 };
 
+struct OptimizedFunctionOrigin {
+	std::string inputKey;
+	std::map<std::string, std::optional<std::string>> bindings;
+};
+
 struct BuildStatistics {
 	std::string cacheDirectory;
 	std::string cacheEntry;
@@ -34,6 +39,16 @@ struct BuildStatistics {
 	size_t nativePartitionModulesSkipped = 0;
 	size_t nativeFunctionDependenciesReused = 0;
 	size_t nativeFunctionFingerprintsComputed = 0;
+	size_t nativeFunctions = 0;
+	size_t nativeOptimizedFunctionProofs = 0;
+	size_t optimizationFunctionRecordsReused = 0;
+	size_t optimizationFunctionRecordsComputed = 0;
+	size_t nativeOptimizedBindings = 0;
+	double optimizationRecordDecodeMilliseconds = 0;
+	double optimizationFunctionRecordMilliseconds = 0;
+	double optimizationOriginCaptureMilliseconds = 0;
+	double optimizationOriginBindMilliseconds = 0;
+	std::map<std::string, OptimizedFunctionOrigin> optimizedFunctionOrigins;
 	Json nativeUnits;
 	Json optimizationUnits = Json::object();
 	size_t optimizationInputUnitsBuilt = 0;

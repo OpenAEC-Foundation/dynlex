@@ -29,8 +29,12 @@ bool emitPartitions(
 		statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 	}
 	std::unordered_set<std::string> reusedFunctions;
+	auto origins = std::move(statistics.optimizedFunctionOrigins);
+	std::map<std::string, std::string> renames;
+	std::map<std::string, const OptimizedFunctionOrigin *> optimizedOrigins;
 	std::string prefix = "__dynlex_" + digest(fs::absolute(context.options.inputPath).lexically_normal().string()) + "_";
 	for (llvm::GlobalValue &value : context.llvmModule->global_values()) {
+		std::string original = value.getName().str();
 		bool reused = llvm::isa<llvm::Function>(value) && !value.isDeclaration() &&
 					  (restoredModule || (!context.options.optimizationLevel && functionReuse &&
 										  functionReuse->reusedFunctionNames().contains(value.getName().str())));
@@ -43,13 +47,17 @@ bool emitPartitions(
 			value.setName(prefix + "anonymous");
 		if (reused)
 			reusedFunctions.insert(value.getName().str());
+		renames.emplace(original, value.getName().str());
+		if (auto origin = origins.find(original); origin != origins.end())
+			optimizedOrigins.emplace(value.getName().str(), &origin->second);
 	}
 	// Cached functions enter through the LLVM linker in a different insertion
 	// order. Normalize it for stable partition keys, including restored modules.
 	sortModuleSymbols(*context.llvmModule);
 	auto dependencyStart = Clock::now();
 	NativePartitionDependencies dependencies(
-		*context.llvmModule, previous ? &previous->at("native_units") : nullptr, reusedFunctions, statistics
+		*context.llvmModule, previous ? &previous->at("native_units") : nullptr, reusedFunctions, optimizedOrigins, renames,
+		statistics
 	);
 	statistics.nativeDependencyMilliseconds += elapsedMilliseconds(dependencyStart);
 	for (unsigned index = 0; index < partitionCount; index++) {
