@@ -6,19 +6,18 @@ void trimCache(const fs::path &directory) {
 	};
 	std::vector<Entry> entries;
 	uintmax_t size = 0;
+	constexpr std::array<std::string_view, 8> prefixes{
+		"object-", "program-", "payload-", "matcher-", "parser-", "errors-", "optimization-input-", "optimization-"
+	};
 	for (const auto &file : fs::directory_iterator(directory)) {
 		if (file.path().extension() != ".entry")
 			continue;
 		std::string name = file.path().stem().string();
-		size_t prefixLength = name.starts_with("object-")	 ? 7
-							  : name.starts_with("program-") ? 8
-							  : name.starts_with("payload-") ? 8
-							  : name.starts_with("matcher-") ? 8
-							  : name.starts_with("parser-")	 ? 7
-							  : name.starts_with("errors-")	 ? 7
-														 : 0;
-		if (!prefixLength || name.size() != prefixLength + 64 ||
-			!std::all_of(name.begin() + prefixLength, name.end(), [](char character) {
+		auto prefix = std::find_if(prefixes.begin(), prefixes.end(), [&](std::string_view value) {
+			return name.starts_with(value);
+		});
+		if (prefix == prefixes.end() || name.size() != prefix->size() + 64 ||
+			!std::all_of(name.begin() + prefix->size(), name.end(), [](char character) {
 			return (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f');
 		}))
 			continue;

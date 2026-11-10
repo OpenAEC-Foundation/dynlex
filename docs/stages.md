@@ -833,7 +833,8 @@ source locations without rebuilding the frontend. An edit confined to messages i
 existing `config.dl` rerenders those diagnostics without recompiling.
 The program entry is a small manifest of observations, diagnostics, object keys,
 and content-addressed keys for generated and optimized LLVM bitcode, function projection, dependency
-graph, inference summaries, and native partition dependencies. Unchanged and comment-only builds inspect the
+graph, inference summaries, native partition dependencies, and optimization-unit inputs.
+Unchanged and comment-only builds inspect the
 manifest without parsing these larger payloads; they load LLVM bitcode only if an object
 must be rebuilt. Executable source edits first load the function projection.
 They load the dependency graph, inference summaries, and both LLVM stages only if type
@@ -1017,11 +1018,23 @@ can import cached generated LLVM bodies of unchanged functions after a code edit
 optimization level. Generated bodies are saved after target attributes and verification,
 before LLVM optimization. Optimized bitcode is stored separately for object regeneration
 and whole-program reuse. At O0 the two module payloads share a content-addressed entry.
-Restored generated bodies run through the normal whole-module optimization pipeline;
-inlining and other changes to optimized callers are therefore recomputed. Native object
-reuse fingerprints the resulting optimized bodies, independently of generated-body reuse.
+Optimized native builds form units from symbol groups constrained by aliases, COMDATs,
+resolvers and block-address users. Each unit records its raw definitions, referenced
+declaration interfaces and module environment. Unchanged units restore bitcode with its
+ThinLTO summary without cloning the module again. The combined ThinLTO index supplies
+optimization cache keys that include imported callees, linkage decisions and target
+configuration. A changed callee therefore reoptimizes affected importing units. The
+single-worker backend stores verified optimized bitcode through its post-optimization
+hook, leaving native emission as a separate query. Internal optimizer-generated symbols
+receive stable unit namespaces before the optimized modules are combined.
+Native object reuse fingerprints the resulting optimized bodies independently of generated-body reuse.
 `ir_generation_ms`, `unoptimized_ir_snapshot_ms`, and `optimization_ms` separate these
-costs. LLVM optimization itself still traverses the module after active code edits.
+costs. `optimization_input_units_built`, `optimization_input_units_reused`,
+`optimization_units_built`, and `optimization_units_reused` expose the independent input
+and optimization cache decisions. `optimization_input_ms` and `optimization_combine_ms`
+measure input preparation and combining the optimized results. Whole-index construction
+and final module combination still visit the unit set on active edits; the backend
+optimizes only cache misses.
 The compiler compares
 each function body separately, so changing one function does not invalidate its
 unchanged neighbors in the same file. A newly added or removed ordinary function

@@ -1,5 +1,6 @@
-constexpr std::array<const char *, 6> programPayloadFields{
-	"all_function_projection", "section_dependency_graph", "inference_summaries", "unoptimized_ir", "ir", "native_units"
+constexpr std::array<const char *, 7> programPayloadFields{
+	"all_function_projection", "section_dependency_graph", "inference_summaries", "unoptimized_ir", "ir", "native_units",
+	"optimization_units"
 };
 
 bool isModulePayload(std::string_view field) { return field == "ir" || field == "unoptimized_ir"; }

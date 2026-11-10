@@ -1,6 +1,25 @@
 """Focused checks for the native program cache manifest and payload entries."""
 
 import json
+import os
+
+
+def check_cache_eviction(root, build):
+    namespace = root / "cache" / "native-v1"
+    unrelated = namespace / "notes.entry"
+    unrelated.write_text("user file")
+    old_entries = []
+    for prefix, digit in (("object-", "f"), ("parser-", "e"),
+                          ("optimization-input-", "d"), ("optimization-", "c")):
+        old = namespace / (prefix + digit * 64 + ".entry")
+        with old.open("wb") as sparse:
+            sparse.truncate(512 * 1024 * 1024 + 1)
+        os.utime(old, (1, 1))
+        old_entries.append(old)
+    assert build()[0]["frontend_reused"]
+    assert all(not path.exists() for path in old_entries), "eviction retained old cache entries"
+    assert unrelated.read_text() == "user file", "eviction deleted the wrong entry"
+    return namespace
 
 
 def check_integration_builds(project, build):
@@ -67,7 +86,8 @@ def check_program_payloads(root, build):
                          if str(main) in json.loads(path.read_bytes().split(b"\n", 2)[2])["files"])
     manifest = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
     assert set(manifest["payload_keys"]) == {
-        "all_function_projection", "section_dependency_graph", "inference_summaries", "unoptimized_ir", "ir", "native_units"
+        "all_function_projection", "section_dependency_graph", "inference_summaries", "unoptimized_ir", "ir", "native_units",
+        "optimization_units"
     }
     assert all(field not in manifest for field in manifest["payload_keys"])
     assert manifest["payload_keys"]["ir"] == manifest["payload_keys"]["unoptimized_ir"], \
