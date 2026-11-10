@@ -1,0 +1,63 @@
+import ../../site/account/controller.dl
+import site_fixture.dl
+
+# Replies go through the same ownership removal as the application input loop.
+to [finish account test reply] {a pointer to JSON value:response} to request {integer:id} failed {boolean:failed} in {a pointer to website state:state}:
+    set pending to state's requests
+    set previous to @intrinsic("construct", a pointer to website request)
+    loop while pending != @intrinsic("construct", a pointer to website request):
+        if pending's id = id:
+            if previous = @intrinsic("construct", a pointer to website request):
+                set state's requests to pending's next
+            else:
+                set previous's next to pending's next
+            if pending's cancelled = false:
+                if failed:
+                    if ((pending's purpose = 14) or ((pending's purpose = 15) or (pending's purpose = 20))) or (pending's index = state's account's generation):
+                        fail website account purpose (pending's purpose) in state
+                else:
+                    receive website account reply response for purpose (pending's purpose) indexed (pending's index) in state
+            free response
+            deallocate pending
+            return nothing
+        set previous to pending
+        set pending to pending's next
+    require condition false reporting "The account test replied to an unowned request"
+
+to [deliver account test reply] {a pointer to JSON value:response} to request {integer:id} in {a pointer to website state:state}:
+    finish account test reply response to request id failed false in state
+
+to [fail account test request] {integer:id} in {a pointer to website state:state}:
+    finish account test reply (a new JSON value of kind the JSON null kind) to request id failed true in state
+
+to [set account test connectivity] {boolean:online} in {a pointer to website state:state}:
+    set notification to a JSON object containing [JSON text "type" is "connectivity", JSON flag "online" is online]
+    receive website account notification notification in state
+    free notification
+
+to [identify account test user] {string:user} in {a pointer to website state:state}:
+    set identity to a new JSON value of kind the JSON null kind
+    if user's length > 0:
+        free identity
+        set identity to a JSON object containing [JSON text "uid" is user]
+    set notification to a JSON object containing [JSON text "type" is "firebase-auth", JSON child "user" is identity]
+    receive website account notification notification in state
+    free notification
+
+to [edit account test plan] {string:source} in {a pointer to website state:state}:
+    set the text of "River source" in (state's view's instance) to source
+    save website river progress in state
+
+to get account test cloud plan {string:source}:
+    set result to empty website progress
+    set data to a JSON object containing [JSON text "source" is source, JSON flag "solved" is true, JSON child "coding" is (new website coding progress for "river")]
+    set updated to website progress saving "river" data data at (50 as a 64 bit integer) in result
+    free data
+    free result
+    return updated's document
+
+to [read account test cloud] {string:source} in {a pointer to website state:state}:
+    set document to account test cloud plan source
+    set response to a JSON object containing [JSON text "value" is (the compact JSON form of document)]
+    free document
+    deliver account test reply response to request (state's account's read request) in state

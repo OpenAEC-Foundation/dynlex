@@ -106,6 +106,27 @@ appearance challenge artwork appearance:
     corner radius is 8
     image fit is cover
 
+appearance game progress appearance:
+    use card appearance
+    padding is 8
+    gap is 0
+
+appearance game progress row appearance:
+    columns are 2
+    stack below 700
+    padding is 0
+    gap is 0
+
+appearance game progress actions appearance:
+    columns are 2
+    padding is 0
+    gap is 0
+
+appearance game save status appearance:
+    use body appearance
+    font size is 15
+    padding is 12
+
 appearance code appearance:
     background is UI ink 42 42 50
     text is UI ink 250 250 249

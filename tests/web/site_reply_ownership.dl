@@ -1,0 +1,45 @@
+import ../../site/application.dl
+import site_fixture.dl
+
+# Exercise the production input loop rather than reproducing its cleanup logic.
+to [deliver cancelled input fixture for] {integer:job} returning {a pointer to JSON value:response} in {a pointer to website state:state}:
+    request "fixture" containing (a new JSON value of kind the JSON null kind) for purpose job indexed 0 in state
+    set id to state's requests' id
+    require condition ((cancel website request id in state) = false) reporting "The queued-reply fixture unexpectedly cancelled an active host request"
+    set view to state's view
+    set view's input kind to 11
+    set view's input code to id
+    set view's modifiers to 0
+    set view's message to the compact JSON form of response
+    free response
+    read website input view
+
+set instance to an instance of website fixture
+set view to a new UI view
+set view's instance to the address of instance
+set state to a new website state
+set state's view to the address of view
+set instance's state to (the address of state) as a pointer
+set jobs to [0, 12, 13, 14, 15, 18, 19, 20]
+set index to 0
+loop while index < the length of jobs:
+    deliver cancelled input fixture for (the item at index in jobs) returning (a new JSON value of kind the JSON null kind) in (the address of state)
+    require condition (state's requests = @intrinsic("construct", a pointer to website request)) reporting "A null callback result retained an owned request or created a cleanup operation"
+    increment index
+deliver cancelled input fixture for 8 returning (a new JSON value of kind the JSON array kind) in (the address of state)
+deliver cancelled input fixture for 6 returning (a JSON object containing [JSON number "artifact" is 99]) in (the address of state)
+deliver cancelled input fixture for 6 returning (a JSON object containing [JSON number "status" is 1]) in (the address of state)
+deliver cancelled input fixture for 4 returning (a JSON object containing [JSON number "resource" is 41]) in (the address of state)
+deliver cancelled input fixture for 10 returning (a JSON object containing [JSON number "resource" is 42]) in (the address of state)
+deliver cancelled input fixture for 11 returning (a JSON object containing [JSON child "buffers" is (a JSON array containing [
+    a JSON object containing [JSON number "id" is 71, JSON number "duration" is 1],
+    a JSON object containing [JSON number "id" is 72, JSON number "duration" is 2]
+])]) in (the address of state)
+set pending to state's requests
+loop while pending != @intrinsic("construct", a pointer to website request):
+    require condition (pending's purpose = 0) reporting "A cancelled reply retained its original request"
+    set next to pending's next
+    deallocate pending
+    set pending to next
+close (the address of instance)
+print line "Cancelled input replies accept their declared result shapes and release only owned compiler, graphics and audio resources."

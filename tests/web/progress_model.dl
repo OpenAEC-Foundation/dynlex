@@ -1,0 +1,45 @@
+import ../../site/games/progress/model.dl
+import lib/filesystem.dl
+
+read the file at "input.progress" and set input to it
+require condition (input succeeded) reporting "The progress model test needs its input file"
+parse (input's contents) as JSON and set parsed to it
+require condition (parsed succeeded) reporting "The progress model test input is invalid"
+set cases to parsed's value
+set results to a new JSON value of kind the JSON array kind
+set index to 0
+loop while index < cases's length:
+    set entry to the JSON value at index index in cases
+    set op to the JSON text named "op" in entry
+    set result to a new JSON value of kind the JSON null kind
+    if op = "source":
+        free result
+        set source to the upgraded website farm source (the JSON text named "source" in entry)
+        set result to a JSON object containing [JSON text "source" is source]
+    if op = "read":
+        free result
+        set decoded to website progress from (the JSON text named "text" in entry)
+        if decoded's error's length > 0:
+            set result to a JSON object containing [JSON text "error" is (decoded's error)]
+        else:
+            set result to decoded's document
+    if (op = "merge") or (op = "import"):
+        free result
+        set a to the JSON member named "local" in entry
+        set b to the JSON member named "remote" in entry
+        if op = "merge":
+            set result to website progress merging a with b
+        else:
+            set result to website account progress merging a with b importing guest (the JSON member named "guest" in entry)
+    if op = "save":
+        free result
+        set saved to website progress saving (the data of (the JSON text named "game" in entry)) data (the JSON member named "data" in entry) at ((the JSON number named "now" in entry) as a 64 bit integer) in (the JSON member named "current" in entry)
+        if saved's error's length > 0:
+            set result to a JSON object containing [JSON text "error" is (saved's error)]
+        else:
+            set result to saved's document
+    add result to the JSON array results
+    increment index
+print line the compact JSON form of results
+free results
+free cases

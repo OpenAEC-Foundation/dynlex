@@ -65,7 +65,7 @@ to [advance the website river audio in] {a pointer to website state:state} visib
 to get [the website river audio is visible in] {a pointer to website state:state}:
     set view to state's view
     set visible to false
-    if (state's route = "/index.html") and ((the value of "Challenge views" in (view's instance)) = 1):
+    if (state's route = "/index.html") and (((the value of "Challenge views" in (view's instance)) = 1) and ((the value of "Game content" in (view's instance)) = 0)):
         set panel to the UI layout labeled "river challenge" in (view's layout)
         set box to panel's painted bounds
         set overlap to the UI intersection of box and (UI box at 0 0 sized (view's width) (view's height))

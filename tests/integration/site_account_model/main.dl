@@ -1,0 +1,45 @@
+import ../../../site/account/model.dl
+
+to get [an account model River save] {a 64 bit integer:time} saying {C string:source}:
+    set data to a JSON object containing [JSON text "source" is source, JSON flag "solved" is false, JSON child "coding" is (new website coding progress for "river")]
+    set empty to empty website progress
+    set saved to website progress saving "river" data data at time in empty
+    free empty
+    free data
+    return saved's document
+
+set local to empty website progress
+set guest to an account model River save (100 as a 64 bit integer) saying "guest plan"
+set revision to a new JSON value of kind the JSON null kind
+set result to reconcile website account progress from local with cloud revision importing guest guest
+require condition (result's error's length = 0) reporting "An empty account rejected guest progress"
+require condition ((result's dirty) and ((the compact JSON form of (result's document)) = (the compact JSON form of guest))) reporting "An empty account did not import the guest or request its first write"
+free result's document
+free revision
+set remote to an account model River save (90 as a 64 bit integer) saying "account plan"
+set revision to a new JSON value of kind the JSON text kind
+set revision's text to the compact JSON form of remote
+set result to reconcile website account progress from local with cloud revision importing guest guest
+require condition ((result's dirty = false) and ((the compact JSON form of (result's document)) = (the compact JSON form of remote))) reporting "A newer unrelated guest game overwrote an existing account game"
+free result's document
+set newer to an account model River save (110 as a 64 bit integer) saying "local account plan"
+set result to reconcile website account progress from newer with cloud revision importing guest local
+require condition ((result's dirty) and ((the compact JSON form of (result's document)) = (the compact JSON form of newer))) reporting "A newer local account game was not queued for cloud sync"
+free result's document
+set revision's text to "{\"version\":4,\"games\":{\"river\":{\"updatedAt\":12,\"data\":{\"source\":\"old cloud plan\",\"solved\":true}}},\"lastGame\":\"river\"}"
+set before to revision's text
+set result to reconcile website account progress from local with cloud revision importing guest local
+require condition ((result's dirty) and ((the JSON number named "version" in (result's document)) = 7.0)) reporting "A cloud save was not fully upgraded before use"
+require condition (revision's text = before) reporting "Migration changed the expected server revision"
+free result's document
+set revision's text to "{broken cloud save"
+set result to reconcile website account progress from local with cloud revision importing guest local
+require condition ((result's error's length > 0) and (result's document = (0 as a pointer to JSON value))) reporting "A corrupt cloud save could be overwritten automatically"
+require condition ((the website account profile for (the string form of "alice")) = "user:alice") reporting "A user did not receive an isolated profile"
+require condition ((the website account profile for (the string form of "")) = "guest") reporting "Signing out did not select the guest profile"
+free revision
+free newer
+free remote
+free local
+free guest
+print line "Account reconciliation preserves account ownership and exact revisions, upgrades cloud saves, and queues only changed data."

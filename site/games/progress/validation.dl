@@ -1,0 +1,170 @@
+# Untrusted browser/cloud files are checked once, before an upgrade can mutate them.
+import instructions.dl
+import goals.dl
+
+to get {a pointer to JSON value:value} is a website save object array:
+    if value is not a JSON array:
+        return false
+    set index to 0
+    loop while index < value's length:
+        if (the JSON value at index index in value) is not a JSON object:
+            return false
+        increment index
+    return true
+
+to get [the website save instruction error in] {a pointer to JSON value:instruction} at version {integer:version}:
+    if (JSON field "op" in instruction has kind the JSON text kind) = false:
+        return the string form of "A farm instruction is missing its operation"
+    set op to the JSON text named "op" in instruction
+    if (op != "action") and (op != "test"):
+        return the string form of ""
+    if (JSON field "key" in instruction has kind the JSON text kind) = false:
+        return the string form of "A farm instruction is missing its vocabulary key"
+    if version > 5:
+        return the string form of ""
+    set key to the JSON text named "key" in instruction
+    set index to the website farm save opcode of key in (the version 5 website farm actions)
+    if op = "test":
+        set index to the website farm save opcode of key in (the version 5 website farm conditions)
+    if index < 0:
+        return "Unknown version-5 farm instruction: " + key
+    set definition to the version 5 website farm opcode in instruction
+    if definition's operands > 0:
+        if (JSON field "argument" in instruction is a safe integer) = false:
+            return the string form of "A farm instruction has an invalid argument"
+    if (definition's operands = 2) and (version = 5):
+        if (JSON field "area" in instruction has kind the JSON text kind) = false:
+            return the string form of "A farm walk instruction has an invalid area"
+    if (definition's operands = 3) and (version = 5):
+        if (JSON field "amount" in instruction is a safe integer) = false:
+            return the string form of "A farm stock test has an invalid amount"
+    if op = "test":
+        if (JSON field "to" in instruction is a safe integer) = false:
+            return the string form of "A farm test has an invalid branch"
+    return the string form of ""
+
+to get [the website farm upgrade error in] {a pointer to JSON value:data} at version {integer:version}:
+    if (JSON field "roles" in data has kind the JSON array kind) = false:
+        return the string form of "The farm save is missing its roles"
+    set roles to the JSON member named "roles" in data
+    if (roles is a website save object array) = false:
+        return the string form of "The farm save contains an invalid role"
+    set index to 0
+    loop while index < roles's length:
+        set role to the JSON value at index index in roles
+        if role lacks JSON member named "program":
+            return the string form of "A farm role is missing its program"
+        set program to the JSON member named "program" in role
+        if program is not JSON null:
+            if (program is a website save object array) = false:
+                return the string form of "A farm role has an invalid program"
+            set position to 0
+            loop while position < program's length:
+                set error to the website save instruction error in (the JSON value at index position in program) at version version
+                if error's length > 0:
+                    return error
+                increment position
+        if version <= 5:
+            if ((JSON field "source" in role has kind the JSON text kind) and (JSON field "applied" in role has kind the JSON text kind)) = false:
+                return the string form of "A farm role has invalid source text"
+        increment index
+    if version = 6:
+        return the string form of ""
+    if (JSON field "world" in data has kind the JSON object kind) = false:
+        return the string form of "The farm save is missing its world"
+    set world to the JSON member named "world" in data
+    if (JSON field "player" in world has kind the JSON object kind) = false:
+        return the string form of "The farm save is missing its player"
+    if (JSON field "workers" in world has kind the JSON array kind) = false:
+        return the string form of "The farm save is missing its workers"
+    set workers to the JSON member named "workers" in world
+    if (workers is a website save object array) = false:
+        return the string form of "The farm save contains an invalid worker"
+    set index to -1
+    loop while index < workers's length:
+        set actor to the JSON member named "player" in world
+        if index >= 0:
+            set actor to the JSON value at index index in workers
+        if (JSON field "routine" in actor has kind the JSON object kind) = false:
+            return the string form of "A farm actor has an invalid routine"
+        increment index
+    if version = 1:
+        if (JSON field "chickens" in world has kind the JSON array kind) = false:
+            return the string form of "The farm save is missing its chickens"
+        if ((the JSON member named "chickens" in world) is a website save object array) = false:
+            return the string form of "The farm save contains an invalid chicken"
+    if ((JSON field "tiles" in world has kind the JSON array kind) and (JSON field "flags" in world has kind the JSON array kind)) = false:
+        return the string form of "The farm save is missing tiles or flags"
+    if ((the JSON member named "flags" in world) is a website save object array) = false:
+        return the string form of "The farm save contains an invalid flag"
+    set rows to the JSON member named "tiles" in world
+    set y to 0
+    loop while y < rows's length:
+        set row to the JSON value at index y in rows
+        if (row is a website save object array) = false:
+            return the string form of "The farm save contains an invalid tile row"
+        set x to 0
+        loop while x < row's length:
+            set tile to the JSON value at index x in row
+            set names to ["tree", "crop"]
+            set index to 0
+            loop while index < the length of names:
+                set name to the item at index in names
+                if tile lacks JSON member named name:
+                    return the string form of "A farm tile is missing its tree or crop"
+                set entity to the JSON member named name in tile
+                if (entity is not JSON null) and (entity is not a JSON object):
+                    return the string form of "A farm tile contains an invalid tree or crop"
+                increment index
+            if (JSON field "items" in tile has kind the JSON array kind) = false:
+                return the string form of "A farm tile is missing its items"
+            if ((the JSON member named "items" in tile) is a website save object array) = false:
+                return the string form of "A farm tile contains an invalid item"
+            increment x
+        increment y
+    return the string form of ""
+
+to get [the website progress document error in] {a pointer to JSON value:document}:
+    if (JSON field "version" in document is a safe integer) = false:
+        return the string form of "The game save is missing a valid version"
+    set number to the JSON number named "version" in document
+    if (number < 1.0) or (number > 7.0):
+        return "Unsupported game save version: " + (the JSON member named "version" in document)'s text
+    set version to number as an integer
+    if (JSON field "games" in document has kind the JSON object kind) = false:
+        return the string form of "The game save is missing its games"
+    if document lacks JSON member named "lastGame":
+        return the string form of "The game save is missing its last game"
+    set last to the JSON member named "lastGame" in document
+    if last is not JSON null:
+        if last's kind != the JSON text kind:
+            return the string form of "The game save has an invalid last game"
+        if (last's text != "river") and (last's text != "farm"):
+            return the string form of "The game save has an unknown last game"
+    set games to the JSON member named "games" in document
+    set names to ["river", "farm"]
+    set index to 0
+    loop while index < the length of names:
+        set name to the item at index in names
+        if games has JSON member named name:
+            set entry to the JSON member named name in games
+            if ((JSON field "updatedAt" in entry is a safe integer) and (JSON field "data" in entry has kind the JSON object kind)) = false:
+                return the string form of "A game save has invalid data or timestamp"
+            if (the JSON number named "updatedAt" in entry) < 0.0:
+                return the string form of "A game save has a negative timestamp"
+            if index = 0:
+                set data to the JSON member named "data" in entry
+                if ((JSON field "source" in data has kind the JSON text kind) and (JSON field "solved" in data has kind the JSON boolean kind)) = false:
+                    return the string form of "The River save has invalid source or completion data"
+                if version >= 5:
+                    if (JSON field "coding" in data has kind the JSON object kind) = false:
+                        return the string form of "The River save is missing its coding progress"
+                    set detail to the website coding progress error in (the JSON member named "coding" in data) for "river"
+                    if detail's length > 0:
+                        return detail
+            if (index = 1) and (version < 7):
+                set error to the website farm upgrade error in (the JSON member named "data" in entry) at version version
+                if error's length > 0:
+                    return error
+        increment index
+    return the string form of ""

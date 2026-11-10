@@ -1,0 +1,104 @@
+import upgrades.dl
+
+class:
+    patterns:
+        website progress result
+    members:
+        document as a pointer to JSON value
+        error as a string
+
+to get empty website progress:
+    return a JSON object containing [
+        JSON number "version" is 7,
+        JSON child "games" is (a new JSON value of kind the JSON object kind),
+        JSON child "lastGame" is (a new JSON value of kind the JSON null kind)
+    ]
+
+to get website progress from {string:text}:
+    parse text as JSON and set parsed to it
+    if parsed failed:
+        free parsed
+        return @intrinsic("construct", website progress result, (0 as a pointer to JSON value), formatted "Invalid game save JSON at byte {parsed's error position}")
+    set document to parsed's value
+    set error to the website progress document error in document
+    if error's length > 0:
+        free document
+        return @intrinsic("construct", website progress result, (0 as a pointer to JSON value), error)
+    upgrade website progress document
+    return @intrinsic("construct", website progress result, document, the string form of "")
+
+to get website progress merging {a pointer to JSON value:local} with {a pointer to JSON value:remote}:
+    set result to empty website progress
+    set latest to -1.0
+    set names to ["river", "farm"]
+    set index to 0
+    set a to the JSON member named "games" in local
+    set b to the JSON member named "games" in remote
+    set games to the JSON member named "games" in result
+    loop while index < the length of names:
+        set name to the item at index in names
+        set chosen to 0 as a pointer to JSON value
+        if a has JSON member named name:
+            set chosen to the JSON member named name in a
+        if b has JSON member named name:
+            set candidate to the JSON member named name in b
+            if chosen = (0 as a pointer to JSON value):
+                set chosen to candidate
+            else if (the JSON number named "updatedAt" in candidate) > (the JSON number named "updatedAt" in chosen):
+                set chosen to candidate
+        if chosen != (0 as a pointer to JSON value):
+            add a JSON member named (the string form of name) with value (a copy of JSON node chosen) to games
+            set timestamp to the JSON number named "updatedAt" in chosen
+            if timestamp > latest:
+                set latest to timestamp
+                set JSON member (JSON text "lastGame" is name) in result
+        increment index
+    return result
+
+to get website account progress merging {a pointer to JSON value:local} with {a pointer to JSON value:remote} importing guest {a pointer to JSON value:guest}:
+    set merged to website progress merging local with remote
+    set games to the JSON member named "games" in merged
+    set guests to the JSON member named "games" in guest
+    set names to ["river", "farm"]
+    set index to 0
+    loop while index < the length of names:
+        set name to the item at index in names
+        if (games lacks JSON member named name) and (guests has JSON member named name):
+            add a JSON member named (the string form of name) with value (a copy of JSON node (the JSON member named name in guests)) to games
+        increment index
+    set empty to empty website progress
+    set result to website progress merging merged with empty
+    free merged
+    free empty
+    return result
+
+to get website progress {a pointer to JSON value:current} needs {C string:game} data {a pointer to JSON value:data}:
+    set games to the JSON member named "games" in current
+    set last to the JSON member named "lastGame" in current
+    if games lacks JSON member named game:
+        return true
+    if last is JSON null:
+        return true
+    if last's text != game:
+        return true
+    set previous to the JSON member named "data" in (the JSON member named game in games)
+    return (the compact JSON form of previous) != (the compact JSON form of data)
+
+to get website progress saving {C string:game} data {a pointer to JSON value:data} at {a 64 bit integer:now} in {a pointer to JSON value:current}:
+    require condition ((game = "river") or (game = "farm")) reporting "A progress write needs a known game"
+    require condition (now <= 9007199254740991) reporting "A progress write needs an exact timestamp"
+    set games to the JSON member named "games" in current
+    set timestamp to the maximum of now and (1 as a 64 bit integer)
+    if (website progress current needs game data data) = false:
+        return @intrinsic("construct", website progress result, a copy of JSON node current, the string form of "")
+    if games has JSON member named game:
+        set previous to the JSON member named game in games
+        set old to (the JSON number named "updatedAt" in previous) as a 64 bit integer
+        if old = 9007199254740991:
+            return @intrinsic("construct", website progress result, (0 as a pointer to JSON value), the string form of "The game's timestamp cannot be advanced exactly")
+        set timestamp to the maximum of now and (old + 1)
+    set result to a copy of JSON node current
+    set entry to a JSON object containing [JSON number "updatedAt" is timestamp, JSON child "data" is (a copy of JSON node data)]
+    set JSON member (JSON child game is entry) in (the JSON member named "games" in result)
+    set JSON member (JSON text "lastGame" is game) in result
+    return @intrinsic("construct", website progress result, result, the string form of "")

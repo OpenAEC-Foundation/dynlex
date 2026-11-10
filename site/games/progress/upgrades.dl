@@ -1,0 +1,125 @@
+import goals.dl
+import source_upgrade.dl
+import validation.dl
+
+to upgrade website farm actors in {a pointer to JSON value:world} from version {integer:version}:
+    set workers to the JSON member named "workers" in world
+    set index to -1
+    loop while index < workers's length:
+        set actor to the JSON member named "player" in world
+        if index >= 0:
+            set actor to the JSON value at index index in workers
+        if version = 2:
+            set JSON member (JSON flag "paused" is false) in actor
+        if (version = 3) or (version = 5):
+            set routine to the JSON member named "routine" in actor
+            set JSON member (JSON child "trace" is (a new JSON value of kind the JSON null kind)) in routine
+            if version = 5:
+                set JSON member (JSON child "continuation" is (a new JSON value of kind the JSON null kind)) in routine
+                set JSON member (JSON child "subject" is (a new JSON value of kind the JSON null kind)) in actor
+        increment index
+
+to upgrade website farm roles in {a pointer to JSON value:roles} from version {integer:version}:
+    set index to 0
+    loop while index < roles's length:
+        set role to the JSON value at index index in roles
+        set program to the JSON member named "program" in role
+        set active to program is not JSON null
+        if version = 3:
+            set JSON member (JSON flag "needsSourceMap" is active) in role
+        if (version = 4) and active:
+            set JSON member (JSON flag "needsSourceMap" is true) in role
+        if version = 5:
+            set JSON member (JSON text "source" is (the upgraded website farm source (the JSON text named "source" in role))) in role
+            set JSON member (JSON text "applied" is (the upgraded website farm source (the JSON text named "applied" in role))) in role
+            set JSON member (JSON flag "needsRebuild" is active) in role
+            remove JSON member "needsSourceMap" from role
+        if active:
+            set position to 0
+            set upgraded to a new JSON value of kind the JSON array kind
+            loop while position < program's length:
+                set instruction to the JSON value at index position in program
+                set op to the JSON text named "op" in instruction
+                if version = 3:
+                    set JSON member (JSON child "range" is (a new JSON value of kind the JSON null kind)) in instruction
+                if version = 4:
+                    if op = "test":
+                        set JSON member (JSON number "amount" is 0) in instruction
+                    if op = "action":
+                        if (the JSON text named "key" in instruction) = "walk":
+                            set JSON member (JSON text "area" is "") in instruction
+                if version = 5:
+                    add (the upgraded website farm instruction instruction) to the JSON array upgraded
+                if (version = 6) and (op = "action"):
+                    if (the JSON text named "key" in instruction) = "take":
+                        set JSON member (JSON text "key" is "collect") in instruction
+                increment position
+            if version = 5:
+                set JSON member (JSON child "program" is upgraded) in role
+            else:
+                free upgraded
+            if version = 6:
+                set JSON member (JSON flag "needsRebuild" is true) in role
+        increment index
+
+to [assign website farm entity identities in] {a pointer to JSON value:world}:
+    set serial to 1
+    set rows to the JSON member named "tiles" in world
+    set y to 0
+    loop while y < rows's length:
+        set row to the JSON value at index y in rows
+        set x to 0
+        loop while x < row's length:
+            set tile to the JSON value at index x in row
+            set items to the JSON member named "items" in tile
+            set index to -2
+            loop while index < items's length:
+                set entity to the JSON member named "tree" in tile
+                if index = -1:
+                    set entity to the JSON member named "crop" in tile
+                if index >= 0:
+                    set entity to the JSON value at index index in items
+                if entity is not JSON null:
+                    set JSON member (JSON number "serial" is serial) in entity
+                    increment serial
+                increment index
+            increment x
+        increment y
+    set flags to the JSON member named "flags" in world
+    set index to 0
+    loop while index < flags's length:
+        set JSON member (JSON number "serial" is serial) in (the JSON value at index index in flags)
+        increment serial
+        increment index
+    set JSON member (JSON number "nextEntity" is serial) in world
+
+# Versioning is a separate boundary, never a compatibility branch in a game loop.
+to upgrade website progress {a pointer to JSON value:document}:
+    set games to the JSON member named "games" in document
+    set version to (the JSON number named "version" in document) as an integer
+    loop while version < 7:
+        if games has JSON member named "farm":
+            set data to the JSON member named "data" in (the JSON member named "farm" in games)
+            if version < 6:
+                set world to the JSON member named "world" in data
+                if version = 1:
+                    set chickens to the JSON member named "chickens" in world
+                    set index to 0
+                    loop while index < chickens's length:
+                        set JSON member (JSON flag "held" is false) in (the JSON value at index index in chickens)
+                        increment index
+                if (version = 2) or ((version = 3) or (version = 5)):
+                    upgrade website farm actors in world from version version
+                if version = 4:
+                    set JSON member (JSON child "areas" is (a new JSON value of kind the JSON array kind)) in world
+                    set JSON member (JSON child "coding" is (new website coding progress for "farm")) in world
+                if version = 5:
+                    assign website farm entity identities in world
+            if version >= 3:
+                upgrade website farm roles in (the JSON member named "roles" in data) from version version
+        if version = 4:
+            if games has JSON member named "river":
+                set river to the JSON member named "data" in (the JSON member named "river" in games)
+                set JSON member (JSON child "coding" is (new website coding progress for "river")) in river
+        increment version
+    set JSON member (JSON number "version" is 7) in document

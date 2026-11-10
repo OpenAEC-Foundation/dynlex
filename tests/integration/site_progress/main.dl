@@ -1,0 +1,35 @@
+import ../../../site/games/progress/model.dl
+
+set parsed to website progress from (the string form of "{\"version\":1,\"games\":{},\"lastGame\":null}")
+require condition (parsed's error's length = 0) reporting "An empty version-1 save was rejected"
+set current to parsed's document
+require condition ((the JSON number named "version" in current) = 7.0) reporting "An old save was not fully upgraded"
+set data to a JSON object containing [JSON text "source" is "take the sheep", JSON flag "solved" is false, JSON child "coding" is (new website coding progress for "river")]
+set saved to website progress saving "river" data data at (1794279584123 as a 64 bit integer) in current
+require condition (saved's error's length = 0) reporting "A game could not be saved"
+set updated to saved's document
+set saved to website progress saving "river" data data at (1794279584124 as a 64 bit integer) in updated
+require condition ((the compact JSON form of (saved's document)) = (the compact JSON form of updated)) reporting "An unchanged save received a new timestamp"
+free saved's document
+set JSON member (JSON flag "solved" is true) in data
+set saved to website progress saving "river" data data at (100 as a 64 bit integer) in updated
+set entry to the JSON member named "river" in (the JSON member named "games" in (saved's document))
+require condition ((the JSON number named "updatedAt" in entry) = 1794279584124.0) reporting "A backwards wall clock lost monotonic save order"
+set merged to website progress merging updated with (saved's document)
+require condition ((the compact JSON form of merged) = (the compact JSON form of (saved's document))) reporting "A newer game failed to merge"
+free merged
+set account to website account progress merging current with updated importing guest (saved's document)
+require condition ((the compact JSON form of account) = (the compact JSON form of updated)) reporting "A guest overwrote an existing account game"
+free account
+free saved's document
+free data
+free updated
+free current
+set invalid to ["{broken", "null", "{\"version\":999}", "{\"version\":7,\"games\":{},\"lastGame\":\"unknown\"}", "{\"version\":7,\"games\":{\"river\":{\"updatedAt\":1.5,\"data\":{}}},\"lastGame\":null}"]
+set index to 0
+loop while index < the length of invalid:
+    set parsed to website progress from (the string form of (the item at index in invalid))
+    require condition ((parsed's error's length > 0) and (parsed's document = (0 as a pointer to JSON value))) reporting "An invalid external save was accepted"
+    increment index
+require condition ((the upgraded website farm source (the string form of "if i can reach it: # chop it down\r\n    chop it down\nprint \"take finished compost\"")) = "if i can reach the tree in front of me: # chop it down\r\n    chop the tree in front of me down\nprint \"take finished compost\"") reporting "A farm source migration changed comments or strings"
+print line "Progress upgrades, exact monotonic timestamps, account isolation, merges and corrupt-save errors work in DynLex."

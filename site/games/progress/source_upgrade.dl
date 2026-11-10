@@ -1,0 +1,88 @@
+import lib/string.dl
+
+to get website save byte {byte:octet} is a word character:
+    return ((octet >= 65) and (octet <= 90)) or (((octet >= 97) and (octet <= 122)) or (((octet >= 48) and (octet <= 57)) or (octet = 95)))
+
+to get the website save replacement {C string:phrase} at {integer:offset} in {string:source} ends at {integer:end}:
+    set count to the length of (the string form of phrase)
+    if offset + count > end:
+        return false
+    if source lacks phrase at offset offset:
+        return false
+    if offset > 0:
+        if website save byte (the character at (offset - 1) in source) is a word character:
+            return false
+    if offset + count < end:
+        if website save byte (the character at (offset + count) in source) is a word character:
+            return false
+    return true
+
+# Quoted strings and comments are copied byte for byte, including escapes and CRLF.
+to get [the position after writing upgraded website farm source] {string:source} into {a pointer to byte:output}:
+    set writer to 0
+    set cursor to 0
+    set phrases to ["i can reach it", "chop it down", "take finished compost"]
+    set replacements to ["i can reach the tree in front of me", "chop the tree in front of me down", "take finished compost from the compost heap"]
+    loop while cursor < source's length:
+        set octet to the character at cursor in source
+        set end to cursor
+        if octet = 34:
+            increment end
+            set closed to false
+            loop while (end < source's length) and (closed = false):
+                set next to the character at end in source
+                increment end
+                if next = 92:
+                    set end to the minimum of (end + 1) and (source's length)
+                else if next = 34:
+                    set closed to true
+            if closed = false:
+                set end to cursor + 1
+        else if octet = 35:
+            set scanning to true
+            loop while (end < source's length) and scanning:
+                set next to the character at end in source
+                if (next = 10) or (next = 13):
+                    set scanning to false
+                else:
+                    increment end
+        if end > cursor:
+            if output != (0 as a pointer to byte):
+                copy (a new string from ((the data of source) + cursor) containing (end - cursor) bytes) into output at offset writer
+            add (end - cursor) to writer
+            set cursor to end
+        else:
+            set end to cursor
+            set scanning to true
+            loop while (end < source's length) and scanning:
+                set next to the character at end in source
+                if (next = 34) or (next = 35):
+                    set scanning to false
+                else:
+                    increment end
+            loop while cursor < end:
+                set matched to false
+                set index to 0
+                loop while (index < the length of phrases) and (matched = false):
+                    set phrase to the item at index in phrases
+                    if the website save replacement phrase at cursor in source ends at end:
+                        set replacement to the string form of (the item at index in replacements)
+                        if output != (0 as a pointer to byte):
+                            copy replacement into output at offset writer
+                        add replacement's length to writer
+                        add (the length of (the string form of phrase)) to cursor
+                        set matched to true
+                    increment index
+                if matched = false:
+                    if output != (0 as a pointer to byte):
+                        store (the character at cursor in source) into output at writer
+                    increment writer
+                    increment cursor
+    return writer
+
+to get the upgraded website farm source {string:source}:
+    set count to the position after writing upgraded website farm source source into (0 as a pointer to byte)
+    set result to a new string buffer containing count bytes
+    set written to the position after writing upgraded website farm source source into (the data of result)
+    require condition (written = count) reporting "The farm source migration changed length between passes"
+    return result

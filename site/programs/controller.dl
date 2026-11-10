@@ -164,11 +164,23 @@ to fail website [program] {integer:index} in {a pointer to website state:state}:
     set the text of (description's status) in (state's view's instance) to "An error occurred. Check the log."
     notify website program index with result 3 in state
 
-to discard website reply {a pointer to JSON value:response} in {a pointer to website state:state}:
-    if response has JSON member named "artifact":
-        request "compiler" containing (a JSON object containing [JSON text "operation" is "release", JSON number "artifact" is (the JSON number named "artifact" in response)]) for purpose 0 indexed 0 in state
-    if response has JSON member named "resource":
+to discard website reply {a pointer to JSON value:response} for purpose {integer:job} in {a pointer to website state:state}:
+    # Only these operations create transferable resources. Other callbacks can
+    # return null, arrays or arbitrary service data and own no host resources.
+    if job = 6:
+        if response has JSON member named "artifact":
+            request "compiler" containing (a JSON object containing [JSON text "operation" is "release", JSON number "artifact" is (the JSON number named "artifact" in response)]) for purpose 0 indexed 0 in state
+    if (job = 4) or (job = 10):
         request "graphics" containing (a JSON object containing [JSON text "operation" is "release", JSON number "resource" is (the JSON number named "resource" in response)]) for purpose 0 indexed 0 in state
+    if job = 11:
+        set decoded to the JSON member named "buffers" in response
+        set buffers to a new JSON value of kind the JSON array kind
+        set index to 0
+        loop while index < decoded's length:
+            set member to JSON number "" is (the JSON number named "id" in (the JSON value at index index in decoded))
+            add (member's value) to the JSON array buffers
+            increment index
+        request "audio" containing (a JSON object containing [JSON text "operation" is "unload", JSON child "buffers" is buffers]) for purpose 0 indexed 0 in state
 
 to select website editor mode {integer:mode} in {a pointer to website state:state}:
     stop website program 2 in state

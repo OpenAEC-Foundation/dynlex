@@ -2,6 +2,6 @@
   "entry": "site/main.dl",
   "dependency": {
     "archive": "dependencies/dynlex-ui.zip",
-    "contentHash": "9d474d867345a274e07604e45f34495760ac181fbfb5ffc7ffefb6a9b946f1f0"
+    "contentHash": "bcb254ab096b82957190b7ccee0dcfaa98c15cc6340a3ca349076acb2c87a1d2"
   }
 }

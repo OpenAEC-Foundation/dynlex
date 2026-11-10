@@ -84,5 +84,6 @@ loop while pending != @intrinsic("construct", a pointer to website request):
     set next to pending's next
     deallocate pending
     set pending to next
+free state's river's coding
 close the address of instance
 print line "River audio owns decoding, idle deadlines, muting, visibility, cue boundaries, pause, speed and failure cleanup in DynLex."

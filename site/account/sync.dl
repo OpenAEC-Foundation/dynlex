@@ -1,0 +1,136 @@
+import base.dl
+
+to [schedule website account save in] {a pointer to website state:state}:
+    set account to the address of (state's account)
+    if (account's phase != 4) or (account's user's length = 0):
+        return nothing
+    if ((account's dirty = false) or account's conflict) or (account's online = false):
+        return nothing
+    if ((account's deadline != 0) or (account's write request != 0)) or account's signing out:
+        return nothing
+    request "timer" containing (a JSON object containing [JSON number "milliseconds" is 10000]) for purpose 18 indexed (account's generation) in state
+    set account's deadline to state's requests' id
+
+to [finish website account logout in] {a pointer to website state:state}:
+    set account to the address of (state's account)
+    if account's auth request = 0:
+        set account's auth mode to 2
+        set account's auth request to request website account operation (a JSON object containing [JSON text "operation" is "sign-out"]) for purpose 19 in state
+    refresh website account controls in state
+
+to [flush website account save in] {a pointer to website state:state}:
+    set account to the address of (state's account)
+    cancel website account request (the address of (account's deadline)) in state
+    if ((account's phase != 4) or (account's user's length = 0)) or account's conflict:
+        return nothing
+    if state's progress's status != 1:
+        set account's signing out to false
+        refresh website account controls in state
+        return nothing
+    if (account's write request != 0) or (account's online = false):
+        return nothing
+    if account's dirty = false:
+        if account's signing out:
+            finish website account logout in state
+        return nothing
+    set account's sent to account's logout snapshot if (account's signing out), else (the compact JSON form of (state's progress's document))
+    set account's write request to request website account operation (a JSON object containing [
+        JSON text "operation" is "compare-set", JSON child "path" is (the website account document path in state),
+        JSON text "field" is "payload", JSON child "expected" is (a copy of JSON node (account's revision)),
+        JSON text "timestampField" is "updatedAt", JSON child "data" is (a JSON object containing [
+            JSON number "version" is 7, JSON text "payload" is (account's sent)
+        ])
+    ]) for purpose 17 in state
+    set account's message to "Saving to your account…"
+    refresh website account controls in state
+
+function [notice website account local save] {a pointer to website state:state}:
+    execute:
+        set account to the address of (state's account)
+        if (account's phase = 4) and (account's user's length > 0):
+            set account's dirty to true
+            if account's conflict = false:
+                set account's message to "Saved in this browser · syncing"
+                schedule website account save in state
+            refresh website account controls in state
+
+to [receive website account write] {a pointer to JSON value:response} in {a pointer to website state:state}:
+    set account to the address of (state's account)
+    set account's write request to 0
+    if (the JSON boolean named "matched" in response) = false:
+        set account's conflict to true
+        set account's signing out to false
+        set account's message to "Another device has newer progress. Choose which game to keep."
+    else:
+        free account's revision
+        set account's revision to a new JSON value of kind the JSON text kind
+        set account's revision's text to account's sent
+        set account's dirty to account's sent != (the compact JSON form of (state's progress's document))
+        set account's message to "Saved in this browser · syncing" if (account's dirty), else "Progress saved to your account"
+        if account's signing out:
+            if account's sent = account's logout snapshot:
+                finish website account logout in state
+            else:
+                flush website account save in state
+        else:
+            schedule website account save in state
+    refresh website account controls in state
+
+to [read website account save for mode] {integer:mode} in {a pointer to website state:state}:
+    set account to the address of (state's account)
+    require condition (account's read request = 0) reporting "An account read already owns a reply"
+    set account's read mode to mode
+    set account's read request to request website account operation (a JSON object containing [
+        JSON text "operation" is "read", JSON child "path" is (the website account document path in state), JSON text "field" is "payload"
+    ]) for purpose 16 in state
+    refresh website account controls in state
+
+to [receive website account read] {a pointer to JSON value:response} in {a pointer to website state:state}:
+    set account to the address of (state's account)
+    set account's read request to 0
+    set revision to the JSON member named "value" in response
+    set profile to the website account profile for (account's user)
+    set result to @intrinsic("construct", website account reconciliation)
+    if account's read mode = 2:
+        # Keep is an explicit choice after reading the new byte-exact revision.
+        set result's document to a copy of JSON node (state's progress's document)
+        set result's dirty to true
+    else if account's read mode = 1:
+        set empty to empty website progress
+        set result to reconcile website account progress from empty with cloud revision importing guest empty
+        free empty
+        if result's error's length = 0:
+            if (write website progress key ("dynlex.games.backup:" + account's user) containing (the compact JSON form of (state's progress's document)) in state) = false:
+                free result's document
+                set result's document to 0 as a pointer to JSON value
+                set result's error to "The displaced account save could not be backed up"
+    else:
+        set loaded to load website account profile profile in state
+        if loaded's error's length > 0:
+            set result's error to loaded's error
+        else:
+            set guest to (a copy of JSON node (state's progress's document)) if (state's progress's profile = "guest"), else (empty website progress)
+            set result to reconcile website account progress from (loaded's document) with cloud revision importing guest guest
+            free loaded's document
+            free guest
+    if result's error's length > 0:
+        if account's read mode = 0:
+            set account's phase to 5
+        report website account failure result's error in state
+        return nothing
+    set apply to account's read mode != 2
+    if (commit website account profile profile containing (result's document) in state) = false:
+        if account's read mode = 0:
+            set account's phase to 5
+        report website account failure (the string form of "The selected account profile could not be committed") in state
+        return nothing
+    free account's revision
+    set account's revision to a copy of JSON node revision
+    set account's dirty to result's dirty
+    set account's conflict to false
+    set account's phase to 4
+    if apply:
+        apply website account games in state
+    set account's message to "Saved in this browser · syncing" if (account's dirty), else "Progress saved to your account"
+    flush website account save in state
+    refresh website account controls in state

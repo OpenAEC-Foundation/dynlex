@@ -1,0 +1,78 @@
+import profiles.dl
+import ../games/river/controller.dl
+
+to [refresh website account controls in] {a pointer to website state:state}:
+    set account to the address of (state's account)
+    set instance to state's view's instance
+    set enabled to account's configuration != (0 as a pointer to JSON value)
+    if enabled:
+        set enabled to account's configuration is not JSON null
+    set actions to 0
+    if account's connected:
+        set actions to 1 if (account's user's length = 0), else 2
+    set the value of "Game account actions" in instance to actions
+    set busy to (account's auth request != 0) or account's signing out
+    set the "Sign in with Google" control in instance enabled (busy = false)
+    set the "Sign out" control in instance enabled (((busy = false) and (account's phase = 4)) and (account's conflict = false))
+    set the value of "Game save conflict" in instance to (1 if (account's conflict), else 0)
+    set choosing to account's read request != 0
+    set the "Load account save" control in instance enabled (choosing = false)
+    set the "Keep this game" control in instance enabled (choosing = false)
+    set content to 0
+    if enabled:
+        if account's phase != 4:
+            set content to 2 if (account's phase = 5), else 1
+    set the value of "Game content" in instance to content
+    if state's progress's status = 2:
+        set the text of "Game save status" in instance to "An error occurred. Check the log."
+    else if account's message's length > 0:
+        set the text of "Game save status" in instance to (account's message)
+
+to [cancel website account request] {a pointer to integer:owned} in {a pointer to website state:state}:
+    if (the value at owned) != 0:
+        ignore cancel website request (the value at owned) in state
+        set the value at owned to 0
+
+to [retire website account operations in] {a pointer to website state:state}:
+    set account to the address of (state's account)
+    increment account's generation
+    cancel website account request (the address of (account's read request)) in state
+    cancel website account request (the address of (account's write request)) in state
+    cancel website account request (the address of (account's auth request)) in state
+    cancel website account request (the address of (account's deadline)) in state
+
+to get [request website account operation] {a pointer to JSON value:payload} for purpose {integer:job} in {a pointer to website state:state}:
+    request "firebase" containing payload for purpose job indexed (state's account's generation) in state
+    return state's requests' id
+
+to get [the website account document path in] {a pointer to website state:state}:
+    set path to a new JSON value of kind the JSON array kind
+    set parts to [the string form of "players", state's account's user, the string form of "games", the string form of "progress"]
+    set index to 0
+    loop while index < the length of parts:
+        set part to a new JSON value of kind the JSON text kind
+        set part's text to the item at index in parts
+        add part to the JSON array path
+        increment index
+    return path
+
+to [suspend website account games in] {a pointer to website state:state}:
+    stop website program (the website program for source "River source") in state
+    stop website river effects in state
+    clear website river plan in (the address of (state's river))
+    refresh website river controls in state
+
+to [apply website account games in] {a pointer to website state:state}:
+    suspend website account games in state
+    apply website progress to the games in state
+    set state's river's message to "The farmer can take one passenger at a time."
+    set instance to state's view's instance
+    set the text of "River diagnostics" in instance to ""
+    set the text of "River execution" in instance to "Write a plan. Run it, or take one instruction at a time."
+    set the text of "River status" in instance to "Ready · Ctrl / ⌘ + Enter runs your plan"
+    refresh website river controls in state
+
+to [report website account failure] {string:detail} in {a pointer to website state:state}:
+    request "log" containing (a JSON object containing [JSON text "level" is "error", JSON text "message" is ("Game account: " + detail)]) for purpose 0 indexed 0 in state
+    set state's account's message to "An error occurred. Check the log."
+    refresh website account controls in state

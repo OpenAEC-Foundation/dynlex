@@ -1,0 +1,115 @@
+import site_account_support.dl
+
+function [check account controller case] {integer:scenario}:
+    globals:
+        website fixture
+    execute:
+        @intrinsic("call", "host", "account_fixture", nothing, scenario)
+        set instance to an instance of website fixture
+        set view to a new UI view
+        set view's instance to the address of instance
+        set state to a new website state
+        set state's view to the address of view
+        set instance's state to (the address of state) as a pointer
+        set stateptr to the address of state
+        set account to the address of (state's account)
+        initialize the website river in stateptr
+        open website progress in stateptr
+        set configuration to a new JSON value of kind the JSON null kind
+        if scenario > 0:
+            free configuration
+            set configuration to a JSON object containing [JSON text "projectId" is "demo-dynlex-games"]
+        open website account with configuration in stateptr
+        if scenario = 0:
+            edit account test plan (the string form of "guest only") in stateptr
+            require condition ((account's phase = 0) and (state's requests = @intrinsic("construct", a pointer to website request))) reporting "Disabled accounts loaded a cloud provider"
+        else:
+            require condition ((the value of "Game content" in (the address of instance)) = 1) reporting "Auth restoration displayed the old identity's game"
+            deliver account test reply (a new JSON value of kind the JSON null kind) to request (account's connect request) in stateptr
+            identify account test user (the string form of "") in stateptr
+            require condition ((account's phase = 4) and (state's progress's profile = "guest")) reporting "Initial signed-out identity did not retain the guest game"
+            set the text of "IDE source" in (the address of instance) to "keep this unsaved IDE draft"
+            set (state's programs + 2)'s phase to 3
+            ignore follow website account action (the string form of "action:account-sign-in") in stateptr
+            deliver account test reply (a JSON object containing [JSON text "code" is "auth/popup-closed-by-user"]) to request (account's auth request) in stateptr
+            require condition ((account's auth request = 0) and (account's phase = 4)) reporting "A cancelled Google popup changed the selected game"
+            ignore follow website account action (the string form of "action:account-sign-in") in stateptr
+            set queued to account's auth request
+            identify account test user (the string form of "alice") in stateptr
+            deliver account test reply (a JSON object containing [JSON child "code" is (a new JSON value of kind the JSON null kind)]) to request queued in stateptr
+            require condition ((account's phase = 3) and (account's auth request = 0)) reporting "A late sign-in reply changed the auth generation"
+            read account test cloud (the string form of "cloud alice") in stateptr
+            require condition ((account's phase = 4) and (account's dirty = false)) reporting "An unchanged cloud account was rewritten"
+            require condition ((state's progress's profile = "user:alice") and ((the UI value for (the control labeled "River source" in (the address of instance)) in (the address of instance))'s text = "cloud alice")) reporting "Signing in did not restore this account's source"
+            require condition (((the UI value for (the control labeled "IDE source" in (the address of instance)) in (the address of instance))'s text = "keep this unsaved IDE draft") and ((state's programs + 2)'s phase = 3)) reporting "Switching game profiles discarded the IDE"
+            if scenario = 1:
+                edit account test plan (the string form of "first edit") in stateptr
+                set deadline to account's deadline
+                edit account test plan (the string form of "second edit") in stateptr
+                require condition ((deadline != 0) and (account's deadline = deadline)) reporting "Each edit postponed the first save deadline"
+                deliver account test reply (a new JSON value of kind the JSON null kind) to request deadline in stateptr
+                require condition ((account's write request != 0) and (account's deadline = 0)) reporting "The deadline did not start exactly one writer"
+                edit account test plan (the string form of "edit during write") in stateptr
+                deliver account test reply (a JSON object containing [JSON flag "matched" is true]) to request (account's write request) in stateptr
+                require condition ((account's dirty) and (account's deadline != 0)) reporting "An in-flight write lost later edits"
+                deliver account test reply (a new JSON value of kind the JSON null kind) to request (account's deadline) in stateptr
+                edit account test plan (the string form of "logout snapshot") in stateptr
+                ignore follow website account action (the string form of "action:account-sign-out") in stateptr
+                set barrier to account's logout snapshot
+                edit account test plan (the string form of "later local edit") in stateptr
+                deliver account test reply (a JSON object containing [JSON flag "matched" is true]) to request (account's write request) in stateptr
+                require condition ((account's auth request = 0) and ((account's write request != 0) and (account's sent = barrier))) reporting "Sign-out did not flush the snapshot after the in-flight write"
+                deliver account test reply (a JSON object containing [JSON flag "matched" is true]) to request (account's write request) in stateptr
+                require condition ((account's auth request != 0) and (account's logout snapshot = barrier)) reporting "Sign-out kept waiting for edits after its snapshot"
+                set queued to account's auth request
+                identify account test user (the string form of "") in stateptr
+                deliver account test reply (a new JSON value of kind the JSON null kind) to request queued in stateptr
+                require condition ((state's progress's profile = "guest") and (account's phase = 4)) reporting "Signing out did not restore the guest profile"
+                require condition ((the UI value for (the control labeled "River source" in (the address of instance)) in (the address of instance))'s text = (the website river starter source)) reporting "An empty guest profile retained account content"
+            else if scenario = 2:
+                edit account test plan (the string form of "local conflicted") in stateptr
+                flush website account save in stateptr
+                deliver account test reply (a JSON object containing [JSON flag "matched" is false]) to request (account's write request) in stateptr
+                require condition ((account's conflict) and (account's deadline = 0)) reporting "A compare mismatch retried without an explicit choice"
+                ignore follow website account action (the string form of "action:account-load") in stateptr
+                read account test cloud (the string form of "another device") in stateptr
+                require condition ((account's conflict = false) and (account's dirty = false)) reporting "Loading the account save did not resolve the conflict"
+                require condition ((the UI value for (the control labeled "River source" in (the address of instance)) in (the address of instance))'s text = "another device") reporting "Load account kept the displaced local game"
+                edit account test plan (the string form of "keep my game") in stateptr
+                flush website account save in stateptr
+                deliver account test reply (a JSON object containing [JSON flag "matched" is false]) to request (account's write request) in stateptr
+                ignore follow website account action (the string form of "action:account-keep") in stateptr
+                read account test cloud (the string form of "remote changed again") in stateptr
+                require condition ((account's write request != 0) and (account's conflict = false)) reporting "Keep game did not compare against a fresh server revision"
+                deliver account test reply (a JSON object containing [JSON flag "matched" is false]) to request (account's write request) in stateptr
+                require condition (account's conflict) reporting "Keep game ignored another race"
+            else:
+                edit account test plan (the string form of "unflushed alice") in stateptr
+                flush website account save in stateptr
+                set stale to account's write request
+                identify account test user (the string form of "bob") in stateptr
+                deliver account test reply (a JSON object containing [JSON flag "matched" is true]) to request stale in stateptr
+                require condition ((account's phase = 3) and (account's revision is JSON null)) reporting "A stale write changed the next identity's revision"
+                set stale to account's read request
+                identify account test user (the string form of "charlie") in stateptr
+                deliver account test reply (a JSON object containing [JSON child "value" is (a new JSON value of kind the JSON null kind)]) to request stale in stateptr
+                require condition ((account's user = "charlie") and (account's phase = 3)) reporting "A stale read selected the previous identity"
+                read account test cloud (the string form of "charlie plan") in stateptr
+                require condition (state's progress's profile = "user:charlie") reporting "The current identity was not committed"
+        free website river trace the address of (state's river's trace)
+        free state's river's coding
+        free state's progress's document
+        free account's configuration
+        free account's revision
+        set pending to state's requests
+        loop while pending != @intrinsic("construct", a pointer to website request):
+            set next to pending's next
+            deallocate pending
+            set pending to next
+        close (the address of instance)
+
+check account controller case 0
+check account controller case 1
+check account controller case 2
+check account controller case 3
+print line "Account policy keeps profiles and IDE drafts separate, coalesces writes, preserves in-flight edits, gates stale replies, resolves conflicts and completes finite logout barriers."

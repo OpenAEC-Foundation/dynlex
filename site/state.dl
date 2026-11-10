@@ -5,6 +5,8 @@ import downloads/release.dl
 import programs/types.dl
 import editor/types.dl
 import games/river/playback.dl
+import games/progress/types.dl
+import account/types.dl
 
 class:
     patterns:
@@ -37,6 +39,8 @@ class:
         editor entry as a string
         shader editor as website shader editor
         river as website river playback
+        progress as website progress store
+        account as website account state
 
 [the|] website state in {a pointer to UI instance:instance} means: instance's state as a pointer to website state
 

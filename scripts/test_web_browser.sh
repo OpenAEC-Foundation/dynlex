@@ -80,7 +80,7 @@ cleanup() {
 trap cleanup EXIT
 
 if [[ "$WEB_SERVER" == "static" || "$WEB_SERVER" == "deployment" ]]; then
-    server_arguments=("$SERVER_PORT" --directory "$PROJECT_DIR/web")
+    server_arguments=("$SERVER_PORT" --directory "${DYNLEX_TEST_WEB_ROOT:-$PROJECT_DIR/web}")
     if [[ "$WEB_SERVER" == "deployment" ]]; then
         server_arguments+=(--deployment)
     fi

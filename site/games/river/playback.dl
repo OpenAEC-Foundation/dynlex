@@ -2,6 +2,8 @@
 import model.dl
 import trace.dl
 import audio_types.dl
+import ../progress/goals.dl
+import content.dl
 
 class:
     patterns:
@@ -30,11 +32,28 @@ class:
         active as a boolean
         last seconds as a floating-point number
         artwork as an integer
-        passenger as a boolean
-        deliveries as an integer
+        coding as a pointer to JSON value
         solved as a boolean
+        changed as a boolean
         message as a string
         audio as website river audio
+
+# Clear all references into the owned trace together. Presentation preferences,
+# assets, sound buffers and saved achievements belong to longer-lived state.
+to [clear website river plan in] {a pointer to website river playback:playback}:
+    free website river trace the address of (playback's trace)
+    set playback's trace to a new website river trace
+    set playback's scene to the initial website river scene
+    set playback's target to playback's scene
+    set playback's instruction and playback's shown to @intrinsic("construct", a pointer to website river instruction)
+    set playback's event to @intrinsic("construct", a pointer to website river event)
+    set playback's position, playback's shown position and playback's marked position to 0
+    set playback's stage to 0
+    set playback's elapsed, playback's duration and playback's seconds to 0.0
+    set playback's last seconds to 0.0
+    set playback's playing, playback's failed and playback's paused to false
+    set playback's stepping, playback's active and playback's changed to false
+    set playback's marked failure to false
 
 # Validate the entire output before presenting any of it. User programs can print
 # arbitrary text, including strings that resemble the game's event protocol.
@@ -115,14 +134,20 @@ to [commit website river event in] {a pointer to website river playback:playback
     set event to playback's event
     set playback's scene to playback's target
     if event's kind = 1:
-        set playback's passenger to true
+        if record website coding goal "passenger" using key "loaded" in (playback's coding):
+            set playback's changed to true
     if (event's kind = 2) and (playback's scene's bank = 1):
-        set flag to 1 shifted left by (event's subject - 1)
-        set playback's deliveries to playback's deliveries bitwise or flag
+        set names to ["SHEEP", "WOLF", "HAY"]
+        if record website coding goal "deliveries" using key (the item at (event's subject - 1) in names) in (playback's coding):
+            set playback's changed to true
     if event's kind = 5:
         set playback's failed to true
         set playback's message to event's message
     if event's kind = 6:
+        if record website coding goal "rescue" using key "solved" in (playback's coding):
+            set playback's changed to true
+        if playback's solved = false:
+            set playback's changed to true
         set playback's solved to true
         set playback's message to "Everyone reached the far bank safely."
 

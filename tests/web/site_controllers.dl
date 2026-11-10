@@ -28,7 +28,7 @@ run website program 0 in (the address of state)
 stop website program 0 in (the address of state)
 require condition (state's requests' cancelled) reporting "An already queued reply lost its ownership on cancellation"
 set reply to a JSON object containing [JSON number "artifact" is 99]
-discard website reply reply in (the address of state)
+discard website reply reply for purpose 6 in (the address of state)
 free reply
 set pending to state's requests
 loop while pending != @intrinsic("construct", a pointer to website request):

@@ -1,0 +1,169 @@
+import configuration.dl
+import sync.dl
+
+to [watch website account identity in] {a pointer to website state:state}:
+    set account to the address of (state's account)
+    set account's phase to 2
+    set account's watch request to request website account operation (a JSON object containing [JSON text "operation" is "watch"]) for purpose 15 in state
+
+to [connect website account in] {a pointer to website state:state}:
+    set account to the address of (state's account)
+    set account's phase to 1
+    set account's message to "Connecting your account…"
+    set account's connect request to request website account operation (a JSON object containing [
+        JSON text "operation" is "connect", JSON child "configuration" is (a copy of JSON node (account's configuration))
+    ]) for purpose 14 in state
+    refresh website account controls in state
+
+to [open website account with] {a pointer to JSON value:configuration} in {a pointer to website state:state}:
+    set account to the address of (state's account)
+    require condition (account's configuration = (0 as a pointer to JSON value)) reporting "The website account was opened twice"
+    set account's configuration to configuration
+    set account's revision to a new JSON value of kind the JSON null kind
+    set account's online to true
+    set state's progress's saved to (the function named "notice website account local save $") as a pointer
+    if configuration is not JSON null:
+        connect website account in state
+        request "connectivity" containing (a new JSON value of kind the JSON null kind) for purpose 20 indexed 0 in state
+        set account's connectivity request to state's requests' id
+
+to [use website account identity] {string:user} in {a pointer to website state:state}:
+    set account to the address of (state's account)
+    if (account's user = user) and ((account's phase = 3) or (account's phase = 4)):
+        return nothing
+    retire website account operations in state
+    set account's signing out, account's dirty and account's conflict to false
+    set account's logout snapshot and account's sent to ""
+    free account's revision
+    set account's revision to a new JSON value of kind the JSON null kind
+    set account's user to user
+    set account's phase to 3
+    set account's message to "Loading your saved progress…"
+    suspend website account games in state
+    refresh website account controls in state
+    if user's length = 0:
+        set loaded to load website account profile (the string form of "guest") in state
+        set selected to false
+        if loaded's error's length = 0:
+            set selected to commit website account profile (the string form of "guest") containing (loaded's document) in state
+        if selected:
+            apply website account games in state
+            set account's phase to 4
+            set account's message to "Progress saves in this browser"
+        else:
+            set account's phase to 5
+            report website account failure (the string form of "The guest profile could not be selected") in state
+        refresh website account controls in state
+    else:
+        read website account save for mode 0 in state
+
+to [fail website account purpose] {integer:job} in {a pointer to website state:state}:
+    set account to the address of (state's account)
+    if job = 14:
+        set account's connect request to 0
+        set account's phase to 5
+    if job = 15:
+        set account's watch request to 0
+        retire website account operations in state
+        set account's phase to 5
+        suspend website account games in state
+    if job = 16:
+        set account's read request to 0
+        if account's read mode = 0:
+            set account's phase to 5
+    if job = 17:
+        set account's write request to 0
+        set account's dirty to true
+        set account's signing out to false
+        schedule website account save in state
+    if job = 18:
+        set account's deadline to 0
+    if job = 19:
+        set account's auth request to 0
+        set account's signing out to false
+    if job = 20:
+        set account's connectivity request to 0
+    report website account failure (the string form of "A platform account operation failed") in state
+
+to [receive website account reply] {a pointer to JSON value:response} for purpose {integer:job} indexed {integer:generation} in {a pointer to website state:state}:
+    set account to the address of (state's account)
+    if job = 14:
+        set account's connect request to 0
+        set account's connected to true
+        watch website account identity in state
+        refresh website account controls in state
+        return nothing
+    if (job = 15) or (job = 20):
+        fail website account purpose job in state
+        return nothing
+    if generation != account's generation:
+        return nothing
+    if job = 16:
+        receive website account read response in state
+    if job = 17:
+        receive website account write response in state
+    if job = 18:
+        set account's deadline to 0
+        flush website account save in state
+    if job = 19:
+        set account's auth request to 0
+        if account's auth mode = 1:
+            set code to the JSON member named "code" in response
+            if code is not JSON null:
+                if (code's text != "auth/popup-closed-by-user") and (code's text != "auth/cancelled-popup-request"):
+                    report website account failure (the string form of "Google sign-in failed") in state
+        # The auth observer owns identity changes. Its notification can arrive
+        # before or after this operation's reply.
+        refresh website account controls in state
+
+to [receive website account notification] {a pointer to JSON value:message} in {a pointer to website state:state}:
+    set kind to the JSON text named "type" in message
+    if kind = "firebase-auth":
+        require condition (state's account's connected) reporting "An identity arrived before the account provider connected"
+        set user to the JSON member named "user" in message
+        use website account identity ((the string form of "") if (user is JSON null), else (the JSON text named "uid" in user)) in state
+    if kind = "connectivity":
+        set state's account's online to the JSON boolean named "online" in message
+        if state's account's online:
+            if state's account's phase = 5:
+                retry website account in state
+            else:
+                flush website account save in state
+
+to [retry website account in] {a pointer to website state:state}:
+    set account to the address of (state's account)
+    if account's connected = false:
+        if account's connect request = 0:
+            connect website account in state
+    else if account's watch request = 0:
+        watch website account identity in state
+    else if account's phase = 5:
+        use website account identity (account's user) in state
+    else:
+        flush website account save in state
+
+to get [follow website account action] {string:destination} in {a pointer to website state:state}:
+    set account to the address of (state's account)
+    if destination = "action:account-retry":
+        retry website account in state
+        return true
+    if destination = "action:account-sign-in":
+        set account's auth mode to 1
+        set account's auth request to request website account operation (a JSON object containing [JSON text "operation" is "sign-in"]) for purpose 19 in state
+        refresh website account controls in state
+        return true
+    if destination = "action:account-sign-out":
+        set account's signing out to true
+        set account's logout snapshot to the compact JSON form of (state's progress's document)
+        if account's online = false:
+            set account's signing out to false
+            set account's message to "Connect to the internet before signing out so your account save can finish."
+        else:
+            flush website account save in state
+        refresh website account controls in state
+        return true
+    if (destination = "action:account-load") or (destination = "action:account-keep"):
+        require condition (account's conflict) reporting "A save-conflict choice was invoked without a conflict"
+        read website account save for mode (1 if (destination = "action:account-load"), else 2) in state
+        return true
+    return false

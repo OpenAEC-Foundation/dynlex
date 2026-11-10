@@ -3,10 +3,15 @@ import shaders/hero.dl
 import programs/controller.dl
 import editor/language.dl
 import games/river/controller.dl
+import account/controller.dl
 
 to follow website link {a pointer to UI instance:instance}:
     set state to the website state in instance
     set destination to (the UI value for (instance's event target) in instance)'s destination
+    if follow website account action destination in state:
+        return nothing
+    if destination = "action:resume-game":
+        set destination to "action:" + (the JSON text named "lastGame" in (state's progress's document))
     if follow website river action destination in state:
         return nothing
     if destination = "action:next-shader":

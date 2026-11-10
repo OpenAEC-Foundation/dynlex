@@ -1,6 +1,7 @@
 import ../../../site/games/river/playback.dl
 
 set playback to a new website river playback
+set playback's coding to new website coding progress for "river"
 set playback's speed to 1
 set playback's trace to website river trace from (the string form of "RIVER|COMMAND|LOAD|SHEEP\nRIVER|ACTION|LOAD|SHEEP\nRIVER|COMMAND|CROSS\nRIVER|ACTION|CROSS|FAR\nRIVER|COMMAND|UNLOAD|SHEEP\nRIVER|ACTION|UNLOAD|SHEEP\n") dropping 2 source lines
 require condition ((the website river trace error in (playback's trace))'s length = 0) reporting "A valid replay failed validation"
@@ -18,7 +19,7 @@ set playback's speed to 2
 advance website river playback (the address of playback) by 0.5
 require condition ((playback's scene's bank = 1) and (playback's scene's cargo = 1)) reporting "Playback speed did not control crossing time"
 advance website river playback (the address of playback) by 0.28
-require condition ((playback's playing = false) and ((playback's deliveries = 1) and (playback's passenger))) reporting "A safe unfinished plan did not stop or record its distinct goals"
+require condition ((playback's playing = false) and (((the website coding count of "deliveries" in (playback's coding)) = 1) and ((the website coding count of "passenger" in (playback's coding)) = 1))) reporting "A safe unfinished plan did not stop or record its distinct goals"
 require condition ((playback's scene's bank = 1) and ((the item at 0 in (playback's scene's passengers)) = 1)) reporting "An incomplete plan reset the world"
 set playback's reduced motion to true
 begin website river replay in (the address of playback) stepping true
@@ -39,5 +40,14 @@ require condition ((playback's playing = false) and ((playback's scene's bank = 
 free website river trace the address of (playback's trace)
 set playback's trace to website river trace from (the string form of "RIVER|COMMAND|LOAD|SHEEP\nRIVER|ACTION|LOAD|SHEEP\nRIVER|ACTION|LOAD|WOLF\n") dropping 2 source lines
 require condition ((the website river trace error in (playback's trace))'s length > 0) reporting "An inconsistent protocol was accepted before playback"
-free website river trace the address of (playback's trace)
+set playback's solved to true
+set playback's elapsed and playback's seconds to 4.0
+set playback's last seconds to 8.0
+set playback's shown position to 2
+set playback's audio's muted to true
+clear website river plan in (the address of playback)
+require condition ((playback's trace's count = 0) and ((playback's event = @intrinsic("construct", a pointer to website river event)) and (playback's shown = @intrinsic("construct", a pointer to website river instruction)))) reporting "Clearing a plan retained references to its freed trace"
+require condition (((playback's elapsed = 0.0) and (playback's seconds = 0.0)) and ((playback's last seconds = 0.0) and (playback's shown position = 0))) reporting "Clearing a plan retained its presentation clock or instruction"
+require condition ((playback's solved and playback's audio's muted) and ((the website coding count of "passenger" in (playback's coding)) = 1)) reporting "Clearing a plan discarded saved achievements or audio preferences"
 print line "River playback steps at instruction boundaries, pauses exactly, changes speed, records goals and resets failures after impact."
+free playback's coding

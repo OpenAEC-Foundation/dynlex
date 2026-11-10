@@ -1,0 +1,37 @@
+import ../games/progress/model.dl
+
+class:
+    patterns:
+        website account state
+    members:
+        # 0 disabled, 1 connecting, 2 waiting for auth, 3 loading, 4 ready, 5 failed.
+        phase as an integer
+        configuration as a pointer to JSON value
+        user as a string
+        generation as an integer
+        connected as a boolean
+        online as a boolean
+        connect request as an integer
+        watch request as an integer
+        connectivity request as an integer
+        read request as an integer
+        write request as an integer
+        auth request as an integer
+        deadline as an integer
+        read mode as an integer
+        auth mode as an integer
+        revision as a pointer to JSON value
+        sent as a string
+        logout snapshot as a string
+        signing out as a boolean
+        dirty as a boolean
+        conflict as a boolean
+        message as a string
+
+class:
+    patterns:
+        website account reconciliation
+    members:
+        document as a pointer to JSON value
+        dirty as a boolean
+        error as a string

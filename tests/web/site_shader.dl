@@ -84,7 +84,7 @@ toggle the website shader preview in (the address of state)
 require condition ((the item at 2 in (state's programs))'s phase = 2) reporting "Preview playback interrupted graphics creation"
 stop website program 2 in (the address of state)
 set response to a JSON object containing [JSON number "resource" is 43]
-discard website reply response in (the address of state)
+discard website reply response for purpose 10 in (the address of state)
 free response
 require condition (state's shader editor's pending program = @intrinsic("construct", a pointer to JSON value)) reporting "A cancelled graphics request retained its description"
 free rendering's program

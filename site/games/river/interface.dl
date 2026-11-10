@@ -1,4 +1,5 @@
 import ../../appearance.dl
+import content.dl
 
 appearance river panel appearance:
     background is UI ink 20 35 39
@@ -79,7 +80,7 @@ document river challenge using river panel appearance:
     region "River body" using columns appearance:
         region "River plan" using river card appearance:
             paragraph "YOUR PLAN / PLAIN ENGLISH, REAL DYNLEX" using river signal appearance
-            editor "River source" containing "# The official names are: sheep, wolf, and hay.\nget the hay in the boat\nrow to the other side" using river code appearance
+            editor "River source" containing (the website river starter source) using river code appearance
             paragraph "River execution" containing "Write a plan. Run it, or take one instruction at a time." using river text appearance
             paragraph "River diagnostics" containing "" using river diagnostics appearance
             region "River run actions" using columns appearance:

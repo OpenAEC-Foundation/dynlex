@@ -1,0 +1,1 @@
+Account reconciliation preserves account ownership and exact revisions, upgrades cloud saves, and queues only changed data.

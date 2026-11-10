@@ -42,8 +42,7 @@ def write_routes(site, stage, pages):
         source = template.replace('DynLex — Make the language part of the work', html.escape(page['title']))
         source = source.replace('Explore working sketches, invent project vocabulary, and run DynLex in the browser.',
                                 html.escape(page['description'], quote=True))
-        for asset in ['platform/start.js', 'assets/branding/dynlex-icon.svg']:
-            source = source.replace('./' + asset, posixpath.relpath(asset, posixpath.dirname(route) or '.'))
+        source = source.replace('./platform/start.js', posixpath.relpath('platform/start.js', posixpath.dirname(route) or '.'))
         target.write_text(source)
     (stage / 'routes.json').write_text(json.dumps(pages, indent=2) + '\n')
 

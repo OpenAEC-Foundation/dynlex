@@ -8,6 +8,7 @@ import { setTimeout as pause } from 'node:timers/promises';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
 const graphicsMode = process.argv[3] || 'system';
+const resumeOnly = process.argv[4] === 'resume';
 assert(['system', 'webgpu', 'webgl-no-adapter', 'webgl-no-api'].includes(graphicsMode));
 const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'dynlex-ui-chrome-'));
 await fs.mkdir('.cache', { recursive: true });
@@ -88,6 +89,12 @@ try {
     throw new Error(`Timed out: ${expression}\n${await evaluate('JSON.stringify({text:document.body.innerText,drawn:window.siteProbe.texts.slice(-20)})')}\n${stderr}`);
   };
   await command('Runtime.enable'); await command('Page.enable');
+  if(resumeOnly) {
+    const progress={version:7,games:{river:{updatedAt:Date.now(),data:{source:'this is invalid river code',solved:true,coding:{
+      passenger:{count:1,seen:['loaded']},deliveries:{count:3,seen:['SHEEP','WOLF','HAY']},rescue:{count:1,seen:['solved']}
+    }}}},lastGame:'river'};
+    await command('Page.addScriptToEvaluateOnNewDocument',{source:`if(location.protocol==='http:') localStorage.setItem('dynlex.games.guest',${JSON.stringify(JSON.stringify(progress))});`});
+  }
   await command('Browser.setDownloadBehavior', { behavior: 'deny' });
   const manifest = await fs.readFile(new URL('../../metadata/release-manifest.txt', import.meta.url), 'utf8');
   const assets = manifest.split('\n').filter(line => line.startsWith('asset ')).map(line => ({
@@ -245,8 +252,8 @@ try {
         get: () => ({ requestAdapter: async () => null }) });
     }
   ` });
-  await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
-  await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` });
+  await command('Emulation.setDeviceMetricsOverride', resumeOnly?{width:390,height:844,deviceScaleFactor:2,mobile:true}:{width:1280,height:900,deviceScaleFactor:1,mobile:false});
+  await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/${resumeOnly?'#challenges':''}` });
   await waitFor('window.siteProbe?.paints > 2');
   await waitFor('window.siteProbe.pictures.includes("assets/games/river/painted-river.webp")');
   await pause(1800);
@@ -255,7 +262,7 @@ try {
     const result = await command('Page.captureScreenshot', { format: 'png' });
     await fs.writeFile(`.cache/site-${name}-${graphicsMode}.png`,Buffer.from(result.data,'base64'));
   };
-  await capture('desktop');
+  await capture(resumeOnly?'river-resume-start':'desktop');
   console.log(JSON.stringify(await evaluate('({title:document.title,api:window.siteProbe.api,paints:window.siteProbe.paints})')));
   if(graphicsMode !== 'system') assert.equal(await evaluate('window.siteProbe.api'),graphicsMode === 'webgpu' ? 'webgpu' : 'webgl2');
   const click = async (x,y) => {
@@ -265,19 +272,43 @@ try {
   };
   const textVisible = text => `window.siteProbe.commands.some(entry => entry.text === ${JSON.stringify(text)})`;
   const clickText = async (text,settle=350) => {
-    for(let attempt=0;attempt<22;attempt++) {
-      let point = await evaluate(`window.siteProbe.commands.find(entry => entry.text === ${JSON.stringify(text)} && entry.y > (innerWidth<700?140:80) && entry.y < innerHeight-20)`);
+    let stationary=0;
+    const position='JSON.stringify(window.siteProbe.commands.map(item=>[item.text,Math.round(item.x),Math.round(item.y)]))';
+    // Text is painted one wrapped line at a time. Resolve the complete caption
+    // before choosing a visible line, including mobile multiline links.
+    const locate=`(() => {
+      const target=${JSON.stringify(text)},entries=window.siteProbe.commands;
+      for(let start=0;start<entries.length;start++) {
+        let caption='',point;
+        for(let end=start;end<Math.min(entries.length,start+8);end++) {
+          const entry=entries[end];
+          caption+=(caption?' ':'')+entry.text;
+          if(entry.y>(innerWidth<700?140:80)&&entry.y<innerHeight-20) point??=entry;
+          if(caption===target&&point) return point;
+          if(!target.startsWith(caption)) break;
+        }
+      }
+      return null;
+    })()`;
+    for(let attempt=0;attempt<100;attempt++) {
+      let point = await evaluate(locate);
       if(point) {
         await pause(settle);
-        point = await evaluate(`window.siteProbe.commands.find(entry => entry.text === ${JSON.stringify(text)} && entry.y > (innerWidth<700?140:80) && entry.y < innerHeight-20)`);
+        point = await evaluate(locate);
         if(point) { await click(point.x,point.y); return; }
       }
+      const before=await evaluate(position);
       const cursor = await evaluate('({x:innerWidth-20,y:Math.min(innerHeight-60,700)})');
-      await command('Input.dispatchMouseEvent',{type:'mouseWheel',...cursor,deltaX:0,deltaY:attempt<8?180:-180});
+      await command('Input.dispatchMouseEvent',{type:'mouseMoved',...cursor});
+      // Begin a missing-caption search at the page's start. Searching down to
+      // the footer and back can exhaust a fixed budget on the tall mobile page.
+      await command('Input.dispatchMouseEvent',{type:'mouseWheel',...cursor,deltaX:0,deltaY:attempt===0?-100000:400});
       await pause(550);
+      stationary=(await evaluate(position))===before?stationary+1:0;
+      if(stationary>=2) break;
     }
     await capture('river-command-missing');
-    throw new Error('Could not reveal command: '+text);
+    throw new Error('Could not reveal command: '+text+'\n'+await evaluate('JSON.stringify({counts:window.siteProbe.texts.filter(text=>/\\d \\/ \\d|far shore|CODING GOALS/.test(text)),visible:window.siteProbe.commands.map(item=>item.text)})'));
   };
   const key = async (code,key,number,modifiers=0) => {
     await command('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:number,modifiers});
@@ -285,11 +316,14 @@ try {
   };
   const wheel = async deltaY => {
     const cursor = await evaluate('({x:innerWidth-20,y:Math.min(innerHeight-60,700)})');
+    await command('Input.dispatchMouseEvent',{type:'mouseMoved',...cursor});
     await command('Input.dispatchMouseEvent',{type:'mouseWheel',...cursor,deltaX:0,deltaY});
     await pause(200);
   };
   const source = await fs.readFile(new URL('./fixtures/river_solution.dl',import.meta.url),'utf8');
   const plan = source.slice(source.indexOf('\n')+1).trimStart();
+  let saved;
+  if(!resumeOnly) {
   await click(800,22); await pause(800);
   await clickText('Open the river challenge →');
   await waitFor('window.siteProbe.pictures.length >= 10');
@@ -369,8 +403,30 @@ try {
   await pause(150);
   assert(await evaluate('window.siteProbe.requests.filter(item => item.service === "audio" && item.payload.operation === "state").slice(-2).every(item => item.payload.volume === 0)'),'Leaving the challenge did not silence its background sounds');
   await waitFor(textVisible('01 / THE RIVER'));
+  saved=await evaluate('JSON.parse(localStorage.getItem("dynlex.games.guest"))');
+  assert.equal(saved.version,7);assert.equal(saved.lastGame,'river');
+  assert.equal(saved.games.river.data.source,'this is invalid river code');
+  assert.equal(saved.games.river.data.solved,true);
+  assert.deepEqual(saved.games.river.data.coding,{passenger:{count:1,seen:['loaded']},
+    deliveries:{count:3,seen:['SHEEP','WOLF','HAY']},rescue:{count:1,seen:['solved']}});
+  assert(Number.isSafeInteger(saved.games.river.updatedAt)&&Math.abs(Date.now()-saved.games.river.updatedAt)<180000);
+  await command('Page.reload',{ignoreCache:true});
+  } else saved=await evaluate('JSON.parse(localStorage.getItem("dynlex.games.guest"))');
+  await waitFor('window.siteProbe?.paints > 2');
+  await clickText('Continue your game →');
+  await clickText('this is invalid river code');
+  // Mobile places the world and goals below the source editor. Reveal them
+  // before checking their painted state rather than waiting above the fold.
+  await clickText('THE RIVER / WAITING FOR A PLAN');
+  await clickText('3 / 3');
+  if(resumeOnly) {
+    await clickText('← Choose a challenge');
+    await waitFor(textVisible('01 / THE RIVER'));
+  }
+  assert.deepEqual(await evaluate('JSON.parse(localStorage.getItem("dynlex.games.guest"))'),saved,'Reload or Resume rewrote stored progress');
   assert.equal(errors.length,0,JSON.stringify(errors));
-  console.log('DynLex River browser interaction passed: step, failure, edit, solve, replay, pause, reset, prefix diagnostics, source marks, audio and mobile layout.');
+  console.log(resumeOnly?'DynLex River mobile resume passed: saved source, world, goal counters and unchanged storage.':
+    'DynLex River browser interaction passed: step, failure, edit, solve, replay, pause, reset, diagnostics, marks, audio, mobile layout, local saves and resume after reload.');
 } finally {
   socket?.close();
   if (chrome.exitCode === null) {

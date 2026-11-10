@@ -1,0 +1,112 @@
+import lib/json_edit.dl
+
+# Frozen version-5 vocabulary. Operands: 0 fixed, 1 old argument,
+# 2 old argument becomes target plus area, 3 old argument and amount.
+class:
+    patterns:
+        website farm save opcode
+    members:
+        previous as a C string
+        current as a C string
+        argument as an integer
+        target as an integer
+        amount as an integer
+        operands as an integer
+
+website save opcode {C string:old} becomes {C string:key} with {integer:argument} {integer:target} {integer:amount} reading {integer:operands} means: @intrinsic("construct", website farm save opcode, old, key, argument, target, amount, operands)
+
+the version 5 website farm actions means: [
+    website save opcode "forward" becomes "step" with 0 -2 -1 reading 0,
+    website save opcode "backward" becomes "step" with 1 -2 -1 reading 0,
+    website save opcode "left" becomes "turn" with 2 -2 -1 reading 0,
+    website save opcode "right" becomes "turn" with 3 -2 -1 reading 0,
+    website save opcode "chop" becomes "chop" with 0 22 -1 reading 0,
+    website save opcode "plow" becomes "plow" with 0 20 -1 reading 0,
+    website save opcode "carrots" becomes "plant" with 6 20 -1 reading 0,
+    website save opcode "wheat" becomes "plant" with 7 20 -1 reading 0,
+    website save opcode "water" becomes "water" with 0 21 -1 reading 0,
+    website save opcode "harvest" becomes "harvest" with 0 21 -1 reading 0,
+    website save opcode "fill" becomes "fill" with 2 -2 1 reading 0,
+    website save opcode "store" becomes "store" with -1 0 -1 reading 0,
+    website save opcode "pickup" becomes "collect" with -1 -2 -1 reading 0,
+    website save opcode "dig" becomes "dig" with 0 20 -1 reading 0,
+    website save opcode "feedCow" becomes "feed" with 0 9 -1 reading 0,
+    website save opcode "feedChickens" becomes "feed" with 0 24 -1 reading 0,
+    website save opcode "milk" becomes "collect" with 10 -2 -1 reading 0,
+    website save opcode "eggs" becomes "collect" with 9 -2 -1 reading 0,
+    website save opcode "compost" becomes "add" with 11 11 -1 reading 0,
+    website save opcode "takeCompost" becomes "collect" with 12 11 -1 reading 0,
+    website save opcode "fertilize" becomes "fertilize" with 0 20 -1 reading 0,
+    website save opcode "wait" becomes "wait" with 0 -2 -1 reading 0,
+    website save opcode "grab" becomes "collect" with -1 -2 -1 reading 1,
+    website save opcode "give" becomes "give" with 5 26 -1 reading 1,
+    website save opcode "walk" becomes "walk" with 0 0 -1 reading 2,
+    website save opcode "drop" becomes "drop" with -1 -2 -1 reading 0
+]
+
+the version 5 website farm conditions means: [
+    website save opcode "treeAhead" becomes "exists" with 0 23 -1 reading 0,
+    website save opcode "reachTree" becomes "reach" with 0 22 -1 reading 0,
+    website save opcode "full" becomes "full" with -1 -2 -1 reading 0,
+    website save opcode "empty" becomes "empty" with -1 -2 -1 reading 0,
+    website save opcode "rain" becomes "rain" with 0 -2 -1 reading 0,
+    website save opcode "dry" becomes "dry" with 0 20 -1 reading 0,
+    website save opcode "ripe" becomes "ripe" with 0 21 -1 reading 0,
+    website save opcode "bare" becomes "bare" with 0 20 -1 reading 0,
+    website save opcode "unplowed" becomes "unplowed" with 0 20 -1 reading 0,
+    website save opcode "bucketEmpty" becomes "empty" with 2 -2 1 reading 0,
+    website save opcode "thirsty" becomes "exists" with 0 7 -1 reading 0,
+    website save opcode "items" becomes "exists" with 0 25 -1 reading 0,
+    website save opcode "compostReady" becomes "ready" with 0 11 -1 reading 0,
+    website save opcode "cowHungry" becomes "hungry" with 0 9 -1 reading 0,
+    website save opcode "chickensHungry" becomes "hungry" with 0 24 -1 reading 0,
+    website save opcode "carrying" becomes "carrying" with 0 -2 -1 reading 1,
+    website save opcode "notCarrying" becomes "notCarrying" with 0 -2 -1 reading 1,
+    website save opcode "role" becomes "role" with 0 -2 -1 reading 1,
+    website save opcode "canStep" becomes "canStep" with 0 -2 -1 reading 0,
+    website save opcode "barnAtLeast" becomes "stockAtLeast" with 0 0 -1 reading 3,
+    website save opcode "barnFewer" becomes "stockFewer" with 0 0 -1 reading 3
+]
+
+to get the website farm save opcode of {string:key} in {an array:definitions}:
+    set index to 0
+    loop while index < the length of definitions:
+        if (the item at index in definitions)'s previous = key:
+            return index
+        increment index
+    return -1
+
+to get the version 5 website farm opcode in {a pointer to JSON value:old}:
+    set op to the JSON text named "op" in old
+    set key to the JSON text named "key" in old
+    if op = "action":
+        return the item at (the website farm save opcode of key in (the version 5 website farm actions)) in (the version 5 website farm actions)
+    return the item at (the website farm save opcode of key in (the version 5 website farm conditions)) in (the version 5 website farm conditions)
+
+to get the upgraded website farm instruction {a pointer to JSON value:old}:
+    set op to the JSON text named "op" in old
+    if (op != "action") and (op != "test"):
+        set copy to a copy of JSON node old
+        set JSON member (JSON child "range" is (a new JSON value of kind the JSON null kind)) in copy
+        return copy
+    set definition to the version 5 website farm opcode in old
+    set argument to definition's argument as a 64 bit integer
+    set target to definition's target as a 64 bit integer
+    set amount to definition's amount as a 64 bit integer
+    set area to the string form of ""
+    if (definition's operands = 1) or (definition's operands = 3):
+        set argument to (the JSON number named "argument" in old) as a 64 bit integer
+    if definition's operands = 2:
+        set target to (the JSON number named "argument" in old) as a 64 bit integer
+        set area to the JSON text named "area" in old
+    if definition's operands = 3:
+        set amount to (the JSON number named "amount" in old) as a 64 bit integer
+    set result to a JSON object containing [
+        JSON text "op" is op, JSON text "key" is (definition's current),
+        JSON number "argument" is argument, JSON number "amount" is amount,
+        JSON number "target" is target, JSON text "area" is area,
+        JSON child "range" is (a new JSON value of kind the JSON null kind)
+    ]
+    if op = "test":
+        add a JSON member named (the string form of "to") with value (a copy of JSON node (the JSON member named "to" in old)) to result
+    return result

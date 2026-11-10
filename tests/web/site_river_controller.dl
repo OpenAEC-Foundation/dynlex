@@ -65,5 +65,6 @@ loop while pending != @intrinsic("construct", a pointer to website request):
     set next to pending's next
     deallocate pending
     set pending to next
+free state's river's coding
 close the address of instance
 print line "River controls select the challenge, compile a single step, replay, change speed, reset, reveal hints and clear stale edits."

@@ -1,0 +1,5 @@
+import lib/json_builders.dl
+
+# Public Firebase web-app configuration only. Null keeps browser-only saves.
+to get the website account configuration:
+    return a new JSON value of kind the JSON null kind

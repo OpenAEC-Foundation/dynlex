@@ -2,6 +2,7 @@ import ../../programs/controller.dl
 import assets.dl
 import annotations.dl
 import audio_policy.dl
+import ../progress/controller.dl
 
 # Commands change the model here; surfaces only draw its current snapshots.
 to [refresh website river controls in] {a pointer to website state:state}:
@@ -25,15 +26,12 @@ to [refresh website river controls in] {a pointer to website state:state}:
         set caption to "Play ▶" if (river's paused), else "Pause Ⅱ"
     set the text of "River play" in instance to caption
     set the text of "River speed" in instance to formatted "{river's speed}× speed"
-    set the text of "River passenger count" in instance to ("1 / 1" if (river's passenger), else "0 / 1")
-    set deliveries to 0
-    set index to 0
-    loop while index < 3:
-        if (river's deliveries bitwise and (1 shifted left by index)) != 0:
-            increment deliveries
-        increment index
+    set passengers to the minimum of 1 and (the website coding count of "passenger" in (river's coding))
+    set deliveries to the minimum of 3 and (the website coding count of "deliveries" in (river's coding))
+    set rescues to the minimum of 1 and (the website coding count of "rescue" in (river's coding))
+    set the text of "River passenger count" in instance to formatted "{passengers} / 1"
     set the text of "River delivery count" in instance to formatted "{deliveries} / 3"
-    set the text of "River rescue count" in instance to ("1 / 1" if (river's solved), else "0 / 1")
+    set the text of "River rescue count" in instance to formatted "{rescues} / 1"
     set the text of "River message" in instance to (river's message)
     if busy = false:
         set world to "THE RIVER / WAITING FOR A PLAN"
@@ -64,16 +62,7 @@ function [notice website river start] {integer:index} in {a pointer to website s
     execute:
         set river to the address of (state's river)
         stop website river effects in state
-        free website river trace the address of (river's trace)
-        set river's trace to a new website river trace
-        set river's scene to the initial website river scene
-        set river's target to river's scene
-        set river's instruction to @intrinsic("construct", a pointer to website river instruction)
-        set river's shown to @intrinsic("construct", a pointer to website river instruction)
-        set river's playing, river's active and river's stepping to false
-        set river's failed to false
-        set river's position to 0
-        set river's stage to 0
+        clear website river plan in river
         set river's message to "Reading your plan."
         set the text of "River execution" in (state's view's instance) to "Compiling the plan…"
         set the text of "River world state" in (state's view's instance) to "THE RIVER / READING YOUR PLAN"
@@ -112,6 +101,7 @@ function [notice website river finish] {integer:index} in {a pointer to website 
         refresh website river controls in state
 
 to [initialize the website river in] {a pointer to website state:state}:
+    set state's river's coding to new website coding progress for "river"
     set state's river's scene to the initial website river scene
     set state's river's speed to 1
     set state's river's message to "The farmer can take one passenger at a time."
@@ -130,6 +120,7 @@ to [notice website river source edit] {a pointer to UI instance:instance}:
     set the text of "River execution" in instance to "Ready for the new plan."
     set the text of "River status" in instance to "Edited · Ctrl / ⌘ + Enter runs your plan"
     refresh website river controls in state
+    save website river progress in state
 
 to get [follow website river action] {string:destination} in {a pointer to website state:state}:
     set instance to state's view's instance
@@ -230,6 +221,9 @@ to [advance the website river in] {a pointer to website state:state}:
             animate UI view view
     set river's active to active
     set river's last seconds to view's seconds
+    if river's changed:
+        save website river progress in state
+        set river's changed to false
     if (state's programs + (the website program for source "River source"))'s phase = 3:
         if river's playing = false:
             set (state's programs + (the website program for source "River source"))'s phase to 0

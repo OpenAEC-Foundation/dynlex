@@ -1,0 +1,26 @@
+import types.dl
+
+to get the website account profile for {string:user}:
+    if user's length = 0:
+        return the string form of "guest"
+    return "user:" + user
+
+# The caller supplies this account's local save and the guest save only when
+# signing in from the guest profile. The server revision remains byte-exact.
+to get [reconcile website account progress from] {a pointer to JSON value:local} with cloud {a pointer to JSON value:revision} importing guest {a pointer to JSON value:guest}:
+    set remote to 0 as a pointer to JSON value
+    if revision is JSON null:
+        set remote to empty website progress
+    else:
+        if revision's kind != the JSON text kind:
+            return @intrinsic("construct", website account reconciliation, (0 as a pointer to JSON value), false, the string form of "The cloud save payload must contain text or null")
+        set decoded to website progress from (revision's text)
+        if decoded's error's length > 0:
+            return @intrinsic("construct", website account reconciliation, (0 as a pointer to JSON value), false, decoded's error)
+        set remote to decoded's document
+    set combined to website account progress merging local with remote importing guest guest
+    free remote
+    set dirty to true
+    if revision is not JSON null:
+        set dirty to (the compact JSON form of combined) != revision's text
+    return @intrinsic("construct", website account reconciliation, combined, dirty, the string form of "")

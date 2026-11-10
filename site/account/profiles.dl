@@ -1,0 +1,43 @@
+import model.dl
+import ../games/progress/controller.dl
+
+to get [load website account profile] {string:profile} in {a pointer to website state:state}:
+    set response to read website progress key ("dynlex.games." + profile) in state
+    if response = (0 as a pointer to JSON value):
+        return @intrinsic("construct", website progress result, (0 as a pointer to JSON value), the string form of "The account profile could not be read")
+    set value to the JSON member named "value" in response
+    set result to @intrinsic("construct", website progress result, (0 as a pointer to JSON value), the string form of "")
+    if value is JSON null:
+        set result's document to empty website progress
+    else:
+        set result to website progress from (value's text)
+    free response
+    if result's error's length > 0:
+        report website progress failure (profile + ": " + result's error) in state
+    return result
+
+# Ownership transfers on success and failure. Persist the complete target before
+# selecting it, so a failed profile switch cannot select an unwritten snapshot.
+to get [commit website account profile] {string:profile} containing {a pointer to JSON value:document} in {a pointer to website state:state}:
+    set store to the address of (state's progress)
+    if store's status != 1:
+        free document
+        return false
+    set same to store's profile = profile
+    set payload to the compact JSON form of document
+    if same:
+        if payload = (the compact JSON form of (store's document)):
+            free document
+            return true
+    if (write website progress key ("dynlex.games." + profile) containing payload in state) = false:
+        free document
+        return false
+    if same = false:
+        if (write website progress key (the string form of "dynlex.games.profile") containing profile in state) = false:
+            free document
+            return false
+    free store's document
+    set store's document to document
+    set store's profile to profile
+    refresh website progress controls in state
+    return true

@@ -36,20 +36,42 @@ website page home page at "/index.html" titled "DynLex — Make the language par
         paragraph "CODING CHALLENGES" using signal appearance
         paragraph "Think in words.\nMove the world." using title appearance
         paragraph "Write a short plan in plain English, then watch every instruction play out." using body appearance
-        view group "Challenge views" using no UI appearance:
-            region "Choose a challenge" using columns appearance:
-                region "River crossing" using card appearance:
-                    paragraph "01 / THE RIVER" using signal appearance
-                    picture "River crossing landscape" from "assets/games/river/painted-river.webp" using challenge artwork appearance
-                    paragraph "Wolf, sheep, and hay" using heading appearance
-                    paragraph "Help a farmer cross the river. Keep the sheep safe from the wolf, and the hay safe from the sheep." using body appearance
-                    link "Open the river challenge →" to "action:river" using primary link appearance
-                region "Farm challenge" using card appearance:
-                    paragraph "02 / THE FARM" using signal appearance
-                    paragraph "Grow your own farm" using heading appearance
-                    paragraph "Turn a plan into a working farm. Write instructions, watch the world respond, and build your vocabulary as you go." using body appearance
-                    link "Open the farm challenge →" to "action:farm" using primary link appearance
-            river challenge
+        region "Game progress" using game progress appearance:
+            region "Game progress summary" using game progress row appearance:
+                paragraph "Game save status" containing "Progress saves in this browser" using game save status appearance
+                region "Game progress actions" using game progress actions appearance:
+                    view group "Game resume" using no UI appearance:
+                        region "No previous game" using no UI appearance:
+                        link "Continue your game →" to "action:resume-game" using link appearance
+                    view group "Game account actions" using no UI appearance:
+                        region "Accounts disabled" using no UI appearance:
+                        link "Sign in with Google" to "action:account-sign-in" using link appearance
+                        link "Sign out" to "action:account-sign-out" using link appearance
+            view group "Game save conflict" using no UI appearance:
+                region "No save conflict" using no UI appearance:
+                region "Choose the saved game" using game progress row appearance:
+                    link "Load account save" to "action:account-load" using link appearance
+                    link "Keep this game" to "action:account-keep" using link appearance
+        view group "Game content" using no UI appearance:
+            region "Current game" using no UI appearance:
+                view group "Challenge views" using no UI appearance:
+                    region "Choose a challenge" using columns appearance:
+                        region "River crossing" using card appearance:
+                            paragraph "01 / THE RIVER" using signal appearance
+                            picture "River crossing landscape" from "assets/games/river/painted-river.webp" using challenge artwork appearance
+                            paragraph "Wolf, sheep, and hay" using heading appearance
+                            paragraph "Help a farmer cross the river. Keep the sheep safe from the wolf, and the hay safe from the sheep." using body appearance
+                            link "Open the river challenge →" to "action:river" using primary link appearance
+                        region "Farm challenge" using card appearance:
+                            paragraph "02 / THE FARM" using signal appearance
+                            paragraph "Grow your own farm" using heading appearance
+                            paragraph "Turn a plan into a working farm. Write instructions, watch the world respond, and build your vocabulary as you go." using body appearance
+                            link "Open the farm challenge →" to "action:farm" using primary link appearance
+                    river challenge
+            paragraph "Loading your saved progress…" using body appearance
+            region "Game account unavailable" using card appearance:
+                paragraph "An error occurred. Check the log." using body appearance
+                link "Retry account" to "action:account-retry" using link appearance
 
     region "language" using content appearance:
         paragraph "PROJECT VOCABULARY" using signal appearance
