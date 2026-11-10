@@ -1046,6 +1046,9 @@ configuration. A changed callee therefore reoptimizes affected importing units. 
 single-worker backend stores verified optimized bitcode through its post-optimization
 hook, leaving native emission as a separate query. Internal optimizer-generated symbols
 receive stable unit namespaces before the optimized modules are combined.
+Combination restores the original names, linkage and visibility of local definitions.
+A final liveness pass removes exports whose callers were fully inlined in other units,
+before native partitions are fingerprinted.
 Native object reuse fingerprints the resulting optimized bodies independently of generated-body reuse.
 `ir_generation_ms`, `unoptimized_ir_snapshot_ms`, and `optimization_ms` separate these
 costs. `optimization_input_units_built`, `optimization_input_units_reused`,

@@ -4,6 +4,10 @@ bool optimizeIncrementalModule(
 ) {
 	if (!context.options.optimizationLevel)
 		return true;
+	std::map<std::string, std::pair<llvm::GlobalValue::LinkageTypes, llvm::GlobalValue::VisibilityTypes>> localSymbols;
+	for (const llvm::GlobalValue &value : context.llvmModule->global_values())
+		if (value.hasLocalLinkage())
+			localSymbols.emplace(value.getName().str(), std::pair{value.getLinkage(), value.getVisibility()});
 	auto inputStart = Clock::now();
 	if (previous) {
 		auto payloadStart = Clock::now();
@@ -147,6 +151,24 @@ bool optimizeIncrementalModule(
 		auto part = parseCachedModule(bitcode, *context.llvmContext);
 		requireCompilerInvariant(!linker.linkInModule(std::move(part)), "optimized units disagree");
 	}
+	std::map<std::string, std::string> originalNames;
+	for (const auto &[original, normalized] : statistics.optimizationUnits.at("names").items())
+		originalNames.emplace(normalized.get<std::string>(), original);
+	for (llvm::GlobalValue &value : combined->global_values()) {
+		if (value.isDeclaration())
+			continue;
+		auto original = originalNames.find(value.getName().str());
+		if (original == originalNames.end())
+			continue;
+		const auto &[linkage, visibility] = localSymbols.at(original->second);
+		value.setLinkage(linkage);
+		value.setVisibility(visibility);
+		value.setName(original->second);
+	}
+	// Cross-unit imports can inline every call while retaining the exporting
+	// definition. Its original local linkage makes that definition removable.
+	llvm::ModuleAnalysisManager analyses;
+	llvm::GlobalDCEPass{}.run(*combined, analyses);
 	sortModuleSymbols(*combined);
 	requireCompilerInvariant(!llvm::verifyModule(*combined), "combined optimized module is invalid");
 	delete context.llvmModule;

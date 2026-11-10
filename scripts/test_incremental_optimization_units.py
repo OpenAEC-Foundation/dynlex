@@ -13,6 +13,8 @@ def check_optimization_units(root, build):
     main.write_text(source)
     cold = build(entry=main, flags=flags)
     assert cold[0]["optimization_units_built"] >= 6
+    assert cold[0]["native_function_fingerprints_computed"] < 6, \
+        "fully inlined internal functions survived optimization"
     main.write_text(source.replace('"part2"', '"edited"'))
     edited = build(entry=main, flags=flags)
     assert edited[0]["optimization_units_reused"] >= 4, edited[0]
