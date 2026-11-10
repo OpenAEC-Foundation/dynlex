@@ -80,6 +80,6 @@ def check_program_payloads(root, build):
     build(entry=main)
     main.write_text(unused_source.replace('"discard", 1', '"discard", 2'))
     unused = build(entry=main)
-    assert unused[0]["type_inference_reused"] and unused[0]["cache_payloads_loaded"] == 2, \
-        "unused edit loaded inference summaries or generated code"
+    assert unused[0]["type_inference_reused"] and unused[0]["cache_payloads_loaded"] == 1, \
+        "unused edit loaded dependency, inference, or generated-code payloads"
     assert unused[1:] == build(False, entry=main)[1:]

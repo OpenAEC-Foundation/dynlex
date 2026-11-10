@@ -479,7 +479,6 @@ bool compileIncrementally(
 			if (previous) {
 				auto payloadStart = Clock::now();
 				statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "all_function_projection");
-				statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "section_dependency_graph");
 				statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 			}
 			auto restoreStart = Clock::now();
@@ -617,6 +616,7 @@ bool compileIncrementally(
 			if (compiled && !reuseTypeInference) {
 				if (previous) {
 					auto payloadStart = Clock::now();
+					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "section_dependency_graph");
 					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "inference_summaries");
 					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
 					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
