@@ -915,7 +915,7 @@ instantiated them; a function whose IR was imported from cache therefore appears
 in the uninstantiated group. Flex, conversion, and other definitions are counted
 separately. These counters expose the work still done for bodies whose code was
 reused without current-process inference.
-For a successful prior build, unchanged, uninstantiated leaf function bodies can
+For a successful prior build, unchanged, uninstantiated ordinary functions without nested definitions can
 skip resolution when their parsed declaration already equals the prior resolved
 declaration, their prior matcher entries remain available, and their patterns
 cannot alter another reference's matcher key while definitions are indexed.

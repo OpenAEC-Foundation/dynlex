@@ -19,7 +19,7 @@ static void appendMutationField(llvm::SHA256 &hash, std::string_view value) {
 
 static void appendMutationNumber(llvm::SHA256 &hash, size_t value) { appendMutationField(hash, std::to_string(value)); }
 
-static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *definition) {
+static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *definition, bool adding) {
 	if (!root->mutationState)
 		return;
 	requireCompilerInvariant(
@@ -63,13 +63,27 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 		else
 			affectedLiterals.insert(path.front().text);
 	}
-	// The root key describes the active definitions, independent of insertion order.
-	// Removing a definition applies the same contribution again.
-	auto toggle = [&](std::string &state) {
+	// Modular addition preserves duplicate contributions while making insertion
+	// order irrelevant. Removal subtracts the same contribution.
+	auto update = [&](std::string &state) {
 		std::string bytes = state.empty() ? std::string(mutation.size(), '\0') : llvm::fromHex(state);
 		requireCompilerInvariant(bytes.size() == mutation.size(), "invalid pattern tree digest size");
-		for (size_t index = 0; index < mutation.size(); index++)
-			bytes[index] ^= static_cast<char>(mutation[index]);
+		unsigned carry = 0;
+		for (size_t offset = 0; offset < mutation.size(); offset++) {
+			size_t index = mutation.size() - offset - 1;
+			unsigned current = static_cast<unsigned char>(bytes[index]);
+			if (adding) {
+				unsigned sum = current + mutation[index] + carry;
+				bytes[index] = static_cast<char>(sum & 0xff);
+				carry = sum >> 8;
+			} else {
+				int difference = static_cast<int>(current) - mutation[index] - carry;
+				carry = difference < 0;
+				if (carry)
+					difference += 256;
+				bytes[index] = static_cast<char>(difference);
+			}
+		}
 		if (std::ranges::all_of(bytes, [](char byte) {
 			return byte == '\0';
 		}))
@@ -78,10 +92,10 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 			state = llvm::toHex(llvm::StringRef(bytes), true);
 	};
 	if (affectsWildcard)
-		toggle(root->mutationState->wildcardDigest);
+		update(root->mutationState->wildcardDigest);
 	for (std::string_view literal : affectedLiterals) {
 		auto [entry, _] = root->mutationState->literalDigests.try_emplace(std::string(literal));
-		toggle(entry->second);
+		update(entry->second);
 		if (entry->second.empty())
 			root->mutationState->literalDigests.erase(entry);
 	}
@@ -324,7 +338,7 @@ void PatternTreeNode::addPatternDefinition(PatternDefinition *definition, Sectio
 			endpoint->endpointRevision++;
 		}
 	}
-	recordTreeMutation(this, definition);
+	recordTreeMutation(this, definition, true);
 }
 
 // Recursively remove a definition from the tree, walking the element path.
@@ -383,7 +397,7 @@ void PatternTreeNode::removePatternDefinition(PatternDefinition *definition) {
 	requireCompilerInvariant(definition != nullptr, "pattern tree removal requires a definition");
 	requireCompilerInvariant(definition->indexedTree == this, "pattern tree removal used the wrong tree");
 	requirePatternDefinitionIndexed(definition);
-	recordTreeMutation(this, definition);
+	recordTreeMutation(this, definition, false);
 	std::vector<std::vector<PatternElement>> oldPaths = definition->indexedPaths;
 	for (const auto &path : oldPaths)
 		removeDefinitionPath(this, path, definition);

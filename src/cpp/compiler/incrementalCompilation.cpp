@@ -530,11 +530,14 @@ bool compileIncrementally(
 					!previous->contains("inactive_projection") ||
 					!compatibleObservations(*previous, recording->observations, context))
 					return std::vector<Section *>{};
-				return selectInactiveBodiesForResolutionReuse(
+				auto selectionStart = Clock::now();
+				std::vector<Section *> selected = selectInactiveBodiesForResolutionReuse(
 					context, recording->observations, previous->at("all_function_projection"),
 					previous->at("inactive_projection"), previous->at("diagnostic_sources").get<std::set<std::string>>(),
 					matcherCache, inactiveMatchEntries
 				);
+				statistics.inactiveBodySelectionMilliseconds += elapsedMilliseconds(selectionStart);
+				return selected;
 			};
 			context.inactiveBodyMatcherTreeUnchanged = [&]() {
 				return previous &&

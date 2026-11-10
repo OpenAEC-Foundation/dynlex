@@ -100,6 +100,7 @@ for name, samples in results.items():
                          "variable_like_count_references_scanned",
                          "body_resolution_reference_visits", "matcher_cache_hits",
                          "inactive_body_resolution_references_skipped",
+                         "inactive_body_selection_ms",
                          "body_references_in_instantiated_functions",
                          "body_references_in_uninstantiated_functions",
                          "body_references_in_flex_functions",

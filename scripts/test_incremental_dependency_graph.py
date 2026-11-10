@@ -426,6 +426,25 @@ def check_inactive_projection_refresh(root, build):
     assert activated[1:] == build(False, entry=skipped)[1:], \
         "newly called inactive function kept its unresolved body"
 
+    nested = root / "inactive_nested_resolution_skip.dl"
+    nested_source = ('flex section while condition:\n'
+                     '    replacement: @intrinsic("loop while", condition)\n'
+                     'to live: @intrinsic("discard", 1)\n'
+                     'to spare:\n'
+                     '    while @intrinsic("equal", 1, 0):\n'
+                     '        live\n'
+                     'live\n')
+    nested.write_text(nested_source)
+    build(entry=nested)
+    nested.write_text(nested_source.replace('"discard", 1', '"discard", 2'))
+    nested_edit = build(entry=nested)
+    assert nested_edit[0]["inactive_body_resolution_references_skipped"] >= 2, \
+        "unchanged inactive control-flow body repeated pattern resolution"
+    assert nested_edit[1:] == build(False, entry=nested)[1:]
+    nested.write_text(nested.read_text().removesuffix('live\n') + 'spare\n')
+    assert build(entry=nested)[1:] == build(False, entry=nested)[1:], \
+        "later call did not restore an inactive control-flow body"
+
     main = root / "inactive_projection_refresh.dl"
     integer = 'integer means: @intrinsic("type", "int")\n'
     live = 'to live: @intrinsic("discard", 1)\n'
