@@ -75,6 +75,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-vulkan-runtime-") as temporary_d
         command = [
             xvfb_run,
             "--auto-servernum",
+            "--error-file=/dev/stderr",
             "--server-args=-screen 0 128x64x24",
             *command,
         ]

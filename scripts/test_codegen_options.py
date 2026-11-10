@@ -130,11 +130,29 @@ def main() -> int:
             source = output_directory / "options.dl"
             source.write_text(SOURCE, encoding="utf-8")
 
-            default_ir = compile_llvm(compiler, repo_root, source, output_directory, "default")
-            default_multiply = floating_operation_line(default_ir, "fmul")
-            if " fast " in default_multiply or " contract " in default_multiply:
-                raise RuntimeError(f"default floating-point behavior is not strict: {default_multiply}")
-            if '"target-cpu"="generic"' not in default_ir:
+            optimized_default = output_directory / "optimized-default.ll"
+            default_result = run_compiler(
+                compiler, repo_root, source, "--emit-llvm", "-o", str(optimized_default)
+            )
+            if default_result.returncode != 0:
+                raise RuntimeError(default_result.stdout + default_result.stderr)
+            optimized_default_ir = optimized_default.read_text(encoding="utf-8")
+            optimized_explicit_ir = compile_llvm(
+                compiler, repo_root, source, output_directory, "optimized-explicit", "-O2"
+            )
+            if optimized_default_ir != optimized_explicit_ir:
+                raise RuntimeError("default LLVM output does not match explicit -O2 output")
+            optimized_multiply = floating_operation_line(optimized_default_ir, "fmul")
+            if " fast " in optimized_multiply or " contract " in optimized_multiply:
+                raise RuntimeError(f"default optimization relaxed floating-point behavior: {optimized_multiply}")
+
+            unoptimized_ir = compile_llvm(compiler, repo_root, source, output_directory, "unoptimized")
+            if optimized_default_ir == unoptimized_ir:
+                raise RuntimeError("explicit -O0 did not disable the default optimization pipeline")
+            unoptimized_multiply = floating_operation_line(unoptimized_ir, "fmul")
+            if " fast " in unoptimized_multiply or " contract " in unoptimized_multiply:
+                raise RuntimeError(f"unoptimized floating-point behavior is not strict: {unoptimized_multiply}")
+            if '"target-cpu"="generic"' not in unoptimized_ir:
                 raise RuntimeError("native target CPU attributes are missing from emitted LLVM IR")
 
             fast_ir = compile_llvm(compiler, repo_root, source, output_directory, "fast", "-ffast-math")

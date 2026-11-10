@@ -19,7 +19,7 @@ def compile_llvm(compiler: Path, source: str, output: Path) -> str:
     source_path = output.with_suffix(".dl")
     source_path.write_text(source, encoding="utf-8")
     result = subprocess.run(
-        [str(compiler), str(source_path), "--emit-llvm", "-o", str(output)], text=True, capture_output=True, check=False
+        [str(compiler), str(source_path), "--emit-llvm", "-O0", "-o", str(output)], text=True, capture_output=True, check=False
     )
     if result.returncode != 0:
         raise RuntimeError(result.stdout + result.stderr)

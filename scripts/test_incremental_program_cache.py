@@ -3,6 +3,24 @@
 import json
 
 
+def check_integration_builds(project, build):
+    for suite, fixture in (
+        ("integration", "json_serialization"),
+        ("integration", "string_lifecycle_counts"),
+        ("integration", "managed_array_pointer_lifecycle"),
+        ("required", "recursive_store_reinference"),
+        ("required", "overloaded_type_constraint_inference"),
+    ):
+        entry = project / "tests" / suite / fixture / "main.dl"
+        reference = build(False, entry=entry)
+        generated = build(entry=entry)
+        assert generated[1:] == reference[1:], f"partitioned code changed behavior: {fixture}"
+        reused = build(entry=entry)
+        assert reused[0]["frontend_reused"] and reused[0]["link_ms"] == 0
+        assert reused[0]["objects_built"] == 0
+        assert reused[1:] == reference[1:], f"cached code changed behavior: {fixture}"
+
+
 def decode_graph(encoded):
     paths = encoded["paths"]
     assert len(paths) == len(encoded["forward"]) == len(encoded["instantiations"])

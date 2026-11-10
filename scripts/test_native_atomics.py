@@ -310,7 +310,7 @@ def main() -> int:
             library.write_text(LIBRARY_SOURCE, encoding="utf-8")
             llvm_output = temporary / "atomics.ll"
             require_success(
-                run([str(compiler), str(library), "--emit-llvm", "--no-main", "-o", str(llvm_output)], repo_root)
+                run([str(compiler), str(library), "--emit-llvm", "--no-main", "-O0", "-o", str(llvm_output)], repo_root)
             )
             llvm_ir = llvm_output.read_text(encoding="utf-8")
             require_atomic_ir(llvm_ir)

@@ -194,7 +194,7 @@ struct ParseContext {
 		bool emitSPIRV = false;
 		bool noMain = false;
 		ShaderStage shaderStage = ShaderStage::Fragment;
-		int optimizationLevel = 0; // 0-3, corresponds to -O0 through -O3
+		int optimizationLevel = 2; // 0-3, corresponds to -O0 through -O3
 		OptimizationSize optimizationSize = OptimizationSize::None;
 		bool fastMath = false;
 		FloatingPointContract floatingPointContract = FloatingPointContract::Off;

@@ -42,7 +42,7 @@ void printUsage(std::ostream &output) {
 		   << "Compiler options:\n"
 		   << "  --emit-llvm | --emit-object | --emit-wasm | --emit-spirv  --no-main\n"
 		   << "  --emit-completions line:column  --dump-purity  --dump-dependencies\n"
-		   << "  --shader-stage=vertex|fragment|compute  -O0|-O1|-O2|-O3|-Os|-Oz|-Ofast\n"
+		   << "  --shader-stage=vertex|fragment|compute  -O0|-O1|-O2|-O3|-Os|-Oz|-Ofast (default: -O2)\n"
 		   << "  -ffast-math|-fno-fast-math  -ffp-contract=fast|off\n"
 		   << "  -march=native|<cpu>  -mcpu=<cpu>  -mtune=<cpu>  -mattr=<features>\n"
 		   << "  -fvectorize|-fno-vectorize  -fslp-vectorize|-fno-slp-vectorize\n"

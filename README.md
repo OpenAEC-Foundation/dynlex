@@ -48,10 +48,18 @@ needed for source-level debugging.
 ./scripts/test.sh --integration
 ```
 
-The required suite checks focused compiler behavior and has a 120-second
-process-tree budget starting after the compiler build. Integration tests cover
-larger library and application programs separately. Release verification runs
-both suites. The CAD fixtures and their verifier live in dynlex-cadkernel.
+The required suite is the compiler's short iteration gate. Its 120-second
+process-tree budget starts immediately after the compiler build and includes
+compiling and running its DynLex fixtures and auxiliary checks. No test preparation
+is moved ahead of that timer. C++ unit checks for numeric parsing and class layout
+run in the integration suite and in separate Linux, macOS, and Windows CI steps.
+Integration tests also cover larger library and application programs. Release
+verification runs both suites. The CAD fixtures and their verifier live in dynlex-cadkernel.
+
+Integration compilations have a 30-second default budget (60 seconds on Windows)
+to include optimization of application libraries. Required fixtures retain their
+10-second default (20 seconds on Windows). Fixture-specific compilation budgets
+still apply through `compile_timeout_seconds.txt`.
 
 ## Browser Compiler
 
@@ -177,6 +185,11 @@ Compile a source file:
 ./build/dynlex program.dl -o program.out && ./program.out
 ```
 
+Generated programs use `-O2` by default, including terminal source and WebAssembly
+output. Select `-O0` for unoptimized code or `-O3` for additional optimization;
+the last optimization flag wins. `-O2` does not enable fast math.
+For source-level debugging, use `-g -O0`; `-g` alone retains the default `-O2`.
+
 Reuse native build results across invocations:
 
 ```bash
@@ -184,10 +197,11 @@ Reuse native build results across invocations:
 ```
 
 Unchanged source/configuration and compiler options reuse the complete analyzed LLVM
-IR. After edits, analysis runs again while unchanged native code partitions reuse
-cached objects. Every build links the executable against the current libraries.
-This mode supports native executable output; it does not yet reuse individual
-function inference results after an edit or change the LSP compilation pipeline.
+IR and cached objects. After edits, unchanged native code partitions can reuse
+cached objects. An unchanged executable can skip linking. Explicit `-O0` builds
+without debug information or execution tracing additionally support function IR
+reuse after active source edits. This mode supports native executable output and
+does not change the LSP compilation pipeline.
 The cache checks file contents (including imports and syntax configuration), compiler
 identity and target options. Corruption is reported as an error. Disk usage is limited
 to 512 MiB; deleting the cache is safe and makes the next build cold. Optional statistics

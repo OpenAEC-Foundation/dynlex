@@ -59,7 +59,7 @@ def main() -> int:
         for source in sources:
             executable = Path(temporary_directory) / (source.parent.name + ".out")
             compile_result = subprocess.run(
-                [str(compiler), str(source), "-g", "-o", str(executable)],
+                [str(compiler), str(source), "-g", "-O0", "-o", str(executable)],
                 cwd=repo_root, text=True, capture_output=True, check=False,
             )
             if compile_result.returncode != 0:
@@ -74,7 +74,7 @@ def main() -> int:
                 return 1
             if source.parent.name == "debug_class_globals":
                 ir = executable.with_suffix(".ll")
-                subprocess.run([str(compiler), str(source), "-g", "--emit-llvm", "-o", str(ir)],
+                subprocess.run([str(compiler), str(source), "-g", "-O0", "--emit-llvm", "-o", str(ir)],
                                cwd=repo_root, check=True, capture_output=True, text=True)
                 metadata = ir.read_text()
                 for name in ("global", "chain"):

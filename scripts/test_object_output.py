@@ -214,7 +214,7 @@ int main(void) {{
 
             llvm_output = temporary / "library.ll"
             require_success(
-                run([str(compiler), str(library), "--emit-llvm", "--no-main", "-o", str(llvm_output)], repo_root)
+                run([str(compiler), str(library), "--emit-llvm", "--no-main", "-O0", "-o", str(llvm_output)], repo_root)
             )
             llvm_ir = llvm_output.read_text(encoding="utf-8")
             if re.search(r"^define .*@main\(", llvm_ir, flags=re.MULTILINE):
@@ -252,7 +252,7 @@ int main(void) {{
             negative_fixed_value.write_text(NEGATIVE_FIXED_VALUE_SOURCE, encoding="utf-8")
             negative_llvm_output = temporary / "negative-fixed-value.ll"
             require_success(
-                run([str(compiler), str(negative_fixed_value), "--emit-llvm", "-o", str(negative_llvm_output)], repo_root)
+                run([str(compiler), str(negative_fixed_value), "--emit-llvm", "-O0", "-o", str(negative_llvm_output)], repo_root)
             )
             if "_ct_value_i_2d_1" not in negative_llvm_output.read_text(encoding="utf-8"):
                 raise RuntimeError("negative fixed integer generated an unsafe LLVM symbol suffix")

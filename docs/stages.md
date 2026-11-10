@@ -690,6 +690,10 @@ Did the user mean `(the maximum of 5 and 3) + 4` or `the maximum of 5 and (3 + 4
 
 # Code Generation Stage
 
+Program optimization defaults to `-O2` for all compilation entry points. Explicit
+optimization flags override that default; `-g` selects debug information without
+changing optimization, while DAP compilation explicitly requests `-O0`.
+
 We already know which patterns call which instantiations, the type of every variable, etc. But now, we branch off into compilation target: browser, machine code, SPIR-V, etc.
 
 Array literals and class construction compose SSA aggregate values directly, allowing

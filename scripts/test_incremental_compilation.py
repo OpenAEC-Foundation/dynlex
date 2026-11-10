@@ -9,10 +9,13 @@ import sys
 import tempfile
 from pathlib import Path
 from test_incremental_dependency_graph import check_cross_file_typed_overload, check_deferred_match_key_replay, check_independent_constraint_probes, check_skipped_constraint_expression_retention, check_class_constraint_value_reuse, check_header_parameter_constraint_owner, check_precedence_match_key_replay, check_folded_value_remains_active, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_resolved_declaration_snapshot_reuse, check_reused_ir_dependency_graph_variants, check_runtime_pure_value_summary, check_temporary_expression_parse_reuse, check_top_level_projection_reuse, check_top_level_execution_constraint_probes, check_unrelated_added_pattern_constraint_probes
-from test_incremental_program_cache import check_program_payloads
+from test_incremental_program_cache import check_integration_builds, check_program_payloads
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
+# Reuse-counter checks exercise the O0-only function cache; integration cases
+# exercise the normal optimization default and its program/object caches.
+optimization_flags = () if integration_mode else ("-O0",)
 compiler = project / "build" / ("dynlex.exe" if os.name == "nt" else "dynlex")
 source = '''integer means: @intrinsic("type", "int")
 to alpha: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))
@@ -29,7 +32,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
 
     def build(incremental=True, flags=(), success=True, entry=main, target=output):
         build_target = target if incremental else target.with_name(target.name + ".clean")
-        arguments = [str(compiler), str(entry), *flags, "-o", str(build_target)]
+        arguments = [str(compiler), str(entry), *optimization_flags, *flags, "-o", str(build_target)]
         if incremental:
             arguments += ["--incremental", str(cache), "--incremental-stats"]
         result = subprocess.run(arguments, cwd=root, capture_output=True, text=True, timeout=120)
@@ -47,21 +50,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         return stats, diagnostics, runtime.stdout if runtime else None
 
     if integration_mode:
-        for suite, fixture in (
-            ("integration", "json_serialization"),
-            ("integration", "string_lifecycle_counts"),
-            ("integration", "managed_array_pointer_lifecycle"),
-            ("required", "recursive_store_reinference"),
-            ("required", "overloaded_type_constraint_inference"),
-        ):
-            entry = project / "tests" / suite / fixture / "main.dl"
-            reference = build(False, entry=entry)
-            generated = build(entry=entry)
-            assert generated[1:] == reference[1:], f"partitioned code changed behavior: {fixture}"
-            reused = build(entry=entry)
-            assert reused[0]["frontend_reused"] and reused[0]["link_ms"] == 0
-            assert reused[0]["objects_built"] == 0
-            assert reused[1:] == reference[1:], f"cached code changed behavior: {fixture}"
+        check_integration_builds(project, build)
         print("Incremental native integration builds passed")
         raise SystemExit(0)
 
@@ -602,7 +591,7 @@ function left times right:
     type_name_edit = build(entry=type_name_main)
     assert type_name_edit[1:] == build(False, entry=type_name_main)[1:]
     llvm_output = root / "type_argument_names.ll"
-    llvm_build = subprocess.run([str(compiler), str(type_name_main), "--emit-llvm", "-o", str(llvm_output)],
+    llvm_build = subprocess.run([str(compiler), str(type_name_main), "--emit-llvm", "-O0", "-o", str(llvm_output)],
                                 cwd=root, capture_output=True, text=True, timeout=120)
     assert llvm_build.returncode == 0, llvm_build.stderr
     llvm_text = llvm_output.read_text()

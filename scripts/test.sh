@@ -415,10 +415,14 @@ for test_dir in "$TESTS_DIR"/*/; do
         has_expected_diagnostics=true
     fi
 
-    # Native Windows compiler processes have higher startup and I/O overhead.
+    # Integration applications include the optimizing backend's work on libraries.
     compile_timeout=10
+    if [[ "$suite" == integration ]]; then
+        compile_timeout=30
+    fi
+    # Native Windows compiler processes have higher startup and I/O overhead.
     if [[ "$is_windows" == "true" ]]; then
-        compile_timeout=20
+        compile_timeout=$((compile_timeout * 2))
     fi
     if ! compile_timeout=$(dynlex_fixture_compile_timeout "$test_dir" "$compile_timeout"); then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
@@ -632,7 +636,7 @@ run_auxiliary_test() {
     local test_name="$1"
     local required_test=false
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack)
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|incremental_compilation|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack)
         required_test=true ;;
     esac
     if [[ "$suite" == required && "$required_test" != true ]] ||
