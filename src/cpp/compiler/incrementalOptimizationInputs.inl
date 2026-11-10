@@ -130,6 +130,14 @@ std::vector<OptimizationInput> captureOptimizationInputs(
 			part->setModuleIdentifier(identifier);
 			part->setModuleInlineAsm(assembly);
 			removeUnusedDeclarations(*part);
+			// A link-once definition can be unused in this partition while other
+			// partitions still reference it. Keep it until the combined index has
+			// decided liveness; combination restores its original linkage.
+			for (llvm::GlobalValue &value : part->global_values())
+				if (!value.isDeclaration() && value.hasLinkOnceLinkage())
+					value.setLinkage(
+						value.hasLinkOnceODRLinkage() ? llvm::GlobalValue::WeakODRLinkage : llvm::GlobalValue::WeakAnyLinkage
+					);
 			optimizeLLVMModule(context, *part, true);
 			sortModuleSymbols(*part);
 			llvm::ProfileSummaryInfo profile(*part);

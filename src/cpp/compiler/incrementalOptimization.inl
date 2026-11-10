@@ -4,10 +4,10 @@ bool optimizeIncrementalModule(
 ) {
 	if (!context.options.optimizationLevel)
 		return true;
-	std::map<std::string, std::pair<llvm::GlobalValue::LinkageTypes, llvm::GlobalValue::VisibilityTypes>> localSymbols;
+	std::map<std::string, std::pair<llvm::GlobalValue::LinkageTypes, llvm::GlobalValue::VisibilityTypes>> originalSymbols;
 	for (const llvm::GlobalValue &value : context.llvmModule->global_values())
-		if (value.hasLocalLinkage())
-			localSymbols.emplace(value.getName().str(), std::pair{value.getLinkage(), value.getVisibility()});
+		if (!value.isDeclaration())
+			originalSymbols.emplace(value.getName().str(), std::pair{value.getLinkage(), value.getVisibility()});
 	auto inputStart = Clock::now();
 	if (previous) {
 		auto payloadStart = Clock::now();
@@ -158,12 +158,14 @@ bool optimizeIncrementalModule(
 		if (value.isDeclaration())
 			continue;
 		auto original = originalNames.find(value.getName().str());
-		if (original == originalNames.end())
+		std::string name = original == originalNames.end() ? value.getName().str() : original->second;
+		auto symbol = originalSymbols.find(name);
+		if (symbol == originalSymbols.end())
 			continue;
-		const auto &[linkage, visibility] = localSymbols.at(original->second);
+		const auto &[linkage, visibility] = symbol->second;
 		value.setLinkage(linkage);
 		value.setVisibility(visibility);
-		value.setName(original->second);
+		value.setName(name);
 	}
 	// Cross-unit imports can inline every call while retaining the exporting
 	// definition. Its original local linkage makes that definition removable.
