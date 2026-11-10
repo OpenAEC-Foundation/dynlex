@@ -46,3 +46,19 @@ Verification includes `tests/integration/site_progress`, the storage-controller
 fixture in `tests/web/site_runtime.py`, and `tests/web/progress_model.mjs`. The
 latter compares native and shipped-browser-compiler output with the replaced
 implementation until final migration cleanup freezes those fixtures.
+
+Numeric JSON constructors use the shared DynLex decimal conversion library rather
+than the human-facing display formatter. It writes the shortest decimal that
+recovers the same binary64 value and reads decimals with ties rounded to even.
+This preserves signed zero, subnormals, and computed simulation values through
+serialization. Parsed number lexemes and exact 64-bit integer readers remain
+lossless. The numeric projection of an out-of-range decimal can overflow or
+underflow, while its original valid JSON text is retained; constructors accept
+finite numbers. JSON permits implementations to bound numeric range and precision.
+See [RFC 8259, section 6](https://www.rfc-editor.org/rfc/rfc8259.html#section-6).
+
+`tests/web/json_numbers.mjs` compares native and Wasm conversions with an
+independent JavaScript oracle across binade boundaries, adjacent values, exact
+halfway ties, extreme exponents, and long decimal inputs. It also checks buffer
+ownership. The native/Wasm oracle runs in the integration suite; `--shipped`
+additionally checks the compiler distributed to browsers.

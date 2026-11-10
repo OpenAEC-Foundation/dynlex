@@ -1,0 +1,1 @@
+JSON preserves binary64 rounding, signed zero, simulation arithmetic, subnormals and finite extremes.

@@ -1,21 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {buildRuntimeImports,createRuntimeFilesystem,inspectRuntimeWasmLayout} from '../../src/web/ide/public/compiler/runtimeImports.js';
+import {observeAllocations} from './allocation_probe.mjs';
 const bytes=await fs.readFile(process.argv[2]),output=[];
 const runtime=buildRuntimeImports(output,createRuntimeFilesystem(),inspectRuntimeWasmLayout(bytes));
-const allocations=new Map();let live=0,peak=0;
-const remember=(pointer,size)=>{
-  assert(pointer,'The JSON memory fixture ran out of memory');
-  allocations.set(pointer,size);live+=size;peak=Math.max(peak,live);
-  assert(peak<4*1024*1024,`Parsing 90KB of JSON retained ${peak} bytes`);return pointer;
-};
-const forget=pointer=>{const size=allocations.get(pointer);if(size!==undefined) {live-=size;allocations.delete(pointer);}};
-const {malloc,calloc,realloc,free}=runtime.env;
-runtime.env.malloc=size=>remember(malloc(size),Number(size));
-runtime.env.calloc=(count,size)=>remember(calloc(count,size),Number(count)*Number(size));
-runtime.env.realloc=(pointer,size)=>{const result=realloc(pointer,size);forget(pointer);return remember(result,Number(size));};
-runtime.env.free=pointer=>{forget(pointer);return free(pointer);};
+const allocation=observeAllocations(runtime,4*1024*1024);
 const {instance}=await WebAssembly.instantiate(bytes,runtime);instance.exports.main();
 assert.equal(output.join(''),'JSON text buffers scale with individual tokens and preserve Unicode decoding.\n');
-assert.equal(live,0,'Parsing left owned JSON strings or containers allocated');
-console.log(`JSON Unicode parsing used ${peak} peak live bytes and freed every allocation.`);
+assert.equal(allocation.live,0,'Parsing left owned JSON strings or containers allocated');
+console.log(`JSON Unicode parsing used ${allocation.peak} peak live bytes and freed every allocation.`);

@@ -1,0 +1,118 @@
+# Correctly rounded, locale-independent binary64 conversion. JSON validates its
+# grammar before calling this arithmetic layer; no platform parser is involved.
+import lib/decimal_integer.dl
+
+to get the binary64 bits of {a 64 bit floating-point number:value}:
+    set copy to value
+    return the value at ((the address of copy) as a pointer to a 64 bit unsigned integer)
+
+to get [binary64 from bits] {a 64 bit unsigned integer:bits}:
+    set copy to bits
+    return the value at ((the address of copy) as a pointer to a 64 bit floating-point number)
+
+# The validated reader supplies a nonzero significand in binary64 range.
+local function [binary64 from decimal magnitude] {a pointer to decimal magnitude:digits} times ten to {a 64 bit integer:exponent} [negative] {boolean:negative}:
+    execute:
+        set numerator to a copy of decimal magnitude digits
+        set denominator to a decimal magnitude from (1 as a 64 bit unsigned integer)
+        set remaining to exponent
+        loop while remaining > 0:
+            multiply decimal magnitude (the address of numerator) by (10 as a 32 bit unsigned integer) adding (0 as a 32 bit unsigned integer)
+            decrement remaining
+        loop while remaining < 0:
+            multiply decimal magnitude (the address of denominator) by (10 as a 32 bit unsigned integer) adding (0 as a 32 bit unsigned integer)
+            increment remaining
+        set power to (the bit length of decimal magnitude (the address of numerator)) - (the bit length of decimal magnitude (the address of denominator))
+        set boundary to a copy of decimal magnitude (the address of denominator)
+        set candidate to a copy of decimal magnitude (the address of numerator)
+        if power >= 0:
+            shift decimal magnitude (the address of boundary) left by power
+        else:
+            shift decimal magnitude (the address of candidate) left by (0 - power)
+        if (compare decimal magnitude (the address of candidate) with (the address of boundary)) < 0:
+            decrement power
+        free decimal magnitude (the address of boundary)
+        free decimal magnitude (the address of candidate)
+        set shift to (52 - power) if (power >= -1022), else 1074
+        if shift >= 0:
+            shift decimal magnitude (the address of numerator) left by shift
+        else:
+            shift decimal magnitude (the address of denominator) left by (0 - shift)
+        set mantissa to the rounded decimal quotient of (the address of numerator) by (the address of denominator)
+        free decimal magnitude (the address of numerator)
+        free decimal magnitude (the address of denominator)
+        set bits to mantissa
+        if power >= -1022:
+            if mantissa = (9007199254740992 as a 64 bit unsigned integer):
+                set mantissa to mantissa shifted right by 1
+                increment power
+            if power > 1023:
+                set bits to 9218868437227405312 as a 64 bit unsigned integer
+            else:
+                set bits to (((power + 1023) as a 64 bit unsigned integer) shifted left by 52) bitwise or (mantissa - (4503599627370496 as a 64 bit unsigned integer))
+        if negative:
+            set bits to bits bitwise or (9223372036854775808 as a 64 bit unsigned integer)
+        return binary64 from bits bits
+
+to get [the binary64 value of validated decimal] {string:text}:
+    set negative to (the character at 0 in text) = 45
+    set cursor to 1 if negative, else 0
+    set first and last to -1
+    set significant, fraction, total and leading to 0
+    set fractional to false
+    set reading to true
+    loop while (cursor < text's length) and reading:
+        set character to the character at cursor in text
+        if (character = 69) or (character = 101):
+            set reading to false
+        else if character = 46:
+            set fractional to true
+        else:
+            if fractional:
+                increment fraction
+            if character != 48:
+                if first = -1:
+                    set first to cursor
+                    set leading to total
+                set last to cursor
+                set significant to total + 1
+            increment total
+        if reading:
+            increment cursor
+    set exponent to 0 as a 64 bit integer
+    if cursor < text's length:
+        increment cursor
+        set minus to false
+        set character to the character at cursor in text
+        if (character = 43) or (character = 45):
+            set minus to character = 45
+            increment cursor
+        # Beyond this bound no significand in this token can compensate the
+        # exponent. Continue consuming digits without overflowing an integer.
+        set bound to (text's length as a 64 bit integer) + 400
+        set parsed to 0 as a 64 bit integer
+        loop while cursor < text's length:
+            if parsed <= bound:
+                set parsed to parsed * 10 + ((the character at cursor in text) - 48)
+            increment cursor
+        set exponent to parsed if (minus = false), else (0 - parsed)
+    set sign to (9223372036854775808 as a 64 bit unsigned integer) if negative, else (0 as a 64 bit unsigned integer)
+    if first = -1:
+        return binary64 from bits sign
+    # Remove trailing zero digits before constructing the exact rational.
+    set exponent to (exponent - (fraction as a 64 bit integer)) + ((total - significant) as a 64 bit integer)
+    set order to (((significant - leading) as a 64 bit integer) + exponent) - 1
+    if order > 308:
+        return binary64 from bits (sign bitwise or (9218868437227405312 as a 64 bit unsigned integer))
+    if order < -324:
+        return binary64 from bits sign
+    set digits to a decimal magnitude from (0 as a 64 bit unsigned integer)
+    set cursor to first
+    loop while cursor <= last:
+        set character to the character at cursor in text
+        if character != 46:
+            multiply decimal magnitude (the address of digits) by (10 as a 32 bit unsigned integer) adding ((character - 48) as a 32 bit unsigned integer)
+        increment cursor
+    set result to binary64 from decimal magnitude (the address of digits) times ten to exponent negative negative
+    free decimal magnitude (the address of digits)
+    return result

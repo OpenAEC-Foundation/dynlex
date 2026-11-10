@@ -1,0 +1,38 @@
+import lib/json_builders.dl
+
+to get binary64 test bits of {a 64 bit floating-point number:value}:
+    set copy to value
+    return the value at ((the address of copy) as a pointer to a 64 bit unsigned integer)
+
+to [check JSON decimal] {string:text} equals {a 64 bit floating-point number:expected}:
+    parse text as JSON and set parsed to it
+    require condition (parsed succeeded) reporting "A valid decimal was rejected"
+    require condition ((binary64 test bits of (parsed's value's number)) = (binary64 test bits of expected)) reporting "Decimal parsing changed binary64 rounding"
+    free parsed
+
+to [check JSON float round trip of] {a 64 bit floating-point number:value}:
+    set member to JSON number "value" is value
+    set encoded to the compact JSON form of (member's value)
+    parse encoded as JSON and set parsed to it
+    require condition (parsed succeeded) reporting "A finite float produced invalid JSON"
+    require condition ((binary64 test bits of (parsed's value's number)) = (binary64 test bits of value)) reporting "JSON serialization lost float precision or range"
+    free parsed
+    free member's value
+
+check JSON decimal (the string form of "0.3") equals 0.3
+check JSON decimal (the string form of "0.30000000000000004") equals (0.1 + 0.2)
+check JSON decimal (the string form of "5e-324") equals 5e-324
+check JSON decimal (the string form of "2.2250738585072014e-308") equals 2.2250738585072014e-308
+check JSON decimal (the string form of "1.7976931348623157e308") equals 1.7976931348623157e308
+check JSON decimal (the string form of "-0") equals (0.0 * -1.0)
+set values to [0.0, 0.0 * -1.0, 0.1 + 0.2, ((6.0 - 0.18) - 0.18) - 0.18, 1e-7, -1e20, 1e308, 5e-324, 2.2250738585072014e-308, 1.7976931348623157e308]
+set index to 0
+loop while index < the length of values:
+    check JSON float round trip of (the item at index in values)
+    increment index
+set member to JSON number "single" is (0.1 as a 32 bit floating-point number)
+parse (member's value's text) as JSON and set parsed to it
+require condition ((binary64 test bits of (parsed's value's number)) = (binary64 test bits of (member's value's number))) reporting "A float32 JSON builder lost its promoted value"
+free parsed
+free member's value
+print line "JSON preserves binary64 rounding, signed zero, simulation arithmetic, subnormals and finite extremes."

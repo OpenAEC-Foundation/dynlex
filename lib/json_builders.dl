@@ -25,10 +25,7 @@ to get JSON text {a value:name} is {a value:value}:
     return @intrinsic("construct", JSON member, the string form of name, node)
 
 to get JSON number {a value:name} is {a number:value}:
-    require condition ((value as a floating-point number) is finite) reporting "JSON numbers must be finite"
-    set node to a new JSON value of kind the JSON number kind
-    set node's text to the string form of value
-    set node's number to value as a floating-point number
+    set node to a new JSON number from value
     return @intrinsic("construct", JSON member, the string form of name, node)
 
 to get JSON flag {a value:name} is {boolean:value}:

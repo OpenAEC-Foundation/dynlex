@@ -6,7 +6,7 @@ import os from 'node:os';
 import {execFileSync} from 'node:child_process';
 const root=path.resolve(import.meta.dirname,'../..');
 const directory=await fs.mkdtemp(path.join(os.tmpdir(),'dynlex-site-models-'));
-const cases=['json_edit','json_text_buffers','string_integer_width','site_account_model'];
+const cases=['json_edit','json_text_buffers','json_float_roundtrip','string_integer_width','site_account_model'];
 try {
   const files=cases.map(name=>`tests/integration/${name}/main.dl`);
   for(const folder of ['site/games/progress','site/account'])
