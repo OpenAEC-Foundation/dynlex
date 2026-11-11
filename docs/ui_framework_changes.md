@@ -171,3 +171,22 @@ without a renderer; the River browser check also requires idle scenes to stop
 painting.
 The same lifecycle rule also preserves cached diagnostics: the server clearing
 its report on close does not erase the editor's retained analysis results.
+
+Source projects now own their main file, imported models and configuration. The
+language connection retains one open model and version per file, synchronizes
+main-file changes before imported queries, and closes all models before changing
+projects. Queries and edits carry project identity and revision, so identical
+URIs in separate examples cannot share results.
+
+Diagnostics previously accepted only the active URI. Project snapshots now retain
+reports for loaded and unopened sources; the main token response commits the
+complete report batch, including empty reports for clean imports. Diagnostic
+presentation has its own generation, so changing or clearing a report updates
+unchanged source while identical reports preserve cached presentation.
+
+Reconfiguring provided files previously left their loaded models stale. Replaced
+sources update their snapshots, removed sources become unavailable, and restoring
+a file revives its model. External library snapshots remain independent of that
+provided file map. Read-only controls pull their document content instead of
+writing preceding control text over a refreshed import. The project still
+synchronizes its main file when the selected imported source is unavailable.

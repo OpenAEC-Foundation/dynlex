@@ -35,12 +35,13 @@ set diagnostics to a JSON object containing [JSON text "uri" is (language's uri)
 set response to a JSON array containing [a JSON object containing [JSON text "method" is "textDocument/publishDiagnostics", JSON child "params" is diagnostics]]
 receive website language reply response at step 4 in (the address of state)
 free response
-require condition ((the UI value for (the control labeled "IDE diagnostics" in window) in window)'s text = "No problems found.") reporting "A successful analysis did not clear diagnostics"
+require condition (language's document's diagnostic revision != language's document's revision) reporting "A partial project report was published before its analysis barrier"
 set tokens to a JSON array containing [a new JSON-RPC integer for 1, a new JSON-RPC integer for 11, a new JSON-RPC integer for 4, a new JSON-RPC integer for 0, a new JSON-RPC integer for 0]
 set response to a JSON array containing [a JSON object containing [JSON number "id" is 6, JSON child "result" is (a JSON object containing [JSON child "data" is tokens])]]
 receive website language reply response at step 6 in (the address of state)
 free response
 set entry to the UI value for (the control labeled "IDE source" in window) in window
+require condition ((the UI value for (the control labeled "IDE diagnostics" in window) in window)'s text = "No problems found.") reporting "A successful analysis did not clear diagnostics"
 require condition ((entry's colors' end - entry's colors' start) = 6) reporting "UTF-16 semantic tokens did not convert to UTF-8 bytes"
 set the text of "IDE source" in window to "newer text"
 synchronize UI source workspace (state's language) at 0.5 seconds
@@ -95,12 +96,12 @@ set diagnostic to a JSON object containing [JSON text "message" is "Example prob
 set response to a JSON array containing [a JSON object containing [JSON text "method" is "textDocument/publishDiagnostics", JSON child "params" is (a JSON object containing [JSON text "uri" is (language's uri), JSON child "diagnostics" is (a JSON array containing [diagnostic])])]]
 receive website language reply response at step 4 in (the address of state)
 free response
-require condition ((the UI value for (the control labeled "River analysis diagnostics" in window) in window)'s text = "river.dl:1:1: Example problem\n") reporting "River diagnostics did not use shared visible-source coordinates"
 set tokens to a JSON array containing [a new JSON-RPC integer for 2, a new JSON-RPC integer for 0, a new JSON-RPC integer for 3, a new JSON-RPC integer for 0, a new JSON-RPC integer for 0]
 set response to a JSON array containing [a JSON object containing [JSON number "id" is 6, JSON child "result" is (a JSON object containing [JSON child "data" is tokens])]]
 receive website language reply response at step 6 in (the address of state)
 free response
 set river to the UI value for (the control labeled "River source" in window) in window
+require condition ((the UI value for (the control labeled "River analysis diagnostics" in window) in window)'s text = "river.dl:1:1: Example problem\n") reporting "River diagnostics did not use shared visible-source coordinates"
 require condition ((river's colors' start = 0) and (river's colors' end = 3)) reporting "River did not receive shared source colors"
 require condition ((the UI value for (the control labeled "River diagnostics" in window) in window)'s text = "") reporting "Language analysis overwrote the game's execution diagnostics"
 set state's shader editor's description to the custom website shader
