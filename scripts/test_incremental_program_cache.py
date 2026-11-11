@@ -45,7 +45,8 @@ def check_cache_eviction(root, build):
     unrelated.write_text("user file")
     old_entries = []
     for prefix, digit in (("object-", "f"), ("parser-", "e"),
-                          ("optimization-input-", "d"), ("optimization-", "c")):
+                          ("optimization-input-", "d"), ("optimization-", "c"),
+                          ("inference-summary-", "b")):
         old = namespace / (prefix + digit * 64 + ".entry")
         with old.open("wb") as sparse:
             sparse.truncate(512 * 1024 * 1024 + 1)
@@ -105,7 +106,7 @@ def decode_graph(encoded):
 
 
 
-def decode_inference_summaries(encoded):
+def decode_inference_summary(encoded):
     types = []
     for node in encoded["types"]:
         value = list(node)
@@ -145,34 +146,30 @@ def decode_inference_summaries(encoded):
         return {**value, "targets": [[definition, scope(invocation)]
                                      for definition, invocation in value["targets"]]}
 
-    result = {}
-    for path, variants in encoded["sections"].items():
-        result[path] = {}
-        for key, summary in variants.items():
-            effects = summary["global_effects"]
-            parameters = summary["parameters"]
-            result[path][key] = {
-                **summary,
-                "argument_types": [types[index] for index in summary["argument_types"]],
-                "compile_time_parameters": constants(summary["compile_time_parameters"]),
-                "parameters": {
-                    **parameters,
-                    "types": {name: types[index] for name, index in parameters["types"].items()},
-                    "outputs": {name: types[index] for name, index in parameters["outputs"].items()},
-                    "constants": {name: constant(value) for name, value in parameters["constants"].items()},
-                },
-                "return_type": types[summary["return_type"]],
-                "pure_values": [[[constant(argument) for argument in arguments], constant(value)]
-                                for arguments, value in summary["pure_values"]],
-                "return_provenance": provenance(summary["return_provenance"]),
-                "global_effects": {
-                    **effects,
-                    "writes": {name: provenance(value) for name, value in effects["writes"].items()},
-                    "constants": {name: constant(value) for name, value in effects["constants"].items()},
-                    "escaped": provenance(effects["escaped"]),
-                },
-            }
-    return result
+    summary = encoded["summary"]
+    effects = summary["global_effects"]
+    parameters = summary["parameters"]
+    return {
+        **summary,
+        "argument_types": [types[index] for index in summary["argument_types"]],
+        "compile_time_parameters": constants(summary["compile_time_parameters"]),
+        "parameters": {
+            **parameters,
+            "types": {name: types[index] for name, index in parameters["types"].items()},
+            "outputs": {name: types[index] for name, index in parameters["outputs"].items()},
+            "constants": {name: constant(value) for name, value in parameters["constants"].items()},
+        },
+        "return_type": types[summary["return_type"]],
+        "pure_values": [[[constant(argument) for argument in arguments], constant(value)]
+                        for arguments, value in summary["pure_values"]],
+        "return_provenance": provenance(summary["return_provenance"]),
+        "global_effects": {
+            **effects,
+            "writes": {name: provenance(value) for name, value in effects["writes"].items()},
+            "constants": {name: constant(value) for name, value in effects["constants"].items()},
+            "escaped": provenance(effects["escaped"]),
+        },
+    }
 
 
 def read_program(cache, entry):
@@ -189,7 +186,15 @@ def read_program(cache, entry):
             elif field == "section_dependency_graph":
                 program[field] = decode_graph(json.loads(payload))
             elif field == "inference_summaries":
-                program[field] = decode_inference_summaries(json.loads(payload))
+                program[field] = {
+                    section: {
+                        variant: decode_inference_summary(json.loads(
+                            (directory / f"inference-summary-{reference['payload']}.entry")
+                            .read_bytes().split(b"\n", 2)[2]))
+                        for variant, reference in variants.items()
+                    }
+                    for section, variants in json.loads(payload).items()
+                }
             else:
                 program[field] = json.loads(payload)
         matches.append(program)
@@ -214,9 +219,12 @@ def check_program_payloads(root, build):
     }
     assert all(field not in manifest for field in manifest["payload_keys"])
     summary_blob = directory / f"payload-{manifest['payload_keys']['inference_summaries']}.entry"
-    encoded = json.loads(summary_blob.read_bytes().split(b"\n", 2)[2])
-    assert set(encoded) == {"types", "sections"}
-    arguments = [summary["argument_types"] for variants in encoded["sections"].values() for summary in variants.values()]
+    references = json.loads(summary_blob.read_bytes().split(b"\n", 2)[2])
+    encoded = [json.loads((directory / f"inference-summary-{reference['payload']}.entry")
+                         .read_bytes().split(b"\n", 2)[2])
+               for variants in references.values() for reference in variants.values()]
+    assert all(set(unit) == {"types", "summary"} for unit in encoded)
+    arguments = [unit["summary"]["argument_types"] for unit in encoded]
     assert any(len(types) == 2 and types[0] == types[1] for types in arguments), "equal argument types were duplicated"
     payloads = [directory / f"payload-{key}.entry" for key in manifest["payload_keys"].values()]
     assert manifest_path.stat().st_size < sum(path.stat().st_size for path in payloads)

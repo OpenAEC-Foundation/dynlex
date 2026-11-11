@@ -46,19 +46,17 @@ template <typename Remap> Json remapInferenceTypeChildren(const Json &type, cons
 }
 
 template <typename Remap> Json remapInferenceValue(const Json &value, const Remap &remap) {
-	Json result = value;
 	auto constraint = [&](const Json &identity) {
 		Json layouts = Json::array();
 		for (const Json &layout : identity.at(1))
 			layouts.push_back(remap(layout));
 		return Json::array({identity.at(0), std::move(layouts)});
 	};
-	if (value.at(0) == "type") {
-		result.at(1) = remap(value.at(1));
-		result.at(2) = constraint(value.at(2));
-	} else if (value.at(0) == "constraint")
-		result.at(1) = constraint(value.at(1));
-	return result;
+	if (value.at(0) == "type")
+		return Json::array({value.at(0), remap(value.at(1)), constraint(value.at(2))});
+	if (value.at(0) == "constraint")
+		return Json::array({value.at(0), constraint(value.at(1))});
+	return value;
 }
 
 template <typename Remap> Json remapCompileTimeParameters(const Json &values, const Remap &remap) {
@@ -111,56 +109,48 @@ template <typename Remap> Json remapInferenceProvenance(const Json &provenance, 
 	};
 }
 
-template <typename Remap> Json remapInferenceSummaryTypes(const Json &sections, const Remap &remap) {
-	Json result = Json::object();
-	for (const auto &[path, variants] : sections.items()) {
-		Json mapped = Json::object();
-		for (const auto &[key, summary] : variants.items()) {
-			Json record = Json::object();
-			for (const auto &[field, value] : summary.items()) {
-				if (field == "argument_types") {
-					Json arguments = Json::array();
-					for (const Json &argument : value)
-						arguments.push_back(remap(argument));
-					record[field] = std::move(arguments);
-				} else if (field == "compile_time_parameters")
-					record[field] = remapCompileTimeParameters(value, remap);
-				else if (field == "parameters")
-					record[field] = remapInferenceParameters(value, remap);
-				else if (field == "pure_values") {
-					Json observations = Json::array();
-					for (const Json &entry : value) {
-						Json arguments = Json::array();
-						for (const Json &argument : entry.at(0))
-							arguments.push_back(remapInferenceValue(argument, remap));
-						observations.push_back(Json::array({std::move(arguments), remapInferenceValue(entry.at(1), remap)}));
-					}
-					record[field] = std::move(observations);
-				} else if (field == "return_type")
-					record[field] = remap(value);
-				else if (field == "return_provenance")
-					record[field] = remapInferenceProvenance(value, remap);
-				else if (field == "global_effects") {
-					Json effects = Json::object();
-					for (const auto &[name, provenance] : value.at("writes").items())
-						effects[name] = remapInferenceProvenance(provenance, remap);
-					Json constants = Json::object();
-					for (const auto &[name, constant] : value.at("constants").items())
-						constants[name] = remapInferenceValue(constant, remap);
-					record[field] = Json{
-						{"writes", std::move(effects)},
-						{"constants", std::move(constants)},
-						{"taken", value.at("taken")},
-						{"escaped", remapInferenceProvenance(value.at("escaped"), remap)}
-					};
-				} else
-					record[field] = value;
+template <typename Remap> Json remapInferenceSummaryTypes(const Json &summary, const Remap &remap) {
+	Json record = Json::object();
+	for (const auto &[field, value] : summary.items()) {
+		if (field == "argument_types") {
+			Json arguments = Json::array();
+			for (const Json &argument : value)
+				arguments.push_back(remap(argument));
+			record[field] = std::move(arguments);
+		} else if (field == "compile_time_parameters")
+			record[field] = remapCompileTimeParameters(value, remap);
+		else if (field == "parameters")
+			record[field] = remapInferenceParameters(value, remap);
+		else if (field == "pure_values") {
+			Json observations = Json::array();
+			for (const Json &entry : value) {
+				Json arguments = Json::array();
+				for (const Json &argument : entry.at(0))
+					arguments.push_back(remapInferenceValue(argument, remap));
+				observations.push_back(Json::array({std::move(arguments), remapInferenceValue(entry.at(1), remap)}));
 			}
-			mapped[key] = std::move(record);
-		}
-		result[path] = std::move(mapped);
+			record[field] = std::move(observations);
+		} else if (field == "return_type")
+			record[field] = remap(value);
+		else if (field == "return_provenance")
+			record[field] = remapInferenceProvenance(value, remap);
+		else if (field == "global_effects") {
+			Json effects = Json::object();
+			for (const auto &[name, provenance] : value.at("writes").items())
+				effects[name] = remapInferenceProvenance(provenance, remap);
+			Json constants = Json::object();
+			for (const auto &[name, constant] : value.at("constants").items())
+				constants[name] = remapInferenceValue(constant, remap);
+			record[field] = Json{
+				{"writes", std::move(effects)},
+				{"constants", std::move(constants)},
+				{"taken", value.at("taken")},
+				{"escaped", remapInferenceProvenance(value.at("escaped"), remap)}
+			};
+		} else
+			record[field] = value;
 	}
-	return result;
+	return record;
 }
 
 struct InferenceTypeHash {
@@ -187,7 +177,7 @@ struct InferenceTypeEqual {
 	bool operator()(const Json *left, const Json *right) const { return *left == *right; }
 };
 
-Json encodeInferenceSummaries(const Json &summaries) {
+Json encodeInferenceSummary(const Json &summary) {
 	Json types = Json::array();
 	// The input remains immutable throughout encoding. A repeated complete
 	// type can be reused before visiting or serializing any of its children.
@@ -201,16 +191,16 @@ Json encodeInferenceSummaries(const Json &summaries) {
 		indices.emplace(&type, index);
 		return index;
 	};
-	Json sections = remapInferenceSummaryTypes(summaries, intern);
-	return Json{{"types", std::move(types)}, {"sections", std::move(sections)}};
+	Json record = remapInferenceSummaryTypes(summary, intern);
+	return Json{{"types", std::move(types)}, {"summary", std::move(record)}};
 }
 
-Json decodeInferenceSummaries(const Json &encoded) {
+Json decodeInferenceSummary(const Json &encoded) {
 	Json types = Json::array();
 	auto expand = [&](const Json &index) -> const Json & {
 		return types.at(index.get<size_t>());
 	};
 	for (const Json &node : encoded.at("types"))
 		types.push_back(remapInferenceTypeChildren(node, expand));
-	return remapInferenceSummaryTypes(encoded.at("sections"), expand);
+	return remapInferenceSummaryTypes(encoded.at("summary"), expand);
 }

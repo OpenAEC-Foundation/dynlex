@@ -1295,10 +1295,23 @@ Preinference restores a saved variant's argument types only after its dependency
 unit requires reevaluation. A stable callee interface can therefore preserve a
 caller before decoding its arguments. `preinfer_argument_variants_decoded` counts
 these restoration attempts.
-Inference-summary payloads store structural type nodes in a shared table.
-Argument and return types refer to those records by number, including nested
-class layouts, array elements, and callback signatures. Loading restores the
-same identities used by inference validation and summary keys.
+Inference summaries are immutable records for individual concrete variants.
+A small manifest stores each record's content hash and reuse eligibility flags.
+Only a variant consumed by preinference or ordinary inference loads its record;
+retaining other variants does not expand their types or observed values.
+Each record interns its structural types, including nested class layouts,
+array elements, and callback signatures. Loading restores the identities used
+by inference validation and summary keys. Freshly inferred variants are encoded
+individually, and an unchanged interface reuses the same stored record.
+`inference_summary_units_loaded`, `inference_summary_units_encoded`, and
+`inference_summary_units_written` expose this work, with
+`inference_summary_load_ms` and `inference_summary_encode_ms` timings.
+Records can be evicted independently: a missing demanded record runs ordinary
+inference, and an unvisited missing record is removed from the next snapshot.
+Missing value observations invalidate their dependency units and callers, so
+retained IR cannot outlive the observations used to validate future edits.
+Availability is recorded before dependency validation. A record disappearing
+after that observation reports an error, as with other concurrent payload eviction.
 Instantiation keys include portable compile-time arguments as well as argument
 types. Scalar values preserve their exact representation; type and constraint
 values preserve their properties and referenced class layouts. Summaries restore
@@ -1316,7 +1329,10 @@ completeness flag describes those observations, rather than all possible inputs.
 Retained summaries keep their dependency variants even when their bodies are not
 visited and they have no native function. A later query reuses the result together
 with the dependencies needed to invalidate it.
-Unused prior summaries without observed pure values or retained native IR are removed.
+Value-state records retain their completeness markers even when no observed value
+could be serialized and no native body was emitted. Dropping that marker could
+incorrectly validate an old caller after a later edit. Unused prior summaries
+without value state or retained native IR are removed.
 The graph payload stores section paths once and indexes forward, reverse, and
 per-instantiation edges by path number. Concrete keys and source fingerprint versions
 also have shared tables, so repeated dependencies do not duplicate their hashes.

@@ -7,11 +7,11 @@ class IncrementalInferenceController {
 		const std::map<const Section *, std::string> &paths, const IncrementalInferenceReads &reads,
 		const Json &frontendDiagnostics, BuildStatistics &statistics, std::unique_ptr<IncrementalIRReuse> &irReuse,
 		std::unique_ptr<IncrementalInferenceReuse> &inferenceReuse, std::unordered_set<const Section *> &graphStable,
-		std::map<std::string, std::string> &fingerprints
+		std::map<std::string, std::string> &fingerprints, InferenceSummaryStore &summaryStore
 	)
 		: previous(previous), observations(observations), projection(projection), paths(paths), reads(reads),
 		  frontendDiagnostics(frontendDiagnostics), statistics(statistics), irReuse(irReuse), inferenceReuse(inferenceReuse),
-		  graphStable(graphStable), fingerprints(fingerprints) {}
+		  graphStable(graphStable), fingerprints(fingerprints), summaryStore(summaryStore) {}
 
 	void run(ParseContext &context, const std::function<bool(const ParseContext::IncrementalFunctionRequest &)> &infer) {
 		auto start = Clock::now();
@@ -23,8 +23,15 @@ class IncrementalInferenceController {
 		ClassIdentityPaths classes = classIdentityPaths(paths);
 		auto eligible = std::make_shared<IncrementalUnitSelection>();
 		auto replacements = std::make_shared<IncrementalUnitSelection>();
+		std::set<InferenceUnitKey> unavailableValues;
+		for (const auto &[path, variants] : previous.at("inference_summaries").items())
+			for (const auto &[key, reference] : variants.items())
+				if ((reference.at("observed_values").get<bool>() || !reference.at("pure_values_complete").get<bool>()) &&
+					!summaryStore.retain(reference))
+					unavailableValues.emplace(path, key);
 		InferenceUnitCheck check(
-			context, projection, paths, previous.at("section_dependency_graph"), reads, *replacements, statistics, fingerprints
+			context, projection, paths, previous.at("section_dependency_graph"), reads, *replacements, statistics, fingerprints,
+			unavailableValues
 		);
 		std::map<std::string, const Section *> sections;
 		for (const auto &[section, path] : paths)
@@ -43,7 +50,7 @@ class IncrementalInferenceController {
 				if (section == sections.end())
 					continue;
 				for (const auto &[key, summary] : variants.items())
-					if (inferenceSummaryHasObservedValues(summary) && !replacements->contains(section->second, key) &&
+					if (inferenceSummaryHasValueState(summary) && !replacements->contains(section->second, key) &&
 						check.unchanged({path, key}))
 						eligible->insert(section->second, key);
 			}
@@ -54,7 +61,7 @@ class IncrementalInferenceController {
 			previous.at("callable_functions"), previous.at("function_instantiations"), paths, eligible, replacements
 		);
 		inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
-			context, previous.at("inference_summaries"), previous.at("global_types"), *irReuse, paths, eligible
+			context, previous.at("inference_summaries"), previous.at("global_types"), *irReuse, paths, eligible, summaryStore
 		);
 		context.reuseInferredInstantiation = [this](
 												 Section *section, const InstantiationKey &key, Instantiation &instantiation,
@@ -72,7 +79,8 @@ class IncrementalInferenceController {
 				eligible->insert(request.section, unit.second);
 				continue;
 			}
-			if (!restoreArguments(unit, request, classes))
+			const Json *priorSummary = restoreArguments(unit, request, classes);
+			if (!priorSummary)
 				continue;
 			if (!infer(request))
 				continue;
@@ -83,9 +91,8 @@ class IncrementalInferenceController {
 				&unit.second
 			);
 			capturedSections.insert(request.section);
-			const Json &priorSummary = previous.at("inference_summaries").at(unit.first).at(unit.second);
-			if (current.contains(unit.second) && priorSummary.at("pure_values_complete").get<bool>() &&
-				current.at(unit.second) == priorSummary) {
+			if (current.contains(unit.second) && priorSummary->at("pure_values_complete").get<bool>() &&
+				current.at(unit.second) == *priorSummary) {
 				replacements->insert(request.section, unit.second);
 				if (native.contains(unit))
 					context.incrementalReplacementFunctions.push_back(request);
@@ -118,13 +125,16 @@ class IncrementalInferenceController {
 
   private:
 	using Request = ParseContext::IncrementalFunctionRequest;
-	bool restoreArguments(const InferenceUnitKey &unit, Request &request, const ClassIdentityPaths &classes) {
+	const Json *restoreArguments(const InferenceUnitKey &unit, Request &request, const ClassIdentityPaths &classes) {
 		statistics.preinferArgumentVariantsDecoded++;
-		const Json &summary = previous.at("inference_summaries").at(unit.first).at(unit.second);
+		const Json *saved = summaryStore.load(previous.at("inference_summaries").at(unit.first).at(unit.second));
+		if (!saved)
+			return nullptr;
+		const Json &summary = *saved;
 		auto key = decodeInferenceKey(summary, classes);
 		if (!key || key->argumentTypes.size() != request.parameterNames.size() ||
 			inferenceSummaryKey(*key, classes) != unit.second)
-			return false;
+			return nullptr;
 		request.key = std::move(*key);
 		request.requiredCompileTimeParameters =
 			summary.at("parameters").at("required_compile_time").get<std::unordered_set<std::string>>();
@@ -134,13 +144,13 @@ class IncrementalInferenceController {
 				for (const Json &encoded : observation.at(0)) {
 					auto value = decodeInferenceValue(encoded, classes);
 					if (!value)
-						return false;
+						return nullptr;
 					values.push_back(std::move(*value));
 				}
 				request.observedArguments.push_back(std::move(values));
 			}
 		}
-		return true;
+		return saved;
 	}
 	std::vector<std::pair<InferenceUnitKey, Request>>
 	collectRequests(const IncrementalUnitSelection &eligible, const std::set<InferenceUnitKey> &native) {
@@ -164,7 +174,7 @@ class IncrementalInferenceController {
 			if (pack)
 				continue;
 			for (const auto &[key, summary] : summaries.at(path).items()) {
-				if ((!native.contains({path, key}) && !inferenceSummaryHasObservedValues(summary)) ||
+				if ((!native.contains({path, key}) && !inferenceSummaryHasValueState(summary)) ||
 					summary.at("needs_global_types").get<bool>() || eligible.contains(section, key))
 					continue;
 				candidates.emplace(InferenceUnitKey{path, key}, Request{const_cast<Section *>(section), names, {}, {}, {}});
@@ -194,4 +204,5 @@ class IncrementalInferenceController {
 	std::unique_ptr<IncrementalInferenceReuse> &inferenceReuse;
 	std::unordered_set<const Section *> &graphStable;
 	std::map<std::string, std::string> &fingerprints;
+	InferenceSummaryStore &summaryStore;
 };

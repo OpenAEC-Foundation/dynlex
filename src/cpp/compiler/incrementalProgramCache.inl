@@ -11,6 +11,10 @@ fs::path programPayloadPath(const fs::path &directory, std::string_view key) {
 	return directory / ("payload-" + std::string(key) + ".entry");
 }
 
+fs::path inferenceSummaryPath(const fs::path &directory, const std::string &key) {
+	return directory / ("inference-summary-" + key + ".entry");
+}
+
 Json encodeSectionGraph(const Json &graph) {
 	const Json &forward = graph.at("forward");
 	requireCompilerInvariant(
@@ -145,7 +149,8 @@ std::optional<Json> readProgramManifest(const fs::path &path) {
 		return std::nullopt;
 	Json manifest = Json::parse(*payload);
 	if (!manifest.contains("payload_keys") || !manifest.at("payload_keys").is_object() ||
-		manifest.at("payload_keys").size() != programPayloadFields.size())
+		manifest.at("payload_keys").size() != programPayloadFields.size() || !manifest.contains("inference_summary_keys") ||
+		!manifest.at("inference_summary_keys").is_array())
 		throw std::runtime_error("invalid program cache manifest: " + path.string());
 	const Json &keys = manifest.at("payload_keys");
 	for (const char *field : programPayloadFields) {
@@ -171,14 +176,19 @@ bool hydrateProgramField(Json &program, const fs::path &directory, const char *f
 		program[field] = std::move(*payload);
 	else if (std::string_view(field) == "section_dependency_graph")
 		program[field] = decodeSectionGraph(Json::parse(*payload));
-	else if (std::string_view(field) == "inference_summaries")
-		program[field] = decodeInferenceSummaries(Json::parse(*payload));
 	else
 		program[field] = Json::parse(*payload);
 	return true;
 }
 
 void writeProgramEntry(const fs::path &path, Json program, const Json *prior = nullptr) {
+	if (program.contains("inference_summaries")) {
+		std::set<std::string> summaries;
+		for (const Json &variants : program.at("inference_summaries"))
+			for (const Json &reference : variants)
+				summaries.insert(reference.at("payload").get<std::string>());
+		program["inference_summary_keys"] = summaries;
+	}
 	Json keys = program.contains("payload_keys") ? program.at("payload_keys") : Json::object();
 	for (const char *field : programPayloadFields) {
 		if (program.contains(field)) {
@@ -186,11 +196,10 @@ void writeProgramEntry(const fs::path &path, Json program, const Json *prior = n
 				prior->at("payload_keys").contains(field)) {
 				keys[field] = prior->at("payload_keys").at(field);
 			} else {
-				std::string payload =
-					isModulePayload(field)									? program.at(field).get<std::string>()
-					: std::string_view(field) == "section_dependency_graph" ? encodeSectionGraph(program.at(field)).dump()
-					: std::string_view(field) == "inference_summaries"		? encodeInferenceSummaries(program.at(field)).dump()
-																			: program.at(field).dump();
+				std::string payload = isModulePayload(field) ? program.at(field).get<std::string>()
+									  : std::string_view(field) == "section_dependency_graph"
+										  ? encodeSectionGraph(program.at(field)).dump()
+										  : program.at(field).dump();
 				std::string key = digest(payload);
 				writeEntry(programPayloadPath(path.parent_path(), key), payload);
 				keys[field] = std::move(key);

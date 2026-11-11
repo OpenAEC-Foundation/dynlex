@@ -8,6 +8,7 @@ from test_incremental_constraint_dependencies import check_constraint_lookup_dep
 from test_incremental_preinfer_summaries import check_preinfer_summary_capture
 from test_incremental_variant_dependencies import check_variant_dependency_cascade
 from test_incremental_compile_time_variants import check_compile_time_variant_cascade
+from test_incremental_summary_units import check_summary_unit_reuse
 
 
 def graph_for(cache, entry):
@@ -293,6 +294,7 @@ def check_leaf_dependency_cascade(root, build):
     check_preinfer_summary_capture(root, build)
     check_variant_dependency_cascade(root, build)
     check_compile_time_variant_cascade(root, build)
+    check_summary_unit_reuse(root, build)
     leaf_a = root / "leaf_a.dl"
     leaf_b = root / "leaf_b.dl"
     leaf_helper = root / "leaf_helper.dl"

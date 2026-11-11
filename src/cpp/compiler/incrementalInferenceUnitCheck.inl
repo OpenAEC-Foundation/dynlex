@@ -3,9 +3,11 @@ class InferenceUnitCheck {
 	InferenceUnitCheck(
 		const ParseContext &context, const Json &projection, const std::map<const Section *, std::string> &paths,
 		const Json &graph, const IncrementalInferenceReads &reads, const IncrementalUnitSelection &stable,
-		BuildStatistics &statistics, std::map<std::string, std::string> &fingerprints
+		BuildStatistics &statistics, std::map<std::string, std::string> &fingerprints,
+		const std::set<InferenceUnitKey> &unavailableValues
 	)
-		: inputs(context, projection, paths, statistics, fingerprints), graph(graph), reads(reads), stable(stable) {}
+		: inputs(context, projection, paths, statistics, fingerprints), graph(graph), reads(reads), stable(stable),
+		  unavailableValues(unavailableValues) {}
 
 	bool unchanged(const InferenceUnitKey &root) {
 		std::set<InferenceUnitKey> visited;
@@ -18,6 +20,8 @@ class InferenceUnitCheck {
 				return false;
 			if (stable.contains(inputs.section(key.first), key.second) || clean.contains(key) || !visited.insert(key).second)
 				continue;
+			if (unavailableValues.contains(key))
+				return false;
 			const Json &unit = graph.at("inference_units").at(key.first).at(key.second);
 			auto [direct, inserted] = directUnchanged.try_emplace(key, true);
 			if (inserted) {
@@ -49,6 +53,7 @@ class InferenceUnitCheck {
 	const Json &graph;
 	const IncrementalInferenceReads &reads;
 	const IncrementalUnitSelection &stable;
+	const std::set<InferenceUnitKey> &unavailableValues;
 	std::map<InferenceUnitKey, bool> directUnchanged;
 	std::set<InferenceUnitKey> clean;
 };

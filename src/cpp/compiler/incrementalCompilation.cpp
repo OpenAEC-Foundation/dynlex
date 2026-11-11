@@ -313,6 +313,7 @@ std::string renderModule(const llvm::Module &module) {
 
 // clang-format off: these fragments share declarations in this order.
 #include "incrementalNativeObjects.inl"
+#include "incrementalInferenceSummaryStore.inl"
 #include "incrementalNativeLayout.inl"
 #include "incrementalNativeSymbols.inl"
 #include "incrementalNativeDependencies.inl"
@@ -358,6 +359,7 @@ bool compileIncrementally(
 		RecordingFileSystem *recording = files.get();
 		context.fileSystem = std::move(files);
 		BuildStatistics statistics;
+		InferenceSummaryStore summaryStore(directory, statistics);
 		statistics.cacheDirectory = directory.string();
 		statistics.cacheEntry = programEntry.string();
 		bool success = false;
@@ -383,6 +385,7 @@ bool compileIncrementally(
 		}
 		if (!reuseFailedFrontend) {
 			if (auto cached = readProgramManifest(programEntry)) {
+				summaryStore.observe(cached->at("inference_summary_keys"));
 				previous = std::move(*cached);
 				if (!previousFailure && !initializeSyntaxConfigs(context, context.options.inputPath))
 					return false;
@@ -645,7 +648,7 @@ bool compileIncrementally(
 					auto controller = std::make_shared<IncrementalInferenceController>(
 						*previous, recording->observations, resolvedFunctionProjection, sectionPaths, inferenceReads,
 						frontendDiagnosticRecords, statistics, functionReuse, inferenceReuse, graphStable,
-						inferenceInputFingerprints
+						inferenceInputFingerprints, summaryStore
 					);
 					context.runIncrementalPreinference =
 						[controller](
@@ -814,7 +817,9 @@ bool compileIncrementally(
 								  sectionPaths, inferenceDiagnosticSources, globalTypes, result.at("function_sections"),
 								  result.at("function_instantiations"), &statistics.reusedInferenceSummarySections
 							  )
-							: captureInferenceSummaries(compiled, sectionPaths, inferenceDiagnosticSources, globalTypes);
+							: captureInferenceSummaries(
+								  compiled, sectionPaths, inferenceDiagnosticSources, globalTypes, summaryStore
+							  );
 					auto graphStart = Clock::now();
 					result["section_dependency_graph"] = captureSectionDependencyGraph(
 						compiled, result, sectionPaths, inferenceReads,
