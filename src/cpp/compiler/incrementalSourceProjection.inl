@@ -21,21 +21,26 @@ Json sourceProjection(
 	const Json *priorSources = nullptr, SourceProjectionWork *work = nullptr
 ) {
 	auto maskStart = Clock::now();
-	using SourceRanges = std::map<const lsp::SourceFile *, std::map<int, std::vector<std::pair<size_t, size_t>>>>;
-	std::map<const lsp::SourceFile *, std::set<int>> masked;
-	std::map<const lsp::SourceFile *, std::set<int>> preserved;
-	SourceRanges maskedRanges;
-	std::unordered_map<const lsp::SourceFile *, std::string> maskTraces;
+	struct LineMask {
+		unsigned char kind = 0;
+		std::vector<std::pair<size_t, size_t>> ranges;
+	};
+	struct FileMask {
+		explicit FileMask(size_t lineCount) : lines(lineCount) {}
+		std::vector<LineMask> lines;
+		std::string trace;
+	};
+	std::unordered_map<const lsp::SourceFile *, FileMask> masks;
 	auto appendNumber = [](std::string &output, std::uint64_t value) {
 		for (size_t index = 0; index < 8; index++) {
 			output.push_back(static_cast<char>(value & 0xff));
 			value >>= 8;
 		}
 	};
-	auto traceFor = [&](const lsp::SourceFile *source) -> std::string & {
-		auto [found, inserted] = maskTraces.try_emplace(source);
+	auto maskFor = [&](const lsp::SourceFile *source) -> FileMask & {
+		auto [found, inserted] = masks.try_emplace(source, source->lineCount());
 		if (inserted) {
-			std::string &trace = found->second;
+			std::string &trace = found->second.trace;
 			trace += maskOpeningLines ? '1' : '0';
 			trace += ignoreMaskedRuns ? '1' : '0';
 			trace += maskGlobalExecution ? '1' : '0';
@@ -66,8 +71,9 @@ Json sourceProjection(
 				break;
 			}
 		}
-		(insideInactive ? masked : preserved)[line->sourceFile].insert(line->sourceFileLineIndex);
-		std::string &lineTrace = traceFor(line->sourceFile);
+		FileMask &fileMask = maskFor(line->sourceFile);
+		fileMask.lines.at(line->sourceFileLineIndex).kind |= insideInactive ? 2 : 1;
+		std::string &lineTrace = fileMask.trace;
 		lineTrace.push_back(insideInactive ? 'M' : 'P');
 		appendNumber(lineTrace, static_cast<std::uint64_t>(line->sourceFileLineIndex));
 		if (!insideInactive)
@@ -80,8 +86,9 @@ Json sourceProjection(
 			if (to <= from)
 				continue;
 			size_t sourceStart = static_cast<size_t>(slice.sourceColumnStart + from - slice.transformedStart);
-			maskedRanges[slice.sourceFile][slice.sourceFileLineIndex].emplace_back(sourceStart, sourceStart + to - from);
-			std::string &sliceTrace = traceFor(slice.sourceFile);
+			FileMask &sliceMask = maskFor(slice.sourceFile);
+			sliceMask.lines.at(slice.sourceFileLineIndex).ranges.emplace_back(sourceStart, sourceStart + to - from);
+			std::string &sliceTrace = sliceMask.trace;
 			sliceTrace.push_back('R');
 			appendNumber(sliceTrace, static_cast<std::uint64_t>(slice.sourceFileLineIndex));
 			appendNumber(sliceTrace, sourceStart);
@@ -95,7 +102,8 @@ Json sourceProjection(
 	for (const auto &[_, source] : context.importedFiles) {
 		const std::string &commentPrefix =
 			source->isInternal ? context.builtinSyntax.commentPrefix : context.projectSyntax.commentPrefix;
-		std::string maskDigest = digest(traceFor(source));
+		FileMask &fileMask = maskFor(source);
+		std::string maskDigest = digest(fileMask.trace);
 		const std::string &contentDigest = observations.at(source->uri).at("content").get_ref<const std::string &>();
 		if (priorSources && priorSources->contains(source->uri)) {
 			const Json &prior = priorSources->at(source->uri);
@@ -150,12 +158,13 @@ Json sourceProjection(
 			std::string normalizedLine(semanticLine);
 			normalizedLine.push_back('\n');
 			std::string_view line(normalizedLine);
-			bool hasMask = masked[source].contains(lineIndex);
-			bool hasPreserved = preserved[source].contains(lineIndex);
+			const LineMask &mask = fileMask.lines.at(lineIndex);
+			bool hasMask = mask.kind & 2;
+			bool hasPreserved = mask.kind & 1;
 			if (hasMask && !hasPreserved) {
 				appendMasked();
 			} else if (hasMask && hasPreserved) {
-				auto ranges = maskedRanges[source][lineIndex];
+				auto ranges = mask.ranges;
 				std::sort(ranges.begin(), ranges.end());
 				size_t cursor = 0;
 				for (const auto &[rangeStart, rangeEnd] : ranges) {

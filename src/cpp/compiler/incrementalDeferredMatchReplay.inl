@@ -1,6 +1,7 @@
 // The program snapshot owns these entries throughout frontend compilation.
 struct PriorMatchKey {
-	const Json *entry;
+	std::string_view initialKey;
+	std::string_view finalKey;
 	const Section *owner;
 };
 using PriorMatchKeys = std::unordered_map<const PatternReference *, PriorMatchKey>;
@@ -13,7 +14,8 @@ struct BodyResolutionUnit {
 
 void prepareDeferredMatchReplay(
 	ParseContext &context, const Json &previous, const Json &observations, std::string_view initialMatcherTree,
-	MatcherPathSnapshots &matcherPaths, const InitialMatcherProjection &currentProjection, PriorMatchKeys &precedenceKeys,
+	MatcherPathSnapshots &matcherPaths, IncrementalMatcherCache &matcherCache,
+	const InitialMatcherProjection &currentProjection, PriorMatchKeys &precedenceKeys,
 	std::vector<BodyResolutionUnit> &bodyUnits
 ) {
 	if (!previous.contains("all_function_projection") || !compatibleObservations(previous, observations, context))
@@ -21,13 +23,9 @@ void prepareDeferredMatchReplay(
 	const Json &projection = previous.at("all_function_projection");
 	const Json &prior = projection.at("matcher_projection");
 	const Json &current = currentProjection.value;
-	auto treeChanges = matcherPaths.compare(
-		projection.at("initial_matcher_tree").get_ref<const std::string &>(), initialMatcherTree
-	);
-	bool sameTree = !treeChanges;
+	auto treeChanges =
+		matcherPaths.compare(projection.at("initial_matcher_tree").get_ref<const std::string &>(), initialMatcherTree);
 	const Json &priorDeclarations = prior.at("declaration_digests");
-	if (sameTree && current.at("declaration_digests") != priorDeclarations)
-		return;
 	// Matching consumes declarations and lexical bindings, not flex execution.
 	// The active tree below already accounts for body-driven parameter promotion.
 	bool stableBindings = current.at("selected_digest") == prior.at("selected_digest") &&
@@ -41,12 +39,10 @@ void prepareDeferredMatchReplay(
 				return;
 		}
 	}
-	if (treeChanges || stableBindings) {
-		const Json &rootDeclarations = current.at("global_resolution");
-		const Json &priorRoot = prior.at("global_resolution");
-		if (rootDeclarations.at(0) != priorRoot.at(0) || rootDeclarations.at(2) != priorRoot.at(2))
-			return;
-	}
+	const Json &rootDeclarations = current.at("global_resolution");
+	const Json &priorRoot = prior.at("global_resolution");
+	if (rootDeclarations.at(0) != priorRoot.at(0) || rootDeclarations.at(2) != priorRoot.at(2))
+		return;
 	const Json &bodies = current.at("bodies");
 	{
 		const Json &scopeRuleBodies = current.at("scope_rule_bodies");
@@ -60,24 +56,24 @@ void prepareDeferredMatchReplay(
 	for (const auto &owner : currentProjection.owners) {
 		const std::string &path = owner.path;
 		const Section *section = owner.section;
-		if (!priorDeclarations.contains(path) ||
-			(treeChanges && current.at("declaration_digests").at(path) != priorDeclarations.at(path)) ||
+		if (!priorDeclarations.contains(path) || current.at("declaration_digests").at(path) != priorDeclarations.at(path) ||
 			(treeChanges && (section->parent != context.mainSection || treeChanges->mayAffect(*section))) ||
 			(!stableBindings && !hasNoGlobalAccess(section)) || !prior.at("bodies").contains(path) || !bodies.contains(path) ||
 			bodies.at(path) != prior.at("bodies").at(path))
 			continue;
-		const Json &entries = prior.at("match_overrides").contains(path) ? prior.at("match_overrides").at(path)
-																		 : projection.at("match_entries").at(path);
+		auto savedEntries = savedReferenceKeys(projection, matcherCache, path);
+		if (!savedEntries)
+			continue;
+		const auto &entries = *savedEntries;
 		const std::vector<PatternReference *> &references = owner.references;
 		if (references.size() != entries.size())
 			continue;
 		bool sameShapes = true;
 		for (size_t index = 0; index < references.size(); index++) {
-			const Json &shape = entries.at(index).at("shape");
+			const auto &saved = entries.at(index);
 			PatternReference *reference = references[index];
-			if (shape.at(0).get_ref<const std::string &>() != reference->pattern.text ||
-				shape.at(1).get<int>() != static_cast<int>(reference->patternType) ||
-				shape.at(2).get<int>() != static_cast<int>(reference->purpose)) {
+			if (saved.pattern != reference->pattern.text || saved.patternType != static_cast<int>(reference->patternType) ||
+				saved.purpose != static_cast<int>(reference->purpose)) {
 				sameShapes = false;
 				break;
 			}
@@ -86,25 +82,25 @@ void prepareDeferredMatchReplay(
 			continue;
 		BodyResolutionUnit unit;
 		bool restoreUnit = section->parent == context.mainSection &&
-						   !diagnosticSources.contains(section->openingLine->sourceFile->uri) &&
+						   !diagnosticSources.contains(resolutionSourceFile(*section).uri) &&
 						   prior.at("body_units").contains(path);
 		size_t deferredIndex = 0;
 		for (size_t index = 0; index < references.size(); index++) {
 			PatternReference *reference = references[index];
-			const Json &entry = entries.at(index);
+			const auto &entry = entries.at(index);
 			bool isDeferred =
 				deferredIndex < owner.deferredReferences.size() && owner.deferredReferences[deferredIndex].first == index;
 			if (isDeferred) {
 				deferredIndex++;
 				unit.deferredIndices.push_back(index);
 			}
-			if (!entry.at("initial_key").is_string())
+			if (entry.initialKey.empty())
 				continue;
-			const std::string &initial = entry.at("initial_key").get_ref<const std::string &>();
+			std::string_view initial = entry.initialKey;
 			if (isDeferred)
 				reference->prevalidatedMatcherKey = initial;
-			if (entry.at("key").is_string() && entry.at("key") != entry.at("initial_key"))
-				precedenceKeys.emplace(reference, PriorMatchKey{&entry, section});
+			if (!entry.finalKey.empty() && entry.finalKey != entry.initialKey)
+				precedenceKeys.emplace(reference, PriorMatchKey{entry.initialKey, entry.finalKey, section});
 		}
 		if (restoreUnit && !unit.deferredIndices.empty()) {
 			unit.references = references;
@@ -172,8 +168,8 @@ bool changedTreeMayAffectPrecedenceRules(const MatcherTreeChanges &changes, cons
 
 void preparePrecedenceMatchReplay(
 	ParseContext &context, const Json &prior, IncrementalMatcherCache &matcherCache, const PriorMatchKeys &precedenceKeys,
-	MatcherPathSnapshots &matcherPaths, const std::vector<PatternReference *> &candidates, double &treeMilliseconds, double &precedenceMilliseconds,
-	double &ruleMilliseconds, size_t &signaturesReused
+	MatcherPathSnapshots &matcherPaths, const std::vector<PatternReference *> &candidates, double &treeMilliseconds,
+	double &precedenceMilliseconds, double &ruleMilliseconds, size_t &signaturesReused
 ) {
 	if (precedenceKeys.empty() || context.patternPrecedenceRevision != 1)
 		return;
@@ -208,8 +204,7 @@ void preparePrecedenceMatchReplay(
 			if (affected->second)
 				continue;
 		}
-		const Json &entry = *old->second.entry;
-		if (reference->incrementalMatcherKey == entry.at("initial_key").get_ref<const std::string &>())
-			reference->prevalidatedMatcherKey = entry.at("key").get_ref<const std::string &>();
+		if (reference->incrementalMatcherKey == old->second.initialKey)
+			reference->prevalidatedMatcherKey = old->second.finalKey;
 	}
 }

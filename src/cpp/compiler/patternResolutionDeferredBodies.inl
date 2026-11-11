@@ -4,16 +4,16 @@
 static bool bodyReferenceCanWaitForDefinitions(const PatternReference *reference) {
 	if (reference->purpose != PatternReference::Purpose::Expression)
 		return false;
-	bool foundOrdinaryFunction = false;
+	bool foundDefinition = false;
 	for (Section *section = reference->range().section(); section; section = section->parent) {
 		if (!section->globalVariables.empty())
 			return false;
 		if (section->patternDefinitions.empty())
 			continue;
-		if (!foundOrdinaryFunction) {
-			if (section->type != SectionType::Function || section->isConversion || section->dataSection)
+		if (!foundDefinition) {
+			if (section->isConversion || section->dataSection)
 				return false;
-			foundOrdinaryFunction = true;
+			foundDefinition = true;
 		}
 		// The count map was populated only with promotable definition words.
 		for (const PatternElement &element : reference->patternElements) {
@@ -24,5 +24,5 @@ static bool bodyReferenceCanWaitForDefinitions(const PatternReference *reference
 				return false;
 		}
 	}
-	return foundOrdinaryFunction;
+	return foundDefinition;
 }

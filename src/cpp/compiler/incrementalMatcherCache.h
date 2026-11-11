@@ -34,6 +34,15 @@ class IncrementalMatcherCache {
 	};
 	std::optional<std::string> recordBodyResolution(const std::vector<std::pair<size_t, PatternReference *>> &references);
 	std::optional<std::vector<BodyResolution>> restoreBodyResolution(std::string_view key);
+	struct ReferenceMatchKeys {
+		std::string_view pattern;
+		int patternType;
+		int purpose;
+		std::string_view finalKey;
+		std::string_view initialKey;
+	};
+	std::string recordReferenceKeys(const std::vector<PatternReference *> &references);
+	std::optional<std::vector<ReferenceMatchKeys>> restoreReferenceKeys(std::string_view key);
 	std::optional<std::string_view> resultKey(const PatternReference *reference) const;
 	size_t hits() const { return reusedCount; }
 	size_t precedenceHits() const { return reusedPrecedenceCount; }

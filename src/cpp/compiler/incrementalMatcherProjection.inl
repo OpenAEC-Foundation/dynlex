@@ -7,7 +7,6 @@ struct InitialMatcherProjection {
 		bool topLevel;
 		std::vector<PatternReference *> references;
 		std::vector<std::pair<size_t, PatternReference *>> deferredReferences;
-		const Json *skipped;
 	};
 	Json value = nullptr;
 	std::vector<Owner> owners;
@@ -15,9 +14,9 @@ struct InitialMatcherProjection {
 	size_t declarationsReused = 0;
 
 	void capture(
-		const ParseContext &context, const Json &observations, const std::unordered_map<const Section *, const Json *> &skipped,
-		const std::list<PatternReference *> &deferredReferences, const Json *previous, const Json &bodyDigests,
-		const std::map<std::string, Section *> &sections, std::string_view tree
+		const ParseContext &context, const Json &observations, const std::list<PatternReference *> &deferredReferences,
+		const Json *previous, const Json &bodyDigests, const std::map<std::string, Section *> &sections, std::string_view tree,
+		const Json &parameterCounts
 	) {
 		const Json *prior = previous ? &previous->at("matcher_projection") : nullptr;
 		declarationsReused = 0;
@@ -32,11 +31,10 @@ struct InitialMatcherProjection {
 				selected[path] = sectionIdentity(*section);
 				functionBodies.insert(section);
 			}
-			if (!reusableCodegenSection(*section))
+			if (!reusableResolutionSection(*section))
 				continue;
 			reusable.insert(section);
-			Owner owner{path, section, section->parent == context.mainSection,
-						{},	  {},	   skipped.contains(section) ? skipped.at(section) : nullptr};
+			Owner owner{path, section, section->parent == context.mainSection, {}, {}};
 			const auto collect = [&](auto &&self, Section *body) -> void {
 				owner.references.insert(owner.references.end(), body->patternReferences.begin(), body->patternReferences.end());
 				for (Section *child : body->children)
@@ -44,6 +42,8 @@ struct InitialMatcherProjection {
 						self(self, child);
 			};
 			collect(collect, section);
+			if (owner.references.empty())
+				continue;
 			for (size_t index = 0; index < owner.references.size(); index++)
 				if (deferred.contains(owner.references[index]))
 					owner.deferredReferences.emplace_back(index, owner.references[index]);
@@ -54,6 +54,7 @@ struct InitialMatcherProjection {
 			{"declaration_digests", Json::object()},
 			{"match_overrides", Json::object()},
 			{"body_units", Json::object()},
+			{"body_promoted_parameters", Json::object()},
 			{"bodies", bodyDigests},
 			{"scope_rule_bodies", scopeRuleBodyPaths(sections)},
 			{"global_resolution", globalResolutionIdentity(*context.mainSection)},
@@ -69,7 +70,8 @@ struct InitialMatcherProjection {
 				 context, observations, reusable, true, true, true, prior ? &prior->at("ambient_nonexecution_sources") : nullptr
 			 )}
 		};
-		bool stableDeclarations = prior && previous->at("initial_matcher_tree") == tree &&
+		bool stableDeclarations =
+			prior && previous->at("initial_matcher_tree") == tree &&
 			value.at("scope_rule_bodies") == prior->at("scope_rule_bodies") &&
 			sourceProjectionsEqual(value.at("ambient_nonexecution_sources"), prior->at("ambient_nonexecution_sources"));
 		if (stableDeclarations)
@@ -80,14 +82,24 @@ struct InitialMatcherProjection {
 				}
 		for (const Owner &owner : owners) {
 			const std::string &path = owner.path;
-			if (stableDeclarations && prior->at("declaration_digests").contains(path) &&
-				prior->at("bodies").contains(path) && bodyDigests.at(path) == prior->at("bodies").at(path)) {
+			if (parameterCounts.contains(path)) {
+				bool bodyPromoted = false;
+				for (PatternDefinition *definition : owner.section->patternDefinitions)
+					forEachLeafElement(definition->patternElements, [&](const DefinitionPatternElement &element) {
+						if (element.promotedFromVariableLike && parameterCounts.at(path).contains(element.text))
+							bodyPromoted = true;
+					});
+				if (bodyPromoted)
+					value.at("body_promoted_parameters")[path] = true;
+			}
+
+			if (stableDeclarations && prior->at("declaration_digests").contains(path) && prior->at("bodies").contains(path) &&
+				bodyDigests.at(path) == prior->at("bodies").at(path)) {
 				value.at("declaration_digests")[path] = prior->at("declaration_digests").at(path);
 				declarationsReused++;
 			} else
 				value.at("declaration_digests")[path] = digest(sectionDeclaration(*owner.section).dump());
 		}
-
 	}
 
 	void captureBodyUnits(IncrementalMatcherCache &matcherCache) {
@@ -105,7 +117,7 @@ struct InitialMatcherProjection {
 		unitsCaptured = true;
 	}
 
-	Json finish(const Json &expanded) {
+	Json finish(const Json &expanded, IncrementalMatcherCache &matcherCache) {
 		requireCompilerInvariant(value.is_object(), "successful frontend has no initial matcher projection");
 		requireCompilerInvariant(unitsCaptured, "successful frontend has no initial body-resolution boundary");
 		auto sameKey = [](const Json &saved, std::string_view key) {
@@ -118,11 +130,6 @@ struct InitialMatcherProjection {
 			bool identical = finalEntries.contains(owner.path) && finalEntries.at(owner.path).size() == owner.references.size();
 			for (size_t index = 0; identical && index < owner.references.size(); index++) {
 				const Json &saved = finalEntries.at(owner.path).at(index);
-				if (owner.skipped) {
-					for (const char *field : {"shape", "key", "initial_key"})
-						identical &= owner.skipped->at(index).at(field) == saved.at(field);
-					continue;
-				}
 				const PatternReference &reference = *owner.references[index];
 				const Json &shape = saved.at("shape");
 				std::string_view matchKey =
@@ -138,26 +145,7 @@ struct InitialMatcherProjection {
 			}
 			if (identical)
 				continue;
-			Json entries = owner.skipped ? *owner.skipped : Json::array();
-			if (!owner.skipped)
-				for (size_t index = 0; index < owner.references.size(); index++) {
-					const PatternReference *reference = owner.references[index];
-					entries.push_back(
-						Json{
-							{"shape", Json::array(
-										  {reference->pattern.text, static_cast<int>(reference->patternType),
-										   static_cast<int>(reference->purpose)}
-									  )},
-							{"key", !reference->match || reference->incrementalMatcherKey.empty()
-										? Json(nullptr)
-										: Json(reference->incrementalMatcherKey)},
-							{"initial_key", !reference->match || reference->initialMatcherKey.empty()
-												? Json(nullptr)
-												: Json(reference->initialMatcherKey)}
-						}
-					);
-				}
-			value.at("match_overrides")[owner.path] = std::move(entries);
+			value.at("match_overrides")[owner.path] = matcherCache.recordReferenceKeys(owner.references);
 		}
 		return std::move(value);
 	}

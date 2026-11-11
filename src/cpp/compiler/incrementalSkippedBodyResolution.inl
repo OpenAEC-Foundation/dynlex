@@ -51,19 +51,25 @@ static bool cachedDefinitionCanChangeAnotherMatcherKey(
 
 std::vector<Section *> selectCachedBodiesForResolutionReuse(
 	const ParseContext &context, const Json &observations, const Json &prior, const std::set<std::string> &diagnosticSources,
-	const IncrementalMatcherCache &matcherCache, const std::map<std::string, Section *> &sections, const Json &bodies,
-	std::unordered_map<const Section *, const Json *> &matchEntries
+	IncrementalMatcherCache &matcherCache, const std::map<std::string, Section *> &sections, const Json &bodies
 ) {
 	Json selected = Json::object();
 	std::unordered_set<const Section *> selectedSections;
 	struct Candidate {
 		std::string path;
 		Section *section;
-		const Json *entries;
+		size_t references;
 	};
 	std::vector<Candidate> candidates;
 	size_t totalReferences = 0;
 	size_t possibleSkippedReferences = 0;
+	const auto countReferences = [](auto &&self, const Section &body) -> size_t {
+		size_t count = body.patternReferences.size();
+		for (const Section *child : body.children)
+			if (child->patternDefinitions.empty())
+				count += self(self, *child);
+		return count;
+	};
 	for (const auto &[path, section] : sections) {
 		totalReferences += section->patternReferences.size();
 		if (section->type == SectionType::Function && !section->patternDefinitions.empty() &&
@@ -71,16 +77,18 @@ std::vector<Section *> selectCachedBodiesForResolutionReuse(
 			selected[path] = sectionIdentity(*section);
 			selectedSections.insert(section);
 		}
-		if (section->parent != context.mainSection || !reusableCodegenSection(*section) || !prior.at("bodies").contains(path) ||
-			!bodies.contains(path) || bodies.at(path) != prior.at("bodies").at(path) ||
-			!prior.at("function_declarations").contains(path) ||
-			!prior.at("match_entries").contains(path) || !prior.at("matcher_projection").at("body_units").contains(path) ||
-			diagnosticSources.contains(section->openingLine->sourceFile->uri))
+		if (section->parent != context.mainSection || !reusableResolutionSection(*section) ||
+			prior.at("matcher_projection").at("body_promoted_parameters").contains(path) ||
+			!prior.at("bodies").contains(path) || !bodies.contains(path) || bodies.at(path) != prior.at("bodies").at(path) ||
+			!prior.at("matcher_projection").at("declaration_digests").contains(path) ||
+			(!prior.at("match_entries").contains(path) &&
+			 !prior.at("matcher_projection").at("match_overrides").contains(path)) ||
+			!prior.at("matcher_projection").at("body_units").contains(path) ||
+			diagnosticSources.contains(resolutionSourceFile(*section).uri))
 			continue;
-		const Json &overrides = prior.at("matcher_projection").at("match_overrides");
-		const Json &entries = overrides.contains(path) ? overrides.at(path) : prior.at("match_entries").at(path);
-		possibleSkippedReferences += entries.size();
-		candidates.push_back({path, section, &entries});
+		size_t count = countReferences(countReferences, *section);
+		possibleSkippedReferences += count;
+		candidates.push_back({path, section, count});
 	}
 	if (candidates.empty() || possibleSkippedReferences * 20 < totalReferences || selected != prior.at("inactive"))
 		return {};
@@ -98,7 +106,9 @@ std::vector<Section *> selectCachedBodiesForResolutionReuse(
 		bool canPromote = std::ranges::any_of(candidate.section->variableLikeCounts, [](const auto &candidate) {
 			return candidate.second != 0;
 		});
-		if (canPromote && sectionDeclaration(*candidate.section) != prior.at("function_declarations").at(candidate.path))
+		if (canPromote &&
+			digest(sectionDeclaration(*candidate.section).dump()) !=
+				prior.at("matcher_projection").at("declaration_digests").at(candidate.path).get_ref<const std::string &>())
 			return true;
 		return cachedDefinitionCanChangeAnotherMatcherKey(
 			*candidate.section, prior.at("reference_literals_global"), changedLiterals
@@ -106,20 +116,23 @@ std::vector<Section *> selectCachedBodiesForResolutionReuse(
 	});
 	size_t safeReferences = 0;
 	for (const Candidate &candidate : candidates)
-		safeReferences += candidate.entries->size();
+		safeReferences += candidate.references;
 	if (safeReferences * 20 < totalReferences)
 		return {};
 	std::vector<Section *> result;
 	for (const Candidate &candidate : candidates) {
+		auto entries = savedReferenceKeys(prior, matcherCache, candidate.path);
+		if (!entries || entries->size() != candidate.references)
+			continue;
 		bool available = true;
-		for (const Json &entry : *candidate.entries) {
-			for (const char *field : {"key", "initial_key"})
-				if (entry.at(field).is_string() && !matcherCache.contains(entry.at(field).get_ref<const std::string &>()))
+		for (size_t index = 0; index < entries->size(); index++) {
+			auto entry = entries->at(index);
+			for (std::string_view key : {entry.finalKey, entry.initialKey})
+				if (!key.empty() && !matcherCache.contains(key))
 					available = false;
 		}
 		if (!available)
 			continue;
-		matchEntries.emplace(candidate.section, candidate.entries);
 		result.push_back(candidate.section);
 	}
 	return result;

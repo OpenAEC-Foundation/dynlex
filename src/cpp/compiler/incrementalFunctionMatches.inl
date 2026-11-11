@@ -147,3 +147,61 @@ bool unchangedSectionBody(const Section &section, const std::string &path, const
 		return before.contains(path) && before.at(path) == after.at(path);
 	return !before.contains(path);
 }
+
+// Resolution units are independent of native function emission: flexes, section
+// declarations and class bodies also own references and lexical bindings.
+bool reusableResolutionSection(const Section &section) {
+	return (!section.patternDefinitions.empty() || section.type == SectionType::Retain ||
+			section.type == SectionType::Release) &&
+		   !containsNestedDefinition(section);
+}
+
+const lsp::SourceFile &resolutionSourceFile(const Section &section) {
+	const CodeLine *line = section.openingLine;
+	if (!line && !section.patternDefinitions.empty())
+		line = section.patternDefinitions.front()->range.line;
+	requireCompilerInvariant(line && line->sourceFile, "resolution unit has no source identity");
+	return *line->sourceFile;
+}
+
+std::string_view matchKeyString(const Json &key) {
+	return key.is_null() ? std::string_view{} : std::string_view(key.get_ref<const std::string &>());
+}
+
+class SavedReferenceKeys {
+  public:
+	using Entry = IncrementalMatcherCache::ReferenceMatchKeys;
+	explicit SavedReferenceKeys(const Json &entries) : entries(&entries) {}
+	explicit SavedReferenceKeys(std::vector<Entry> entries) : entries(std::move(entries)) {}
+	size_t size() const {
+		if (auto json = std::get_if<const Json *>(&entries))
+			return (*json)->size();
+		return std::get<std::vector<Entry>>(entries).size();
+	}
+	Entry at(size_t index) const {
+		if (auto json = std::get_if<const Json *>(&entries)) {
+			const Json &entry = (*json)->at(index);
+			const Json &shape = entry.at("shape");
+			return {
+				shape.at(0).get_ref<const std::string &>(), shape.at(1).get<int>(), shape.at(2).get<int>(),
+				matchKeyString(entry.at("key")), matchKeyString(entry.at("initial_key"))
+			};
+		}
+		return std::get<std::vector<Entry>>(entries).at(index);
+	}
+
+  private:
+	std::variant<const Json *, std::vector<Entry>> entries;
+};
+
+std::optional<SavedReferenceKeys>
+savedReferenceKeys(const Json &projection, IncrementalMatcherCache &matcherCache, const std::string &path) {
+	const Json &overrides = projection.at("matcher_projection").at("match_overrides");
+	if (overrides.contains(path)) {
+		auto decoded = matcherCache.restoreReferenceKeys(overrides.at(path).get_ref<const std::string &>());
+		return decoded ? std::optional(SavedReferenceKeys(std::move(*decoded))) : std::nullopt;
+	}
+	if (!projection.at("match_entries").contains(path))
+		return std::nullopt;
+	return SavedReferenceKeys(projection.at("match_entries").at(path));
+}

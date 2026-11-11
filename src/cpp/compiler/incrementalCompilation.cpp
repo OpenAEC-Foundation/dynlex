@@ -508,7 +508,6 @@ bool compileIncrementally(
 			InitialParameterCounts initialParameterCounts(
 				context, previous ? &*previous : nullptr, recording->observations, statistics.parameterCountCacheMilliseconds
 			);
-			std::unordered_map<const Section *, const Json *> cachedMatchEntries;
 			context.selectCachedBodiesForResolutionReuse = [&]() {
 				if (!previous || previousMatches.empty() || context.options.emitDebugInfo || context.options.traceExecution ||
 					!compatibleObservations(*previous, recording->observations, context))
@@ -517,7 +516,7 @@ bool compileIncrementally(
 				std::vector<Section *> selected = selectCachedBodiesForResolutionReuse(
 					context, recording->observations, previous->at("all_function_projection"),
 					previous->at("diagnostic_sources").get<std::set<std::string>>(), matcherCache,
-					initialParameterCounts.sections(), initialParameterCounts.bodies(), cachedMatchEntries
+					initialParameterCounts.sections(), initialParameterCounts.bodies()
 				);
 				statistics.cachedBodySelectionMilliseconds += elapsedMilliseconds(selectionStart);
 				return selected;
@@ -537,19 +536,20 @@ bool compileIncrementally(
 			context.prepareDeferredMatcherReplay = [&](const std::list<PatternReference *> &references) {
 				auto projectionStart = Clock::now();
 				const Json *prior = previous && compatibleObservations(*previous, recording->observations, context)
-					? &previous->at("all_function_projection") : nullptr;
+										? &previous->at("all_function_projection")
+										: nullptr;
 				initialMatcherTree = matcherTreeSignature(context);
 				initialMatcherProjection.capture(
-					context, recording->observations, cachedMatchEntries, references, prior, initialParameterCounts.bodies(),
-					initialParameterCounts.sections(), initialMatcherTree
+					context, recording->observations, references, prior, initialParameterCounts.bodies(),
+					initialParameterCounts.sections(), initialMatcherTree, initialParameterCounts.snapshot()
 				);
 				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
 				statistics.matcherDeclarationsReused = initialMatcherProjection.declarationsReused;
 				matcherPaths.retain(initialMatcherTree, context);
 				if (previous)
 					prepareDeferredMatchReplay(
-						context, *previous, recording->observations, initialMatcherTree, matcherPaths, initialMatcherProjection,
-						precedenceKeys, bodyUnits
+						context, *previous, recording->observations, initialMatcherTree, matcherPaths, matcherCache,
+						initialMatcherProjection, precedenceKeys, bodyUnits
 					);
 			};
 			context.restoreDeferredBodyUnits = [&]() {
@@ -634,7 +634,8 @@ bool compileIncrementally(
 			if (compiled) {
 				auto projectionStart = Clock::now();
 				resolvedFunctionProjection["initial_parameter_counts"] = initialParameterCounts.snapshot();
-				resolvedFunctionProjection["matcher_projection"] = initialMatcherProjection.finish(resolvedFunctionProjection);
+				resolvedFunctionProjection["matcher_projection"] =
+					initialMatcherProjection.finish(resolvedFunctionProjection, matcherCache);
 				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
 				const Json *priorLiteralProjection =
 					previous && compatibleObservations(*previous, recording->observations, context) &&

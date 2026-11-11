@@ -142,8 +142,10 @@ Adding a definition wakes a waiting reference only when one of those conditions 
 deadlock recovery still sees all waiting references. This avoids rescanning every failed
 reference on each resolution pass.
 An expression reference that cannot mention a live implicit parameter candidate waits
-until definitions are indexed, even when another reference in the same function must
-classify that candidate. Unchanged functions without global access can replay their
+until definitions are indexed, even when another reference in the same definition must
+classify that candidate. This also applies to section replacements and class lifecycle
+bodies; native code emission does not determine their matching dependencies.
+Unchanged functions without global access can replay their
 matcher keys after a top-level execution edit when the nonexecution source projection
 is unchanged.
 An edit inside a flex function can also preserve other functions' matcher keys:
@@ -151,8 +153,10 @@ matching checks the resolved pattern signatures and lexical declarations separat
 from the flex's executable body. Scope-rule edits still invalidate that proof, and
 body-driven parameter reclassification invalidates callers through the changed tree.
 The saved matcher projection describes the boundary before receiver bodies become
-generated functions. It stores declaration digests and only the match entries that
-differ from the expanded projection; `matcher_projection_ms` reports its capture cost.
+generated functions. It stores declaration digests and content keys for only the
+reference records that differ from the expanded projection. These records live in the binary matcher
+store and expose string views while replaying, without duplicating JSON reference
+objects; `matcher_projection_ms` reports its capture cost.
 An unchanged tree and surrounding declarations let unchanged bodies retain their
 matcher declaration digests. `matcher_declarations_reused` counts those retained
 without serializing the declaration again; edits inside scope rules invalidate this proof.
@@ -1006,10 +1010,14 @@ instantiated them; a function whose IR was imported from cache therefore appears
 in the uninstantiated group. Flex, conversion, and other definitions are counted
 separately. These counters expose the work still done for bodies whose code was
 reused without current-process inference.
-Unchanged deferred references in ordinary functions can also restore their initial
-resolution as a unit after declarations are indexed. References that classify
+Unchanged deferred references in definitions can also restore their initial
+resolution as a unit after declarations are indexed. Functions, flexes, section
+replacements and class bodies share this mechanism, independently of native
+function generation. References that classify
 implicit parameters run first. Reuse requires unchanged source, declarations and
 lexical bindings, and a matching environment that cannot affect the saved results.
+Root explicit declarations and data names are checked even when the indexed tree
+is unchanged: adding a multiword variable can replace an earlier pattern lookup.
 The existing binary matcher cache stores each unit's reference indices, direct
 variable outcomes, exact source spans and positive or failed lookup keys. The
 JSON projection stores only the unit's content key. Restored matches and variable
@@ -1017,12 +1025,15 @@ references rejoin the ordinary expansion and precedence-invalidation machinery.
 Bodies with prior diagnostics run the normal resolver.
 `body_resolution_units_reused` and `body_resolution_references_restored`
 count this restoration, separately from references evaluated by the resolver.
-For a successful prior build, unchanged ordinary functions without nested definitions can
+For a successful prior build, unchanged definitions without nested definitions can
 skip resolution when their header is fixed by zero implicit-candidate counts or
 their parsed declaration equals the prior resolved declaration, their prior
 matcher entries remain available, and their patterns
 cannot alter another reference's matcher key while definitions are indexed.
-Initial word counts establish when a declaration can be indexed immediately;
+A saved summary identifies declarations whose parameters were promoted by body
+matching. Early selection rejects those before serializing their headers, leaving
+classification to the normal resolver. Initial word counts establish when a
+declaration can be indexed immediately;
 its body can then wait even when the function was instantiated in the prior build.
 The source projection and body digest establish that their text is unchanged.
 If the completed pattern tree differs, their references rejoin the resolver.
@@ -1221,7 +1232,9 @@ These source projections use the configured comment scanner and ignore blank
 lines and trailing whitespace, so a comment-only build does not invalidate the
 next executable edit.
 Each file's projection also stores its source digest and the section-mask
-fingerprint. An edited build reuses the projection of an unchanged imported file
+fingerprint. Temporary masks use arrays indexed by physical source line, retaining
+separate spans for mixed declaration/body lines without allocating tree nodes for
+each line. An edited build reuses the projection of an unchanged imported file
 when both fingerprints match. `--incremental-stats` reports reused and scanned
 source projections; semantic compatibility compares the projected text digest,
 so a comment insertion does not invalidate the next executable edit.
