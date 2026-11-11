@@ -412,6 +412,7 @@ trap cleanup_test_output EXIT
 
 total_start_ms=$(now_ms)
 
+run_fixture_tests() {
 for test_dir in "$TESTS_DIR"/*/; do
     test_start_ms=$(now_ms)
     test_dir="${test_dir%/}"
@@ -678,12 +679,57 @@ for test_dir in "$TESTS_DIR"/*/; do
         failures+=("$test_name")
     fi
 done
+return 0
+}
+
+start_fixture_tests() {
+    fixture_results="$TEST_OUTPUT_DIR/fixture-results"
+    (
+        trap - EXIT
+        run_fixture_tests || exit "$?"
+        printf '%s\0' "$passed" "$failed" "$skipped" "$test_output" "${failures[@]}" > "$fixture_results"
+    ) &
+    fixture_worker=$!
+}
+
+collect_fixture_tests() {
+    local worker_status=0
+    wait "$fixture_worker" || worker_status=$?
+    if [[ $worker_status -ne 0 ]]; then
+        echo "Fixture worker exited with status $worker_status." >&2
+        return "$worker_status"
+    fi
+    local fixture_passed fixture_failed fixture_skipped fixture_output fixture_failure
+    local fixture_failures=()
+    {
+        IFS= read -r -d '' fixture_passed &&
+        IFS= read -r -d '' fixture_failed &&
+        IFS= read -r -d '' fixture_skipped &&
+        IFS= read -r -d '' fixture_output || return 1
+        while IFS= read -r -d '' fixture_failure; do
+            fixture_failures+=("$fixture_failure")
+        done
+    } < "$fixture_results" || return 1
+    passed=$((passed + fixture_passed))
+    failed=$((failed + fixture_failed))
+    skipped=$((skipped + fixture_skipped))
+    test_output="$fixture_output$test_output"
+    failures=("${fixture_failures[@]}" "${failures[@]}")
+}
+
+# Run fixtures concurrently with the independent auxiliary checks in the short gate.
+# Integration checks keep their existing single-group memory budget.
+if [[ "$suite" == required ]]; then
+    start_fixture_tests
+else
+    run_fixture_tests
+fi
 
 run_auxiliary_test() {
     local test_name="$1"
     local required_test=false
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|incremental_compilation|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout)
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|incremental_compilation|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout)
         required_test=true ;;
     esac
     if [[ "$suite" == required && "$required_test" != true ]] ||
@@ -718,6 +764,7 @@ run_auxiliary_test "elf_binary_guard" 10 python3 -B "$SCRIPT_DIR/test_no_elf_bin
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
 run_auxiliary_test "fixture_compile_budget" 10 python3 -B "$SCRIPT_DIR/test_fixture_options.py"
 run_auxiliary_test "required_focus" 10 python3 -B "$SCRIPT_DIR/test_required_focus.py"
+run_auxiliary_test "suite_groups" 10 python3 -B "$SCRIPT_DIR/test_suite_groups.py"
 run_auxiliary_test "diagnostic_expectations" 10 python3 -B "$SCRIPT_DIR/test_diagnostic_expectations.py"
 run_auxiliary_test "process_error_mode" 10 python3 -B "$SCRIPT_DIR/test_process_error_mode.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
@@ -842,6 +889,10 @@ if [[ "$suite" == integration ]]; then
         ((failed++)) || true
         failures+=("lsp_integration")
     fi
+fi
+
+if [[ "$suite" == required ]]; then
+    collect_fixture_tests || exit "$?"
 fi
 
 total_elapsed_ms=$(elapsed_ms_since "$total_start_ms")

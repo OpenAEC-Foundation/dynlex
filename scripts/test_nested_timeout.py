@@ -43,6 +43,7 @@ def main():
         root = Path(temporary)
         child = root / "child.py"
         pid_file = root / "child.pid"
+        parallel_pid_file = root / "parallel.pid"
         child.write_text(
             "import os,sys,time\n"
             "from pathlib import Path\n"
@@ -52,12 +53,14 @@ def main():
         script = root / "nested.sh"
         script.write_text('PROJECT_DIR=$2\n' + wrapper + '''
 if [[ "$1" == inner ]]; then
-    run_with_timeout 30 "$3" "$4/child.py" "$4/child.pid"
+    run_with_timeout 30 "$3" "$4/child.py" "$4/child.pid" &
+    run_with_timeout 30 "$3" "$4/child.py" "$4/parallel.pid" &
+    wait
 else
     run_with_timeout "$6" "$5" "$0" inner "$2" "$3" "$4" "$5"
 fi
 ''', encoding="utf-8", newline="\n")
-        pid = None
+        pids = []
         try:
             started = time.monotonic()
             result = subprocess.run(
@@ -65,20 +68,21 @@ fi
                  "3" if os.name == "nt" else "1"],
                 capture_output=True, text=True, timeout=10,
             )
-            assert pid_file.exists(), "nested child never started"
-            pid = int(pid_file.read_text())
+            assert pid_file.exists() and parallel_pid_file.exists(), "parallel nested children never started"
+            pids = [int(path.read_text()) for path in (pid_file, parallel_pid_file)]
             assert result.returncode == 124, (result.returncode, result.stdout, result.stderr)
             assert time.monotonic() - started < 10, "watchdog did not return promptly"
-            assert not running(pid), "outer timeout left the nested timed process running"
+            assert all(not running(pid) for pid in pids), "outer timeout left a nested timed process running"
         finally:
-            if pid is None and pid_file.exists():
-                pid = int(pid_file.read_text())
-            if pid is not None and running(pid):
-                if os.name == "nt":
-                    subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], check=True,
-                                   stdout=subprocess.DEVNULL)
-                else:
-                    os.kill(pid, signal.SIGKILL)
+            for path in (pid_file, parallel_pid_file):
+                if path.exists():
+                    pid = int(path.read_text())
+                    if running(pid):
+                        if os.name == "nt":
+                            subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], check=True,
+                                           stdout=subprocess.DEVNULL)
+                        else:
+                            os.kill(pid, signal.SIGKILL)
 
 
 if __name__ == "__main__":
