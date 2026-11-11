@@ -17,7 +17,7 @@ var<uniform> ubo_height: type_11;
 @group(0) @binding(1) 
 var<uniform> ubo_render_pass: type_11;
 
-fn the_distance_from_3a_point8point5_to_segment_from_3a_point8start5_to_3a_point8end5_a_20_point_a_20_point_a_20_point(point: ptr<function, type_6>, start: ptr<function, type_6>, end: ptr<function, type_6>) -> f32 {
+fn the_distance_from_3a_point8point5_to_segment_from_3a_point8start5_to_3a_point8end5_definition_f3a372962fa686537baec66b5c22c2fcb51087893340fec534ce76b120688b7b_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b(point: ptr<function, type_6>, start: ptr<function, type_6>, end: ptr<function, type_6>) -> f32 {
     var phi_750_: u32;
     var phi_752_: f32;
 
@@ -47,7 +47,7 @@ fn the_distance_from_3a_point8point5_to_segment_from_3a_point8start5_to_3a_point
     return sqrt(((_e170 * _e170) + (_e171 * _e171)));
 }
 
-fn the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(point_1: ptr<function, type_6>, phase: ptr<function, f32>) -> f32 {
+fn the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(point_1: ptr<function, type_6>, phase: ptr<function, f32>) -> f32 {
     let _e135 = (*point_1).member;
     let _e141 = (*phase);
     let _e151 = (_e135.x + (sin((_e141 + ((_e135.x * 0.73f) - (_e135.y * 0.41f)))) * 0.58f));
@@ -57,7 +57,7 @@ fn the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(poi
     return (((_e159 * 0.46f) + (_e165 * 0.29f)) + ((sin((((_e151 * 2.47f) - (_e153 * 2.11f)) + (_e159 * 1.8f))) * 0.17f) + (cos((((_e151 * 4.03f) + (_e153 * 3.17f)) + (_e165 * 1.4f))) * 0.08f)));
 }
 
-fn the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(point_2: ptr<function, type_6>, phase_1: ptr<function, f32>) -> f32 {
+fn the_spark_field_at_3a_point8point5_during_3a_value8phase5_definition_b45b4d0f369762d8ebfe5c0c7b634d3bb84e995046b3c28d0d2c522bd033e42e_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(point_2: ptr<function, type_6>, phase_1: ptr<function, f32>) -> f32 {
     var tmp77_: f32;
     var tmp39_: f32;
     var location: type_6;
@@ -69,18 +69,18 @@ fn the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(poi
     let _e140 = (*point_2).member;
     let _e145 = vec2<f32>((_e140.x * 0.19f), vec2<f32>().y);
     sample.member = vec2<f32>(_e145.x, (_e140.y * 0.19f));
-    let _e152 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&sample), phase_1);
+    let _e152 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&sample), phase_1);
     let _e157 = vec2<f32>(((_e140.x * 0.23f) + 7f), vec2<f32>().y);
     shifted.member = vec2<f32>(_e157.x, ((_e140.y * 0.23f) + -5f));
     let _e165 = (_e140.x + (_e152 * 1.7f));
     let _e166 = (*phase_1);
     tmp39_ = (_e166 + 1.7f);
-    let _e168 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&shifted), (&tmp39_));
+    let _e168 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&shifted), (&tmp39_));
     let _e170 = (_e140.y + (_e168 * 1.7f));
     let _e174 = vec2<f32>((_e165 * 0.11f), vec2<f32>().y);
     location.member = vec2<f32>(_e174.x, (_e170 * 0.11f));
     tmp77_ = (_e166 + 4f);
-    let _e181 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&location), (&tmp77_));
+    let _e181 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&location), (&tmp77_));
     let _e185 = ((((_e181 * 0.5f) + 0.5f) + -0.48f) / 0.34f);
     if (_e185 < 0f) {
         phi_691_ = 0f;
@@ -104,7 +104,7 @@ fn the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(poi
     return ((1f - ((_e210 * _e210) * (3f - (_e210 * 2f)))) * ((_e192 * _e192) * (3f - (_e192 * 2f))));
 }
 
-fn the_scene_window_from_opening_to_closing_at_moment_f32_f32_f32_(opening: ptr<function, f32>, closing: ptr<function, f32>, moment: ptr<function, f32>) -> f32 {
+fn the_scene_window_from_opening_to_closing_at_moment_definition_40f5d1686fffc75cdc19da50a5aa0d0b9862c0c4b26f9c3f2f42bb35a31e707a_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(opening: ptr<function, f32>, closing: ptr<function, f32>, moment: ptr<function, f32>) -> f32 {
     var phi_567_: u32;
     var phi_569_: f32;
     var phi_577_: u32;
@@ -225,29 +225,29 @@ fn main_1() {
     } else {
         tmp149_ = 0f;
         tmp150_ = 7.4f;
-        let _e185 = the_scene_window_from_opening_to_closing_at_moment_f32_f32_f32_((&tmp149_), (&tmp150_), (&moment_1));
+        let _e185 = the_scene_window_from_opening_to_closing_at_moment_definition_40f5d1686fffc75cdc19da50a5aa0d0b9862c0c4b26f9c3f2f42bb35a31e707a_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp149_), (&tmp150_), (&moment_1));
         tmp152_ = 6.85f;
         tmp153_ = 11f;
-        let _e186 = the_scene_window_from_opening_to_closing_at_moment_f32_f32_f32_((&tmp152_), (&tmp153_), (&moment_1));
+        let _e186 = the_scene_window_from_opening_to_closing_at_moment_definition_40f5d1686fffc75cdc19da50a5aa0d0b9862c0c4b26f9c3f2f42bb35a31e707a_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp152_), (&tmp153_), (&moment_1));
         let _e192 = vec2<f32>(((_e155 * 0.021f) + (_e168 * 2.2f)), vec2<f32>().y);
         tmp174_.member = vec2<f32>(_e192.x, ((_e174 * 2.2f) - (_e155 * 0.014f)));
         tmp175_ = 1.9f;
-        let _e200 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp174_), (&tmp175_));
+        let _e200 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp174_), (&tmp175_));
         let _e202 = ((_e200 * 0.5f) + 0.5f);
         let _e208 = vec2<f32>(((_e168 * 4.1f) - (_e155 * 0.017f)), vec2<f32>().y);
         tmp196_.member = vec2<f32>(_e208.x, ((_e155 * 0.011f) + (_e174 * 4.1f)));
         tmp197_ = 5.4f;
-        let _e216 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp196_), (&tmp197_));
+        let _e216 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp196_), (&tmp197_));
         let _e219 = (1f - min(abs(_e216), 1f));
         let _e220 = (_e219 * _e219);
         let _e226 = vec2<f32>(((_e155 * 0.24f) + (_e168 * 27f)), vec2<f32>().y);
         tmp218_.member = vec2<f32>(_e226.x, ((_e174 * 27f) - (_e155 * 0.13f)));
         tmp219_ = 9.7f;
-        let _e234 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp218_), (&tmp219_));
+        let _e234 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_definition_b45b4d0f369762d8ebfe5c0c7b634d3bb84e995046b3c28d0d2c522bd033e42e_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp218_), (&tmp219_));
         let _e240 = vec2<f32>(((_e155 * 8.4f) + (_e168 * 7f)), vec2<f32>().y);
         tmp237_.member = vec2<f32>(_e240.x, (_e174 * 46f));
         tmp238_ = 14.2f;
-        let _e246 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp237_), (&tmp238_));
+        let _e246 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_definition_b45b4d0f369762d8ebfe5c0c7b634d3bb84e995046b3c28d0d2c522bd033e42e_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp237_), (&tmp238_));
         let _e248 = (abs(_e174) / 0.66f);
         let _e250 = select(_e248, 1f, (_e248 > 1f));
         let _e257 = (_e185 * ((1f - ((_e250 * _e250) * (3f - (_e250 * 2f)))) * _e246));
@@ -293,7 +293,7 @@ fn main_1() {
         let _e337 = vec2<f32>(_e334, vec2<f32>().y);
         let _e340 = ((((sin(_e317) * 1.08f) * 1.86f) + -0.04f) / _e331);
         ending.member = vec2<f32>(_e337.x, _e340);
-        let _e345 = the_distance_from_3a_point8point5_to_segment_from_3a_point8start5_to_3a_point8end5_a_20_point_a_20_point_a_20_point((&screen), (&center), (&ending));
+        let _e345 = the_distance_from_3a_point8point5_to_segment_from_3a_point8start5_to_3a_point8end5_definition_f3a372962fa686537baec66b5c22c2fcb51087893340fec534ce76b120688b7b_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b((&screen), (&center), (&ending));
         let _e347 = ((_e345 + -0.002f) / 0.0069999993f);
         if (_e347 < 0f) {
             phi_408_ = 0f;
@@ -318,7 +318,7 @@ fn main_1() {
         start_1.member = vec2<f32>(_e373.x, (_e340 - _e374));
         let _e383 = vec2<f32>((_e334 + _e369), vec2<f32>().y);
         finish.member = vec2<f32>(_e383.x, (_e340 + _e374));
-        let _e389 = the_distance_from_3a_point8point5_to_segment_from_3a_point8start5_to_3a_point8end5_a_20_point_a_20_point_a_20_point((&screen), (&start_1), (&finish));
+        let _e389 = the_distance_from_3a_point8point5_to_segment_from_3a_point8start5_to_3a_point8end5_definition_f3a372962fa686537baec66b5c22c2fcb51087893340fec534ce76b120688b7b_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b((&screen), (&start_1), (&finish));
         let _e391 = ((_e389 + -0.002f) / 0.009f);
         if (_e391 < 0f) {
             phi_442_ = 0f;

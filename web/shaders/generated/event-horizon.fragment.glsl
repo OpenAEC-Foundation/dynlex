@@ -21,7 +21,7 @@ layout(std140) uniform type_11_block_2Fragment { type_11 _group_0_binding_3_fs; 
 
 layout(location = 0) out vec4 _fs2p_location0;
 
-float the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(inout type_7 point, inout float phase) {
+float the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(inout type_7 point, inout float phase) {
     vec2 _e175 = point.member;
     float _e181 = phase;
     float _e191 = (_e175.x + (sin((_e181 + ((_e175.x * 0.73) - (_e175.y * 0.41)))) * 0.58));
@@ -31,7 +31,7 @@ float the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(
     return (((_e199 * 0.46) + (_e205 * 0.29)) + ((sin((((_e191 * 2.47) - (_e193 * 2.11)) + (_e199 * 1.8))) * 0.17) + (cos((((_e191 * 4.03) + (_e193 * 3.17)) + (_e205 * 1.4))) * 0.08)));
 }
 
-float the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(inout type_7 point_1, inout float phase_1) {
+float the_spark_field_at_3a_point8point5_during_3a_value8phase5_definition_b45b4d0f369762d8ebfe5c0c7b634d3bb84e995046b3c28d0d2c522bd033e42e_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(inout type_7 point_1, inout float phase_1) {
     float tmp77_ = 0.0;
     float tmp39_ = 0.0;
     type_7 location = type_7(vec2(0.0));
@@ -42,18 +42,18 @@ float the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(
     vec2 _e180 = point_1.member;
     vec2 _e185 = vec2((_e180.x * 0.19), vec2(0.0).y);
     sample_.member = vec2(_e185.x, (_e180.y * 0.19));
-    float _e192 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(sample_, phase_1);
+    float _e192 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(sample_, phase_1);
     vec2 _e197 = vec2(((_e180.x * 0.23) + 7.0), vec2(0.0).y);
     shifted.member = vec2(_e197.x, ((_e180.y * 0.23) + -5.0));
     float _e205 = (_e180.x + (_e192 * 1.7));
     float _e206 = phase_1;
     tmp39_ = (_e206 + 1.7);
-    float _e208 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(shifted, tmp39_);
+    float _e208 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(shifted, tmp39_);
     float _e210 = (_e180.y + (_e208 * 1.7));
     vec2 _e214 = vec2((_e205 * 0.11), vec2(0.0).y);
     location.member = vec2(_e214.x, (_e210 * 0.11));
     tmp77_ = (_e206 + 4.0);
-    float _e221 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(location, tmp77_);
+    float _e221 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(location, tmp77_);
     float _e225 = ((((_e221 * 0.5) + 0.5) + -0.48) / 0.34);
     if ((_e225 < 0.0)) {
         phi_946_ = 0.0;
@@ -77,7 +77,7 @@ float the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(
     return ((1.0 - ((_e250 * _e250) * (3.0 - (_e250 * 2.0)))) * ((_e232 * _e232) * (3.0 - (_e232 * 2.0))));
 }
 
-float a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_20_point_f32_f32_f32_(inout type_7 position, inout float scale, inout float phase_2, inout float time) {
+float a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_definition_c5856d2c5efd026e505778d50574371148e52e90ec263059ef5737eecfdfcf6b_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(inout type_7 position, inout float scale, inout float phase_2, inout float time) {
     float tmp62_ = 0.0;
     type_7 tmp58_ = type_7(vec2(0.0));
     float tmp45_ = 0.0;
@@ -97,14 +97,14 @@ float a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5po
     tmp26_.member = vec2(_e199.x, _e202);
     float _e207 = (_e184 * 13.7);
     tmp28_ = _e207;
-    float _e208 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp26_, tmp28_);
+    float _e208 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_definition_b45b4d0f369762d8ebfe5c0c7b634d3bb84e995046b3c28d0d2c522bd033e42e_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp26_, tmp28_);
     vec2 _e212 = vec2((_e196 * 0.33), vec2(0.0).y);
     tmp41_.member = vec2(_e212.x, _e202);
     tmp45_ = (_e207 + 0.09);
-    float _e218 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp41_, tmp45_);
+    float _e218 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_definition_b45b4d0f369762d8ebfe5c0c7b634d3bb84e995046b3c28d0d2c522bd033e42e_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp41_, tmp45_);
     tmp58_.member = vec2(_e199.x, (_e202 * 0.33));
     tmp62_ = (_e207 + -0.11);
-    float _e225 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp58_, tmp62_);
+    float _e225 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_definition_b45b4d0f369762d8ebfe5c0c7b634d3bb84e995046b3c28d0d2c522bd033e42e_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp58_, tmp62_);
     float _e231 = (sqrt(((_e192.x * _e192.x) + (_e192.y * _e192.y))) / 1.35);
     float _e233 = ((_e231 > 1.0) ? 1.0 : _e231);
     return (((sin(((_e182 * 2.7) + (_e184 * 29.0))) * 0.13) + 0.87) * (((_e187 * 1.25) + 0.28) * ((_e208 * 2.8) + (((_e218 + _e225) * (1.0 - ((_e233 * _e233) * (3.0 - (_e233 * 2.0))))) * 0.17))));
@@ -186,16 +186,16 @@ void main_1() {
     vec2 _e265 = vec2(((_e199 * 0.025) + (_e248 * 1.8)), vec2(0.0).y);
     tmp177_.member = vec2(_e265.x, ((_e255 * 1.8) + -4.0));
     tmp178_ = 1.7;
-    float _e272 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp177_, tmp178_);
+    float _e272 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp177_, tmp178_);
     float _e274 = ((_e272 * 0.5) + 0.5);
     vec2 _e279 = vec2(((_e248 * 4.6) + -11.0), vec2(0.0).y);
     tmp198_.member = vec2(_e279.x, ((_e199 * 0.018) + (_e255 * 4.6)));
     tmp199_ = 5.3;
-    float _e287 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp198_, tmp199_);
+    float _e287 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp198_, tmp199_);
     vec2 _e294 = vec2(((_e248 * 2.4) + 7.0), vec2(0.0).y);
     tmp218_.member = vec2(_e294.x, ((_e255 * 2.4) + -9.0));
     tmp220_ = (_e199 * 0.045);
-    float _e302 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp218_, tmp220_);
+    float _e302 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp218_, tmp220_);
     float _e304 = ((_e274 + -0.45) / 0.41000003);
     if ((_e304 < 0.0)) {
         phi_397_ = 0.0;
@@ -230,17 +230,17 @@ void main_1() {
     float _e320 = phi_404_;
     tmp277_ = 13.0;
     tmp278_ = 0.09;
-    float _e321 = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_20_point_f32_f32_f32_(universe, tmp277_, tmp278_, time_1);
+    float _e321 = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_definition_c5856d2c5efd026e505778d50574371148e52e90ec263059ef5737eecfdfcf6b_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(universe, tmp277_, tmp278_, time_1);
     tmp280_ = 21.0;
     tmp281_ = 0.41;
-    float _e322 = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_20_point_f32_f32_f32_(universe, tmp280_, tmp281_, time_1);
+    float _e322 = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_definition_c5856d2c5efd026e505778d50574371148e52e90ec263059ef5737eecfdfcf6b_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(universe, tmp280_, tmp281_, time_1);
     tmp283_ = 31.0;
     tmp284_ = 0.77;
-    float _e323 = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_20_point_f32_f32_f32_(universe, tmp283_, tmp284_, time_1);
+    float _e323 = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_definition_c5856d2c5efd026e505778d50574371148e52e90ec263059ef5737eecfdfcf6b_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(universe, tmp283_, tmp284_, time_1);
     vec2 _e327 = vec2((_e248 * 5.1), vec2(0.0).y);
     tmp307_.member = vec2(_e327.x, (_e255 * 5.1));
     tmp308_ = 8.2;
-    float _e333 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp307_, tmp308_);
+    float _e333 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp307_, tmp308_);
     float _e337 = ((sin((_e199 * 0.17)) * 0.018) + 0.12);
     float _e338 = sin(_e337);
     float _e339 = cos(_e337);
@@ -283,11 +283,11 @@ void main_1() {
     vec2 _e374 = vec2(((_e199 * 0.52) + (_e342 * 8.3)), vec2(0.0).y);
     tmp430_.member = vec2(_e374.x, (_e346 * 1.8));
     tmp431_ = 3.1;
-    float _e380 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp430_, tmp431_);
+    float _e380 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp430_, tmp431_);
     vec2 _e386 = vec2(((_e342 * 18.0) - (_e199 * 0.91)), vec2(0.0).y);
     tmp445_.member = vec2(_e386.x, (_e346 * 3.7));
     tmp446_ = 7.9;
-    float _e392 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp445_, tmp446_);
+    float _e392 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp445_, tmp446_);
     float _e394 = ((_e350 + -0.29) / 0.53999996);
     if ((_e394 < 0.0)) {
         phi_467_ = 0.0;
@@ -356,7 +356,7 @@ void main_1() {
     vec2 _e436 = vec2((_e226 * 15.0), vec2(0.0).y);
     tmp592_.member = vec2(_e436.x, ((_e228 * 3.0) - (_e199 * 0.8)));
     tmp593_ = 10.0;
-    float _e444 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp592_, tmp593_);
+    float _e444 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_definition_b36ff1377d79f97ed14ba7257106235547048854eaf25b4dfbf1e21013b41863_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp592_, tmp593_);
     float _e446 = ((_e232 + -0.176) / 0.026000008);
     if ((_e446 < 0.0)) {
         phi_507_ = 0.0;

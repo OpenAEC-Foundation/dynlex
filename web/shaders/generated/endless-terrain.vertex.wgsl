@@ -29,7 +29,7 @@ var<private> dynlex_interpolant_7465727261696e20706f736974696f6e: vec4<f32>;
 var<private> dynlex_interpolant_7465727261696e206e6f726d616c: vec4<f32>;
 var<private> dynlex_interpolant_7465727261696e206d6174657269616c: vec4<f32>;
 
-fn the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_20_point_f32_(offset: ptr<function, type_10>, permutation: ptr<function, f32>) -> f32 {
+fn the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_definition_a79b700c9a74741d6a8594c4143b02a273848b138fdb550ea0ee8b10da594efa_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(offset: ptr<function, type_10>, permutation: ptr<function, f32>) -> f32 {
     let _e129 = (*offset).member;
     let _e136 = max((0.5f - ((_e129.x * _e129.x) + (_e129.y * _e129.y))), 0f);
     let _e137 = (*permutation);
@@ -41,7 +41,7 @@ fn the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5
     return (((_e129.y * _e144) + (_e129.x * _e147)) * ((_e153 * _e153) * (1.7928429f - (((_e144 * _e144) + (_e147 * _e147)) * 0.85373473f))));
 }
 
-fn the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(point: ptr<function, type_10>, phase: ptr<function, f32>) -> f32 {
+fn the_simplex_field_at_3a_point8point5_during_3a_value8phase5_definition_9ec9c146ebc7a85119d4bcf0b82ba2832980bf28047655187412e8f0c4cb8803_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(point: ptr<function, type_10>, phase: ptr<function, f32>) -> f32 {
     var final_: f32;
     var following: f32;
     var initial: f32;
@@ -82,13 +82,13 @@ fn the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(p
     let _e235 = ((_e189 + (_e229 - (floor((_e229 / 289f)) * 289f))) + 1f);
     let _e238 = (_e235 * ((_e235 * 34f) + 1f));
     final_ = (_e238 - (floor((_e238 / 289f)) * 289f));
-    let _e243 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_20_point_f32_((&offset_1), (&initial));
-    let _e244 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_20_point_f32_((&middle), (&following));
-    let _e245 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_20_point_f32_((&third), (&final_));
+    let _e243 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_definition_a79b700c9a74741d6a8594c4143b02a273848b138fdb550ea0ee8b10da594efa_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&offset_1), (&initial));
+    let _e244 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_definition_a79b700c9a74741d6a8594c4143b02a273848b138fdb550ea0ee8b10da594efa_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&middle), (&following));
+    let _e245 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_definition_a79b700c9a74741d6a8594c4143b02a273848b138fdb550ea0ee8b10da594efa_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&third), (&final_));
     return (((_e243 + _e244) + _e245) * 130f);
 }
 
-fn the_terrain_height_at_3terrain_coordinate8position5_a_20_point(position: ptr<function, type_8>) -> f32 {
+fn the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_(position: ptr<function, type_8>) -> f32 {
     var tmp178_: f32;
     var tmp177_: type_10;
     var tmp148_: f32;
@@ -110,29 +110,29 @@ fn the_terrain_height_at_3terrain_coordinate8position5_a_20_point(position: ptr<
     let _e145 = vec2<f32>((_e140.x * 0.011f), vec2<f32>().y);
     tmp8_.member = vec2<f32>(_e145.x, (_e140.z * 0.011f));
     tmp9_ = 1.7f;
-    let _e152 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp8_), (&tmp9_));
+    let _e152 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_definition_9ec9c146ebc7a85119d4bcf0b82ba2832980bf28047655187412e8f0c4cb8803_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp8_), (&tmp9_));
     let _e157 = vec2<f32>(((_e140.x * 0.021f) + 9f), vec2<f32>().y);
     tmp27_.member = vec2<f32>(_e157.x, ((_e140.z * 0.021f) + -4f));
     tmp28_ = 4.1f;
-    let _e164 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp27_), (&tmp28_));
+    let _e164 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_definition_9ec9c146ebc7a85119d4bcf0b82ba2832980bf28047655187412e8f0c4cb8803_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp27_), (&tmp28_));
     let _e170 = vec2<f32>(((_e140.z * 0.019f) - (_e140.x * 0.006f)), vec2<f32>().y);
     tmp59_.member = vec2<f32>(_e170.x, ((_e140.z * 0.007f) + (_e140.x * 0.02f)));
     tmp60_ = 8.3f;
-    let _e178 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp59_), (&tmp60_));
+    let _e178 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_definition_9ec9c146ebc7a85119d4bcf0b82ba2832980bf28047655187412e8f0c4cb8803_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp59_), (&tmp60_));
     let _e180 = (_e140.x + (_e164 * 9.5f));
     let _e182 = (_e140.z + (_e178 * 9.5f));
     let _e188 = vec2<f32>(((_e180 * 0.027f) + (_e182 * 0.006f)), vec2<f32>().y);
     tmp116_.member = vec2<f32>(_e188.x, ((_e182 * 0.027f) - (_e180 * 0.006f)));
     tmp117_ = 2.3f;
-    let _e196 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp116_), (&tmp117_));
+    let _e196 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_definition_9ec9c146ebc7a85119d4bcf0b82ba2832980bf28047655187412e8f0c4cb8803_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp116_), (&tmp117_));
     let _e202 = vec2<f32>(((_e182 * 0.057f) - (_e180 * 0.018f)), vec2<f32>().y);
     tmp147_.member = vec2<f32>(_e202.x, ((_e180 * 0.054f) + (_e182 * 0.019f)));
     tmp148_ = 6.9f;
-    let _e210 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp147_), (&tmp148_));
+    let _e210 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_definition_9ec9c146ebc7a85119d4bcf0b82ba2832980bf28047655187412e8f0c4cb8803_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp147_), (&tmp148_));
     let _e216 = vec2<f32>(((_e180 * 0.119f) + (_e182 * 0.041f)), vec2<f32>().y);
     tmp177_.member = vec2<f32>(_e216.x, ((_e182 * 0.113f) - (_e180 * 0.037f)));
     tmp178_ = 9.7f;
-    let _e224 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp177_), (&tmp178_));
+    let _e224 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_definition_9ec9c146ebc7a85119d4bcf0b82ba2832980bf28047655187412e8f0c4cb8803_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp177_), (&tmp178_));
     let _e226 = ((_e152 + 0.48f) / 0.92999995f);
     if (_e226 < 0f) {
         phi_475_ = 0f;
@@ -222,7 +222,7 @@ fn main_1() {
         let _e187 = vec3<f32>(_e183, vec3<f32>(f32(), 0f, f32()).y, vec3<f32>(f32(), 0f, f32()).z);
         let _e191 = ((((_e136 * 3.25f) + -92.1f) + (_e167 * _e176)) - (_e166 * _e179));
         world.member = vec3<f32>(_e187.x, _e187.y, _e191);
-        let _e198 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point((&world));
+        let _e198 = the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_((&world));
         if (_e144.w > 1.5f) {
             let _e273 = ((_e136 * 0.41f) + ((_e191 * 0.07f) + (_e183 * 0.17f)));
             let _e278 = (((_e191 * 0.21f) - (_e183 * 0.05f)) - (_e136 * 0.32f));
@@ -259,23 +259,23 @@ fn main_1() {
         } else {
             let _e203 = vec3<f32>((_e183 + -0.34f), vec3<f32>(f32(), 0f, f32()).y, vec3<f32>(f32(), 0f, f32()).z);
             tmp312_.member = vec3<f32>(_e203.x, _e203.y, _e191);
-            let _e209 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point((&tmp312_));
+            let _e209 = the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_((&tmp312_));
             let _e214 = vec3<f32>((_e183 + 0.34f), vec3<f32>(f32(), 0f, f32()).y, vec3<f32>(f32(), 0f, f32()).z);
             tmp325_.member = vec3<f32>(_e214.x, _e214.y, _e191);
-            let _e220 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point((&tmp325_));
+            let _e220 = the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_((&tmp325_));
             tmp338_.member = vec3<f32>(_e187.x, _e187.y, (_e191 + -0.34f));
-            let _e227 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point((&tmp338_));
+            let _e227 = the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_((&tmp338_));
             tmp351_.member = vec3<f32>(_e187.x, _e187.y, (_e191 + 0.34f));
-            let _e234 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point((&tmp351_));
+            let _e234 = the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_((&tmp351_));
             let _e239 = vec3<f32>((_e209 - _e220), vec3<f32>(f32(), 0.68f, f32()).y, vec3<f32>(f32(), 0.68f, f32()).z);
             let _e248 = vec2<f32>((_e183 * 0.065f), vec2<f32>().y);
             tmp388_.member = vec2<f32>(_e248.x, (_e191 * 0.065f));
             tmp389_ = 13.7f;
-            let _e254 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp388_), (&tmp389_));
+            let _e254 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_definition_9ec9c146ebc7a85119d4bcf0b82ba2832980bf28047655187412e8f0c4cb8803_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp388_), (&tmp389_));
             let _e259 = vec2<f32>((_e183 * 0.14f), vec2<f32>().y);
             tmp409_.member = vec2<f32>(_e259.x, (_e191 * 0.14f));
             tmp410_ = 16.2f;
-            let _e265 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp409_), (&tmp410_));
+            let _e265 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_definition_9ec9c146ebc7a85119d4bcf0b82ba2832980bf28047655187412e8f0c4cb8803_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b((&tmp409_), (&tmp410_));
             phi_340_ = 0f;
             phi_341_ = (_e265 * 0.5f);
             phi_342_ = (_e254 * 0.5f);

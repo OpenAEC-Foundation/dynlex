@@ -1,7 +1,7 @@
 {
   "schemaVersion": 13,
   "translatorHash": "6ef329ce2b6bf0e635d04e2a83d7158681f2aa2ff14745db18646d3046951673",
-  "compilerHash": "19783903026f48c2d21fb6fef7fe17bfc5a00d233973b1ae4a960919185da9d4",
+  "compilerHash": "5c1957257e4b8ff3ca3e0d3cefbfeafd040fbe4f7fdf45749c57ec73dc6a2879",
   "semanticLegend": {
     "tokenModifiers": [
       "definition",
@@ -39,11 +39,11 @@
           "sources": {
             "webgpu": {
               "path": "shaders/generated/event-horizon.fragment.wgsl",
-              "hash": "4f9530a51e211d9f67938cbb5364c97ccac0e7e25a36666706ea67adafb9289c"
+              "hash": "8c4584f7c3306598d357d11fb28fe885b7ddcd732588a22ec4b6c73d9adbdd30"
             },
             "webgl": {
               "path": "shaders/generated/event-horizon.fragment.glsl",
-              "hash": "b43bf5dd6adcef1ae0c77673c5f4b2ae5ff02cfbc33cf7b030b6057abb2078cd"
+              "hash": "2d7679fc69377a44e7ba9a287c946165576ecb2b7aca72b2f98160dc41e8b3fa"
             }
           },
           "uniforms": [
@@ -7474,11 +7474,11 @@
           "sources": {
             "webgpu": {
               "path": "shaders/generated/endless-terrain.vertex.wgsl",
-              "hash": "20921e206c7d035283fb2f61e57ce049a2dc19b77ef8e9ac8c581ad3cf58c978"
+              "hash": "396d80a83d66f0349064738e299c0ef4623083d5c7e4227679208e7b68081f57"
             },
             "webgl": {
               "path": "shaders/generated/endless-terrain.vertex.glsl",
-              "hash": "303cd64241623a88653bc305d3cf1b8e08afd1c1a75b32b48b94013617413986"
+              "hash": "d0dd15a6107a42944dc8878b28ef2742f78738ba4715c40530911b4b969983ab"
             }
           },
           "uniforms": [
@@ -23106,11 +23106,11 @@
           "sources": {
             "webgpu": {
               "path": "shaders/generated/nano-choreography.fragment.wgsl",
-              "hash": "6b65669b8d5c6fd5630ae02a9258c0763deaf9aebcff924d30142540d2630fda"
+              "hash": "9831bbb72998467ab80c3d0ef7f510909a5788859835eab576383d80fff034fa"
             },
             "webgl": {
               "path": "shaders/generated/nano-choreography.fragment.glsl",
-              "hash": "3fe17887d2cd5164b6751e6f4b951f834b809bbb0fbd166e383c3547d4904155"
+              "hash": "19ee8e07572ce6a1678567c834cacdc7b64e51bc6c0ffeb03bebfb8a28322f9b"
             }
           },
           "uniforms": [
