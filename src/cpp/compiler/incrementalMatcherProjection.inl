@@ -73,10 +73,15 @@ struct InitialMatcherProjection {
 	void captureBodyUnits(IncrementalMatcherCache &matcherCache) {
 		if (unitsCaptured)
 			return;
-		for (const Owner &owner : owners)
-			if (owner.topLevel)
-				if (auto key = matcherCache.recordBodyResolution(owner.deferredReferences))
-					value.at("body_units")[owner.path] = std::move(*key);
+		for (const Owner &owner : owners) {
+			if (!owner.topLevel)
+				continue;
+			std::vector<std::pair<size_t, PatternReference *>> references;
+			for (size_t index = 0; index < owner.references.size(); index++)
+				references.emplace_back(index, owner.references[index]);
+			if (auto key = matcherCache.recordBodyResolution(references))
+				value.at("body_units")[owner.path] = std::move(*key);
+		}
 		unitsCaptured = true;
 	}
 

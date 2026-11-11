@@ -1011,9 +1011,12 @@ declaration, their prior matcher entries remain available, and their patterns
 cannot alter another reference's matcher key while definitions are indexed.
 The source projection and body digest establish that their text is unchanged.
 If a later match calls one of these functions, or the completed pattern tree
-differs, its references rejoin the resolver. The cache retains matcher entries
-for bodies that stay inactive. `inactive_body_resolution_references_skipped`
-counts their omitted reference visits. This path runs only when the potential
+differs, its references rejoin the resolver. Other selected bodies replay their
+complete cached resolution after indexing, before expression expansion and
+variable-group materialization. This preserves valid body trees for later
+function-value queries and keeps lexical bindings available to validation and
+inference. `inactive_body_resolution_references_skipped` counts the early
+resolver visits bypassed by this replay. This path runs only when the potential
 skipped work is at least one twentieth of the program's references, so its
 selection work does not dominate small edits in larger programs. Pattern-tree
 keys combine active definition contributions independent of insertion order;

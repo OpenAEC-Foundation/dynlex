@@ -524,13 +524,6 @@ bool compileIncrementally(
 					   matcherTreeSignature(context) ==
 						   previous->at("all_function_projection").at("initial_matcher_tree").get_ref<const std::string &>();
 			};
-			context.retainInactiveBodyMatcherResults = [&](const std::vector<Section *> &sections) {
-				for (const Section *section : sections)
-					for (const Json &entry : *inactiveMatchEntries.at(section))
-						for (const char *field : {"key", "initial_key"})
-							if (entry.at(field).is_string())
-								matcherCache.retain(entry.at(field).get_ref<const std::string &>());
-			};
 			std::string initialMatcherTree;
 			MatcherPathSnapshots matcherPaths(directory, compilerIdentity);
 			InitialMatcherProjection initialMatcherProjection;

@@ -830,6 +830,7 @@ bool resolvePatterns(ParseContext &context) {
 			emitUnresolvedPatternDiagnostics();
 			return false;
 		}
+		replayInactiveBodies(context, deferredBodyReferences, skippedInactiveBodies);
 		if (context.prepareDeferredMatcherReplay && context.patternPrecedenceRevision == 0)
 			context.prepareDeferredMatcherReplay(deferredBodyReferences);
 		{
@@ -945,7 +946,6 @@ bool resolvePatterns(ParseContext &context) {
 	}
 
 	emitExplicitDefinitionParameterAmbiguityWarnings(context);
-	retainSkippedInactiveBodyResults(context, skippedInactiveBodies);
 	// All patterns resolved — expand expressions and resolve variable references
 	for (CodeLine *line : context.codeLines) {
 		if (line->expression)

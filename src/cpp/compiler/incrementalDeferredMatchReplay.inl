@@ -120,14 +120,14 @@ std::vector<ParseContext::RestoredBodyReference> restoreBodyResolutionUnits(
 	std::vector<ParseContext::RestoredBodyReference> result;
 	for (const BodyResolutionUnit &unit : units) {
 		auto decoded = matcherCache.restoreBodyResolution(unit.key);
-		if (!decoded || decoded->size() != unit.deferredIndices.size())
+		if (!decoded)
 			continue;
+		requireCompilerInvariant(decoded->size() == unit.references.size(), "cached body has mismatched reference count");
 		std::vector<ParseContext::RestoredBodyReference> staged;
-		for (size_t index = 0; index < decoded->size(); index++) {
-			auto &saved = decoded->at(index);
-			if (saved.referenceIndex != unit.deferredIndices[index])
-				break;
-			PatternReference *reference = unit.references.at(saved.referenceIndex);
+		for (size_t referenceIndex : unit.deferredIndices) {
+			auto &saved = decoded->at(referenceIndex);
+			requireCompilerInvariant(saved.referenceIndex == referenceIndex, "cached body reference order changed");
+			PatternReference *reference = unit.references.at(referenceIndex);
 			ParseContext::RestoredBodyReference restored{reference, {}, {}};
 			if (saved.variable) {
 				if (!saved.matchKey.empty()) {
@@ -148,7 +148,7 @@ std::vector<ParseContext::RestoredBodyReference> restoreBodyResolutionUnits(
 			}
 			staged.push_back(std::move(restored));
 		}
-		if (staged.size() != decoded->size())
+		if (staged.size() != unit.deferredIndices.size())
 			continue;
 		context.bodyResolutionUnitsReused++;
 		for (auto &reference : staged)

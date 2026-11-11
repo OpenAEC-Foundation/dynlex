@@ -76,7 +76,9 @@ std::vector<Section *> selectInactiveBodiesForResolutionReuse(
 			!priorInactive.at("inactive").contains(path) || !prior.at("bodies").contains(path) ||
 			!prior.at("function_declarations").contains(path) ||
 			sectionDeclaration(*section) != prior.at("function_declarations").at(path) ||
-			!prior.at("match_entries").contains(path) || diagnosticSources.contains(section->openingLine->sourceFile->uri))
+			!prior.at("match_entries").contains(path) ||
+			!prior.at("matcher_projection").at("body_units").contains(path) ||
+			diagnosticSources.contains(section->openingLine->sourceFile->uri))
 			continue;
 		const Json &entries = prior.at("match_entries").at(path);
 		possibleSkippedReferences += entries.size();
