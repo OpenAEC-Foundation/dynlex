@@ -1,3 +1,5 @@
+#include "patternDefinitionTreeType.inl"
+
 struct ClassificationWork {
 	size_t unitsReused = 0;
 	size_t parametersReused = 0;
@@ -8,15 +10,16 @@ struct ClassificationWork {
 	size_t dependencyUnitsReused = 0;
 	size_t edges = 0;
 	size_t candidateChecks = 0;
+	size_t unitsPotentiallyInvalidated = 0, unitsReactivated = 0, cascadesStopped = 0;
 	double milliseconds = 0;
 	double loadMilliseconds = 0, inputMilliseconds = 0, environmentMilliseconds = 0, scopeMilliseconds = 0;
 	double dependencyMilliseconds = 0, restoreMilliseconds = 0, saveMilliseconds = 0;
 };
 
 class IncrementalClassification {
-	enum Field { Path, Input, Queries, Provides, Outputs, Edges, HasCandidates, Environment };
+	enum Field { Path, Input, Queries, Provides, Outputs, Edges, HasCandidates, Environment, Export };
 	struct Unit {
-		std::string path, input, queries, provides, outputs;
+		std::string path, input, queries, provides, outputs, exportKey;
 		Section *section;
 		const Json *old = nullptr;
 		bool hasCandidates = false;
@@ -52,24 +55,10 @@ class IncrementalClassification {
 		if (!prior || context.options.emitDebugInfo || context.options.traceExecution)
 			return result;
 		auto restoreStarted = Clock::now();
-		const Json &projection = previous->at("all_function_projection");
-		const Json &matcher = projection.at("matcher_projection");
-		std::set<std::string> diagnostics = previous->at("diagnostic_sources").get<std::set<std::string>>();
-		for (Unit &unit : units) {
+		for (size_t index = 0; index < units.size(); index++) {
+			Unit &unit = units[index];
 			Section &section = *unit.section;
-			if (unit.environment || dirty.contains(unit.path) || !unit.old || section.parent != context.mainSection ||
-				!reusableResolutionSection(section) || unit.references.empty() ||
-				diagnostics.contains(resolutionSourceFile(section).uri) || !sameBody(unit.path) ||
-				!matcher.at("body_units").contains(unit.path))
-				continue;
-			auto references = savedReferenceKeys(projection, cache, unit.path);
-			if (!references || references->size() != unit.references.size())
-				continue;
-			bool available = cache.contains(matcher.at("body_units").at(unit.path).get_ref<const std::string &>());
-			for (const auto &reference : *references)
-				for (std::string_view key : {reference.initialKey, reference.finalKey})
-					available &= key.empty() || cache.contains(key);
-			if (!available)
+			if (!eligible[index] || evaluate[index])
 				continue;
 			const Json &outputs = data(unit.old->at(Outputs).get_ref<const std::string &>());
 			std::map<std::string, Range> bindings;
@@ -89,6 +78,7 @@ class IncrementalClassification {
 					section.resolvePatternParameterBinding(context, name, use), "cached parameter has no binding"
 				);
 			unit.selected = true;
+			validationNeeded |= dirty.contains(unit.path);
 			unit.outputs = unit.old->at(Outputs).get<std::string>();
 			work.unitsReused++;
 			work.parametersReused += outputs.size();
@@ -98,13 +88,17 @@ class IncrementalClassification {
 		return result;
 	}
 
+	std::vector<Section *> invalidated();
+
 	void recordOutputs() {
 		Timer timer{work, &work.saveMilliseconds};
 		requireCompilerInvariant(prepared, "classification boundary precedes its inputs");
 		work.parametersRecorded = 0;
 		for (Unit &unit : units) {
+			unit.exportKey = exported(unit);
 			if (unit.selected) {
 				work.parametersRecorded += data(unit.outputs).size();
+				work.cascadesStopped += dirty.contains(unit.path);
 				continue;
 			}
 			Json outputs = Json::array();
@@ -144,12 +138,17 @@ class IncrementalClassification {
 			entries.push_back(
 				Json::array(
 					{unit.path, unit.input, unit.queries, unit.provides, unit.outputs, unit.edges, unit.hasCandidates,
-					 unit.environment}
+					 unit.environment, unit.exportKey}
 				)
 			);
 		}
 		return cache.recordClassificationData(
-			Json{{"units", std::move(entries)}, {"sources", std::move(sources)}, {"rules", std::move(rules)}}
+			Json{
+				{"units", std::move(entries)},
+				{"sources", std::move(sources)},
+				{"rules", std::move(rules)},
+				{"zero_width_functions", zeroWidthFunctions}
+			}
 		);
 	}
 
@@ -171,6 +170,9 @@ class IncrementalClassification {
 		const Json &before = previous->at("all_function_projection").at("matcher_projection").at("bodies");
 		return before.contains(path) && before.at(path) == counts.bodies().at(path);
 	}
+	bool canReuse(const Unit &unit);
+	std::string exported(const Unit &unit) const;
+	void preparePropagation(std::vector<std::vector<size_t>> reverse, const std::vector<bool> &inputsChanged);
 	static std::string encoded(std::string_view text) { return llvm::toHex(llvm::StringRef(text), true); }
 	std::string declarationInput(const Unit &unit) const {
 		const Section &section = *unit.section;
@@ -199,7 +201,7 @@ class IncrementalClassification {
 			.dump();
 	}
 	Json provided(const Unit &unit) const {
-		std::set<std::vector<std::string>> paths;
+		std::set<std::pair<std::vector<std::string>, size_t>> paths;
 		for (const PatternDefinition *definition : unit.section->patternDefinitions)
 			for (const auto &path : canonicalPatternPaths(definition->patternElements)) {
 				std::set<std::string> required;
@@ -215,41 +217,61 @@ class IncrementalClassification {
 							if (!std::isspace(static_cast<unsigned char>(element.text[index])))
 								required.insert(encoded(std::string_view(element.text).substr(index, 1)));
 				}
-				paths.emplace(required.begin(), required.end());
+				paths.emplace(std::vector<std::string>(required.begin(), required.end()), matcherTokenCount(path));
 			}
 		return paths;
 	}
 	Json queried(const Unit &unit) const {
 		std::unordered_set<std::string_view> literals;
 		std::set<std::string> result;
+		std::set<int> types;
+		size_t capacity = 0;
 		for (const PatternReference *reference : unit.references) {
+			size_t referenceCapacity = matcherTokenCount(reference->patternElements);
+			types.insert(static_cast<int>(reference->patternType));
 			addMatcherStartLiterals(reference->pattern.text, literals);
-			addMatcherStartLiterals(reference->range().line->fullText, literals);
 			if (reference->expression)
 				for (size_t index = 0; index < reference->expression->arguments.size(); index++)
 					if (auto spelling = numericPatternArgumentSpelling(reference, index)) {
+						size_t numericTokens = matcherTokenCount(getPatternElements(*spelling));
+						if (numericTokens > 1)
+							referenceCapacity += numericTokens - 1;
 						std::unordered_set<std::string_view> numeric;
 						addMatcherStartLiterals(*spelling, numeric);
 						for (std::string_view literal : numeric)
 							result.insert(encoded(literal));
 					}
+			capacity = std::max(capacity, referenceCapacity);
 		}
 		for (std::string_view literal : literals)
 			result.insert(encoded(literal));
-		return result;
+		return Json{
+			{"types", std::move(types)},
+			{"literals", std::move(result)},
+			{"capacity", capacity},
+			{"unbounded", zeroWidthFunctions}
+		};
 	}
 	bool couldReadQueries(const Json &queries, const Unit &reader, const Unit &target) {
 		if (reader.references.empty())
 			return false;
+		SectionType treeType = definitionPatternTreeType(target.section);
+		const Json &types = queries.at("types");
+		if (!std::binary_search(types.begin(), types.end(), Json(static_cast<int>(treeType))))
+			return false;
 		work.candidateChecks++;
 		const Json &paths = data(target.provides);
+		const Json &literals = queries.at("literals");
 		for (const Json &path : paths)
-			if (std::ranges::all_of(path, [&](const Json &literal) {
-				return std::binary_search(queries.begin(), queries.end(), literal);
+			if ((queries.at("unbounded").get<bool>() || path.at(1).get<size_t>() <= queries.at("capacity").get<size_t>()) &&
+				std::ranges::all_of(path.at(0), [&](const Json &literal) {
+				return std::binary_search(literals.begin(), literals.end(), literal);
 			})) {
 				if (!target.section->isLocal)
 					return true;
 				return std::ranges::any_of(reader.references, [&](const PatternReference *reference) {
+					if (reference->patternType != treeType)
+						return false;
 					return std::ranges::any_of(target.section->patternDefinitions, [&](const PatternDefinition *definition) {
 						return isPatternDefinitionVisibleFromSource(*definition, *reference->range().line->sourceFile);
 					});
@@ -277,8 +299,16 @@ class IncrementalClassification {
 	std::unordered_map<std::string, const Json *> oldUnits;
 	std::unordered_map<std::string, Json> known;
 	std::unordered_set<std::string> dirty;
+	std::vector<std::vector<size_t>> reverseEdges, components;
+	std::vector<size_t> componentOf;
+	std::vector<bool> eligible, evaluate;
+	std::vector<std::string> observedExports;
+	bool removedExportsObserved = false;
+	bool validationNeeded = false;
+	bool zeroWidthFunctions = false;
 	Json sources, rules;
 };
 
 #include "incrementalClassificationGraph.inl"
+#include "incrementalClassificationPropagation.inl"
 #include "incrementalClassificationScopes.inl"

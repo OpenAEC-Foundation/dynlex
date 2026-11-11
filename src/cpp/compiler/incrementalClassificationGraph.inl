@@ -3,6 +3,10 @@ void IncrementalClassification::prepare() {
 	auto stageStarted = Clock::now();
 	const auto &sections = counts.sections();
 	const Json &bodies = counts.bodies();
+	for (const auto &[_, section] : sections)
+		if (definitionPatternTreeType(section) == SectionType::Function)
+			for (const PatternDefinition *definition : section->patternDefinitions)
+				zeroWidthFunctions |= patternCanBeEmpty(definition->patternElements);
 	if (previous && compatibleObservations(*previous, observations, context)) {
 		const Json &projection = previous->at("all_function_projection").at("matcher_projection");
 		prior = cache.restoreClassificationData(projection.at("classifications").get_ref<const std::string &>());
@@ -55,11 +59,13 @@ void IncrementalClassification::prepare() {
 		collect(collect, section);
 		if (section->openingLine)
 			unit.lines.push_back(section->openingLine);
-		if (unit.old && unit.old->at(HasCandidates) == unit.hasCandidates && (!unit.hasCandidates || sameBody(path))) {
+		if (unit.old && prior->at("zero_width_functions") == zeroWidthFunctions &&
+			unit.old->at(HasCandidates) == unit.hasCandidates && (!unit.hasCandidates || sameBody(path))) {
 			unit.queries = unit.old->at(Queries).get<std::string>();
 			work.queryUnitsReused++;
 		} else {
-			unit.queries = save(unit.hasCandidates ? queried(unit) : Json::array());
+			unit.queries =
+				save(unit.hasCandidates ? queried(unit) : Json{{"types", Json::array()}, {"literals", Json::array()}});
 			work.queryUnitsBuilt++;
 		}
 		unit.provides =
@@ -114,6 +120,7 @@ void IncrementalClassification::prepare() {
 			invalidated[index] = true;
 			pending.push(index);
 		}
+	const std::vector<bool> inputsChanged = invalidated;
 	while (!pending.empty()) {
 		size_t changed = pending.top();
 		pending.pop();
@@ -126,8 +133,9 @@ void IncrementalClassification::prepare() {
 	for (size_t index = 0; index < units.size(); index++)
 		if (invalidated[index]) {
 			dirty.insert(units[index].path);
-			work.unitsInvalidated++;
+			work.unitsPotentiallyInvalidated++;
 		}
+	preparePropagation(std::move(reverse), inputsChanged);
 	work.dependencyMilliseconds += elapsedMilliseconds(stageStarted);
 	prepared = true;
 }
@@ -140,14 +148,15 @@ void IncrementalClassification::dependencies() {
 	for (const Unit &unit : units)
 		if (unit.hasCandidates && !unit.references.empty() && (!unit.old || unit.old->at(Queries) != unit.queries)) {
 			hasNewQueries = true;
-			for (const Json &literal : data(unit.queries))
+			for (const Json &literal : data(unit.queries).at("literals"))
 				frequencies[literal.get_ref<const std::string &>()]++;
 		}
 	std::unordered_map<std::string_view, std::vector<size_t>> targetsByLiteral;
 	std::vector<size_t> wildcardTargets;
 	if (hasNewQueries)
 		for (size_t target = 0; target < units.size(); target++)
-			for (const Json &path : data(units[target].provides)) {
+			for (const Json &signature : data(units[target].provides)) {
+				const Json &path = signature.at(0);
 				if (path.empty()) {
 					wildcardTargets.push_back(target);
 					continue;
@@ -194,7 +203,7 @@ void IncrementalClassification::dependencies() {
 			work.dependencyUnitsReused++;
 		} else if (!unit.references.empty()) {
 			std::vector<size_t> candidates = wildcardTargets;
-			for (const Json &literal : data(unit.queries))
+			for (const Json &literal : data(unit.queries).at("literals"))
 				if (auto found = targetsByLiteral.find(literal.get_ref<const std::string &>()); found != targetsByLiteral.end())
 					candidates.insert(candidates.end(), found->second.begin(), found->second.end());
 			std::sort(candidates.begin(), candidates.end());

@@ -102,6 +102,7 @@ struct ParseContext {
 	std::function<std::vector<RestoredBodyReference>()> restoreDeferredBodyUnits;
 	std::function<void(const std::vector<PatternReference *> &)> preparePrecedenceMatcherReplay;
 	std::function<std::vector<Section *>()> selectCachedBodiesForResolutionReuse;
+	std::function<std::vector<Section *>()> invalidateCachedClassifications;
 	size_t cachedBodyResolutionReferencesSkipped = 0;
 	std::function<bool(Section &)> reuseInitialVariableLikeCounts;
 	std::function<void(const std::list<Section *> &)> recordInitialVariableLikeCounts;

@@ -37,6 +37,46 @@ def check_recursive_classification_cascade(root, build):
     assert promoted_parameters() == expected
 
 
+def check_classification_cycle_exports(root, build):
+    main = root / "classification_cycle_exports.dl"
+    source = (
+        'flex function [alpha] value:\n'
+        '    replacement:\n'
+        '        @intrinsic("discard", value)\n'
+        '        beta value\n'
+        'flex function [beta] value:\n'
+        '    replacement:\n'
+        '        alpha value\n'
+        'to observer value: alpha value\n'
+        '[keep] item means: item\n'
+        '@intrinsic("discard", 0)\n'
+    )
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('"discard", value', '"discard", @intrinsic("add", value, 1)'))
+    stable_cycle = build(entry=main)
+    assert stable_cycle[0]["classification_parameters_reused"] >= 2, "unchanged cycle exports reclassified a reader"
+    assert stable_cycle[0]["classification_units_reactivated"] == 0
+    assert stable_cycle[1:] == build(False, entry=main)[1:]
+    main.write_text(source.replace('        @intrinsic("discard", value)\n', ''))
+    changed_cycle = build(entry=main)
+    assert changed_cycle[0]["classification_units_reactivated"] >= 1
+    assert changed_cycle[0]["classification_parameters_reused"] == 1
+    assert changed_cycle[1:] == build(False, entry=main)[1:]
+
+    main = root / "classification_deleted_provider.dl"
+    helper = root / "classification_deleted_helper.dl"
+    source = 'value means: 5\nto outer value: @intrinsic("discard", value)\n'
+    helper.write_text(source)
+    main.write_text('import classification_deleted_helper.dl\n'
+                    'to final value: outer value\n'
+                    '@intrinsic("discard", 0)\n')
+    build(entry=main)
+    helper.write_text(source.removeprefix('value means: 5\n'))
+    deleted = build(entry=main)
+    assert deleted[0]["classification_units_reactivated"] >= 1, "a deleted provider lost its cached readers"
+    assert deleted[1:] == build(False, entry=main)[1:]
+
 def check_incremental_classification(root, build):
     main = root / "independent_classification.dl"
     source = (
@@ -192,3 +232,88 @@ def check_incremental_classification(root, build):
     recovered = build(entry=main)
     assert recovered[2] == b"8\n"
     assert recovered[1:] == build(False, entry=main)[1:]
+    check_classification_propagation(root, build)
+
+
+def check_classification_propagation(root, build):
+    main = root / "classification_propagation.dl"
+    source = (
+        'to core value: @intrinsic("discard", value)\n'
+        'to outer value: core value\n'
+        'to final value: outer value\n'
+        '[neighbor] other means: @intrinsic("add", other, 1)\n'
+        '@intrinsic("discard", 0)\n'
+    )
+    main.write_text(source)
+    build(entry=main)
+    edited = source.replace('"discard", value', '"discard", @intrinsic("add", value, 1)')
+    main.write_text(edited)
+    stable = build(entry=main)
+    assert stable[0]["classification_parameters_reused"] >= 3, "an unchanged signature reclassified its callers"
+    assert stable[0]["classification_units_reactivated"] == 0
+    assert stable[1:] == build(False, entry=main)[1:]
+    before = read_program(root / "cache", main)["all_function_projection"]["function_declarations"]
+    main.write_text(source.replace('"discard", value', '"discard", 0'))
+    changed = build(entry=main)
+    assert changed[0]["classification_units_reactivated"] >= 2, "a changed signature retained cached callers"
+    assert changed[0]["classification_parameters_reused"] == 1
+    assert changed[0]["variable_like_count_references_scanned"] == 0, "a restarted unchanged caller rescanned its words"
+    assert changed[1:] == build(False, entry=main)[1:]
+    projection = read_program(root / "cache", main)["all_function_projection"]
+    after = projection["function_declarations"]
+    chain = {path for path, identity in projection["inactive"].items()
+             if any(word in identity["header"] for word in ("core", "outer", "final"))}
+    assert len(chain) == 3
+    assert all(before[path] != after[path] for path in chain), "a last-use removal did not cascade through every caller"
+    assert all(not element[4] for path in chain for definition in after[path]["definitions"]
+               for element in definition["elements"]), "a caller kept an implicit parameter after its last use vanished"
+    main.write_text(main.read_text() + 'final 7\n')
+    assert build(entry=main, success=False)[1:] == build(False, entry=main, success=False)[1:]
+    main.write_text(source)
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]
+    check_classification_cycle_exports(root, build)
+
+    main = root / "classification_matcher_tree.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              '[choose] item means: @intrinsic("add", item, 1)\n'
+              '@intrinsic("discard", choose 7)\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source + 'implicitly convert {integer:value}:\n    replacement:\n        value\n')
+    conversion = build(entry=main)
+    assert conversion[0]["classification_parameters_reused"] >= 1, "a conversion invalidated ordinary pattern lookups"
+    assert conversion[0]["classification_units_reactivated"] == 0
+    assert conversion[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text() + '[add] {payload} means: payload\n')
+    intrinsic_name = build(entry=main)
+    assert intrinsic_name[0]["classification_parameters_reused"] >= 1, "a quoted intrinsic name became a lookup dependency"
+    assert intrinsic_name[0]["classification_units_reactivated"] == 0
+    assert intrinsic_name[1:] == build(False, entry=main)[1:]
+
+    main = root / "classification_capture_capacity.dl"
+    source = ('function first second:\n'
+              '    execute:\n'
+              '        @intrinsic("discard", first)\n'
+              '        @intrinsic("discard", second)\n'
+              '[identity] value means: value\n'
+              '@intrinsic("discard", identity 7)\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('"discard", second', '"discard", @intrinsic("add", second, 1)'))
+    capacity = build(entry=main)
+    assert capacity[0]["classification_units_potentially_invalidated"] == 1, "two captures could match one input token"
+    assert capacity[1:] == build(False, entry=main)[1:]
+
+    main = root / "classification_zero_width.dl"
+    source = '[identity] value means: value\n@intrinsic("discard", identity 7)\n'
+    empty = 'function [optional|]:\n    replacement:\n        1\n'
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source + empty)
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]
+    main.write_text(source + empty + '@intrinsic("discard", 1)\n')
+    zero_width = build(entry=main)
+    assert zero_width[0]["classification_parameters_reused"] >= 1
+    assert zero_width[1:] == build(False, entry=main)[1:]
+    main.write_text(source)
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]

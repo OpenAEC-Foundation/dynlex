@@ -521,6 +521,9 @@ bool compileIncrementally(
 				statistics.cachedBodySelectionMilliseconds += elapsedMilliseconds(selectionStart);
 				return selected;
 			};
+			context.invalidateCachedClassifications = [&]() {
+				return classification.invalidated();
+			};
 			std::string initialMatcherTree;
 			MatcherPathSnapshots matcherPaths(directory, compilerIdentity);
 			InitialMatcherProjection initialMatcherProjection;

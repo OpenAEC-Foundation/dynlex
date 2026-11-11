@@ -22,7 +22,7 @@ void IncrementalClassification::prepareEnvironments() {
 		environment.hasCandidates = true;
 		if (auto old = oldUnits.find(environment.path); old != oldUnits.end())
 			environment.old = old->second;
-		Json inputs = Json::array({globalResolutionIdentity(*section)});
+		Json inputs = Json::array({globalResolutionIdentity(*section), zeroWidthFunctions});
 		if (!declaring.empty())
 			for (PatternReference *reference : section->patternReferences) {
 				Unit query;

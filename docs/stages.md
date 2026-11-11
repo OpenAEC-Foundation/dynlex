@@ -1036,13 +1036,24 @@ count this restoration, separately from references evaluated by the resolver.
 Declaration classification has its own persistent dependency graph. Its inputs
 include the parsed declaration, body text when implicit candidates remain, lexical
 ancestors, scope rules, and ambient declarations. Each reference contributes its
-possible literal spellings, including numeric arguments. A declaration contributes
+possible literal spellings from its normalized matcher input, including numeric arguments,
+and the matcher trees used by its references. Quoted intrinsic names and surrounding
+source text do not participate in those lookups. A declaration contributes
 canonical paths with words that could become parameters omitted from the required
 literals. These potential matches account for unsuccessful lookups and new patterns,
 independently of the functions selected during inference.
-Query edges honor the matcher's source visibility, including file-local patterns;
-units with no references do not perform lookups. A declaration-input change
+Query edges honor the matcher's source visibility, including file-local patterns.
+They also use the resolver's shared definition-to-tree mapping, so a conversion
+cannot invalidate an ordinary function lookup. Units with no references do not
+perform lookups. A declaration-input change
 rechecks potential edges even when its required literals stay the same.
+Potential paths also retain a lower bound on consumed matcher positions. Captures
+and words need one position; punctuation uses its non-space byte count because
+the matcher can split punctuation tokens. A query records an upper bound from its
+normalized elements and accepted numeric spellings. Paths above that bound cannot
+be dependencies. If any function spelling can consume no input, captures may use
+empty subexpressions, so the query has no finite bound. Adding or removing such a
+spelling refreshes the query metadata through the normal dependency graph.
 New query units find possible dependencies through an index of rare required
 literals instead of comparing every pair of units. Paths without required literals
 remain candidates for every nonempty reader. `classification_candidate_checks`
@@ -1056,6 +1067,22 @@ through a cycle invalidates every affected member before any cached parameter is
 installed, so old recursive signatures cannot sustain a removed parameter. A body
 edit cannot change the classification of a header with no live implicit candidates;
 that declaration's input therefore excludes the body.
+Classification distinguishes changed inputs from changed exported signatures.
+Strongly connected components use both the old and current edges, including deleted
+providers. A component with changed inputs resolves normally as a group. Unchanged
+downstream components may provisionally restore their saved headers and bodies.
+Before committing the definition boundary, the compiler compares resolved header
+and visible-name exports. An unchanged export stops the cascade. A changed export
+retracts the directly dependent cached components, removes their indexed headers
+and body-derived parameter bindings, restores their cached initial word counts,
+and resolves those bodies normally. Their
+exports then determine whether another step is needed. Visible-name environments
+settle their potentially changed provider closure before publishing names, so
+provisional headers cannot leave stale data declarations in a lexical scope.
+`classification_units_potentially_invalidated` counts reverse-reachable units;
+`classification_units_invalidated` counts units evaluated, and
+`classification_units_reactivated` counts cached units restarted by changed exports.
+`classification_cascades_stopped` counts retained units from the potential cascade.
 The topology, reference-literal sets, potential signatures, and promoted parameters
 are separate content-addressed CBOR records in the matcher store. Unchanged query
 and dependency units retain their records. Promotion locations use nonempty logical

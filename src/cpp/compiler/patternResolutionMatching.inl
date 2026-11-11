@@ -104,7 +104,12 @@ static std::vector<Section *> unresolveReference(
 	return affectedSections;
 }
 
-static bool cleanupStaleImplicitPromotionsInSection(ParseContext &context, Section *section) {
+static bool cleanupStaleImplicitPromotionsInSection(
+	ParseContext &context, Section *section,
+	const std::function<bool(const std::string &)> &acceptName = [](const std::string &) {
+		return true;
+	}
+) {
 	bool changed = false;
 	std::vector<std::pair<std::string, VariableReference *>> ownedDefinitions;
 	ownedDefinitions.reserve(section->variableDefinitions.size());
@@ -112,6 +117,8 @@ static bool cleanupStaleImplicitPromotionsInSection(ParseContext &context, Secti
 		ownedDefinitions.emplace_back(name, definitionReference);
 
 	for (const auto &[name, definitionReference] : ownedDefinitions) {
+		if (!acceptName(name))
+			continue;
 		if (sectionSubtreeHasBoundReferenceToDefinition(section, name, definitionReference))
 			continue;
 
@@ -388,6 +395,7 @@ static bool resolveReferences(
 
 #include "patternPrecedenceMatching.inl"
 #include "patternResolutionCachedBodies.inl"
+#include "patternResolutionClassificationInvalidation.inl"
 
 // step 3: loop over code, resolve patterns and build up a pattern tree until all patterns are resolved
 bool resolvePatterns(ParseContext &context) {
@@ -730,6 +738,13 @@ bool resolvePatterns(ParseContext &context) {
 			}
 
 			if (unResolvedSections.empty() && bodyReferences.empty() && !failedBodyWorklist.hasWaiting()) {
+				if (reactivateCachedClassifications(
+						context, skippedCachedBodies, bodyReferences, unResolvedSections, definitionToReferences,
+						queueReferenceForRematch
+					)) {
+					appendRequeuedReferences();
+					continue;
+				}
 				break;
 			}
 
