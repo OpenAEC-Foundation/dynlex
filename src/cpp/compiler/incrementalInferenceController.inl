@@ -52,11 +52,13 @@ class IncrementalInferenceController {
 			return inferenceReuse->reuse(section, key, instantiation, allowPureValueSummary);
 		};
 		std::set<const Section *> capturedSections;
-		for (const auto &[unit, request] : collectRequests(classes)) {
+		for (auto &[unit, request] : collectRequests(*eligible)) {
 			if (check.unchanged(unit)) {
 				eligible->insert(request.section, unit.second);
 				continue;
 			}
+			if (!restoreArguments(unit, request, classes))
+				continue;
 			if (!infer(request))
 				continue;
 			statistics.preinferredInstantiations++;
@@ -100,7 +102,20 @@ class IncrementalInferenceController {
 
   private:
 	using Request = ParseContext::IncrementalFunctionRequest;
-	std::vector<std::pair<InferenceUnitKey, Request>> collectRequests(const ClassIdentityPaths &classes) {
+	bool restoreArguments(const InferenceUnitKey &unit, Request &request, const ClassIdentityPaths &classes) {
+		statistics.preinferArgumentVariantsDecoded++;
+		const Json &arguments = previous.at("inference_summaries").at(unit.first).at(unit.second).at("argument_types");
+		for (const Json &encoded : arguments) {
+			auto type = decodeInferenceTypeIdentity(encoded, classes);
+			if (!type)
+				return false;
+			request.argumentTypes.push_back(std::move(*type));
+		}
+		InstantiationKey instance{request.argumentTypes, {}};
+		return request.argumentTypes.size() == request.parameterNames.size() &&
+			   inferenceSummaryKey(instance, classes) == unit.second;
+	}
+	std::vector<std::pair<InferenceUnitKey, Request>> collectRequests(const IncrementalUnitSelection &eligible) {
 		std::map<std::string, std::set<std::string>> generated;
 		for (const auto &[name, owner] : previous.at("function_sections").items())
 			if (!previous.at("callable_functions").contains(name))
@@ -125,19 +140,10 @@ class IncrementalInferenceController {
 			if (pack)
 				continue;
 			for (const auto &[key, summary] : summaries.at(path).items()) {
-				if (!generated[path].contains(key) || summary.at("needs_global_types").get<bool>())
+				if (!generated[path].contains(key) || summary.at("needs_global_types").get<bool>() ||
+					eligible.contains(section, key))
 					continue;
-				Request request{const_cast<Section *>(section), names, {}};
-				for (const Json &encoded : summary.at("argument_types")) {
-					auto type = decodeInferenceTypeIdentity(encoded, classes);
-					if (!type)
-						break;
-					request.argumentTypes.push_back(std::move(*type));
-				}
-				InstantiationKey instance{request.argumentTypes, {}};
-				if (request.argumentTypes.size() == summary.at("argument_types").size() &&
-					request.argumentTypes.size() == names.size() && inferenceSummaryKey(instance, classes) == key)
-					candidates.emplace(InferenceUnitKey{path, key}, std::move(request));
+				candidates.emplace(InferenceUnitKey{path, key}, Request{const_cast<Section *>(section), names, {}});
 			}
 		}
 		std::vector<std::pair<InferenceUnitKey, Request>> ordered;

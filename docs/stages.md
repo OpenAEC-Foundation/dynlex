@@ -1291,6 +1291,10 @@ summaries and generated IR independently. The same encoder produces
 the final persistent summaries. `preinfer_summary_sections_captured` and
 `preinfer_summary_instantiations_captured` count this comparison work separately
 from successful preinference requests.
+Preinference restores a saved variant's argument types only after its dependency
+unit requires reevaluation. A stable callee interface can therefore preserve a
+caller before decoding its arguments. `preinfer_argument_variants_decoded` counts
+these restoration attempts.
 Inference-summary payloads store structural type nodes in a shared table.
 Argument and return types refer to those records by number, including nested
 class layouts, array elements, and callback signatures. Loading restores the

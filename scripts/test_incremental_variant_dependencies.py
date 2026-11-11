@@ -42,6 +42,8 @@ def check_variant_dependency_cascade(root, build):
         assert edited[2] == b"1.5\n10\n"
         assert edited[0]["preinferred_instantiations"] == 2 + int(indirect), \
             "the unaffected decimal caller variant was pre-inferred"
+        assert edited[0]["preinfer_argument_variants_decoded"] == 2 + int(indirect), \
+            "preinference decoded arguments of unaffected variants"
         assert edited[0]["native_functions_lowered"] == 3 + int(indirect), \
             "the unaffected decimal caller variant was lowered again"
         assert edited[0]["functions_ir_reused"] >= 2 + int(indirect)
@@ -51,6 +53,8 @@ def check_variant_dependency_cascade(root, build):
         assert stable[2] == b"2.5\n10\n"
         assert stable[0]["root_execution_reused"], "an unchanged variant interface did not stop the cascade"
         assert stable[0]["preinferred_instantiations"] == 1
+        assert stable[0]["preinfer_argument_variants_decoded"] == 1, \
+            "preinference decoded caller arguments after a stable interface stopped propagation"
         assert stable[0]["native_functions_lowered"] == 1
         assert stable[1:] == build(False, entry=main)[1:]
 
