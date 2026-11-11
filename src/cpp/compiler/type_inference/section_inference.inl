@@ -546,6 +546,15 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 	RuntimeLifecycleUses uses;
 	uses.collectSection(parseContext.mainSection);
 	uses.collectExposedFunctions(parseContext.mainSection);
+	for (const auto &request : parseContext.incrementalReplacementFunctions) {
+		InstantiationKey key{.argumentTypes = request.argumentTypes, .compileTimeParameters = {}};
+		auto instantiation = request.section->instantiations.find(key);
+		requireCompilerInvariant(
+			instantiation != request.section->instantiations.end() && instantiation->second.valid,
+			"incremental replacement lost its inferred lifecycle root"
+		);
+		uses.collectInstantiation(instantiation->second);
+	}
 	for (size_t index = 0; index < uses.customTypes.size(); index++) {
 		DataType classType = uses.customTypes[index];
 		ClassDefinition &definition = *classType.classDefinition;

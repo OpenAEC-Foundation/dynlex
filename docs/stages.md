@@ -1138,6 +1138,8 @@ layouts that constraint reuse did not restore can be installed after the entry's
 dependencies validate, provided current class declarations and committed layouts
 agree. Imported entry IR also supplies globals that exposed functions reference.
 The `root_execution_reused` counter records when the entry was imported.
+Lifecycle discovery also follows each preinferred function whose body will be
+generated. These bodies can require managed cleanup when the entry IR is reused.
 
 The graph follows instantiated replacement bodies, caller bodies, static loop
 iterations, and data expressions, including compile-time-only callable queries.
