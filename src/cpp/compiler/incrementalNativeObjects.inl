@@ -58,6 +58,8 @@ struct BuildStatistics {
 	size_t inactiveProjectionMatchesRechecked = 0;
 	size_t reusedDiagnosticRecords = 0;
 	size_t matcherCacheHits = 0;
+	size_t matcherKeyComputations = 0;
+	size_t matcherSignatureLookups = 0;
 	size_t deferredMatchKeysReplayed = 0;
 	size_t precedenceMatchKeysReplayed = 0;
 	size_t precedenceMatcherCacheHits = 0;

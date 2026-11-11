@@ -163,6 +163,10 @@ Incremental matcher keys reuse each parsed reference's candidate literal spellin
 Each indexed definition contributes to a tree of its required literal words. A reference fingerprints only
 the signatures whose words occur in its matcher input, including wildcard-start patterns. A new overload
 therefore invalidates a cached result when it could match that input, even if the previous result was a failure.
+Required-literal paths and query literals are sorted and unique, so candidate-signature traversal probes
+only literals after the current path's last literal. Each matcher request computes its input fingerprint
+once and carries it through result recording. `matcher_key_computations` and `matcher_signature_lookups`
+report fingerprint work separately from matcher executions.
 Lexical scope is fingerprinted again for every lookup, so a new declaration can invalidate the previous match.
 Resolved declaration snapshots are reused after a function-body edit when the source outside function bodies is
 unchanged and each edited body retains its resolved declaration. Scope-rule bodies and nested definitions exclude

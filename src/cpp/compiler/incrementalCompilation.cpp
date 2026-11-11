@@ -787,6 +787,8 @@ bool compileIncrementally(
 			statistics.precedenceMatchKeysReplayed = matcherCache.precedenceKeyReplays();
 			statistics.precedenceMatcherCacheHits = matcherCache.precedenceHits();
 			statistics.matcherKeyMilliseconds = matcherCache.keyTimeMilliseconds();
+			statistics.matcherKeyComputations = matcherCache.keyComputations();
+			statistics.matcherSignatureLookups = matcherCache.signatureLookups();
 			statistics.matcherRestoreMilliseconds = matcherCache.restoreTimeMilliseconds();
 			context.reuseMatcherResult = {};
 			context.recordMatcherResult = {};

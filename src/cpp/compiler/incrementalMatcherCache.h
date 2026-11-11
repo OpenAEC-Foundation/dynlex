@@ -15,7 +15,7 @@ struct ParseContext;
 struct PatternReference;
 struct PatternTreeNode;
 // Caches pointer-free matcher results across native compiler invocations.
-// The key includes the trie mutation history, because a newly added overload can
+// The key includes active candidate signatures, because a newly added overload can
 // change a match even when the call never used that overload before.
 class IncrementalMatcherCache {
   public:
@@ -43,6 +43,8 @@ class IncrementalMatcherCache {
 	void reusePrecedenceSignature(std::string_view signature);
 	double keyTimeMilliseconds() const { return keyMilliseconds; }
 	double restoreTimeMilliseconds() const { return restoreMilliseconds; }
+	size_t keyComputations() const { return keyComputationCount; }
+	size_t signatureLookups() const { return signatureLookupCount; }
 
   private:
 	ParseContext &context;
@@ -56,6 +58,8 @@ class IncrementalMatcherCache {
 	size_t prevalidatedPrecedenceCount = 0;
 	double keyMilliseconds = 0;
 	double restoreMilliseconds = 0;
+	size_t keyComputationCount = 0;
+	size_t signatureLookupCount = 0;
 
 	bool available(MatchOptions options);
 	std::string key(PatternReference &reference, bool trackDependencies);

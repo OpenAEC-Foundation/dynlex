@@ -114,6 +114,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"projection_ambient_ms", statistics.sourceProjectionWork.ambientMilliseconds},
 					  {"projection_compatibility_ms", statistics.sourceProjectionWork.compatibilityMilliseconds},
 					  {"matcher_key_ms", statistics.matcherKeyMilliseconds},
+					  {"matcher_key_computations", statistics.matcherKeyComputations},
+					  {"matcher_signature_lookups", statistics.matcherSignatureLookups},
 					  {"matcher_restore_ms", statistics.matcherRestoreMilliseconds},
 					  {"precedence_tree_signature_ms", statistics.precedenceTreeSignatureMilliseconds},
 					  {"precedence_signature_ms", statistics.precedenceSignatureMilliseconds},

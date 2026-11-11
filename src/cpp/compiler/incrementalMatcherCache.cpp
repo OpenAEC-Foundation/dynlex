@@ -278,6 +278,7 @@ bool IncrementalMatcherCache::available(MatchOptions options) {
 
 std::string IncrementalMatcherCache::key(PatternReference &reference, bool trackDependencies) {
 	auto started = std::chrono::steady_clock::now();
+	keyComputationCount++;
 	const Range &range = reference.range();
 	requireCompilerInvariant(range.line && range.line->sourceFile, "incremental matcher reference has no source");
 	if (!reference.matcherKeyLiterals) {
@@ -335,23 +336,27 @@ std::string IncrementalMatcherCache::key(PatternReference &reference, bool track
 	auto appendTreeState = [&](const PatternTreeNode *root) {
 		Fingerprint treeFingerprint;
 		std::vector<std::string_view> path;
-		auto visit = [&](auto &&self, const PatternTreeSignatureNode &node) -> void {
+		auto visit = [&](auto &&self, const PatternTreeSignatureNode &node, size_t firstLiteral) -> void {
 			if (!node.digest.empty()) {
 				treeFingerprint.number(path.size());
 				for (std::string_view literal : path)
 					treeFingerprint.string(literal);
 				treeFingerprint.string(node.digest);
 			}
-			for (const std::string &literal : literals.possibleStartLiterals) {
+			// Required literal paths and query literals are sorted and unique.
+			// Descendants can therefore contain only later query literals.
+			signatureLookupCount += literals.possibleStartLiterals.size() - firstLiteral;
+			for (size_t index = firstLiteral; index < literals.possibleStartLiterals.size(); index++) {
+				const std::string &literal = literals.possibleStartLiterals[index];
 				auto found = node.children.find(literal);
 				if (found == node.children.end())
 					continue;
 				path.push_back(literal);
-				self(self, *found->second);
+				self(self, *found->second, index + 1);
 				path.pop_back();
 			}
 		};
-		visit(visit, root->mutationState->signatures);
+		visit(visit, root->mutationState->signatures, 0);
 		fingerprint.string(treeFingerprint.finish());
 	};
 	const PatternTreeNode *root = context.patternTrees[static_cast<size_t>(reference.patternType)];
@@ -598,7 +603,9 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 		prevalidated = false;
 	}
 	if (entry == previousEntries.end()) {
-		reference->incrementalMatcherKey.clear();
+		// Matching reads this input state. Recording its result consumes the
+		// same fingerprint before the caller commits discovered bindings.
+		reference->incrementalMatcherKey = std::move(cacheKey);
 		return std::nullopt;
 	}
 	std::string_view value = entry->second;
@@ -648,7 +655,7 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 	} catch (const MissingCachedMatcherNode &) {
 		// The cache key covers active definitions; a transient trie path is not
 		// part of that identity. Match again to capture dependencies on this tree.
-		reference->incrementalMatcherKey.clear();
+		reference->incrementalMatcherKey = std::move(cacheKey);
 		if (dependencies)
 			dependencies->clear();
 		return std::nullopt;
@@ -662,19 +669,19 @@ void IncrementalMatcherCache::record(
 		reference->incrementalMatcherKey.clear();
 		return;
 	}
+	requireCompilerInvariant(!reference->incrementalMatcherKey.empty(), "recorded matcher result has no input fingerprint");
 	if (match) {
 		std::string packed(1, '\1');
 		if (appendMatch(packed, *reference, *match)) {
-			std::string cacheKey = key(*reference, dependencies != nullptr);
-			reference->incrementalMatcherKey = cacheKey;
-			recorded[std::move(cacheKey)] = std::move(packed);
+			recorded[reference->incrementalMatcherKey] = std::move(packed);
 		} else
 			reference->incrementalMatcherKey.clear();
 		return;
 	}
-	reference->incrementalMatcherKey.clear();
-	if (!dependencies)
+	if (!dependencies) {
+		reference->incrementalMatcherKey.clear();
 		return;
+	}
 	std::string packed(1, '\0');
 	appendLength(packed, dependencies->size());
 	for (const MatchDependency &dependency : *dependencies) {
@@ -682,7 +689,5 @@ void IncrementalMatcherCache::record(
 		appendNode(packed, dependency.node);
 		appendString(packed, dependency.literal);
 	}
-	std::string cacheKey = key(*reference, true);
-	reference->incrementalMatcherKey = cacheKey;
-	recorded[std::move(cacheKey)] = std::move(packed);
+	recorded[reference->incrementalMatcherKey] = std::move(packed);
 }
