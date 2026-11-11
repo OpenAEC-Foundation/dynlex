@@ -274,9 +274,28 @@ static CompileTimeValue executePureInstantiationReturnValue(
 	);
 	state.recordValueRead(*section, instantiation.body->storageScope);
 	std::vector<CompileTimeValue> argumentValueKey = compileTimeArgumentValueVector(argumentValues);
+	std::optional<InferenceReadOwner> valueOwner;
+	if (!state.valueReadOwners.empty())
+		valueOwner = state.valueReadOwners.back();
+	auto observe = [&](const CompileTimeValue &value) {
+		if (const auto &record = state.parseContext.recordInferenceValue) {
+			auto emit = [&](const InferenceReadOwner &owner) {
+				record(owner, *section, instantiation.body->storageScope, argumentValueKey, value);
+			};
+			if (valueOwner)
+				emit(*valueOwner);
+			else
+				state.inferenceContext.recordDependencyRead(emit);
+		}
+	};
+	// An evaluation that cannot produce a portable result still consumes the
+	// body. Keep that dependency even if execution stops before returning.
+	observe({});
 	auto cachedIt = instantiation.pureReturnValuesByArguments.find(argumentValueKey);
-	if (cachedIt != instantiation.pureReturnValuesByArguments.end())
+	if (cachedIt != instantiation.pureReturnValuesByArguments.end()) {
+		observe(cachedIt->second);
 		return cachedIt->second;
+	}
 	if (!ensurePureExecutionBody(state, section, instantiation, argumentValues))
 		return {};
 	PureExecutionFrame frame;
@@ -307,6 +326,7 @@ static CompileTimeValue executePureInstantiationReturnValue(
 		return {};
 	if (state.inferenceContext.trial && state.inferenceContext.trialJournal)
 		state.inferenceContext.trialJournal->recordInstantiationWrite(&instantiation);
+	observe(executionResult.value);
 	instantiation.pureReturnValuesByArguments.emplace(std::move(argumentValueKey), executionResult.value);
 	return executionResult.value;
 }

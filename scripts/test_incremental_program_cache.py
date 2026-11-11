@@ -99,6 +99,8 @@ def decode_graph(encoded):
                 "sources": {paths[unit_sources[index][0]]: unit_sources[index][1] for index in unit[1]},
                 "callees": [[paths[index], unit_keys[variant]] for index, variant in unit[2]],
                 "lookups": unit[3],
+                "values": [[paths[index], unit_keys[variant], arguments, result]
+                           for index, variant, arguments, result in unit[4]],
             } for unit in variants}
             for path, variants in zip(paths, encoded["inference_units"])
         },

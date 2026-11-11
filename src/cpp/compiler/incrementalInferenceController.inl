@@ -23,6 +23,7 @@ class IncrementalInferenceController {
 		ClassIdentityPaths classes = classIdentityPaths(paths);
 		auto eligible = std::make_shared<IncrementalUnitSelection>();
 		auto replacements = std::make_shared<IncrementalUnitSelection>();
+		std::map<InferenceUnitKey, Json> verifiedValues;
 		std::set<InferenceUnitKey> unavailableValues;
 		for (const auto &[path, variants] : previous.at("inference_summaries").items())
 			for (const auto &[key, reference] : variants.items())
@@ -31,7 +32,7 @@ class IncrementalInferenceController {
 					unavailableValues.emplace(path, key);
 		InferenceUnitCheck check(
 			context, projection, paths, previous.at("section_dependency_graph"), reads, *replacements, statistics, fingerprints,
-			unavailableValues
+			unavailableValues, verifiedValues
 		);
 		std::map<std::string, const Section *> sections;
 		for (const auto &[section, path] : paths)
@@ -91,9 +92,14 @@ class IncrementalInferenceController {
 				&unit.second
 			);
 			capturedSections.insert(request.section);
-			if (current.contains(unit.second) && priorSummary->at("pure_values_complete").get<bool>() &&
-				current.at(unit.second) == *priorSummary) {
+			if (current.contains(unit.second) && sameInterface(current.at(unit.second), *priorSummary)) {
 				replacements->insert(request.section, unit.second);
+				Json values = Json::object();
+				for (const Json &observation : current.at(unit.second).at("pure_values")) {
+					Json identity = inferenceValueFingerprints(observation.at(0), observation.at(1));
+					values[identity.at(0).get<std::string>()] = std::move(identity.at(1));
+				}
+				verifiedValues[unit] = std::move(values);
 				if (native.contains(unit))
 					context.incrementalReplacementFunctions.push_back(request);
 			}
@@ -125,6 +131,12 @@ class IncrementalInferenceController {
 
   private:
 	using Request = ParseContext::IncrementalFunctionRequest;
+	static bool sameInterface(const Json &current, const Json &prior) {
+		return std::ranges::all_of(current.items(), [&](const auto &entry) {
+			return entry.key() == "pure_values" || entry.key() == "pure_values_complete" ||
+				   prior.at(entry.key()) == entry.value();
+		});
+	}
 	const Json *restoreArguments(const InferenceUnitKey &unit, Request &request, const ClassIdentityPaths &classes) {
 		statistics.preinferArgumentVariantsDecoded++;
 		const Json *saved = summaryStore.load(previous.at("inference_summaries").at(unit.first).at(unit.second));
@@ -138,17 +150,15 @@ class IncrementalInferenceController {
 		request.key = std::move(*key);
 		request.requiredCompileTimeParameters =
 			summary.at("parameters").at("required_compile_time").get<std::unordered_set<std::string>>();
-		if (summary.at("pure_values_complete").get<bool>()) {
-			for (const Json &observation : summary.at("pure_values")) {
-				std::vector<CompileTimeValue> values;
-				for (const Json &encoded : observation.at(0)) {
-					auto value = decodeInferenceValue(encoded, classes);
-					if (!value)
-						return nullptr;
-					values.push_back(std::move(*value));
-				}
-				request.observedArguments.push_back(std::move(values));
+		for (const Json &observation : summary.at("pure_values")) {
+			std::vector<CompileTimeValue> values;
+			for (const Json &encoded : observation.at(0)) {
+				auto value = decodeInferenceValue(encoded, classes);
+				if (!value)
+					return nullptr;
+				values.push_back(std::move(*value));
 			}
+			request.observedArguments.push_back(std::move(values));
 		}
 		return saved;
 	}

@@ -61,6 +61,13 @@ bool ensureCallableFunctionGenerated(
 	applyNativeScalarABI(
 		*callableFunction, context.llvmModule->getTargetTriple(), instantiationPointer->returnType, argumentTypes
 	);
+	if (context.recordGeneratedFunction)
+		context.recordGeneratedFunction(section, InstantiationKey{argumentTypes, {}}, callableFunction, true);
+	if (context.reuseGeneratedFunction && context.reuseGeneratedFunction(section, *instantiationPointer, callableFunction)) {
+		callableFunction->setLinkage(llvm::GlobalValue::ExternalLinkage);
+		generatedFunction = callableFunction;
+		return true;
+	}
 
 	size_t argumentIndex = 0;
 	for (llvm::Argument &argument : callableFunction->args())
@@ -128,8 +135,6 @@ bool ensureCallableFunctionGenerated(
 
 	if (!succeeded)
 		return false;
-	if (context.recordGeneratedFunction)
-		context.recordGeneratedFunction(section, InstantiationKey{argumentTypes, {}}, callableFunction, true);
 	generatedFunction = callableFunction;
 	return true;
 }

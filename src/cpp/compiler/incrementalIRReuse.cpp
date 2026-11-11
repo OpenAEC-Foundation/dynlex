@@ -156,7 +156,10 @@ bool IncrementalIRReuse::reuse(
 	if (sectionPath == sectionPaths.end() || previousFunctions.at(name) != sectionPath->second)
 		return false;
 	const auto &currentKey = currentFunctionInstantiations.at(name);
-	if (!eligible->contains(section, currentKey.get<std::string>()) || previousFunctionInstantiations.at(name) != currentKey)
+	bool stableWrapper =
+		previousCallableFunctions.contains(name) && replacements->contains(section, currentKey.get<std::string>());
+	if ((!eligible->contains(section, currentKey.get<std::string>()) && !stableWrapper) ||
+		previousFunctionInstantiations.at(name) != currentKey)
 		return false;
 	llvm::Function *old = previousModule->getFunction(name);
 	if (!old || old->isDeclaration() || old->getFunctionType() != function->getFunctionType())

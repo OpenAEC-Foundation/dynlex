@@ -1,6 +1,10 @@
 using InferenceUnitKey = std::pair<std::string, std::string>;
 
-Json emptyInferenceUnit() { return Json{{"sources", Json::object()}, {"callees", Json::array()}, {"lookups", Json::object()}}; }
+Json emptyInferenceUnit() {
+	return Json{
+		{"sources", Json::object()}, {"callees", Json::array()}, {"lookups", Json::object()}, {"values", Json::array()}
+	};
+}
 
 class InferenceUnitGraphCapture {
   public:
@@ -10,15 +14,14 @@ class InferenceUnitGraphCapture {
 		const std::map<std::string, std::set<std::string>> &lookupOwners, BuildStatistics &statistics,
 		std::map<std::string, std::string> &fingerprints
 	)
-		: context(context), paths(paths), reads(reads), graph(graph), priorUnits(priorUnits),
-		  inputs(context, projection, paths, statistics, fingerprints), statistics(statistics) {
+		: context(context), paths(paths), classes(classIdentityPaths(paths)), reads(reads), graph(graph),
+		  priorUnits(priorUnits), inputs(context, projection, paths, statistics, fingerprints), statistics(statistics) {
 		for (const auto &[key, owners] : lookupOwners)
 			for (const std::string &owner : owners)
 				lookupsByOwner[owner].insert(key);
 	}
 
 	Json capture(const Json &summaries, const Json &functionSections, const Json &functionKeys) {
-		ClassIdentityPaths classes = classIdentityPaths(paths);
 		for (const auto &[section, path] : paths) {
 			units[path] = Json::object();
 			for (const auto &[key, instantiation] : section->instantiations) {
@@ -65,6 +68,8 @@ class InferenceUnitGraphCapture {
 				for (const Json &callee : unit.at("callees"))
 					unique.emplace(callee.at(0).get<std::string>(), callee.at(1).get<std::string>());
 				unit["callees"] = unique;
+				std::set<Json> values(unit.at("values").begin(), unit.at("values").end());
+				unit["values"] = values;
 			}
 		return std::move(units);
 	}
@@ -105,6 +110,31 @@ class InferenceUnitGraphCapture {
 				else
 					pending.push(callee); // Discarded trials still contribute the inputs they read.
 			}
+			for (const auto &[callee, queries] : found->second.values) {
+				auto target = mappedScopes.find(callee);
+				if (target == mappedScopes.end()) {
+					pending.push(callee);
+					continue;
+				}
+				for (const auto &[arguments, value] : queries) {
+					Json encodedArguments = Json::array();
+					for (const CompileTimeValue &argument : arguments) {
+						auto encoded = encodeInferenceValue(argument, classes);
+						if (!encoded)
+							break;
+						encodedArguments.push_back(std::move(*encoded));
+					}
+					auto result = encodeInferenceValue(value, classes);
+					bool portable = result && encodedArguments.size() == arguments.size();
+					Json identity =
+						portable ? inferenceValueFingerprints(encodedArguments, *result) : Json::array({nullptr, nullptr});
+					unit["values"].push_back(
+						Json::array(
+							{target->second.first, target->second.second, std::move(identity.at(0)), std::move(identity.at(1))}
+						)
+					);
+				}
+			}
 		}
 	}
 	void retain(const std::string &path, const std::string &key) {
@@ -135,6 +165,7 @@ class InferenceUnitGraphCapture {
 	}
 	const ParseContext &context;
 	const std::map<const Section *, std::string> &paths;
+	ClassIdentityPaths classes;
 	const IncrementalInferenceReads &reads;
 	const Json &graph;
 	Json *priorUnits;

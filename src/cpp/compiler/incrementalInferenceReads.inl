@@ -2,11 +2,13 @@ class IncrementalInferenceReads {
   public:
 	using Keys = std::set<std::string>;
 	using Scope = std::shared_ptr<const VariableStorageScope>;
+	using ValueQueries = std::map<std::vector<CompileTimeValue>, CompileTimeValue>;
 	struct ScopeNode {
 		const Section *section;
 		Keys sources;
 		std::set<Scope, std::owner_less<Scope>> callees;
 		Keys lookups;
+		std::map<Scope, ValueQueries, std::owner_less<Scope>> values;
 	};
 	using ScopeNodes = std::map<Scope, ScopeNode, std::owner_less<Scope>>;
 
@@ -56,6 +58,14 @@ class IncrementalInferenceReads {
 			probeDependencies[*owner.constraintProbe].insert(path);
 	}
 	const ScopeNodes &scopes() const { return scopeNodes; }
+	void recordValue(
+		const InferenceReadOwner &owner, const Section &dependency, const Scope &calleeScope,
+		const std::vector<CompileTimeValue> &arguments, const CompileTimeValue &value
+	) {
+		ensureScope(calleeScope, &dependency);
+		if (owner.section && owner.direct)
+			ensureScope(owner.scope, owner.section).values[calleeScope][arguments] = value;
+	}
 
 	void validate(ParseContext &context, const Json &prior) {
 		if (prior.empty())
@@ -128,7 +138,7 @@ class IncrementalInferenceReads {
   private:
 	ScopeNode &ensureScope(const Scope &scope, const Section *section) {
 		requireCompilerInvariant(section && (scope || !section->parent), "inference owner has no storage scope");
-		auto [found, inserted] = scopeNodes.try_emplace(scope, ScopeNode{section, {}, {}, {}});
+		auto [found, inserted] = scopeNodes.try_emplace(scope, ScopeNode{section, {}, {}, {}, {}});
 		requireCompilerInvariant(found->second.section == section, "inference storage scope belongs to multiple sections");
 		if (inserted)
 			found->second.sources.insert(sectionPaths.at(section));

@@ -1,5 +1,5 @@
-// Cached inference summaries are applied only when every matched dependency
-// has an unchanged body. Other instantiations follow normal type inference.
+// Reuse requires unchanged source inputs and validated dependency results for
+// this concrete instantiation. Other instantiations follow ordinary inference.
 bool hasNoGlobalAccess(const Section *section) {
 	if (!section->globalVariables.empty())
 		return false;

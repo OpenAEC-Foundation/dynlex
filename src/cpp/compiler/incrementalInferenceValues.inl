@@ -1,3 +1,7 @@
+Json inferenceValueFingerprints(const Json &arguments, const Json &value) {
+	return Json::array({digest(arguments.dump()), digest(value.dump())});
+}
+
 std::optional<Json> inferenceConstraintIdentity(const TypeConstraint &constraint, const ClassIdentityPaths &classes) {
 	auto properties = encodePortableConstraint(constraint, classes);
 	if (!properties)

@@ -1231,6 +1231,11 @@ global initializers. The `cached_ir_dependency_scans` and
 include the stable definition identity, concrete argument layouts, and the
 destination of compile-time type arguments. Exported callable names keep their
 ABI spelling.
+Callable wrappers participate in the same IR reuse protocol as specialized
+functions. A wrapper can retain its body when the target's interface is stable
+and its implementation is rebuilt. Reused callers and new code therefore refer
+to one wrapper address for a callable; importing a second internal definition
+would change function-pointer equality.
 Successful native builds persist direct section dependencies from resolved matches
 and inferred call selections, with reverse edges for invalidation. When the next
 build has the same matching environment, an edited section marks only its reverse
@@ -1320,8 +1325,17 @@ Preinference recreates those bindings before inferring a requested variant.
 Pure calls with known arguments can reuse their summaries and observed values
 without a native function body. A later runtime call infers the body before emitting
 its function, retaining the observations still consumed by cached callers.
-Interface comparison reevaluates previously observed
-argument sets and compares the resulting values as well as types and effects.
+Interface comparison reevaluates previously observed argument sets. Runtime
+callers depend on the callee's inferred types and effects; compile-time consumers
+also retain fingerprints of the particular arguments and result they read.
+Portable observed values are stored once in the callee's summary instead of
+being duplicated into every caller. A changed result
+therefore invalidates its consumers while another argument's unchanged result can
+preserve its callers. Nested pure execution records these reads for the function
+performing the computation. `value_dependency_queries_checked` and
+`value_dependency_queries_reused` count comparisons against freshly checked
+results. Unknown or nonportable results retain a body dependency, so an interface
+comparison cannot silently validate an observation it cannot represent.
 When an unchanged cached body is inferred to evaluate a new argument, it retains
 previously validated observations still consumed by cached callers. The saved
 completeness flag describes those observations, rather than all possible inputs.

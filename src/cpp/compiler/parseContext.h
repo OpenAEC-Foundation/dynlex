@@ -135,6 +135,11 @@ struct ParseContext {
 		recordCallableLookup;
 	std::function<void(const InferenceReadOwner &, const Section &, const std::shared_ptr<const VariableStorageScope> &)>
 		recordInferenceDependency;
+	std::function<void(
+		const InferenceReadOwner &, const Section &, const std::shared_ptr<const VariableStorageScope> &,
+		const std::vector<CompileTimeValue> &, const CompileTimeValue &
+	)>
+		recordInferenceValue;
 	// Parse cache entries contain only unresolved syntax. Restored executable
 	// expressions register references; temporary type expressions keep them local.
 	std::function<Expression *(Section *, Range, SectionType, bool)> reuseParsedExpression;

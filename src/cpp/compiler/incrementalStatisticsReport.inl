@@ -51,6 +51,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"inference_units_captured", statistics.inferenceUnitsCaptured},
 					  {"inference_units_reused", statistics.inferenceUnitsReused},
 					  {"inference_summary_units_loaded", statistics.inferenceSummaryUnitsLoaded},
+					  {"value_dependency_queries_checked", statistics.valueDependencyQueriesChecked},
+					  {"value_dependency_queries_reused", statistics.valueDependencyQueriesReused},
 					  {"inference_summary_units_encoded", statistics.inferenceSummaryUnitsEncoded},
 					  {"inference_summary_units_written", statistics.inferenceSummaryUnitsWritten},
 					  {"inference_summary_load_ms", statistics.inferenceSummaryLoadMilliseconds},

@@ -55,7 +55,7 @@ Json encodeSectionGraph(const Json &graph) {
 		encodedInstantiations.push_back(std::move(variants));
 		Json units = Json::array();
 		for (const auto &[key, unit] : graph.at("inference_units").at(name).items()) {
-			Json sources = Json::array(), callees = Json::array();
+			Json sources = Json::array(), callees = Json::array(), values = Json::array();
 			for (const auto &[source, fingerprint] : unit.at("sources").items()) {
 				auto [found, inserted] =
 					unitSourceIds.try_emplace(std::pair{ids.at(source), fingerprint.get<std::string>()}, unitSources.size());
@@ -67,7 +67,16 @@ Json encodeSectionGraph(const Json &graph) {
 				callees.push_back(
 					Json::array({ids.at(callee.at(0).get<std::string>()), keyId(callee.at(1).get<std::string>())})
 				);
-			units.push_back(Json::array({keyId(key), std::move(sources), std::move(callees), unit.at("lookups")}));
+			for (const Json &query : unit.at("values"))
+				values.push_back(
+					Json::array(
+						{ids.at(query.at(0).get<std::string>()), keyId(query.at(1).get<std::string>()), query.at(2),
+						 query.at(3)}
+					)
+				);
+			units.push_back(
+				Json::array({keyId(key), std::move(sources), std::move(callees), unit.at("lookups"), std::move(values)})
+			);
 		}
 		encodedUnits.push_back(std::move(units));
 	}
@@ -120,15 +129,25 @@ Json decodeSectionGraph(const Json &encoded) {
 		graph["instantiations"][path] = std::move(variants);
 		Json units = Json::object();
 		for (const Json &unit : encoded.at("inference_units").at(index)) {
-			Json sources = Json::object(), callees = Json::array();
+			Json sources = Json::object(), callees = Json::array(), values = Json::array();
 			for (const Json &id : unit.at(1)) {
 				const Json &source = unitSources.at(id.get<size_t>());
 				sources[paths.at(source.at(0).get<size_t>()).get<std::string>()] = source.at(1);
 			}
 			for (const Json &callee : unit.at(2))
 				callees.push_back(Json::array({paths.at(callee.at(0).get<size_t>()), unitKeys.at(callee.at(1).get<size_t>())}));
-			units[unitKeys.at(unit.at(0).get<size_t>()).get<std::string>()] =
-				Json{{"sources", std::move(sources)}, {"callees", std::move(callees)}, {"lookups", unit.at(3)}};
+			for (const Json &query : unit.at(4))
+				values.push_back(
+					Json::array(
+						{paths.at(query.at(0).get<size_t>()), unitKeys.at(query.at(1).get<size_t>()), query.at(2), query.at(3)}
+					)
+				);
+			units[unitKeys.at(unit.at(0).get<size_t>()).get<std::string>()] = Json{
+				{"sources", std::move(sources)},
+				{"callees", std::move(callees)},
+				{"lookups", unit.at(3)},
+				{"values", std::move(values)}
+			};
 		}
 		graph["inference_units"][path] = std::move(units);
 	}

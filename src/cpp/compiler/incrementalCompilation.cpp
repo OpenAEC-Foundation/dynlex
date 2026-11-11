@@ -627,6 +627,10 @@ bool compileIncrementally(
 				context.recordInferenceDependency = [&](const auto &owner, const auto &dependency, const auto &scope) {
 					inferenceReads.recordDependency(owner, dependency, scope);
 				};
+				context.recordInferenceValue = [&](const auto &owner, const auto &dependency, const auto &scope,
+												   const auto &arguments, const auto &value) {
+					inferenceReads.recordValue(owner, dependency, scope, arguments, value);
+				};
 				context.recordCallableLookup = [&](const auto &owner, const auto &source, auto signature, const auto &matches) {
 					inferenceReads.record(owner, source, signature, matches);
 				};
@@ -690,6 +694,7 @@ bool compileIncrementally(
 			context.runIncrementalPreinference = {};
 			context.recordCallableLookup = {};
 			context.recordInferenceDependency = {};
+			context.recordInferenceValue = {};
 			statistics.callableLookupsObserved = inferenceReads.observedCount();
 			statistics.failedCallableLookupsObserved = inferenceReads.failedCount();
 			statistics.callableLookupsChecked = inferenceReads.checkedCount();
