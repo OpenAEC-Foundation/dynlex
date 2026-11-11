@@ -28,7 +28,7 @@ from test_incremental_lifecycle_replacements import check_lifecycle_replacement_
 from test_incremental_root_execution import check_local_function_symbols, check_root_class_reuse, check_root_execution_reuse, check_static_function_dependency
 from test_incremental_body_units import check_body_resolution_units
 from test_incremental_native_codegen import check_optimized_native_codegen
-from test_incremental_classification import check_recursive_classification_cascade
+from test_incremental_classification import check_recursive_classification_cascade, check_incremental_classification
 from test_incremental_inferred_dependencies import check_callable_trial_dependencies, check_inferred_section_dependencies
 
 project = Path(sys.argv[1]).resolve()
@@ -91,6 +91,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_entry_metadata_reuse(root, build)
     check_active_resolution_units(root, build)
     check_definition_resolution_units(root, build)
+    check_incremental_classification(root, build)
     check_lifecycle_replacement_roots(root, build)
     check_local_function_symbols(root, build)
     check_static_function_dependency(root, build)

@@ -45,6 +45,8 @@ class IncrementalMatcherCache {
 	std::optional<std::vector<ReferenceMatchKeys>> restoreReferenceKeys(std::string_view key);
 	std::string recordMatchIdentities(const std::vector<std::string_view> &identities);
 	std::optional<std::vector<std::string_view>> restoreMatchIdentities(std::string_view key);
+	std::string recordClassificationData(const Json &value);
+	std::optional<Json> restoreClassificationData(std::string_view key);
 	std::optional<std::string_view> resultKey(const PatternReference *reference) const;
 	size_t hits() const { return reusedCount; }
 	size_t precedenceHits() const { return reusedPrecedenceCount; }

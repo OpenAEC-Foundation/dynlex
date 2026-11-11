@@ -26,7 +26,9 @@ static std::optional<std::string> explicitWholeVariableSourceName(const PatternR
 	return result.substr(first, last - first + 1);
 }
 
-static bool indexDataDeclarationNames(ParseContext &context, const std::list<PatternReference *> &references) {
+static bool indexDataDeclarationNames(
+	ParseContext &context, const std::list<PatternReference *> &references, std::unordered_set<Section *> &changedScopes
+) {
 	bool changed = false;
 	for (PatternReference *reference : references) {
 		if (reference->patternType != SectionType::Section || !reference->range().line->sectionOpening)
@@ -34,8 +36,10 @@ static bool indexDataDeclarationNames(ParseContext &context, const std::list<Pat
 		// Discover names through the same metadata and matcher as the final
 		// header resolution, without resolving or executing the declaration.
 		std::unique_ptr<PatternMatch> match(context.match(reference));
-		if (match)
-			changed |= reference->indexDataDeclarationNames(*match);
+		if (match && reference->indexDataDeclarationNames(*match)) {
+			changedScopes.insert(reference->range().section());
+			changed = true;
+		}
 	}
 	return changed;
 }

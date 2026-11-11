@@ -110,6 +110,13 @@ for name, samples in results.items():
         "pure_value_summary_hits": round(statistics.median(sample[2]["pure_value_summary_hits"] for sample in samples)),
         "functions_ir_reused": round(statistics.median(sample[2]["functions_ir_reused"] for sample in samples)),
         "body_resolution_reference_visits": round(statistics.median(sample[2]["body_resolution_reference_visits"] for sample in samples)),
+        **{field: round(statistics.median(sample[2][field] for sample in samples), 1)
+           for field in ("classification_ms", "classification_units_reused", "classification_parameters_reused",
+                         "classification_units_invalidated", "classification_dependency_edges",
+                         "classification_candidate_checks", "classification_inputs_ms",
+                         "classification_dependencies_ms", "classification_restore_ms", "classification_save_ms",
+                         "classification_query_units_built", "classification_query_units_reused",
+                         "classification_dependency_units_reused")},
         "matcher_cache_hits": round(statistics.median(sample[2]["matcher_cache_hits"] for sample in samples)),
         "deferred_match_keys_replayed": round(statistics.median(sample[2]["deferred_match_keys_replayed"] for sample in samples)),
         "precedence_match_keys_replayed": round(statistics.median(sample[2]["precedence_match_keys_replayed"] for sample in samples)),

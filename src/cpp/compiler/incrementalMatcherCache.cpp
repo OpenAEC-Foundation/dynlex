@@ -183,6 +183,7 @@ void IncrementalMatcherCache::retain(std::string_view key) {
 }
 
 #include "incrementalBodyResolutionCache.inl"
+#include "incrementalClassificationData.inl"
 #include "incrementalReferenceKeys.inl"
 
 std::optional<std::string_view> IncrementalMatcherCache::resultKey(const PatternReference *reference) const {

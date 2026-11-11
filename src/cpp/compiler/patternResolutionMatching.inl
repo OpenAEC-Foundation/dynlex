@@ -1,3 +1,4 @@
+#include "patternResolutionDataNames.inl"
 #include "patternResolutionVariableDeclarations.inl"
 #include "patternResolutionVariableGroups.inl"
 
@@ -447,6 +448,7 @@ bool resolvePatterns(ParseContext &context) {
 		ref->patternElements = getPatternElements(ref->pattern.text);
 	// Compute initial VL counts before resolution
 	computeVariableLikeCounts(context, unResolvedSections, true);
+	std::vector<PatternReference *> definitionReferences(bodyReferences.begin(), bodyReferences.end());
 	SkippedCachedBodies skippedCachedBodies;
 	skipCachedBodyReferences(context, bodyReferences, skippedCachedBodies);
 	std::list<PatternReference *> deferredBodyReferences;
@@ -670,9 +672,18 @@ bool resolvePatterns(ParseContext &context) {
 				madeProgress = true;
 			}
 			if (unResolvedSections.empty()) {
-				bool namesChanged = indexDataDeclarationNames(context, globalReferences);
-				namesChanged |= indexDataDeclarationNames(context, bodyReferences);
+				std::unordered_set<Section *> changedScopes;
+				bool namesChanged = indexDataDeclarationNames(context, globalReferences, changedScopes);
+				namesChanged |= indexDataDeclarationNames(context, bodyReferences, changedScopes);
 				if (namesChanged) {
+					for (PatternReference *reference : referencesAffectedByDataNames(definitionReferences, changedScopes)) {
+						if (reference->match)
+							queueReferenceForRematch(reference);
+						else
+							for (Section *section = reference->range().section(); section; section = section->parent)
+								if (!section->patternDefinitions.empty())
+									appendUniqueSection(pendingPromotionCleanupSections, section);
+					}
 					failedBodyWorklist.wakeNewExplicitVariables();
 					madeProgress = true;
 				}
@@ -719,11 +730,6 @@ bool resolvePatterns(ParseContext &context) {
 			}
 
 			if (unResolvedSections.empty() && bodyReferences.empty() && !failedBodyWorklist.hasWaiting()) {
-				std::vector<Section *> activated = cachedBodiesToReactivate(context, skippedCachedBodies);
-				if (!activated.empty()) {
-					reactivateCachedBodies(context, bodyReferences, skippedCachedBodies, activated);
-					continue;
-				}
 				break;
 			}
 

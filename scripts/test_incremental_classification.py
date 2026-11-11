@@ -33,4 +33,162 @@ def check_recursive_classification_cascade(root, build):
     assert failed[1:] == build(False, entry=main, success=False)[1:]
     main.write_text(source)
     assert build(entry=main)[1:] == build(False, entry=main)[1:]
+
     assert promoted_parameters() == expected
+
+
+def check_incremental_classification(root, build):
+    main = root / "independent_classification.dl"
+    source = (
+        'integer means: @intrinsic("type", "int")\n'
+        'function [first] value:\n'
+        '    execute:\n'
+        '        @intrinsic("return", @intrinsic("add", value, 1))\n'
+        'function [second] item:\n'
+        '    execute:\n'
+        '        @intrinsic("return", @intrinsic("add", item, 1))\n'
+        '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", first 7))\n'
+        '@intrinsic("discard", second 8)\n'
+    )
+    main.write_text(source)
+    cold = build(entry=main)
+    assert cold[2] == b"8\n"
+    for number in (2, 3):
+        main.write_text(source.replace('"add", item, 1', f'"add", item, {number}'))
+        edited = build(entry=main)
+        assert edited[0]["classification_parameters_reused"] >= 1, "independent implicit parameter was rediscovered"
+        assert edited[0]["classification_units_invalidated"] >= 1
+        assert edited[0]["cached_body_resolution_references_skipped"] >= 1
+        assert edited[0]["body_resolution_reference_visits"] < cold[0]["body_resolution_reference_visits"]
+        assert edited[1:] == build(False, entry=main)[1:]
+
+    commented = main.read_text().replace('        @intrinsic("return", @intrinsic("add", value, 1))',
+                                         '        # Keep the promotion location after this comment.\n'
+                                         '        @intrinsic("return", @intrinsic("add", value, 1))')
+    main.write_text(commented)
+    assert build(entry=main)[0]["frontend_reused"]
+    main.write_text(commented.replace('"add", item, 3', '"add", item, 4'))
+    after_comment = build(entry=main)
+    assert after_comment[0]["classification_parameters_reused"] >= 1
+    assert after_comment[1:] == build(False, entry=main)[1:]
+
+    main.write_text(main.read_text().replace('second 8)', 'second 9)'))
+    root_edit = build(entry=main)
+    assert root_edit[0]["classification_parameters_reused"] >= 2, "root execution repeated unchanged parameter classification"
+    assert root_edit[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text() + '@intrinsic("store", {state}, 1)\n')
+    root_binding = build(entry=main)
+    assert root_binding[0]["classification_parameters_reused"] == 0, "new root names reused an earlier classification environment"
+    assert root_binding[1:] == build(False, entry=main)[1:]
+
+    main = root / "classification_cycle.dl"
+    source = (
+        'flex function [alpha] value:\n'
+        '    replacement:\n'
+        '        @intrinsic("discard", value)\n'
+        '        beta value\n'
+        'flex function [beta] value:\n'
+        '    replacement:\n'
+        '        alpha value\n'
+        'to idle: @intrinsic("discard", 0)\n'
+        '@intrinsic("discard", 0)\n'
+    )
+    main.write_text(source)
+    build(entry=main)
+    unrelated = source.replace('to idle: @intrinsic("discard", 0)', 'to idle: @intrinsic("discard", 1)')
+    main.write_text(unrelated)
+    reused = build(entry=main)
+    assert reused[0]["classification_parameters_reused"] >= 2, "an unchanged classification cycle was recomputed"
+    assert reused[1:] == build(False, entry=main)[1:]
+    projection = read_program(root / "cache", main)["all_function_projection"]
+    before = projection["matcher_projection"]["declaration_digests"]
+    cycle_paths = {path for path, identity in projection["inactive"].items()
+                   if "alpha" in identity["header"] or "beta" in identity["header"]}
+    assert len(cycle_paths) == 2
+    main.write_text(unrelated.replace('        @intrinsic("discard", value)\n', ''))
+    removed = build(entry=main)
+    assert removed[0]["classification_parameters_reused"] == 0, "a dirty cycle retained its old parameters"
+    assert removed[0]["classification_units_invalidated"] >= 2
+    assert removed[1:] == build(False, entry=main)[1:]
+    after = read_program(root / "cache", main)["all_function_projection"]["matcher_projection"]["declaration_digests"]
+    assert all(after[path] != before[path] for path in cycle_paths), "a classification cycle sustained a removed parameter"
+    main.write_text(main.read_text() + 'alpha 7\n')
+    assert build(entry=main, success=False)[1:] == build(False, entry=main, success=False)[1:]
+
+    main = root / "classification_failed_lookup.dl"
+    source = (
+        '[identity] value means: value\n'
+        '@intrinsic("discard", identity 7)\n'
+    )
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source + 'value means: 9\n')
+    added = build(entry=main, success=False)
+    assert added[1:] == build(False, entry=main, success=False)[1:], "a new pattern retained a failed classification lookup"
+    main.write_text(source)
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]
+
+    main = root / "classification_data_metadata.dl"
+    source = (
+        'integer means: @intrinsic("type", "int")\n'
+        'section [answer] {first} [or] {second}:\n'
+        '    declares: second\n'
+        '    result: integer\n'
+        '    value:\n'
+        '        42\n'
+        '[selected] {value} means: @intrinsic("add", value, 1)\n'
+        '[other] {value} means: value\n'
+        '[read] selected name means: selected name\n'
+        '@intrinsic("store", name, 7)\n'
+        'answer selected name or other name:\n'
+        '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", read selected name))\n'
+    )
+    main.write_text(source)
+    assert build(entry=main)[2] == b"8\n"
+    main.write_text(source.replace('"%d\\n"', '"%d!\\n"'))
+    unrelated_root = build(entry=main)
+    assert unrelated_root[2] == b"8!\n"
+    assert unrelated_root[0]["classification_parameters_reused"] >= 1, "an unrelated root edit invalidated data-name dependencies"
+    assert unrelated_root[1:] == build(False, entry=main)[1:]
+    main.write_text(source.replace('declares: second', 'declares: first'))
+    metadata = build(entry=main)
+    assert metadata[2] == b"42\n", "declares metadata retained an earlier parameter classification"
+    assert metadata[0]["classification_parameters_reused"] == 0
+    assert metadata[1:] == build(False, entry=main)[1:]
+    current = main.read_text()
+    shadow = ('flex section [answer] [selected] [name] [or] [other] [name]:\n'
+              '    replacement:\n'
+              '        @intrinsic("discard", 0)\n')
+    main.write_text(current + shadow)
+    overridden = build(entry=main)
+    assert overridden[2] == b"8\n", "a new competing section retained a declared data name"
+    assert overridden[1:] == build(False, entry=main)[1:]
+    main.write_text(current)
+    restored = build(entry=main)
+    assert restored[2] == b"42\n", "removing a competing section lost its data-name dependency"
+    assert restored[1:] == build(False, entry=main)[1:]
+
+    main = root / "classification_local_visibility.dl"
+    helper = root / "classification_local_helper.dl"
+    helper_source = '[helper] value means: value\n'
+    helper.write_text(helper_source)
+    main.write_text(
+        'import classification_local_helper.dl\n'
+        'integer means: @intrinsic("type", "int")\n'
+        '[first] value means: @intrinsic("add", value, 1)\n'
+        '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", first 7))\n'
+    )
+    assert build(entry=main)[2] == b"8\n"
+    private_value = 'local function [value]:\n    execute:\n        @intrinsic("return", 9)\n'
+    helper.write_text(helper_source + private_value)
+    private = build(entry=main)
+    assert private[2] == b"8\n"
+    assert private[0]["classification_parameters_reused"] >= 1, "an invisible local pattern invalidated a header"
+    assert private[1:] == build(False, entry=main)[1:]
+    helper.write_text(helper_source + private_value.removeprefix('local '))
+    public = build(entry=main, success=False)
+    assert public[1:] == build(False, entry=main, success=False)[1:]
+    helper.write_text(helper_source + private_value)
+    recovered = build(entry=main)
+    assert recovered[2] == b"8\n"
+    assert recovered[1:] == build(False, entry=main)[1:]

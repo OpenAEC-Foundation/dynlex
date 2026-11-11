@@ -450,20 +450,21 @@ def check_inactive_projection_refresh(root, build):
         "later call did not restore an inactive control-flow body"
 
     new_call = root / "inactive_new_call.dl"
-    new_call_source = ('to live: @intrinsic("discard", 1)\n'
-                       'to spare: @intrinsic("discard", 2)\n'
+    new_call_source = ('integer means: @intrinsic("type", "int")\n'
+                       'to live: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "live"))\n'
+                       'to spare: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "spare"))\n'
                        'live\n')
     new_call.write_text(new_call_source)
-    build(entry=new_call)
-    assert "spare".encode().hex() not in projection_for(root / "cache", new_call)["reference_literals_global"]
-    new_call.write_text(new_call_source.replace('to live: @intrinsic("discard", 1)', 'to live: spare'))
-    assert build(entry=new_call)[1:] == build(False, entry=new_call)[1:]
-    assert "spare".encode().hex() in projection_for(root / "cache", new_call)["reference_literals_global"], \
-        "changed call was omitted from the persisted matcher literal index"
+    assert build(entry=new_call)[2] == b"live\n"
+    new_call.write_text(new_call_source.replace(
+        'to live: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "live"))', 'to live: spare'))
+    added_call = build(entry=new_call)
+    assert added_call[2] == b"spare\n"
+    assert added_call[1:] == build(False, entry=new_call)[1:]
     new_call.write_text(new_call_source)
-    assert build(entry=new_call)[1:] == build(False, entry=new_call)[1:]
-    assert "spare".encode().hex() not in projection_for(root / "cache", new_call)["reference_literals_global"], \
-        "removed call remained in the matcher literal index"
+    removed_call = build(entry=new_call)
+    assert removed_call[2] == b"live\n"
+    assert removed_call[1:] == build(False, entry=new_call)[1:]
 
     unicode_source = root / "inactive_unicode_literal.dl"
     unicode_source.write_text('to greet é: @intrinsic("discard", 1)\ngreet é\n')

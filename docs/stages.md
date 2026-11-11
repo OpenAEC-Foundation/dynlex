@@ -89,6 +89,10 @@ owning section calls. A declared data name is indexed before expression expansio
 multiword names and forward references use the normal variable matcher. After matching,
 the declaring capture binds the result variable and supplies its spelling as a string
 argument to the value expression.
+Introducing a data name requeues existing body matches that could mention it in the
+affected lexical scope. Removing their old variable bindings also rechecks implicit
+parameters, so a newly visible multiword name can replace a call and remove its last
+parameter usage before the resolved-definition boundary is committed.
 
 Once section signatures are available, the normal matcher indexes declaring captures
 before function-body resolution must finish. This discovers only declaration names;
@@ -1029,35 +1033,55 @@ references rejoin the ordinary expansion and precedence-invalidation machinery.
 Bodies with prior diagnostics run the normal resolver.
 `body_resolution_units_reused` and `body_resolution_references_restored`
 count this restoration, separately from references evaluated by the resolver.
-For a successful prior build, unchanged definitions without nested definitions can
-skip resolution when their header is fixed by zero implicit-candidate counts or
-their parsed declaration equals the prior resolved declaration, their prior
-matcher entries remain available, and their patterns
-cannot alter another reference's matcher key while definitions are indexed.
-A saved summary identifies declarations whose parameters were promoted by body
-matching. Early selection rejects those before serializing their headers, leaving
-classification to the normal resolver. Initial word counts establish when a
-declaration can be indexed immediately;
-its body can then wait even when the function was instantiated in the prior build.
-The source projection and body digest establish that their text is unchanged.
-If the completed pattern tree differs, their references rejoin the resolver.
-Other selected bodies replay their
-complete cached resolution after indexing, before expression expansion and
+Declaration classification has its own persistent dependency graph. Its inputs
+include the parsed declaration, body text when implicit candidates remain, lexical
+ancestors, scope rules, and ambient declarations. Each reference contributes its
+possible literal spellings, including numeric arguments. A declaration contributes
+canonical paths with words that could become parameters omitted from the required
+literals. These potential matches account for unsuccessful lookups and new patterns,
+independently of the functions selected during inference.
+Query edges honor the matcher's source visibility, including file-local patterns;
+units with no references do not perform lookups. A declaration-input change
+rechecks potential edges even when its required literals stay the same.
+New query units find possible dependencies through an index of rare required
+literals instead of comparing every pair of units. Paths without required literals
+remain candidates for every nonempty reader. `classification_candidate_checks`
+counts the candidates checked after this filtering.
+Visible-name environments are separate graph units for ancestor scopes. They record
+parsed bindings and inputs of potential data-declaration calls. Their query edges also
+include non-declaring competitors, so adding an overload that suppresses a declaration
+invalidates its readers. Unrelated root execution does not change those environments.
+An edit invalidates readers through both the prior and current graph. Propagation
+through a cycle invalidates every affected member before any cached parameter is
+installed, so old recursive signatures cannot sustain a removed parameter. A body
+edit cannot change the classification of a header with no live implicit candidates;
+that declaration's input therefore excludes the body.
+The topology, reference-literal sets, potential signatures, and promoted parameters
+are separate content-addressed CBOR records in the matcher store. Unchanged query
+and dependency units retain their records. Promotion locations use nonempty logical
+lines within the owning definition so comments do not change their identity.
+An unchanged top-level body without nested definitions can restore its parameter
+classification when its dependencies and lexical environment remain valid and its
+saved body resolution is available. The compiler installs those parameters through
+the normal binding operations before indexing the declaration. Bodies with prior
+diagnostics still run normal resolution. The source projection and body digest
+establish that a skipped body's text is unchanged.
+After indexing, selected bodies rejoin the deferred worklist. A changed pattern tree
+validates each body's lookup dependencies rather than restarting the declaration
+phase. Affected references run the resolver; unaffected bodies replay their complete
+cached resolution before expression expansion and
 variable-group materialization. This preserves valid body trees for later
 function-value queries and keeps lexical bindings available to validation and
 inference. `cached_body_resolution_references_skipped` counts the early
-resolver visits bypassed by this replay. This path runs only when the potential
-skipped work is at least one twentieth of the program's references, so its
-selection work does not dominate small edits in larger programs. Pattern-tree
+resolver visits bypassed by this replay. `classification_parameters_reused` and
+`classification_units_invalidated` expose classification reuse and cascading
+invalidation. Query and dependency-unit counters separate reused graph metadata
+from work performed for the edit; `classification_ms` measures the stage. Pattern-tree
 keys combine active definition contributions independent of insertion order;
 removing and readding the same definition restores its earlier key.
-The cache records matcher input literals as hex-encoded byte sequences by
-source file. When the initial pattern tree is unchanged, an edited build scans
-references from changed files and carries the unchanged files' literal sets
-forward. It considers both the previous and current literals when selecting
-cached bodies, then writes the current sets for the next build. A changed
-initial tree rebuilds the index from current references.
-`cached_body_selection_ms` measures this decision.
+Matcher input literals are encoded as hex byte sequences so non-ASCII punctuation
+substrings remain portable. Their records belong to classification units rather
+than a program-wide literal set. `cached_body_selection_ms` measures early selection.
 Unchanged references replay saved precedence-pass keys when their first-pass
 keys and precedence families still match. If the final indexed tree changed,
 the cache compares the changed paths' required literals against each

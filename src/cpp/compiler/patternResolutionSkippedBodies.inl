@@ -19,9 +19,8 @@ skipCachedBodyReferences(ParseContext &context, std::list<PatternReference *> &b
 	});
 }
 
-static void reactivateCachedBodies(
-	ParseContext &context, std::list<PatternReference *> &bodyReferences, SkippedCachedBodies &skipped,
-	const std::vector<Section *> &sections, bool recomputeCounts = true
+static void deferSkippedBodyReferences(
+	std::list<PatternReference *> &bodyReferences, SkippedCachedBodies &skipped, const std::vector<Section *> &sections
 ) {
 	std::vector<PatternReference *> references;
 	for (Section *section : sections) {
@@ -34,23 +33,8 @@ static void reactivateCachedBodies(
 		}
 		skipped.erase(found);
 	}
-	if (recomputeCounts) {
-		std::list<Section *> countSections(sections.begin(), sections.end());
-		computeVariableLikeCounts(context, countSections);
-	}
 	std::sort(references.begin(), references.end(), referenceComesBefore);
 	bodyReferences.insert(bodyReferences.end(), references.begin(), references.end());
-}
-
-static std::vector<Section *> cachedBodiesToReactivate(ParseContext &context, const SkippedCachedBodies &skipped) {
-	std::vector<Section *> activated;
-	if (skipped.empty())
-		return activated;
-	bool sameTree = context.cachedBodyMatcherTreeUnchanged();
-	for (const auto &[section, _] : skipped)
-		if (!sameTree)
-			activated.push_back(section);
-	return activated;
 }
 
 // Replaying the saved resolution is necessary even when the body currently
@@ -63,5 +47,5 @@ static void replayCachedBodies(ParseContext &context, std::list<PatternReference
 		sections.push_back(section);
 		context.cachedBodyResolutionReferencesSkipped += references.size();
 	}
-	reactivateCachedBodies(context, deferred, skipped, sections, false);
+	deferSkippedBodyReferences(deferred, skipped, sections);
 }

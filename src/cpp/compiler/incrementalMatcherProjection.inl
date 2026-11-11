@@ -15,8 +15,7 @@ struct InitialMatcherProjection {
 
 	void capture(
 		const ParseContext &context, const Json &observations, const std::list<PatternReference *> &deferredReferences,
-		const Json *previous, const Json &bodyDigests, const std::map<std::string, Section *> &sections, std::string_view tree,
-		const Json &parameterCounts
+		const Json *previous, const Json &bodyDigests, const std::map<std::string, Section *> &sections, std::string_view tree
 	) {
 		const Json *prior = previous ? &previous->at("matcher_projection") : nullptr;
 		declarationsReused = 0;
@@ -54,7 +53,6 @@ struct InitialMatcherProjection {
 			{"declaration_digests", Json::object()},
 			{"match_overrides", Json::object()},
 			{"body_units", Json::object()},
-			{"body_promoted_parameters", Json::object()},
 			{"bodies", bodyDigests},
 			{"scope_rule_bodies", scopeRuleBodyPaths(sections)},
 			{"global_resolution", globalResolutionIdentity(*context.mainSection)},
@@ -82,17 +80,6 @@ struct InitialMatcherProjection {
 				}
 		for (const Owner &owner : owners) {
 			const std::string &path = owner.path;
-			if (parameterCounts.contains(path)) {
-				bool bodyPromoted = false;
-				for (PatternDefinition *definition : owner.section->patternDefinitions)
-					forEachLeafElement(definition->patternElements, [&](const DefinitionPatternElement &element) {
-						if (element.promotedFromVariableLike && parameterCounts.at(path).contains(element.text))
-							bodyPromoted = true;
-					});
-				if (bodyPromoted)
-					value.at("body_promoted_parameters")[path] = true;
-			}
-
 			if (stableDeclarations && prior->at("declaration_digests").contains(path) && prior->at("bodies").contains(path) &&
 				bodyDigests.at(path) == prior->at("bodies").at(path)) {
 				value.at("declaration_digests")[path] = prior->at("declaration_digests").at(path);

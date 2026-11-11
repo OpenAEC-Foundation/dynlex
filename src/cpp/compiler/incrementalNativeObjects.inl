@@ -69,6 +69,7 @@ struct BuildStatistics {
 	size_t definitionParseHits = 0;
 	size_t definitionParseMisses = 0;
 	SourceProjectionWork sourceProjectionWork;
+	ClassificationWork classification;
 	double matcherKeyMilliseconds = 0;
 	double matcherRestoreMilliseconds = 0;
 	double precedenceTreeSignatureMilliseconds = 0;

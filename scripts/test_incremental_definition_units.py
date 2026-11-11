@@ -122,16 +122,16 @@ def check_definition_resolution_units(root, build):
         '@intrinsic("discard", 0)\n'
     )
     main.write_text(source)
-    build(entry=main)
+    cycle = build(entry=main)
     projection = read_program(root / "cache", main)["all_function_projection"]["matcher_projection"]
     before = projection["declaration_digests"]
-    assert len(projection["body_promoted_parameters"]) == 2
+    assert cycle[0]["classification_parameters_recorded"] == 2
     main.write_text(source.replace('        @intrinsic("discard", value)\n', ''))
     edited = build(entry=main)
     assert edited[1:] == build(False, entry=main)[1:]
     projection = read_program(root / "cache", main)["all_function_projection"]["matcher_projection"]
     after = projection["declaration_digests"]
-    assert not projection["body_promoted_parameters"]
+    assert edited[0]["classification_parameters_recorded"] == 0
     assert len(before) == len(after) == 2
     assert all(after[path] != signature for path, signature in before.items()), "flex cycle kept a removed parameter"
     main.write_text(main.read_text() + 'alpha 7\n')

@@ -249,7 +249,7 @@ bool hasNoGlobalAccess(const Section *section);
 
 #include "incrementalFunctionProjection.inl"
 #include "incrementalExecutionProjection.inl"
-#include "incrementalSkippedBodyResolution.inl"
+#include "incrementalClassificationLiterals.inl"
 #include "incrementalMatcherProjection.inl"
 // clang-format on
 
@@ -323,6 +323,9 @@ bool compatibleObservations(const Json &previous, const Json &current, const Par
 #include "incrementalDeferredMatchReplay.inl"
 #include "incrementalInactiveFunctionProjection.inl"
 #include "incrementalInitialParameterCounts.inl"
+// clang-format off
+#include "incrementalClassification.inl"
+// clang-format on
 #include "incrementalObservationReuse.inl"
 
 #include "incrementalOptions.inl"
@@ -508,23 +511,15 @@ bool compileIncrementally(
 			InitialParameterCounts initialParameterCounts(
 				context, previous ? &*previous : nullptr, recording->observations, statistics.parameterCountCacheMilliseconds
 			);
+			IncrementalClassification classification(
+				context, matcherCache, previous ? &*previous : nullptr, recording->observations, initialParameterCounts,
+				statistics.classification
+			);
 			context.selectCachedBodiesForResolutionReuse = [&]() {
-				if (!previous || previousMatches.empty() || context.options.emitDebugInfo || context.options.traceExecution ||
-					!compatibleObservations(*previous, recording->observations, context))
-					return std::vector<Section *>{};
 				auto selectionStart = Clock::now();
-				std::vector<Section *> selected = selectCachedBodiesForResolutionReuse(
-					context, recording->observations, previous->at("all_function_projection"),
-					previous->at("diagnostic_sources").get<std::set<std::string>>(), matcherCache,
-					initialParameterCounts.sections(), initialParameterCounts.bodies()
-				);
+				std::vector<Section *> selected = classification.select();
 				statistics.cachedBodySelectionMilliseconds += elapsedMilliseconds(selectionStart);
 				return selected;
-			};
-			context.cachedBodyMatcherTreeUnchanged = [&]() {
-				return previous &&
-					   matcherTreeSignature(context) ==
-						   previous->at("all_function_projection").at("initial_matcher_tree").get_ref<const std::string &>();
 			};
 			std::string initialMatcherTree;
 			MatcherPathSnapshots matcherPaths(directory, compilerIdentity);
@@ -535,13 +530,14 @@ bool compileIncrementally(
 			context.recordMatcherResult = std::bind_front(&IncrementalMatcherCache::record, &matcherCache);
 			context.prepareDeferredMatcherReplay = [&](const std::list<PatternReference *> &references) {
 				auto projectionStart = Clock::now();
+				classification.recordOutputs();
 				const Json *prior = previous && compatibleObservations(*previous, recording->observations, context)
 										? &previous->at("all_function_projection")
 										: nullptr;
 				initialMatcherTree = matcherTreeSignature(context);
 				initialMatcherProjection.capture(
 					context, recording->observations, references, prior, initialParameterCounts.bodies(),
-					initialParameterCounts.sections(), initialMatcherTree, initialParameterCounts.snapshot()
+					initialParameterCounts.sections(), initialMatcherTree
 				);
 				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
 				statistics.matcherDeclarationsReused = initialMatcherProjection.declarationsReused;
@@ -636,17 +632,8 @@ bool compileIncrementally(
 				resolvedFunctionProjection["initial_parameter_counts"] = initialParameterCounts.snapshot();
 				resolvedFunctionProjection["matcher_projection"] =
 					initialMatcherProjection.finish(resolvedFunctionProjection, matcherCache);
+				resolvedFunctionProjection["matcher_projection"]["classifications"] = classification.snapshot();
 				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
-				const Json *priorLiteralProjection =
-					previous && compatibleObservations(*previous, recording->observations, context) &&
-							initialMatcherTree == previous->at("all_function_projection")
-													  .at("initial_matcher_tree")
-													  .get_ref<const std::string &>()
-						? &previous->at("all_function_projection")
-						: nullptr;
-				refreshReferenceLiteralIndex(
-					resolvedFunctionProjection, context, recording->observations, sections, priorLiteralProjection
-				);
 			}
 			statistics.projectionMilliseconds = elapsedMilliseconds(stageStart);
 			std::map<const Section *, std::string> sectionPaths;
