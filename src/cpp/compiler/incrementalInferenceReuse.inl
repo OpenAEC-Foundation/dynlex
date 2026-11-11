@@ -47,7 +47,7 @@ std::optional<Json> inferenceArgumentTypes(const InstantiationKey &key, const Cl
 		return std::nullopt;
 	Json arguments = Json::array();
 	for (const DataType &type : key.argumentTypes) {
-		auto identity = inferenceTypeIdentity(type, classPaths);
+		auto identity = typeIdentity(type, classPaths);
 		if (!identity)
 			return std::nullopt;
 		arguments.push_back(std::move(*identity));
@@ -106,7 +106,7 @@ Json captureInferenceSummaries(
 			if (needsGlobalTypes && globalTypes.is_null())
 				continue;
 			auto argumentTypes = inferenceArgumentTypes(key, classPaths);
-			auto returnType = inferenceTypeIdentity(instantiation.returnType, classPaths);
+			auto returnType = typeIdentity(instantiation.returnType, classPaths);
 			if (!argumentTypes || !returnType)
 				continue;
 			std::string summaryKey = digest(argumentTypes->dump());

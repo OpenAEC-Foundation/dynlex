@@ -14,6 +14,7 @@
 #include "section.h"
 #include "section/classSection.h"
 #include "section/variable.h"
+#include "semanticIdentity.h"
 #include "syntaxConfig.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
@@ -76,11 +77,7 @@ double elapsedMilliseconds(Clock::time_point start) {
 	return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
 }
 
-std::string digest(std::string_view text) {
-	llvm::BLAKE3 hash;
-	hash.update(llvm::StringRef(text.data(), text.size()));
-	return llvm::toHex(hash.final(), true);
-}
+std::string digest(std::string_view text) { return stableIdentityDigest(text); }
 
 #include "incrementalCompilerIdentity.inl"
 
@@ -190,7 +187,6 @@ void recordSemanticSources(Json &result, RecordingFileSystem &files, const Parse
 	}
 }
 
-#include "incrementalSectionIdentity.inl"
 bool containsNestedDefinition(const Section &section) {
 	for (const Section *child : section.children) {
 		if (!child->patternDefinitions.empty() || containsNestedDefinition(*child))

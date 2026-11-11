@@ -1,0 +1,12 @@
+type means: @intrinsic("type", "type")
+integer means: @intrinsic("type", "int", 32)
+class:
+    patterns: box
+    members:
+        payload
+
+to get empty pointer for {type:kind}:
+    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%s\n", "descriptor"))
+    @intrinsic("return", @intrinsic("construct", @intrinsic("add pointer depth", kind)))
+
+@intrinsic("discard", empty pointer for box)

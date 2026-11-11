@@ -100,3 +100,51 @@ Finally, the editor test helper no longer starts an unawaited module import in
 every future document. That leaked instrumentation into unrelated pages and
 produced uncaught import failures during navigation. Access is now awaited and
 document-scoped; tests that reload explicitly reinstall it in the new document.
+
+## Website and shared editor fixes
+
+The website migration also exercised the following compiler paths. These are
+language and compiler fixes, with no website-specific syntax or inference rules.
+
+| Symptom | Root cause and change | Regression coverage |
+| --- | --- | --- |
+| Static descriptions could not read nested aggregate values. | Immutable aggregate loads now fold through initialized globals; static-reference globals are published without fabricated zero initializers. | `static_aggregate_reads` |
+| Long associative expressions exhausted time or stack. | Grouping enumeration now prunes spans that have no eligible root. | `associative_chain`, `grouping_bounded_stack`, `grouping_fixed_root_stack` |
+| Replayed arguments lost assignments or used state from another invocation. | Replay retains complete input/output transitions and checks binding frames, assignment roles, execution state and result fingerprints. | `argument_reference_inference_replay`, `cached_callee_grouping_replay` |
+| Declared names were parsed as calls, or absorbed trailing literal words. | Declaring captures honor literal continuations and named-operand priority. Header snapshots refresh the declaration index to a fixed point and remove stale provisional names. | `data_declaration_operand_priority`, `data_declaration_suffix`, `scripts/test_data_declaration_cache.py` |
+| A named operand at an expression root lost to a colliding literal-prefix call. | Explicit named captures take operand priority while enclosing literal continuations retain their precedence. | `explicit_named_operator_operand` |
+| Unsupported numeric widths reached codegen invariants. | Builtin type construction now rejects unsupported storage widths with source diagnostics. | Required integer, unsigned, numeric-constraint, Boolean and floating-point width fixtures |
+| An early return leaked managed subjects introduced later in a loop. | Return cleanup is emitted after the complete owning-variable registry is known, preserving initialization flags and retained return values. | `managed_subject_early_return` |
+| A guaranteed first loop iteration used the return branches of a later pass. | Runtime body annotations join the first and later entries independently of the precise post-loop state. | `guaranteed_loop_early_return` |
+| Managed cleanup produced invalid debug locations. | Shared return-cleanup emission preserves valid debug metadata. | `debug_managed_cleanup` |
+| Nested inference trials lost constants retained by their enclosing trial. | Lookup follows the complete trial chain; each trial keeps ownership of its writes and unknown-value shadows. | `nested_trial_constant_scope` |
+| Cached recursive type identities expanded shared graphs into trees. | Encoding visits each reachable class layout once and fingerprints the graph. | `check_shared_class_type_graph` in `scripts/test_incremental_program_cache.py` |
+| Edited builds repeatedly specialized equivalent recursive layouts. | Refinement retains the established type when it already contains the incoming structure. | `check_equivalent_recursive_layouts` in `scripts/test_incremental_class_layouts.py` |
+| Reordered calls exchanged cached bodies for different class layouts, or lost their cached LLVM function. | Symbols use stable declaration identities and full concrete type identities, including nested arrays and callback signatures. Codegen shares the cache's graph encoder. | `check_class_symbol_identity` in `scripts/test_incremental_class_layouts.py`, `unbound_class_symbol` |
+
+The shared editor additionally fixes UTF-16 workspace-edit planning, protected
+prefix ranges, completion edits and continuation commands, Unicode insertion and
+IME completion triggers, clipboard event normalization, and editor-themed popup
+geometry. Studio, River and ordinary embedded source controls use the same
+workspace, document, language client and interaction code.
+
+Two borrowed-list traversals incorrectly reassigned their by-reference arguments:
+palette comparison cleared the retained palette, causing repeated syntax-color
+application and idle redraws; query cancellation discarded the owned feature
+slots after an edit. Both now walk a local cursor. Regressions check retained list
+identity, repeated unchanged presentation, slot reuse after edits and context
+changes, and zero retained allocations through the actual Wasm runtime. These
+checks run at both optimization levels alongside the native editor fixtures.
+
+Symbol identity distinguishes type descriptors from runtime layouts: an unbound
+class used as a type argument does not need an allocated instance. Exposed
+C-callable wrappers retain their public names; the object-output test links and
+runs its existing C caller at O0, O2 and O3.
+
+LLVM can replace a constant `printf` with `puts`. The shared Wasm host now
+recognizes and implements that import, preserving UTF-8 text and its trailing
+newline. Host tests cover empty, ASCII and Unicode strings; the unbound-class
+regression also executes the optimized output through the Wasm host.
+
+Native helper test builds honor `CMAKE_BUILD_PARALLEL_LEVEL`, with one job by
+default, instead of forcing two jobs over the caller's limit.

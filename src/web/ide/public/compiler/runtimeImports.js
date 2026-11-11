@@ -118,6 +118,7 @@ const supportedEnvImports = new Set([
   "memmove",
   "memset",
   "printf",
+  "puts",
   "rand",
   "realloc",
   "remove",
@@ -585,6 +586,10 @@ export function buildRuntimeImports(stdoutChunks, filesystem, layout) {
       const output = buildFormatStringOutput(memory, readCString(memory, formatPointer), varargsPointer);
       stdoutChunks.push(output);
       return new TextEncoder().encode(output).length;
+    },
+    puts(pointer) {
+      stdoutChunks.push(readCString(memory, pointer) + "\n");
+      return 0;
     },
     rand() {
       randomState = (1103515245 * randomState + 12345) & 0x7fffffff;

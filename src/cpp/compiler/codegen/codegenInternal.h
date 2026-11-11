@@ -57,7 +57,8 @@ resolveCodegenBindingLayers(ParseContext &context, Expression *expression, Bindi
 DataType finalizedExpressionType(ParseContext &context, Expression *expr);
 PatternDefinition *finalizedPatternDefinition(ParseContext &context, Expression *expr);
 llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name, DataType type);
-std::string getPatternFunctionName(Section *section);
+std::string getPatternName(Section *section);
+std::string getPatternFunctionName(ParseContext &context, Section *section);
 void allocateSectionVariables(ParseContext &context, Section *section, InstantiatedSectionBody *body = nullptr);
 LValueAddressResult generateLValueAddress(ParseContext &context, Expression *expr);
 llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromType, DataType toType);

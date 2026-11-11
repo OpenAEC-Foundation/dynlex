@@ -3,6 +3,7 @@
 
 def check_class_layout_restoration(root, build):
     check_equivalent_recursive_layouts(root, build)
+    check_class_symbol_identity(root, build)
     recursive = root / "recursive_class_constraint.dl"
     recursive_source = ('[a|] pointer to pointee means: @intrinsic("add pointer depth", pointee)\n'
                         'value as destination means: @intrinsic("cast", value, destination)\n'
@@ -124,3 +125,45 @@ scan @intrinsic("address of", position) with 2
     assert edited[0]["constraint_values_reused"] > 0
     assert edited[0]["inference_instantiations_reused"] > 0
     assert edited[1:] == build(False, entry=main)[1:]
+
+
+def check_class_symbol_identity(root, build):
+    main = root / "class_symbol_identity.dl"
+    source = '''integer means: @intrinsic("type", "int", 32)
+class:
+    patterns:
+        box
+    members:
+        value
+
+to get inspect box value:
+    @intrinsic("return", @intrinsic("less than", @intrinsic("cast", value's value, @intrinsic("type", "float", 64)), 2.0))
+
+to get inspect collection values:
+    @intrinsic("store", item, @intrinsic("extract element", values, 0))
+    @intrinsic("return", inspect box item)
+
+@intrinsic("store", first, @intrinsic("construct", box, @intrinsic("call", "libc", "abs", integer, 1)))
+@intrinsic("store", second, @intrinsic("construct", box, @intrinsic("cast", @intrinsic("call", "libc", "abs", integer, 3), @intrinsic("type", "float", 64))))
+'''
+    for aggregate in (False, True):
+        prepared = source
+        action = "inspect box"
+        if aggregate:
+            prepared += '@intrinsic("store", {first group}, [first])\n'
+            prepared += '@intrinsic("store", {second group}, [second])\n'
+            action = "inspect collection"
+        names = ["{first group}", "{second group}"] if aggregate else ["first", "second"]
+        calls = [
+            f'@intrinsic("discard", @intrinsic("call", "libc", "putchar", integer, '
+            f'@intrinsic("add", 48, @intrinsic("cast", {action} {name}, integer))))\n'
+            for name in names
+        ]
+        for flags in ((), ("-O2",)):
+            main.write_text(prepared + "".join(calls))
+            assert build(entry=main, flags=flags)[2] == b"10"
+            main.write_text(prepared + "".join(reversed(calls)))
+            changed = build(entry=main, flags=flags)
+            assert changed[0]["inference_instantiations_reused"] > 0, "class call edit did not reuse inference"
+            assert changed[1:] == build(False, entry=main, flags=flags)[1:], "reordered class layouts reused another instantiation's function"
+            assert changed[2] == b"01"

@@ -243,8 +243,7 @@ resolveCodegenBindingLayers(ParseContext &context, Expression *expression, Bindi
 	if (bindingFrameStack.empty())
 		bindingFrameStack.pushFrame(BindingFrame{});
 	return resolveThroughBindingLayers(
-		expression, std::move(bindingFrameStack),
-		[&](Expression *expression) -> std::optional<FlexBindingExpansion> {
+		expression, std::move(bindingFrameStack), [&](Expression *expression) -> std::optional<FlexBindingExpansion> {
 		if (!expression || expression->kind != Expression::Kind::PatternCall)
 			return std::nullopt;
 		PatternDefinition *definition = finalizedPatternDefinition(context, expression);
@@ -309,7 +308,7 @@ llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &na
 }
 
 // Generate a unique function name for a pattern
-std::string getPatternFunctionName(Section *section) {
+std::string getPatternName(Section *section) {
 	requireCompilerInvariant(section != nullptr, "function naming requires a section");
 	std::string name;
 	if (!section->patternDefinitions.empty()) {
@@ -327,6 +326,14 @@ std::string getPatternFunctionName(Section *section) {
 		}
 	}
 	return name;
+}
+
+std::string getPatternFunctionName(ParseContext &context, Section *section) {
+	auto identity = context.codegenSectionIdentities.find(section);
+	requireCompilerInvariant(
+		identity != context.codegenSectionIdentities.end(), "generated function has no stable declaration identity"
+	);
+	return getPatternName(section) + "_definition_" + identity->second;
 }
 
 static void

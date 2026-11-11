@@ -7,6 +7,7 @@ import {
 } from "../../src/web/ide/public/compiler/runtimeImports.js";
 
 const importNames = [
+  "puts",
   "dynlex_host_error_message",
   "dynlex_host_user_cache_directory",
   "dynlex_host_executable_directory",
@@ -24,8 +25,9 @@ for (const name of importNames) {
   assert.equal(isSupportedRuntimeImport({ module: "env", name }), true, `${name} must be supported`);
 }
 
+const output = [];
 const { env } = buildRuntimeImports(
-  [],
+  output,
   createRuntimeFilesystem(),
   { heapBase: 8 * 1024 * 1024 + 16 }
 );
@@ -41,6 +43,12 @@ function writeInput(text) {
   new Uint8Array(memory.buffer).set(encoded, pointer);
   return { length: encoded.length, pointer };
 }
+
+for (const text of ["plain output", "", "Olá 😀"]) {
+  const input = writeInput(text);
+  assert(env.puts(input.pointer) >= 0);
+}
+assert.equal(output.join(""), "plain output\n\nOlá 😀\n");
 
 function errorMessage(name) {
   const length = env[name](0, 0);

@@ -1,7 +1,10 @@
-static std::string buildCallableFunctionName(PatternDefinition *definition, const std::vector<DataType> &argumentTypes) {
-	std::string name = getPatternFunctionName(definition->section) + "_callable";
+static std::string
+buildCallableFunctionName(ParseContext &context, PatternDefinition *definition, const std::vector<DataType> &argumentTypes) {
+	const bool exposed = definition->section->isExposed;
+	std::string name =
+		(exposed ? getPatternName(definition->section) : getPatternFunctionName(context, definition->section)) + "_callable";
 	for (const DataType &type : argumentTypes)
-		name += "_" + encodeLLVMNameComponent(type.toString());
+		name += "_" + (exposed ? encodeLLVMNameComponent(type.toString()) : encodeLLVMTypeName(context, type));
 	return name;
 }
 
@@ -50,7 +53,7 @@ bool ensureCallableFunctionGenerated(
 		parameterTypes.push_back(getLLVMType(context, parameterType));
 	llvm::Type *returnType = getLLVMType(context, instantiationPointer->returnType);
 	llvm::FunctionType *callableType = llvm::FunctionType::get(returnType, parameterTypes, false);
-	std::string callableName = buildCallableFunctionName(definition, argumentTypes);
+	std::string callableName = buildCallableFunctionName(context, definition, argumentTypes);
 	llvm::GlobalValue::LinkageTypes linkage = (requireExternalLinkage || section->isExposed)
 												  ? llvm::GlobalValue::ExternalLinkage
 												  : llvm::GlobalValue::InternalLinkage;

@@ -109,6 +109,13 @@ bool generateCode(
 		context.llvmContext && context.llvmModule && !context.llvmBuilder,
 		"code generation requires one initialized target layout"
 	);
+	std::map<std::string, Section *> identities;
+	collectSections(context.mainSection, "root", identities);
+	for (const auto &[path, section] : identities) {
+		context.codegenSectionIdentities.emplace(section, stableIdentityDigest(path));
+		if (section->type == SectionType::Class)
+			context.codegenClassIdentities.emplace(static_cast<ClassSection *>(section)->classDefinition, path);
+	}
 	context.llvmBuilder = new llvm::IRBuilder<>(*context.llvmContext);
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);

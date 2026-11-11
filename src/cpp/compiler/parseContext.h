@@ -135,6 +135,10 @@ struct ParseContext {
 	std::vector<IncrementalFunctionRequest> incrementalReplacementFunctions;
 	std::function<void(Section *, const InstantiationKey *, llvm::Function *, bool)> recordGeneratedFunction;
 	std::function<bool(ParseContext &)> importReusedFunctions;
+	// Code generation names definitions and concrete types independently of call order.
+	std::map<const Section *, std::string> codegenSectionIdentities;
+	std::map<const ClassDefinition *, std::string> codegenClassIdentities;
+	std::map<DataType, std::string> codegenTypeIdentities;
 	std::array<double, 4> frontendStageMilliseconds{};
 	std::array<double, 6> inferenceStageMilliseconds{};
 	double resolutionSetupMilliseconds = 0;

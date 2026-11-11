@@ -848,6 +848,15 @@ they are not an integer interchange API.
 Native callable definitions and external-call declarations and call sites apply the same narrow-scalar ABI extension attributes.
 Booleans use `zeroext`, and 8/16-bit integers extend according to signedness. Non-Darwin AArch64 (AAPCS64) leaves these scalars
 unextended; Win64 extends only Booleans. Internal pattern calls keep their separate by-reference calling convention.
+Generated function symbols identify their declaration and complete concrete argument types,
+including class layouts inside arrays and callback signatures. Definition identities follow
+source headers and lexical ownership rather than line numbers; type identities visit each
+reachable class layout once. Code generation and incremental inference share this identity
+encoder. Reordering calls cannot exchange two specializations' symbols or cached bodies.
+Compile-time type descriptors can identify an unbound class without requiring a
+runtime layout. Concrete inference summaries still require complete types.
+Exposed C-callable wrappers retain their public pattern-and-signature names;
+internal specializations and callbacks use the complete identities above.
 Internal function generation preserves each runtime argument's storage address space and caches the resulting ABI on
 the inferred instantiation. Forwarding a global reference retains its original storage; local and global references can
 therefore select distinct LLVM functions for the same inferred argument types.
