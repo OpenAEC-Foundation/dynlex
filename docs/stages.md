@@ -427,6 +427,10 @@ function names. Known variable or literal storage cannot be deallocated, while n
 accepted. Parameter storage can alias heap storage and is therefore unknown. Library deallocations use these patterns rather than bypassing the check with raw external calls.
 
 Writing a concrete value through storage whose nested class subtype is still unspecified refines that storage type. Function instantiations record refinements to parameter storage and apply them to the caller, so a generic container can bind its element subtype on its first write without losing it at the function boundary. This only completes unspecified structure; it never changes an already concrete member type.
+Structurally equivalent recursive layouts retain the established storage type,
+even when their internal instantiation IDs differ. Only added structure propagates
+as a refinement, so equivalent layouts cannot generate an unbounded chain of
+function specializations.
 
 Assignments involving unfinished structure record type equations between lexical storage views. Fully determined types need no new equations; writes to existing roots still propagate through their earlier equations. Views project fields, aggregate elements and
 pointer depth, so refinement through a copied pointer also completes the corresponding subtype in its source. These are
@@ -1200,8 +1204,10 @@ known-argument call can use that value without reinferring the body; a new
 argument still infers the body and evaluates the call normally.
 Summaries record return address provenance and storage-parameter relationships, plus
 writes, known constants, address provenance, and address escapes for global variables.
-Class type identities include the current instantiation's field types; a changed layout
-prevents reuse. A summary that accesses globals requires the same structural global
+Type identities include a digest of the field types of all reachable class instantiations.
+Each layout is visited once, in discovery order, so shared and recursive types do not
+expand into nested copies. A changed layout prevents reuse.
+A summary that accesses globals requires the same structural global
 types as the previous build. A summary
 is reused only if its source body, pattern declarations, every matched function
 dependency and its cached IR closure are unchanged. Other instantiations still

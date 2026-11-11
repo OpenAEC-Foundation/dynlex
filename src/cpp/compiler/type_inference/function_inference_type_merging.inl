@@ -1,11 +1,13 @@
 static bool
 refineUnspecifiedClassInstantiation(const DataType &currentType, const DataType &incomingType, DataType &refinedType) {
-	if (ClassDefinition::typeStructurallyRefines(incomingType, currentType)) {
-		refinedType = incomingType;
-		return true;
-	}
+	// Equivalent recursive layouts can have different instantiation identities.
+	// Keep the established type unless the incoming type adds structure.
 	if (ClassDefinition::typeStructurallyRefines(currentType, incomingType)) {
 		refinedType = currentType;
+		return true;
+	}
+	if (ClassDefinition::typeStructurallyRefines(incomingType, currentType)) {
+		refinedType = incomingType;
 		return true;
 	}
 	return false;

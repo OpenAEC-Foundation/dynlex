@@ -2,6 +2,7 @@
 
 
 def check_class_layout_restoration(root, build):
+    check_equivalent_recursive_layouts(root, build)
     recursive = root / "recursive_class_constraint.dl"
     recursive_source = ('[a|] pointer to pointee means: @intrinsic("add pointer depth", pointee)\n'
                         'value as destination means: @intrinsic("cast", value, destination)\n'
@@ -66,3 +67,60 @@ def check_class_layout_restoration(root, build):
         "changed class field type was not re-evaluated"
     assert changed[2] != initial[2], "class field type edit did not change its runtime layout"
     assert changed[1:] == build(False, entry=provider)[1:]
+
+
+def check_equivalent_recursive_layouts(root, build):
+    main = root / "equivalent_recursive_layouts.dl"
+    source = '''[a|] pointer to pointee means: @intrinsic("add pointer depth", pointee)
+integer means: @intrinsic("type", "int")
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+class:
+    patterns:
+        an entry
+    members:
+        next as a pointer to an entry
+        document as a pointer to metadata
+class:
+    patterns:
+        a cursor
+    members:
+        first as a pointer to an entry
+
+class:
+    patterns:
+        metadata
+    members:
+        owner as a pointer to a cursor
+
+to get fresh metadata:
+    @intrinsic("discard", @intrinsic("call", "libc", "rand", integer))
+    @intrinsic("return", @intrinsic("construct", a pointer to metadata))
+
+to touch: @intrinsic("discard", 1)
+
+to scan {a pointer to a cursor:state} with {integer:depth}:
+    if @intrinsic("not equal", depth, 0):
+        set item to @intrinsic("construct", an entry)
+        set item's document to fresh metadata
+        set item's next to state's first
+        set state's first to @intrinsic("construct", a pointer to @intrinsic("type of", item))
+        scan state with @intrinsic("subtract", depth, 1)
+
+set position to @intrinsic("construct", a cursor)
+touch
+scan @intrinsic("address of", position) with 2
+'''
+    main.write_text(source)
+    cold = build(entry=main)
+    assert cold[1:] == build(False, entry=main)[1:]
+    main.write_text(source.replace('"discard", 1', '"discard", 2'))
+    edited = build(entry=main)
+    assert edited[0]["constraint_values_reused"] > 0
+    assert edited[0]["inference_instantiations_reused"] > 0
+    assert edited[1:] == build(False, entry=main)[1:]

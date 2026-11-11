@@ -42,30 +42,31 @@ void decodePureReturnValues(const Json &encoded, Instantiation &instantiation) {
 	}
 }
 
-std::optional<std::string> inferenceSummaryKey(const InstantiationKey &key, const ClassIdentityPaths &classPaths) {
+std::optional<Json> inferenceArgumentTypes(const InstantiationKey &key, const ClassIdentityPaths &classPaths) {
 	if (!key.compileTimeParameters.empty())
 		return std::nullopt;
 	Json arguments = Json::array();
 	for (const DataType &type : key.argumentTypes) {
-		std::set<std::pair<const ClassDefinition *, int>> visiting;
-		auto identity = inferenceTypeIdentity(type, classPaths, visiting);
+		auto identity = inferenceTypeIdentity(type, classPaths);
 		if (!identity)
 			return std::nullopt;
 		arguments.push_back(std::move(*identity));
 	}
-	return digest(arguments.dump());
+	return arguments;
 }
 
-bool canPersistInferenceSummary(
-	const Section *section, const InstantiationKey &key, const Instantiation &instantiation,
-	const ClassIdentityPaths &classPaths
-) {
-	std::set<std::pair<const ClassDefinition *, int>> visiting;
+std::optional<std::string> inferenceSummaryKey(const InstantiationKey &key, const ClassIdentityPaths &classPaths) {
+	auto arguments = inferenceArgumentTypes(key, classPaths);
+	if (!arguments)
+		return std::nullopt;
+	return digest(arguments->dump());
+}
+
+bool canPersistInferenceSummary(const Section *section, const InstantiationKey &key, const Instantiation &instantiation) {
 	return section->type == SectionType::Function && !section->isFlex && !section->isConversion &&
-		   inferenceSummaryKey(key, classPaths).has_value() && instantiation.valid && !instantiation.inferring &&
-		   !instantiation.needsReinfer && instantiation.body &&
-		   inferenceTypeIdentity(instantiation.returnType, classPaths, visiting).has_value() &&
-		   instantiation.argumentTypes == key.argumentTypes && instantiation.parameterSeedTypesByName.empty() &&
+		   key.compileTimeParameters.empty() && instantiation.valid && !instantiation.inferring &&
+		   !instantiation.needsReinfer && instantiation.body && instantiation.argumentTypes == key.argumentTypes &&
+		   instantiation.parameterSeedTypesByName.empty() &&
 		   std::ranges::all_of(
 			   instantiation.parameterOutputTypesByName,
 			   [&](const auto &entry) {
@@ -91,7 +92,7 @@ Json captureInferenceSummaries(
 		if (inferenceSummarySourceExcluded(section, excludedSources) || (skipped && skipped->contains(section)))
 			continue;
 		for (const auto &[key, instantiation] : section->instantiations) {
-			if (!canPersistInferenceSummary(section, key, instantiation, classPaths))
+			if (!canPersistInferenceSummary(section, key, instantiation))
 				continue;
 			auto globalEffects = encodeGlobalEffects(section, instantiation);
 			if (!globalEffects)
@@ -104,17 +105,16 @@ Json captureInferenceSummaries(
 									instantiation.externallyEscapedGlobalProvenance != AddressProvenance{};
 			if (needsGlobalTypes && globalTypes.is_null())
 				continue;
-			Json argumentTypes = Json::array();
-			for (const DataType &type : key.argumentTypes) {
-				std::set<std::pair<const ClassDefinition *, int>> visiting;
-				argumentTypes.push_back(*inferenceTypeIdentity(type, classPaths, visiting));
-			}
-			std::set<std::pair<const ClassDefinition *, int>> visiting;
+			auto argumentTypes = inferenceArgumentTypes(key, classPaths);
+			auto returnType = inferenceTypeIdentity(instantiation.returnType, classPaths);
+			if (!argumentTypes || !returnType)
+				continue;
+			std::string summaryKey = digest(argumentTypes->dump());
 			Json pureValues = encodePureReturnValues(section, instantiation);
 			bool pureValuesComplete = pureValues.size() == instantiation.pureReturnValuesByArguments.size();
-			summaries[path][*inferenceSummaryKey(key, classPaths)] = Json{
-				{"argument_types", std::move(argumentTypes)},
-				{"return_type", *inferenceTypeIdentity(instantiation.returnType, classPaths, visiting)},
+			summaries[path][summaryKey] = Json{
+				{"argument_types", std::move(*argumentTypes)},
+				{"return_type", std::move(*returnType)},
 				{"purity", static_cast<int>(instantiation.purity)},
 				{"has_return_address_provenance", instantiation.hasReturnAddressProvenance},
 				{"return_provenance", std::move(*returnProvenance)},
@@ -148,8 +148,10 @@ class IncrementalInferenceReuse {
 	}
 
 	bool reuse(Section *section, const InstantiationKey &key, Instantiation &instantiation, bool allowPureValueSummary) {
+		if (!eligible.contains(section))
+			return false;
 		std::optional<std::string> keyText = inferenceSummaryKey(key, classPaths);
-		if (!eligible.contains(section) || !keyText)
+		if (!keyText)
 			return false;
 		const std::string &path = sectionPaths.at(section);
 		if (!summaries.contains(path) || !summaries.at(path).contains(*keyText))
