@@ -62,15 +62,39 @@ template <typename Remap> Json remapInferenceSummaryTypes(const Json &sections, 
 	return result;
 }
 
+struct InferenceTypeHash {
+	size_t operator()(const Json *value) const {
+		if (value->is_array()) {
+			size_t hash = llvm::hash_combine('a', value->size());
+			for (const Json &element : *value)
+				hash = llvm::hash_combine(hash, (*this)(&element));
+			return hash;
+		}
+		if (value->is_string())
+			return llvm::hash_combine('s', llvm::StringRef(value->get_ref<const std::string &>()));
+		// Loaded JSON uses unsigned values for positive integers. Fresh
+		// snapshots can use signed values for the same type metadata.
+		return llvm::hash_combine('i', value->get<int64_t>());
+	}
+};
+
+struct InferenceTypeEqual {
+	bool operator()(const Json *left, const Json *right) const { return *left == *right; }
+};
+
 Json encodeInferenceSummaries(const Json &summaries) {
 	Json types = Json::array();
-	std::unordered_map<std::string, size_t> indices;
+	// The input remains immutable throughout encoding. A repeated complete
+	// type can be reused before visiting or serializing any of its children.
+	std::unordered_map<const Json *, size_t, InferenceTypeHash, InferenceTypeEqual> indices;
 	std::function<size_t(const Json &)> intern = [&](const Json &type) {
+		if (auto found = indices.find(&type); found != indices.end())
+			return found->second;
 		Json node = remapInferenceTypeChildren(type, intern);
-		auto [entry, inserted] = indices.try_emplace(node.dump(), types.size());
-		if (inserted)
-			types.push_back(std::move(node));
-		return entry->second;
+		size_t index = types.size();
+		types.push_back(std::move(node));
+		indices.emplace(&type, index);
+		return index;
 	};
 	Json sections = remapInferenceSummaryTypes(summaries, intern);
 	return Json{{"types", std::move(types)}, {"sections", std::move(sections)}};
