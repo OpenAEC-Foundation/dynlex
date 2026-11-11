@@ -8,6 +8,7 @@ struct ActiveClassInstantiation {
 struct ClassInstantiationTransaction {
 	ParseContext *parseContext{};
 	std::unordered_map<ClassDefinition *, size_t> originalInstantiationSizes;
+	std::vector<ClassDefinition *> appendedDefinitions;
 	std::vector<std::pair<ClassDefinition *, std::string>> insertedRequestKeys;
 	bool failed = false;
 };
@@ -50,9 +51,11 @@ static void recordClassInstantiationAppend(ClassDefinition *classDefinition) {
 	requireCompilerInvariant(
 		activeClassInstantiationTransaction.has_value(), "class instantiation append has no active transaction"
 	);
-	activeClassInstantiationTransaction->originalInstantiationSizes.try_emplace(
+	auto [entry, inserted] = activeClassInstantiationTransaction->originalInstantiationSizes.try_emplace(
 		classDefinition, classDefinition->instantiations.size()
 	);
+	if (inserted)
+		activeClassInstantiationTransaction->appendedDefinitions.push_back(classDefinition);
 }
 
 static void cacheClassInstantiationRequest(ClassDefinition *classDefinition, const std::string &requestKey, int index) {
@@ -167,7 +170,7 @@ struct ScopedActiveClassInstantiation {
 			requireCompilerInvariant(
 				!activeClassInstantiationTransaction.has_value(), "class instantiation transaction leaked between resolutions"
 			);
-			activeClassInstantiationTransaction = ClassInstantiationTransaction{&parseContext, {}, {}, false};
+			activeClassInstantiationTransaction = ClassInstantiationTransaction{&parseContext, {}, {}, {}, false};
 		} else {
 			requireCompilerInvariant(
 				activeClassInstantiationTransaction && activeClassInstantiationTransaction->parseContext == &parseContext,

@@ -1,0 +1,7 @@
+class:
+    patterns:
+        endless
+    members:
+        next as endless
+
+endless

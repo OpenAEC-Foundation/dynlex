@@ -625,6 +625,7 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 
 static void recordUnknownTypeConstraintFailure(InferenceContext *inferenceContext, ParseContext &parseContext, Range range);
 
+#include "class_storage_resolution.inl"
 #include "type_resolution_class.inl"
 #include "type_resolution_diagnostics.inl"
 #include "type_resolution_overloads.inl"
@@ -654,6 +655,16 @@ static bool variableReferenceIsCurrentInstantiationParameter(const InferenceCont
 static void recordUnknownTypeConstraintFailure(InferenceContext *inferenceContext, ParseContext &parseContext, Range range) {
 	requireCompilerInvariant(inferenceContext != nullptr, "type-constraint failure requires an inference context");
 	inferenceContext->fail(unknownTypeConstraintDiagnostic(parseContext, range, range.subString), 1, false);
+}
+
+static void recordRecursiveClassStorageFailure(
+	InferenceContext *inferenceContext, ParseContext &parseContext, Range range, const DataType &type
+) {
+	requireCompilerInvariant(inferenceContext != nullptr, "recursive class storage requires an inference context");
+	inferenceContext->fail(
+		Diagnostic(parseContext, Diagnostic::Level::Error, "recursive class storage", range, "type", typeToUserName(type)), 1,
+		false
+	);
 }
 
 #include "type_resolution_values.inl"

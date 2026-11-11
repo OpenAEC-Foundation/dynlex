@@ -333,7 +333,7 @@ static DataType instantiateBoundClassType(
 			if (!completeBoundClassFieldType(fieldType, (*constructionArgumentTypes)[fieldIndex], completedFieldType))
 				return {};
 			fieldType = std::move(completedFieldType);
-		} else if (!fieldType.isConcrete()) {
+		} else if (!classFieldTypeIsCompleteOrPending(fieldType)) {
 			activeInstantiation.completed = true;
 			return {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
 		}
@@ -360,6 +360,8 @@ static DataType instantiateBoundClassType(
 		requireCompilerInvariant(instIndex == newIndex, "new recursive class instantiation did not use its planned index");
 	}
 	resolveStoredSymbolicClassInstantiation(classDef, symbolicIndex, instIndex);
+	if (activeInstantiation.ownsTransaction && !validateCompletedClassStorage(parseContext, inferenceContext))
+		return {};
 	cacheClassInstantiationRequest(classDef, requestKey, instIndex);
 	activeInstantiation.completed = true;
 	return {DataType::Kind::Type, 0, 0, classDef, instIndex, nullptr, DataType::Kind::Class};

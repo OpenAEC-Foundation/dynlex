@@ -2,4 +2,4 @@ class:
     patterns:
         [a|] sample
     members:
-        first as (, second as )
+        first as ), second as (

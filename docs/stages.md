@@ -333,6 +333,17 @@ overloads. Declaration order never selects an overload.
 this implies:
  - functions and classes are instantiated on USAGE. for functions when they're called, for classes with the construct intrinsic. so if a class or function is never used, NO instantiation is created.
 
+Class layout resolution keeps symbolic references throughout a mutually recursive
+instantiation transaction, including inline fields and array elements. An active
+symbolic layout is distinct from an unspecified generic member type. Once those
+references resolve, the graph of inline storage must be acyclic; a pointer breaks
+the storage cycle. Infinite inline storage produces a configured source diagnostic.
+
+Member lists split only at commas outside brackets and string literals. A member's
+type can be any ordinary type expression, including an intrinsic containing named
+types. Type-reference expansion visits pending arguments beneath an already parsed
+outer expression, and unresolved references retain type-constraint diagnostics.
+
 The compiler NEVER expands flexes to look for something like an intrinsic. instead, the compiler walks the code normally and once intrinsics are encountered, it does something with them.
 
 Recursive function inference runs complete body passes until the instantiation stabilizes.

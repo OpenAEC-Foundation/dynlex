@@ -582,6 +582,19 @@ const unboundClassFixture = new URL('../required/unbound_class_symbol/', import.
 assert.equal(await compileAndRun(await readFile(new URL('main.dl', unboundClassFixture), 'utf8')),
   await readFile(new URL('expected.txt', unboundClassFixture), 'utf8'));
 
+for (const fixture of ['recursive_inline_pointer_layout', 'recursive_inline_array_layout', 'member_nested_type_expressions']) {
+  const directory = new URL(`../required/${fixture}/`, import.meta.url);
+  assert.equal(await compileAndRun(await readFile(new URL('main.dl', directory), 'utf8')),
+    await readFile(new URL('expected.txt', directory), 'utf8'), fixture);
+}
+for (const fixture of ['recursive_inline_storage_invalid', 'recursive_array_storage_invalid']) {
+  const source = await readFile(new URL(`../required/${fixture}/main.dl`, import.meta.url), 'utf8');
+  moduleInstance.ccall('dynlex_web_set_main_source', null, ['string'], [source]);
+  assert.notEqual(moduleInstance.ccall('dynlex_web_compile_and_emit_wasm', 'number', [], []), 0, fixture);
+  const diagnostics = moduleInstance.ccall('dynlex_web_get_diagnostics_json', 'string', [], []);
+  assert.match(diagnostics, /recursive inline storage; use a pointer to break the cycle/, fixture);
+}
+
 // Exercise the rebuilt compiler and its embedded standard library with the
 // same numeric and scope-rule regressions as the native compiler.
 for (const fixture of ["scope_rules_function_body", "numeric_library_patterns"]) {

@@ -1,0 +1,10 @@
+type called {name} means: @intrinsic("type", "int", 32)
+
+class:
+    patterns:
+        sample
+    members:
+        first as @intrinsic("type", "int", 32), values as @intrinsic("array", 2, @intrinsic("type", "int", 32)), last as type called "a quoted \", comma"
+
+@intrinsic("store", value, @intrinsic("construct", sample, 1, [2, 3], 4))
+@intrinsic("variadic call", "libc", "printf", @intrinsic("type", "nothing"), 1, "%d %d %d\n", value's first, @intrinsic("extract element", value's values, 1), value's last)
