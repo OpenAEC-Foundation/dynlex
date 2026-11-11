@@ -12,6 +12,7 @@ set view's driver to the address of driver
 set view's instance to the address of instance
 set view's active to true
 set state to a new website state
+set state's services to the browser UI service provider
 set state's view to the address of view
 set state's shader editor's description to the custom website shader
 set instance's state to (the address of state) as a pointer

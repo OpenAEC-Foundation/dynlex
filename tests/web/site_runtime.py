@@ -39,7 +39,7 @@ def main():
             source = project / f'tests/web/{name}.dl'
             if name in models:
                 expected = (ROOT / f'tests/web/models/{name}.txt').read_text()
-                for suffix, options in [('.out', []), ('.optimized.out', ['-O2']), ('.wasm', ['--emit-wasm'])]:
+                for suffix, options in [('.out', ['-O0']), ('.optimized.out', ['-O2']), ('.wasm', ['--emit-wasm'])]:
                     binary = project / (name + suffix)
                     subprocess.run([str(args.compiler.resolve()), str(source), *options, '-o', str(binary)],
                                    cwd=ROOT, check=True, timeout=180)

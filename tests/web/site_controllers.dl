@@ -5,6 +5,7 @@ set instance to an instance of website fixture
 set view to a new UI view
 set view's instance to the address of instance
 set state to a new website state
+set state's services to the browser UI service provider
 set state's view to the address of view
 set instance's state to (the address of state) as a pointer
 run website program 0 in (the address of state)

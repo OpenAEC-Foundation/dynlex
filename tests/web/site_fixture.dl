@@ -9,6 +9,7 @@ document website fixture:
 
 
 import ../../site/packages/dynlex-ui/platform/browser/shaders.dl
+import ../../site/packages/dynlex-ui/platform/browser/requests.dl
 
 to get [a website shader test driver]:
     set driver to a new UI driver

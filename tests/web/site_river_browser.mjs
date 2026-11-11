@@ -5,6 +5,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { setTimeout as pause } from 'node:timers/promises';
+import { verifySourceCompletion, verifySourcePaste } from './editor_feature_checks.mjs';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
 const graphicsMode = process.argv[3] || 'system';
@@ -124,7 +125,7 @@ try {
   });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: await fs.readFile(new URL('./fixtures/ui-color-probe.js', import.meta.url), 'utf8') });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], commands: [], marks: [], requests: [], contexts: [], sources: [], decoded: 0, frames: new Set() };
+    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], completions: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], commands: [], marks: [], requests: [], contexts: [], sources: [], decoded: 0, frames: new Set() };
     const scheduleFrame = requestAnimationFrame.bind(window), cancelFrame = cancelAnimationFrame.bind(window);
     window.requestAnimationFrame = callback => {
       let id = scheduleFrame(time => { window.siteProbe.frames.delete(id); callback(time); });
@@ -223,6 +224,8 @@ try {
             status: data.result.status, stages: Object.keys(data.result.stages || {})
           });
           if (!Array.isArray(data.result)) return;
+          for (const message of data.result) if (Array.isArray(message.result?.items))
+            window.siteProbe.completions.push(message.result.items);
           for (const message of data.result) if (message.method === 'textDocument/publishDiagnostics')
             window.siteProbe.diagnostics.push(message.params);
         });
@@ -369,8 +372,9 @@ try {
   // The source editor is the only code surface in this active view. Click its
   // starter comment, select the document, and type through normalized input.
   await clickText('# The official names are: sheep, wolf, and hay.');
-  await key('KeyA','a',65,2);
-  await command('Input.insertText',{text:plan});
+  await verifySourceCompletion({command,evaluate,waitFor,key,capture,
+    source:'get t',prefix:'import lib/river_challenge.dl\n\n',name:'river'});
+  await verifySourcePaste({command,evaluate,waitFor,key,source:plan});
   await pause(100);
   assert.equal(await evaluate('window.siteProbe.marks.length'),0,'Editing retained execution marks from another snapshot');
   await clickText('Run plan ▶');

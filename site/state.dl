@@ -1,5 +1,5 @@
 import packages/dynlex-ui/ui/application.dl
-import packages/dynlex-ui/platform/browser/requests.dl
+import packages/dynlex-ui/ui/services.dl
 import lib/json_builders.dl
 import downloads/release.dl
 import programs/types.dl
@@ -23,6 +23,7 @@ class:
         website state
     members:
         view as a pointer to UI view
+        services as a pointer to UI service provider
         requests as a pointer to website request
         route as a string
         fragment as a string
@@ -65,7 +66,7 @@ to request {C string:service} containing {a pointer to JSON value:payload} for p
     request service with JSON data data for purpose job indexed index in state
 
 to request {C string:service} with JSON data {string:data} for purpose {integer:job} indexed {integer:index} in {a pointer to website state:state}:
-    set id to a browser UI request named service containing data in (state's view)
+    set id to a UI request named service containing data through (state's services) in (state's view)
     set pending to @intrinsic("construct", website request, id, job, index, state's requests, false)
     set state's requests to storage for one slot initialized with pending
 
@@ -79,7 +80,7 @@ to get cancel website request {integer:id} in {a pointer to website state:state}
             set previous to pending
             set pending to pending's next
     require condition found reporting "The cancelled website request has no owner"
-    set active to cancel browser UI request id
+    set active to cancel UI request id through (state's services) in (state's view)
     if active:
         if previous = @intrinsic("construct", a pointer to website request):
             set state's requests to pending's next

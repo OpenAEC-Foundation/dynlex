@@ -24,11 +24,15 @@ export function createCompilerServices(base, dependencyUrl) {
         return null;
       }
       if (payload.operation !== 'compile') throw new Error(`Unknown compiler operation: ${payload.operation}`);
+      let target;
+      if (payload.target === 'cpu') target = 'wasm';
+      else if (payload.target === 'shader') target = 'shader';
+      else throw new Error(`Unknown compiler target: ${payload.target}`);
       const result = await connection('build').request('compile', {
         sources: { ...await sources(), ...payload.sources }, entry: payload.entry,
-        target: payload.target, traced: payload.traced, stages: payload.stages
+        target, traced: payload.traced, stages: payload.stages
       }, { signal });
-      if (result.status === 0 && payload.target === 'wasm') {
+      if (result.status === 0 && target === 'wasm') {
         result.artifact = nextArtifact++; artifacts.set(result.artifact, result.wasm); delete result.wasm;
       }
       return result;

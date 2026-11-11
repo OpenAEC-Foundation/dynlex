@@ -1,4 +1,4 @@
-# Application metadata and browser transport. Editor behavior lives in dynlex-ui.
+# Application metadata and service transport. Editor behavior lives in dynlex-ui.
 import ../state.dl
 
 to [configure the website source editor] {C string:label} [named] {string:filename} [prefixed by] {string:prefix} [using] {a pointer to JSON value:profiles} [in] {a pointer to website state:state}:
@@ -10,6 +10,7 @@ to [configure the website source editor] {C string:label} [named] {string:filena
 to [open website source editors in] {a pointer to website state:state}:
     set instance to state's view's instance
     set state's language to a UI source workspace in instance rooted at "file:///workspace"
+    enable UI source tools for (state's language) in (state's view)
     set description to the item at (the website program for source "River source") in (the website program descriptions)
     configure the website source editor "River source" named (the string form of (description's filename)) prefixed by (the string form of (description's prefix)) using UI CPU analysis in state
     set river to the UI source editor labeled "River source" in (state's language)
@@ -62,6 +63,7 @@ to [receive website language reply] {a pointer to JSON value:response} [at step]
 to [advance website language analysis in] {a pointer to website state:state}:
     refresh website source editor metadata in state
     set view to state's view
+    update UI source tools in (state's language)
     set work to the next UI source workspace work in (state's language) focused on (the UI source focus in view for (state's language)) at (view's seconds) seconds
     send website language work work in state
     present UI source workspace (state's language) using (the default UI source token theme)

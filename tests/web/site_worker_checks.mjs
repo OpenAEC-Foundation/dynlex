@@ -9,7 +9,7 @@ export async function verifyWorkers(base = new URL('/', location.href)) {
   const signal = deadline.signal;
   let phase = 'initial compile';
   const timer = setTimeout(() => deadline.abort(new Error(`Worker test timed out during ${phase}`)), 30000);
-  const compile = source => provider.services.compiler({ operation: 'compile', target: 'wasm',
+  const compile = source => provider.services.compiler({ operation: 'compile', target: 'cpu',
     entry: 'main.dl', traced: false, sources: { 'main.dl': source } }, { signal });
   try {
     const delayed = new WorkerConnection(new URL('/__tests__/delayed-worker.mjs', location.href));

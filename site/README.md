@@ -3,6 +3,12 @@
 The interface is declared in DynLex and rendered by the shared dynlex-ui library.
 Page content and metadata come from the same records. Browser JavaScript supplies
 platform capabilities, compiler workers and the Wasm execution host.
+The application receives its renderer and service provider independently. Shared
+controllers use `ui/services.dl` for calls, requests and cancellation; `main.dl`
+selects the browser adapters.
+Program requests target `cpu`; the browser compiler service builds Wasm and
+returns an opaque executable artifact. Shader requests retain their explicit
+shader stages.
 
 Build and serve from the compiler checkout:
 
@@ -65,12 +71,15 @@ node tests/web/site_games.mjs
 node tests/web/site_program_protocol.mjs
 ```
 
-Source editors use `dynlex-ui/ui/source_workspace.dl`. The workspace discovers
+Source editors use `dynlex-ui/ui/source_tools.dl`. Its workspace discovers
 source controls, retains one document model per control, synchronizes UI and
 programmatic edits, and schedules active editors through one language connection.
 `editor/language.dl` supplies website project metadata and transports the shared
 client's work to the compiler service. It contains no tokenizer or diagnostic
 coordinate conversion. Studio, River and the homepage sketches use this path.
+Completion requests, suggestion selection, text edits, continuation commands and
+undo use the shared overlay and standard text-edit planner. Website code enables
+the tools once and forwards language-service messages.
 River's hidden vocabulary import is part of the analysis document; the shared
 mapper converts its UTF-16 results back to the visible UTF-8 source. Language
 results use separate presentation slots from River execution feedback.

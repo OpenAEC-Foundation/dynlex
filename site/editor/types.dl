@@ -2,7 +2,7 @@ import lib/sections.dl
 import lib/json.dl
 import ../shaders/types.dl
 
-import ../packages/dynlex-ui/ui/source_workspace.dl
+import ../packages/dynlex-ui/ui/source_tools.dl
 
 class:
     patterns:

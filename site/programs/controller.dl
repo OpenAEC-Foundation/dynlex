@@ -62,7 +62,7 @@ to run website [program] {integer:index} in {a pointer to website state:state}:
     set name to the string form of (description's filename)
     if index = 2:
         set name to the website source filename in state
-    set target to "wasm"
+    set target to "cpu"
     set stages to a new JSON value of kind the JSON array kind
     if (index = 2) and (the website editor uses shaders in state):
         set target to "shader"

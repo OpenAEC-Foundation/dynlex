@@ -9,6 +9,7 @@ set view to a new UI view
 set view's instance to window
 set view's layout to a document UI layout for (window's description) inside (window's description)
 set state to a new website state
+set state's services to the browser UI service provider
 set state's view to the address of view
 set state's route to "/ide/index.html"
 set instance's state to (the address of state) as a pointer

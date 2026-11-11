@@ -5,6 +5,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { setTimeout as pause } from 'node:timers/promises';
+import { verifySourceCompletion, verifySourcePaste } from './editor_feature_checks.mjs';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
 const graphicsMode = process.argv[3] || 'system';
@@ -126,7 +127,7 @@ try {
   });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: await fs.readFile(new URL('./fixtures/ui-color-probe.js', import.meta.url), 'utf8') });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [] };
+    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], completions: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [] };
     const instantiate = WebAssembly.instantiate.bind(WebAssembly);
     WebAssembly.instantiate = function(bytes, imports, ...args) {
       const env = imports?.env;
@@ -172,6 +173,8 @@ try {
             status: data.result.status, stages: Object.keys(data.result.stages || {})
           });
           if (!Array.isArray(data.result)) return;
+          for (const message of data.result) if (Array.isArray(message.result?.items))
+            window.siteProbe.completions.push(message.result.items);
           for (const message of data.result) if (message.method === 'textDocument/publishDiagnostics')
             window.siteProbe.diagnostics.push(message.params);
         });
@@ -240,8 +243,9 @@ try {
     await command('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:number,modifiers});
     await command('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:number,modifiers});
   };
-  await key('KeyA','a',65,2);
-  await command('Input.insertText',{text:'import lib/std.dl\nprint line 7'});
+  await verifySourceCompletion({command,evaluate,waitFor,key,capture,
+    source:'import lib/std.dl\npri',prefix:'',name:'ide'});
+  await verifySourcePaste({command,evaluate,waitFor,key,source:'import lib/std.dl\nprint line 7'});
   await click(237,287);
   await waitFor('window.siteProbe.texts.includes("7")');
   await click(120,480); await key('KeyA','a',65,2);
