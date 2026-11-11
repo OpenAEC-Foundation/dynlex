@@ -31,8 +31,9 @@ bool emitPartitions(
 	std::unordered_set<std::string> reusedFunctions;
 	std::string prefix = "__dynlex_" + digest(fs::absolute(context.options.inputPath).lexically_normal().string()) + "_";
 	for (llvm::GlobalValue &value : context.llvmModule->global_values()) {
-		bool reused = llvm::isa<llvm::Function>(value) && !value.isDeclaration() &&
-					  (restoredModule || (functionReuse && functionReuse->reusedFunctionNames().contains(value.getName().str())));
+		bool reused =
+			llvm::isa<llvm::Function>(value) && !value.isDeclaration() &&
+			(restoredModule || (functionReuse && functionReuse->reusedFunctionNames().contains(value.getName().str())));
 		if (value.hasLocalLinkage()) {
 			value.setName(prefix + value.getName().str());
 			value.setLinkage(llvm::GlobalValue::ExternalLinkage);
@@ -51,9 +52,7 @@ bool emitPartitions(
 		*context.llvmModule, previous ? &previous->at("native_units") : nullptr, reusedFunctions, statistics
 	);
 	statistics.nativeDependencyMilliseconds += elapsedMilliseconds(dependencyStart);
-	for (unsigned index = 0; index < partitionCount; index++) {
-		if (!dependencies.hasDefinition(index))
-			continue;
+	for (auto &[index, record] : dependencies.snapshot["partitions"].items()) {
 		bool unchanged = dependencies.canReuse(index);
 		std::string key;
 		std::optional<std::string> cached;
@@ -65,9 +64,9 @@ bool emitPartitions(
 		if (!cached) {
 			llvm::ValueToValueMapTy values;
 			part = llvm::CloneModule(*context.llvmModule, values, [&](const llvm::GlobalValue *value) {
-				return !value->isDeclaration() && dependencies.layout.partition(*value) == index;
+				return !value->isDeclaration() && dependencies.layout.component(*value) == index;
 			});
-			if (index != 0)
+			if (!index.empty())
 				part->setModuleInlineAsm("");
 			llvm::ModuleAnalysisManager analyses;
 			llvm::StripDeadPrototypesPass().run(*part, analyses);
@@ -77,7 +76,7 @@ bool emitPartitions(
 			cached = readEntry(directory / ("object-" + key + ".entry"));
 		} else
 			statistics.nativePartitionModulesSkipped++;
-		dependencies.snapshot["partitions"][index]["object_key"] = key;
+		record["object_key"] = key;
 		statistics.objectKeys.push_back(key);
 		fs::path object = temporary.directory / (std::to_string(objects.size()) + ".o");
 		if (cached) {

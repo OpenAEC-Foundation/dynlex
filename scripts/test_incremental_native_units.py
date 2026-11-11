@@ -48,6 +48,7 @@ def check_native_partition_edits(root, build):
     edited = build(entry=main)
     assert edited[0]["inference_instantiations_reused"] >= 19
     assert edited[0]["functions_ir_reused"] == 19
+    assert edited[0]["native_functions_lowered"] == 1, "unrelated functions shared the edited function's native unit"
     assert edited[0]["objects_built"] <= 3
     assert edited[0]["native_function_dependencies_reused"] >= 19
     assert edited[0]["native_partition_modules_skipped"] >= 1, "unchanged native units were cloned again"

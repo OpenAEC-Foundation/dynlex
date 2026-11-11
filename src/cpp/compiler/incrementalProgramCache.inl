@@ -32,6 +32,16 @@ Json encodeSectionGraph(const Json &graph) {
 	};
 	Json encodedForward = Json::array();
 	Json encodedInstantiations = Json::array();
+	Json encodedUnits = Json::array();
+	Json unitKeys = Json::array(), unitSources = Json::array();
+	std::map<std::string, size_t> unitKeyIds;
+	std::map<std::pair<size_t, std::string>, size_t> unitSourceIds;
+	auto keyId = [&](const std::string &key) {
+		auto [found, inserted] = unitKeyIds.try_emplace(key, unitKeys.size());
+		if (inserted)
+			unitKeys.push_back(key);
+		return found->second;
+	};
 	for (const Json &path : paths) {
 		const std::string &name = path.get_ref<const std::string &>();
 		encodedForward.push_back(encodeEdges(forward.at(name)));
@@ -39,6 +49,23 @@ Json encodeSectionGraph(const Json &graph) {
 		for (const auto &[key, edges] : graph.at("instantiations").at(name).items())
 			variants[key] = encodeEdges(edges);
 		encodedInstantiations.push_back(std::move(variants));
+		Json units = Json::array();
+		for (const auto &[key, unit] : graph.at("inference_units").at(name).items()) {
+			Json sources = Json::array(), callees = Json::array();
+			for (const auto &[source, fingerprint] : unit.at("sources").items()) {
+				auto [found, inserted] =
+					unitSourceIds.try_emplace(std::pair{ids.at(source), fingerprint.get<std::string>()}, unitSources.size());
+				if (inserted)
+					unitSources.push_back(Json::array({ids.at(source), fingerprint}));
+				sources.push_back(found->second);
+			}
+			for (const Json &callee : unit.at("callees"))
+				callees.push_back(
+					Json::array({ids.at(callee.at(0).get<std::string>()), keyId(callee.at(1).get<std::string>())})
+				);
+			units.push_back(Json::array({keyId(key), std::move(sources), std::move(callees), unit.at("lookups")}));
+		}
+		encodedUnits.push_back(std::move(units));
 	}
 	Json encodedReverse = Json::array();
 	for (const auto &[path, callers] : graph.at("reverse").items())
@@ -56,6 +83,9 @@ Json encodeSectionGraph(const Json &graph) {
 		{"forward", std::move(encodedForward)},
 		{"reverse", std::move(encodedReverse)},
 		{"instantiations", std::move(encodedInstantiations)},
+		{"inference_units", std::move(encodedUnits)},
+		{"inference_unit_keys", std::move(unitKeys)},
+		{"inference_unit_sources", std::move(unitSources)},
 		{"callable_lookups", std::move(encodedLookups)},
 		{"inference_reads", std::move(encodedReads)}
 	};
@@ -65,6 +95,7 @@ Json decodeSectionGraph(const Json &encoded) {
 	const Json &paths = encoded.at("paths");
 	const Json &forward = encoded.at("forward");
 	const Json &instantiations = encoded.at("instantiations");
+	const Json &unitKeys = encoded.at("inference_unit_keys"), &unitSources = encoded.at("inference_unit_sources");
 	if (!paths.is_array() || !forward.is_array() || !instantiations.is_array() || paths.size() != forward.size() ||
 		paths.size() != instantiations.size())
 		throw std::runtime_error("invalid section dependency cache shape");
@@ -74,10 +105,8 @@ Json decodeSectionGraph(const Json &encoded) {
 			result.push_back(paths.at(id.get<size_t>()));
 		return result;
 	};
-	Json graph{
-		{"forward", Json::object()}, {"reverse", Json::object()}, {"instantiations", Json::object()},
-		{"callable_lookups", Json::object()}, {"inference_reads", Json::object()}
-	};
+	Json graph{{"forward", Json::object()},			 {"reverse", Json::object()},		  {"instantiations", Json::object()},
+			   {"callable_lookups", Json::object()}, {"inference_reads", Json::object()}, {"inference_units", Json::object()}};
 	for (size_t index = 0; index < paths.size(); index++) {
 		const std::string &path = paths.at(index).get_ref<const std::string &>();
 		graph["forward"][path] = decodeEdges(forward.at(index));
@@ -85,6 +114,19 @@ Json decodeSectionGraph(const Json &encoded) {
 		for (const auto &[key, edges] : instantiations.at(index).items())
 			variants[key] = decodeEdges(edges);
 		graph["instantiations"][path] = std::move(variants);
+		Json units = Json::object();
+		for (const Json &unit : encoded.at("inference_units").at(index)) {
+			Json sources = Json::object(), callees = Json::array();
+			for (const Json &id : unit.at(1)) {
+				const Json &source = unitSources.at(id.get<size_t>());
+				sources[paths.at(source.at(0).get<size_t>()).get<std::string>()] = source.at(1);
+			}
+			for (const Json &callee : unit.at(2))
+				callees.push_back(Json::array({paths.at(callee.at(0).get<size_t>()), unitKeys.at(callee.at(1).get<size_t>())}));
+			units[unitKeys.at(unit.at(0).get<size_t>()).get<std::string>()] =
+				Json{{"sources", std::move(sources)}, {"callees", std::move(callees)}, {"lookups", unit.at(3)}};
+		}
+		graph["inference_units"][path] = std::move(units);
 	}
 	for (const Json &entry : encoded.at("reverse"))
 		graph["reverse"][paths.at(entry.at(0).get<size_t>()).get<std::string>()] = decodeEdges(entry.at(1));
@@ -144,12 +186,11 @@ void writeProgramEntry(const fs::path &path, Json program, const Json *prior = n
 				prior->at("payload_keys").contains(field)) {
 				keys[field] = prior->at("payload_keys").at(field);
 			} else {
-				std::string payload = isModulePayload(field) ? program.at(field).get<std::string>()
-									  : std::string_view(field) == "section_dependency_graph"
-										  ? encodeSectionGraph(program.at(field)).dump()
-									  : std::string_view(field) == "inference_summaries"
-										  ? encodeInferenceSummaries(program.at(field)).dump()
-										  : program.at(field).dump();
+				std::string payload =
+					isModulePayload(field)									? program.at(field).get<std::string>()
+					: std::string_view(field) == "section_dependency_graph" ? encodeSectionGraph(program.at(field)).dump()
+					: std::string_view(field) == "inference_summaries"		? encodeInferenceSummaries(program.at(field)).dump()
+																			: program.at(field).dump();
 				std::string key = digest(payload);
 				writeEntry(programPayloadPath(path.parent_path(), key), payload);
 				keys[field] = std::move(key);

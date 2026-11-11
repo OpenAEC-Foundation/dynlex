@@ -77,6 +77,7 @@ def check_integration_builds(project, build):
 
 def decode_graph(encoded):
     paths = encoded["paths"]
+    unit_keys, unit_sources = encoded["inference_unit_keys"], encoded["inference_unit_sources"]
     assert len(paths) == len(encoded["forward"]) == len(encoded["instantiations"])
     return {
         "forward": {path: [paths[index] for index in edges]
@@ -92,6 +93,14 @@ def decode_graph(encoded):
         },
         "inference_reads": {paths[owner]: [paths[index] for index in reads]
                             for owner, reads in encoded["inference_reads"]},
+        "inference_units": {
+            path: {unit_keys[unit[0]]: {
+                "sources": {paths[unit_sources[index][0]]: unit_sources[index][1] for index in unit[1]},
+                "callees": [[paths[index], unit_keys[variant]] for index, variant in unit[2]],
+                "lookups": unit[3],
+            } for unit in variants}
+            for path, variants in zip(paths, encoded["inference_units"])
+        },
     }
 
 
@@ -195,6 +204,21 @@ def check_program_payloads(root, build):
     assert edited[0]["cache_payloads_loaded"] == 5
     assert edited[1:] == build(False, entry=main)[1:]
     edited_program = read_program(root / "cache", main)
+    units = edited_program["section_dependency_graph"]["inference_units"]
+    required = {(path, key) for path, variants in units.items() for key in variants if key != "*"}
+    required.add(("root", "*"))
+    required.update((path, edited_program["function_instantiations"][name])
+                    for name, path in edited_program["function_sections"].items())
+    pending = list(required)
+    while pending:
+        path, key = pending.pop()
+        for callee in units[path][key]["callees"]:
+            target = tuple(callee)
+            if target not in required:
+                required.add(target)
+                pending.append(target)
+    assert all((path, key) in required for path, variants in units.items() for key in variants), \
+        "dependency capture built aggregate units outside the retained output closure"
     assert edited_program["generated_ir"].startswith(b"BC\xc0\xde")
     for field in ("matches", "match_entries"):
         assert all(isinstance(key, str) and len(key) == 64

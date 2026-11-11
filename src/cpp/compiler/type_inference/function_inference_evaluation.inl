@@ -89,16 +89,34 @@ struct PureSectionFlexBodyExecutionFrame {
 
 struct PureExecutionState {
 	ParseContext &parseContext;
-	InferenceContext *inferenceContext{};
+	InferenceContext &inferenceContext;
 	size_t steps = 0;
 	size_t depth = 0;
 	std::vector<InstantiatedSectionBody *> activeBodies;
 	std::vector<PureSectionFlexBodyExecutionFrame> sectionFlexBodyFrames;
 	std::vector<Section *> activeFlexDefinitionStack;
 	std::vector<Section *> flexCallSiteSectionStack;
+	std::vector<InferenceReadOwner> valueReadOwners;
 
-	PureExecutionState(ParseContext &context, InferenceContext *inference)
+	PureExecutionState(ParseContext &context, InferenceContext &inference)
 		: parseContext(context), inferenceContext(inference) {}
+	void recordValueRead(const Section &section) const {
+		inferenceContext.recordBodyRead(section);
+		if (const auto &record = parseContext.recordInferenceDependency)
+			for (const auto &owner : valueReadOwners)
+				record(owner, section, {});
+	}
+};
+
+struct ScopedPureValueReads {
+	PureExecutionState &state;
+	ScopedPureValueReads(
+		PureExecutionState &state, const Section *section, const std::shared_ptr<const VariableStorageScope> &scope
+	)
+		: state(state) {
+		state.valueReadOwners.push_back({.section = section, .scope = scope, .constraintProbe = {}});
+	}
+	~ScopedPureValueReads() { state.valueReadOwners.pop_back(); }
 };
 
 // Resource exhaustion unwinds the entire evaluator. Returning an unknown
@@ -230,7 +248,7 @@ static CompileTimeValue pureExecutionImmediateValue(Expression *expr) {
 }
 
 static CompileTimeValue pureExecutionStoredValue(Expression *expr, const PureExecutionState &state) {
-	return state.inferenceContext ? state.inferenceContext->lookupExpressionValue(expr) : getExpressionCompileTimeValue(expr);
+	return state.inferenceContext.lookupExpressionValue(expr);
 }
 
 static CompileTimeValue executePureInstantiationReturnValue(
@@ -241,6 +259,7 @@ static CompileTimeValue executePureInstantiationReturnValue(
 		instantiation.needsReinfer || !instantiation.valid || !instantiation.returnType.isDeduced() ||
 		instantiation.returnType.kind == DataType::Kind::Void)
 		return {};
+	state.recordValueRead(*section);
 	std::vector<CompileTimeValue> argumentValueKey = compileTimeArgumentValueVector(argumentValues);
 	auto cachedIt = instantiation.pureReturnValuesByArguments.find(argumentValueKey);
 	if (cachedIt != instantiation.pureReturnValuesByArguments.end())
@@ -253,6 +272,7 @@ static CompileTimeValue executePureInstantiationReturnValue(
 	requireCompilerInvariant(
 		instantiation.body->sourceSection == section, "pure execution encountered an instantiation body for another section"
 	);
+	ScopedPureValueReads valueReads(state, section, instantiation.body->storageScope);
 	for (const auto &[parameterName, value] : argumentValues) {
 		Variable *parameterVariable = findExecutionSectionVariable(section, parameterName);
 		if (!parameterVariable || !parameterVariable->definition)
@@ -273,8 +293,8 @@ static CompileTimeValue executePureInstantiationReturnValue(
 	});
 	if ((!executionResult.returned && !hasImplicitDefinitionValue) || !isCompileTimeKnown(executionResult.value))
 		return {};
-	if (state.inferenceContext && state.inferenceContext->trial && state.inferenceContext->trialJournal)
-		state.inferenceContext->trialJournal->recordInstantiationWrite(&instantiation);
+	if (state.inferenceContext.trial && state.inferenceContext.trialJournal)
+		state.inferenceContext.trialJournal->recordInstantiationWrite(&instantiation);
 	instantiation.pureReturnValuesByArguments.emplace(std::move(argumentValueKey), executionResult.value);
 	return executionResult.value;
 }
@@ -607,7 +627,7 @@ static CompileTimeValue evaluatePureFunctionCallReturnValue(
 	}, parameterBindings, argumentValues)) {
 		return {};
 	}
-	PureExecutionState executionState{context.parseContext, &context};
+	PureExecutionState executionState{context.parseContext, context};
 	try {
 		return executePureInstantiationReturnValue(executionState, section, instantiation, argumentValues);
 	} catch (const PureExecutionStopped &stopped) {

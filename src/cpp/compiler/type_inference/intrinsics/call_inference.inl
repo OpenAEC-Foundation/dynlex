@@ -12,12 +12,11 @@ void ExpressionInferenceSupport::inferFunctionIntrinsic() {
 	}
 	std::string signature = std::get<std::string>(functionExpr->literalValue);
 	const lsp::SourceFile *source = functionExpr->range.line ? functionExpr->range.line->sourceFile : nullptr;
-	std::vector<CallableFunctionMatch> callableMatches = findCallableFunctionsBySignature(
-		context.parseContext, signature, source
-	);
+	std::vector<CallableFunctionMatch> callableMatches =
+		findCallableFunctionsBySignature(context.parseContext, signature, source);
 	if (const auto &record = context.parseContext.recordCallableLookup) {
-		context.recordDependencyRead([&](const Section *owner, std::optional<size_t> probe) {
-			record(owner, probe, *source, signature, callableMatches);
+		context.recordDependencyRead([&](const InferenceReadOwner &owner) {
+			record(owner, *source, signature, callableMatches);
 		});
 	}
 	if (callableMatches.empty()) {

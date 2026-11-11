@@ -215,7 +215,7 @@ llvm::Function *generateSpecializedFunction(
 	llvm::Function *func = llvm::Function::Create(funcType, llvm::Function::InternalLinkage, funcName, context.llvmModule);
 	activeInst.llvmFunctionsByParameterAddressSpaces.emplace(std::move(parameterAddressSpaces), func);
 	if (context.recordGeneratedFunction)
-		context.recordGeneratedFunction(section, &instantiationKey, func, false);
+		context.recordGeneratedFunction(section, instantiationKey, func, false);
 	if (context.reuseGeneratedFunction && context.reuseGeneratedFunction(section, activeInst, func)) {
 		func->setLinkage(llvm::GlobalValue::ExternalLinkage);
 		return func;

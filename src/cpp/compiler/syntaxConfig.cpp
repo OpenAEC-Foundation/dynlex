@@ -3,6 +3,8 @@
 #include "parseContext.h"
 #include "pathUtils.h"
 #include "section/parseUtils.h"
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/BLAKE3.h"
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -573,7 +575,13 @@ bool loadSyntaxConfigFile(ParseContext &context, const std::string &path, Syntax
 		addConfigError(context, path, shorthandNode ? shorthandNode->lineNumber : root.children[0]->lineNumber, *error);
 		return false;
 	}
-	appendStructuralConfig(root, config.nonMessageIdentity);
+	// Cache inputs consume this identity repeatedly. Retain one digest instead
+	// of copying and hashing the full structural configuration in every unit.
+	std::string identity = config.nonMessageIdentity;
+	appendStructuralConfig(root, identity);
+	llvm::BLAKE3 hash;
+	hash.update(llvm::StringRef(identity));
+	config.nonMessageIdentity = llvm::toHex(hash.final(), true);
 	return true;
 }
 

@@ -51,6 +51,7 @@
 	Instantiation &inst = matchedSection->instantiations[instantiationKey];
 	auto storageScope = inst.body ? inst.body->storageScope
 								  : context.parseContext.storageScopeForInstantiation(matchedSection, instantiationKey);
+	context.recordBodyRead(*matchedSection, storageScope);
 	expr->selectedInstantiation = &inst;
 	if (inst.argumentTypes.empty()) {
 		inst.argumentTypes = argTypes;

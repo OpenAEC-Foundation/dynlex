@@ -1,12 +1,20 @@
 class IncrementalInferenceReads {
   public:
 	using Keys = std::set<std::string>;
+	using Scope = std::shared_ptr<const VariableStorageScope>;
+	struct ScopeNode {
+		const Section *section;
+		Keys sources;
+		std::set<Scope, std::owner_less<Scope>> callees;
+		Keys lookups;
+	};
+	using ScopeNodes = std::map<Scope, ScopeNode, std::owner_less<Scope>>;
 
 	explicit IncrementalInferenceReads(const std::map<const Section *, std::string> &sectionPaths)
 		: sectionPaths(sectionPaths) {}
 
 	void record(
-		const Section *owner, std::optional<size_t> probe, const lsp::SourceFile &source, std::string_view signature,
+		const InferenceReadOwner &owner, const lsp::SourceFile &source, std::string_view signature,
 		const std::vector<CallableFunctionMatch> &matches
 	) {
 		std::string input = source.uri;
@@ -20,19 +28,34 @@ class IncrementalInferenceReads {
 				{"signature", llvm::toHex(llvm::StringRef(signature), true)},
 				{"candidates", encodeCandidates(matches)}
 			};
-		if (owner)
-			bySection[sectionPaths.at(owner)].insert(key);
-		if (probe)
-			byProbe[*probe].insert(std::move(key));
+		if (owner.section) {
+			bySection[sectionPaths.at(owner.section)].insert(key);
+			if (owner.direct)
+				ensureScope(owner.scope, owner.section).lookups.insert(key);
+		}
+		if (owner.constraintProbe)
+			byProbe[*owner.constraintProbe].insert(std::move(key));
 	}
 
-	void recordDependency(const Section *owner, std::optional<size_t> probe, const Section &dependency) {
+	void recordDependency(const InferenceReadOwner &owner, const Section &dependency, const Scope &calleeScope) {
 		const std::string &path = sectionPaths.at(&dependency);
-		if (owner && owner != &dependency)
-			sectionDependencies[sectionPaths.at(owner)].insert(path);
-		if (probe)
-			probeDependencies[*probe].insert(path);
+		if (calleeScope)
+			ensureScope(calleeScope, &dependency);
+		if (owner.section) {
+			if (owner.section != &dependency)
+				sectionDependencies[sectionPaths.at(owner.section)].insert(path);
+			if (owner.direct) {
+				auto &node = ensureScope(owner.scope, owner.section);
+				if (calleeScope)
+					node.callees.insert(calleeScope);
+				else
+					node.sources.insert(path);
+			}
+		}
+		if (owner.constraintProbe)
+			probeDependencies[*owner.constraintProbe].insert(path);
 	}
+	const ScopeNodes &scopes() const { return scopeNodes; }
 
 	void validate(ParseContext &context, const Json &prior) {
 		if (prior.empty())
@@ -42,12 +65,17 @@ class IncrementalInferenceReads {
 			sources.emplace(file->uri, file);
 		for (const auto &[key, lookup] : prior.items()) {
 			auto source = sources.find(lookup.at("source").get_ref<const std::string &>());
-			if (source == sources.end() ||
-				lookup.at("candidates") !=
-					encodeCandidates(findCallableFunctionsBySignature(
-						context, llvm::fromHex(lookup.at("signature").get_ref<const std::string &>()), source->second
-					)))
+			if (source == sources.end()) {
 				changed.insert(key);
+				continue;
+			}
+			Json candidates = encodeCandidates(findCallableFunctionsBySignature(
+				context, llvm::fromHex(lookup.at("signature").get_ref<const std::string &>()), source->second
+			));
+			if (lookup.at("candidates") != candidates)
+				changed.insert(key);
+			validatedObservations[key] = lookup;
+			validatedObservations[key]["candidates"] = std::move(candidates);
 		}
 		checked = prior.size();
 	}
@@ -82,6 +110,8 @@ class IncrementalInferenceReads {
 	const Json &observation(const std::string &key, const Json *prior) const {
 		if (auto found = observations.find(key); found != observations.end())
 			return found->second;
+		if (auto found = validatedObservations.find(key); found != validatedObservations.end())
+			return found->second;
 		requireCompilerInvariant(prior && !changed.contains(key), "retained an invalid callable lookup");
 		return prior->at(key);
 	}
@@ -96,6 +126,14 @@ class IncrementalInferenceReads {
 	const Keys &changedKeys() const { return changed; }
 
   private:
+	ScopeNode &ensureScope(const Scope &scope, const Section *section) {
+		requireCompilerInvariant(section && (scope || !section->parent), "inference owner has no storage scope");
+		auto [found, inserted] = scopeNodes.try_emplace(scope, ScopeNode{section, {}, {}, {}});
+		requireCompilerInvariant(found->second.section == section, "inference storage scope belongs to multiple sections");
+		if (inserted)
+			found->second.sources.insert(sectionPaths.at(section));
+		return found->second;
+	}
 	Json encodeCandidates(const std::vector<CallableFunctionMatch> &matches) const {
 		std::vector<std::tuple<std::string_view, size_t, size_t>> candidates;
 		for (const CallableFunctionMatch &match : matches) {
@@ -113,6 +151,8 @@ class IncrementalInferenceReads {
 
 	const std::map<const Section *, std::string> &sectionPaths;
 	std::map<std::string, Json> observations;
+	std::map<std::string, Json> validatedObservations;
+	ScopeNodes scopeNodes;
 	std::map<std::string, Keys> bySection;
 	std::map<size_t, Keys> byProbe;
 	std::map<std::string, Keys> sectionDependencies;

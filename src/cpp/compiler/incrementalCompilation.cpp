@@ -8,8 +8,10 @@
 #include "incrementalIRReuse.h"
 #include "incrementalMatcherCache.h"
 #include "incrementalModuleBitcode.h"
+#include "incrementalUnitSelection.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
+#include "numberScopeRules.h"
 #include "pathUtils.h"
 #include "patternTreeNode.h"
 #include "section.h"
@@ -74,7 +76,6 @@ namespace fs = std::filesystem;
 constexpr std::string_view cacheHeader = "DynLex incremental cache v1\n";
 constexpr uintmax_t maximumEntryBytes = 256 * 1024 * 1024;
 constexpr uintmax_t maximumCacheBytes = 512 * 1024 * 1024;
-constexpr unsigned partitionCount = 16;
 using Clock = std::chrono::steady_clock;
 
 double elapsedMilliseconds(Clock::time_point start) {
@@ -257,41 +258,9 @@ bool hasNoGlobalAccess(const Section *section);
 #include "incrementalInferenceReads.inl"
 #include "incrementalSectionDependencies.inl"
 
-bool functionDependenciesUnchanged(
-	Section *section, const std::unordered_map<const Section *, bool> &unchanged, std::unordered_map<Section *, bool> &memo,
-	const std::unordered_set<const Section *> &stableBoundaries = {}
-) {
-	if (stableBoundaries.contains(section))
-		return true;
-	auto cached = memo.find(section);
-	if (cached != memo.end())
-		return cached->second;
-	std::unordered_set<Section *> visited;
-	std::vector<Section *> pending{section};
-	bool safe = true;
-	while (!pending.empty() && safe) {
-		Section *node = pending.back();
-		pending.pop_back();
-		if (stableBoundaries.contains(node) || !visited.insert(node).second)
-			continue;
-		if (auto known = memo.find(node); known != memo.end()) {
-			safe = known->second;
-			continue;
-		}
-		if (!unchanged.at(node)) {
-			safe = false;
-			break;
-		}
-		collectMatchedSectionDependencies(node, pending);
-		for (const auto &[_, instantiation] : node->instantiations)
-			collectInferredSectionDependencies(instantiation.body.get(), pending);
-	}
-	return memo[section] = safe;
-}
-
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context);
 
-#include "incrementalCodegenEligibility.inl"
+#include "incrementalRootBindings.inl"
 
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context) {
 	const Json &before = previous.at("files");
@@ -361,14 +330,17 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalInferenceReuse.inl"
 
 // clang-format off: these includes depend on the declarations in the preceding files.
-#include "incrementalDependencyGraph.inl"
 #include "incrementalConstraintValue.inl"
+#include "incrementalInferenceUnitInputs.inl"
+#include "incrementalInferenceUnitGraph.inl"
+#include "incrementalDependencyGraph.inl"
 #include "incrementalClassInstantiations.inl"
 #include "incrementalConstraintProbeReuse.inl"
+#include "incrementalInferenceUnitCheck.inl"
+#include "incrementalRootExecution.inl"
+#include "incrementalInferenceController.inl"
 // clang-format on
 
-#include "incrementalInferencePreinfer.inl"
-#include "incrementalRootExecution.inl"
 #include "incrementalStatisticsReport.inl"
 } // namespace
 
@@ -644,17 +616,18 @@ bool compileIncrementally(
 			for (const auto &[path, section] : sections)
 				sectionPaths.emplace(section, path);
 			IncrementalInferenceReads inferenceReads(sectionPaths);
+			// Signatures and scope rules are finalized before preinference. Their
+			// source inputs stay immutable through body inference and persistence.
+			std::map<std::string, std::string> inferenceInputFingerprints;
 			std::unique_ptr<IncrementalIRReuse> functionReuse;
 			std::unique_ptr<IncrementalInferenceReuse> inferenceReuse;
 			std::unordered_set<const Section *> graphStable;
 			if (compiled && !reuseTypeInference) {
-				context.recordInferenceDependency = [&](const Section *owner, std::optional<size_t> probe,
-														const Section &dependency) {
-					inferenceReads.recordDependency(owner, probe, dependency);
+				context.recordInferenceDependency = [&](const auto &owner, const auto &dependency, const auto &scope) {
+					inferenceReads.recordDependency(owner, dependency, scope);
 				};
-				context.recordCallableLookup = [&](const auto *owner, auto probe, const auto &source, auto signature,
-												   const auto &matches) {
-					inferenceReads.record(owner, probe, source, signature, matches);
+				context.recordCallableLookup = [&](const auto &owner, const auto &source, auto signature, const auto &matches) {
+					inferenceReads.record(owner, source, signature, matches);
 				};
 				if (previous) {
 					auto payloadStart = Clock::now();
@@ -671,78 +644,17 @@ bool compileIncrementally(
 						prepareConstraintProbeReuse(
 							context, prior, resolvedFunctionProjection, graph, sections, inferenceReads.changedKeys()
 						);
-					IncrementalPreinferPlan plan = incrementalInferenceCandidates(
-						context, *previous, recording->observations, sectionPaths, resolvedFunctionProjection,
-						inferenceReads.changedKeys()
+					auto controller = std::make_shared<IncrementalInferenceController>(
+						*previous, recording->observations, resolvedFunctionProjection, sectionPaths, inferenceReads,
+						frontendDiagnosticRecords, statistics, functionReuse, inferenceReuse, graphStable,
+						inferenceInputFingerprints
 					);
-					statistics.preinferDependencyGraphSectionsChecked = plan.dependencyGraphSectionsChecked;
 					context.runIncrementalPreinference =
-						[&, plan = std::move(plan)](
+						[controller](
 							ParseContext &inferred,
-							const std::function<bool(const ParseContext::IncrementalFunctionRequest &)> &inferRequest
+							const std::function<bool(const ParseContext::IncrementalFunctionRequest &)> &infer
 						) {
-						auto preinferStart = Clock::now();
-						const Json &priorSummaries = previous->at("inference_summaries");
-						ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
-						std::unordered_set<const Section *> stable;
-						for (size_t first = 0; first < plan.requests.size();) {
-							Section *section = plan.requests[first].section;
-							size_t end = first + 1;
-							while (end < plan.requests.size() && plan.requests[end].section == section)
-								end++;
-							std::unordered_map<Section *, bool> memo;
-							if (!functionDependenciesUnchanged(section, plan.bodyUnchanged, memo, stable)) {
-								std::vector<ParseContext::IncrementalFunctionRequest> variants(
-									plan.requests.begin() + first, plan.requests.begin() + end
-								);
-								for (const auto &request : variants)
-									if (inferRequest(request))
-										statistics.preinferredInstantiations++;
-								InferenceStorageIdentities storage(inferred, sectionPaths, classPaths);
-								Json currentSummaries = Json::object();
-								currentSummaries[sectionPaths.at(section)] = captureSectionInferenceSummary(
-									section, classPaths, storage, Json(nullptr),
-									&statistics.preinferSummaryInstantiationsCaptured
-								);
-								statistics.preinferSummarySectionsCaptured++;
-								auto newlyStable = stableIncrementalReplacements(
-									variants, sectionPaths, currentSummaries, priorSummaries,
-									inferred.incrementalReplacementFunctions
-								);
-								stable.insert(newlyStable.begin(), newlyStable.end());
-							}
-							first = end;
-						}
-						auto codegenPlan = planCodegenReuse(
-							inferred, *previous, recording->observations, resolvedFunctionProjection, sections,
-							inferenceReads.changedKeys(), stable, &statistics.dependencyGraphSectionsReused
-						);
-						bool rootEligible = codegenPlan.unchangedRoot &&
-											reusableRootExecution(inferred, *previous, frontendDiagnosticRecords, sectionPaths);
-						statistics.preinferenceMilliseconds = elapsedMilliseconds(preinferStart);
-						auto &eligible = codegenPlan.functions;
-						if (eligible.empty() && !rootEligible)
-							return;
-						graphStable = eligible;
-						std::unordered_set<std::string> replacementPaths;
-						for (const Section *section : stable)
-							replacementPaths.insert(sectionPaths.at(section));
-						functionReuse = std::make_unique<IncrementalIRReuse>(
-							inferred, previous->at("generated_ir").get_ref<const std::string &>(),
-							previous->at("function_sections"), previous->at("callable_functions"),
-							previous->at("function_instantiations"), sectionPaths, eligible, std::move(replacementPaths)
-						);
-						if (rootEligible && reuseRootWithGlobalTypes(inferred, *previous, sectionPaths, *functionReuse)) {
-							graphStable.insert(inferred.mainSection);
-						}
-						inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
-							inferred, priorSummaries, previous->at("global_types"), *functionReuse, sectionPaths,
-							std::move(eligible)
-						);
-						inferred.reuseInferredInstantiation = [&](Section *section, const InstantiationKey &key,
-																  Instantiation &instantiation, bool allowPureValueSummary) {
-							return inferenceReuse->reuse(section, key, instantiation, allowPureValueSummary);
-						};
+						controller->run(inferred, infer);
 					};
 				}
 			}
@@ -834,17 +746,13 @@ bool compileIncrementally(
 				for (const auto &[section, path] : sectionPaths)
 					if (hasCodegenSectionIdentity(*section))
 						context.functionSymbolIdentities.emplace(section, sectionIdentityDigest(path));
-				context.recordGeneratedFunction = [&](Section *section, const InstantiationKey *key, llvm::Function *function,
+				context.recordGeneratedFunction = [&](Section *section, const InstantiationKey &key, llvm::Function *function,
 													  bool callable) {
-					requireCompilerInvariant(
-						callable == (key == nullptr), "generated function has an invalid instantiation key"
-					);
 					std::string name = function->getName().str();
 					functionSections.emplace(name, sectionPaths.at(section));
 					if (callable)
 						callableFunctions[name] = true;
-					else if (std::optional<std::string> identity = inferenceSummaryKey(*key, functionClassPaths))
-						functionInstantiations[name] = *identity;
+					functionInstantiations[name] = inferenceSummaryKey(key, functionClassPaths).value_or(aggregateGraphVariant);
 				};
 				if (functionReuse) {
 					context.reuseGeneratedFunction = [&](Section *section, Instantiation &, llvm::Function *function) {
@@ -886,8 +794,7 @@ bool compileIncrementally(
 							functionSections.emplace(name, previous->at("function_sections").at(name).get<std::string>());
 							if (previous->at("callable_functions").contains(name))
 								callableFunctions[name] = true;
-							if (previous->at("function_instantiations").contains(name))
-								functionInstantiations[name] = previous->at("function_instantiations").at(name);
+							functionInstantiations[name] = previous->at("function_instantiations").at(name);
 						}
 					}
 					result["function_sections"] = functionSections;
@@ -912,11 +819,10 @@ bool compileIncrementally(
 							: captureInferenceSummaries(compiled, sectionPaths, inferenceDiagnosticSources, globalTypes);
 					auto graphStart = Clock::now();
 					result["section_dependency_graph"] = captureSectionDependencyGraph(
-						sectionPaths, inferenceReads,
-						result.at("all_function_projection").at("constraint_probe_schedule").at("callable_lookups"),
-						previous ? &previous->at("section_dependency_graph") : nullptr, graphStable,
-						retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr),
-						&statistics.dependencyGraphEntriesReused, &statistics.dependencyGraphReverseNodesUpdated
+						compiled, result, sectionPaths, inferenceReads,
+						result.at("all_function_projection").at("constraint_probe_schedule").at("callable_lookups"), statistics,
+						inferenceInputFingerprints, previous ? &previous->at("section_dependency_graph") : nullptr, graphStable,
+						retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr)
 					);
 					statistics.dependencyGraphMilliseconds = elapsedMilliseconds(graphStart);
 					retainInferenceInputPaths(

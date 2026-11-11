@@ -704,8 +704,10 @@ static bool inferPatternCall(
 		return false;
 	}
 	if (matchedSection->type == SectionType::Class && !matchedSection->isFlex) {
+		context.recordBodyRead(*matchedSection);
 		inferClassPatternCall(expr, context, flexBindingFrameStack, *resolution);
 	} else if (matchedSection->isFlex) {
+		context.recordBodyRead(*matchedSection);
 		if (argumentEffects)
 			argumentEffects->restore(context);
 		inferFlexPatternCall(expr, context, flexBindingFrameStack, *resolution);

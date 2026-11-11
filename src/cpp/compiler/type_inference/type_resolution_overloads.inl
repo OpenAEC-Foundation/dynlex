@@ -223,8 +223,7 @@ struct InferenceContext {
 			if (fromSeenIt == seenSectionInstantiations.end())
 				return SectionInstantiationRetargetResult::MissingSourceRecord;
 			auto undoIt = std::find_if(
-				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(),
-				[&](const SectionInstantiationUndo &undo) {
+				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(), [&](const SectionInstantiationUndo &undo) {
 				return undo.section == section && undo.key == fromKey;
 			}
 			);
@@ -370,6 +369,7 @@ struct InferenceContext {
 	struct DependencyOwner {
 		const Section *section;
 		const DependencyOwner *parent;
+		std::shared_ptr<const VariableStorageScope> scope;
 	};
 	struct DependencyReads {
 		const DependencyOwner *owner = nullptr;
@@ -429,15 +429,28 @@ struct InferenceContext {
 
 	template <typename Recorder> void recordDependencyRead(Recorder &&record) const {
 		if (dependencyReads.constraintProbe)
-			record(nullptr, dependencyReads.constraintProbe);
+			record(InferenceReadOwner{.scope = {}, .constraintProbe = dependencyReads.constraintProbe});
 		if (dependencyReads.owner) {
 			// Rejected trials may leave no call expression linking the caller
 			// to the callee whose inference it consumed.
 			for (const auto *owner = dependencyReads.owner; owner; owner = trial ? owner->parent : nullptr)
-				record(owner->section, std::nullopt);
-		} else if (!dependencyReads.constraintProbe) {
-			record(parseContext.mainSection, std::nullopt);
+				record(
+					InferenceReadOwner{
+						.section = owner->section,
+						.scope = owner->scope,
+						.constraintProbe = {},
+						.direct = owner == dependencyReads.owner
+					}
+				);
 		}
+		// Stage-level requests (for example exposed-function validation) are
+		// not reads by entry-point execution. Root execution installs its owner.
+	}
+	void recordBodyRead(const Section &dependency, const std::shared_ptr<const VariableStorageScope> &calleeScope = {}) const {
+		if (const auto &record = parseContext.recordInferenceDependency)
+			recordDependencyRead([&](const InferenceReadOwner &owner) {
+				record(owner, dependency, calleeScope);
+			});
 	}
 
 	void inheritSectionExecutionState(const InferenceContext &other) {

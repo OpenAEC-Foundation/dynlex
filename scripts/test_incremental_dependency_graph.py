@@ -6,6 +6,7 @@ from test_incremental_inactive_selection import check_literal_inactive_body
 from test_incremental_class_layouts import check_class_layout_restoration
 from test_incremental_constraint_dependencies import check_constraint_lookup_dependencies
 from test_incremental_preinfer_summaries import check_preinfer_summary_capture
+from test_incremental_variant_dependencies import check_variant_dependency_cascade
 
 
 def graph_for(cache, entry):
@@ -289,6 +290,7 @@ def check_reused_ir_dependency_graph_variants(root, build):
 
 def check_leaf_dependency_cascade(root, build):
     check_preinfer_summary_capture(root, build)
+    check_variant_dependency_cascade(root, build)
     leaf_a = root / "leaf_a.dl"
     leaf_b = root / "leaf_b.dl"
     leaf_helper = root / "leaf_helper.dl"

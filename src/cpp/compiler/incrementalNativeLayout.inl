@@ -1,7 +1,6 @@
 // Partition constraints belong to LLVM symbols, independently of DynLex syntax.
 class NativePartitionLayout {
 	std::unordered_map<const llvm::GlobalValue *, const llvm::GlobalValue *> parents;
-	std::unordered_map<const llvm::GlobalValue *, unsigned> partitions;
 	std::unordered_map<const llvm::GlobalValue *, std::string> components;
 
 	const llvm::GlobalValue *root(const llvm::GlobalValue *value) {
@@ -63,14 +62,8 @@ class NativePartitionLayout {
 		}
 		for (const auto &[value, _] : parents) {
 			components.emplace(value, root(value)->getName().str());
-			std::string hash = digest(root(value)->getName().str());
-			unsigned number = 0;
-			for (char digit : std::string_view(hash).substr(0, 8))
-				number = number * 16 + (digit <= '9' ? digit - '0' : digit - 'a' + 10);
-			partitions.emplace(value, number % partitionCount);
 		}
 	}
 
-	unsigned partition(const llvm::GlobalValue &value) const { return partitions.at(&value); }
 	const std::string &component(const llvm::GlobalValue &value) const { return components.at(&value); }
 };

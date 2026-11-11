@@ -1268,9 +1268,26 @@ keep the bodies they read active across edited builds, even when those bodies
 have no emitted IR.
 The graph speeds preinference and codegen
 eligibility checks; section parsing and resolution still rebuild their state.
-After preinferring a section's saved variants, the interface comparison captures
-only that section's inference summaries. Previously captured sections are not
-serialized again as later sections finish. The same section encoder produces
+Inference dependencies are also recorded per concrete instantiation. A unit retains
+the fingerprints of the source and compiled signatures it consumed, the exact
+callee instantiations it read, and callable lookup candidate fingerprints. Rejected
+trials contribute their reads even when they leave no selected call expression.
+Compile-time evaluation records body reads for the caller and each active pure
+value computation, so a nested callee edit invalidates cached observed values.
+Storage scopes identify observations within a process and survive key refinement;
+the persisted graph uses section paths and final concrete keys. Discarded trials'
+observations are projected into their callers. Cycle checks commit a reusable result
+only after the entire reachable cycle has been checked.
+Aggregate dependency units are captured only when a retained output's dependency
+closure requests them. Unchanged units retain their records. Source input fingerprints
+are computed once after declared constraints and signature templates are finalized,
+and shared by reuse checks and persistence. `inference_unit_inputs_computed` and
+`inference_unit_input_ms` expose that work; `inference_units_captured`,
+`inference_units_reused`, `inference_aggregate_units_captured`, and
+`inference_aggregate_units_reused` distinguish new and retained dependency records.
+The interface comparison captures only the instantiation just preinferred.
+Other variants, including unchanged variants of that same function, retain their
+summaries and generated IR independently. The same encoder produces
 the final persistent summaries. `preinfer_summary_sections_captured` and
 `preinfer_summary_instantiations_captured` count this comparison work separately
 from successful preinference requests.
@@ -1279,7 +1296,9 @@ Argument and return types refer to those records by number, including nested
 class layouts, array elements, and callback signatures. Loading restores the
 same identities used by inference validation and summary keys.
 The graph payload stores section paths once and indexes forward, reverse, and
-per-instantiation edges by path number. Variants whose compile-time arguments
+per-instantiation edges by path number. Concrete keys and source fingerprint versions
+also have shared tables, so repeated dependencies do not duplicate their hashes.
+Variants whose compile-time arguments
 cannot form an inference-summary key store the union of their selected edges
 under the reserved `*` variant key. Importing their IR retains those edges, so
 successive edits do not invalidate unrelated callers. A reused inference or IR
@@ -1339,10 +1358,11 @@ with concrete runtime argument and return types, including class pointers. A pur
 function returning a value reuses its summary when its call arguments are not all
 known at compile time. A call with known arguments uses a saved return value when
 available; otherwise it infers the body for compile-time evaluation.
-For a pure function without global access or matched function dependencies, the
+For a pure function without global access, the
 cache also stores scalar return values by scalar argument values. A repeated
 known-argument call can use that value without reinferring the body; a new
-argument still infers the body and evaluates the call normally.
+argument still infers the body and evaluates the call normally. Nested callee
+body reads remain dependencies of the observed value.
 Summaries record return address provenance and storage-parameter relationships, plus
 writes, known constants, address provenance, and address escapes for global variables.
 Storage origins retain their lexical declaration and logical invocation across compiler
@@ -1361,8 +1381,8 @@ invalidate constraint probes whose earlier selection could change.
 Class type identities include the current instantiation's field types; a changed layout
 prevents reuse. A summary that accesses globals requires the same structural global
 types as the previous build. A summary
-is reused only if its source body, pattern declarations, every matched function
-dependency and its cached IR closure are unchanged. Other instantiations still
+is reused only if its source body, compiled pattern declarations, observed concrete
+dependencies and its cached IR closure are unchanged. Other instantiations still
 run ordinary inference. A function in a file with diagnostics gets no inference
 summary, so its warnings are regenerated. Functions imported from cached IR count as active when
 deciding whether an edited body can be ignored. This prevents a later callee edit
@@ -1372,17 +1392,19 @@ when those functions and their dependencies are unchanged. Replay compares the
 current inferred global types; IR import separately compares the emitted global
 types and initializers. The changed top-level body is inferred and generated.
 
-For functions with one pattern path, restorable concrete argument types, and no transitive
-global access, the compiler can infer affected instantiations in dependency order.
+For functions with one pattern path, restorable concrete argument types, and restorable
+execution effects, the compiler can infer affected instantiations in dependency order.
 It compares every instantiation's return type and execution effects with the prior
-summary. An equivalent interface stops invalidation at that function: higher callers
+summary. An equivalent interface stops invalidation at that instantiation: higher callers
 retain their inference summaries and LLVM bodies, while the function is generated
 anew and linked to them. A changed interface continues through callers until an
 equivalent interface is found or the entry point is reached. This path compares
 inferred results rather than guessing from edited source text.
 
 At O0, native emission divides the generated IR
-into deterministic, independently linkable partitions. Local symbols receive a stable
+into independently linkable LLVM components keyed by stable symbol names. Independent
+functions do not share hash buckets; a changed function does not lower unrelated
+functions merely because their names hash to the same number. Local symbols receive a stable
 program namespace and hidden external linkage. Aliases, resolvers, COMDAT groups, and
 block-address users remain together. The native dependency snapshot records each
 partition's definitions and referenced declaration interfaces, including attributes,

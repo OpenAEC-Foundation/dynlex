@@ -82,11 +82,15 @@ bool inferenceSummarySourceExcluded(const Section *section, const std::set<std::
 
 Json captureSectionInferenceSummary(
 	const Section *section, const ClassIdentityPaths &classPaths, InferenceStorageIdentities &storage, const Json &globalTypes,
-	size_t *capturedInstantiations = nullptr
+	size_t *capturedInstantiations = nullptr, const IncrementalUnitSelection *skipped = nullptr,
+	const std::string *onlyKey = nullptr
 ) {
 	Json summaries = Json::object();
 	for (const auto &[key, instantiation] : section->instantiations) {
 		if (!canPersistInferenceSummary(section, key, instantiation, classPaths))
+			continue;
+		const std::string identity = *inferenceSummaryKey(key, classPaths);
+		if ((skipped && skipped->contains(section, identity)) || (onlyKey && identity != *onlyKey))
 			continue;
 		auto globalEffects = encodeGlobalEffects(section, instantiation, storage);
 		if (!globalEffects)
@@ -134,16 +138,15 @@ Json captureSectionInferenceSummary(
 
 Json captureInferenceSummaries(
 	ParseContext &context, const std::map<const Section *, std::string> &sectionPaths,
-	const std::set<std::string> &excludedSources, const Json &globalTypes,
-	const std::unordered_set<const Section *> *skipped = nullptr
+	const std::set<std::string> &excludedSources, const Json &globalTypes, const IncrementalUnitSelection *skipped = nullptr
 ) {
 	Json summaries = Json::object();
 	ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
 	InferenceStorageIdentities storage(context, sectionPaths, classPaths);
 	for (const auto &[section, path] : sectionPaths) {
-		if (inferenceSummarySourceExcluded(section, excludedSources) || (skipped && skipped->contains(section)))
+		if (inferenceSummarySourceExcluded(section, excludedSources))
 			continue;
-		Json variants = captureSectionInferenceSummary(section, classPaths, storage, globalTypes);
+		Json variants = captureSectionInferenceSummary(section, classPaths, storage, globalTypes, nullptr, skipped);
 		if (!variants.empty())
 			summaries[path] = std::move(variants);
 	}
@@ -154,7 +157,7 @@ class IncrementalInferenceReuse {
   public:
 	IncrementalInferenceReuse(
 		ParseContext &context, const Json &summaries, const Json &priorGlobalTypes, const IncrementalIRReuse &irReuse,
-		const std::map<const Section *, std::string> &sectionPaths, std::unordered_set<const Section *> eligible
+		const std::map<const Section *, std::string> &sectionPaths, std::shared_ptr<IncrementalUnitSelection> eligible
 	)
 		: context(context), summaries(summaries), priorGlobalTypes(priorGlobalTypes), irReuse(irReuse),
 		  eligible(std::move(eligible)), sectionPaths(sectionPaths), classPaths(classIdentityPaths(sectionPaths)),
@@ -162,7 +165,7 @@ class IncrementalInferenceReuse {
 
 	bool reuse(Section *section, const InstantiationKey &key, Instantiation &instantiation, bool allowPureValueSummary) {
 		std::optional<std::string> keyText = inferenceSummaryKey(key, classPaths);
-		if (!eligible.contains(section) || !keyText)
+		if (!keyText || !eligible->contains(section, *keyText))
 			return false;
 		const std::string &path = sectionPaths.at(section);
 		if (!summaries.contains(path) || !summaries.at(path).contains(*keyText))
@@ -208,21 +211,24 @@ class IncrementalInferenceReuse {
 		const std::map<const Section *, std::string> &paths, const std::set<std::string> &excludedSources,
 		const Json &globalTypes, size_t *reusedSections = nullptr
 	) const {
-		std::unordered_set<const Section *> skipped;
+		IncrementalUnitSelection skipped;
 		if (globalTypes == priorGlobalTypes)
-			for (const Section *section : eligible)
-				if (std::ranges::all_of(section->instantiations, [](const auto &entry) {
-					return entry.second.inferenceReusedFromCache;
-				}))
-					skipped.insert(section);
+			for (const auto &[section, keys] : eligible->sections())
+				for (const auto &[key, instantiation] : section->instantiations)
+					if (instantiation.inferenceReusedFromCache)
+						if (auto identity = inferenceSummaryKey(key, classPaths); identity && keys.contains(*identity))
+							skipped.insert(section, *identity);
 		Json result = captureInferenceSummaries(context, paths, excludedSources, globalTypes, &skipped);
-		for (const Section *section : eligible) {
+		for (const auto &[section, keys] : eligible->sections()) {
 			if (inferenceSummarySourceExcluded(section, excludedSources))
 				continue;
 			const std::string &path = sectionPaths.at(section);
 			if (summaries.contains(path)) {
+				bool encodedCurrentVariants = result.contains(path) && !result.at(path).empty();
 				bool copied = false;
 				for (const auto &[key, summary] : summaries.at(path).items()) {
+					if (!keys.contains(key))
+						continue;
 					if (summary.at("needs_global_types").get<bool>() && globalTypes != priorGlobalTypes)
 						continue;
 					if (!result[path].contains(key)) {
@@ -230,7 +236,7 @@ class IncrementalInferenceReuse {
 						copied = true;
 					}
 				}
-				if (copied && skipped.contains(section) && reusedSections)
+				if (copied && !encodedCurrentVariants && reusedSections)
 					(*reusedSections)++;
 			}
 		}
@@ -242,7 +248,7 @@ class IncrementalInferenceReuse {
 	const Json &summaries;
 	const Json &priorGlobalTypes;
 	const IncrementalIRReuse &irReuse;
-	std::unordered_set<const Section *> eligible;
+	std::shared_ptr<IncrementalUnitSelection> eligible;
 	const std::map<const Section *, std::string> &sectionPaths;
 	ClassIdentityPaths classPaths;
 	InferenceStorageIdentities storage;

@@ -111,6 +111,7 @@ static PureExpressionExecutionResult executePureFlexCall(
 ) {
 	requireCompilerInvariant(definition && definition->section, "pure flex execution requires a selected definition");
 	Section *matchedSection = definition->section;
+	state.recordValueRead(*matchedSection);
 	requireCompilerInvariant(matchedSection->isFlex, "pure flex execution received a non-flex definition");
 	requireCompilerInvariant(
 		expr && expr->inferredFlexBody && expr->inferredFlexExpansion,

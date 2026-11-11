@@ -33,6 +33,8 @@ bool ensureSectionInstantiationInferred(
 	Instantiation &inst = instIt->second;
 	auto storageScope =
 		inst.body ? inst.body->storageScope : parseContext.storageScopeForInstantiation(section, instantiationKey);
+	if (callerContext)
+		callerContext->recordBodyRead(*section, storageScope);
 	if (!inst.body)
 		inst.body = callerContext ? callerContext->cloneSectionBody(section, nullptr, storageScope)
 								  : parseContext.cloneSectionBody(section, false, nullptr, storageScope);

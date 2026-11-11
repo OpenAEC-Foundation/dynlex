@@ -1,7 +1,7 @@
 struct NativePartitionDependencies {
 	NativePartitionLayout layout;
 	Json snapshot;
-	std::array<bool, partitionCount> bodiesUnchanged;
+	std::map<std::string, bool> bodiesUnchanged;
 	const Json *previous;
 
 	NativePartitionDependencies(
@@ -9,7 +9,6 @@ struct NativePartitionDependencies {
 		BuildStatistics &statistics
 	)
 		: layout(module), previous(previous) {
-		bodiesUnchanged.fill(true);
 		llvm::ValueToValueMapTy values;
 		auto declarations = llvm::CloneModule(module, values, [](const llvm::GlobalValue *) {
 			return false;
@@ -33,14 +32,14 @@ struct NativePartitionDependencies {
 			value->eraseFromParent();
 		declarations->setModuleInlineAsm("");
 		snapshot = Json{
-			{"environment", digest(renderModule(*declarations))}, {"symbols", Json::object()}, {"partitions", Json::array()}
+			{"environment", digest(renderModule(*declarations))}, {"symbols", Json::object()}, {"partitions", Json::object()}
 		};
-		std::array<std::set<std::string>, partitionCount> owned, dependencies;
+		std::map<std::string, std::set<std::string>> owned, dependencies;
 		for (const llvm::GlobalValue &value : module.global_values()) {
 			if (value.isDeclaration())
 				continue;
 			std::string name = value.getName().str();
-			unsigned partition = layout.partition(value);
+			const std::string &partition = layout.component(value);
 			owned[partition].insert(name);
 			const Json *old = previous && previous->at("symbols").contains(name) ? &previous->at("symbols").at(name) : nullptr;
 			Json definition = nullptr;
@@ -66,12 +65,19 @@ struct NativePartitionDependencies {
 				bodyUnchanged = old && definition == old->at("definition");
 				references = NativeSymbolReferences{}.collect(value);
 			}
-			bodiesUnchanged[partition] = bodiesUnchanged[partition] && bodyUnchanged;
+			auto [unchanged, inserted] = bodiesUnchanged.try_emplace(partition, true);
+			unchanged->second = unchanged->second && bodyUnchanged;
 			dependencies[partition].insert(references.begin(), references.end());
 			dependencies[partition].insert(name);
 			snapshot["symbols"][name] = Json{{"definition", std::move(definition)}, {"references", references}};
 		}
-		for (unsigned index = 0; index < partitionCount; index++) {
+		// An empty component is reserved for module assembly; named definitions
+		// have nonempty names and remain in their own LLVM-required components.
+		if (!module.getModuleInlineAsm().empty()) {
+			owned.try_emplace("");
+			bodiesUnchanged.emplace("", true);
+		}
+		for (const auto &[index, names] : owned) {
 			std::vector<std::string> pending(dependencies[index].begin(), dependencies[index].end());
 			while (!pending.empty()) {
 				std::string name = std::move(pending.back());
@@ -83,23 +89,18 @@ struct NativePartitionDependencies {
 			Json interfaces = Json::object();
 			for (const std::string &name : dependencies[index])
 				interfaces[name] = declarationHashes.at(name);
-			snapshot["partitions"].push_back(
-				Json{
-					{"symbols", owned[index]},
-					{"declarations", std::move(interfaces)},
-					{"assembly", index == 0 ? module.getModuleInlineAsm() : ""},
-					{"object_key", nullptr}
-				}
-			);
+			snapshot["partitions"][index] = Json{
+				{"symbols", names},
+				{"declarations", std::move(interfaces)},
+				{"assembly", index.empty() ? module.getModuleInlineAsm() : ""},
+				{"object_key", nullptr}
+			};
 		}
 	}
 
-	bool hasDefinition(unsigned index) const {
-		const Json &part = snapshot.at("partitions").at(index);
-		return !part.at("symbols").empty() || !part.at("assembly").get_ref<const std::string &>().empty();
-	}
-	bool canReuse(unsigned index) const {
-		if (!previous || !bodiesUnchanged[index] || previous->at("environment") != snapshot.at("environment"))
+	bool canReuse(const std::string &index) const {
+		if (!previous || !bodiesUnchanged.at(index) || !previous->at("partitions").contains(index) ||
+			previous->at("environment") != snapshot.at("environment"))
 			return false;
 		const Json &before = previous->at("partitions").at(index);
 		const Json &after = snapshot.at("partitions").at(index);

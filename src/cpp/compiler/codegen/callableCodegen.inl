@@ -129,7 +129,7 @@ bool ensureCallableFunctionGenerated(
 	if (!succeeded)
 		return false;
 	if (context.recordGeneratedFunction)
-		context.recordGeneratedFunction(section, nullptr, callableFunction, true);
+		context.recordGeneratedFunction(section, InstantiationKey{argumentTypes, {}}, callableFunction, true);
 	generatedFunction = callableFunction;
 	return true;
 }

@@ -132,30 +132,6 @@ bool compatibleGlobalFreeProjection(const Json &prior, const Json &current) {
 		   sourceProjectionsEqual(current.at("ambient_nonexecution_sources"), prior.at("ambient_nonexecution_sources"));
 }
 
-bool unchangedFunctionSource(const std::string &path, const Json &prior, const Json &current) {
-	const Json &oldDeclarations = prior.at("function_declarations");
-	const Json &newDeclarations = current.at("function_declarations");
-	const Json &oldBodies = prior.at("bodies");
-	const Json &newBodies = current.at("bodies");
-	if (!oldDeclarations.contains(path) || !newDeclarations.contains(path) ||
-		oldDeclarations.at(path) != newDeclarations.at(path) || !oldBodies.contains(path) || !newBodies.contains(path) ||
-		oldBodies.at(path) != newBodies.at(path))
-		return false;
-	return current.at("matches").at(path) == prior.at("matches").at(path);
-}
-
-bool unchangedSectionBody(const Section &section, const std::string &path, const Json &prior, const Json &current) {
-	if (reusableCodegenSection(section))
-		return unchangedFunctionSource(path, prior, current);
-	// Flex functions have no standalone native function, but their bodies are
-	// still inputs to their callers' inference summaries and generated code.
-	const Json &before = prior.at("bodies");
-	const Json &after = current.at("bodies");
-	if (after.contains(path))
-		return before.contains(path) && before.at(path) == after.at(path);
-	return !before.contains(path);
-}
-
 // Resolution units are independent of native function emission: flexes, section
 // declarations and class bodies also own references and lexical bindings.
 bool reusableResolutionSection(const Section &section) {

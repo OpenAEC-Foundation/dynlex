@@ -1,4 +1,5 @@
 #pragma once
+#include "incrementalUnitSelection.h"
 
 #include <map>
 #include <memory>
@@ -22,8 +23,8 @@ class IncrementalIRReuse {
 	IncrementalIRReuse(
 		ParseContext &context, const std::string &previousIR, const nlohmann::json &previousFunctions,
 		const nlohmann::json &previousCallableFunctions, const nlohmann::json &previousFunctionInstantiations,
-		std::map<const Section *, std::string> sectionPaths, std::unordered_set<const Section *> eligibleSections,
-		std::unordered_set<std::string> replacementPaths = {}
+		std::map<const Section *, std::string> sectionPaths, std::shared_ptr<IncrementalUnitSelection> eligible,
+		std::shared_ptr<IncrementalUnitSelection> replacements
 	);
 	bool reuse(Section *section, llvm::Function *function, const nlohmann::json &currentFunctionInstantiations);
 	bool hasReusableIRForInstantiation(
@@ -43,6 +44,7 @@ class IncrementalIRReuse {
 		std::unordered_set<const llvm::GlobalVariable *> mutableGlobals;
 	};
 	const Dependencies &dependenciesOf(const llvm::Function &function) const;
+	bool selected(const std::string &name, const IncrementalUnitSelection &selection) const;
 	bool reusableClosure(
 		const llvm::Function &function, llvm::Module &current, std::unordered_set<std::string> &names,
 		bool allowUnmaterializedGlobals = false
@@ -53,10 +55,10 @@ class IncrementalIRReuse {
 	const nlohmann::json &previousCallableFunctions;
 	const nlohmann::json &previousFunctionInstantiations;
 	std::map<const Section *, std::string> sectionPaths;
-	std::unordered_set<const Section *> eligibleSections;
-	std::unordered_set<std::string> eligiblePaths;
+	std::shared_ptr<IncrementalUnitSelection> eligible;
+	std::shared_ptr<IncrementalUnitSelection> replacements;
+	std::map<std::string, const Section *> sectionsByPath;
 	std::unordered_map<std::string, std::unordered_map<std::string, std::vector<std::string>>> previousNamesByPathAndKey;
-	std::unordered_set<std::string> replacementPaths;
 	std::unordered_set<std::string> reusedNames;
 	bool reusedRoot = false;
 	mutable std::unordered_map<const llvm::Function *, Dependencies> dependencyCache;

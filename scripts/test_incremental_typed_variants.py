@@ -24,6 +24,7 @@ def check_typed_variant_dependency_retention(root, build):
         edited = build(entry=main)
         assert edited[0]["functions_ir_reused"] >= 2, "successive edits lost typed function IR reuse"
         assert edited[0]["constraint_probes_reused"] >= 1, "an unrelated edit invalidated the typed constraint"
+        assert edited[0]["inference_aggregate_units_reused"] >= 1, "unchanged typed dependency units were captured again"
         assert edited[1:] == build(False, entry=main)[1:]
     graph = read_program(root / "cache", main)["section_dependency_graph"]
     expected = {}

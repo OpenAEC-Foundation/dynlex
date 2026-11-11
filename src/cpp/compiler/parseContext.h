@@ -3,6 +3,7 @@
 #include "codeLine.h"
 #include "compilerUtils.h"
 #include "diagnostic.h"
+#include "inferenceReadOwner.h"
 #include "lsp/fileSystem.h"
 #include "patternMatch.h"
 #include "patternTreeNode.h"
@@ -126,12 +127,11 @@ struct ParseContext {
 	size_t constraintValuesReused = 0;
 	size_t constraintExpressionsReused = 0;
 	// Type queries can affect inference even when the trial that read them was rejected.
-	std::function<void(
-		const Section *, std::optional<size_t>, const lsp::SourceFile &, std::string_view,
-		const std::vector<CallableFunctionMatch> &
-	)>
+	std::function<
+		void(const InferenceReadOwner &, const lsp::SourceFile &, std::string_view, const std::vector<CallableFunctionMatch> &)>
 		recordCallableLookup;
-	std::function<void(const Section *, std::optional<size_t>, const Section &)> recordInferenceDependency;
+	std::function<void(const InferenceReadOwner &, const Section &, const std::shared_ptr<const VariableStorageScope> &)>
+		recordInferenceDependency;
 	// Parse cache entries contain only unresolved syntax. Restored executable
 	// expressions register references; temporary type expressions keep them local.
 	std::function<Expression *(Section *, Range, SectionType, bool)> reuseParsedExpression;
@@ -147,7 +147,7 @@ struct ParseContext {
 		runIncrementalPreinference;
 	std::vector<IncrementalFunctionRequest> incrementalReplacementFunctions;
 	bool reuseRootExecution = false;
-	std::function<void(Section *, const InstantiationKey *, llvm::Function *, bool)> recordGeneratedFunction;
+	std::function<void(Section *, const InstantiationKey &, llvm::Function *, bool)> recordGeneratedFunction;
 	std::function<bool(ParseContext &)> importReusedFunctions;
 	std::array<double, 4> frontendStageMilliseconds{};
 	std::array<double, 6> inferenceStageMilliseconds{};

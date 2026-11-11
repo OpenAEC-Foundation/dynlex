@@ -27,6 +27,12 @@ struct BuildStatistics {
 	size_t preinferredInstantiations = 0;
 	size_t preinferSummarySectionsCaptured = 0;
 	size_t preinferSummaryInstantiationsCaptured = 0;
+	size_t inferenceUnitInputsComputed = 0;
+	size_t inferenceUnitsCaptured = 0;
+	size_t inferenceUnitsReused = 0;
+	size_t aggregateInferenceUnitsCaptured = 0;
+	size_t aggregateInferenceUnitsReused = 0;
+	double inferenceUnitInputMilliseconds = 0;
 	bool reusedRootExecution = false;
 	size_t cachedIRDependencyScans = 0;
 	size_t cachedIRDependencyHits = 0;
