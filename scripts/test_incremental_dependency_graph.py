@@ -4,6 +4,7 @@ import json
 from test_incremental_program_cache import read_program
 from test_incremental_inactive_selection import check_literal_inactive_body
 from test_incremental_class_layouts import check_class_layout_restoration
+from test_incremental_constraint_dependencies import check_constraint_lookup_dependencies
 
 
 def graph_for(cache, entry):
@@ -74,6 +75,7 @@ def check_temporary_expression_parse_reuse(root, build):
 
 
 def check_independent_constraint_probes(root, build):
+    check_constraint_lookup_dependencies(root, build)
     main = root / "independent_constraint_probes.dl"
     source = ('floating-point means: @intrinsic("type", "float")\n'
               'integer means: @intrinsic("type", "int")\n'
@@ -190,14 +192,24 @@ def check_unrelated_added_pattern_constraint_probes(root, build):
         "an unrelated added pattern re-inferred an existing type constraint"
     assert edited[1:] == build(False, entry=main)[1:]
 
+    partial = root / "partial_added_pattern_constraint_probes.dl"
+    partial.write_text(source)
+    build(entry=partial)
+    partial.write_text(source + 'to integer marker: @intrinsic("discard", 2)\n')
+    partial_edit = build(entry=partial)
+    assert partial_edit[0]["constraint_probes_reused"] >= 1
+    assert partial_edit[0]["constraint_probes_run"] == 0, \
+        "a missing required word still invalidated the type constraint"
+    assert partial_edit[1:] == build(False, entry=partial)[1:]
+
     relevant = root / "relevant_added_pattern_constraint_probes.dl"
     relevant.write_text(source)
     build(entry=relevant)
-    relevant.write_text(source + 'to integer marker: @intrinsic("discard", 2)\n')
-    affected = build(entry=relevant)
-    assert affected[0]["constraint_probes_run"] >= 1, \
-        "a pattern containing the constraint name reused its prior probe"
-    assert affected[1:] == build(False, entry=relevant)[1:]
+    relevant.write_text(source + 'function [integer]:\n    execute:\n'
+                        '        @intrinsic("return", @intrinsic("type", "float"))\n')
+    affected = build(entry=relevant, success=False)
+    assert affected[0]["constraint_probes_run"] >= 1, "a competing type provider reused its prior probe"
+    assert affected[1:] == build(False, entry=relevant, success=False)[1:]
 
 
 def check_header_parameter_constraint_owner(root, build):

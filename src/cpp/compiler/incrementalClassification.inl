@@ -194,6 +194,11 @@ class IncrementalClassification {
 	std::string exported(const Unit &unit) const;
 	void preparePropagation(std::vector<std::vector<size_t>> reverse, const std::vector<bool> &inputsChanged);
 	static std::string encoded(std::string_view text) { return llvm::toHex(llvm::StringRef(text), true); }
+	static std::array<SectionType, 2> queryTrees(const PatternReference &reference) {
+		// Captures can contain function calls even when the outer lookup uses
+		// another tree, such as a custom section header.
+		return {reference.patternType, SectionType::Function};
+	}
 	std::string declarationInput(const Unit &unit) const {
 		const Section &section = *unit.section;
 		Json definitions = Json::array();
@@ -248,7 +253,8 @@ class IncrementalClassification {
 		size_t capacity = 0;
 		for (const PatternReference *reference : unit.references) {
 			size_t referenceCapacity = matcherTokenCount(reference->patternElements);
-			types.insert(static_cast<int>(reference->patternType));
+			for (SectionType type : queryTrees(*reference))
+				types.insert(static_cast<int>(type));
 			addMatcherStartLiterals(reference->pattern.text, literals);
 			if (reference->expression)
 				for (size_t index = 0; index < reference->expression->arguments.size(); index++)
@@ -290,7 +296,8 @@ class IncrementalClassification {
 				if (!target.section->isLocal)
 					return true;
 				return std::ranges::any_of(reader.references, [&](const PatternReference *reference) {
-					if (reference->patternType != treeType)
+					auto trees = queryTrees(*reference);
+					if (std::ranges::find(trees, treeType) == trees.end())
 						return false;
 					return std::ranges::any_of(target.section->patternDefinitions, [&](const PatternDefinition *definition) {
 						return isPatternDefinitionVisibleFromSource(*definition, *reference->range().line->sourceFile);

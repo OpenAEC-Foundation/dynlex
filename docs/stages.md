@@ -917,7 +917,11 @@ on a function's header line, which belongs to its parent section. A later build
 reuses unaffected first-pass probes before the first affected item when declarations,
 pattern trees, precedence, scope rules, and source outside function bodies are
 unchanged. The saved dependency graph also invalidates a probe when an edited
-body can reach another candidate that could match its expression. Later-pass
+body reaches a definition or binding read by its expression. Every probe attempt
+records syntactic candidates and bindings, including deferred attempts and
+rejected grouping trials. Body edits use those recorded edges instead of a
+textual approximation: editing subtraction cannot invalidate a literal type name
+merely because the name contains a hyphen. Later-pass
 probes and probes after the first affected item run again so a changed
 constraint can resolve earlier and cascade in order.
 An edit confined to top-level execution can retain a probe whose recorded
@@ -928,6 +932,12 @@ run again through the saved reverse dependency graph.
 Adding an ordinary function retains saved probes when prior function declarations
 and scope rules are unchanged, the source outside functions is unchanged, and the
 new pattern cannot match any saved constraint text or current pattern reference.
+Candidate paths require every fixed literal, independently for each choice
+alternative. Captures do not make a path universal when it still requires words
+or punctuation. Queries use complete lexer words and punctuation bytes; a word
+such as `in` is absent from `integer`. Current references contribute their
+normalized matcher input and numeric argument spellings, including their combined
+literals. Surrounding source strings and intrinsic names do not enter that query.
 Potential matches rerun the probes. Global declaration identities use positions
 within their source files, so adding lines to an earlier imported file does not
 change the identity of an unchanged global declaration.
@@ -943,6 +953,10 @@ probe schedule. When the class declaration still has the same fields, the
 compiler restores its instantiation table before decoding reusable constraint
 values, including recursive class layouts. An edited class declaration makes
 its saved constraint values ineligible for reuse.
+Matched-dependency collection stops at separately owned code-generation sections,
+including class `retain` and `release` bodies. Their runtime dependencies belong to
+their own graph units, so editing a lifecycle helper preserves class-layout
+constraints while still regenerating the affected lifecycle code and diagnostics.
 `constraint_probes_reused`, `constraint_probes_run`, `constraint_values_reused`, and
 `constraint_expressions_reused` report these separate decisions. The six entries
 of `inference_stage_ms` measure declared constraints, pattern conflicts,
@@ -1053,6 +1067,10 @@ canonical paths with words that could become parameters omitted from the require
 literals. These potential matches account for unsuccessful lookups and new patterns,
 independently of the functions selected during inference.
 Query edges honor the matcher's source visibility, including file-local patterns.
+Every reference reads both its outer matcher tree and the function tree used by
+nested captures. The visibility check applies to those nested function lookups as
+well, so a new visible function can retract a cached parameter discovered in a
+section header while an imported file-local function remains excluded.
 They also use the resolver's shared definition-to-tree mapping, so a conversion
 cannot invalidate an ordinary function lookup. Units with no references do not
 perform lookups. A declaration-input change

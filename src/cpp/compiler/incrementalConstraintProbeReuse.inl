@@ -8,33 +8,66 @@ bool stableConstraintProbePrelude(const Json &prior, const Json &current) {
 		   sourceProjectionsEqual(prior.at("ambient_nonexecution_sources"), current.at("ambient_nonexecution_sources"));
 }
 
-bool constraintDefinitionMayMatch(const Section &section, std::string_view loweredText) {
-	for (const PatternDefinition *definition : section.patternDefinitions)
-		for (const auto &path : canonicalPatternPaths(definition->patternElements))
-			for (const DefinitionPatternElement &element : path) {
-				if (element.type == PatternElement::Type::Variable || element.promotedFromVariableLike)
-					return true;
-				if (element.type == PatternElement::Type::Other) {
-					if (std::ranges::all_of(element.text, [](unsigned char character) {
-						return std::isspace(character);
-					}))
-						continue;
-					return true;
-				}
-				std::string literal;
-				for (unsigned char character : element.text) {
-					if (character >= 128)
-						return true;
-					literal.push_back(static_cast<char>(std::tolower(character)));
-				}
-				if (literal.empty())
-					continue;
-				if (loweredText.find(literal) != std::string_view::npos)
-					return true;
-				break;
-			}
-	return false;
-}
+// Necessary matcher literals exclude captures and surrounding source. Words are
+// complete tokens; punctuation can be split by the matcher, so retain its bytes.
+class ConstraintProbeQuery {
+  public:
+	ConstraintProbeQuery() = default;
+	explicit ConstraintProbeQuery(std::string_view text) { append(text); }
+	explicit ConstraintProbeQuery(const PatternReference &reference) {
+		append(reference.pattern.text);
+		if (reference.expression)
+			for (size_t index = 0; index < reference.expression->arguments.size(); index++)
+				if (auto spelling = numericPatternArgumentSpelling(&reference, index))
+					append(*spelling);
+	}
+	static ConstraintProbeQuery requiredBy(const std::vector<DefinitionPatternElement> &path) {
+		ConstraintProbeQuery result;
+		for (const DefinitionPatternElement &element : path)
+			if (element.type != PatternElement::Type::Variable && !element.promotedFromVariableLike)
+				result.append(element.text);
+		return result;
+	}
+	bool containsAll(const ConstraintProbeQuery &required) const {
+		return std::ranges::all_of(required.literals, [&](const std::string &literal) {
+			return literals.contains(literal);
+		});
+	}
+
+  private:
+	static std::string lowered(std::string text) {
+		for (char &character : text)
+			character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+		return text;
+	}
+	void append(std::string_view text) {
+		for (const PatternElement &element : getPatternElements(text))
+			if (element.type == PatternElement::Type::VariableLike)
+				literals.insert(lowered(element.text));
+			else if (element.type == PatternElement::Type::Other)
+				for (unsigned char character : element.text)
+					if (!std::isspace(character))
+						literals.insert(lowered(std::string(1, character)));
+	}
+	std::unordered_set<std::string> literals;
+};
+
+class ConstraintProbePattern {
+  public:
+	explicit ConstraintProbePattern(const Section &section) {
+		for (const PatternDefinition *definition : section.patternDefinitions)
+			for (const auto &path : canonicalPatternPaths(definition->patternElements))
+				requirements.push_back(ConstraintProbeQuery::requiredBy(path));
+	}
+	bool mayMatch(const ConstraintProbeQuery &query) const {
+		return std::ranges::any_of(requirements, [&](const ConstraintProbeQuery &path) {
+			return query.containsAll(path);
+		});
+	}
+
+  private:
+	std::vector<ConstraintProbeQuery> requirements;
+};
 
 std::vector<bool> reusableConstraintProbes(
 	const Json &prior, const Json &current, const Json &graph, const std::map<std::string, Section *> &sections,
@@ -50,13 +83,13 @@ std::vector<bool> reusableConstraintProbes(
 			if (!current.at(field).contains(path) || current.at(field).at(path) != value)
 				return {};
 	}
-	std::vector<const Section *> addedDefinitions;
+	std::vector<ConstraintProbePattern> addedPatterns;
 	for (const auto &[path, _] : current.at("function_declarations").items()) {
 		if (prior.at("function_declarations").contains(path))
 			continue;
 		if (!sections.contains(path))
 			return {};
-		addedDefinitions.push_back(sections.at(path));
+		addedPatterns.emplace_back(*sections.at(path));
 	}
 	for (const auto &[path, _] : current.at("inactive").items())
 		if (!prior.at("inactive").contains(path) && !current.at("function_declarations").contains(path))
@@ -88,35 +121,21 @@ std::vector<bool> reusableConstraintProbes(
 			items.size() == lookupReads.size(),
 		"saved type-constraint probe schedule has mismatched item records"
 	);
-	std::vector<std::string> loweredTexts;
-	loweredTexts.reserve(texts.size());
-	for (const std::string &text : texts) {
-		std::string lowered;
-		lowered.reserve(text.size());
-		for (unsigned char character : text)
-			lowered.push_back(static_cast<char>(std::tolower(character)));
-		loweredTexts.push_back(std::move(lowered));
-	}
-	for (const Section *added : addedDefinitions) {
-		auto mayMatchText = [&](std::string_view source) {
-			std::string lowered;
-			lowered.reserve(source.size());
-			for (unsigned char character : source)
-				lowered.push_back(static_cast<char>(std::tolower(character)));
-			return constraintDefinitionMayMatch(*added, lowered);
-		};
-		for (const std::string &text : loweredTexts)
-			if (constraintDefinitionMayMatch(*added, text))
+	if (!addedPatterns.empty()) {
+		for (const std::string &text : texts) {
+			ConstraintProbeQuery query(text);
+			if (std::ranges::any_of(addedPatterns, [&](const ConstraintProbePattern &added) {
+				return added.mayMatch(query);
+			}))
 				return {};
+		}
 		for (const auto &[_, section] : sections)
 			for (const PatternReference *reference : section->patternReferences) {
-				if (mayMatchText(reference->pattern.text) || mayMatchText(reference->range().line->fullText))
+				ConstraintProbeQuery query(*reference);
+				if (std::ranges::any_of(addedPatterns, [&](const ConstraintProbePattern &added) {
+					return added.mayMatch(query);
+				}))
 					return {};
-				if (reference->expression)
-					for (size_t index = 0; index < reference->expression->arguments.size(); index++)
-						if (std::optional<std::string> spelling = numericPatternArgumentSpelling(reference, index);
-							spelling && mayMatchText(*spelling))
-							return {};
 			}
 	}
 	std::vector<std::string> changedBodies;
@@ -161,16 +180,6 @@ std::vector<bool> reusableConstraintProbes(
 			if (dirtyClosure.contains(path) || topLevelDependent.contains(path))
 				dirty[index] = true;
 		}
-	}
-	for (const std::string &path : dirtyClosure) {
-		const Section &section = *sections.at(path);
-		// Existing conversion bodies are read through the dependency graph.
-		// Their unary patterns cannot directly match a constraint expression.
-		if (section.patternDefinitions.empty() || section.isConversion)
-			continue;
-		for (size_t index = 0; index < items.size(); index++)
-			if (!dirty[index] && constraintDefinitionMayMatch(section, loweredTexts[index]))
-				dirty[index] = true;
 	}
 	size_t firstDirty = items.size();
 	for (size_t index = 0; index < items.size(); index++)

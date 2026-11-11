@@ -442,6 +442,11 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 			if (reuseItem)
 				parseContext.constraintProbesReused++;
 			else {
+				// Keep every syntactic candidate and binding read, including
+				// attempts that defer or later lose a grouping trial.
+				recordDeclaredConstraintDependencies(
+					item, parseContext, variableOwners, parseContext.constraintProbeDependencies[itemIndex]
+				);
 				probe = probeDeclaredTypeConstraint(item, parseContext, nullptr, {.constraintProbe = itemIndex});
 				parseContext.constraintProbesRun++;
 			}

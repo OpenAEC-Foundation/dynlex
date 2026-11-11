@@ -2,6 +2,7 @@
 
 from test_incremental_program_cache import read_program
 from test_incremental_classification_inputs import check_classification_inputs
+from test_incremental_nested_lookups import check_nested_classification_lookups
 
 
 def check_recursive_classification_cascade(root, build):
@@ -236,6 +237,7 @@ def check_incremental_classification(root, build):
     assert recovered[1:] == build(False, entry=main)[1:]
     check_classification_propagation(root, build)
     check_classification_inputs(root, build)
+    check_nested_classification_lookups(root, build)
 
 
 def check_classification_propagation(root, build):

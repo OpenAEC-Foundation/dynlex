@@ -1,7 +1,10 @@
 """Infer lifecycle behavior needed by a regenerated function under a reused entry."""
 
+from test_incremental_lifecycle_constraints import check_lifecycle_constraint_dependencies
+
 
 def check_lifecycle_replacement_roots(root, build):
+    check_lifecycle_constraint_dependencies(root, build)
     main = root / "lifecycle_replacement_roots.dl"
     source = (
         'integer means: @intrinsic("type", "int")\n'

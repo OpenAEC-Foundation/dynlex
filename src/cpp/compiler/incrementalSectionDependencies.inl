@@ -9,7 +9,7 @@ void collectMatchedSectionDependencies(const Section *body, std::vector<Section 
 		if (reference->match)
 			visitMatch(*reference->match);
 	for (const Section *child : body->children)
-		if (child->patternDefinitions.empty())
+		if (child->patternDefinitions.empty() && !hasCodegenSectionIdentity(*child))
 			collectMatchedSectionDependencies(child, dependencies);
 }
 
