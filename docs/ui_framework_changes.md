@@ -148,3 +148,24 @@ regression also executes the optimized output through the Wasm host.
 
 Native helper test builds honor `CMAKE_BUILD_PARALLEL_LEVEL`, with one job by
 default, instead of forcing two jobs over the caller's limit.
+
+The shared language client distinguishes server requests from editor responses
+before matching IDs. A server request can legally use the same ID as an editor
+request; the preceding implementation treated it as the answer and aborted while
+reading its missing result. Server requests now receive replies with their exact
+IDs, including strings and integers beyond JavaScript's exact-number range.
+Queued replies preserve pending editor work and its ownership. Semantic refreshes
+request tokens without resending source, and changed token results invalidate
+colors independently of source revisions. Identical token data retains cached
+colors. Native and Wasm regressions cover the two protocol directions, suspended
+work, repeated refreshes and resource cleanup.
+
+A server refresh emitted after `didClose` initially invalidated the closed
+document too. The workspace then reopened that project repeatedly, producing
+background compiler traffic and paints while the UI revision stayed unchanged.
+The client tracks the open-document lifecycle and acknowledges closing refreshes
+without invalidating closed results. `source_close_refresh` reproduces the cycle
+without a renderer; the River browser check also requires idle scenes to stop
+painting.
+The same lifecycle rule also preserves cached diagnostics: the server clearing
+its report on close does not erase the editor's retained analysis results.
