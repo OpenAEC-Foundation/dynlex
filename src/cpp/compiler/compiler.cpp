@@ -711,8 +711,9 @@ importSourceFile(const std::string &path, ParseContext &context, const std::stri
 			return false;
 
 		// check if the line is an import statement
+		std::string_view importText = trimLeadingWhitespace(line->rightTrimmedText);
 		if (std::optional<std::string_view> importPathView =
-				extractDirectiveArgument(line->rightTrimmedText, syntax.importKeyword)) {
+				extractDirectiveArgument(importText, syntax.importKeyword)) {
 			// recursively import the file, replacing this line with the imported content
 			std::string importingDir =
 				std::filesystem::path(pathutil::toFilesystemPath(sourceFile->uri.empty() ? path : sourceFile->uri))
@@ -724,7 +725,10 @@ importSourceFile(const std::string &path, ParseContext &context, const std::stri
 			if (!importSourceFile(importPath, context, resolvedImport.root, purpose)) {
 				context.addDiagnostic(Diagnostic(
 					context, Diagnostic::Level::Error, "failed to import source file",
-					Range(line, static_cast<int>(syntax.importKeyword.length()), line->rightTrimmedText.length()), "path",
+					Range(
+						line, static_cast<int>(importText.data() - line->rightTrimmedText.data() + syntax.importKeyword.length()),
+						line->rightTrimmedText.length()
+					), "path",
 					importPath
 				));
 				return false;

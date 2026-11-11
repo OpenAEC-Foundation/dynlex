@@ -1,11 +1,16 @@
-bool IncrementalClassification::canReuse(const Unit &unit) {
+bool IncrementalClassification::canReuse(Unit &unit) {
 	if (!prior || unit.environment || !unit.old || context.options.emitDebugInfo || context.options.traceExecution ||
-		unit.section->parent != context.mainSection || !reusableResolutionSection(*unit.section) || unit.references.empty() ||
-		!sameBody(unit.path))
+		unit.section->parent != context.mainSection || !reusableResolutionSection(*unit.section) || unit.references.empty())
 		return false;
 	for (const Json &source : previous->at("diagnostic_sources"))
 		if (source == resolutionSourceFile(*unit.section).uri)
 			return false;
+	if (!sameBody(unit.path)) {
+		// Header-only reuse cannot be provisional: its live body is resolved by
+		// the ordinary worklist rather than the skipped-body retraction path.
+		unit.headerOnly = !dirty.contains(unit.path) && unit.old->at(Input) == unit.input;
+		return unit.headerOnly;
+	}
 	const Json &projection = previous->at("all_function_projection");
 	const Json &matcher = projection.at("matcher_projection");
 	if (!matcher.at("body_units").contains(unit.path) ||
@@ -104,7 +109,7 @@ void IncrementalClassification::preparePropagation(
 	eligible.resize(units.size());
 	observedExports.resize(units.size());
 	for (size_t index = 0; index < units.size(); index++) {
-		const Unit &unit = units[index];
+		Unit &unit = units[index];
 		eligible[index] = canReuse(unit);
 		if (!unit.environment && unit.hasCandidates && !eligible[index])
 			eager[index] = true;

@@ -8,6 +8,7 @@ imports fall back to the working directory and mix trees.
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import tempfile
@@ -21,6 +22,27 @@ COMPILER = Path(sys.argv.pop()).resolve()
 
 
 class ImportRootConsistencyTests(unittest.TestCase):
+    def test_indented_configured_import_is_loaded(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dynlex-indented-import-") as directory:
+            root = Path(directory)
+            (root / "config.dl").write_text('dynlex options:\n    import: "include"\n')
+            main = root / "main.dl"
+            body = root / "body.dl"
+            main.write_text('function [run]:\n    execute:\n        include body.dl\n')
+            body.write_text('        @intrinsic("discard", 0)\n')
+            result = subprocess.run([str(COMPILER), str(main), "--dump-dependencies"],
+                                    cwd=root, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(result.stdout)
+            self.assertTrue(report["complete"])
+            self.assertIn(body.resolve(), {Path(source).resolve() for source in report["sources"]})
+            body.unlink()
+            missing = subprocess.run([str(COMPILER), str(main), "--dump-dependencies"],
+                                     cwd=root, capture_output=True, text=True, timeout=10)
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertFalse(json.loads(missing.stdout)["complete"])
+            self.assertIn("main.dl:3:16-24:", missing.stderr)
+
     def test_project_syntax_and_symlinked_builtin_syntax(self) -> None:
         with tempfile.TemporaryDirectory(prefix="dynlex-source-syntax-") as directory:
             root = Path(directory)

@@ -1,6 +1,7 @@
 """A body edit can change an entire recursive signature dependency cycle."""
 
 from test_incremental_program_cache import read_program
+from test_incremental_classification_inputs import check_classification_inputs
 
 
 def check_recursive_classification_cascade(root, build):
@@ -96,8 +97,9 @@ def check_incremental_classification(root, build):
     for number in (2, 3):
         main.write_text(source.replace('"add", item, 1', f'"add", item, {number}'))
         edited = build(entry=main)
-        assert edited[0]["classification_parameters_reused"] >= 1, "independent implicit parameter was rediscovered"
-        assert edited[0]["classification_units_invalidated"] >= 1
+        assert edited[0]["classification_parameters_reused"] >= 2, "a literal argument edit rediscovered implicit parameters"
+        assert edited[0]["classification_units_invalidated"] == 0
+        assert edited[0]["classification_header_only_units_reused"] == 1
         assert edited[0]["cached_body_resolution_references_skipped"] >= 1
         assert edited[0]["body_resolution_reference_visits"] < cold[0]["body_resolution_reference_visits"]
         assert edited[1:] == build(False, entry=main)[1:]
@@ -233,6 +235,7 @@ def check_incremental_classification(root, build):
     assert recovered[2] == b"8\n"
     assert recovered[1:] == build(False, entry=main)[1:]
     check_classification_propagation(root, build)
+    check_classification_inputs(root, build)
 
 
 def check_classification_propagation(root, build):
@@ -299,7 +302,8 @@ def check_classification_propagation(root, build):
               '@intrinsic("discard", identity 7)\n')
     main.write_text(source)
     build(entry=main)
-    main.write_text(source.replace('"discard", second', '"discard", @intrinsic("add", second, 1)'))
+    # Change the provider's reference inputs; a literal-only edit now reuses its header.
+    main.write_text(source.replace('"discard", second', '"discard", @intrinsic("add", second, second)'))
     capacity = build(entry=main)
     assert capacity[0]["classification_units_potentially_invalidated"] == 1, "two captures could match one input token"
     assert capacity[1:] == build(False, entry=main)[1:]

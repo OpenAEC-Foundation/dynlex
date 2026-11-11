@@ -1,22 +1,33 @@
 Json definitionBodyDigests(const ParseContext &context, const std::map<std::string, Section *> &sections) {
-	std::map<const Section *, std::string> bodies;
+	struct Body {
+		const lsp::SourceFile *source = nullptr;
+		std::string text;
+	};
+	std::map<const Section *, Body> bodies;
 	for (const auto &[_, section] : sections)
 		if (!section->patternDefinitions.empty() || section->type == SectionType::Retain ||
 			section->type == SectionType::Release)
-			bodies.emplace(section, "");
+			bodies.try_emplace(section);
 	for (const CodeLine *line : context.codeLines) {
 		if (line->rightTrimmedText.empty())
 			continue;
 		for (const Section *section = line->section; section; section = section->parent)
 			if (auto body = bodies.find(section); body != bodies.end()) {
-				body->second.append(line->rightTrimmedText);
-				body->second += '\n';
+				Body &content = body->second;
+				// Equal text can resolve differently under file-local visibility.
+				// Frame source transitions and lines so their boundaries are unambiguous.
+				if (content.source != line->sourceFile) {
+					content.source = line->sourceFile;
+					content.text += 'F' + std::to_string(content.source->uri.size()) + ':' + content.source->uri;
+				}
+				content.text += 'L' + std::to_string(line->rightTrimmedText.size()) + ':';
+				content.text.append(line->rightTrimmedText);
 			}
 	}
 	Json result = Json::object();
 	for (const auto &[path, section] : sections)
 		if (auto body = bodies.find(section); body != bodies.end())
-			result[path] = digest(body->second);
+			result[path] = digest(body->second.text);
 	return result;
 }
 

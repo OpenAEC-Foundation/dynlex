@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import uuid
+from test_incremental_compiler_identity import check_compiler_identity
 
 
 def windows_cache_directory():
@@ -95,3 +96,4 @@ def check_default_cache(compiler, root):
             env = {**environment, "HOME": str(home), "XDG_CACHE_HOME": value}
             _, stats = invoke("--incremental-stats", env=env)
             assert Path(stats["cache_directory"]).resolve() == (home / ".cache/dynlex/compiler/native-v1").resolve()
+    check_compiler_identity(compiler, root / "compiler-identity")

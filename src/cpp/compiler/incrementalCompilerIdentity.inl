@@ -18,10 +18,15 @@ std::string compilerBuildIdentity(const std::string &argv0) {
 	std::string executable = llvm::sys::fs::getMainExecutable(argv0.c_str(), reinterpret_cast<void *>(&compileIncrementally));
 	if (executable.empty())
 		throw std::runtime_error("cannot identify compiler executable");
-	auto object = llvm::object::ObjectFile::createObjectFile(executable);
+	// Object bytes do not need a terminator. Requiring one makes LLVM copy the
+	// entire executable when its size is a multiple of the system page size.
+	auto buffer = llvm::MemoryBuffer::getFile(executable, false, false);
+	if (!buffer)
+		throw std::runtime_error("cannot read compiler executable: " + buffer.getError().message());
+	auto object = llvm::object::ObjectFile::createObjectFile((*buffer)->getMemBufferRef());
 	if (!object)
 		throw std::runtime_error("cannot inspect compiler executable: " + llvm::toString(object.takeError()));
-	llvm::object::BuildIDRef buildId = llvm::object::getBuildID(object->getBinary());
+	llvm::object::BuildIDRef buildId = llvm::object::getBuildID(object->get());
 	if (!buildId.empty())
 		return "build-id:" + llvm::toHex(buildId, true);
 	return "sha256:" + digestFile(executable);

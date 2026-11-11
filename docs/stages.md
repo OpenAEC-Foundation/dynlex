@@ -11,6 +11,9 @@ Later stages of the compiler are very dependent on earlier stages. Every line of
 # Import Stage
 
 The compiler combines all files into one large file.
+Import directives use the configured spelling at any indentation level. Imported
+lines retain their authored indentation and source identity; a missing indented
+import reports its path at the original source columns.
 
 Each source file fixes its URI and internal-library classification when created.
 Content edits preserve that identity. Syntax lookup selects the current compilation's
@@ -888,6 +891,8 @@ source and candidate pattern tree are equivalent; a successful build retires the
 failed snapshot.
 The compiler linker build ID (or executable content digest when the format has no
 build ID), effective compiler options and host CPU features identify the computation. Modification timestamps are never a correctness criterion.
+Build-ID inspection opens binary bytes without a null-terminator requirement,
+so page-aligned compiler executables are mapped instead of copied in full.
 The cache's size limit evicts entries by successful access time. Reading a
 verified entry refreshes its cache-file timestamp, so repeated reuse keeps hot
 optimization units ahead of older results that no longer participate in builds.
@@ -1034,8 +1039,13 @@ Bodies with prior diagnostics run the normal resolver.
 `body_resolution_units_reused` and `body_resolution_references_restored`
 count this restoration, separately from references evaluated by the resolver.
 Declaration classification has its own persistent dependency graph. Its inputs
-include the parsed declaration, body text when implicit candidates remain, lexical
-ancestors, scope rules, and ambient declarations. Each reference contributes its
+include the parsed declaration, reference source spans and lexical bindings
+when implicit candidates remain, lexical ancestors, scope rules, and ambient
+declarations. The body input records scope structure, source identities, and binding
+order relative to references. Inserting or editing a literal-only execution statement
+therefore preserves classification while its executable body is still rechecked.
+Bodies containing nested definitions retain their complete body input.
+Each reference contributes its
 possible literal spellings from its normalized matcher input, including numeric arguments,
 and the matcher trees used by its references. Quoted intrinsic names and surrounding
 source text do not participate in those lookups. A declaration contributes
@@ -1085,14 +1095,20 @@ provisional headers cannot leave stale data declarations in a lexical scope.
 `classification_cascades_stopped` counts retained units from the potential cascade.
 The topology, reference-literal sets, potential signatures, and promoted parameters
 are separate content-addressed CBOR records in the matcher store. Unchanged query
-and dependency units retain their records. Promotion locations use nonempty logical
-lines within the owning definition so comments do not change their identity.
+and dependency units retain their records. Promotion locations use reference
+ordinals and normalized pattern positions within the owning definition, so comments
+and inserted literal-only statements do not change their identity.
 An unchanged top-level body without nested definitions can restore its parameter
 classification when its dependencies and lexical environment remain valid and its
 saved body resolution is available. The compiler installs those parameters through
 the normal binding operations before indexing the declaration. Bodies with prior
 diagnostics still run normal resolution. The source projection and body digest
 establish that a skipped body's text is unchanged.
+Body digests frame source-file transitions as well as text: moving identical code
+between files can change file-local overload visibility. A changed body can reuse
+only its header when its classification input and complete dependency closure are
+unchanged; its references remain on the ordinary resolution worklist.
+`classification_header_only_units_reused` counts these separate header restorations.
 After indexing, selected bodies rejoin the deferred worklist. A changed pattern tree
 validates each body's lookup dependencies rather than restarting the declaration
 phase. Affected references run the resolver; unaffected bodies replay their complete

@@ -74,6 +74,7 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"cached_body_resolution_references_skipped", context.cachedBodyResolutionReferencesSkipped},
 					  {"cached_body_selection_ms", statistics.cachedBodySelectionMilliseconds},
 					  {"classification_units_reused", statistics.classification.unitsReused},
+					  {"classification_header_only_units_reused", statistics.classification.headerOnlyUnitsReused},
 					  {"classification_parameters_reused", statistics.classification.parametersReused},
 					  {"classification_parameters_recorded", statistics.classification.parametersRecorded},
 					  {"classification_units_invalidated", statistics.classification.unitsInvalidated},

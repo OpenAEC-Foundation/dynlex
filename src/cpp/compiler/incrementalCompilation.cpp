@@ -41,6 +41,7 @@
 #include "llvm/Support/BLAKE3.h"
 #include "llvm/Support/Caching.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SHA256.h"
 #include "llvm/Support/Threading.h"
 #include "llvm/Support/raw_ostream.h"

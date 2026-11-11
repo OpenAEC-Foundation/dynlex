@@ -2,6 +2,7 @@
 
 struct ClassificationWork {
 	size_t unitsReused = 0;
+	size_t headerOnlyUnitsReused = 0;
 	size_t parametersReused = 0;
 	size_t parametersRecorded = 0;
 	size_t unitsInvalidated = 0;
@@ -17,16 +18,16 @@ struct ClassificationWork {
 };
 
 class IncrementalClassification {
-	enum Field { Path, Input, Queries, Provides, Outputs, Edges, HasCandidates, Environment, Export };
+	enum Field { Path, Input, Queries, Provides, Outputs, Edges, HasCandidates, Environment, Export, BodyInput };
 	struct Unit {
-		std::string path, input, queries, provides, outputs, exportKey;
+		std::string path, input, queries, provides, outputs, exportKey, bodyInput;
 		Section *section;
 		const Json *old = nullptr;
 		bool hasCandidates = false;
 		bool environment = false;
 		bool selected = false;
+		bool headerOnly = false;
 		std::vector<PatternReference *> references;
-		std::vector<CodeLine *> lines;
 		std::vector<size_t> edges;
 	};
 	struct Timer {
@@ -65,7 +66,12 @@ class IncrementalClassification {
 			for (const Json &output : outputs) {
 				PatternDefinition *definition = section.patternDefinitions.at(output.at(0).get<size_t>());
 				size_t wanted = output.at(1).get<size_t>(), index = 0;
-				Range use(unit.lines.at(output.at(2).get<size_t>()), output.at(3).get<int>(), output.at(4).get<int>());
+				PatternReference &reference = *unit.references.at(output.at(2).get<size_t>());
+				const Range &range = reference.range();
+				Range use(
+					range.line, range.start() + static_cast<int>(reference.pattern.getLinePos(output.at(3).get<size_t>())),
+					range.start() + static_cast<int>(reference.pattern.getLinePos(output.at(4).get<size_t>()))
+				);
 				forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
 					if (index++ != wanted)
 						return;
@@ -82,7 +88,10 @@ class IncrementalClassification {
 			unit.outputs = unit.old->at(Outputs).get<std::string>();
 			work.unitsReused++;
 			work.parametersReused += outputs.size();
-			result.push_back(&section);
+			if (unit.headerOnly)
+				work.headerOnlyUnitsReused++;
+			else
+				result.push_back(&section);
 		}
 		work.restoreMilliseconds += elapsedMilliseconds(restoreStarted);
 		return result;
@@ -112,10 +121,20 @@ class IncrementalClassification {
 							!counts.snapshot().at(unit.path).contains(element.text))
 							return;
 						const Range &use = element.firstImplicitPromotionUseRange;
-						auto line = std::ranges::find(unit.lines, use.line);
-						requireCompilerInvariant(line != unit.lines.end(), "parameter promotion has no owning source line");
+						auto reference = std::ranges::find_if(unit.references, [&](const PatternReference *candidate) {
+							const Range &range = candidate->range();
+							return range.line == use.line && range.start() <= use.start() && range.end() >= use.end();
+						});
+						requireCompilerInvariant(
+							reference != unit.references.end(), "parameter promotion has no owning reference"
+						);
+						PatternReference &owner = **reference;
 						outputs.push_back(
-							Json::array({definitionIndex, index, line - unit.lines.begin(), use.start(), use.end()})
+							Json::array(
+								{definitionIndex, index, reference - unit.references.begin(),
+								 owner.pattern.getPatternPos(use.start() - owner.range().start()),
+								 owner.pattern.getPatternPos(use.end() - owner.range().start())}
+							)
 						);
 					});
 				}
@@ -138,7 +157,7 @@ class IncrementalClassification {
 			entries.push_back(
 				Json::array(
 					{unit.path, unit.input, unit.queries, unit.provides, unit.outputs, unit.edges, unit.hasCandidates,
-					 unit.environment, unit.exportKey}
+					 unit.environment, unit.exportKey, unit.bodyInput}
 				)
 			);
 		}
@@ -170,7 +189,8 @@ class IncrementalClassification {
 		const Json &before = previous->at("all_function_projection").at("matcher_projection").at("bodies");
 		return before.contains(path) && before.at(path) == counts.bodies().at(path);
 	}
-	bool canReuse(const Unit &unit);
+	bool canReuse(Unit &unit);
+	std::string classificationBodyInput(const Unit &unit) const;
 	std::string exported(const Unit &unit) const;
 	void preparePropagation(std::vector<std::vector<size_t>> reverse, const std::vector<bool> &inputsChanged);
 	static std::string encoded(std::string_view text) { return llvm::toHex(llvm::StringRef(text), true); }
@@ -310,5 +330,6 @@ class IncrementalClassification {
 };
 
 #include "incrementalClassificationGraph.inl"
+#include "incrementalClassificationInputs.inl"
 #include "incrementalClassificationPropagation.inl"
 #include "incrementalClassificationScopes.inl"

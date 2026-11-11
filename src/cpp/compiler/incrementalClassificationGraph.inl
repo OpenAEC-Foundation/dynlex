@@ -34,14 +34,25 @@ void IncrementalClassification::prepare() {
 		unit.section = section;
 		if (auto old = oldUnits.find(path); old != oldUnits.end())
 			unit.old = old->second;
+		const auto collect = [&](auto &&self, Section *body) -> void {
+			unit.references.insert(unit.references.end(), body->patternReferences.begin(), body->patternReferences.end());
+			for (Section *child : body->children)
+				if (child->patternDefinitions.empty())
+					self(self, child);
+		};
+		collect(collect, section);
 		std::string input = declarationInput(unit);
 		for (const Section *ancestor = section; ancestor; ancestor = ancestor->parent)
 			unit.hasCandidates |= std::ranges::any_of(ancestor->variableLikeCounts, [](const auto &candidate) {
 				return candidate.second != 0;
 			});
 		input += unit.hasCandidates ? '1' : '0';
-		if (unit.hasCandidates)
-			input += bodies.at(path).get_ref<const std::string &>();
+		if (unit.hasCandidates) {
+			unit.bodyInput = unit.old && unit.old->at(HasCandidates).get<bool>() && sameBody(path)
+								 ? unit.old->at(BodyInput).get<std::string>()
+								 : classificationBodyInput(unit);
+			input += unit.bodyInput;
+		}
 		for (const Section *ancestor = section->parent; ancestor && ancestor != context.mainSection;
 			 ancestor = ancestor->parent)
 			if (!ancestor->patternDefinitions.empty()) {
@@ -50,17 +61,8 @@ void IncrementalClassification::prepare() {
 				input += bodies.at(units.at(identity->second).path).get_ref<const std::string &>();
 			}
 		unit.input = digest(input);
-		const auto collect = [&](auto &&self, Section *body) -> void {
-			unit.references.insert(unit.references.end(), body->patternReferences.begin(), body->patternReferences.end());
-			for (Section *child : body->children)
-				if (child->patternDefinitions.empty())
-					self(self, child);
-		};
-		collect(collect, section);
-		if (section->openingLine)
-			unit.lines.push_back(section->openingLine);
 		if (unit.old && prior->at("zero_width_functions") == zeroWidthFunctions &&
-			unit.old->at(HasCandidates) == unit.hasCandidates && (!unit.hasCandidates || sameBody(path))) {
+			unit.old->at(HasCandidates) == unit.hasCandidates && unit.old->at(BodyInput) == unit.bodyInput) {
 			unit.queries = unit.old->at(Queries).get<std::string>();
 			work.queryUnitsReused++;
 		} else {
@@ -76,11 +78,6 @@ void IncrementalClassification::prepare() {
 			masked.insert(section);
 		units.push_back(std::move(unit));
 	}
-	for (CodeLine *line : context.codeLines)
-		if (!line->rightTrimmedText.empty())
-			for (const Section *section = line->section; section; section = section->parent)
-				if (auto owner = sectionUnits.find(section); owner != sectionUnits.end() && line != section->openingLine)
-					units[owner->second].lines.push_back(line);
 	work.inputMilliseconds += elapsedMilliseconds(stageStarted);
 	stageStarted = Clock::now();
 	prepareEnvironments();
