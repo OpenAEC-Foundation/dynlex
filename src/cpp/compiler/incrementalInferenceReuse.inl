@@ -80,6 +80,58 @@ bool inferenceSummarySourceExcluded(const Section *section, const std::set<std::
 	return !section->openingLine || excludedSources.contains(section->openingLine->sourceFile->uri);
 }
 
+Json captureSectionInferenceSummary(
+	const Section *section, const ClassIdentityPaths &classPaths, InferenceStorageIdentities &storage, const Json &globalTypes,
+	size_t *capturedInstantiations = nullptr
+) {
+	Json summaries = Json::object();
+	for (const auto &[key, instantiation] : section->instantiations) {
+		if (!canPersistInferenceSummary(section, key, instantiation, classPaths))
+			continue;
+		auto globalEffects = encodeGlobalEffects(section, instantiation, storage);
+		if (!globalEffects)
+			continue;
+		auto returnProvenance = storage.encodeProvenance(instantiation.returnAddressProvenance);
+		if (!returnProvenance)
+			continue;
+		bool needsGlobalTypes = !hasNoGlobalAccess(section) || !instantiation.writtenGlobalReferences.empty() ||
+								!instantiation.addressTakenGlobalReferences.empty() ||
+								instantiation.externallyEscapedGlobalProvenance != AddressProvenance{};
+		if (needsGlobalTypes && globalTypes.is_null())
+			continue;
+		Json argumentTypes = Json::array();
+		for (const DataType &type : key.argumentTypes) {
+			std::set<std::pair<const ClassDefinition *, int>> visiting;
+			argumentTypes.push_back(*inferenceTypeIdentity(type, classPaths, visiting));
+		}
+		std::set<std::pair<const ClassDefinition *, int>> visiting;
+		Json pureValues = encodePureReturnValues(section, instantiation);
+		bool pureValuesComplete = pureValues.size() == instantiation.pureReturnValuesByArguments.size();
+		summaries[*inferenceSummaryKey(key, classPaths)] = Json{
+			{"argument_types", std::move(argumentTypes)},
+			{"return_type", *inferenceTypeIdentity(instantiation.returnType, classPaths, visiting)},
+			{"purity", static_cast<int>(instantiation.purity)},
+			{"has_return_address_provenance", instantiation.hasReturnAddressProvenance},
+			{"return_provenance", std::move(*returnProvenance)},
+			{"return_storage_parameter", instantiation.returnPointerStorageParameterName
+											 ? Json(*instantiation.returnPointerStorageParameterName)
+											 : Json(nullptr)},
+			{"return_storage_ambiguous", instantiation.returnPointerStorageAmbiguous},
+			{"falls_through", instantiation.fallsThrough},
+			{"return_intrinsic", instantiation.hasReturnIntrinsic},
+			{"unknown_write", instantiation.writesThroughUnknownAddress},
+			{"unknown_escape", instantiation.externallyEscapesUnknownAddress},
+			{"needs_global_types", needsGlobalTypes},
+			{"pure_values", std::move(pureValues)},
+			{"pure_values_complete", pureValuesComplete},
+			{"global_effects", std::move(*globalEffects)}
+		};
+		if (capturedInstantiations)
+			(*capturedInstantiations)++;
+	}
+	return summaries;
+}
+
 Json captureInferenceSummaries(
 	ParseContext &context, const std::map<const Section *, std::string> &sectionPaths,
 	const std::set<std::string> &excludedSources, const Json &globalTypes,
@@ -91,48 +143,9 @@ Json captureInferenceSummaries(
 	for (const auto &[section, path] : sectionPaths) {
 		if (inferenceSummarySourceExcluded(section, excludedSources) || (skipped && skipped->contains(section)))
 			continue;
-		for (const auto &[key, instantiation] : section->instantiations) {
-			if (!canPersistInferenceSummary(section, key, instantiation, classPaths))
-				continue;
-			auto globalEffects = encodeGlobalEffects(section, instantiation, storage);
-			if (!globalEffects)
-				continue;
-			auto returnProvenance = storage.encodeProvenance(instantiation.returnAddressProvenance);
-			if (!returnProvenance)
-				continue;
-			bool needsGlobalTypes = !hasNoGlobalAccess(section) || !instantiation.writtenGlobalReferences.empty() ||
-									!instantiation.addressTakenGlobalReferences.empty() ||
-									instantiation.externallyEscapedGlobalProvenance != AddressProvenance{};
-			if (needsGlobalTypes && globalTypes.is_null())
-				continue;
-			Json argumentTypes = Json::array();
-			for (const DataType &type : key.argumentTypes) {
-				std::set<std::pair<const ClassDefinition *, int>> visiting;
-				argumentTypes.push_back(*inferenceTypeIdentity(type, classPaths, visiting));
-			}
-			std::set<std::pair<const ClassDefinition *, int>> visiting;
-			Json pureValues = encodePureReturnValues(section, instantiation);
-			bool pureValuesComplete = pureValues.size() == instantiation.pureReturnValuesByArguments.size();
-			summaries[path][*inferenceSummaryKey(key, classPaths)] = Json{
-				{"argument_types", std::move(argumentTypes)},
-				{"return_type", *inferenceTypeIdentity(instantiation.returnType, classPaths, visiting)},
-				{"purity", static_cast<int>(instantiation.purity)},
-				{"has_return_address_provenance", instantiation.hasReturnAddressProvenance},
-				{"return_provenance", std::move(*returnProvenance)},
-				{"return_storage_parameter", instantiation.returnPointerStorageParameterName
-												 ? Json(*instantiation.returnPointerStorageParameterName)
-												 : Json(nullptr)},
-				{"return_storage_ambiguous", instantiation.returnPointerStorageAmbiguous},
-				{"falls_through", instantiation.fallsThrough},
-				{"return_intrinsic", instantiation.hasReturnIntrinsic},
-				{"unknown_write", instantiation.writesThroughUnknownAddress},
-				{"unknown_escape", instantiation.externallyEscapesUnknownAddress},
-				{"needs_global_types", needsGlobalTypes},
-				{"pure_values", std::move(pureValues)},
-				{"pure_values_complete", pureValuesComplete},
-				{"global_effects", std::move(*globalEffects)}
-			};
-		}
+		Json variants = captureSectionInferenceSummary(section, classPaths, storage, globalTypes);
+		if (!variants.empty())
+			summaries[path] = std::move(variants);
 	}
 	return summaries;
 }

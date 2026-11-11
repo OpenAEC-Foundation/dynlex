@@ -43,6 +43,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"pure_value_summary_hits", context.pureValueSummaryHits},
 					  {"inference_summary_sections_reused", statistics.reusedInferenceSummarySections},
 					  {"preinferred_instantiations", statistics.preinferredInstantiations},
+					  {"preinfer_summary_sections_captured", statistics.preinferSummarySectionsCaptured},
+					  {"preinfer_summary_instantiations_captured", statistics.preinferSummaryInstantiationsCaptured},
 					  {"root_execution_reused", statistics.reusedRootExecution},
 					  {"cached_ir_dependency_scans", statistics.cachedIRDependencyScans},
 					  {"cached_ir_dependency_hits", statistics.cachedIRDependencyHits},

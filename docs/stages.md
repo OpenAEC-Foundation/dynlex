@@ -1268,6 +1268,12 @@ keep the bodies they read active across edited builds, even when those bodies
 have no emitted IR.
 The graph speeds preinference and codegen
 eligibility checks; section parsing and resolution still rebuild their state.
+After preinferring a section's saved variants, the interface comparison captures
+only that section's inference summaries. Previously captured sections are not
+serialized again as later sections finish. The same section encoder produces
+the final persistent summaries. `preinfer_summary_sections_captured` and
+`preinfer_summary_instantiations_captured` count this comparison work separately
+from successful preinference requests.
 Inference-summary payloads store structural type nodes in a shared table.
 Argument and return types refer to those records by number, including nested
 class layouts, array elements, and callback signatures. Loading restores the

@@ -683,6 +683,7 @@ bool compileIncrementally(
 						) {
 						auto preinferStart = Clock::now();
 						const Json &priorSummaries = previous->at("inference_summaries");
+						ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
 						std::unordered_set<const Section *> stable;
 						for (size_t first = 0; first < plan.requests.size();) {
 							Section *section = plan.requests[first].section;
@@ -697,7 +698,13 @@ bool compileIncrementally(
 								for (const auto &request : variants)
 									if (inferRequest(request))
 										statistics.preinferredInstantiations++;
-								Json currentSummaries = captureInferenceSummaries(inferred, sectionPaths, {}, Json(nullptr));
+								InferenceStorageIdentities storage(inferred, sectionPaths, classPaths);
+								Json currentSummaries = Json::object();
+								currentSummaries[sectionPaths.at(section)] = captureSectionInferenceSummary(
+									section, classPaths, storage, Json(nullptr),
+									&statistics.preinferSummaryInstantiationsCaptured
+								);
+								statistics.preinferSummarySectionsCaptured++;
 								auto newlyStable = stableIncrementalReplacements(
 									variants, sectionPaths, currentSummaries, priorSummaries,
 									inferred.incrementalReplacementFunctions
