@@ -9,6 +9,13 @@ class InferenceStorageIdentities {
 		for (const auto &[section, path] : paths)
 			sections.emplace(path, const_cast<Section *>(section));
 	}
+	std::optional<Json> encodeValue(const CompileTimeValue &value) const { return encodeInferenceValue(value, classes); }
+	bool canDecodeValue(const Json &value) const { return decodeInferenceValue(value, classes).has_value(); }
+	CompileTimeValue decodeValue(const Json &encoded) const {
+		auto value = decodeInferenceValue(encoded, classes);
+		requireCompilerInvariant(value.has_value(), "cached storage value has unrestored dependencies");
+		return std::move(*value);
+	}
 
 	std::optional<Json> encodeProvenance(const AddressProvenance &provenance) {
 		std::vector<Json> targets;
@@ -81,23 +88,9 @@ class InferenceStorageIdentities {
 		std::optional<Json> result;
 		if (auto found = instantiations.find(scope.get()); found != instantiations.end()) {
 			const auto &[section, key] = *found->second;
-			Json arguments = Json::array(), constants = Json::array();
-			for (const DataType &type : key.argumentTypes) {
-				std::set<std::pair<const ClassDefinition *, int>> visiting;
-				auto identity = inferenceTypeIdentity(type, classes, visiting);
-				if (!identity)
-					return std::nullopt;
-				arguments.push_back(std::move(*identity));
-			}
-			for (const auto &[name, value] : key.compileTimeParameters) {
-				auto constant = encodeGlobalConstant(value);
-				if (!constant)
-					return std::nullopt;
-				constants.push_back(Json::array({name, std::move(*constant)}));
-			}
-			result = Json{
-				{"owner", paths.at(section)}, {"argument_types", std::move(arguments)}, {"constants", std::move(constants)}
-			};
+			result = encodeInferenceKey(key, classes);
+			if (result)
+				(*result)["owner"] = paths.at(section);
 		} else if (auto found = invocations.find(scope.get()); found != invocations.end()) {
 			const auto &[parent, expression, iteration] = *found->second;
 			auto parentIdentity = encodeScope(parent);
@@ -114,9 +107,7 @@ class InferenceStorageIdentities {
 			return true;
 		if (scope.contains("parent"))
 			return canDecodeScope(scope.at("parent"));
-		return std::ranges::all_of(scope.at("argument_types"), [&](const Json &type) {
-			return decodeInferenceTypeIdentity(type, classes).has_value();
-		});
+		return decodeInferenceKey(scope, classes).has_value();
 	}
 
 	std::shared_ptr<const VariableStorageScope> decodeScope(const Json &scope) {
@@ -134,12 +125,9 @@ class InferenceStorageIdentities {
 			);
 		}
 		Section *section = sections.at(scope.at("owner").get<std::string>());
-		InstantiationKey key;
-		for (const Json &type : scope.at("argument_types"))
-			key.argumentTypes.push_back(*decodeInferenceTypeIdentity(type, classes));
-		for (const Json &constant : scope.at("constants"))
-			key.compileTimeParameters.emplace_back(constant.at(0).get<std::string>(), decodeGlobalConstant(constant.at(1)));
-		return context.storageScopeForInstantiation(section, key);
+		auto key = decodeInferenceKey(scope, classes);
+		requireCompilerInvariant(key.has_value(), "cached invocation has unrestored arguments");
+		return context.storageScopeForInstantiation(section, *key);
 	}
 
 	static Expression *sourceExpression(const Section &section, const std::string &text, size_t occurrence) {

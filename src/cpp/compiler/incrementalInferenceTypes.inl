@@ -1,18 +1,7 @@
-using ClassIdentityPaths = std::map<const ClassDefinition *, std::string>;
-
-ClassIdentityPaths classIdentityPaths(const std::map<const Section *, std::string> &sectionPaths) {
-	ClassIdentityPaths result;
-	for (const auto &[section, path] : sectionPaths) {
-		if (section->type == SectionType::Class)
-			result.emplace(static_cast<const ClassSection *>(section)->classDefinition, path);
-	}
-	return result;
-}
-
 std::optional<Json> inferenceTypeIdentity(
 	const DataType &type, const ClassIdentityPaths &classPaths, std::set<std::pair<const ClassDefinition *, int>> &visiting
 ) {
-	if (!type.isConcrete())
+	if (!type.isMetaType() && !type.isConcrete())
 		return std::nullopt;
 	Json result = Json::array({static_cast<int>(type.kind), type.numericSize, type.pointerDepth});
 	switch (type.kind) {
@@ -21,7 +10,26 @@ std::optional<Json> inferenceTypeIdentity(
 	case DataType::Kind::Float:
 	case DataType::Kind::Int:
 	case DataType::Kind::UInt:
+	case DataType::Kind::Constraint:
+	case DataType::Kind::ArgumentPack:
+	case DataType::Kind::ArgumentReference:
 		break;
+	case DataType::Kind::Type: {
+		auto payload = encodePortableConstraintType(type, classPaths);
+		if (!payload)
+			return std::nullopt;
+		result.push_back(std::move(*payload));
+		DataType referenced = type.toReferencedType();
+		Json layout = nullptr;
+		if (referenced.isConcrete()) {
+			auto identity = inferenceTypeIdentity(referenced, classPaths, visiting);
+			if (!identity)
+				return std::nullopt;
+			layout = std::move(*identity);
+		}
+		result.push_back(std::move(layout));
+		break;
+	}
 	case DataType::Kind::Array:
 	case DataType::Kind::Vector:
 	case DataType::Kind::Matrix: {
@@ -36,8 +44,7 @@ std::optional<Json> inferenceTypeIdentity(
 		break;
 	}
 	case DataType::Kind::Class: {
-		if (!type.classDefinition ||
-			(type.classInstIndex < 0 && type.pointerDepth == 0) ||
+		if (!type.classDefinition || (type.classInstIndex < 0 && type.pointerDepth == 0) ||
 			type.classInstIndex >= static_cast<int>(type.classDefinition->instantiations.size()))
 			return std::nullopt;
 		auto path = classPaths.find(type.classDefinition);
@@ -88,16 +95,23 @@ std::optional<Json> inferenceTypeIdentity(
 }
 
 std::optional<DataType> decodeInferenceTypeIdentity(const Json &encoded, const ClassIdentityPaths &classPaths) {
-	DataType result{
-		static_cast<DataType::Kind>(encoded.at(0).get<int>()), encoded.at(1).get<int>(), encoded.at(2).get<int>()
-	};
+	DataType result{static_cast<DataType::Kind>(encoded.at(0).get<int>()), encoded.at(1).get<int>(), encoded.at(2).get<int>()};
 	switch (result.kind) {
 	case DataType::Kind::Void:
 	case DataType::Kind::Bool:
 	case DataType::Kind::Float:
 	case DataType::Kind::Int:
 	case DataType::Kind::UInt:
+	case DataType::Kind::Constraint:
+	case DataType::Kind::ArgumentPack:
+	case DataType::Kind::ArgumentReference:
 		break;
+	case DataType::Kind::Type: {
+		if (!portableConstraintTypeReferencesPresent(encoded.at(3), classPaths))
+			return std::nullopt;
+		result = decodePortableConstraintType(encoded.at(3), classPaths);
+		break;
+	}
 	case DataType::Kind::Array:
 	case DataType::Kind::Vector:
 	case DataType::Kind::Matrix: {

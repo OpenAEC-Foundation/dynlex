@@ -149,6 +149,9 @@ struct Instantiation : InstantiationExecutionEffects {
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_set<std::string> requiredCompileTimeParameters;
 	std::map<std::vector<CompileTimeValue>, CompileTimeValue> pureReturnValuesByArguments;
+	// A restored table can omit values that were not portable. Retained caller
+	// code can still depend on those observations after another argument is seen.
+	bool pureReturnValuesComplete = true;
 	std::shared_ptr<InstantiatedSectionBody> body;
 	std::map<std::vector<unsigned>, llvm::Function *> llvmFunctionsByParameterAddressSpaces;
 	llvm::Function *llvmCallableFunction = nullptr;

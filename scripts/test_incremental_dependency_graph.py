@@ -7,6 +7,7 @@ from test_incremental_class_layouts import check_class_layout_restoration
 from test_incremental_constraint_dependencies import check_constraint_lookup_dependencies
 from test_incremental_preinfer_summaries import check_preinfer_summary_capture
 from test_incremental_variant_dependencies import check_variant_dependency_cascade
+from test_incremental_compile_time_variants import check_compile_time_variant_cascade
 
 
 def graph_for(cache, entry):
@@ -291,6 +292,7 @@ def check_reused_ir_dependency_graph_variants(root, build):
 def check_leaf_dependency_cascade(root, build):
     check_preinfer_summary_capture(root, build)
     check_variant_dependency_cascade(root, build)
+    check_compile_time_variant_cascade(root, build)
     leaf_a = root / "leaf_a.dl"
     leaf_b = root / "leaf_b.dl"
     leaf_helper = root / "leaf_helper.dl"
@@ -369,6 +371,8 @@ def check_leaf_dependency_cascade(root, build):
     integer_graph = graph_for(root / "cache", variant_main)
     consume_path = next(path for path, variants in integer_graph["instantiations"].items() if variants)
     integer_keys = set(integer_graph["instantiations"][consume_path])
+    assert set(read_program(root / "cache", variant_main)["inference_summaries"][consume_path]) == integer_keys, \
+        "unused native specialization retained an unusable inference summary"
     variant_main.write_text(variant_definition + 'consume 1.0\n')
     variant_edit = build(entry=variant_main)
     float_graph = graph_for(root / "cache", variant_main)

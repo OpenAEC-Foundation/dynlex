@@ -44,6 +44,7 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"inference_summary_sections_reused", statistics.reusedInferenceSummarySections},
 					  {"preinferred_instantiations", statistics.preinferredInstantiations},
 					  {"preinfer_argument_variants_decoded", statistics.preinferArgumentVariantsDecoded},
+					  {"preinfer_pure_values_checked", context.preinferredPureValuesChecked},
 					  {"preinfer_summary_sections_captured", statistics.preinferSummarySectionsCaptured},
 					  {"preinfer_summary_instantiations_captured", statistics.preinferSummaryInstantiationsCaptured},
 					  {"inference_unit_inputs_computed", statistics.inferenceUnitInputsComputed},

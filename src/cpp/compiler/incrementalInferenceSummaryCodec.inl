@@ -14,6 +14,13 @@ template <typename Remap> Json remapInferenceTypeChildren(const Json &type, cons
 	case DataType::Kind::Float:
 	case DataType::Kind::Int:
 	case DataType::Kind::UInt:
+	case DataType::Kind::Constraint:
+	case DataType::Kind::ArgumentPack:
+	case DataType::Kind::ArgumentReference:
+		break;
+	case DataType::Kind::Type:
+		result.push_back(type.at(3));
+		result.push_back(type.at(4).is_null() ? Json(nullptr) : Json(remap(type.at(4))));
 		break;
 	case DataType::Kind::Array:
 	case DataType::Kind::Vector:
@@ -38,6 +45,41 @@ template <typename Remap> Json remapInferenceTypeChildren(const Json &type, cons
 	return result;
 }
 
+template <typename Remap> Json remapInferenceValue(const Json &value, const Remap &remap) {
+	Json result = value;
+	auto constraint = [&](const Json &identity) {
+		Json layouts = Json::array();
+		for (const Json &layout : identity.at(1))
+			layouts.push_back(remap(layout));
+		return Json::array({identity.at(0), std::move(layouts)});
+	};
+	if (value.at(0) == "type") {
+		result.at(1) = remap(value.at(1));
+		result.at(2) = constraint(value.at(2));
+	} else if (value.at(0) == "constraint")
+		result.at(1) = constraint(value.at(1));
+	return result;
+}
+
+template <typename Remap> Json remapCompileTimeParameters(const Json &values, const Remap &remap) {
+	Json result = Json::array();
+	for (const Json &entry : values)
+		result.push_back(Json::array({entry.at(0), remapInferenceValue(entry.at(1), remap)}));
+	return result;
+}
+
+template <typename Remap> Json remapInferenceParameters(const Json &parameters, const Remap &remap) {
+	Json result = Json::object();
+	for (const char *field : {"types", "outputs", "constants"}) {
+		Json values = Json::object();
+		for (const auto &[name, value] : parameters.at(field).items())
+			values[name] = std::string_view(field) == "constants" ? remapInferenceValue(value, remap) : Json(remap(value));
+		result[field] = std::move(values);
+	}
+	result["required_compile_time"] = parameters.at("required_compile_time");
+	return result;
+}
+
 template <typename Remap> Json remapInferenceStorageScope(const Json &scope, const Remap &remap) {
 	if (scope.is_null())
 		return nullptr;
@@ -50,7 +92,11 @@ template <typename Remap> Json remapInferenceStorageScope(const Json &scope, con
 	Json arguments = Json::array();
 	for (const Json &type : scope.at("argument_types"))
 		arguments.push_back(remap(type));
-	return Json{{"owner", scope.at("owner")}, {"constants", scope.at("constants")}, {"argument_types", std::move(arguments)}};
+	return Json{
+		{"owner", scope.at("owner")},
+		{"compile_time_parameters", remapCompileTimeParameters(scope.at("compile_time_parameters"), remap)},
+		{"argument_types", std::move(arguments)}
+	};
 }
 
 template <typename Remap> Json remapInferenceProvenance(const Json &provenance, const Remap &remap) {
@@ -77,6 +123,19 @@ template <typename Remap> Json remapInferenceSummaryTypes(const Json &sections, 
 					for (const Json &argument : value)
 						arguments.push_back(remap(argument));
 					record[field] = std::move(arguments);
+				} else if (field == "compile_time_parameters")
+					record[field] = remapCompileTimeParameters(value, remap);
+				else if (field == "parameters")
+					record[field] = remapInferenceParameters(value, remap);
+				else if (field == "pure_values") {
+					Json observations = Json::array();
+					for (const Json &entry : value) {
+						Json arguments = Json::array();
+						for (const Json &argument : entry.at(0))
+							arguments.push_back(remapInferenceValue(argument, remap));
+						observations.push_back(Json::array({std::move(arguments), remapInferenceValue(entry.at(1), remap)}));
+					}
+					record[field] = std::move(observations);
 				} else if (field == "return_type")
 					record[field] = remap(value);
 				else if (field == "return_provenance")
@@ -85,9 +144,12 @@ template <typename Remap> Json remapInferenceSummaryTypes(const Json &sections, 
 					Json effects = Json::object();
 					for (const auto &[name, provenance] : value.at("writes").items())
 						effects[name] = remapInferenceProvenance(provenance, remap);
+					Json constants = Json::object();
+					for (const auto &[name, constant] : value.at("constants").items())
+						constants[name] = remapInferenceValue(constant, remap);
 					record[field] = Json{
 						{"writes", std::move(effects)},
-						{"constants", value.at("constants")},
+						{"constants", std::move(constants)},
 						{"taken", value.at("taken")},
 						{"escaped", remapInferenceProvenance(value.at("escaped"), remap)}
 					};
@@ -111,6 +173,10 @@ struct InferenceTypeHash {
 		}
 		if (value->is_string())
 			return llvm::hash_combine('s', llvm::StringRef(value->get_ref<const std::string &>()));
+		if (value->is_null())
+			return llvm::hash_combine('n');
+		if (value->is_boolean())
+			return llvm::hash_combine('b', value->get<bool>());
 		// Loaded JSON uses unsigned values for positive integers. Fresh
 		// snapshots can use signed values for the same type metadata.
 		return llvm::hash_combine('i', value->get<int64_t>());

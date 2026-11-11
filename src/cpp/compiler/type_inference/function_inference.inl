@@ -419,7 +419,22 @@ static bool runInstantiationReinferenceLoop(
 	InferenceContext &context, Instantiation &instantiation, PatternDefinition *definition, const Range &fallbackRange,
 	std::string functionName, bool canDeferToCaller, InferPassFn &&inferPass
 ) {
+	struct RetainedPureValues {
+		Instantiation &instantiation;
+		decltype(Instantiation::pureReturnValuesByArguments) values;
+		bool complete;
+		~RetainedPureValues() {
+			instantiation.pureReturnValuesByArguments.merge(values);
+			instantiation.pureReturnValuesComplete &= complete;
+		}
+	} retained{
+		instantiation,
+		instantiation.inferenceReusedFromCache ? std::move(instantiation.pureReturnValuesByArguments)
+											   : decltype(Instantiation::pureReturnValuesByArguments){},
+		!instantiation.inferenceReusedFromCache || instantiation.pureReturnValuesComplete
+	};
 	instantiation.inferenceReusedFromCache = false;
+	instantiation.pureReturnValuesComplete = true;
 	size_t reinferPass = 0;
 	constexpr size_t maxReinferPasses = 32;
 	while (true) {

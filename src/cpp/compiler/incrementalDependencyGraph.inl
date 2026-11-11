@@ -70,6 +70,20 @@ Json captureSectionDependencyGraph(
 		std::set<std::string> retainedKeys;
 		if (auto keys = retained.keysByPath.find(path); keys != retained.keysByPath.end())
 			retainedKeys = keys->second;
+		std::map<const Instantiation *, std::optional<std::string>> currentIdentities;
+		std::set<std::string> instantiatedKeys;
+		for (const auto &[key, instantiation] : section->instantiations) {
+			auto identity = inferenceSummaryKey(key, classPaths);
+			if (identity)
+				instantiatedKeys.insert(*identity);
+			currentIdentities.emplace(&instantiation, std::move(identity));
+		}
+		// A retained pure value can have no native function and no body visited
+		// in this build. Its dependency variant belongs to the saved result.
+		if (const auto &summaries = program.at("inference_summaries"); summaries.contains(path))
+			for (const auto &[key, _] : summaries.at(path).items())
+				if (!instantiatedKeys.contains(key))
+					retainedKeys.insert(key);
 		IncrementalInferenceReads::Keys sectionLookups = inferenceReads.readsOf(path);
 		IncrementalInferenceReads::Keys reads = inferenceReads.dependenciesOf(path);
 		bool reuseEntry = hadPrevious && stable.contains(section) && forward.contains(path) && instantiations.contains(path) &&
@@ -77,7 +91,7 @@ Json captureSectionDependencyGraph(
 		std::set<std::string> currentKeys = retainedKeys;
 		if (reuseEntry)
 			for (const auto &[key, instantiation] : section->instantiations) {
-				std::optional<std::string> identity = inferenceSummaryKey(key, classPaths);
+				const auto &identity = currentIdentities.at(&instantiation);
 				if (!instantiation.inferenceReusedFromCache || !identity || !instantiations.at(path).contains(*identity)) {
 					reuseEntry = false;
 					break;
@@ -110,7 +124,7 @@ Json captureSectionDependencyGraph(
 		bool hasAggregateVariant = retainedKeys.contains(aggregateGraphVariant);
 		bool retainPriorLookups = !retainedKeys.empty() || (context.reuseRootExecution && section == context.mainSection);
 		for (const auto &[key, instantiation] : section->instantiations) {
-			std::optional<std::string> keyText = inferenceSummaryKey(key, classPaths);
+			const auto &keyText = currentIdentities.at(&instantiation);
 			Json selected = Json::array();
 			if (instantiation.inferenceReusedFromCache) {
 				retainPriorLookups = true;

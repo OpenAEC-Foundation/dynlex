@@ -70,7 +70,16 @@
 		if (!inst.body)
 			inst.body = context.cloneSectionBody(matchedSection, nullptr, storageScope);
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
-		context.parseContext.reuseInferredInstantiation(matchedSection, instantiationKey, inst, true);
+		context.parseContext.reuseInferredInstantiation(
+			matchedSection, instantiationKey, inst,
+			knownCallArguments ? ParseContext::InferenceReuseUse::ConstantCall : ParseContext::InferenceReuseUse::RuntimeCall
+		);
+	} else if (inst.inferenceReusedFromCache && !knownCallArguments && !inst.needsReinfer &&
+			   !inst.pureReturnValuesByArguments.empty() && context.parseContext.reuseInferredInstantiation) {
+		bool prepared = context.parseContext.reuseInferredInstantiation(
+			matchedSection, instantiationKey, inst, ParseContext::InferenceReuseUse::RuntimeCall
+		);
+		requireCompilerInvariant(prepared, "cached pure observations changed before runtime use");
 	}
 	if (knownCallArguments && inst.inferenceReusedFromCache && inst.purity == InstantiationPurity::Pure &&
 		inst.returnType.kind != DataType::Kind::Void) {

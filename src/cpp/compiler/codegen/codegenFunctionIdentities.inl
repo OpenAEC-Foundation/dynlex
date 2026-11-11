@@ -61,3 +61,100 @@ static void appendInternalFunctionIdentity(
 	}
 	name += "." + sectionIdentityDigest(identity);
 }
+
+static void appendCodegenConstraintIdentity(
+	ParseContext &context, const TypeConstraint &constraint, ClassLayoutStack &layouts, std::string &identity
+) {
+	auto append = [&](const auto &value) {
+		identity += value ? std::to_string(static_cast<long long>(*value)) : "?";
+		identity += ";";
+	};
+	identity += constraint.isResolved() ? "resolved;" : "pending;";
+	append(constraint.kind);
+	append(constraint.numericSize);
+	append(constraint.pointerDepth);
+	append(constraint.arraySize);
+	append(constraint.matrixRows);
+	append(constraint.matrixColumns);
+	append(constraint.classInstantiationIndex);
+	identity += std::to_string(constraint.requiresNumeric) + std::to_string(constraint.requiresInteger) +
+				std::to_string(constraint.requiresCompileTimeValue) + std::to_string(constraint.constrainsClassDefinition);
+	identity += ";class[";
+	if (constraint.classDefinition)
+		appendCodegenTypeIdentity(
+			context,
+			DataType{DataType::Kind::Class, 0, 0, constraint.classDefinition, constraint.classInstantiationIndex.value_or(-1)},
+			layouts, identity
+		);
+	identity += "];element[";
+	if (constraint.elementConstraint)
+		appendCodegenConstraintIdentity(context, *constraint.elementConstraint, layouts, identity);
+	identity += "];function[";
+	if (constraint.functionSignature) {
+		appendCodegenTypeIdentity(context, constraint.functionSignature->result, layouts, identity);
+		for (const DataType &parameter : constraint.functionSignature->parameters)
+			appendCodegenTypeIdentity(context, parameter, layouts, identity);
+	}
+	identity += "];";
+}
+
+static std::string codegenConstraintIdentity(ParseContext &context, const TypeConstraint &constraint) {
+	ClassLayoutStack layouts;
+	std::string identity;
+	appendCodegenConstraintIdentity(context, constraint, layouts, identity);
+	return sectionIdentityDigest(identity);
+}
+
+static std::string encodeLLVMNameComponent(std::string_view value) {
+	static constexpr char hexadecimalDigits[] = "0123456789abcdef";
+	std::string encoded;
+	for (unsigned char character : value) {
+		if (std::isalnum(character)) {
+			encoded += static_cast<char>(character);
+			continue;
+		}
+		encoded += '_';
+		encoded += hexadecimalDigits[character >> 4];
+		encoded += hexadecimalDigits[character & 0x0f];
+		encoded += '_';
+	}
+	return encoded;
+}
+
+static std::string encodeInstantiationKeyForFunctionName(ParseContext &context, const InstantiationKey &instantiationKey) {
+	std::string suffix;
+	for (const auto &[name, value] : instantiationKey.compileTimeParameters) {
+		suffix += "_ct_" + encodeLLVMNameComponent(name) + "_";
+		if (const auto *integer = std::get_if<WideInteger>(&value))
+			suffix += std::string(integer->isUnsigned ? "wu" : "wi") + std::to_string(integer->bits.getBitWidth()) + "_" +
+					  encodeLLVMNameComponent(integer->toString(16));
+		else if (const auto *integer = std::get_if<std::int64_t>(&value))
+			suffix += "i" + encodeLLVMNameComponent(std::to_string(*integer));
+		else if (const auto *integer = std::get_if<std::uint64_t>(&value))
+			suffix += "u" + encodeLLVMNameComponent(std::to_string(*integer));
+		else if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
+			suffix += "i_minimum_magnitude";
+		else if (const auto *number = std::get_if<double>(&value))
+			suffix += std::to_string(std::bit_cast<uint64_t>(*number));
+		else if (const auto *text = std::get_if<std::string>(&value))
+			suffix += std::to_string(text->size()) + "_" + encodeLLVMNameComponent(*text);
+		else if (const auto *boolean = std::get_if<bool>(&value))
+			suffix += *boolean ? "true" : "false";
+		else if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value)) {
+			suffix += encodeLLVMNameComponent(typeRef->type.toReferencedType().toString());
+			suffix += "_constraint_" + codegenConstraintIdentity(context, typeRef->constraint);
+		} else if (const auto *constraint = std::get_if<TypeConstraint>(&value))
+			suffix += "constraint_" + codegenConstraintIdentity(context, *constraint);
+		else if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
+			suffix += "ptr" + std::to_string(pointer->address);
+		else if (const auto *function = std::get_if<CompileTimeFunction>(&value)) {
+			const Range &range = function->definition->range;
+			suffix += "fn" + std::to_string(range.line->mergedLineIndex) + "_" + std::to_string(range.start()) + "_" +
+					  std::to_string(function->pathIndex);
+			for (const DataType &type : function->instantiation->argumentTypes)
+				suffix += "_" + encodeLLVMNameComponent(type.toString());
+		} else
+			suffix += "unknown";
+	}
+	return suffix;
+}

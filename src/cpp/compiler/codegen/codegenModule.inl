@@ -248,9 +248,7 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 		return false;
 	for (const auto &request : context.incrementalReplacementFunctions) {
 		Section *section = request.section;
-		InstantiationKey key;
-		key.argumentTypes = request.argumentTypes;
-		auto instantiation = section->instantiations.find(key);
+		auto instantiation = section->instantiations.find(request.key);
 		requireCompilerInvariant(
 			instantiation != section->instantiations.end(), "incremental replacement lost its inferred instantiation"
 		);
@@ -258,8 +256,10 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 		std::vector<llvm::Value *> arguments;
 		for (const std::string &name : request.parameterNames) {
 			bindings.emplace_back(name, nullptr);
-			arguments.push_back(llvm::UndefValue::get(builder.getPtrTy()));
 		}
+		arguments.assign(
+			collectRuntimeParameterIndices(instantiation->second, bindings).size(), llvm::UndefValue::get(builder.getPtrTy())
+		);
 		if (!generateSpecializedFunction(context, section, bindings, instantiation->second, arguments))
 			return false;
 	}

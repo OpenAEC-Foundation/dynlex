@@ -311,26 +311,24 @@ std::string renderModule(const llvm::Module &module) {
 
 #include "incrementalCacheTrim.inl"
 
-// clang-format off: the native fragments share declarations in this order.
+// clang-format off: these fragments share declarations in this order.
 #include "incrementalNativeObjects.inl"
 #include "incrementalNativeLayout.inl"
 #include "incrementalNativeSymbols.inl"
 #include "incrementalNativeDependencies.inl"
-// clang-format on
-
 #include "incrementalCompilationPartitions.inl"
+#include "incrementalClassIdentityPaths.inl"
+#include "incrementalConstraintValue.inl"
 #include "incrementalInferenceTypes.inl"
-// clang-format off: the optimizer consumes the input descriptors.
 #include "incrementalOptimizationInputs.inl"
 #include "incrementalOptimization.inl"
 #include "incrementalOptimizedNativeUnits.inl"
-// clang-format on
-
+#include "incrementalInferenceValues.inl"
+#include "incrementalInferenceKeys.inl"
 #include "incrementalInferenceEffects.inl"
+#include "incrementalInferenceParameterState.inl"
 #include "incrementalInferenceReuse.inl"
 
-// clang-format off: these includes depend on the declarations in the preceding files.
-#include "incrementalConstraintValue.inl"
 #include "incrementalInferenceUnitInputs.inl"
 #include "incrementalInferenceUnitGraph.inl"
 #include "incrementalDependencyGraph.inl"
@@ -813,8 +811,8 @@ bool compileIncrementally(
 					result["inference_summaries"] =
 						inferenceReuse
 							? inferenceReuse->snapshot(
-								  sectionPaths, inferenceDiagnosticSources, globalTypes,
-								  &statistics.reusedInferenceSummarySections
+								  sectionPaths, inferenceDiagnosticSources, globalTypes, result.at("function_sections"),
+								  result.at("function_instantiations"), &statistics.reusedInferenceSummarySections
 							  )
 							: captureInferenceSummaries(compiled, sectionPaths, inferenceDiagnosticSources, globalTypes);
 					auto graphStart = Clock::now();

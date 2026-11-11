@@ -38,6 +38,15 @@ class IncrementalInferenceController {
 					!replacements->contains(section->second, key) && check.unchanged({path, key}))
 					eligible->insert(section->second, key);
 			}
+			for (const auto &[path, variants] : previous.at("inference_summaries").items()) {
+				auto section = sections.find(path);
+				if (section == sections.end())
+					continue;
+				for (const auto &[key, summary] : variants.items())
+					if (inferenceSummaryHasObservedValues(summary) && !replacements->contains(section->second, key) &&
+						check.unchanged({path, key}))
+						eligible->insert(section->second, key);
+			}
 		};
 		updateEligible();
 		irReuse = std::make_unique<IncrementalIRReuse>(
@@ -47,12 +56,18 @@ class IncrementalInferenceController {
 		inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
 			context, previous.at("inference_summaries"), previous.at("global_types"), *irReuse, paths, eligible
 		);
-		context.reuseInferredInstantiation =
-			[this](Section *section, const InstantiationKey &key, Instantiation &instantiation, bool allowPureValueSummary) {
-			return inferenceReuse->reuse(section, key, instantiation, allowPureValueSummary);
+		context.reuseInferredInstantiation = [this](
+												 Section *section, const InstantiationKey &key, Instantiation &instantiation,
+												 ParseContext::InferenceReuseUse use
+											 ) {
+			return inferenceReuse->reuse(section, key, instantiation, use);
 		};
+		std::set<InferenceUnitKey> native;
+		for (const auto &[name, owner] : previous.at("function_sections").items())
+			if (!previous.at("callable_functions").contains(name))
+				native.emplace(owner.get<std::string>(), previous.at("function_instantiations").at(name).get<std::string>());
 		std::set<const Section *> capturedSections;
-		for (auto &[unit, request] : collectRequests(*eligible)) {
+		for (auto &[unit, request] : collectRequests(*eligible, native)) {
 			if (check.unchanged(unit)) {
 				eligible->insert(request.section, unit.second);
 				continue;
@@ -72,7 +87,8 @@ class IncrementalInferenceController {
 			if (current.contains(unit.second) && priorSummary.at("pure_values_complete").get<bool>() &&
 				current.at(unit.second) == priorSummary) {
 				replacements->insert(request.section, unit.second);
-				context.incrementalReplacementFunctions.push_back(request);
+				if (native.contains(unit))
+					context.incrementalReplacementFunctions.push_back(request);
 			}
 		}
 		statistics.preinferSummarySectionsCaptured += capturedSections.size();
@@ -104,22 +120,30 @@ class IncrementalInferenceController {
 	using Request = ParseContext::IncrementalFunctionRequest;
 	bool restoreArguments(const InferenceUnitKey &unit, Request &request, const ClassIdentityPaths &classes) {
 		statistics.preinferArgumentVariantsDecoded++;
-		const Json &arguments = previous.at("inference_summaries").at(unit.first).at(unit.second).at("argument_types");
-		for (const Json &encoded : arguments) {
-			auto type = decodeInferenceTypeIdentity(encoded, classes);
-			if (!type)
-				return false;
-			request.argumentTypes.push_back(std::move(*type));
+		const Json &summary = previous.at("inference_summaries").at(unit.first).at(unit.second);
+		auto key = decodeInferenceKey(summary, classes);
+		if (!key || key->argumentTypes.size() != request.parameterNames.size() ||
+			inferenceSummaryKey(*key, classes) != unit.second)
+			return false;
+		request.key = std::move(*key);
+		request.requiredCompileTimeParameters =
+			summary.at("parameters").at("required_compile_time").get<std::unordered_set<std::string>>();
+		if (summary.at("pure_values_complete").get<bool>()) {
+			for (const Json &observation : summary.at("pure_values")) {
+				std::vector<CompileTimeValue> values;
+				for (const Json &encoded : observation.at(0)) {
+					auto value = decodeInferenceValue(encoded, classes);
+					if (!value)
+						return false;
+					values.push_back(std::move(*value));
+				}
+				request.observedArguments.push_back(std::move(values));
+			}
 		}
-		InstantiationKey instance{request.argumentTypes, {}};
-		return request.argumentTypes.size() == request.parameterNames.size() &&
-			   inferenceSummaryKey(instance, classes) == unit.second;
+		return true;
 	}
-	std::vector<std::pair<InferenceUnitKey, Request>> collectRequests(const IncrementalUnitSelection &eligible) {
-		std::map<std::string, std::set<std::string>> generated;
-		for (const auto &[name, owner] : previous.at("function_sections").items())
-			if (!previous.at("callable_functions").contains(name))
-				generated[owner.get<std::string>()].insert(previous.at("function_instantiations").at(name).get<std::string>());
+	std::vector<std::pair<InferenceUnitKey, Request>>
+	collectRequests(const IncrementalUnitSelection &eligible, const std::set<InferenceUnitKey> &native) {
 		const Json &prior = previous.at("all_function_projection"), &summaries = previous.at("inference_summaries");
 		std::map<InferenceUnitKey, Request> candidates;
 		for (const auto &[section, path] : paths) {
@@ -140,10 +164,10 @@ class IncrementalInferenceController {
 			if (pack)
 				continue;
 			for (const auto &[key, summary] : summaries.at(path).items()) {
-				if (!generated[path].contains(key) || summary.at("needs_global_types").get<bool>() ||
-					eligible.contains(section, key))
+				if ((!native.contains({path, key}) && !inferenceSummaryHasObservedValues(summary)) ||
+					summary.at("needs_global_types").get<bool>() || eligible.contains(section, key))
 					continue;
-				candidates.emplace(InferenceUnitKey{path, key}, Request{const_cast<Section *>(section), names, {}});
+				candidates.emplace(InferenceUnitKey{path, key}, Request{const_cast<Section *>(section), names, {}, {}, {}});
 			}
 		}
 		std::vector<std::pair<InferenceUnitKey, Request>> ordered;

@@ -116,13 +116,30 @@ def decode_inference_summaries(encoded):
         elif node[0] == 11:
             value[3] = types[node[3]]
             value[4] = [types[index] for index in node[4]]
+        elif node[0] == 12 and node[4] is not None:
+            value[4] = types[node[4]]
         types.append(value)
+
+    def constant(value):
+        result = list(value)
+        if value[0] in ("type", "constraint"):
+            position = 2 if value[0] == "type" else 1
+            identity = value[position]
+            result[position] = [identity[0], [types[index] for index in identity[1]]]
+            if value[0] == "type":
+                result[1] = types[value[1]]
+        return result
+
+    def constants(values):
+        return [[name, constant(value)] for name, value in values]
+
     def scope(value):
         if value is None:
             return None
         if "parent" in value:
             return {**value, "parent": scope(value["parent"])}
-        return {**value, "argument_types": [types[index] for index in value["argument_types"]]}
+        return {**value, "argument_types": [types[index] for index in value["argument_types"]],
+                "compile_time_parameters": constants(value["compile_time_parameters"])}
 
     def provenance(value):
         return {**value, "targets": [[definition, scope(invocation)]
@@ -133,14 +150,25 @@ def decode_inference_summaries(encoded):
         result[path] = {}
         for key, summary in variants.items():
             effects = summary["global_effects"]
+            parameters = summary["parameters"]
             result[path][key] = {
                 **summary,
                 "argument_types": [types[index] for index in summary["argument_types"]],
+                "compile_time_parameters": constants(summary["compile_time_parameters"]),
+                "parameters": {
+                    **parameters,
+                    "types": {name: types[index] for name, index in parameters["types"].items()},
+                    "outputs": {name: types[index] for name, index in parameters["outputs"].items()},
+                    "constants": {name: constant(value) for name, value in parameters["constants"].items()},
+                },
                 "return_type": types[summary["return_type"]],
+                "pure_values": [[[constant(argument) for argument in arguments], constant(value)]
+                                for arguments, value in summary["pure_values"]],
                 "return_provenance": provenance(summary["return_provenance"]),
                 "global_effects": {
                     **effects,
                     "writes": {name: provenance(value) for name, value in effects["writes"].items()},
+                    "constants": {name: constant(value) for name, value in effects["constants"].items()},
                     "escaped": provenance(effects["escaped"]),
                 },
             }

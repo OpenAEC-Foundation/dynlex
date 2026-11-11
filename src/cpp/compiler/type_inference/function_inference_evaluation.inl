@@ -100,11 +100,19 @@ struct PureExecutionState {
 
 	PureExecutionState(ParseContext &context, InferenceContext &inference)
 		: parseContext(context), inferenceContext(inference) {}
-	void recordValueRead(const Section &section) const {
-		inferenceContext.recordBodyRead(section);
-		if (const auto &record = parseContext.recordInferenceDependency)
-			for (const auto &owner : valueReadOwners)
-				record(owner, section, {});
+	void recordValueRead(const Section &section, const std::shared_ptr<const VariableStorageScope> &scope) const {
+		if (valueReadOwners.empty()) {
+			inferenceContext.recordBodyRead(section, scope);
+			return;
+		}
+		if (const auto &record = parseContext.recordInferenceDependency) {
+			record(valueReadOwners.back(), section, scope);
+			if (inferenceContext.dependencyReads.constraintProbe)
+				record(
+					{.section = nullptr, .scope = {}, .constraintProbe = inferenceContext.dependencyReads.constraintProbe},
+					section, scope
+				);
+		}
 	}
 };
 
@@ -251,6 +259,8 @@ static CompileTimeValue pureExecutionStoredValue(Expression *expr, const PureExe
 	return state.inferenceContext.lookupExpressionValue(expr);
 }
 
+#include "pure_execution_body.inl"
+
 static CompileTimeValue executePureInstantiationReturnValue(
 	PureExecutionState &state, Section *section, Instantiation &instantiation,
 	const std::vector<std::pair<std::string, CompileTimeValue>> &argumentValues
@@ -259,16 +269,18 @@ static CompileTimeValue executePureInstantiationReturnValue(
 		instantiation.needsReinfer || !instantiation.valid || !instantiation.returnType.isDeduced() ||
 		instantiation.returnType.kind == DataType::Kind::Void)
 		return {};
-	state.recordValueRead(*section);
+	requireCompilerInvariant(
+		static_cast<bool>(instantiation.body), "pure execution encountered an instantiation without an inferred body"
+	);
+	state.recordValueRead(*section, instantiation.body->storageScope);
 	std::vector<CompileTimeValue> argumentValueKey = compileTimeArgumentValueVector(argumentValues);
 	auto cachedIt = instantiation.pureReturnValuesByArguments.find(argumentValueKey);
 	if (cachedIt != instantiation.pureReturnValuesByArguments.end())
 		return cachedIt->second;
+	if (!ensurePureExecutionBody(state, section, instantiation, argumentValues))
+		return {};
 	PureExecutionFrame frame;
 	frame.instantiation = &instantiation;
-	requireCompilerInvariant(
-		static_cast<bool>(instantiation.body), "pure execution encountered an instantiation without an inferred body"
-	);
 	requireCompilerInvariant(
 		instantiation.body->sourceSection == section, "pure execution encountered an instantiation body for another section"
 	);

@@ -48,10 +48,13 @@ class TargetMachine;
 struct CallableFunctionMatch;
 
 struct ParseContext {
+	enum class InferenceReuseUse { RuntimeCall, ConstantCall, Callable };
 	struct IncrementalFunctionRequest {
 		Section *section;
 		std::vector<std::string> parameterNames;
-		std::vector<DataType> argumentTypes;
+		InstantiationKey key;
+		std::unordered_set<std::string> requiredCompileTimeParameters;
+		std::vector<std::vector<CompileTimeValue>> observedArguments;
 	};
 	struct IncrementalConstraintValue {
 		TypeConstraint constraint;
@@ -142,7 +145,7 @@ struct ParseContext {
 	// Native incremental builds may import a previously generated function body
 	// after this compilation has inferred its current types and selected calls.
 	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;
-	std::function<bool(Section *, const InstantiationKey &, Instantiation &, bool)> reuseInferredInstantiation;
+	std::function<bool(Section *, const InstantiationKey &, Instantiation &, InferenceReuseUse)> reuseInferredInstantiation;
 	std::function<void(ParseContext &, const std::function<bool(const IncrementalFunctionRequest &)> &)>
 		runIncrementalPreinference;
 	std::vector<IncrementalFunctionRequest> incrementalReplacementFunctions;
@@ -168,6 +171,7 @@ struct ParseContext {
 	size_t variableLikeCountReferencesScanned = 0;
 	size_t patternPrecedenceGraphEdges = 0;
 	size_t pureValueSummaryHits = 0;
+	size_t preinferredPureValuesChecked = 0;
 	// On-demand signature probes are scoped to this compilation and never committed.
 	std::set<std::tuple<PatternDefinition *, size_t, size_t>> activePatternConstraintProbes;
 	std::map<std::tuple<PatternDefinition *, size_t, size_t>, TypeConstraint> provisionalConstraintDomains;

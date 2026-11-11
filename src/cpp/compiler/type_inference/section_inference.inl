@@ -549,8 +549,7 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 	uses.collectSection(parseContext.mainSection);
 	uses.collectExposedFunctions(parseContext.mainSection);
 	for (const auto &request : parseContext.incrementalReplacementFunctions) {
-		InstantiationKey key{.argumentTypes = request.argumentTypes, .compileTimeParameters = {}};
-		auto instantiation = request.section->instantiations.find(key);
+		auto instantiation = request.section->instantiations.find(request.key);
 		requireCompilerInvariant(
 			instantiation != request.section->instantiations.end() && instantiation->second.valid,
 			"incremental replacement lost its inferred lifecycle root"
@@ -595,6 +594,8 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 	return true;
 }
 
+#include "incremental_function_inference.inl"
+
 bool inferTypes(ParseContext &parseContext) {
 	auto stageStart = std::chrono::steady_clock::now();
 	size_t stageIndex = 0;
@@ -616,22 +617,7 @@ bool inferTypes(ParseContext &parseContext) {
 	finishStage();
 	if (parseContext.runIncrementalPreinference) {
 		auto inferRequest = [&](const ParseContext::IncrementalFunctionRequest &request) {
-			Section *section = request.section;
-			requireCompilerInvariant(
-				section->type == SectionType::Function && !section->patternDefinitions.empty(),
-				"incremental preinference requires a function definition"
-			);
-			std::vector<std::pair<std::string, Expression *>> bindings;
-			for (const std::string &name : request.parameterNames)
-				bindings.emplace_back(name, nullptr);
-			size_t diagnosticCount = parseContext.diagnostics.size();
-			bool inferred = ensureSectionInstantiationInferred(
-				parseContext, section, section->patternDefinitions.front(), bindings, request.argumentTypes, {}, nullptr,
-				nullptr
-			);
-			if (!inferred)
-				parseContext.diagnostics.resize(diagnosticCount);
-			return inferred;
+			return inferIncrementalFunction(parseContext, request);
 		};
 		parseContext.runIncrementalPreinference(parseContext, inferRequest);
 	}

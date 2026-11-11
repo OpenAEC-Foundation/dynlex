@@ -1299,6 +1299,24 @@ Inference-summary payloads store structural type nodes in a shared table.
 Argument and return types refer to those records by number, including nested
 class layouts, array elements, and callback signatures. Loading restores the
 same identities used by inference validation and summary keys.
+Instantiation keys include portable compile-time arguments as well as argument
+types. Scalar values preserve their exact representation; type and constraint
+values preserve their properties and referenced class layouts. Summaries restore
+parameter input and output types, constant bindings, and compile-time requirements.
+Preinference recreates those bindings before inferring a requested variant.
+Pure calls with known arguments can reuse their summaries and observed values
+without a native function body. A later runtime call infers the body before emitting
+its function, retaining the observations still consumed by cached callers.
+Interface comparison reevaluates previously observed
+argument sets and compares the resulting values as well as types and effects.
+When an unchanged cached body is inferred to evaluate a new argument, it retains
+previously validated observations still consumed by cached callers. The saved
+completeness flag describes those observations, rather than all possible inputs.
+`preinfer_pure_values_checked` counts the observed calls checked for this comparison.
+Retained summaries keep their dependency variants even when their bodies are not
+visited and they have no native function. A later query reuses the result together
+with the dependencies needed to invalidate it.
+Unused prior summaries without observed pure values or retained native IR are removed.
 The graph payload stores section paths once and indexes forward, reverse, and
 per-instantiation edges by path number. Concrete keys and source fingerprint versions
 also have shared tables, so repeated dependencies do not duplicate their hashes.

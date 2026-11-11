@@ -15,45 +15,6 @@ VariableReference *globalEffectReference(Section *section, const std::string &na
 	return variable->definition;
 }
 
-std::optional<Json> encodeGlobalConstant(const CompileTimeValue &value) {
-	if (const auto *integer = std::get_if<WideInteger>(&value))
-		return Json::array({"wide", integer->bits.getBitWidth(), integer->isUnsigned, integer->toString(16)});
-	if (const auto *integer = std::get_if<std::int64_t>(&value))
-		return Json::array({"signed", *integer});
-	if (const auto *integer = std::get_if<std::uint64_t>(&value))
-		return Json::array({"unsigned", *integer});
-	if (const auto *number = std::get_if<double>(&value))
-		return Json::array({"float_bits", std::bit_cast<std::uint64_t>(*number)});
-	if (const auto *text = std::get_if<std::string>(&value))
-		return Json::array({"text", *text});
-	if (const auto *boolean = std::get_if<bool>(&value))
-		return Json::array({"boolean", *boolean});
-	if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
-		return Json::array({"pointer", pointer->address});
-	return std::nullopt;
-}
-
-CompileTimeValue decodeGlobalConstant(const Json &encoded) {
-	const std::string kind = encoded.at(0).get<std::string>();
-	if (kind == "wide")
-		return WideInteger{
-			llvm::APInt(encoded.at(1).get<unsigned>(), encoded.at(3).get<std::string>(), 16), encoded.at(2).get<bool>()
-		};
-	if (kind == "signed")
-		return encoded.at(1).get<std::int64_t>();
-	if (kind == "unsigned")
-		return encoded.at(1).get<std::uint64_t>();
-	if (kind == "float_bits")
-		return std::bit_cast<double>(encoded.at(1).get<std::uint64_t>());
-	if (kind == "text")
-		return encoded.at(1).get<std::string>();
-	if (kind == "boolean")
-		return encoded.at(1).get<bool>();
-	if (kind == "pointer")
-		return CompileTimePointer{encoded.at(1).get<std::uint64_t>()};
-	crashCompilerBug("cached global effect contains an unknown compile-time value kind");
-}
-
 #include "incrementalInferenceStorage.inl"
 
 std::optional<Json>
@@ -81,7 +42,7 @@ encodeGlobalEffects(const Section *section, const Instantiation &instantiation, 
 		if (!instantiation.writtenGlobalReferences.contains(reference))
 			return std::nullopt;
 		auto name = globalEffectName(section, reference);
-		auto encoded = encodeGlobalConstant(value);
+		auto encoded = storage.encodeValue(value);
 		if (!name || !encoded)
 			return std::nullopt;
 		constants[*name] = std::move(*encoded);
@@ -100,7 +61,13 @@ encodeGlobalEffects(const Section *section, const Instantiation &instantiation, 
 }
 
 bool canDecodeGlobalEffects(const Json &encoded, const InferenceStorageIdentities &storage) {
-	return storage.canDecodeProvenance(encoded.at("escaped")) &&
+	return std::ranges::all_of(
+			   encoded.at("constants"),
+			   [&](const Json &value) {
+		return storage.canDecodeValue(value);
+	}
+		   ) &&
+		   storage.canDecodeProvenance(encoded.at("escaped")) &&
 		   std::ranges::all_of(encoded.at("writes"), [&](const Json &provenance) {
 		return storage.canDecodeProvenance(provenance);
 	});
@@ -115,7 +82,7 @@ void decodeGlobalEffects(
 		instantiation.finalGlobalAddressProvenance.emplace(reference, storage.decodeProvenance(provenance));
 	}
 	for (const auto &[name, value] : encoded.at("constants").items())
-		instantiation.finalGlobalConstantValues.emplace(globalEffectReference(section, name), decodeGlobalConstant(value));
+		instantiation.finalGlobalConstantValues.emplace(globalEffectReference(section, name), storage.decodeValue(value));
 	for (const std::string &name : encoded.at("taken").get<std::set<std::string>>())
 		instantiation.addressTakenGlobalReferences.insert(globalEffectReference(section, name));
 	instantiation.externallyEscapedGlobalProvenance = storage.decodeProvenance(encoded.at("escaped"));

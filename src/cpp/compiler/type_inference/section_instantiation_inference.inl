@@ -48,7 +48,7 @@ bool ensureSectionInstantiationInferred(
 		inst, paramBindings, argTypes, inst.requiredCompileTimeParameters, evaluateParameterValue
 	);
 	if (!inst.returnType.isDeduced() && parseContext.reuseInferredInstantiation)
-		parseContext.reuseInferredInstantiation(section, instantiationKey, inst, false);
+		parseContext.reuseInferredInstantiation(section, instantiationKey, inst, ParseContext::InferenceReuseUse::Callable);
 	if (inst.inferenceReusedFromCache && inst.purity == InstantiationPurity::Pure &&
 		inst.returnType.kind != DataType::Kind::Void)
 		inst.needsReinfer = true;
