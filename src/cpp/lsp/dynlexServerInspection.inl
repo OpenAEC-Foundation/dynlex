@@ -130,7 +130,7 @@ static std::string formatCompileTimeValue(const CompileTimeValue &value) {
 		return asFloat.str();
 	}
 	if (const auto *text = std::get_if<std::string>(&value))
-		return "\"" + *text + "\"";
+		return quotedSourceString(*text);
 	if (const auto *boolean = std::get_if<bool>(&value))
 		return *boolean ? "true" : "false";
 	if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value)) {
@@ -144,6 +144,18 @@ static std::string formatCompileTimeValue(const CompileTimeValue &value) {
 	return "?";
 }
 
+static std::string markdownCodeSpan(std::string_view text) {
+	size_t longest = 0;
+	size_t run = 0;
+	for (char character : text) {
+		run = character == '`' ? run + 1 : 0;
+		longest = std::max(longest, run);
+	}
+	std::string delimiter(longest + 1, '`');
+	bool pad = !text.empty() && (text.front() == '`' || text.back() == '`');
+	return delimiter + (pad ? " " : "") + std::string(text) + (pad ? " " : "") + delimiter;
+}
+
 static Json makeVariableHoverContents(const std::string &typeText, const std::optional<CompileTimeValue> &value) {
 	std::ostringstream markdown;
 	if (!typeText.empty()) {
@@ -153,7 +165,7 @@ static Json makeVariableHoverContents(const std::string &typeText, const std::op
 	if (hasKnownValue) {
 		if (!typeText.empty())
 			markdown << "\n\n";
-		markdown << "value: `" << formatCompileTimeValue(*value) << "`";
+		markdown << "value: " << markdownCodeSpan(formatCompileTimeValue(*value));
 	}
 	return Json{{"kind", "markdown"}, {"value", markdown.str()}};
 }

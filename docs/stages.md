@@ -36,6 +36,12 @@ Sections are analyzed. We do basic parsing **WITHOUT hardcoding**.
 Every array element is parsed as a complete expression. A single-element array uses its entire interior text and nested
 bracket hierarchy, just as comma-separated elements do; a nested string or parenthesis is not the element by itself.
 
+String literal decoding and source-value presentation share one escape alphabet.
+Hover, purity reports and resolved-expression diagnostics print quoted, escaped
+values, preserving quotes, backslashes, control characters and Unicode. LSP
+Markdown code spans choose delimiters longer than every backtick run in the
+formatted value so literal contents cannot terminate their presentation.
+
 String boundaries use backslash parity: a quote preceded by an odd run of backslashes is escaped; an even run leaves
 the quote unescaped. Bracket parsing, comment scanning, and source-character validation share this rule.
 

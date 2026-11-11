@@ -1,8 +1,8 @@
 #pragma once
+#include "sourceStringLiterals.h"
 #include <stack>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 
 // A character is escaped only by an odd run of preceding backslashes.
 inline bool isEscapedCharacter(std::string_view text, size_t index) {
@@ -10,23 +10,6 @@ inline bool isEscapedCharacter(std::string_view text, size_t index) {
 	while (start > 0 && text[start - 1] == '\\')
 		--start;
 	return (index - start) % 2 != 0;
-}
-
-// Decode the escape sequences accepted in source string literals.
-inline std::string processEscapeSequences(std::string_view input) {
-	static const std::unordered_map<char, char> escapes = {{'n', '\n'}, {'t', '\t'}, {'r', '\r'},  {'a', '\a'}, {'b', '\b'},
-														   {'f', '\f'}, {'v', '\v'}, {'\\', '\\'}, {'"', '"'},	{'0', '\0'}};
-	std::string result;
-	result.reserve(input.size());
-	for (size_t i = 0; i < input.size(); ++i) {
-		if (input[i] == '\\' && i + 1 < input.size()) {
-			auto it = escapes.find(input[++i]);
-			result += (it != escapes.end()) ? it->second : input[i];
-		} else {
-			result += input[i];
-		}
-	}
-	return result;
 }
 
 inline size_t nextListingSeparator(std::string_view text, size_t start) {

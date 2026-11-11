@@ -156,7 +156,7 @@ static std::string renderResolvedExpression(Expression *expr) {
 		if (const auto *number = std::get_if<double>(&expr->literalValue))
 			return std::to_string(*number);
 		if (const auto *text = std::get_if<std::string>(&expr->literalValue))
-			return "\"" + *text + "\"";
+			return quotedSourceString(*text);
 		return "<literal>";
 	case Expression::Kind::ArgumentPack:
 		return std::string(expr->range.subString);

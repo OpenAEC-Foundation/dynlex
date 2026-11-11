@@ -16,6 +16,7 @@
 #include "semanticTokenBuilder.h"
 #include "semanticTokenDebug.h"
 #include "sourceFile.h"
+#include "sourceStringLiterals.h"
 #include "variable.h"
 #include <algorithm>
 #include <cmath>

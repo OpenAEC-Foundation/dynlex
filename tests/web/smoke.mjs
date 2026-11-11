@@ -232,6 +232,16 @@ for (const [version, expected] of [[1, "a 32-bit integer"], [2, "a pointer to a 
 }
 notifyLsp("textDocument/didClose", {textDocument: {uri: instanceHoverUri}});
 
+const markupHoverUri = "file:///workspace/hover-markup.dl";
+const markupHoverSource = await readFile(new URL("../lsp/hover_markup/main.dl", import.meta.url), "utf8");
+const markupHoverExpected = JSON.parse(await readFile(new URL("../lsp/hover_markup/expected.json", import.meta.url), "utf8"));
+notifyLsp("textDocument/didOpen", {textDocument: {uri: markupHoverUri, languageId: "dynlex", version: 1, text: markupHoverSource}});
+for (const {line, character, value} of markupHoverExpected) {
+  const result = requestLsp("textDocument/hover", {textDocument: {uri: markupHoverUri}, position: {line, character}});
+  assert.deepEqual(result.contents, {kind: "markdown", value});
+}
+notifyLsp("textDocument/didClose", {textDocument: {uri: markupHoverUri}});
+
 const riverCallUri = "file:///workspace/river-calls.dl";
 const riverCallSource = `import lib/river_challenge.dl
 get the sheep in the boat and row to the other side

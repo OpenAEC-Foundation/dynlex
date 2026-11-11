@@ -156,7 +156,7 @@ static std::string formatCompileTimeValueForPurityReport(const CompileTimeValue 
 		return std::to_string(*number);
 	}
 	if (const auto *text = std::get_if<std::string>(&value))
-		return "\"" + *text + "\"";
+		return quotedSourceString(*text);
 	if (const auto *boolean = std::get_if<bool>(&value))
 		return *boolean ? "true" : "false";
 	if (const auto *type = std::get_if<TypeReferenceValue>(&value)) {
