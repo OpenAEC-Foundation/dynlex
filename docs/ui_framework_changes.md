@@ -121,6 +121,8 @@ language and compiler fixes, with no website-specific syntax or inference rules.
 | Cached recursive type identities expanded shared graphs into trees. | Encoding visits each reachable class layout once and fingerprints the graph. | `check_shared_class_type_graph` in `scripts/test_incremental_program_cache.py` |
 | Edited builds repeatedly specialized equivalent recursive layouts. | Refinement retains the established type when it already contains the incoming structure. | `check_equivalent_recursive_layouts` in `scripts/test_incremental_class_layouts.py` |
 | Reordered calls exchanged cached bodies for different class layouts, or lost their cached LLVM function. | Symbols use stable declaration identities and full concrete type identities, including nested arrays and callback signatures. Codegen shares the cache's graph encoder. | `check_class_symbol_identity` in `scripts/test_incremental_class_layouts.py`, `unbound_class_symbol` |
+| Hover reported unresolved types inside instantiated functions. | Hover reads the selected inferred body for expression and variable types; type and constant lookup share instance selection. | `scripts/test_lsp_hover_instances.py`, Web compiler smoke, actual shared-client connection |
+| Hovering a parameter declaration returned the whole function signature. | Declaration lookup uses the scope containing the recorded reference, independently of the header line's outer syntax section. | `scripts/test_lsp_hover_instances.py`, Web compiler smoke |
 
 The shared editor additionally fixes UTF-16 workspace-edit planning, protected
 prefix ranges, completion edits and continuation commands, Unicode insertion and

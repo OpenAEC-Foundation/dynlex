@@ -215,6 +215,23 @@ assert.ok(
   `Expected typed squared-value instantiation label, got: ${JSON.stringify(instantiations)}`
 );
 
+const instanceHoverUri = "file:///workspace/hover-instances.dl";
+const instanceHoverSource = await readFile(new URL("../lsp/hover_instances/main.dl", import.meta.url), "utf8");
+notifyLsp("textDocument/didOpen", { textDocument: {
+  uri: instanceHoverUri, languageId: "dynlex", version: 1, text: instanceHoverSource
+} });
+for (const [version, expected] of [[1, "a 32-bit integer"], [2, "a pointer to a byte"]]) {
+  if (version === 2) {
+    notifyLsp("textDocument/didChange", { textDocument: { uri: instanceHoverUri, version },
+      contentChanges: [{ text: instanceHoverSource.replace("echo 7)", 'echo "updated")') }] });
+  }
+  for (const position of [{line: 0, character: 16}, {line: 2, character: 29}]) {
+    const hover = requestLsp("textDocument/hover", {textDocument: {uri: instanceHoverUri}, position});
+    assert.ok(hover.contents.value.includes(expected), JSON.stringify(hover));
+  }
+}
+notifyLsp("textDocument/didClose", {textDocument: {uri: instanceHoverUri}});
+
 const riverCallUri = "file:///workspace/river-calls.dl";
 const riverCallSource = `import lib/river_challenge.dl
 get the sheep in the boat and row to the other side
