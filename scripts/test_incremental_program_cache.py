@@ -95,6 +95,27 @@ def decode_graph(encoded):
     }
 
 
+
+def decode_inference_summaries(encoded):
+    types = []
+    for node in encoded["types"]:
+        value = list(node)
+        if node[0] in (7, 8, 9):
+            value[5] = types[node[5]]
+        elif node[0] == 10 and len(node) == 6:
+            value[5] = [types[index] for index in node[5]]
+        elif node[0] == 11:
+            value[3] = types[node[3]]
+            value[4] = [types[index] for index in node[4]]
+        types.append(value)
+    return {path: {
+        key: {**summary,
+              "argument_types": [types[index] for index in summary["argument_types"]],
+              "return_type": types[summary["return_type"]]}
+        for key, summary in variants.items()}
+        for path, variants in encoded["sections"].items()}
+
+
 def read_program(cache, entry):
     matches = []
     directory = cache / "native-v1"
@@ -108,6 +129,8 @@ def read_program(cache, entry):
                 program[field] = payload
             elif field == "section_dependency_graph":
                 program[field] = decode_graph(json.loads(payload))
+            elif field == "inference_summaries":
+                program[field] = decode_inference_summaries(json.loads(payload))
             else:
                 program[field] = json.loads(payload)
         matches.append(program)
@@ -118,8 +141,8 @@ def read_program(cache, entry):
 def check_program_payloads(root, build):
     main = root / "program_payloads.dl"
     source = ('integer means: @intrinsic("type", "int")\n'
-              'to report: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\n'
-              'report\n')
+              'to report {integer:left} {integer:right}: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\n'
+              'report 1 2\n')
     main.write_text(source)
     build(entry=main)
     directory = root / "cache" / "native-v1"
@@ -131,6 +154,11 @@ def check_program_payloads(root, build):
         "optimization_units"
     }
     assert all(field not in manifest for field in manifest["payload_keys"])
+    summary_blob = directory / f"payload-{manifest['payload_keys']['inference_summaries']}.entry"
+    encoded = json.loads(summary_blob.read_bytes().split(b"\n", 2)[2])
+    assert set(encoded) == {"types", "sections"}
+    arguments = [summary["argument_types"] for variants in encoded["sections"].values() for summary in variants.values()]
+    assert any(len(types) == 2 and types[0] == types[1] for types in arguments), "equal argument types were duplicated"
     payloads = [directory / f"payload-{key}.entry" for key in manifest["payload_keys"].values()]
     assert manifest_path.stat().st_size < sum(path.stat().st_size for path in payloads)
     before = {path: (path.stat().st_ino, path.read_bytes()) for path in payloads}

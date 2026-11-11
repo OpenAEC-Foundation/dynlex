@@ -1,3 +1,5 @@
+#include "incrementalInferenceSummaryCodec.inl"
+
 constexpr std::array<const char *, 6> programPayloadFields{
 	"all_function_projection", "section_dependency_graph", "inference_summaries", "generated_ir", "native_units",
 	"optimization_units"
@@ -127,6 +129,8 @@ bool hydrateProgramField(Json &program, const fs::path &directory, const char *f
 		program[field] = std::move(*payload);
 	else if (std::string_view(field) == "section_dependency_graph")
 		program[field] = decodeSectionGraph(Json::parse(*payload));
+	else if (std::string_view(field) == "inference_summaries")
+		program[field] = decodeInferenceSummaries(Json::parse(*payload));
 	else
 		program[field] = Json::parse(*payload);
 	return true;
@@ -143,6 +147,8 @@ void writeProgramEntry(const fs::path &path, Json program, const Json *prior = n
 				std::string payload = isModulePayload(field) ? program.at(field).get<std::string>()
 									  : std::string_view(field) == "section_dependency_graph"
 										  ? encodeSectionGraph(program.at(field)).dump()
+									  : std::string_view(field) == "inference_summaries"
+										  ? encodeInferenceSummaries(program.at(field)).dump()
 										  : program.at(field).dump();
 				std::string key = digest(payload);
 				writeEntry(programPayloadPath(path.parent_path(), key), payload);

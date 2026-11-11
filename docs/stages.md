@@ -1148,6 +1148,10 @@ keep the bodies they read active across edited builds, even when those bodies
 have no emitted IR.
 The graph speeds preinference and codegen
 eligibility checks; section parsing and resolution still rebuild their state.
+Inference-summary payloads store structural type nodes in a shared table.
+Argument and return types refer to those records by number, including nested
+class layouts, array elements, and callback signatures. Loading restores the
+same identities used by inference validation and summary keys.
 The graph payload stores section paths once and indexes forward, reverse, and
 per-instantiation edges by path number. Variants whose compile-time arguments
 cannot form an inference-summary key store the union of their selected edges
