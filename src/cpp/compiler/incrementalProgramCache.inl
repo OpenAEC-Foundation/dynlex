@@ -42,16 +42,20 @@ Json encodeSectionGraph(const Json &graph) {
 	for (const auto &[path, callers] : graph.at("reverse").items())
 		encodedReverse.push_back(Json::array({ids.at(path), encodeEdges(callers)}));
 	Json encodedLookups = Json::object();
-	for (const auto &[signature, lookup] : graph.at("callable_lookups").items())
-		encodedLookups[signature] = Json{
-			{"owners", encodeEdges(lookup.at("owners"))}, {"candidates", lookup.at("candidates")}
-		};
+	for (const auto &[key, lookup] : graph.at("callable_lookups").items()) {
+		encodedLookups[key] = lookup;
+		encodedLookups[key]["owners"] = encodeEdges(lookup.at("owners"));
+	}
+	Json encodedReads = Json::array();
+	for (const auto &[owner, reads] : graph.at("inference_reads").items())
+		encodedReads.push_back(Json::array({ids.at(owner), encodeEdges(reads)}));
 	return Json{
 		{"paths", std::move(paths)},
 		{"forward", std::move(encodedForward)},
 		{"reverse", std::move(encodedReverse)},
 		{"instantiations", std::move(encodedInstantiations)},
-		{"callable_lookups", std::move(encodedLookups)}
+		{"callable_lookups", std::move(encodedLookups)},
+		{"inference_reads", std::move(encodedReads)}
 	};
 }
 
@@ -70,7 +74,7 @@ Json decodeSectionGraph(const Json &encoded) {
 	};
 	Json graph{
 		{"forward", Json::object()}, {"reverse", Json::object()}, {"instantiations", Json::object()},
-		{"callable_lookups", Json::object()}
+		{"callable_lookups", Json::object()}, {"inference_reads", Json::object()}
 	};
 	for (size_t index = 0; index < paths.size(); index++) {
 		const std::string &path = paths.at(index).get_ref<const std::string &>();
@@ -82,10 +86,12 @@ Json decodeSectionGraph(const Json &encoded) {
 	}
 	for (const Json &entry : encoded.at("reverse"))
 		graph["reverse"][paths.at(entry.at(0).get<size_t>()).get<std::string>()] = decodeEdges(entry.at(1));
-	for (const auto &[signature, lookup] : encoded.at("callable_lookups").items())
-		graph["callable_lookups"][signature] = Json{
-			{"owners", decodeEdges(lookup.at("owners"))}, {"candidates", lookup.at("candidates")}
-		};
+	for (const auto &[key, lookup] : encoded.at("callable_lookups").items()) {
+		graph["callable_lookups"][key] = lookup;
+		graph["callable_lookups"][key]["owners"] = decodeEdges(lookup.at("owners"));
+	}
+	for (const Json &entry : encoded.at("inference_reads"))
+		graph["inference_reads"][paths.at(entry.at(0).get<size_t>()).get<std::string>()] = decodeEdges(entry.at(1));
 	return graph;
 }
 

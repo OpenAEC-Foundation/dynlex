@@ -1,7 +1,7 @@
 std::unordered_set<std::string> dirtySectionsFromSavedGraph(
 	const Json &graph, const std::map<std::string, Section *> &sections,
 	const std::unordered_map<const Section *, bool> &unchanged, const std::unordered_set<const Section *> &stableBoundaries,
-	bool matchingEnvironmentChanged
+	bool matchingEnvironmentChanged, const IncrementalInferenceReads::Keys &changedLookups
 ) {
 	const Json &forward = graph.at("forward");
 	const Json &reverse = graph.at("reverse");
@@ -36,14 +36,9 @@ std::unordered_set<std::string> dirtySectionsFromSavedGraph(
 	for (const auto &[path, _] : forward.items())
 		if (!sections.contains(path))
 			markDirty(path);
-	if (matchingEnvironmentChanged) {
-		const Json &lookups = graph.at("callable_lookups");
-		Json candidates = callableCandidateSets(sections, lookups);
-		for (const auto &[signature, lookup] : lookups.items())
-			if (lookup.at("candidates") != candidates.at(signature))
-				for (const Json &owner : lookup.at("owners"))
-					markDirty(owner.get_ref<const std::string &>());
-	}
+	for (const std::string &key : changedLookups)
+		for (const Json &owner : graph.at("callable_lookups").at(key).at("owners"))
+			markDirty(owner.get_ref<const std::string &>());
 	while (!pending.empty()) {
 		std::string path = std::move(pending.back());
 		pending.pop_back();
@@ -57,8 +52,8 @@ std::unordered_set<std::string> dirtySectionsFromSavedGraph(
 
 std::unordered_set<const Section *> eligibleCodegenSections(
 	const ParseContext &context, const Json &previous, const Json &currentObservations, const Json &currentProjection,
-	const std::map<std::string, Section *> &sections, const std::unordered_set<const Section *> &interfaceStableChanges = {},
-	size_t *graphReused = nullptr
+	const std::map<std::string, Section *> &sections, const IncrementalInferenceReads::Keys &changedLookups,
+	const std::unordered_set<const Section *> &interfaceStableChanges, size_t *graphReused
 ) {
 	std::unordered_set<const Section *> eligible;
 	if (context.options.emitDebugInfo || context.options.traceExecution || !previous.contains("all_function_projection") ||
@@ -79,7 +74,7 @@ std::unordered_set<const Section *> eligibleCodegenSections(
 							  interfaceStableChanges.contains(section));
 	auto dirty = dirtySectionsFromSavedGraph(
 		previous.at("section_dependency_graph"), sections, unchanged, interfaceStableChanges,
-		priorProjection.at("final_matcher_tree") != currentProjection.at("final_matcher_tree")
+		priorProjection.at("final_matcher_tree") != currentProjection.at("final_matcher_tree"), changedLookups
 	);
 	for (const auto &[path, section] : sections)
 		if (reusableCodegenSection(*section) && !interfaceStableChanges.contains(section) &&

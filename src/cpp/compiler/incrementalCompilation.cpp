@@ -8,7 +8,6 @@
 #include "incrementalIRReuse.h"
 #include "incrementalMatcherCache.h"
 #include "incrementalModuleBitcode.h"
-#include "intrinsicInfo.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
 #include "pathUtils.h"
@@ -253,6 +252,7 @@ bool hasNoGlobalAccess(const Section *section);
 #include "incrementalMatcherProjection.inl"
 // clang-format on
 
+#include "incrementalInferenceReads.inl"
 #include "incrementalSectionDependencies.inl"
 
 bool functionDependenciesUnchanged(
@@ -653,23 +653,37 @@ bool compileIncrementally(
 			std::map<const Section *, std::string> sectionPaths;
 			for (const auto &[path, section] : sections)
 				sectionPaths.emplace(section, path);
+			IncrementalInferenceReads inferenceReads(sectionPaths);
 			std::unique_ptr<IncrementalIRReuse> functionReuse;
 			std::unique_ptr<IncrementalInferenceReuse> inferenceReuse;
 			std::unordered_set<const Section *> graphStable;
 			if (compiled && !reuseTypeInference) {
+				context.recordInferenceDependency = [&](const Section *owner, std::optional<size_t> probe,
+														const Section &dependency) {
+					inferenceReads.recordDependency(owner, probe, dependency);
+				};
+				context.recordCallableLookup = [&](const auto *owner, auto probe, const auto &source, auto signature,
+												   const auto &matches) {
+					inferenceReads.record(owner, probe, source, signature, matches);
+				};
 				if (previous) {
 					auto payloadStart = Clock::now();
 					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "section_dependency_graph");
 					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "inference_summaries");
 					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "generated_ir");
 					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
+					const Json &prior = previous->at("all_function_projection");
+					const Json &graph = previous->at("section_dependency_graph");
+					if (prior.at("final_matcher_tree") != finalMatcherTree ||
+						prior.at("declarations") != resolvedFunctionProjection.at("declarations"))
+						inferenceReads.validate(context, graph.at("callable_lookups"));
 					if (compatibleObservations(*previous, recording->observations, context))
 						prepareConstraintProbeReuse(
-							context, previous->at("all_function_projection"), resolvedFunctionProjection,
-							previous->at("section_dependency_graph"), sections
+							context, prior, resolvedFunctionProjection, graph, sections, inferenceReads.changedKeys()
 						);
 					IncrementalPreinferPlan plan = incrementalInferenceCandidates(
-						context, *previous, recording->observations, sectionPaths, resolvedFunctionProjection
+						context, *previous, recording->observations, sectionPaths, resolvedFunctionProjection,
+						inferenceReads.changedKeys()
 					);
 					statistics.preinferDependencyGraphSectionsChecked = plan.dependencyGraphSectionsChecked;
 					context.runIncrementalPreinference =
@@ -703,8 +717,8 @@ bool compileIncrementally(
 							first = end;
 						}
 						std::unordered_set<const Section *> eligible = eligibleCodegenSections(
-							inferred, *previous, recording->observations, resolvedFunctionProjection, sections, stable,
-							&statistics.dependencyGraphSectionsReused
+							inferred, *previous, recording->observations, resolvedFunctionProjection, sections,
+							inferenceReads.changedKeys(), stable, &statistics.dependencyGraphSectionsReused
 						);
 						statistics.preinferenceMilliseconds = elapsedMilliseconds(preinferStart);
 						if (eligible.empty())
@@ -739,7 +753,7 @@ bool compileIncrementally(
 						resolvedFunctionProjection[field] = inferred.at(field);
 				} else {
 					resolvedFunctionProjection["constraint_probe_schedule"] =
-						captureConstraintProbeSchedule(context, sectionPaths);
+						captureConstraintProbeSchedule(context, sectionPaths, inferenceReads, previous ? &*previous : nullptr);
 					resolvedFunctionProjection["class_instantiations"] = captureClassInstantiations(sectionPaths);
 				}
 			}
@@ -756,6 +770,12 @@ bool compileIncrementally(
 			statistics.reusedInferenceInstantiations = inferenceReuse ? inferenceReuse->reusedCount() : 0;
 			context.reuseInferredInstantiation = {};
 			context.runIncrementalPreinference = {};
+			context.recordCallableLookup = {};
+			context.recordInferenceDependency = {};
+			statistics.callableLookupsObserved = inferenceReads.observedCount();
+			statistics.failedCallableLookupsObserved = inferenceReads.failedCount();
+			statistics.callableLookupsChecked = inferenceReads.checkedCount();
+			statistics.callableLookupsChanged = inferenceReads.changedKeys().size();
 			statistics.matcherCacheHits = matcherCache.hits();
 			statistics.matcherPathSnapshotsBuilt = matcherPaths.pathsBuilt();
 			statistics.matcherPathSnapshotsLoaded = matcherPaths.pathsLoaded();
@@ -870,11 +890,6 @@ bool compileIncrementally(
 					const Json *priorInactiveSources = previous ? &previous->at("inactive_projection").at("sources") : nullptr;
 					std::set<std::string> retainedActivePaths =
 						retainedActiveFunctionPaths(functionReuse.get(), previous ? &*previous : nullptr);
-					result["inactive_projection"] = captureInactiveProjection(
-						result.at("all_function_projection").at("declarations"), compiled, recording->observations, nullptr,
-						&generatedFunctionPaths, &sections, priorInactiveSources, &statistics.sourceProjectionWork, nullptr,
-						&retainedActivePaths
-					);
 					Json globalTypes = captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
 					result["global_types"] = globalTypes;
 					result["inference_summaries"] =
@@ -885,11 +900,22 @@ bool compileIncrementally(
 									   : captureInferenceSummaries(sectionPaths, inferenceDiagnosticSources, globalTypes);
 					auto graphStart = Clock::now();
 					result["section_dependency_graph"] = captureSectionDependencyGraph(
-						sectionPaths, previous ? &previous->at("section_dependency_graph") : nullptr, graphStable,
+						sectionPaths, inferenceReads,
+						result.at("all_function_projection").at("constraint_probe_schedule").at("callable_lookups"),
+						previous ? &previous->at("section_dependency_graph") : nullptr, graphStable,
 						retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr),
 						&statistics.dependencyGraphEntriesReused, &statistics.dependencyGraphReverseNodesUpdated
 					);
 					statistics.dependencyGraphMilliseconds = elapsedMilliseconds(graphStart);
+					retainInferenceInputPaths(
+						result.at("all_function_projection").at("constraint_probe_schedule"),
+						result.at("section_dependency_graph"), retainedActivePaths
+					);
+					result["inactive_projection"] = captureInactiveProjection(
+						result.at("all_function_projection").at("declarations"), compiled, recording->observations, nullptr,
+						&generatedFunctionPaths, &sections, priorInactiveSources, &statistics.sourceProjectionWork, nullptr,
+						&retainedActivePaths
+					);
 					recordSemanticSources(result, *recording, compiled);
 					statistics.snapshotMilliseconds = elapsedMilliseconds(snapshotStart);
 					bool emitted;

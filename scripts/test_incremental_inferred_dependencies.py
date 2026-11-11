@@ -65,3 +65,113 @@ def check_inferred_section_dependencies(root, build):
     assert "Ambiguous function reference" in ambiguous[1]
     main.write_text(typed)
     assert build(entry=main)[2] == b"4\n"
+
+
+def check_callable_trial_dependencies(root, build):
+    main = root / "inferred_callable_trial.dl"
+    hidden = root / "inferred_callable_hidden.dl"
+    hidden.write_text("\n")
+    source = (
+        'import inferred_callable_hidden.dl\n'
+        'integer means: @intrinsic("type", "int")\n'
+        'decimal means: @intrinsic("type", "float")\n'
+        'class:\n'
+        '    patterns:\n'
+        '        box\n'
+        '    members:\n'
+        '        value as integer\n'
+        'convert item:\n'
+        '    replacement:\n'
+        '        @intrinsic("construct", box, 1)\n'
+        'convert {integer:item}:\n'
+        '    replacement:\n'
+        '        @intrinsic("discard", @intrinsic("function", "special callback $"))\n'
+        '        @intrinsic("construct", box, 2)\n'
+        'to report:\n'
+        '    @intrinsic("store", result, @intrinsic("cast", 7, box))\n'
+        '    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", result\'s value))\n'
+        'report\n'
+    )
+    main.write_text(source)
+    missing = build(entry=main)
+    assert missing[2] == b"1\n"
+    assert missing[0]["failed_callable_lookups_observed"] > 0
+    source += '@intrinsic("discard", 0)\n'
+    main.write_text(source)
+    reused = build(entry=main)
+    assert reused[2] == b"1\n" and reused[0]["functions_ir_reused"] >= 1
+
+    # A candidate in another file's local scope does not change this lookup.
+    hidden.write_text('local function special callback {decimal:value}:\n    execute:\n        @intrinsic("discard", value)\n')
+    invisible = build(entry=main)
+    assert invisible[2] == b"1\n" and invisible[0]["functions_ir_reused"] >= 1
+    assert invisible[0]["callable_lookups_checked"] > 0 and invisible[0]["callable_lookups_changed"] == 0
+
+    # Adding a visible candidate changes the outcome of the rejected trial.
+    main.write_text(source + 'to special callback {integer:value}: @intrinsic("discard", value)\n')
+    available = build(entry=main)
+    assert available[1:] == build(False, entry=main)[1:], "a cached failed lookup kept the more specific conversion ineligible"
+    assert available[2] == b"2\n"
+    assert available[0]["callable_lookups_changed"] == 1
+    hidden.write_text("\n")
+    still_available = build(entry=main)
+    assert still_available[2] == b"2\n" and still_available[0]["functions_ir_reused"] >= 1
+    assert still_available[0]["callable_lookups_checked"] > 0 and still_available[0]["callable_lookups_changed"] == 0
+    main.write_text(source)
+    removed = build(entry=main)
+    assert removed[1:] == build(False, entry=main)[1:]
+    assert removed[2] == b"1\n"
+
+    # A conversion that produced the wrong type also remains a dependency.
+    main = root / "inferred_conversion_trial.dl"
+    conversion = source.replace('import inferred_callable_hidden.dl\n', '')
+    conversion = conversion.replace(
+        '        @intrinsic("discard", @intrinsic("function", "special callback $"))\n'
+        '        @intrinsic("construct", box, 2)\n',
+        '        0\n',
+    )
+    main.write_text(conversion)
+    assert build(entry=main)[2] == b"1\n"
+    main.write_text(conversion.replace('        0\n', '        @intrinsic("construct", box, 2)\n'))
+    changed = build(entry=main)
+    assert changed[1:] == build(False, entry=main)[1:], "rejected conversion body edit reused stale caller code"
+    assert changed[2] == b"2\n"
+
+    # A callable body can be read by a failed trial without leaving an
+    # instantiation. Fixing the body must still invalidate that trial.
+    main = root / "inferred_callable_trial_body.dl"
+    callback = source.replace('import inferred_callable_hidden.dl\n', '') + (
+        'to special callback {integer:value}: @intrinsic("discard", value)\n'
+    )
+    main.write_text(callback.replace(
+        'callback {integer:value}: @intrinsic("discard", value)',
+        'callback {integer:value}: @intrinsic("add", value, "x")',
+    ))
+    assert build(entry=main)[2] == b"1\n"
+    main.write_text(callback)
+    changed = build(entry=main)
+    assert changed[1:] == build(False, entry=main)[1:], "a failed callable trial was masked as an inactive body"
+    assert changed[2] == b"2\n"
+
+    # A function consumed by a restored type constraint remains active even
+    # when it has neither a current instantiation nor generated LLVM code.
+    main = root / "inferred_callable_constraint.dl"
+    constraint = (
+        'to get callback result:\n'
+        '    @intrinsic("return", 1)\n'
+        'callback type means: @intrinsic("function return type", @intrinsic("function", "callback result"))\n'
+        'to accept {callback type:value}: @intrinsic("discard", value)\n'
+        'accept 1\n'
+    )
+    main.write_text(constraint)
+    build(entry=main)
+    constraint += '@intrinsic("discard", 0)\n'
+    main.write_text(constraint)
+    restored = build(entry=main)
+    assert restored[0]["constraint_values_reused"] >= 1
+    cached = read_program(root / "cache", main)
+    keys = cached["all_function_projection"]["constraint_probe_schedule"]["callable_lookups"]
+    assert any(keys)
+    main.write_text(constraint.replace('"return", 1)', '"return", 1.0)'))
+    changed = build(entry=main, success=False)
+    assert changed[1:] == build(False, entry=main, success=False)[1:], "a restored constraint lost its callable dependency"

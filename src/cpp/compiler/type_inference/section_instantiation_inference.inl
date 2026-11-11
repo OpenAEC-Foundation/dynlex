@@ -55,6 +55,7 @@ bool ensureSectionInstantiationInferred(
 	ScopedSectionLocalVariableState calleeVariableState(section);
 	InferenceContext context(parseContext, callerContext && callerContext->trial);
 	if (callerContext) {
+		context.dependencyReads = callerContext->dependencyReads;
 		// Cached instantiations cannot consume the caller's tracked constants.
 		// Only globals and instantiation-key parameter constants enter a pass.
 		context.inheritedTrialExpressionValues =

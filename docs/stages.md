@@ -1120,10 +1120,18 @@ were not re-inferred.
 
 The graph follows instantiated replacement bodies, caller bodies, static loop
 iterations, and data expressions, including compile-time-only callable queries.
-A callable signature records its candidate set and owning sections. Adding or
-removing a candidate dirties those sections even when their ordinary pattern
-matches are unchanged. Deleted sections also propagate invalidation through their
-saved reverse edges.
+A callable lookup records its spelling, source visibility, visible candidates,
+and the sections or declared constraint probes that read it. Inference records
+the lookup even when a conversion or grouping trial is rejected. An empty
+candidate set is a dependency, so adding a visible definition can invalidate
+the earlier rejection. A definition local to another file leaves the lookup
+valid. A conversion probe also records the body it tested, so changing that
+body can make a previously rejected conversion applicable. Deleted sections
+propagate invalidation through their saved reverse edges. The
+`callable_lookups_checked` and `callable_lookups_changed` counters measure
+validation after a pattern tree edit. Rejected trials and restored constraints
+keep the bodies they read active across edited builds, even when those bodies
+have no emitted IR.
 The graph speeds preinference and codegen
 eligibility checks; section parsing and resolution still rebuild their state.
 The graph payload stores section paths once and indexes forward, reverse, and

@@ -27,6 +27,35 @@ std::set<std::string> retainedActiveFunctionPaths(const IncrementalIRReuse *reus
 	return active;
 }
 
+// Rejected trials and restored constraints can consume a body without
+// leaving an instantiation or emitted function.
+void retainInferenceInputPaths(const Json &schedule, const Json &graph, std::set<std::string> &active) {
+	std::stack<std::string> pending;
+	auto add = [&](const Json &paths) {
+		for (const Json &path : paths)
+			pending.push(path.get<std::string>());
+	};
+	for (const Json &roots : schedule.at("roots"))
+		add(roots);
+	for (const auto &[_, reads] : graph.at("inference_reads").items())
+		add(reads);
+	for (const auto &[_, lookup] : graph.at("callable_lookups").items()) {
+		const Json &candidates = lookup.at("candidates");
+		if (candidates.size() == 1)
+			pending.push(candidates.at(0).at(0).get<std::string>());
+	}
+	std::unordered_set<std::string> visited;
+	while (!pending.empty()) {
+		std::string path = std::move(pending.top());
+		pending.pop();
+		if (!visited.insert(path).second)
+			continue;
+		active.insert(path);
+		for (const Json &dependency : graph.at("forward").at(path))
+			pending.push(dependency.get<std::string>());
+	}
+}
+
 Json captureInactiveProjection(
 	const Json &resolvedDeclarations, const ParseContext &context, const Json &observations,
 	const Json *priorInactive = nullptr,

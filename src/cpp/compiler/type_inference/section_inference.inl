@@ -20,11 +20,20 @@ static bool inferSectionLineRange(
 	requireCompilerInvariant(!body || body->sourceSection == section, "active instantiated body does not match section");
 	InstantiatedSectionBody *savedInstantiatedBody = context.currentInstantiatedSectionBody;
 	context.currentInstantiatedSectionBody = body;
+	InferenceContext::DependencyOwner dependencyOwner{section, context.dependencyReads.owner};
+	if ((context.parseContext.recordCallableLookup || context.parseContext.recordInferenceDependency) &&
+		(section == context.parseContext.mainSection || (section->type == SectionType::Function && !section->isFlex) ||
+		 section->type == SectionType::Retain || section->type == SectionType::Release))
+		context.dependencyReads.owner = &dependencyOwner;
 	struct InstantiatedBodyRestore {
 		InferenceContext &context;
 		InstantiatedSectionBody *savedBody;
-		~InstantiatedBodyRestore() { context.currentInstantiatedSectionBody = savedBody; }
-	} instantiatedBodyRestore{context, savedInstantiatedBody};
+		const InferenceContext::DependencyOwner *savedOwner;
+		~InstantiatedBodyRestore() {
+			context.currentInstantiatedSectionBody = savedBody;
+			context.dependencyReads.owner = savedOwner;
+		}
+	} instantiatedBodyRestore{context, savedInstantiatedBody, dependencyOwner.parent};
 	// The first valid inference determines operand ordering per code line. Later
 	// passes reuse the committed grouping stored on the line itself.
 	if (context.trial && context.trialJournal)

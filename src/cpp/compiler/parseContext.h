@@ -19,6 +19,7 @@
 #include <optional>
 #include <set>
 #include <stack>
+#include <string_view>
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
@@ -42,6 +43,8 @@ class DIFile;
 class DIScope;
 class TargetMachine;
 } // namespace llvm
+
+struct CallableFunctionMatch;
 
 struct ParseContext {
 	struct IncrementalFunctionRequest {
@@ -115,10 +118,18 @@ struct ParseContext {
 	std::vector<int> constraintProbePasses;
 	std::vector<std::optional<IncrementalConstraintValue>> constraintProbeValues;
 	std::vector<std::unordered_set<const Section *>> constraintProbeDependencies;
+	std::vector<bool> constraintProbeReadsReused;
 	size_t constraintProbesReused = 0;
 	size_t constraintProbesRun = 0;
 	size_t constraintValuesReused = 0;
 	size_t constraintExpressionsReused = 0;
+	// Type queries can affect inference even when the trial that read them was rejected.
+	std::function<void(
+		const Section *, std::optional<size_t>, const lsp::SourceFile &, std::string_view,
+		const std::vector<CallableFunctionMatch> &
+	)>
+		recordCallableLookup;
+	std::function<void(const Section *, std::optional<size_t>, const Section &)> recordInferenceDependency;
 	// Parse cache entries contain only unresolved syntax. Restored executable
 	// expressions register references; temporary type expressions keep them local.
 	std::function<Expression *(Section *, Range, SectionType, bool)> reuseParsedExpression;

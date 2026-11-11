@@ -37,7 +37,8 @@ bool constraintDefinitionMayMatch(const Section &section, std::string_view lower
 }
 
 std::vector<bool> reusableConstraintProbes(
-	const Json &prior, const Json &current, const Json &graph, const std::map<std::string, Section *> &sections
+	const Json &prior, const Json &current, const Json &graph, const std::map<std::string, Section *> &sections,
+	const IncrementalInferenceReads::Keys &changedLookups
 ) {
 	if (!stableConstraintProbePrelude(prior, current))
 		return {};
@@ -64,6 +65,7 @@ std::vector<bool> reusableConstraintProbes(
 	const auto texts = schedule.at("texts").get<std::vector<std::string>>();
 	const auto passes = schedule.at("passes").get<std::vector<int>>();
 	const Json &roots = schedule.at("roots");
+	const Json &lookupReads = schedule.at("callable_lookups");
 	bool topLevelExecutionChanged = !sourceProjectionsEqual(prior.at("ambient_sources"), current.at("ambient_sources"));
 	std::unordered_set<std::string> topLevelDependent;
 	if (topLevelExecutionChanged) {
@@ -82,7 +84,8 @@ std::vector<bool> reusableConstraintProbes(
 		}
 	}
 	requireCompilerInvariant(
-		items.size() == texts.size() && items.size() == passes.size() && items.size() == roots.size(),
+		items.size() == texts.size() && items.size() == passes.size() && items.size() == roots.size() &&
+			items.size() == lookupReads.size(),
 		"saved type-constraint probe schedule has mismatched item records"
 	);
 	std::vector<std::string> loweredTexts;
@@ -132,6 +135,9 @@ std::vector<bool> reusableConstraintProbes(
 	// functions that an earlier speculative grouping may have rejected.
 	std::unordered_set<std::string> dirtyClosure;
 	std::vector<std::string> pending = std::move(changedBodies);
+	for (const std::string &key : changedLookups)
+		for (const Json &owner : graph.at("callable_lookups").at(key).at("owners"))
+			pending.push_back(owner.get<std::string>());
 	while (!pending.empty()) {
 		std::string path = std::move(pending.back());
 		pending.pop_back();
@@ -144,7 +150,10 @@ std::vector<bool> reusableConstraintProbes(
 				pending.push_back(caller.get<std::string>());
 	}
 	std::vector<bool> dirty(items.size(), false);
-	for (size_t index = 0; index < items.size(); index++)
+	for (size_t index = 0; index < items.size(); index++) {
+		dirty[index] = std::ranges::any_of(lookupReads.at(index), [&](const Json &key) {
+			return changedLookups.contains(key.get_ref<const std::string &>());
+		});
 		for (const Json &root : roots.at(index)) {
 			std::string path = root.get<std::string>();
 			if (!forward.contains(path))
@@ -152,6 +161,7 @@ std::vector<bool> reusableConstraintProbes(
 			if (dirtyClosure.contains(path) || topLevelDependent.contains(path))
 				dirty[index] = true;
 		}
+	}
 	for (const std::string &path : dirtyClosure) {
 		const Section &section = *sections.at(path);
 		if (section.patternDefinitions.empty())
@@ -172,9 +182,9 @@ std::vector<bool> reusableConstraintProbes(
 
 void prepareConstraintProbeReuse(
 	ParseContext &context, const Json &prior, const Json &current, const Json &graph,
-	const std::map<std::string, Section *> &sections
+	const std::map<std::string, Section *> &sections, const IncrementalInferenceReads::Keys &changedLookups
 ) {
-	std::vector<bool> reusable = reusableConstraintProbes(prior, current, graph, sections);
+	std::vector<bool> reusable = reusableConstraintProbes(prior, current, graph, sections, changedLookups);
 	if (std::ranges::none_of(reusable, [](bool value) {
 		return value;
 	}))
@@ -211,7 +221,10 @@ void prepareConstraintProbeReuse(
 	context.reuseDeclaredConstraintProbes = true;
 }
 
-Json captureConstraintProbeSchedule(const ParseContext &context, const std::map<const Section *, std::string> &sectionPaths) {
+Json captureConstraintProbeSchedule(
+	const ParseContext &context, const std::map<const Section *, std::string> &sectionPaths,
+	const IncrementalInferenceReads &inferenceReads, const Json *prior
+) {
 	requireCompilerInvariant(
 		context.constraintProbeItems.size() == context.constraintProbePasses.size(),
 		"type-constraint probe schedule has mismatched item and pass counts"
@@ -230,14 +243,34 @@ Json captureConstraintProbeSchedule(const ParseContext &context, const std::map<
 		context.constraintProbeItems.size() == context.constraintProbeValues.size(),
 		"type-constraint probe schedule has mismatched item and value counts"
 	);
+	requireCompilerInvariant(
+		context.constraintProbeItems.size() == context.constraintProbeReadsReused.size(),
+		"type-constraint probe schedule has mismatched lookup observations"
+	);
+	const Json *priorSchedule = prior ? &prior->at("all_function_projection").at("constraint_probe_schedule") : nullptr;
+	const Json *priorLookups = prior ? &prior->at("section_dependency_graph").at("callable_lookups") : nullptr;
 	Json roots = Json::array();
 	Json values = Json::array();
+	Json lookupReads = Json::array();
 	ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
 	for (size_t index = 0; index < context.constraintProbeDependencies.size(); index++) {
 		const auto &dependencies = context.constraintProbeDependencies[index];
 		std::set<std::string> paths;
 		for (const Section *section : dependencies)
 			paths.insert(sectionPaths.at(section));
+		const auto &direct = inferenceReads.dependenciesOfProbe(index);
+		paths.insert(direct.begin(), direct.end());
+		bool reused = context.constraintProbeReadsReused.at(index);
+		auto keys = inferenceReads.readsOfProbe(index, priorSchedule, reused);
+		if (reused)
+			for (const Json &path : priorSchedule->at("roots").at(index))
+				paths.insert(path.get_ref<const std::string &>());
+		for (const std::string &key : keys) {
+			const Json &candidates = inferenceReads.observation(key, priorLookups).at("candidates");
+			if (candidates.size() == 1)
+				paths.insert(candidates.at(0).at(0).get<std::string>());
+		}
+		lookupReads.push_back(std::move(keys));
 		roots.push_back(paths);
 		const auto &value = context.constraintProbeValues[index];
 		values.push_back(value ? encodePortableConstraintValue(*value, classPaths).value_or(Json(nullptr)) : Json(nullptr));
@@ -247,6 +280,7 @@ Json captureConstraintProbeSchedule(const ParseContext &context, const std::map<
 		{"texts", context.constraintProbeTexts},
 		{"passes", context.constraintProbePasses},
 		{"roots", roots},
-		{"values", values}
+		{"values", values},
+		{"callable_lookups", std::move(lookupReads)}
 	};
 }

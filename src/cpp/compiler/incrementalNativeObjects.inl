@@ -80,6 +80,10 @@ struct BuildStatistics {
 	double matcherProjectionMilliseconds = 0;
 	size_t matcherPathSnapshotsBuilt = 0;
 	size_t matcherPathSnapshotsLoaded = 0;
+	size_t callableLookupsObserved = 0;
+	size_t failedCallableLookupsObserved = 0;
+	size_t callableLookupsChecked = 0;
+	size_t callableLookupsChanged = 0;
 	double inferenceMilliseconds = 0;
 	double projectionMilliseconds = 0;
 	double inactiveProjectionMilliseconds = 0;

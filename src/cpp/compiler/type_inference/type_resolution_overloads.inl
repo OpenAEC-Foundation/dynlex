@@ -367,6 +367,15 @@ struct InferenceContext {
 	};
 
 	ParseContext &parseContext;
+	struct DependencyOwner {
+		const Section *section;
+		const DependencyOwner *parent;
+	};
+	struct DependencyReads {
+		const DependencyOwner *owner = nullptr;
+		std::optional<size_t> constraintProbe;
+	};
+	DependencyReads dependencyReads;
 	Instantiation *currentInstantiation{};
 	const InferredArgumentScope *inferredArguments{};
 	bool inferringReferenceAssignmentTarget = false;
@@ -418,7 +427,21 @@ struct InferenceContext {
 	InferenceContext(ParseContext &pc) : parseContext(pc) {}
 	InferenceContext(ParseContext &pc, bool trial) : parseContext(pc), trial(trial) {}
 
+	template <typename Recorder> void recordDependencyRead(Recorder &&record) const {
+		if (dependencyReads.constraintProbe)
+			record(nullptr, dependencyReads.constraintProbe);
+		if (dependencyReads.owner) {
+			// Rejected trials may leave no call expression linking the caller
+			// to the callee whose inference it consumed.
+			for (const auto *owner = dependencyReads.owner; owner; owner = trial ? owner->parent : nullptr)
+				record(owner->section, std::nullopt);
+		} else if (!dependencyReads.constraintProbe) {
+			record(parseContext.mainSection, std::nullopt);
+		}
+	}
+
 	void inheritSectionExecutionState(const InferenceContext &other) {
+		dependencyReads = other.dependencyReads;
 		typeRefinements = other.typeRefinements;
 		memoryFlexBase = other.memoryFlexBase;
 		currentInstantiatedSectionBody = other.currentInstantiatedSectionBody;

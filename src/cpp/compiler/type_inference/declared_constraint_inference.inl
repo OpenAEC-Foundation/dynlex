@@ -4,13 +4,15 @@ static bool typeContainsSymbolicClassInstantiation(const DataType &type) {
 }
 
 static PatternTypeConstraintProbe probeDeclaredTypeConstraint(
-	DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext, ResolvedPatternConstraint *resolvedResult = nullptr
+	DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext, ResolvedPatternConstraint *resolvedResult,
+	InferenceContext::DependencyReads reads
 ) {
 	item.failureDiagnostic.reset();
 	GroupingSnapshot originalGrouping = captureGroupingSnapshot(item.expression);
 	resetExpressionTypes(item.expression);
 	InferenceContext::TrialJournal journal;
 	InferenceContext trialContext(parseContext, true);
+	trialContext.dependencyReads = reads;
 	Instantiation signatureInstantiation;
 	trialContext.currentInstantiation = &signatureInstantiation;
 	trialContext.trialJournal = &journal;
@@ -74,8 +76,9 @@ static bool commitNumberRule(DeclaredTypeConstraintWorkItem &item, ParseContext 
 	return true;
 }
 
-static void commitDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext) {
+static void commitDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext, size_t index) {
 	InferenceContext context(parseContext);
+	context.dependencyReads.constraintProbe = index;
 	Instantiation signatureInstantiation;
 	context.currentInstantiation = &signatureInstantiation;
 	context.unresolvedPatternConstraintSignal = std::make_shared<bool>(false);
@@ -335,6 +338,7 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 	parseContext.constraintProbeValues.resize(items.size());
 	parseContext.constraintProbeDependencies.clear();
 	parseContext.constraintProbeDependencies.resize(items.size());
+	parseContext.constraintProbeReadsReused.assign(items.size(), false);
 	for (const DeclaredTypeConstraintWorkItem &item : items) {
 		parseContext.constraintProbeItems.push_back(declaredConstraintProbeIdentity(item));
 		parseContext.constraintProbeTexts.push_back(item.typeConstraintName);
@@ -437,7 +441,7 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 			if (reuseItem)
 				parseContext.constraintProbesReused++;
 			else {
-				probe = probeDeclaredTypeConstraint(item, parseContext);
+				probe = probeDeclaredTypeConstraint(item, parseContext, nullptr, {.constraintProbe = itemIndex});
 				parseContext.constraintProbesRun++;
 			}
 			if (probe == PatternTypeConstraintProbe::Deferred)
@@ -474,7 +478,7 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 				parseContext.constraintValuesReused++;
 			} else {
 				size_t diagnosticsBeforeCommit = parseContext.diagnostics.size();
-				commitDeclaredTypeConstraint(item, parseContext);
+				commitDeclaredTypeConstraint(item, parseContext, itemIndex);
 				bool cacheableResult = parseContext.diagnostics.size() == diagnosticsBeforeCommit;
 				if (cacheableResult && item.element)
 					parseContext.constraintProbeValues[itemIndex] = ParseContext::IncrementalConstraintValue{
@@ -489,6 +493,7 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 				);
 			}
 			parseContext.constraintProbePasses[itemIndex] = pass;
+			parseContext.constraintProbeReadsReused[itemIndex] = reuseItem;
 			if (item.numberRuleLine) {
 				if (!commitNumberRule(item, parseContext, item.numberRuleConstraint)) {
 					item.expression = nullptr;

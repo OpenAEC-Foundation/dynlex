@@ -87,10 +87,11 @@ def decode_graph(encoded):
                                   for key, edges in variants.items()}
                            for path, variants in zip(paths, encoded["instantiations"])},
         "callable_lookups": {
-            signature: {"owners": [paths[index] for index in lookup["owners"]],
-                        "candidates": lookup["candidates"]}
-            for signature, lookup in encoded["callable_lookups"].items()
+            key: {**lookup, "owners": [paths[index] for index in lookup["owners"]]}
+            for key, lookup in encoded["callable_lookups"].items()
         },
+        "inference_reads": {paths[owner]: [paths[index] for index in reads]
+                            for owner, reads in encoded["inference_reads"]},
     }
 
 

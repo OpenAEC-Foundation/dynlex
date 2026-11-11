@@ -26,7 +26,8 @@ RetainedGraphVariants retainedGraphVariants(const IncrementalIRReuse *reuse, con
 }
 
 Json captureSectionDependencyGraph(
-	const std::map<const Section *, std::string> &paths, Json *previous = nullptr,
+	const std::map<const Section *, std::string> &paths, const IncrementalInferenceReads &inferenceReads,
+	const Json &probeLookups, Json *previous = nullptr,
 	const std::unordered_set<const Section *> &stable = {}, const RetainedGraphVariants &retained = {},
 	size_t *reused = nullptr, size_t *reverseUpdated = nullptr
 ) {
@@ -35,21 +36,23 @@ Json captureSectionDependencyGraph(
 					 ? std::move(*previous)
 					 : Json{
 						   {"forward", Json::object()}, {"reverse", Json::object()}, {"instantiations", Json::object()},
-						   {"callable_lookups", Json::object()}
+						   {"callable_lookups", Json::object()}, {"inference_reads", Json::object()}
 					   };
 	Json &forward = graph.at("forward");
 	Json &reverse = graph.at("reverse");
 	Json &instantiations = graph.at("instantiations");
-	Json &callableLookups = graph.at("callable_lookups");
+	const Json &priorLookups = graph.at("callable_lookups");
+	const Json &priorReads = graph.at("inference_reads");
+	Json sectionReads = Json::object();
 	std::map<std::string, std::set<std::string>> lookupOwners;
 	std::unordered_map<std::string, std::vector<std::string_view>> priorLookupsByOwner;
-	for (const auto &[key, lookup] : callableLookups.items())
+	for (const auto &[key, lookup] : priorLookups.items())
 		for (const Json &owner : lookup.at("owners"))
 			priorLookupsByOwner[owner.get<std::string>()].push_back(key);
-	auto retainLookups = [&](const std::string &path) {
+	auto retainLookups = [&](const std::string &path, IncrementalInferenceReads::Keys &keys) {
 		if (auto found = priorLookupsByOwner.find(path); found != priorLookupsByOwner.end())
 			for (std::string_view signature : found->second)
-				lookupOwners[std::string(signature)].insert(path);
+				keys.emplace(signature);
 	};
 	ClassIdentityPaths classPaths = classIdentityPaths(paths);
 	std::unordered_set<std::string> currentPaths;
@@ -72,7 +75,10 @@ Json captureSectionDependencyGraph(
 			retainedKeys = keys->second;
 		if (retained.unkeyedPaths.contains(path))
 			retainedKeys.insert(aggregateGraphVariant);
-		bool reuseEntry = hadPrevious && stable.contains(section) && forward.contains(path) && instantiations.contains(path);
+		IncrementalInferenceReads::Keys sectionLookups = inferenceReads.readsOf(path);
+		IncrementalInferenceReads::Keys reads = inferenceReads.dependenciesOf(path);
+		bool reuseEntry = hadPrevious && stable.contains(section) && forward.contains(path) &&
+						  instantiations.contains(path) && sectionLookups.empty() && reads.empty();
 		std::set<std::string> currentKeys = retainedKeys;
 		if (reuseEntry)
 			for (const auto &[key, instantiation] : section->instantiations) {
@@ -89,17 +95,20 @@ Json captureSectionDependencyGraph(
 				return instantiations.at(path).contains(key);
 			});
 		if (reuseEntry) {
-			retainLookups(path);
+			retainLookups(path, sectionLookups);
+			for (const std::string &key : sectionLookups)
+				lookupOwners[key].insert(path);
+			if (priorReads.contains(path))
+				sectionReads[path] = priorReads.at(path);
 			if (reused)
 				(*reused)++;
 			continue;
 		}
 		std::set<std::string> direct;
-		std::set<std::string> sectionLookups;
 		std::vector<Section *> matched;
 		collectMatchedSectionDependencies(section, matched);
 		if (!section->parent)
-			InferredSectionDependencies(matched, &sectionLookups).collectExecution(*section);
+			InferredSectionDependencies(matched).collectExecution(*section);
 		for (Section *dependency : matched)
 			direct.insert(paths.at(dependency));
 		Json variants = Json::object();
@@ -118,7 +127,7 @@ Json captureSectionDependencyGraph(
 				selected = instantiations.at(path).at(*keyText);
 			} else {
 				std::vector<Section *> inferred;
-				InferredSectionDependencies(inferred, &sectionLookups).collectBody(instantiation.body.get());
+				collectInferredSectionDependencies(instantiation.body.get(), inferred);
 				std::set<std::string> selectedPaths;
 				for (Section *dependency : inferred)
 					selectedPaths.insert(paths.at(dependency));
@@ -152,27 +161,39 @@ Json captureSectionDependencyGraph(
 		}
 		if (hasAggregateVariant)
 			variants[aggregateGraphVariant] = aggregateDependencies;
+		if (retainPriorLookups) {
+			retainLookups(path, sectionLookups);
+			if (priorReads.contains(path))
+				for (const Json &dependency : priorReads.at(path))
+					reads.insert(dependency.get_ref<const std::string &>());
+		}
+		if (!reads.empty()) {
+			direct.insert(reads.begin(), reads.end());
+			sectionReads[path] = std::move(reads);
+		}
+		for (const std::string &key : sectionLookups) {
+			lookupOwners[key].insert(path);
+			const Json &candidates = inferenceReads.observation(key, &priorLookups).at("candidates");
+			if (candidates.size() == 1)
+				direct.insert(candidates.at(0).at(0).get<std::string>());
+		}
 		std::set<std::string> before = forward.contains(path) ? dependencySet(forward.at(path)) : std::set<std::string>{};
 		if (before != direct)
 			changes.push_back({path, std::move(before), direct});
 		forward[path] = direct;
 		instantiations[path] = std::move(variants);
-		for (const std::string &signature : sectionLookups)
-			lookupOwners[signature].insert(path);
-		if (retainPriorLookups)
-			retainLookups(path);
 	}
-	callableLookups = Json::object();
-	if (!lookupOwners.empty()) {
-		std::map<std::string, const Section *> sortedSections;
-		for (const auto &[section, path] : paths)
-			sortedSections.emplace(path, section);
-		for (auto &[signature, owners] : lookupOwners)
-			callableLookups[signature] = Json{{"owners", std::move(owners)}};
-		Json candidates = callableCandidateSets(sortedSections, callableLookups);
-		for (auto &[signature, lookup] : callableLookups.items())
-			lookup["candidates"] = std::move(candidates.at(signature));
+	for (const Json &keys : probeLookups)
+		for (const Json &key : keys)
+			lookupOwners.try_emplace(key.get<std::string>());
+	Json callableLookups = Json::object();
+	for (auto &[key, owners] : lookupOwners) {
+		Json lookup = inferenceReads.observation(key, &priorLookups);
+		lookup["owners"] = std::move(owners);
+		callableLookups[key] = std::move(lookup);
 	}
+	graph["callable_lookups"] = std::move(callableLookups);
+	graph["inference_reads"] = std::move(sectionReads);
 	if (hadPrevious) {
 		for (auto entry = forward.begin(); entry != forward.end();) {
 			if (currentPaths.contains(entry.key())) {

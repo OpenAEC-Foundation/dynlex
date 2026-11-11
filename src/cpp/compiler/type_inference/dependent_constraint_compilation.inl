@@ -624,7 +624,8 @@ static std::optional<ResolvedPatternConstraint> probeInitialPatternConstraint(
 				return;
 			}
 			ResolvedPatternConstraint result;
-			PatternTypeConstraintProbe probe = probeDeclaredTypeConstraint(item, context.parseContext, &result);
+			PatternTypeConstraintProbe probe =
+				probeDeclaredTypeConstraint(item, context.parseContext, &result, context.dependencyReads);
 			destroyTypeConstraintExpression(item.expression);
 			if (probe != PatternTypeConstraintProbe::Ready) {
 				return;

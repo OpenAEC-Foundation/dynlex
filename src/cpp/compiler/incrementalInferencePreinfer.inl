@@ -14,7 +14,8 @@ std::set<Section *> matchedSectionDependencies(Section *section) {
 
 IncrementalPreinferPlan incrementalInferenceCandidates(
 	const ParseContext &context, const Json &previous, const Json &observations,
-	const std::map<const Section *, std::string> &sectionPaths, const Json &current
+	const std::map<const Section *, std::string> &sectionPaths, const Json &current,
+	const IncrementalInferenceReads::Keys &changedLookups
 ) {
 	IncrementalPreinferPlan result;
 	if (context.options.emitDebugInfo || context.options.traceExecution ||
@@ -42,7 +43,7 @@ IncrementalPreinferPlan incrementalInferenceCandidates(
 			sections.emplace(path, const_cast<Section *>(section));
 		graphDirty = dirtySectionsFromSavedGraph(
 			previous.at("section_dependency_graph"), sections, globalFree, {},
-			prior.at("final_matcher_tree") != current.at("final_matcher_tree")
+			prior.at("final_matcher_tree") != current.at("final_matcher_tree"), changedLookups
 		);
 	}
 	std::unordered_map<Section *, bool> globalFreeClosure;

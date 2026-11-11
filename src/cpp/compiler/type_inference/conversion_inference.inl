@@ -137,6 +137,10 @@ static ConversionLookup findUserConversion(
 			resolveSourceConstraint(definition, sourceSelection.pathIndex, 0);
 		requireCompilerInvariant(sourceConstraint.has_value(), "selected conversion constraint could not be materialized");
 		ConversionCandidate candidate{definition, sourceSelection.pathIndex, std::move(sourceConstraint->constraint), {}};
+		if (const auto &record = context.parseContext.recordInferenceDependency)
+			context.recordDependencyRead([&](const Section *owner, std::optional<size_t> probe) {
+				record(owner, probe, *definition->section);
+			});
 		bool deferred = false;
 		std::optional<ConversionOutcome> outcome =
 			probeConversionOutcome(source, bindingFrameStack, context, candidate, deferred);
