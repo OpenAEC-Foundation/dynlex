@@ -82,21 +82,23 @@ bool inferenceSummarySourceExcluded(const Section *section, const std::set<std::
 }
 
 Json captureInferenceSummaries(
-	const std::map<const Section *, std::string> &sectionPaths, const std::set<std::string> &excludedSources,
-	const Json &globalTypes, const std::unordered_set<const Section *> *skipped = nullptr
+	ParseContext &context, const std::map<const Section *, std::string> &sectionPaths,
+	const std::set<std::string> &excludedSources, const Json &globalTypes,
+	const std::unordered_set<const Section *> *skipped = nullptr
 ) {
 	Json summaries = Json::object();
 	ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
+	InferenceStorageIdentities storage(context, sectionPaths, classPaths);
 	for (const auto &[section, path] : sectionPaths) {
 		if (inferenceSummarySourceExcluded(section, excludedSources) || (skipped && skipped->contains(section)))
 			continue;
 		for (const auto &[key, instantiation] : section->instantiations) {
 			if (!canPersistInferenceSummary(section, key, instantiation, classPaths))
 				continue;
-			auto globalEffects = encodeGlobalEffects(section, instantiation);
+			auto globalEffects = encodeGlobalEffects(section, instantiation, storage);
 			if (!globalEffects)
 				continue;
-			auto returnProvenance = encodeAddressProvenance(section, instantiation.returnAddressProvenance);
+			auto returnProvenance = storage.encodeProvenance(instantiation.returnAddressProvenance);
 			if (!returnProvenance)
 				continue;
 			bool needsGlobalTypes = !hasNoGlobalAccess(section) || !instantiation.writtenGlobalReferences.empty() ||
@@ -139,13 +141,12 @@ Json captureInferenceSummaries(
 class IncrementalInferenceReuse {
   public:
 	IncrementalInferenceReuse(
-		const Json &summaries, const Json &priorGlobalTypes, const IncrementalIRReuse &irReuse,
+		ParseContext &context, const Json &summaries, const Json &priorGlobalTypes, const IncrementalIRReuse &irReuse,
 		const std::map<const Section *, std::string> &sectionPaths, std::unordered_set<const Section *> eligible
 	)
-		: summaries(summaries), priorGlobalTypes(priorGlobalTypes), irReuse(irReuse), eligible(std::move(eligible)),
-		  sectionPaths(sectionPaths) {
-		classPaths = classIdentityPaths(sectionPaths);
-	}
+		: context(context), summaries(summaries), priorGlobalTypes(priorGlobalTypes), irReuse(irReuse),
+		  eligible(std::move(eligible)), sectionPaths(sectionPaths), classPaths(classIdentityPaths(sectionPaths)),
+		  storage(context, sectionPaths, classPaths) {}
 
 	bool reuse(Section *section, const InstantiationKey &key, Instantiation &instantiation, bool allowPureValueSummary) {
 		std::optional<std::string> keyText = inferenceSummaryKey(key, classPaths);
@@ -167,10 +168,13 @@ class IncrementalInferenceReuse {
 		}
 		if (!irReuse.hasReusableIRForInstantiation(section, *keyText, needsGlobalTypes))
 			return false;
+		if (!storage.canDecodeProvenance(summary.at("return_provenance")) ||
+			!canDecodeGlobalEffects(summary.at("global_effects"), storage))
+			return false;
 		instantiation.returnType = std::move(*returnType);
 		instantiation.purity = static_cast<InstantiationPurity>(summary.at("purity").get<int>());
 		instantiation.hasReturnAddressProvenance = summary.at("has_return_address_provenance").get<bool>();
-		instantiation.returnAddressProvenance = decodeAddressProvenance(section, summary.at("return_provenance"));
+		instantiation.returnAddressProvenance = storage.decodeProvenance(summary.at("return_provenance"));
 		instantiation.returnPointerStorageParameterName =
 			summary.at("return_storage_parameter").is_null()
 				? std::nullopt
@@ -180,7 +184,7 @@ class IncrementalInferenceReuse {
 		instantiation.hasReturnIntrinsic = summary.at("return_intrinsic").get<bool>();
 		instantiation.writesThroughUnknownAddress = summary.at("unknown_write").get<bool>();
 		instantiation.externallyEscapesUnknownAddress = summary.at("unknown_escape").get<bool>();
-		decodeGlobalEffects(section, summary.at("global_effects"), instantiation);
+		decodeGlobalEffects(section, summary.at("global_effects"), instantiation, storage);
 		decodePureReturnValues(summary.at("pure_values"), instantiation);
 		instantiation.inferenceReusedFromCache = true;
 		count++;
@@ -199,7 +203,7 @@ class IncrementalInferenceReuse {
 					return entry.second.inferenceReusedFromCache;
 				}))
 					skipped.insert(section);
-		Json result = captureInferenceSummaries(paths, excludedSources, globalTypes, &skipped);
+		Json result = captureInferenceSummaries(context, paths, excludedSources, globalTypes, &skipped);
 		for (const Section *section : eligible) {
 			if (inferenceSummarySourceExcluded(section, excludedSources))
 				continue;
@@ -222,11 +226,13 @@ class IncrementalInferenceReuse {
 	}
 
   private:
+	ParseContext &context;
 	const Json &summaries;
 	const Json &priorGlobalTypes;
 	const IncrementalIRReuse &irReuse;
 	std::unordered_set<const Section *> eligible;
 	const std::map<const Section *, std::string> &sectionPaths;
 	ClassIdentityPaths classPaths;
+	InferenceStorageIdentities storage;
 	size_t count = 0;
 };

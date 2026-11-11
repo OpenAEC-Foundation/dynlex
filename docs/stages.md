@@ -1217,6 +1217,15 @@ known-argument call can use that value without reinferring the body; a new
 argument still infers the body and evaluates the call normally.
 Summaries record return address provenance and storage-parameter relationships, plus
 writes, known constants, address provenance, and address escapes for global variables.
+Storage origins retain their lexical declaration and logical invocation across compiler
+processes. Ordinary invocation identities include the owning function and its typed
+instantiation key. Flex invocations add their parent invocation, source expression,
+and argument-pack iteration. Body recreation retains the ordinary invocation's storage
+scope. Source-expression identities ignore comment lines and preceding unrelated
+statements, so moving an unchanged invocation preserves its cached effects.
+Type-constraint probe identities also follow their declaring section and source
+declaration. Moving later declarations after an earlier statement is removed preserves
+their probe schedule and inferred constraint values.
 Class type identities include the current instantiation's field types; a changed layout
 prevents reuse. A summary that accesses globals requires the same structural global
 types as the previous build. A summary

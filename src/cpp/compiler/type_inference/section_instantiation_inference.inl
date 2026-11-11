@@ -31,8 +31,11 @@ bool ensureSectionInstantiationInferred(
 	if (instIt == section->instantiations.end())
 		instIt = section->instantiations.emplace(instantiationKey, Instantiation{}).first;
 	Instantiation &inst = instIt->second;
+	auto storageScope =
+		inst.body ? inst.body->storageScope : parseContext.storageScopeForInstantiation(section, instantiationKey);
 	if (!inst.body)
-		inst.body = callerContext ? callerContext->cloneSectionBody(section) : parseContext.cloneSectionBody(section);
+		inst.body = callerContext ? callerContext->cloneSectionBody(section, nullptr, storageScope)
+								  : parseContext.cloneSectionBody(section, false, nullptr, storageScope);
 	if (inst.argumentTypes.empty())
 		inst.argumentTypes = argTypes;
 	else
@@ -98,7 +101,7 @@ bool ensureSectionInstantiationInferred(
 		context.currentAddressState = {};
 		context.currentSubject = {};
 		if (context.trial)
-			inst.body = context.cloneSectionBody(section);
+			inst.body = context.cloneSectionBody(section, nullptr, storageScope);
 		bool passSucceeded = inferSection(section, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
 		finishParameterOutputReinference(context, inst, passSucceeded);
 		inst.fallsThrough = instantiationFallsThrough;
@@ -155,6 +158,7 @@ bool ensureSectionInstantiationInferred(
 		node.key() = refinedKey;
 		auto insertResult = section->instantiations.insert(std::move(node));
 		requireCompilerInvariant(insertResult.inserted, "Refined instantiation key collided with existing entry");
+		parseContext.refineInstantiationStorageScope(section, instantiationKey, refinedKey);
 	}
 	// The body and its trial metadata must survive together. A child context
 	// owns constants, groupings and callable selections until its caller commits.

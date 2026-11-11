@@ -49,6 +49,8 @@
 	if (context.trial && context.trialJournal)
 		context.trialJournal->recordSectionInstantiationWrite(matchedSection, instantiationKey);
 	Instantiation &inst = matchedSection->instantiations[instantiationKey];
+	auto storageScope = inst.body ? inst.body->storageScope
+								  : context.parseContext.storageScopeForInstantiation(matchedSection, instantiationKey);
 	expr->selectedInstantiation = &inst;
 	if (inst.argumentTypes.empty()) {
 		inst.argumentTypes = argTypes;
@@ -59,15 +61,13 @@
 	std::vector<std::pair<std::string, CompileTimeValue>> knownValues;
 	if (context.parseContext.reuseInferredInstantiation || inst.inferenceReusedFromCache) {
 		std::vector<std::pair<std::string, Expression *>> knownBindings;
-		knownCallArguments = collectKnownCallArgumentValues(
-			expr, def, [&](Expression *argumentExpression) {
-				return resolveStoredCompileTimeValue(argumentExpression, flexBindingFrameStack, &context);
-			}, knownBindings, knownValues
-		);
+		knownCallArguments = collectKnownCallArgumentValues(expr, def, [&](Expression *argumentExpression) {
+			return resolveStoredCompileTimeValue(argumentExpression, flexBindingFrameStack, &context);
+		}, knownBindings, knownValues);
 	}
 	if (!inst.returnType.isDeduced() && context.parseContext.reuseInferredInstantiation) {
 		if (!inst.body)
-			inst.body = context.cloneSectionBody(matchedSection);
+			inst.body = context.cloneSectionBody(matchedSection, nullptr, storageScope);
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 		context.parseContext.reuseInferredInstantiation(matchedSection, instantiationKey, inst, true);
 	}
@@ -84,7 +84,7 @@
 	if (!inst.inferring && !hasReusableInstantiation) {
 		ScopedSectionLocalVariableState calleeVariableState(matchedSection);
 		if (context.trial)
-			inst.body = context.cloneSectionBody(matchedSection);
+			inst.body = context.cloneSectionBody(matchedSection, nullptr, storageScope);
 		Instantiation *savedInst = context.currentInstantiation;
 		size_t callerMemoryFlexBase = context.memoryFlexBase;
 		auto callerKnownConstants = context.currentVariableValues;
@@ -140,7 +140,7 @@
 			bool savedReinferSuppression = context.suppressReinferPassDiagnostics;
 			context.suppressReinferPassDiagnostics = true;
 			if (!inst.body)
-				inst.body = context.cloneSectionBody(matchedSection);
+				inst.body = context.cloneSectionBody(matchedSection, nullptr, storageScope);
 			bool passSucceeded =
 				inferSection(matchedSection, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
 			finishParameterOutputReinference(context, inst, passSucceeded);
@@ -250,6 +250,7 @@
 		node.key() = *refinedInstantiationKey;
 		auto insertResult = matchedSection->instantiations.insert(std::move(node));
 		requireCompilerInvariant(insertResult.inserted, "Refined instantiation key collided with existing entry");
+		context.parseContext.refineInstantiationStorageScope(matchedSection, instantiationKey, *refinedInstantiationKey);
 	}
 	context.setExpressionValue(expr, context.lookupExpressionValue(expr));
 	return true;

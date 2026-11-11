@@ -703,7 +703,7 @@ bool compileIncrementally(
 								for (const auto &request : variants)
 									if (inferRequest(request))
 										statistics.preinferredInstantiations++;
-								Json currentSummaries = captureInferenceSummaries(sectionPaths, {}, Json(nullptr));
+								Json currentSummaries = captureInferenceSummaries(inferred, sectionPaths, {}, Json(nullptr));
 								auto newlyStable = stableIncrementalReplacements(
 									variants, sectionPaths, currentSummaries, priorSummaries,
 									inferred.incrementalReplacementFunctions
@@ -736,7 +736,8 @@ bool compileIncrementally(
 							graphStable.insert(inferred.mainSection);
 						}
 						inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
-							priorSummaries, previous->at("global_types"), *functionReuse, sectionPaths, std::move(eligible)
+							inferred, priorSummaries, previous->at("global_types"), *functionReuse, sectionPaths,
+							std::move(eligible)
 						);
 						inferred.reuseInferredInstantiation = [&](Section *section, const InstantiationKey &key,
 																  Instantiation &instantiation, bool allowPureValueSummary) {
@@ -901,11 +902,12 @@ bool compileIncrementally(
 										   : captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
 					result["global_types"] = globalTypes;
 					result["inference_summaries"] =
-						inferenceReuse ? inferenceReuse->snapshot(
-											 sectionPaths, inferenceDiagnosticSources, globalTypes,
-											 &statistics.reusedInferenceSummarySections
-										 )
-									   : captureInferenceSummaries(sectionPaths, inferenceDiagnosticSources, globalTypes);
+						inferenceReuse
+							? inferenceReuse->snapshot(
+								  sectionPaths, inferenceDiagnosticSources, globalTypes,
+								  &statistics.reusedInferenceSummarySections
+							  )
+							: captureInferenceSummaries(compiled, sectionPaths, inferenceDiagnosticSources, globalTypes);
 					auto graphStart = Clock::now();
 					result["section_dependency_graph"] = captureSectionDependencyGraph(
 						sectionPaths, inferenceReads,

@@ -38,6 +38,33 @@ template <typename Remap> Json remapInferenceTypeChildren(const Json &type, cons
 	return result;
 }
 
+template <typename Remap> Json remapInferenceStorageScope(const Json &scope, const Remap &remap) {
+	if (scope.is_null())
+		return nullptr;
+	if (scope.contains("parent"))
+		return Json{
+			{"parent", remapInferenceStorageScope(scope.at("parent"), remap)},
+			{"site", scope.at("site")},
+			{"iteration", scope.at("iteration")}
+		};
+	Json arguments = Json::array();
+	for (const Json &type : scope.at("argument_types"))
+		arguments.push_back(remap(type));
+	return Json{{"owner", scope.at("owner")}, {"constants", scope.at("constants")}, {"argument_types", std::move(arguments)}};
+}
+
+template <typename Remap> Json remapInferenceProvenance(const Json &provenance, const Remap &remap) {
+	Json targets = Json::array();
+	for (const Json &target : provenance.at("targets"))
+		targets.push_back(Json::array({target.at(0), remapInferenceStorageScope(target.at(1), remap)}));
+	return Json{
+		{"targets", std::move(targets)},
+		{"null", provenance.at("null")},
+		{"unknown", provenance.at("unknown")},
+		{"static", provenance.at("static")}
+	};
+}
+
 template <typename Remap> Json remapInferenceSummaryTypes(const Json &sections, const Remap &remap) {
 	Json result = Json::object();
 	for (const auto &[path, variants] : sections.items()) {
@@ -52,7 +79,19 @@ template <typename Remap> Json remapInferenceSummaryTypes(const Json &sections, 
 					record[field] = std::move(arguments);
 				} else if (field == "return_type")
 					record[field] = remap(value);
-				else
+				else if (field == "return_provenance")
+					record[field] = remapInferenceProvenance(value, remap);
+				else if (field == "global_effects") {
+					Json effects = Json::object();
+					for (const auto &[name, provenance] : value.at("writes").items())
+						effects[name] = remapInferenceProvenance(provenance, remap);
+					record[field] = Json{
+						{"writes", std::move(effects)},
+						{"constants", value.at("constants")},
+						{"taken", value.at("taken")},
+						{"escaped", remapInferenceProvenance(value.at("escaped"), remap)}
+					};
+				} else
 					record[field] = value;
 			}
 			mapped[key] = std::move(record);

@@ -108,12 +108,34 @@ def decode_inference_summaries(encoded):
             value[3] = types[node[3]]
             value[4] = [types[index] for index in node[4]]
         types.append(value)
-    return {path: {
-        key: {**summary,
-              "argument_types": [types[index] for index in summary["argument_types"]],
-              "return_type": types[summary["return_type"]]}
-        for key, summary in variants.items()}
-        for path, variants in encoded["sections"].items()}
+    def scope(value):
+        if value is None:
+            return None
+        if "parent" in value:
+            return {**value, "parent": scope(value["parent"])}
+        return {**value, "argument_types": [types[index] for index in value["argument_types"]]}
+
+    def provenance(value):
+        return {**value, "targets": [[definition, scope(invocation)]
+                                     for definition, invocation in value["targets"]]}
+
+    result = {}
+    for path, variants in encoded["sections"].items():
+        result[path] = {}
+        for key, summary in variants.items():
+            effects = summary["global_effects"]
+            result[path][key] = {
+                **summary,
+                "argument_types": [types[index] for index in summary["argument_types"]],
+                "return_type": types[summary["return_type"]],
+                "return_provenance": provenance(summary["return_provenance"]),
+                "global_effects": {
+                    **effects,
+                    "writes": {name: provenance(value) for name, value in effects["writes"].items()},
+                    "escaped": provenance(effects["escaped"]),
+                },
+            }
+    return result
 
 
 def read_program(cache, entry):

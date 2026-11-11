@@ -293,6 +293,22 @@ std::shared_ptr<InstantiatedSectionBody> ParseContext::cloneSectionBody(
 	return body;
 }
 
+std::shared_ptr<const VariableStorageScope>
+ParseContext::storageScopeForInstantiation(Section *section, const InstantiationKey &key) {
+	auto [entry, inserted] = instantiationStorageScopes.try_emplace({section, key});
+	if (inserted)
+		entry->second = std::make_shared<VariableStorageScope>();
+	return entry->second;
+}
+
+void ParseContext::refineInstantiationStorageScope(
+	Section *section, const InstantiationKey &before, const InstantiationKey &after
+) {
+	auto scope = instantiationStorageScopes.extract({section, before});
+	requireCompilerInvariant(!scope.empty(), "refined instantiation has no storage scope");
+	instantiationStorageScopes.insert_or_assign({section, after}, std::move(scope.mapped()));
+}
+
 std::shared_ptr<const VariableStorageScope> ParseContext::storageScopeForInvocation(
 	const Expression *expression, size_t iteration, std::shared_ptr<const VariableStorageScope> parentScope
 ) {

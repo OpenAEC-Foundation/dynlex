@@ -63,9 +63,10 @@ static std::vector<Section *> inactiveBodiesToReactivate(
 
 // Replaying the saved resolution is necessary even when the body currently
 // has no direct call. Later inference can request it through a function value.
-static void replayInactiveBodies(
-	ParseContext &context, std::list<PatternReference *> &deferred, SkippedInactiveBodies &skipped
-) {
+static void
+replayInactiveBodies(ParseContext &context, std::list<PatternReference *> &deferred, SkippedInactiveBodies &skipped) {
+	if (skipped.empty())
+		return;
 	std::vector<Section *> sections;
 	for (const auto &[section, references] : skipped) {
 		sections.push_back(section);

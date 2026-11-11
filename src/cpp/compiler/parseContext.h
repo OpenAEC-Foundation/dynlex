@@ -397,6 +397,9 @@ struct ParseContext {
 		std::shared_ptr<const VariableStorageScope> storageScope = {}
 	);
 
+	std::map<std::pair<Section *, InstantiationKey>, std::shared_ptr<const VariableStorageScope>> instantiationStorageScopes;
+	std::shared_ptr<const VariableStorageScope> storageScopeForInstantiation(Section *section, const InstantiationKey &key);
+	void refineInstantiationStorageScope(Section *section, const InstantiationKey &before, const InstantiationKey &after);
 	std::map<
 		std::tuple<std::shared_ptr<const VariableStorageScope>, const Expression *, size_t>,
 		std::shared_ptr<const VariableStorageScope>>
