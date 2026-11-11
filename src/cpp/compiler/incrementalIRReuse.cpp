@@ -160,7 +160,7 @@ bool IncrementalIRReuse::reuse(
 	if (!old || old->isDeclaration() || old->getFunctionType() != function->getFunctionType())
 		return false;
 	std::unordered_set<std::string> names;
-	if (!reusableClosure(*old, *function->getParent(), names))
+	if (!reusableClosure(*old, *function->getParent(), names, reusedRoot))
 		return false;
 	reusedNames.insert(names.begin(), names.end());
 	return true;

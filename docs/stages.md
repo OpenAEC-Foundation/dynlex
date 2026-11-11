@@ -1132,9 +1132,12 @@ were not re-inferred.
 When a body edit preserves its inferred interface, the compiler can reuse the
 entry point's inference and IR. This checks the top-level execution source,
 matching environment, typed constraints, class layouts, diagnostics, and the
-cached entry's LLVM dependency closure. The current proof covers native entries
-with no exposed functions or managed class lifecycle declarations. The
-`root_execution_reused` counter records when the entry was imported.
+cached entry's LLVM dependency closure. Entry replay restores its global types
+for the ordinary exposed-function and lifecycle inference passes. Cached class
+layouts that constraint reuse did not restore can be installed after the entry's
+dependencies validate, provided current class declarations and committed layouts
+agree. Imported entry IR also supplies globals that exposed functions reference.
+The `root_execution_reused` counter records when the entry was imported.
 
 The graph follows instantiated replacement bodies, caller bodies, static loop
 iterations, and data expressions, including compile-time-only callable queries.

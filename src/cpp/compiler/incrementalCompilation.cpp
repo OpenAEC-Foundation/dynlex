@@ -730,8 +730,7 @@ bool compileIncrementally(
 							previous->at("function_sections"), previous->at("callable_functions"),
 							previous->at("function_instantiations"), sectionPaths, eligible, std::move(replacementPaths)
 						);
-						if (rootEligible && functionReuse->reuseRoot()) {
-							inferred.reuseRootExecution = true;
+						if (rootEligible && reuseRootWithGlobalTypes(inferred, *previous, sectionPaths, *functionReuse)) {
 							graphStable.insert(inferred.mainSection);
 						}
 						inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
