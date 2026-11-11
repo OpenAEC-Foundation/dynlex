@@ -11,6 +11,8 @@ std::set<std::string> retainedActiveFunctionPaths(const IncrementalIRReuse *reus
 	const Json &priorInactive = previous->at("inactive_projection").at("inactive");
 	std::set<std::string> visited;
 	std::stack<std::string> pending;
+	if (reuse->rootReused())
+		pending.push("root");
 	for (const std::string &name : reuse->reusedFunctionNames())
 		pending.push(owners.at(name).get<std::string>());
 	while (!pending.empty()) {

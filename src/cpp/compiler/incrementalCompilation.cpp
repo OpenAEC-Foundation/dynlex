@@ -15,6 +15,7 @@
 #include "section.h"
 #include "section/classSection.h"
 #include "section/variable.h"
+#include "sectionIdentity.h"
 #include "syntaxConfig.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
@@ -362,6 +363,7 @@ std::string renderModule(const llvm::Module &module) {
 // clang-format on
 
 #include "incrementalInferencePreinfer.inl"
+#include "incrementalRootExecution.inl"
 #include "incrementalStatisticsReport.inl"
 } // namespace
 
@@ -716,12 +718,15 @@ bool compileIncrementally(
 							}
 							first = end;
 						}
-						std::unordered_set<const Section *> eligible = eligibleCodegenSections(
+						auto codegenPlan = planCodegenReuse(
 							inferred, *previous, recording->observations, resolvedFunctionProjection, sections,
 							inferenceReads.changedKeys(), stable, &statistics.dependencyGraphSectionsReused
 						);
+						bool rootEligible = codegenPlan.unchangedRoot &&
+											reusableRootExecution(inferred, *previous, frontendDiagnosticRecords, sectionPaths);
 						statistics.preinferenceMilliseconds = elapsedMilliseconds(preinferStart);
-						if (eligible.empty())
+						auto &eligible = codegenPlan.functions;
+						if (eligible.empty() && !rootEligible)
 							return;
 						graphStable = eligible;
 						std::unordered_set<std::string> replacementPaths;
@@ -732,6 +737,10 @@ bool compileIncrementally(
 							previous->at("function_sections"), previous->at("callable_functions"),
 							previous->at("function_instantiations"), sectionPaths, eligible, std::move(replacementPaths)
 						);
+						if (rootEligible && functionReuse->reuseRoot()) {
+							inferred.reuseRootExecution = true;
+							graphStable.insert(inferred.mainSection);
+						}
 						inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
 							priorSummaries, previous->at("global_types"), *functionReuse, sectionPaths, std::move(eligible)
 						);
@@ -746,6 +755,7 @@ bool compileIncrementally(
 			if (compiled && !reuseTypeInference)
 				compiled = finishTypeInference(context);
 			statistics.inferenceMilliseconds = elapsedMilliseconds(stageStart);
+			statistics.reusedRootExecution = context.reuseRootExecution;
 			if (compiled) {
 				if (reuseTypeInference) {
 					const Json &inferred = previous->at("all_function_projection");
@@ -824,6 +834,9 @@ bool compileIncrementally(
 				Json callableFunctions = Json::object();
 				Json functionInstantiations = Json::object();
 				ClassIdentityPaths functionClassPaths = classIdentityPaths(sectionPaths);
+				for (const auto &[section, path] : sectionPaths)
+					if (hasCodegenSectionIdentity(*section))
+						context.functionSymbolIdentities.emplace(section, sectionIdentityDigest(path));
 				context.recordGeneratedFunction = [&](Section *section, const InstantiationKey *key, llvm::Function *function,
 													  bool callable) {
 					requireCompilerInvariant(
@@ -837,12 +850,11 @@ bool compileIncrementally(
 						functionInstantiations[name] = *identity;
 				};
 				if (functionReuse) {
-					context.reuseGeneratedFunction = [&](Section *section, Instantiation &instantiation,
-														 llvm::Function *function) {
-						return functionReuse->reuse(section, instantiation, function);
+					context.reuseGeneratedFunction = [&](Section *section, Instantiation &, llvm::Function *function) {
+						return functionReuse->reuse(section, function, functionInstantiations);
 					};
 					context.importReusedFunctions = [&](ParseContext &compiled) {
-						return functionReuse->import(compiled);
+						return functionReuse->import(compiled, functionInstantiations);
 					};
 				}
 				stageStart = Clock::now();
@@ -890,7 +902,9 @@ bool compileIncrementally(
 					const Json *priorInactiveSources = previous ? &previous->at("inactive_projection").at("sources") : nullptr;
 					std::set<std::string> retainedActivePaths =
 						retainedActiveFunctionPaths(functionReuse.get(), previous ? &*previous : nullptr);
-					Json globalTypes = captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
+					Json globalTypes = compiled.reuseRootExecution
+										   ? previous->at("global_types")
+										   : captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
 					result["global_types"] = globalTypes;
 					result["inference_summaries"] =
 						inferenceReuse ? inferenceReuse->snapshot(
@@ -943,7 +957,8 @@ bool compileIncrementally(
 					return true;
 				});
 				statistics.codegenMilliseconds = elapsedMilliseconds(stageStart);
-				statistics.reusedFunctionIR = functionReuse ? functionReuse->reusedCount() : 0;
+				if (functionReuse)
+					recordIRReuseStatistics(statistics, *functionReuse, *previous, sectionPaths);
 				context.recordGeneratedFunction = {};
 				context.reuseGeneratedFunction = {};
 				context.importReusedFunctions = {};

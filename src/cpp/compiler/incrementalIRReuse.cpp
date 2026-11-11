@@ -24,6 +24,8 @@ void collectDependencies(
 	if (const auto *global = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
 		if (!global->isConstant())
 			mutableGlobals.insert(global);
+		if (global->hasInitializer())
+			collectDependencies(global->getInitializer(), owner, visited, dependencies, mutableGlobals);
 		return;
 	}
 	if (const auto *function = llvm::dyn_cast<llvm::Function>(value)) {
@@ -56,8 +58,9 @@ IncrementalIRReuse::IncrementalIRReuse(
 	std::unordered_set<std::string> replacementPaths
 )
 	: currentModule(context.llvmModule), previousFunctions(previousFunctions),
-	  previousCallableFunctions(previousCallableFunctions), sectionPaths(std::move(sectionPaths)),
-	  eligibleSections(std::move(eligibleSections)), replacementPaths(std::move(replacementPaths)) {
+	  previousCallableFunctions(previousCallableFunctions), previousFunctionInstantiations(previousFunctionInstantiations),
+	  sectionPaths(std::move(sectionPaths)), eligibleSections(std::move(eligibleSections)),
+	  replacementPaths(std::move(replacementPaths)) {
 	previousModule = parseCachedModule(previousIR, *context.llvmContext);
 	if (previousModule->getDataLayout() != context.llvmModule->getDataLayout() ||
 		previousModule->getTargetTriple() != context.llvmModule->getTargetTriple())
@@ -68,6 +71,15 @@ IncrementalIRReuse::IncrementalIRReuse(
 		requireCompilerInvariant(previousFunctions.contains(name), "cached instantiation has no generated function owner");
 		previousNamesByPathAndKey[previousFunctions.at(name).get<std::string>()][key.get<std::string>()].push_back(name);
 	}
+}
+
+const IncrementalIRReuse::Dependencies &IncrementalIRReuse::dependenciesOf(const llvm::Function &function) const {
+	auto [found, inserted] = dependencyCache.try_emplace(&function);
+	if (inserted)
+		collectDependencies(function, found->second.functions, found->second.mutableGlobals);
+	else
+		dependencyCacheHits++;
+	return found->second;
 }
 
 bool IncrementalIRReuse::reusableClosure(
@@ -89,10 +101,8 @@ bool IncrementalIRReuse::reusableClosure(
 		return false;
 	if (llvm::Function *now = current.getFunction(name); now && now->getFunctionType() != function.getFunctionType())
 		return false;
-	std::unordered_set<const llvm::Function *> dependencies;
-	std::unordered_set<const llvm::GlobalVariable *> mutableGlobals;
-	collectDependencies(function, dependencies, mutableGlobals);
-	for (const llvm::GlobalVariable *old : mutableGlobals) {
+	const Dependencies &dependencies = dependenciesOf(function);
+	for (const llvm::GlobalVariable *old : dependencies.mutableGlobals) {
 		llvm::GlobalVariable *now = current.getGlobalVariable(old->getName(), true);
 		if (!now && allowUnmaterializedGlobals)
 			continue;
@@ -100,7 +110,7 @@ bool IncrementalIRReuse::reusableClosure(
 			!now->hasInitializer() || !old->hasInitializer() || now->getInitializer() != old->getInitializer())
 			return false;
 	}
-	for (const llvm::Function *dependency : dependencies) {
+	for (const llvm::Function *dependency : dependencies.functions) {
 		if (!reusableClosure(*dependency, current, names, allowUnmaterializedGlobals))
 			return false;
 	}
@@ -130,7 +140,9 @@ bool IncrementalIRReuse::hasReusableIRForInstantiation(
 	return true;
 }
 
-bool IncrementalIRReuse::reuse(Section *section, Instantiation &, llvm::Function *function) {
+bool IncrementalIRReuse::reuse(
+	Section *section, llvm::Function *function, const nlohmann::json &currentFunctionInstantiations
+) {
 	if (!eligibleSections.contains(section))
 		return false;
 	std::string name = function->getName().str();
@@ -138,6 +150,11 @@ bool IncrementalIRReuse::reuse(Section *section, Instantiation &, llvm::Function
 		return false;
 	auto sectionPath = sectionPaths.find(section);
 	if (sectionPath == sectionPaths.end() || previousFunctions.at(name) != sectionPath->second)
+		return false;
+	auto previousKey = previousFunctionInstantiations.find(name);
+	auto currentKey = currentFunctionInstantiations.find(name);
+	if ((previousKey == previousFunctionInstantiations.end()) != (currentKey == currentFunctionInstantiations.end()) ||
+		(previousKey != previousFunctionInstantiations.end() && *previousKey != *currentKey))
 		return false;
 	llvm::Function *old = previousModule->getFunction(name);
 	if (!old || old->isDeclaration() || old->getFunctionType() != function->getFunctionType())
@@ -149,45 +166,59 @@ bool IncrementalIRReuse::reuse(Section *section, Instantiation &, llvm::Function
 	return true;
 }
 
-bool IncrementalIRReuse::import(ParseContext &context) {
-	if (reusedNames.empty())
+bool IncrementalIRReuse::reuseRoot() {
+	const llvm::Function *entry = previousModule->getFunction("main");
+	requireCompilerInvariant(entry && !entry->isDeclaration(), "cached executable has no entry-point body");
+	std::unordered_set<std::string> closure;
+	for (const llvm::Function *dependency : dependenciesOf(*entry).functions)
+		if (!reusableClosure(*dependency, *currentModule, closure, true))
+			return false;
+	reusedNames.insert(closure.begin(), closure.end());
+	reusedRoot = true;
+	return true;
+}
+
+bool IncrementalIRReuse::import(ParseContext &context, const nlohmann::json &currentFunctionInstantiations) {
+	if (reusedNames.empty() && !reusedRoot)
 		return true;
-	for (const std::string &name : reusedNames) {
-		std::unordered_set<const llvm::Function *> dependencies;
-		std::unordered_set<const llvm::GlobalVariable *> globals;
-		collectDependencies(*previousModule->getFunction(name), dependencies, globals);
-		for (const llvm::Function *dependency : dependencies) {
+	std::vector<std::string> names(reusedNames.begin(), reusedNames.end());
+	if (reusedRoot)
+		names.emplace_back("main");
+	std::set<std::string> mutableGlobalNames;
+	for (const std::string &name : names) {
+		const Dependencies &dependencies = dependenciesOf(*previousModule->getFunction(name));
+		for (const llvm::GlobalVariable *global : dependencies.mutableGlobals)
+			mutableGlobalNames.insert(global->getName().str());
+		for (const llvm::Function *dependency : dependencies.functions) {
 			std::string dependencyName = dependency->getName().str();
 			if (!previousFunctions.contains(dependencyName) ||
 				!replacementPaths.contains(previousFunctions.at(dependencyName).get<std::string>()) ||
 				previousCallableFunctions.contains(dependencyName))
 				continue;
 			llvm::Function *replacement = context.llvmModule->getFunction(dependencyName);
-			if (!replacement || replacement->isDeclaration() || replacement->getFunctionType() != dependency->getFunctionType())
+			auto key = currentFunctionInstantiations.find(dependencyName);
+			if (!replacement || replacement->isDeclaration() ||
+				replacement->getFunctionType() != dependency->getFunctionType() || key == currentFunctionInstantiations.end() ||
+				*key != previousFunctionInstantiations.at(dependencyName))
 				throw std::runtime_error("reused caller lost its rebuilt callee: " + dependencyName);
 		}
-	}
-	std::set<std::string> mutableGlobalNames;
-	for (const std::string &name : reusedNames) {
-		std::unordered_set<const llvm::Function *> dependencies;
-		std::unordered_set<const llvm::GlobalVariable *> mutableGlobals;
-		collectDependencies(*previousModule->getFunction(name), dependencies, mutableGlobals);
-		for (const llvm::GlobalVariable *global : mutableGlobals)
-			mutableGlobalNames.insert(global->getName().str());
 	}
 	llvm::ValueToValueMapTy values;
 	std::unique_ptr<llvm::Module> cached = llvm::CloneModule(*previousModule, values, [&](const llvm::GlobalValue *value) {
 		if (const auto *function = llvm::dyn_cast<llvm::Function>(value))
-			return reusedNames.contains(function->getName().str());
+			return reusedNames.contains(function->getName().str()) || (reusedRoot && function->getName() == "main");
 		return true;
 	});
-	for (const std::string &name : reusedNames)
+	for (const std::string &name : names)
 		cached->getFunction(name)->setLinkage(llvm::GlobalValue::ExternalLinkage);
 	std::vector<std::pair<std::string, llvm::GlobalValue::LinkageTypes>> globalLinkages;
 	for (const std::string &name : mutableGlobalNames) {
 		llvm::GlobalVariable *old = cached->getGlobalVariable(name, true);
 		llvm::GlobalVariable *now = context.llvmModule->getGlobalVariable(name, true);
-		if (!old || !now)
+		requireCompilerInvariant(old, "cached function references a missing global variable");
+		if (!now && reusedRoot)
+			continue;
+		if (!now)
 			throw std::runtime_error("reused function lost a global variable: " + name);
 		globalLinkages.emplace_back(name, now->getLinkage());
 		old->setInitializer(nullptr);
@@ -214,12 +245,14 @@ bool IncrementalIRReuse::import(ParseContext &context) {
 		context.llvmModule->getGlobalVariable(name, true)->setLinkage(linkage);
 	for (const auto &[name, linkage] : replacementLinkages)
 		context.llvmModule->getFunction(name)->setLinkage(linkage);
-	for (const std::string &name : reusedNames) {
+	for (const std::string &name : names) {
 		llvm::Function *function = context.llvmModule->getFunction(name);
 		if (!function || function->isDeclaration())
 			throw std::runtime_error("cached function IR was not linked: " + name);
 		function->setLinkage(previousModule->getFunction(name)->getLinkage());
 		restoreRequiredLibraries(context, *function);
 	}
+	if (reusedRoot)
+		context.mainLLVMFunction = context.llvmModule->getFunction("main");
 	return true;
 }

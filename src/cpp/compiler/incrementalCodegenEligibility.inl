@@ -50,20 +50,42 @@ std::unordered_set<std::string> dirtySectionsFromSavedGraph(
 	return dirty;
 }
 
-std::unordered_set<const Section *> eligibleCodegenSections(
+// The execution source projection already proves the same top-level
+// statements. A body edit can shift their physical line numbers.
+bool sameRootGlobalBindings(const Json &prior, const Json &current) {
+	for (size_t group = 0; group < 2; group++) {
+		const Json &before = prior.at(group);
+		const Json &after = current.at(group);
+		if (before.size() != after.size())
+			return false;
+		for (const auto &[name, location] : before.items()) {
+			auto binding = after.find(name);
+			if (binding == after.end() || location.at(0) != binding->at(0) || location.at(2) != binding->at(2))
+				return false;
+		}
+	}
+	return prior.at(2) == current.at(2);
+}
+
+struct IncrementalCodegenReusePlan {
+	std::unordered_set<const Section *> functions;
+	bool unchangedRoot = false;
+};
+
+IncrementalCodegenReusePlan planCodegenReuse(
 	const ParseContext &context, const Json &previous, const Json &currentObservations, const Json &currentProjection,
 	const std::map<std::string, Section *> &sections, const IncrementalInferenceReads::Keys &changedLookups,
 	const std::unordered_set<const Section *> &interfaceStableChanges, size_t *graphReused
 ) {
-	std::unordered_set<const Section *> eligible;
+	IncrementalCodegenReusePlan plan;
 	if (context.options.emitDebugInfo || context.options.traceExecution || !previous.contains("all_function_projection") ||
 		!previous.contains("function_sections") || !compatibleObservations(previous, currentObservations, context))
-		return eligible;
+		return plan;
 	const Json &priorProjection = previous.at("all_function_projection");
 	bool fullyCompatible = compatibleFunctionProjection(priorProjection, currentProjection);
 	bool globalFreeCompatible = compatibleGlobalFreeProjection(priorProjection, currentProjection);
 	if (!fullyCompatible && !globalFreeCompatible)
-		return eligible;
+		return plan;
 	std::unordered_map<const Section *, bool> unchanged;
 	// A top-level execution edit does not change an unchanged function body.
 	// Global readers remain candidates: summary replay checks current global
@@ -76,12 +98,20 @@ std::unordered_set<const Section *> eligibleCodegenSections(
 		previous.at("section_dependency_graph"), sections, unchanged, interfaceStableChanges,
 		priorProjection.at("final_matcher_tree") != currentProjection.at("final_matcher_tree"), changedLookups
 	);
+	plan.unchangedRoot = fullyCompatible && !dirty.contains("root") &&
+						 priorProjection.at("declarations") == currentProjection.at("declarations") &&
+						 priorProjection.at("initial_matcher_tree") == currentProjection.at("initial_matcher_tree") &&
+						 priorProjection.at("final_matcher_tree") == currentProjection.at("final_matcher_tree") &&
+						 sameRootGlobalBindings(priorProjection.at("global_resolution"), currentProjection.at("global_resolution")) &&
+						 priorProjection.at("precedence_signature") == currentProjection.at("precedence_signature") &&
+						 priorProjection.at("precedence_rules") == currentProjection.at("precedence_rules") &&
+						 priorProjection.at("scope_rule_bodies") == currentProjection.at("scope_rule_bodies");
 	for (const auto &[path, section] : sections)
 		if (reusableCodegenSection(*section) && !interfaceStableChanges.contains(section) &&
 			!dirty.contains(path)) {
-			eligible.insert(section);
+			plan.functions.insert(section);
 			if (graphReused)
 				(*graphReused)++;
 		}
-	return eligible;
+	return plan;
 }

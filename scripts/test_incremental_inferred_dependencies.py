@@ -26,7 +26,8 @@ def check_inferred_section_dependencies(root, build):
     program = read_program(root / "cache", main)
     declarations = program["all_function_projection"]["function_declarations"]
     callback = next(path for path, entry in declarations.items() if entry["identity"]["header"] == "callback value:")
-    wrapper = program["function_sections"]["use_wrapper"]
+    wrapper = next(path for path, entry in declarations.items() if entry["identity"]["header"] == "use wrapper:")
+    assert wrapper in program["function_sections"].values()
     main.write_text(source.replace('"return", 1)', '"return", 1.0)'))
     edited = build(entry=main)
     assert edited[1:] == build(False, entry=main)[1:], "callback return type edit reused stale caller code"

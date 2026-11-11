@@ -639,7 +639,7 @@ bool inferTypes(ParseContext &parseContext) {
 	InferenceContext context(parseContext);
 	context.currentVariableValues.clear();
 	context.currentAddressState = {};
-	if (!inferSection(parseContext.mainSection, nullptr, nullptr, context, {})) {
+	if (!parseContext.reuseRootExecution && !inferSection(parseContext.mainSection, nullptr, nullptr, context, {})) {
 		emitPendingInferenceFailure(context);
 		return false;
 	}
@@ -699,7 +699,8 @@ bool inferTypes(ParseContext &parseContext) {
 			validateVariables(child);
 		}
 	};
-	validateVariables(parseContext.mainSection);
+	if (!parseContext.reuseRootExecution)
+		validateVariables(parseContext.mainSection);
 
 	// Validate non-flex functions have deduced return types
 	std::function<void(Section *)> validateReturnTypes = [&](Section *section) {

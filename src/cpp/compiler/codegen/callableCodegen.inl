@@ -54,6 +54,8 @@ bool ensureCallableFunctionGenerated(
 	llvm::GlobalValue::LinkageTypes linkage = (requireExternalLinkage || section->isExposed)
 												  ? llvm::GlobalValue::ExternalLinkage
 												  : llvm::GlobalValue::InternalLinkage;
+	if (linkage == llvm::GlobalValue::InternalLinkage)
+		appendInternalFunctionIdentity(context, section, argumentTypes, callableName);
 	llvm::Function *callableFunction = llvm::Function::Create(callableType, linkage, callableName, context.llvmModule);
 	instantiationPointer->llvmCallableFunction = callableFunction;
 	applyNativeScalarABI(

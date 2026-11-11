@@ -15,6 +15,7 @@
 #include "patternDefinition.h"
 #include "patternReference.h"
 #include "sectionFlexBody.h"
+#include "sectionIdentity.h"
 #include "spirv.h"
 #include "type.h"
 #include "variable.h"
@@ -38,6 +39,8 @@
 #include <limits>
 #include <unordered_map>
 #include <unordered_set>
+
+#include "codegenFunctionIdentities.inl"
 
 static std::vector<size_t> collectRuntimeParameterIndices(
 	const Instantiation &instantiation, const std::vector<std::pair<std::string, Expression *>> &paramBindings
@@ -208,6 +211,7 @@ llvm::Function *generateSpecializedFunction(
 			funcName += "_" + std::to_string(addressSpace);
 	}
 
+	appendInternalFunctionIdentity(context, section, argTypes, funcName);
 	llvm::Function *func = llvm::Function::Create(funcType, llvm::Function::InternalLinkage, funcName, context.llvmModule);
 	activeInst.llvmFunctionsByParameterAddressSpaces.emplace(std::move(parameterAddressSpaces), func);
 	if (context.recordGeneratedFunction)

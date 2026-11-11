@@ -144,6 +144,7 @@ struct ParseContext {
 	std::function<void(ParseContext &, const std::function<bool(const IncrementalFunctionRequest &)> &)>
 		runIncrementalPreinference;
 	std::vector<IncrementalFunctionRequest> incrementalReplacementFunctions;
+	bool reuseRootExecution = false;
 	std::function<void(Section *, const InstantiationKey *, llvm::Function *, bool)> recordGeneratedFunction;
 	std::function<bool(ParseContext &)> importReusedFunctions;
 	std::array<double, 4> frontendStageMilliseconds{};
@@ -246,6 +247,7 @@ struct ParseContext {
 	std::unique_ptr<llvm::TargetMachine> targetMachine;
 	std::string resolvedTargetTuneCPU;
 	llvm::Function *mainLLVMFunction{};
+	std::unordered_map<const Section *, std::string> functionSymbolIdentities;
 	llvm::BasicBlock *mainCleanupBlock{};
 	llvm::AllocaInst *mainReturnStorage{};
 	llvm::GlobalVariable *commandLineArgumentCountGlobal{};

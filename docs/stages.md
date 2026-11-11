@@ -1106,9 +1106,13 @@ object partitions. Reused function IR
 retains the native libraries required by external calls, so a caller edit cannot
 drop a link dependency.
 Dependency reachability handles recursive call cycles; an unchanged cycle remains
-reusable when none of its reachable functions changed. Generated function names
-include the destination of compile-time type arguments so overloads retain stable
-identities across edited builds.
+reusable when none of its reachable functions changed. The compiler scans each
+cached function's LLVM dependencies once per build, including references in
+global initializers. The `cached_ir_dependency_scans` and
+`cached_ir_dependency_hits` counters track that work. Internal function names
+include the stable definition identity, concrete argument layouts, and the
+destination of compile-time type arguments. Exported callable names keep their
+ABI spelling.
 Successful native builds persist direct section dependencies from resolved matches
 and inferred call selections, with reverse edges for invalidation. When the next
 build has the same matching environment, an edited section marks only its reverse
@@ -1117,6 +1121,13 @@ that propagation. Inference variants restored from cache carry their prior call
 dependencies forward, while newly inferred variants capture current calls.
 Imported LLVM functions retain their prior variant dependencies when their bodies
 were not re-inferred.
+
+When a body edit preserves its inferred interface, the compiler can reuse the
+entry point's inference and IR. This checks the top-level execution source,
+matching environment, typed constraints, class layouts, diagnostics, and the
+cached entry's LLVM dependency closure. The current proof covers native entries
+with no exposed functions or managed class lifecycle declarations. The
+`root_execution_reused` counter records when the entry was imported.
 
 The graph follows instantiated replacement bodies, caller bodies, static loop
 iterations, and data expressions, including compile-time-only callable queries.

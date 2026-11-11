@@ -103,6 +103,7 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 		context.llvmContext && context.llvmModule && !context.llvmBuilder,
 		"code generation requires one initialized target layout"
 	);
+	initializeSectionSymbolIdentities(context);
 	context.llvmBuilder = new llvm::IRBuilder<>(*context.llvmContext);
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
@@ -213,11 +214,11 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 		context.currentDebugScope = mainSP;
 	}
 
-	if (mainFunc) {
+	if (mainFunc && !context.reuseRootExecution) {
 		llvm::BasicBlock *entry = llvm::BasicBlock::Create(*context.llvmContext, "entry", mainFunc);
 		builder.SetInsertPoint(entry);
 	}
-	if (supportsCommandLineArguments) {
+	if (supportsCommandLineArguments && !context.reuseRootExecution) {
 		auto argument = mainFunc->arg_begin();
 		llvm::Value *rawArgumentCount = &*argument++;
 		llvm::Value *rawArgumentValues = &*argument;
@@ -233,8 +234,8 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 		builder.CreateStore(userArgumentCount, context.commandLineArgumentCountGlobal);
 		builder.CreateStore(userArgumentValues, context.commandLineArgumentValuesGlobal);
 	}
-	if (mainFunc) {
-		context.mainLLVMFunction = mainFunc;
+	context.mainLLVMFunction = mainFunc;
+	if (mainFunc && !context.reuseRootExecution) {
 		context.mainCleanupBlock = llvm::BasicBlock::Create(*context.llvmContext, "main.cleanup", mainFunc);
 		if (!context.options.emitSPIRV)
 			context.mainReturnStorage = builder.CreateAlloca(builder.getInt32Ty(), nullptr, "main.return");
@@ -263,7 +264,7 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 			return false;
 	}
 
-	if (mainFunc) {
+	if (mainFunc && !context.reuseRootExecution) {
 		if (!builder.GetInsertBlock()->hasTerminator()) {
 			if (!context.options.emitSPIRV)
 				builder.CreateStore(builder.getInt32(0), context.mainReturnStorage);
