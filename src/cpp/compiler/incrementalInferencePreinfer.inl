@@ -48,8 +48,8 @@ IncrementalPreinferPlan incrementalInferenceCandidates(
 	}
 	std::unordered_map<Section *, bool> globalFreeClosure;
 	for (const auto &[section, path] : sectionPaths) {
-		if (section->type != SectionType::Function || section->isFlex || section->isConversion || !globalFree.at(section) ||
-			!summaries.contains(path) || summaries.at(path).empty() || section->patternDefinitions.size() != 1 ||
+		if (section->type != SectionType::Function || section->isFlex || !globalFree.at(section) || !summaries.contains(path) ||
+			summaries.at(path).empty() || section->patternDefinitions.size() != 1 ||
 			section->patternDefinitions.front()->indexedPaths.size() != 1 ||
 			!prior.at("function_declarations").contains(path) || !current.at("function_declarations").contains(path) ||
 			prior.at("function_declarations").at(path) != current.at("function_declarations").at(path))

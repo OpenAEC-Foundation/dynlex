@@ -1226,6 +1226,10 @@ statements, so moving an unchanged invocation preserves its cached effects.
 Type-constraint probe identities also follow their declaring section and source
 declaration. Moving later declarations after an earlier statement is removed preserves
 their probe schedule and inferred constraint values.
+Typed conversion instantiations participate in inference-summary and LLVM IR reuse.
+An interface-stable conversion body edit can retain its callers. Existing conversion
+body reads participate in the constraint dependency graph. Added conversions also
+invalidate constraint probes whose earlier selection could change.
 Class type identities include the current instantiation's field types; a changed layout
 prevents reuse. A summary that accesses globals requires the same structural global
 types as the previous build. A summary

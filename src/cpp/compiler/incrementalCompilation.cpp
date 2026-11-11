@@ -218,8 +218,7 @@ Json inactiveFunctionSections(const std::map<std::string, Section *> &sections) 
 	Json inactive = Json::object();
 	for (const auto &[path, section] : sections) {
 		if (section->type != SectionType::Function || section->patternDefinitions.empty() || section->isFlex ||
-			section->isConversion || section->isExposed || !section->instantiations.empty() ||
-			containsNestedDefinition(*section))
+			section->isExposed || !section->instantiations.empty() || containsNestedDefinition(*section))
 			continue;
 		inactive[path] = sectionIdentity(*section);
 	}
@@ -232,7 +231,7 @@ bool reusableCodegenSection(const Section &section) {
 	if (section.type == SectionType::Retain || section.type == SectionType::Release)
 		return !containsNestedDefinition(section);
 	return section.type == SectionType::Function && !section.patternDefinitions.empty() && !section.isFlex &&
-		   !section.isConversion && !containsNestedDefinition(section);
+		   !containsNestedDefinition(section);
 }
 
 bool sourceProjectionsEqual(const Json &left, const Json &right);

@@ -19,6 +19,7 @@ from test_incremental_optimized_ir import check_optimized_function_reuse
 from test_incremental_optimization_units import check_optimization_units
 from test_incremental_body_activation import check_inactive_body_activation
 from test_incremental_storage_origins import check_storage_origin_reuse
+from test_incremental_conversions import check_conversion_reuse
 from test_incremental_root_execution import check_local_function_symbols, check_root_class_reuse, check_root_execution_reuse, check_static_function_dependency
 from test_incremental_body_units import check_body_resolution_units
 from test_incremental_native_codegen import check_optimized_native_codegen
@@ -80,6 +81,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_root_class_reuse(root, build)
     check_inactive_body_activation(root, build)
     check_storage_origin_reuse(root, build)
+    check_conversion_reuse(root, build)
     check_local_function_symbols(root, build)
     check_static_function_dependency(root, build)
     check_recursive_classification_cascade(root, build)

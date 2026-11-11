@@ -164,7 +164,9 @@ std::vector<bool> reusableConstraintProbes(
 	}
 	for (const std::string &path : dirtyClosure) {
 		const Section &section = *sections.at(path);
-		if (section.patternDefinitions.empty())
+		// Existing conversion bodies are read through the dependency graph.
+		// Their unary patterns cannot directly match a constraint expression.
+		if (section.patternDefinitions.empty() || section.isConversion)
 			continue;
 		for (size_t index = 0; index < items.size(); index++)
 			if (!dirty[index] && constraintDefinitionMayMatch(section, loweredTexts[index]))

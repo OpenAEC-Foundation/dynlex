@@ -61,9 +61,8 @@ bool canPersistInferenceSummary(
 	const ClassIdentityPaths &classPaths
 ) {
 	std::set<std::pair<const ClassDefinition *, int>> visiting;
-	return section->type == SectionType::Function && !section->isFlex && !section->isConversion &&
-		   inferenceSummaryKey(key, classPaths).has_value() && instantiation.valid && !instantiation.inferring &&
-		   !instantiation.needsReinfer && instantiation.body &&
+	return section->type == SectionType::Function && !section->isFlex && inferenceSummaryKey(key, classPaths).has_value() &&
+		   instantiation.valid && !instantiation.inferring && !instantiation.needsReinfer && instantiation.body &&
 		   inferenceTypeIdentity(instantiation.returnType, classPaths, visiting).has_value() &&
 		   instantiation.argumentTypes == key.argumentTypes && instantiation.parameterSeedTypesByName.empty() &&
 		   std::ranges::all_of(
