@@ -21,7 +21,7 @@ def check_inactive_body_activation(root, build):
     activated = build(entry=main)
     assert activated[1:] == build(False, entry=main)[1:], "new function value consumed an unresolved cached body"
     assert activated[2] == b"spare\n"
-    assert activated[0]["inactive_body_resolution_references_skipped"] > 0
+    assert activated[0]["cached_body_resolution_references_skipped"] > 0
     assert activated[0]["body_resolution_references_restored"] > 0
     for text in (source, changed):
         main.write_text(text)
@@ -53,5 +53,5 @@ def check_inactive_body_activation(root, build):
     edited = build(entry=main)
     assert edited[1:] == build(False, entry=main)[1:]
     assert edited[2] == b"12\n"
-    assert edited[0]["inactive_body_resolution_references_skipped"] > 0
+    assert edited[0]["cached_body_resolution_references_skipped"] > 0
     assert edited[0]["body_resolution_references_restored"] > 0

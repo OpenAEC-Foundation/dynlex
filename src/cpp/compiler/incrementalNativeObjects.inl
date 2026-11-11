@@ -81,8 +81,10 @@ struct BuildStatistics {
 	double cacheFinalizeMilliseconds = 0;
 	double totalMilliseconds = 0;
 	double frontendMilliseconds = 0;
-	double inactiveBodySelectionMilliseconds = 0;
+	double cachedBodySelectionMilliseconds = 0;
+	double parameterCountCacheMilliseconds = 0;
 	double matcherProjectionMilliseconds = 0;
+	size_t matcherDeclarationsReused = 0;
 	size_t matcherPathSnapshotsBuilt = 0;
 	size_t matcherPathSnapshotsLoaded = 0;
 	size_t callableLookupsObserved = 0;

@@ -1,8 +1,8 @@
-Json functionBodyDigests(const ParseContext &context, const std::map<std::string, Section *> &sections) {
+Json definitionBodyDigests(const ParseContext &context, const std::map<std::string, Section *> &sections) {
 	std::map<const Section *, std::string> bodies;
 	for (const auto &[_, section] : sections)
-		if ((section->type == SectionType::Function && !section->patternDefinitions.empty()) ||
-			section->type == SectionType::Retain || section->type == SectionType::Release)
+		if (!section->patternDefinitions.empty() || section->type == SectionType::Retain ||
+			section->type == SectionType::Release)
 			bodies.emplace(section, "");
 	for (const CodeLine *line : context.codeLines) {
 		if (line->rightTrimmedText.empty())
@@ -57,8 +57,7 @@ Json scopeRuleBodyPaths(const std::map<std::string, Section *> &sections) {
 Json captureAllFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
 	IncrementalMatcherCache &matcherCache, MatcherPathSnapshots &matcherPaths, std::string_view initialMatcherTree,
-	std::string_view finalMatcherTree,
-	const Json *previous, SourceProjectionWork *projectionWork, bool compatibleSyntax
+	std::string_view finalMatcherTree, const Json *previous, SourceProjectionWork *projectionWork, bool compatibleSyntax
 ) {
 	auto phaseStart = Clock::now();
 	const Json *prior =
@@ -87,7 +86,7 @@ Json captureAllFunctionProjection(
 	if (projectionWork)
 		projectionWork->setupMilliseconds += elapsedMilliseconds(phaseStart);
 	phaseStart = Clock::now();
-	Json bodyDigests = functionBodyDigests(context, sections);
+	Json bodyDigests = definitionBodyDigests(context, sections);
 	Json currentScopeRuleBodies = scopeRuleBodyPaths(sections);
 	if (projectionWork)
 		projectionWork->bodyMilliseconds += elapsedMilliseconds(phaseStart);
@@ -135,8 +134,10 @@ Json captureAllFunctionProjection(
 		bool stableRootBindings = stableDeclarationContext && currentGlobalResolution == prior->at("global_resolution");
 		std::optional<MatcherTreeChanges> initialChanges, finalChanges;
 		if (stableDeclarationContext) {
-			initialChanges = matcherPaths.compare(prior->at("initial_matcher_tree").get_ref<const std::string &>(), initialMatcherTree);
-			finalChanges = matcherPaths.compare(prior->at("final_matcher_tree").get_ref<const std::string &>(), finalMatcherTree);
+			initialChanges =
+				matcherPaths.compare(prior->at("initial_matcher_tree").get_ref<const std::string &>(), initialMatcherTree);
+			finalChanges =
+				matcherPaths.compare(prior->at("final_matcher_tree").get_ref<const std::string &>(), finalMatcherTree);
 		}
 		for (const auto &[path, section] : sections) {
 			bool reusableSection = reusable.contains(section);

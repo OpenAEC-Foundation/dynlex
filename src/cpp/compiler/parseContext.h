@@ -101,9 +101,12 @@ struct ParseContext {
 	std::function<void(const std::list<PatternReference *> &)> prepareDeferredMatcherReplay;
 	std::function<std::vector<RestoredBodyReference>()> restoreDeferredBodyUnits;
 	std::function<void(const std::vector<PatternReference *> &)> preparePrecedenceMatcherReplay;
-	std::function<std::vector<Section *>()> selectInactiveBodiesForResolutionReuse;
-	std::function<bool()> inactiveBodyMatcherTreeUnchanged;
-	size_t inactiveBodyResolutionReferencesSkipped = 0;
+	std::function<std::vector<Section *>()> selectCachedBodiesForResolutionReuse;
+	std::function<bool()> cachedBodyMatcherTreeUnchanged;
+	size_t cachedBodyResolutionReferencesSkipped = 0;
+	std::function<bool(Section &)> reuseInitialVariableLikeCounts;
+	std::function<void(const std::list<Section *> &)> recordInitialVariableLikeCounts;
+	size_t variableLikeCountUnitsReused = 0;
 	// A native build may reuse the successful ordering of type-constraint probes
 	// when its saved dependency closure and matching environment are unchanged.
 	bool reuseDeclaredConstraintProbes = false;

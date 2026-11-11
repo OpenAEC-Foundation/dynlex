@@ -20,6 +20,7 @@
 #include <list>
 #include <queue>
 #include <ranges>
+#include <span>
 #include <sstream>
 #include <stack>
 #include <tuple>

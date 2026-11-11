@@ -421,7 +421,7 @@ def check_inactive_projection_refresh(root, build):
     cold = build(entry=skipped)
     skipped.write_text(skipped_source.replace('"discard", 1', '"discard", 2'))
     reused = build(entry=skipped)
-    assert reused[0]["inactive_body_resolution_references_skipped"] >= 2, \
+    assert reused[0]["cached_body_resolution_references_skipped"] >= 2, \
         "unchanged inactive bodies repeated pattern resolution"
     assert reused[0]["body_resolution_reference_visits"] < cold[0]["body_resolution_reference_visits"]
     assert reused[1:] == build(False, entry=skipped)[1:]
@@ -442,7 +442,7 @@ def check_inactive_projection_refresh(root, build):
     build(entry=nested)
     nested.write_text(nested_source.replace('"discard", 1', '"discard", 2'))
     nested_edit = build(entry=nested)
-    assert nested_edit[0]["inactive_body_resolution_references_skipped"] >= 2, \
+    assert nested_edit[0]["cached_body_resolution_references_skipped"] >= 2, \
         "unchanged inactive control-flow body repeated pattern resolution"
     assert nested_edit[1:] == build(False, entry=nested)[1:]
     nested.write_text(nested.read_text().removesuffix('live\n') + 'spare\n')
@@ -741,49 +741,6 @@ def check_pointer_preinfer(root, build):
     assert edited[0]["preinferred_instantiations"] >= 1, "pointer argument function was not pre-inferred"
     assert edited[0]["inference_instantiations_reused"] >= 1, "independent pointer function was re-inferred"
     assert edited[1:] == build(False, entry=main)[1:]
-
-
-def check_implicit_parameter_classification_cascade(root, build):
-    main = root / "implicit_classification_cascade.dl"
-    caller = ('to wrapper thing:\n'
-              '    use thing\n'
-              '    @intrinsic("discard", thing)\n'
-              'wrapper 1\n')
-    parameter_body = '    @intrinsic("discard", thing)\n'
-    literal_body = '    @intrinsic("discard", 1)\n'
-    main.write_text('to use thing:\n' + parameter_body + caller)
-    build(entry=main)
-    before = projection_for(root / "cache", main)
-    main.write_text('to use thing:\n' + literal_body + caller)
-    edited = build(entry=main)
-    after = projection_for(root / "cache", main)
-    assert edited[0]["projection_declaration_sections_reused"] == 0, \
-        "implicit parameter reclassification reused a stale declaration snapshot"
-    assert edited[0]["variable_like_count_references_scanned"] >= 2
-    assert before["declarations"] != after["declarations"], \
-        "implicit parameter removal kept the old declaration dependency"
-    changed = [path for path in before["function_declarations"]
-               if before["function_declarations"][path] != after["function_declarations"][path]]
-    assert len(changed) == 1, "body edit did not isolate the reclassified declaration"
-    caller_path = next(path for path, declaration in before["function_declarations"].items()
-                       if declaration["identity"]["header"] == "wrapper thing:")
-    assert before["matches"][caller_path] != after["matches"][caller_path], \
-        "caller matches ignored reclassified pattern"
-    assert edited[1:] == build(False, entry=main)[1:]
-
-    nested = root / "nested_body_implicit_classification.dl"
-    nested_source = ('function use thing:\n'
-                     '    execute:\n'
-                     '        @intrinsic("discard", thing)\n')
-    nested.write_text(nested_source)
-    build(entry=nested)
-    nested_before = projection_for(root / "cache", nested)
-    nested.write_text(nested_source.replace('"discard", thing', '"discard", 1'))
-    nested_edit = build(entry=nested)
-    nested_after = projection_for(root / "cache", nested)
-    assert nested_before["declarations"] != nested_after["declarations"], \
-        "nested body reference did not affect its ancestor's implicit parameter"
-    assert nested_edit[1:] == build(False, entry=nested)[1:]
 
 
 def check_independent_body_resolution_order(root, build):

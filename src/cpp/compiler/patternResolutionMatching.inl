@@ -217,7 +217,7 @@ static bool isArgumentExpressionReference(const PatternReference *reference) {
 
 #include "patternResolutionDeferredBodies.inl"
 
-#include "patternResolutionInactiveBodies.inl"
+#include "patternResolutionSkippedBodies.inl"
 
 // Resolve a list of pattern references against the tree. Returns true if all resolved.
 static bool resolveReferences(
@@ -445,11 +445,10 @@ bool resolvePatterns(ParseContext &context) {
 		ref->patternElements = getPatternElements(ref->pattern.text);
 	for (PatternReference *ref : globalReferences)
 		ref->patternElements = getPatternElements(ref->pattern.text);
-	SkippedInactiveBodies skippedInactiveBodies;
-	skipInactiveBodyReferences(context, bodyReferences, skippedInactiveBodies);
-
 	// Compute initial VL counts before resolution
-	computeVariableLikeCounts(context, unResolvedSections);
+	computeVariableLikeCounts(context, unResolvedSections, true);
+	SkippedCachedBodies skippedCachedBodies;
+	skipCachedBodyReferences(context, bodyReferences, skippedCachedBodies);
 	std::list<PatternReference *> deferredBodyReferences;
 	for (auto reference = bodyReferences.begin(); reference != bodyReferences.end();) {
 		if (!bodyReferenceCanWaitForDefinitions(*reference)) {
@@ -720,10 +719,9 @@ bool resolvePatterns(ParseContext &context) {
 			}
 
 			if (unResolvedSections.empty() && bodyReferences.empty() && !failedBodyWorklist.hasWaiting()) {
-				std::vector<Section *> activated =
-					inactiveBodiesToReactivate(context, skippedInactiveBodies, definitionToReferences);
+				std::vector<Section *> activated = cachedBodiesToReactivate(context, skippedCachedBodies);
 				if (!activated.empty()) {
-					reactivateInactiveBodies(context, bodyReferences, skippedInactiveBodies, activated);
+					reactivateCachedBodies(context, bodyReferences, skippedCachedBodies, activated);
 					continue;
 				}
 				break;
@@ -830,7 +828,7 @@ bool resolvePatterns(ParseContext &context) {
 			emitUnresolvedPatternDiagnostics();
 			return false;
 		}
-		replayInactiveBodies(context, deferredBodyReferences, skippedInactiveBodies);
+		replayCachedBodies(context, deferredBodyReferences, skippedCachedBodies);
 		if (context.prepareDeferredMatcherReplay && context.patternPrecedenceRevision == 0)
 			context.prepareDeferredMatcherReplay(deferredBodyReferences);
 		{

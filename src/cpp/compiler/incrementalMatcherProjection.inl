@@ -12,18 +12,20 @@ struct InitialMatcherProjection {
 	Json value = nullptr;
 	std::vector<Owner> owners;
 	bool unitsCaptured = false;
+	size_t declarationsReused = 0;
 
 	void capture(
 		const ParseContext &context, const Json &observations, const std::unordered_map<const Section *, const Json *> &skipped,
-		const std::list<PatternReference *> &deferredReferences, const Json *prior
+		const std::list<PatternReference *> &deferredReferences, const Json *previous, const Json &bodyDigests,
+		const std::map<std::string, Section *> &sections, std::string_view tree
 	) {
+		const Json *prior = previous ? &previous->at("matcher_projection") : nullptr;
+		declarationsReused = 0;
 		owners.clear();
 		unitsCaptured = false;
 		std::unordered_set<const PatternReference *> deferred(deferredReferences.begin(), deferredReferences.end());
-		std::map<std::string, Section *> sections;
-		collectSections(context.mainSection, "root", sections);
 		std::unordered_set<const Section *> functionBodies, reusable;
-		Json selected = Json::object(), declarations = Json::object();
+		Json selected = Json::object();
 		for (const auto &[path, section] : sections) {
 			if (section->type == SectionType::Function && !section->patternDefinitions.empty() &&
 				!containsNestedDefinition(*section)) {
@@ -33,7 +35,6 @@ struct InitialMatcherProjection {
 			if (!reusableCodegenSection(*section))
 				continue;
 			reusable.insert(section);
-			declarations[path] = digest(sectionDeclaration(*section).dump());
 			Owner owner{path, section, section->parent == context.mainSection,
 						{},	  {},	   skipped.contains(section) ? skipped.at(section) : nullptr};
 			const auto collect = [&](auto &&self, Section *body) -> void {
@@ -50,10 +51,10 @@ struct InitialMatcherProjection {
 		}
 		value = Json{
 			{"selected_digest", digest(selected.dump())},
-			{"declaration_digests", std::move(declarations)},
+			{"declaration_digests", Json::object()},
 			{"match_overrides", Json::object()},
 			{"body_units", Json::object()},
-			{"bodies", functionBodyDigests(context, sections)},
+			{"bodies", bodyDigests},
 			{"scope_rule_bodies", scopeRuleBodyPaths(sections)},
 			{"global_resolution", globalResolutionIdentity(*context.mainSection)},
 			{"sources", sourceProjection(
@@ -68,6 +69,25 @@ struct InitialMatcherProjection {
 				 context, observations, reusable, true, true, true, prior ? &prior->at("ambient_nonexecution_sources") : nullptr
 			 )}
 		};
+		bool stableDeclarations = prior && previous->at("initial_matcher_tree") == tree &&
+			value.at("scope_rule_bodies") == prior->at("scope_rule_bodies") &&
+			sourceProjectionsEqual(value.at("ambient_nonexecution_sources"), prior->at("ambient_nonexecution_sources"));
+		if (stableDeclarations)
+			for (const auto &[path, _] : value.at("scope_rule_bodies").items())
+				if (!prior->at("bodies").contains(path) || bodyDigests.at(path) != prior->at("bodies").at(path)) {
+					stableDeclarations = false;
+					break;
+				}
+		for (const Owner &owner : owners) {
+			const std::string &path = owner.path;
+			if (stableDeclarations && prior->at("declaration_digests").contains(path) &&
+				prior->at("bodies").contains(path) && bodyDigests.at(path) == prior->at("bodies").at(path)) {
+				value.at("declaration_digests")[path] = prior->at("declaration_digests").at(path);
+				declarationsReused++;
+			} else
+				value.at("declaration_digests")[path] = digest(sectionDeclaration(*owner.section).dump());
+		}
+
 	}
 
 	void captureBodyUnits(IncrementalMatcherCache &matcherCache) {

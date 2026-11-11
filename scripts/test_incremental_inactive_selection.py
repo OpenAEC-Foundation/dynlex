@@ -11,7 +11,7 @@ def check_literal_inactive_body(root, build):
     cold = build(entry=main)
     main.write_text(source.replace('"discard", 1', '"discard", 2'))
     edited = build(entry=main)
-    assert edited[0]["inactive_body_resolution_references_skipped"] >= 1, \
+    assert edited[0]["cached_body_resolution_references_skipped"] >= 1, \
         "an unchanged literal-only function rematched because its first word was used elsewhere"
     assert edited[0]["body_resolution_reference_visits"] < cold[0]["body_resolution_reference_visits"]
     assert edited[1:] == build(False, entry=main)[1:]

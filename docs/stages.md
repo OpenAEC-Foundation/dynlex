@@ -153,6 +153,9 @@ body-driven parameter reclassification invalidates callers through the changed t
 The saved matcher projection describes the boundary before receiver bodies become
 generated functions. It stores declaration digests and only the match entries that
 differ from the expanded projection; `matcher_projection_ms` reports its capture cost.
+An unchanged tree and surrounding declarations let unchanged bodies retain their
+matcher declaration digests. `matcher_declarations_reused` counts those retained
+without serializing the declaration again; edits inside scope rules invalidate this proof.
 Flex bodies also participate in inference and native-code invalidation even though
 they have no standalone native function. Inference summaries retain observed pure
 call results; a changed function becomes a stable dependency boundary only when
@@ -964,7 +967,12 @@ so early indexing alone does not make its references eligible to wait.
 Implicit-parameter candidate counts use one section-tree walk. Each body
 reference contributes once to candidate words in ancestor definition sections,
 including nested definitions. `variable_like_count_references_scanned` counts
-those references.
+those references. Native builds retain the initial counts by declaration identity,
+candidate word set, and body digest. Unchanged definitions restore their counts before resolution;
+an edit inside a nested definition invalidates the containing definitions' counts
+as well. The walk visits references only for definitions whose counts need to be
+computed. `variable_like_count_units_reused` reports restored count maps.
+`parameter_count_cache_ms` measures cache input preparation, lookup, and recording.
 An ordinary nested function has no implicit closure. Validation reports a
 reference to an outer runtime local and directs the author to pass it as an
 argument; global variables remain accessible.
@@ -1009,17 +1017,20 @@ references rejoin the ordinary expansion and precedence-invalidation machinery.
 Bodies with prior diagnostics run the normal resolver.
 `body_resolution_units_reused` and `body_resolution_references_restored`
 count this restoration, separately from references evaluated by the resolver.
-For a successful prior build, unchanged, uninstantiated ordinary functions without nested definitions can
-skip resolution when their parsed declaration already equals the prior resolved
-declaration, their prior matcher entries remain available, and their patterns
+For a successful prior build, unchanged ordinary functions without nested definitions can
+skip resolution when their header is fixed by zero implicit-candidate counts or
+their parsed declaration equals the prior resolved declaration, their prior
+matcher entries remain available, and their patterns
 cannot alter another reference's matcher key while definitions are indexed.
+Initial word counts establish when a declaration can be indexed immediately;
+its body can then wait even when the function was instantiated in the prior build.
 The source projection and body digest establish that their text is unchanged.
-If a later match calls one of these functions, or the completed pattern tree
-differs, its references rejoin the resolver. Other selected bodies replay their
+If the completed pattern tree differs, their references rejoin the resolver.
+Other selected bodies replay their
 complete cached resolution after indexing, before expression expansion and
 variable-group materialization. This preserves valid body trees for later
 function-value queries and keeps lexical bindings available to validation and
-inference. `inactive_body_resolution_references_skipped` counts the early
+inference. `cached_body_resolution_references_skipped` counts the early
 resolver visits bypassed by this replay. This path runs only when the potential
 skipped work is at least one twentieth of the program's references, so its
 selection work does not dominate small edits in larger programs. Pattern-tree
@@ -1029,9 +1040,9 @@ The cache records matcher input literals as hex-encoded byte sequences by
 source file. When the initial pattern tree is unchanged, an edited build scans
 references from changed files and carries the unchanged files' literal sets
 forward. It considers both the previous and current literals when selecting
-inactive bodies, then writes the current sets for the next build. A changed
+cached bodies, then writes the current sets for the next build. A changed
 initial tree rebuilds the index from current references.
-`inactive_body_selection_ms` measures this decision.
+`cached_body_selection_ms` measures this decision.
 Unchanged references replay saved precedence-pass keys when their first-pass
 keys and precedence families still match. If the final indexed tree changed,
 the cache compares the changed paths' required literals against each

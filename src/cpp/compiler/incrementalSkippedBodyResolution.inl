@@ -21,7 +21,7 @@ static void addMatcherStartLiterals(std::string_view text, std::unordered_set<st
 
 #include "incrementalMatcherLiteralIndex.inl"
 
-static bool inactiveDefinitionCanChangeAnotherMatcherKey(
+static bool cachedDefinitionCanChangeAnotherMatcherKey(
 	const Section &candidate, const Json &priorLiterals, const std::unordered_set<std::string_view> &changedLiterals
 ) {
 	for (const PatternDefinition *definition : candidate.patternDefinitions) {
@@ -33,7 +33,8 @@ static bool inactiveDefinitionCanChangeAnotherMatcherKey(
 					for (const auto &alternative : element.alternatives)
 						if (self(self, alternative))
 							return true;
-				} else if (candidate.canPromoteImplicitParameter(*definition, element))
+				} else if (candidate.canPromoteImplicitParameter(*definition, element) &&
+						   candidate.variableLikeCounts.at(element.text) != 0)
 					return true;
 			}
 			return false;
@@ -48,13 +49,11 @@ static bool inactiveDefinitionCanChangeAnotherMatcherKey(
 	return false;
 }
 
-std::vector<Section *> selectInactiveBodiesForResolutionReuse(
-	const ParseContext &context, const Json &observations, const Json &prior, const Json &priorInactive,
-	const std::set<std::string> &diagnosticSources, const IncrementalMatcherCache &matcherCache,
+std::vector<Section *> selectCachedBodiesForResolutionReuse(
+	const ParseContext &context, const Json &observations, const Json &prior, const std::set<std::string> &diagnosticSources,
+	const IncrementalMatcherCache &matcherCache, const std::map<std::string, Section *> &sections, const Json &bodies,
 	std::unordered_map<const Section *, const Json *> &matchEntries
 ) {
-	std::map<std::string, Section *> sections;
-	collectSections(context.mainSection, "root", sections);
 	Json selected = Json::object();
 	std::unordered_set<const Section *> selectedSections;
 	struct Candidate {
@@ -72,19 +71,21 @@ std::vector<Section *> selectInactiveBodiesForResolutionReuse(
 			selected[path] = sectionIdentity(*section);
 			selectedSections.insert(section);
 		}
-		if (section->parent != context.mainSection || !reusableCodegenSection(*section) ||
-			!priorInactive.at("inactive").contains(path) || !prior.at("bodies").contains(path) ||
+		if (section->parent != context.mainSection || !reusableCodegenSection(*section) || !prior.at("bodies").contains(path) ||
+			!bodies.contains(path) || bodies.at(path) != prior.at("bodies").at(path) ||
 			!prior.at("function_declarations").contains(path) ||
-			sectionDeclaration(*section) != prior.at("function_declarations").at(path) ||
-			!prior.at("match_entries").contains(path) ||
-			!prior.at("matcher_projection").at("body_units").contains(path) ||
+			!prior.at("match_entries").contains(path) || !prior.at("matcher_projection").at("body_units").contains(path) ||
 			diagnosticSources.contains(section->openingLine->sourceFile->uri))
 			continue;
-		const Json &entries = prior.at("match_entries").at(path);
+		const Json &overrides = prior.at("matcher_projection").at("match_overrides");
+		const Json &entries = overrides.contains(path) ? overrides.at(path) : prior.at("match_entries").at(path);
 		possibleSkippedReferences += entries.size();
 		candidates.push_back({path, section, &entries});
 	}
 	if (candidates.empty() || possibleSkippedReferences * 20 < totalReferences || selected != prior.at("inactive"))
+		return {};
+	Json sources = sourceProjection(context, observations, selectedSections, false, false, false, &prior.at("sources"));
+	if (!sourceProjectionsEqual(sources, prior.at("sources")))
 		return {};
 	std::set<std::string> changedSources = changedReferenceLiteralSources(context, observations, prior);
 	ReferenceLiteralsBySource changedBySource = referenceStartLiteralsBySource(sections, changedSources);
@@ -92,7 +93,14 @@ std::vector<Section *> selectInactiveBodiesForResolutionReuse(
 	for (const auto &[_, literals] : changedBySource)
 		changedLiterals.insert(literals.begin(), literals.end());
 	std::erase_if(candidates, [&](const Candidate &candidate) {
-		return inactiveDefinitionCanChangeAnotherMatcherKey(
+		// A body with no occurrences of an implicit candidate cannot promote its
+		// header. Its stable path and body preserve authored declaration metadata.
+		bool canPromote = std::ranges::any_of(candidate.section->variableLikeCounts, [](const auto &candidate) {
+			return candidate.second != 0;
+		});
+		if (canPromote && sectionDeclaration(*candidate.section) != prior.at("function_declarations").at(candidate.path))
+			return true;
+		return cachedDefinitionCanChangeAnotherMatcherKey(
 			*candidate.section, prior.at("reference_literals_global"), changedLiterals
 		);
 	});
@@ -101,19 +109,10 @@ std::vector<Section *> selectInactiveBodiesForResolutionReuse(
 		safeReferences += candidate.entries->size();
 	if (safeReferences * 20 < totalReferences)
 		return {};
-	Json sources = sourceProjection(context, observations, selectedSections, false, false, false, &prior.at("sources"));
-	if (!sourceProjectionsEqual(sources, prior.at("sources")))
-		return {};
-	Json bodies = functionBodyDigests(context, sections);
 	std::vector<Section *> result;
 	for (const Candidate &candidate : candidates) {
-		if (!bodies.contains(candidate.path) || bodies.at(candidate.path) != prior.at("bodies").at(candidate.path))
-			continue;
 		bool available = true;
 		for (const Json &entry : *candidate.entries) {
-			if (entry.at("key").is_string() && entry.at("initial_key").is_string() &&
-				entry.at("key") != entry.at("initial_key"))
-				available = false;
 			for (const char *field : {"key", "initial_key"})
 				if (entry.at(field).is_string() && !matcherCache.contains(entry.at(field).get_ref<const std::string &>()))
 					available = false;

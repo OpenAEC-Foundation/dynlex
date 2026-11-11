@@ -1,8 +1,12 @@
 static std::optional<std::string> explicitWholeVariableSourceName(const PatternReference *reference) {
 	if (!reference)
 		return std::nullopt;
-	const std::vector<PatternElement> elements =
-		reference->patternElements.empty() ? getPatternElements(reference->pattern.text) : reference->patternElements;
+	std::vector<PatternElement> parsedElements;
+	std::span<const PatternElement> elements(reference->patternElements);
+	if (elements.empty()) {
+		parsedElements = getPatternElements(reference->pattern.text);
+		elements = parsedElements;
+	}
 	std::string result;
 	size_t argumentIndex = 0;
 	for (const PatternElement &element : elements) {

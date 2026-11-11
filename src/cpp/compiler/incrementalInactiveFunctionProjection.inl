@@ -23,7 +23,7 @@ std::optional<Json> refreshInactiveFunctionProjection(
 	for (const std::string &path : reusable)
 		if (!prior.at("function_declarations").contains(path) || !prior.at("matches").contains(path))
 			return std::nullopt;
-	Json bodies = functionBodyDigests(context, sections);
+	Json bodies = definitionBodyDigests(context, sections);
 	const Json &oldBodies = prior.at("bodies");
 	if (bodies.size() != oldBodies.size())
 		return std::nullopt;
