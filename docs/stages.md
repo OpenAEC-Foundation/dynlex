@@ -154,9 +154,13 @@ from the flex's executable body. Scope-rule edits still invalidate that proof, a
 body-driven parameter reclassification invalidates callers through the changed tree.
 The saved matcher projection describes the boundary before receiver bodies become
 generated functions. It stores declaration digests and content keys for only the
-reference records that differ from the expanded projection. These records live in the binary matcher
-store and expose string views while replaying, without duplicating JSON reference
-objects; `matcher_projection_ms` reports its capture cost.
+reference tables that differ from the expanded projection. Both boundaries share
+content-addressed binary reference tables in the matcher store. A function's ordered
+resolved-match identities are another binary unit whose key is its match fingerprint.
+Unchanged functions carry these keys forward without copying or serializing their
+individual reference records. A changed function decodes only its previous tables
+and retains matching references' identities through string views. The matcher payload
+still packages the retained units together. `matcher_projection_ms` reports capture cost.
 An unchanged tree and surrounding declarations let unchanged bodies retain their
 matcher declaration digests. `matcher_declarations_reused` counts those retained
 without serializing the declaration again; edits inside scope rules invalidate this proof.

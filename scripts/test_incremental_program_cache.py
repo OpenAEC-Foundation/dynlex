@@ -194,7 +194,12 @@ def check_program_payloads(root, build):
     edited = build(entry=main)
     assert edited[0]["cache_payloads_loaded"] == 5
     assert edited[1:] == build(False, entry=main)[1:]
-    assert read_program(root / "cache", main)["generated_ir"].startswith(b"BC\xc0\xde")
+    edited_program = read_program(root / "cache", main)
+    assert edited_program["generated_ir"].startswith(b"BC\xc0\xde")
+    for field in ("matches", "match_entries"):
+        assert all(isinstance(key, str) and len(key) == 64
+                   for key in edited_program["all_function_projection"][field].values()), \
+            "function match records were embedded instead of carrying reusable unit keys"
     updated = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
     graph_blob = directory / f"payload-{updated['payload_keys']['section_dependency_graph']}.entry"
     assert isinstance(json.loads(graph_blob.read_bytes().split(b"\n", 2)[2])["forward"], list)

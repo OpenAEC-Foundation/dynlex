@@ -4,8 +4,8 @@
 // changed body and match units without rebuilding those whole-program views.
 std::optional<Json> refreshInactiveFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
-	const IncrementalMatcherCache &matcherCache, const Json &prior, const Json &priorInactive,
-	size_t &matchesRechecked, size_t &matchEntriesReused
+	IncrementalMatcherCache &matcherCache, const Json &prior, const Json &priorInactive, size_t &matchesRechecked,
+	size_t &matchEntriesReused
 ) {
 	Json selected = Json::object();
 	std::map<const Section *, std::string> paths;
@@ -41,7 +41,8 @@ std::optional<Json> refreshInactiveFunctionProjection(
 		refreshed["bodies"][path] = body;
 		if (reusable.contains(path)) {
 			ResolvedFunctionMatches result = resolvedFunctionMatches(
-				sections.at(path), paths, matcherCache, &prior.at("match_entries").at(path), &matchEntriesReused
+				sections.at(path), paths, matcherCache, &prior.at("match_entries").at(path), &prior.at("matches").at(path),
+				&matchEntriesReused
 			);
 			refreshed["matches"][path] = std::move(result.fingerprint);
 			refreshed["match_entries"][path] = std::move(result.entries);
@@ -99,15 +100,13 @@ bool canReuseInactiveBodies(
 	std::set<std::string> diagnosticSources = previous.at("diagnostic_sources").get<std::set<std::string>>();
 	for (const auto &[_, source] : context.importedFiles) {
 		const std::string &uri = source->uri;
-		if (diagnosticSources.contains(uri) &&
-			previous.at("files").at(uri).at("content") != observations.at(uri).at("content"))
+		if (diagnosticSources.contains(uri) && previous.at("files").at(uri).at("content") != observations.at(uri).at("content"))
 			return false;
 	}
 	const Json &priorProjection = previous.at("inactive_projection");
 	currentProjection = captureInactiveProjection(
 		declarationDigest(sections), context, observations, &priorProjection.at("inactive"), nullptr, &sections,
-		&priorProjection.at("sources"),
-		projectionWork, &priorProjection.at("sources")
+		&priorProjection.at("sources"), projectionWork, &priorProjection.at("sources")
 	);
 	return currentProjection.is_object() && currentProjection.at("declarations") == priorProjection.at("declarations");
 }

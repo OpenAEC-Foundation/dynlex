@@ -704,9 +704,14 @@ def check_folded_value_remains_active(root, build):
 def check_local_match_projection_reuse(root, build):
     main = root / "local_match_projection.dl"
     prefix = 'to leaf: @intrinsic("discard", 1)\nto run:\n    leaf\n    leaf\n'
-    main.write_text(prefix + '    @intrinsic("discard", 1)\nrun\n')
+    execution = '@intrinsic("discard", 0)\n'
+    main.write_text(prefix + '    @intrinsic("discard", 1)\nrun\n' + execution)
     build(entry=main)
-    main.write_text(prefix + '    @intrinsic("discard", 2)\nrun\n')
+    main.write_text(main.read_text().replace('"discard", 0)', '"discard", 9)'))
+    entry_edit = build(entry=main)
+    assert entry_edit[0]["projection_top_level_sections_reused"] >= 2
+    assert entry_edit[1:] == build(False, entry=main)[1:]
+    main.write_text(prefix + '    @intrinsic("discard", 2)\nrun\n' + execution.replace('0)', '9)'))
     edited = build(entry=main)
     assert edited[0]["projection_match_entries_reused"] >= 2, \
         "a one-line body edit re-fingerprinted unchanged pattern calls"

@@ -120,32 +120,19 @@ struct InitialMatcherProjection {
 	Json finish(const Json &expanded, IncrementalMatcherCache &matcherCache) {
 		requireCompilerInvariant(value.is_object(), "successful frontend has no initial matcher projection");
 		requireCompilerInvariant(unitsCaptured, "successful frontend has no initial body-resolution boundary");
-		auto sameKey = [](const Json &saved, std::string_view key) {
-			return saved.is_null() ? key.empty() : saved.get_ref<const std::string &>() == key;
-		};
+		for (const char *field : {"matches", "match_entries"})
+			for (const auto &[_, entry] : expanded.at(field).items()) {
+				const std::string &key = entry.get_ref<const std::string &>();
+				if (matcherCache.contains(key))
+					matcherCache.retain(key);
+			}
 		for (const Owner &owner : owners) {
 			// Most bodies retain their references through expansion. Store only
 			// overrides for bodies whose earlier matcher boundary differs.
 			const Json &finalEntries = expanded.at("match_entries");
-			bool identical = finalEntries.contains(owner.path) && finalEntries.at(owner.path).size() == owner.references.size();
-			for (size_t index = 0; identical && index < owner.references.size(); index++) {
-				const Json &saved = finalEntries.at(owner.path).at(index);
-				const PatternReference &reference = *owner.references[index];
-				const Json &shape = saved.at("shape");
-				std::string_view matchKey =
-					reference.match ? std::string_view(reference.incrementalMatcherKey) : std::string_view{};
-				identical = shape.at(0).get_ref<const std::string &>() == reference.pattern.text &&
-							shape.at(1).get<int>() == static_cast<int>(reference.patternType) &&
-							shape.at(2).get<int>() == static_cast<int>(reference.purpose) &&
-							sameKey(saved.at("key"), matchKey) &&
-							sameKey(
-								saved.at("initial_key"),
-								reference.match ? std::string_view(reference.initialMatcherKey) : std::string_view{}
-							);
-			}
-			if (identical)
-				continue;
-			value.at("match_overrides")[owner.path] = matcherCache.recordReferenceKeys(owner.references);
+			std::string key = matcherCache.recordReferenceKeys(owner.references);
+			if (!finalEntries.contains(owner.path) || finalEntries.at(owner.path).get_ref<const std::string &>() != key)
+				value.at("match_overrides")[owner.path] = std::move(key);
 		}
 		return std::move(value);
 	}
