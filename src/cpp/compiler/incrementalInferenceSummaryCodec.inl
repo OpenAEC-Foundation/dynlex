@@ -56,6 +56,12 @@ template <typename Remap> Json remapInferenceValue(const Json &value, const Rema
 		return Json::array({value.at(0), remap(value.at(1)), constraint(value.at(2))});
 	if (value.at(0) == "constraint")
 		return Json::array({value.at(0), constraint(value.at(1))});
+	if (value.at(0) == "function") {
+		Json arguments = Json::array();
+		for (const Json &type : value.at(4))
+			arguments.push_back(remap(type));
+		return Json::array({value.at(0), value.at(1), value.at(2), value.at(3), std::move(arguments), remap(value.at(5))});
+	}
 	return value;
 }
 

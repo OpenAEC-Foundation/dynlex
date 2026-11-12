@@ -1319,7 +1319,20 @@ Availability is recorded before dependency validation. A record disappearing
 after that observation reports an error, as with other concurrent payload eviction.
 Instantiation keys include portable compile-time arguments as well as argument
 types. Scalar values preserve their exact representation; type and constraint
-values preserve their properties and referenced class layouts. Summaries restore
+values preserve their properties and referenced class layouts. Function values
+name their source section, exact definition and signature path, and inferred
+argument and return types. These identities also support fixed function-valued
+arguments. Summary manifests retain the referenced inference units even when
+they have no native body or observed return values.
+Decoding interns symbolic references in a transaction, then restores their
+complete inference facts before committing the reachable graph. Cyclic value
+tables therefore never run ordinary inference against partly restored effects.
+A cache miss rolls back the whole transaction, and trial journals include every
+indirectly restored target. Runtime lifecycle discovery materializes a referenced
+body only when reusable native IR is unavailable, using its inferred argument
+types (including deferred callback receivers). `function_body_inference_passes`
+counts actual function-body inference, including this materialization work.
+Summaries restore
 parameter input and output types, constant bindings, and compile-time requirements.
 Preinference recreates those bindings before inferring a requested variant.
 Pure calls with known arguments can reuse their summaries and observed values
@@ -1328,6 +1341,8 @@ its function, retaining the observations still consumed by cached callers.
 Interface comparison reevaluates previously observed argument sets. Runtime
 callers depend on the callee's inferred types and effects; compile-time consumers
 also retain fingerprints of the particular arguments and result they read.
+These fingerprints are frozen when the observation is made, before a rejected
+trial can discard the compiler objects used by a function-valued argument.
 Portable observed values are stored once in the callee's summary instead of
 being duplicated into every caller. A changed result
 therefore invalidates its consumers while another argument's unchanged result can

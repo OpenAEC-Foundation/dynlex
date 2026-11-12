@@ -20,9 +20,10 @@ class IncrementalInferenceController {
 			!compatibleObservations(previous, observations, context) ||
 			(!compatibleFunctionProjection(prior, projection) && !compatibleGlobalFreeProjection(prior, projection)))
 			return;
-		ClassIdentityPaths classes = classIdentityPaths(paths);
+		InferenceValueIdentities identities(paths);
 		auto eligible = std::make_shared<IncrementalUnitSelection>();
 		auto replacements = std::make_shared<IncrementalUnitSelection>();
+		SymbolicInferenceUnits symbolic = referencedInferenceFunctions(previous.at("inference_summaries"));
 		std::map<InferenceUnitKey, Json> verifiedValues;
 		std::set<InferenceUnitKey> unavailableValues;
 		for (const auto &[path, variants] : previous.at("inference_summaries").items())
@@ -51,8 +52,8 @@ class IncrementalInferenceController {
 				if (section == sections.end())
 					continue;
 				for (const auto &[key, summary] : variants.items())
-					if (inferenceSummaryHasValueState(summary) && !replacements->contains(section->second, key) &&
-						check.unchanged({path, key}))
+					if ((inferenceSummaryHasValueState(summary) || symbolic.contains({path, key})) &&
+						!replacements->contains(section->second, key) && check.unchanged({path, key}))
 						eligible->insert(section->second, key);
 			}
 		};
@@ -66,29 +67,29 @@ class IncrementalInferenceController {
 		);
 		context.reuseInferredInstantiation = [this](
 												 Section *section, const InstantiationKey &key, Instantiation &instantiation,
-												 ParseContext::InferenceReuseUse use
+												 ParseContext::InferenceReuseUse use, InferenceContext *caller
 											 ) {
-			return inferenceReuse->reuse(section, key, instantiation, use);
+			return inferenceReuse->reuse(section, key, instantiation, use, caller);
 		};
 		std::set<InferenceUnitKey> native;
 		for (const auto &[name, owner] : previous.at("function_sections").items())
 			if (!previous.at("callable_functions").contains(name))
 				native.emplace(owner.get<std::string>(), previous.at("function_instantiations").at(name).get<std::string>());
 		std::set<const Section *> capturedSections;
-		for (auto &[unit, request] : collectRequests(*eligible, native)) {
+		for (auto &[unit, request] : collectRequests(*eligible, native, symbolic)) {
 			if (check.unchanged(unit)) {
 				eligible->insert(request.section, unit.second);
 				continue;
 			}
-			const Json *priorSummary = restoreArguments(unit, request, classes);
+			const Json *priorSummary = restoreArguments(unit, request);
 			if (!priorSummary)
 				continue;
 			if (!infer(request))
 				continue;
 			statistics.preinferredInstantiations++;
-			InferenceStorageIdentities storage(context, paths, classes);
+			InferenceStorageIdentities storage(context, paths, identities);
 			Json current = captureSectionInferenceSummary(
-				request.section, classes, storage, Json(nullptr), &statistics.preinferSummaryInstantiationsCaptured, nullptr,
+				request.section, identities, storage, Json(nullptr), &statistics.preinferSummaryInstantiationsCaptured, nullptr,
 				&unit.second
 			);
 			capturedSections.insert(request.section);
@@ -137,33 +138,39 @@ class IncrementalInferenceController {
 				   prior.at(entry.key()) == entry.value();
 		});
 	}
-	const Json *restoreArguments(const InferenceUnitKey &unit, Request &request, const ClassIdentityPaths &classes) {
+	const Json *restoreArguments(const InferenceUnitKey &unit, Request &request) {
 		statistics.preinferArgumentVariantsDecoded++;
 		const Json *saved = summaryStore.load(previous.at("inference_summaries").at(unit.first).at(unit.second));
 		if (!saved)
 			return nullptr;
-		const Json &summary = *saved;
-		auto key = decodeInferenceKey(summary, classes);
-		if (!key || key->argumentTypes.size() != request.parameterNames.size() ||
-			inferenceSummaryKey(*key, classes) != unit.second)
-			return nullptr;
-		request.key = std::move(*key);
-		request.requiredCompileTimeParameters =
-			summary.at("parameters").at("required_compile_time").get<std::unordered_set<std::string>>();
-		for (const Json &observation : summary.at("pure_values")) {
-			std::vector<CompileTimeValue> values;
-			for (const Json &encoded : observation.at(0)) {
-				auto value = decodeInferenceValue(encoded, classes);
-				if (!value)
-					return nullptr;
-				values.push_back(std::move(*value));
+		bool decoded = inferenceReuse->decodeValues([&](const InferenceValueIdentities &identities) {
+			const Json &summary = *saved;
+			auto key = decodeInferenceKey(summary, identities);
+			if (!key || key->argumentTypes.size() != request.parameterNames.size() ||
+				inferenceSummaryKey(*key, identities) != unit.second)
+				return false;
+			request.key = std::move(*key);
+			request.requiredCompileTimeParameters =
+				summary.at("parameters").at("required_compile_time").get<std::unordered_set<std::string>>();
+			for (const Json &observation : summary.at("pure_values")) {
+				std::vector<CompileTimeValue> values;
+				for (const Json &encoded : observation.at(0)) {
+					auto value = decodeInferenceValue(encoded, identities);
+					if (!value)
+						return false;
+					values.push_back(std::move(*value));
+				}
+				request.observedArguments.push_back(std::move(values));
 			}
-			request.observedArguments.push_back(std::move(values));
-		}
-		return saved;
+			return true;
+		});
+		return decoded ? saved : nullptr;
 	}
-	std::vector<std::pair<InferenceUnitKey, Request>>
-	collectRequests(const IncrementalUnitSelection &eligible, const std::set<InferenceUnitKey> &native) {
+
+	std::vector<std::pair<InferenceUnitKey, Request>> collectRequests(
+		const IncrementalUnitSelection &eligible, const std::set<InferenceUnitKey> &native,
+		const SymbolicInferenceUnits &symbolic
+	) {
 		const Json &prior = previous.at("all_function_projection"), &summaries = previous.at("inference_summaries");
 		std::map<InferenceUnitKey, Request> candidates;
 		for (const auto &[section, path] : paths) {
@@ -184,7 +191,8 @@ class IncrementalInferenceController {
 			if (pack)
 				continue;
 			for (const auto &[key, summary] : summaries.at(path).items()) {
-				if ((!native.contains({path, key}) && !inferenceSummaryHasValueState(summary)) ||
+				if ((!native.contains({path, key}) && !inferenceSummaryHasValueState(summary) &&
+					 !symbolic.contains({path, key})) ||
 					summary.at("needs_global_types").get<bool>() || eligible.contains(section, key))
 					continue;
 				candidates.emplace(InferenceUnitKey{path, key}, Request{const_cast<Section *>(section), names, {}, {}, {}});

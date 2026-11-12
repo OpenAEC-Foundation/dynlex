@@ -72,12 +72,13 @@
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 		context.parseContext.reuseInferredInstantiation(
 			matchedSection, instantiationKey, inst,
-			knownCallArguments ? ParseContext::InferenceReuseUse::ConstantCall : ParseContext::InferenceReuseUse::RuntimeCall
+			knownCallArguments ? ParseContext::InferenceReuseUse::ConstantCall : ParseContext::InferenceReuseUse::RuntimeCall,
+			&context
 		);
 	} else if (inst.inferenceReusedFromCache && !knownCallArguments && !inst.needsReinfer &&
 			   !inst.pureReturnValuesByArguments.empty() && context.parseContext.reuseInferredInstantiation) {
 		bool prepared = context.parseContext.reuseInferredInstantiation(
-			matchedSection, instantiationKey, inst, ParseContext::InferenceReuseUse::RuntimeCall
+			matchedSection, instantiationKey, inst, ParseContext::InferenceReuseUse::RuntimeCall, &context
 		);
 		requireCompilerInvariant(prepared, "cached pure observations changed before runtime use");
 	}
@@ -151,6 +152,7 @@
 			context.suppressReinferPassDiagnostics = true;
 			if (!inst.body)
 				inst.body = context.cloneSectionBody(matchedSection, nullptr, storageScope);
+			context.parseContext.functionBodyInferencePasses++;
 			bool passSucceeded =
 				inferSection(matchedSection, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
 			finishParameterOutputReinference(context, inst, passSucceeded);

@@ -545,7 +545,7 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 		}
 	}
 
-	RuntimeLifecycleUses uses;
+	RuntimeLifecycleUses uses(callerContext);
 	uses.collectSection(parseContext.mainSection);
 	uses.collectExposedFunctions(parseContext.mainSection);
 	for (const auto &request : parseContext.incrementalReplacementFunctions) {
@@ -556,6 +556,8 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 		);
 		uses.collectInstantiation(instantiation->second);
 	}
+	if (!uses.valid)
+		return false;
 	for (size_t index = 0; index < uses.customTypes.size(); index++) {
 		DataType classType = uses.customTypes[index];
 		ClassDefinition &definition = *classType.classDefinition;
@@ -591,7 +593,7 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 			uses.collectInstantiation(instantiation->second);
 		}
 	}
-	return true;
+	return uses.valid;
 }
 
 #include "incremental_function_inference.inl"

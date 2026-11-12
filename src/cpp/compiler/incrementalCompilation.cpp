@@ -313,6 +313,7 @@ std::string renderModule(const llvm::Module &module) {
 
 // clang-format off: these fragments share declarations in this order.
 #include "incrementalNativeObjects.inl"
+#include "incrementalInferenceSymbolDependencies.inl"
 #include "incrementalInferenceSummaryStore.inl"
 #include "incrementalNativeLayout.inl"
 #include "incrementalNativeSymbols.inl"
@@ -321,6 +322,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalClassIdentityPaths.inl"
 #include "incrementalConstraintValue.inl"
 #include "incrementalInferenceTypes.inl"
+#include "incrementalInferenceIdentities.inl"
 #include "incrementalOptimizationInputs.inl"
 #include "incrementalOptimization.inl"
 #include "incrementalOptimizedNativeUnits.inl"
@@ -617,6 +619,7 @@ bool compileIncrementally(
 			for (const auto &[path, section] : sections)
 				sectionPaths.emplace(section, path);
 			IncrementalInferenceReads inferenceReads(sectionPaths);
+			InferenceValueIdentities valueIdentities(sectionPaths);
 			// Signatures and scope rules are finalized before preinference. Their
 			// source inputs stay immutable through body inference and persistence.
 			std::map<std::string, std::string> inferenceInputFingerprints;
@@ -629,7 +632,9 @@ bool compileIncrementally(
 				};
 				context.recordInferenceValue = [&](const auto &owner, const auto &dependency, const auto &scope,
 												   const auto &arguments, const auto &value) {
-					inferenceReads.recordValue(owner, dependency, scope, arguments, value);
+					inferenceReads.recordValue(
+						owner, dependency, scope, captureInferenceValueQuery(arguments, value, valueIdentities)
+					);
 				};
 				context.recordCallableLookup = [&](const auto &owner, const auto &source, auto signature, const auto &matches) {
 					inferenceReads.record(owner, source, signature, matches);
@@ -748,7 +753,7 @@ bool compileIncrementally(
 				std::map<std::string, std::string> functionSections;
 				Json callableFunctions = Json::object();
 				Json functionInstantiations = Json::object();
-				ClassIdentityPaths functionClassPaths = classIdentityPaths(sectionPaths);
+				InferenceValueIdentities functionIdentities(sectionPaths);
 				for (const auto &[section, path] : sectionPaths)
 					if (hasCodegenSectionIdentity(*section))
 						context.functionSymbolIdentities.emplace(section, sectionIdentityDigest(path));
@@ -758,7 +763,7 @@ bool compileIncrementally(
 					functionSections.emplace(name, sectionPaths.at(section));
 					if (callable)
 						callableFunctions[name] = true;
-					functionInstantiations[name] = inferenceSummaryKey(key, functionClassPaths).value_or(aggregateGraphVariant);
+					functionInstantiations[name] = inferenceSummaryKey(key, functionIdentities).value_or(aggregateGraphVariant);
 				};
 				if (functionReuse) {
 					context.reuseGeneratedFunction = [&](Section *section, Instantiation &, llvm::Function *function) {

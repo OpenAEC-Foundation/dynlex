@@ -80,13 +80,13 @@ void recordIRReuseStatistics(
 	// Instantiation in the current context or calling the summary loader.
 	auto retained = retainedGraphVariants(&reuse, &previous);
 	const Json &summaries = previous.at("inference_summaries");
-	ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
+	InferenceValueIdentities identities(sectionPaths);
 	for (const auto &[section, path] : sectionPaths) {
 		auto variants = retained.keysByPath.find(path);
 		if (variants == retained.keysByPath.end() || !summaries.contains(path))
 			continue;
 		for (const auto &[key, _] : section->instantiations)
-			if (auto identity = inferenceSummaryKey(key, classPaths))
+			if (auto identity = inferenceSummaryKey(key, identities))
 				variants->second.erase(*identity);
 		for (const std::string &key : variants->second)
 			if (summaries.at(path).contains(key))

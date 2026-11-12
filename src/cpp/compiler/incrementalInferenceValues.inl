@@ -50,7 +50,8 @@ std::optional<Json> inferenceConstraintIdentity(const TypeConstraint &constraint
 	return Json::array({std::move(*properties), std::move(layouts)});
 }
 
-std::optional<Json> encodeInferenceValue(const CompileTimeValue &value, const ClassIdentityPaths &classes) {
+std::optional<Json> encodeInferenceValue(const CompileTimeValue &value, const InferenceValueIdentities &identities) {
+	const ClassIdentityPaths &classes = identities.classes;
 	if (const auto *integer = std::get_if<WideInteger>(&value))
 		return Json::array({"wide", integer->bits.getBitWidth(), integer->isUnsigned, integer->toString(16)});
 	if (const auto *integer = std::get_if<std::int64_t>(&value))
@@ -79,10 +80,55 @@ std::optional<Json> encodeInferenceValue(const CompileTimeValue &value, const Cl
 			return std::nullopt;
 		return Json::array({"constraint", std::move(*properties)});
 	}
+	if (const auto *function = std::get_if<CompileTimeFunction>(&value)) {
+		if (identities.stagedFunction)
+			if (auto encoded = identities.stagedFunction(*function))
+				return encoded;
+		const auto &definitions = function->definition->section->patternDefinitions;
+		auto definition = std::ranges::find(definitions, function->definition);
+		requireCompilerInvariant(definition != definitions.end(), "function value has an unowned definition");
+		const Instantiation &instantiation = *function->instantiation;
+		if (!instantiation.valid || instantiation.inferring ||
+			(instantiation.needsReinfer && !instantiation.inferenceReusedFromCache) ||
+			!instantiation.requiredCompileTimeParameters.empty())
+			return std::nullopt;
+		Json arguments = Json::array();
+		for (const DataType &type : instantiation.argumentTypes) {
+			std::set<std::pair<const ClassDefinition *, int>> visiting;
+			auto encoded = inferenceTypeIdentity(type, classes, visiting);
+			if (!encoded)
+				return std::nullopt;
+			arguments.push_back(std::move(*encoded));
+		}
+		std::set<std::pair<const ClassDefinition *, int>> visiting;
+		auto result = inferenceTypeIdentity(instantiation.returnType, classes, visiting);
+		if (!result)
+			return std::nullopt;
+		return Json::array(
+			{"function", identities.paths.at(function->definition->section),
+			 static_cast<size_t>(definition - definitions.begin()), function->pathIndex, std::move(arguments),
+			 std::move(*result)}
+		);
+	}
 	return std::nullopt;
 }
 
-std::optional<CompileTimeValue> decodeInferenceValue(const Json &encoded, const ClassIdentityPaths &classes) {
+Json captureInferenceValueQuery(
+	const std::vector<CompileTimeValue> &arguments, const CompileTimeValue &value, const InferenceValueIdentities &identities
+) {
+	Json encodedArguments = Json::array();
+	for (const CompileTimeValue &argument : arguments) {
+		auto encoded = encodeInferenceValue(argument, identities);
+		if (!encoded)
+			return Json::array({nullptr, nullptr});
+		encodedArguments.push_back(std::move(*encoded));
+	}
+	auto result = encodeInferenceValue(value, identities);
+	return Json::array({digest(encodedArguments.dump()), result ? Json(digest(result->dump())) : Json(nullptr)});
+}
+
+std::optional<CompileTimeValue> decodeInferenceValue(const Json &encoded, const InferenceValueIdentities &identities) {
+	const ClassIdentityPaths &classes = identities.classes;
 	const std::string &kind = encoded.at(0).get_ref<const std::string &>();
 	if (kind == "wide")
 		return WideInteger{
@@ -100,6 +146,13 @@ std::optional<CompileTimeValue> decodeInferenceValue(const Json &encoded, const 
 		return encoded.at(1).get<bool>();
 	if (kind == "pointer")
 		return CompileTimePointer{encoded.at(1).get<std::uint64_t>()};
+	if (kind == "function") {
+		requireCompilerInvariant(
+			static_cast<bool>(identities.restoreFunction), "function value decoder has no restoration context"
+		);
+		auto function = identities.restoreFunction(encoded);
+		return function ? std::optional<CompileTimeValue>{*function} : std::nullopt;
+	}
 	if (kind == "type" || kind == "constraint") {
 		const Json &properties = encoded.at(kind == "type" ? 2 : 1);
 		if (!portableConstraintReferencesPresent(properties.at(0), classes))

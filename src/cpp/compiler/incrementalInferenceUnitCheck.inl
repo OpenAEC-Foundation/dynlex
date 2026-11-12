@@ -46,7 +46,7 @@ class InferenceUnitCheck {
 			for (const Json &query : unit.at("values")) {
 				InferenceUnitKey callee{query.at(0).get<std::string>(), query.at(1).get<std::string>()};
 				auto verified = verifiedValues.find(callee);
-				if (query.at(2).is_null() || verified == verifiedValues.end()) {
+				if (query.at(2).is_null() || query.at(3).is_null() || verified == verifiedValues.end()) {
 					pending.emplace(std::move(callee), false);
 					continue;
 				}

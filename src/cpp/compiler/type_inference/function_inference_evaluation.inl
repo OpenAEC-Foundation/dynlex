@@ -733,6 +733,11 @@ static Instantiation *ensureCallableFunctionInstantiationInferred(
 	return &instantiation->second;
 }
 
+void recordInferenceRestoration(InferenceContext *context, Section *section, const InstantiationKey &key) {
+	if (context && context->trial && context->trialJournal)
+		context->trialJournal->recordSectionInstantiationWrite(section, key);
+}
+
 static CompileTimeValue
 inferVariableCompileTimeValue(Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack) {
 	if (!expr || !expr->variable)

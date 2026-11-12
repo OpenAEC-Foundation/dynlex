@@ -131,6 +131,9 @@ def decode_inference_summary(encoded):
             result[position] = [identity[0], [types[index] for index in identity[1]]]
             if value[0] == "type":
                 result[1] = types[value[1]]
+        elif value[0] == "function":
+            result[4] = [types[index] for index in value[4]]
+            result[5] = types[value[5]]
         return result
 
     def constants(values):

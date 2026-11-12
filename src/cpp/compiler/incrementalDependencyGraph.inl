@@ -51,7 +51,7 @@ Json captureSectionDependencyGraph(
 			for (std::string_view signature : found->second)
 				keys.emplace(signature);
 	};
-	ClassIdentityPaths classPaths = classIdentityPaths(paths);
+	InferenceValueIdentities identities(paths);
 	std::unordered_set<std::string> currentPaths;
 	struct DependencyChange {
 		std::string caller;
@@ -73,7 +73,7 @@ Json captureSectionDependencyGraph(
 		std::map<const Instantiation *, std::optional<std::string>> currentIdentities;
 		std::set<std::string> instantiatedKeys;
 		for (const auto &[key, instantiation] : section->instantiations) {
-			auto identity = inferenceSummaryKey(key, classPaths);
+			auto identity = inferenceSummaryKey(key, identities);
 			if (identity)
 				instantiatedKeys.insert(*identity);
 			currentIdentities.emplace(&instantiation, std::move(identity));

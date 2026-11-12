@@ -4,13 +4,13 @@ struct InferenceParameterState {
 	std::unordered_set<std::string> requiredCompileTime;
 };
 
-std::optional<Json> encodeInferenceParameters(const Instantiation &instantiation, const ClassIdentityPaths &classes) {
+std::optional<Json> encodeInferenceParameters(const Instantiation &instantiation, const InferenceValueIdentities &identities) {
 	requireCompilerInvariant(instantiation.parameterSeedTypesByName.empty(), "completed inference retained parameter seeds");
 	Json types = Json::object(), outputs = Json::object(), constants = Json::object();
 	auto capture = [&](const auto &source, Json &destination) {
 		for (const auto &[name, type] : source) {
 			std::set<std::pair<const ClassDefinition *, int>> visiting;
-			auto identity = inferenceTypeIdentity(type, classes, visiting);
+			auto identity = inferenceTypeIdentity(type, identities.classes, visiting);
 			if (!identity)
 				return false;
 			destination[name] = std::move(*identity);
@@ -20,7 +20,7 @@ std::optional<Json> encodeInferenceParameters(const Instantiation &instantiation
 	if (!capture(instantiation.parameterTypesByName, types) || !capture(instantiation.parameterOutputTypesByName, outputs))
 		return std::nullopt;
 	for (const auto &[name, value] : instantiation.constantParameterValues) {
-		auto encoded = encodeInferenceValue(value, classes);
+		auto encoded = encodeInferenceValue(value, identities);
 		if (!encoded)
 			return std::nullopt;
 		constants[name] = std::move(*encoded);
@@ -36,11 +36,12 @@ std::optional<Json> encodeInferenceParameters(const Instantiation &instantiation
 	};
 }
 
-std::optional<InferenceParameterState> decodeInferenceParameters(const Json &encoded, const ClassIdentityPaths &classes) {
+std::optional<InferenceParameterState>
+decodeInferenceParameters(const Json &encoded, const InferenceValueIdentities &identities) {
 	InferenceParameterState result;
 	auto restore = [&](const Json &source, auto &destination) {
 		for (const auto &[name, identity] : source.items()) {
-			auto type = decodeInferenceTypeIdentity(identity, classes);
+			auto type = decodeInferenceTypeIdentity(identity, identities.classes);
 			if (!type)
 				return false;
 			destination.emplace(name, std::move(*type));
@@ -50,7 +51,7 @@ std::optional<InferenceParameterState> decodeInferenceParameters(const Json &enc
 	if (!restore(encoded.at("types"), result.types) || !restore(encoded.at("outputs"), result.outputs))
 		return std::nullopt;
 	for (const auto &[name, encodedValue] : encoded.at("constants").items()) {
-		auto value = decodeInferenceValue(encodedValue, classes);
+		auto value = decodeInferenceValue(encodedValue, identities);
 		if (!value)
 			return std::nullopt;
 		result.constants.emplace(name, std::move(*value));

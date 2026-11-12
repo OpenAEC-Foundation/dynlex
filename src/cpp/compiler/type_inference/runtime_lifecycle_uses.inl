@@ -2,7 +2,9 @@
 // while resolving declarations, overloads or compile-time type queries.
 class RuntimeLifecycleUses {
   public:
+	explicit RuntimeLifecycleUses(InferenceContext &context) : context(context) {}
 	std::vector<DataType> customTypes;
+	bool valid = true;
 
 	void collectType(const DataType &type) {
 		if (type.isPointer() || !type.isConcrete() || !types.insert(type).second)
@@ -76,7 +78,33 @@ class RuntimeLifecycleUses {
 			collectBody(*child, bindings);
 	}
 
+	bool prepareCallable(const CompileTimeFunction &function) {
+		Instantiation &instantiation = *function.instantiation;
+		if (!instantiation.inferenceReusedFromCache)
+			return true;
+		std::vector<CallableFunctionParameter> parameters;
+		collectCallableFunctionParameters({function.definition, function.pathIndex}, parameters);
+		requireCompilerInvariant(
+			parameters.size() == instantiation.argumentTypes.size(), "symbolic callable lost its inferred parameter types"
+		);
+		std::vector<Expression> arguments(parameters.size());
+		std::vector<std::pair<std::string, Expression *>> bindings;
+		for (size_t index = 0; index < parameters.size(); index++) {
+			arguments[index].kind = Expression::Kind::TypedPlaceholder;
+			arguments[index].type = instantiation.argumentTypes[index];
+			bindings.emplace_back(parameters[index].name, &arguments[index]);
+		}
+		// Deferred callbacks infer their receiver from the section schema; the
+		// authored parameter need not declare that concrete type itself.
+		return ensureSectionInstantiationInferred(
+			context.parseContext, function.definition->section, function.definition, bindings, instantiation.argumentTypes, {},
+			context.currentInstantiation, &context
+		);
+	}
+
 	void collectExpression(Expression *expression, const BindingFrameStack &bindings = {}) {
+		if (!valid)
+			return;
 		ResolvedBindingLayers resolved = resolveVariableBindingWithCallerScope(expression, bindings);
 		if (resolved.expression != expression) {
 			collectExpression(resolved.expression, resolved.bindingFrameStack);
@@ -85,8 +113,22 @@ class RuntimeLifecycleUses {
 		if (expression->type.isMetaType() || !expressions.insert(expression).second)
 			return;
 		collectType(expression->type);
-		if (const auto *function = std::get_if<CompileTimeFunction>(&expression->compileTimeValue))
+		if (const auto *function = std::get_if<CompileTimeFunction>(&expression->compileTimeValue)) {
+			size_t diagnosticCount = context.parseContext.diagnostics.size();
+			if (!prepareCallable(*function)) {
+				valid = false;
+				if (context.parseContext.diagnostics.size() == diagnosticCount) {
+					requireCompilerInvariant(
+						!context.typeFailureDetail.empty(), "callable restoration failed without a diagnostic"
+					);
+					context.addDiagnosticWithCurrentTrace(
+						buildFailureDetailDiagnostic(expression->range, context.typeFailureDetail)
+					);
+				}
+				return;
+			}
 			collectInstantiation(*function->instantiation, true);
+		}
 		if (expression->selectedInstantiation)
 			collectInstantiation(*expression->selectedInstantiation, expression->selectedCallableDefinition != nullptr);
 		if (expression->inferredDataValue)
@@ -114,4 +156,7 @@ class RuntimeLifecycleUses {
 			collectExpression(expression->arguments[index], bindings);
 		}
 	}
+
+  private:
+	InferenceContext &context;
 };

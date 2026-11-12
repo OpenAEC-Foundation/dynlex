@@ -56,6 +56,8 @@ struct CallableFunctionMatch {
 	size_t pathIndex{};
 };
 
+void recordInferenceRestoration(InferenceContext *context, Section *section, const InstantiationKey &key);
+
 struct CallableFunctionParameter {
 	std::string name;
 	DataType type;

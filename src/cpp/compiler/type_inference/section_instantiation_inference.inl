@@ -48,10 +48,13 @@ bool ensureSectionInstantiationInferred(
 		inst, paramBindings, argTypes, inst.requiredCompileTimeParameters, evaluateParameterValue
 	);
 	if (!inst.returnType.isDeduced() && parseContext.reuseInferredInstantiation)
-		parseContext.reuseInferredInstantiation(section, instantiationKey, inst, ParseContext::InferenceReuseUse::Callable);
-	if (inst.inferenceReusedFromCache && inst.purity == InstantiationPurity::Pure &&
-		inst.returnType.kind != DataType::Kind::Void)
-		inst.needsReinfer = true;
+		parseContext.reuseInferredInstantiation(
+			section, instantiationKey, inst, ParseContext::InferenceReuseUse::Callable, callerContext
+		);
+	if (inst.inferenceReusedFromCache && parseContext.reuseInferredInstantiation)
+		parseContext.reuseInferredInstantiation(
+			section, instantiationKey, inst, ParseContext::InferenceReuseUse::Callable, callerContext
+		);
 	if (inst.returnType.isDeduced() && !inst.needsReinfer)
 		return inst.valid;
 	if (inst.inferring)
@@ -104,6 +107,7 @@ bool ensureSectionInstantiationInferred(
 		context.currentSubject = {};
 		if (context.trial)
 			inst.body = context.cloneSectionBody(section, nullptr, storageScope);
+		parseContext.functionBodyInferencePasses++;
 		bool passSucceeded = inferSection(section, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
 		finishParameterOutputReinference(context, inst, passSucceeded);
 		inst.fallsThrough = instantiationFallsThrough;

@@ -46,9 +46,10 @@ class TargetMachine;
 } // namespace llvm
 
 struct CallableFunctionMatch;
+struct InferenceContext;
 
 struct ParseContext {
-	enum class InferenceReuseUse { RuntimeCall, ConstantCall, Callable };
+	enum class InferenceReuseUse { RuntimeCall, ConstantCall, Callable, SymbolicReference };
 	struct IncrementalFunctionRequest {
 		Section *section;
 		std::vector<std::string> parameterNames;
@@ -150,7 +151,9 @@ struct ParseContext {
 	// Native incremental builds may import a previously generated function body
 	// after this compilation has inferred its current types and selected calls.
 	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;
-	std::function<bool(Section *, const InstantiationKey &, Instantiation &, InferenceReuseUse)> reuseInferredInstantiation;
+	std::function<bool(Section *, const InstantiationKey &, Instantiation &, InferenceReuseUse, InferenceContext *)>
+		reuseInferredInstantiation;
+	size_t functionBodyInferencePasses = 0;
 	std::function<void(ParseContext &, const std::function<bool(const IncrementalFunctionRequest &)> &)>
 		runIncrementalPreinference;
 	std::vector<IncrementalFunctionRequest> incrementalReplacementFunctions;

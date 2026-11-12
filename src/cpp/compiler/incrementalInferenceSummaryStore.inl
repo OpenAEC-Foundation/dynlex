@@ -49,6 +49,7 @@ class InferenceSummaryStore {
 			{"purity", summary.at("purity")},
 			{"needs_global_types", summary.at("needs_global_types")},
 			{"observed_values", !summary.at("pure_values").empty()},
+			{"symbolic_dependencies", captureSymbolicInferenceDependencies(summary)},
 			{"pure_values_complete", summary.at("pure_values_complete")}
 		};
 	}

@@ -3,16 +3,16 @@
 class InferenceStorageIdentities {
   public:
 	InferenceStorageIdentities(
-		ParseContext &context, const std::map<const Section *, std::string> &paths, const ClassIdentityPaths &classes
+		ParseContext &context, const std::map<const Section *, std::string> &paths, const InferenceValueIdentities &identities
 	)
-		: context(context), paths(paths), classes(classes) {
+		: context(context), paths(paths), identities(identities) {
 		for (const auto &[section, path] : paths)
 			sections.emplace(path, const_cast<Section *>(section));
 	}
-	std::optional<Json> encodeValue(const CompileTimeValue &value) const { return encodeInferenceValue(value, classes); }
-	bool canDecodeValue(const Json &value) const { return decodeInferenceValue(value, classes).has_value(); }
+	std::optional<Json> encodeValue(const CompileTimeValue &value) const { return encodeInferenceValue(value, identities); }
+	bool canDecodeValue(const Json &value) const { return decodeInferenceValue(value, identities).has_value(); }
 	CompileTimeValue decodeValue(const Json &encoded) const {
-		auto value = decodeInferenceValue(encoded, classes);
+		auto value = decodeInferenceValue(encoded, identities);
 		requireCompilerInvariant(value.has_value(), "cached storage value has unrestored dependencies");
 		return std::move(*value);
 	}
@@ -88,7 +88,7 @@ class InferenceStorageIdentities {
 		std::optional<Json> result;
 		if (auto found = instantiations.find(scope.get()); found != instantiations.end()) {
 			const auto &[section, key] = *found->second;
-			result = encodeInferenceKey(key, classes);
+			result = encodeInferenceKey(key, identities);
 			if (result)
 				(*result)["owner"] = paths.at(section);
 		} else if (auto found = invocations.find(scope.get()); found != invocations.end()) {
@@ -107,7 +107,7 @@ class InferenceStorageIdentities {
 			return true;
 		if (scope.contains("parent"))
 			return canDecodeScope(scope.at("parent"));
-		return decodeInferenceKey(scope, classes).has_value();
+		return decodeInferenceKey(scope, identities).has_value();
 	}
 
 	std::shared_ptr<const VariableStorageScope> decodeScope(const Json &scope) {
@@ -125,7 +125,7 @@ class InferenceStorageIdentities {
 			);
 		}
 		Section *section = sections.at(scope.at("owner").get<std::string>());
-		auto key = decodeInferenceKey(scope, classes);
+		auto key = decodeInferenceKey(scope, identities);
 		requireCompilerInvariant(key.has_value(), "cached invocation has unrestored arguments");
 		return context.storageScopeForInstantiation(section, *key);
 	}
@@ -171,7 +171,7 @@ class InferenceStorageIdentities {
 
 	ParseContext &context;
 	const std::map<const Section *, std::string> &paths;
-	const ClassIdentityPaths &classes;
+	const InferenceValueIdentities &identities;
 	std::map<std::string, Section *> sections;
 	std::unordered_map<const VariableStorageScope *, const std::pair<Section *, InstantiationKey> *> instantiations;
 	std::unordered_map<

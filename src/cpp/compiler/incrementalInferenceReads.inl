@@ -2,7 +2,10 @@ class IncrementalInferenceReads {
   public:
 	using Keys = std::set<std::string>;
 	using Scope = std::shared_ptr<const VariableStorageScope>;
-	using ValueQueries = std::map<std::vector<CompileTimeValue>, CompileTimeValue>;
+	struct ValueQueries {
+		std::map<std::string, Json> results;
+		bool opaqueArguments = false;
+	};
 	struct ScopeNode {
 		const Section *section;
 		Keys sources;
@@ -58,13 +61,16 @@ class IncrementalInferenceReads {
 			probeDependencies[*owner.constraintProbe].insert(path);
 	}
 	const ScopeNodes &scopes() const { return scopeNodes; }
-	void recordValue(
-		const InferenceReadOwner &owner, const Section &dependency, const Scope &calleeScope,
-		const std::vector<CompileTimeValue> &arguments, const CompileTimeValue &value
-	) {
+	void
+	recordValue(const InferenceReadOwner &owner, const Section &dependency, const Scope &calleeScope, const Json &identity) {
 		ensureScope(calleeScope, &dependency);
-		if (owner.section && owner.direct)
-			ensureScope(owner.scope, owner.section).values[calleeScope][arguments] = value;
+		if (owner.section && owner.direct) {
+			auto &queries = ensureScope(owner.scope, owner.section).values[calleeScope];
+			if (identity.at(0).is_null())
+				queries.opaqueArguments = true;
+			else
+				queries.results[identity.at(0).get<std::string>()] = identity.at(1);
+		}
 	}
 
 	void validate(ParseContext &context, const Json &prior) {

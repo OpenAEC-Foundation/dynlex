@@ -14,8 +14,8 @@ class InferenceUnitGraphCapture {
 		const std::map<std::string, std::set<std::string>> &lookupOwners, BuildStatistics &statistics,
 		std::map<std::string, std::string> &fingerprints
 	)
-		: context(context), paths(paths), classes(classIdentityPaths(paths)), reads(reads), graph(graph),
-		  priorUnits(priorUnits), inputs(context, projection, paths, statistics, fingerprints), statistics(statistics) {
+		: context(context), paths(paths), identities(paths), reads(reads), graph(graph), priorUnits(priorUnits),
+		  inputs(context, projection, paths, statistics, fingerprints), statistics(statistics) {
 		for (const auto &[key, owners] : lookupOwners)
 			for (const std::string &owner : owners)
 				lookupsByOwner[owner].insert(key);
@@ -27,7 +27,7 @@ class InferenceUnitGraphCapture {
 			for (const auto &[key, instantiation] : section->instantiations) {
 				if (!instantiation.valid || instantiation.inferring || instantiation.needsReinfer || !instantiation.body)
 					continue;
-				auto identity = inferenceSummaryKey(key, classes);
+				auto identity = inferenceSummaryKey(key, identities);
 				if (identity)
 					mappedScopes.emplace(instantiation.body->storageScope, InferenceUnitKey{path, *identity});
 			}
@@ -37,7 +37,7 @@ class InferenceUnitGraphCapture {
 			for (const auto &[key, instantiation] : section->instantiations) {
 				if (!instantiation.valid || instantiation.inferring || instantiation.needsReinfer || !instantiation.body)
 					continue;
-				auto identity = inferenceSummaryKey(key, classes);
+				auto identity = inferenceSummaryKey(key, identities);
 				if (!identity)
 					continue;
 				bool reused = instantiation.inferenceReusedFromCache;
@@ -51,8 +51,11 @@ class InferenceUnitGraphCapture {
 		(context.reuseRootExecution ? statistics.inferenceUnitsReused : statistics.inferenceUnitsCaptured)++;
 		units["root"][aggregateGraphVariant] = std::move(root);
 		for (const auto &[path, variants] : summaries.items())
-			for (const auto &[key, _] : variants.items())
+			for (const auto &[key, reference] : variants.items()) {
 				retain(path, key);
+				for (const Json &target : reference.at("symbolic_dependencies"))
+					units[path][key]["callees"].push_back(target);
+			}
 		for (const auto &[name, owner] : functionSections.items())
 			retain(owner.get<std::string>(), functionKeys.at(name).get<std::string>());
 		std::vector<InferenceUnitKey> referenced;
@@ -116,23 +119,10 @@ class InferenceUnitGraphCapture {
 					pending.push(callee);
 					continue;
 				}
-				for (const auto &[arguments, value] : queries) {
-					Json encodedArguments = Json::array();
-					for (const CompileTimeValue &argument : arguments) {
-						auto encoded = encodeInferenceValue(argument, classes);
-						if (!encoded)
-							break;
-						encodedArguments.push_back(std::move(*encoded));
-					}
-					auto result = encodeInferenceValue(value, classes);
-					bool portable = result && encodedArguments.size() == arguments.size();
-					Json identity =
-						portable ? inferenceValueFingerprints(encodedArguments, *result) : Json::array({nullptr, nullptr});
-					unit["values"].push_back(
-						Json::array(
-							{target->second.first, target->second.second, std::move(identity.at(0)), std::move(identity.at(1))}
-						)
-					);
+				if (queries.opaqueArguments)
+					unit["values"].push_back(Json::array({target->second.first, target->second.second, nullptr, nullptr}));
+				for (const auto &[arguments, value] : queries.results) {
+					unit["values"].push_back(Json::array({target->second.first, target->second.second, arguments, value}));
 				}
 			}
 		}
@@ -165,7 +155,7 @@ class InferenceUnitGraphCapture {
 	}
 	const ParseContext &context;
 	const std::map<const Section *, std::string> &paths;
-	ClassIdentityPaths classes;
+	InferenceValueIdentities identities;
 	const IncrementalInferenceReads &reads;
 	const Json &graph;
 	Json *priorUnits;
