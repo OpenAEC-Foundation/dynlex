@@ -14,6 +14,7 @@ from test_incremental_callable_identity import check_callable_identity_reuse
 from test_incremental_symbolic_values import check_symbolic_value_queries
 from test_incremental_typed_bodies import check_typed_body_reuse
 from test_incremental_native_globals import check_native_global_reuse
+from test_incremental_reference_metadata import check_reference_metadata_reuse
 
 
 def graph_for(cache, entry):
@@ -903,6 +904,7 @@ def check_global_reader_after_top_level_edit(root, build):
 
 
 def check_deferred_match_key_replay(root, build):
+    check_reference_metadata_reuse(root, build)
     main = root / "deferred_match_key_replay.dl"
     source = ('integer means: @intrinsic("type", "int")\n'
               'to first: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\n'

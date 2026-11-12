@@ -42,7 +42,9 @@ class IncrementalMatcherCache {
 		std::string_view initialKey;
 	};
 	std::string recordReferenceKeys(const std::vector<PatternReference *> &references);
-	std::optional<std::vector<ReferenceMatchKeys>> restoreReferenceKeys(std::string_view key);
+	const std::vector<ReferenceMatchKeys> *restoreReferenceKeys(std::string_view key);
+	size_t referenceMetadataLoads() const { return referenceMetadataLoadCount; }
+	size_t referenceMetadataReuses() const { return referenceMetadataReuseCount; }
 	std::string recordMatchIdentities(const std::vector<std::string_view> &identities);
 	std::optional<std::vector<std::string_view>> restoreMatchIdentities(std::string_view key);
 	std::string recordClassificationData(const Json &value);
@@ -63,6 +65,9 @@ class IncrementalMatcherCache {
 	ParseContext &context;
 	std::unordered_map<std::string_view, std::string_view> previousEntries;
 	std::map<std::string, std::variant<std::string, std::string_view>> recorded;
+	std::unordered_map<std::string_view, std::vector<ReferenceMatchKeys>> decodedReferenceKeys;
+	size_t referenceMetadataLoadCount = 0;
+	size_t referenceMetadataReuseCount = 0;
 	std::uint64_t cachedPrecedenceRevision = 0;
 	std::string cachedPrecedenceDigest;
 	size_t reusedCount = 0;

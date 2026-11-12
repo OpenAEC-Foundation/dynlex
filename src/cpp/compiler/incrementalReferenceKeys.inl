@@ -18,11 +18,15 @@ std::string IncrementalMatcherCache::recordReferenceKeys(const std::vector<Patte
 	return key;
 }
 
-std::optional<std::vector<IncrementalMatcherCache::ReferenceMatchKeys>>
+const std::vector<IncrementalMatcherCache::ReferenceMatchKeys> *
 IncrementalMatcherCache::restoreReferenceKeys(std::string_view key) {
+	if (auto decoded = decodedReferenceKeys.find(key); decoded != decodedReferenceKeys.end()) {
+		referenceMetadataReuseCount++;
+		return &decoded->second;
+	}
 	auto entry = previousEntries.find(key);
 	if (entry == previousEntries.end())
-		return std::nullopt;
+		return nullptr;
 	std::string_view packed = entry->second;
 	if (packed.empty() || packed.front() != '\3')
 		throw std::runtime_error("invalid projected reference cache kind");
@@ -46,7 +50,8 @@ IncrementalMatcherCache::restoreReferenceKeys(std::string_view key) {
 	if (position != packed.size())
 		throw std::runtime_error("trailing projected reference cache data");
 	retain(key);
-	return result;
+	referenceMetadataLoadCount++;
+	return &decodedReferenceKeys.emplace(entry->first, std::move(result)).first->second;
 }
 
 // The ordered identities are both the function's match fingerprint and a lazy

@@ -721,6 +721,8 @@ bool compileIncrementally(
 			statistics.callableLookupsChecked = inferenceReads.checkedCount();
 			statistics.callableLookupsChanged = inferenceReads.changedKeys().size();
 			statistics.matcherCacheHits = matcherCache.hits();
+			statistics.referenceMetadataUnitsLoaded = matcherCache.referenceMetadataLoads();
+			statistics.referenceMetadataUnitsReused = matcherCache.referenceMetadataReuses();
 			statistics.matcherPathSnapshotsBuilt = matcherPaths.pathsBuilt();
 			statistics.matcherPathSnapshotsLoaded = matcherPaths.pathsLoaded();
 			statistics.deferredMatchKeysReplayed = matcherCache.deferredKeyReplays();

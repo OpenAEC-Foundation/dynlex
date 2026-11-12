@@ -75,6 +75,10 @@ struct BuildStatistics {
 	size_t optimizationUnitsBuilt = 0;
 	size_t optimizationUnitsReused = 0;
 	double optimizationInputMilliseconds = 0;
+	double optimizationInterfaceMilliseconds = 0;
+	double optimizationSymbolMilliseconds = 0;
+	double optimizationInputCheckMilliseconds = 0;
+	double optimizationInputBuildMilliseconds = 0;
 	double optimizationIndexMilliseconds = 0;
 	double optimizationBackendMilliseconds = 0;
 	size_t dependencyGraphSectionsReused = 0;
@@ -84,6 +88,8 @@ struct BuildStatistics {
 	size_t inactiveProjectionMatchesRechecked = 0;
 	size_t reusedDiagnosticRecords = 0;
 	size_t matcherCacheHits = 0;
+	size_t referenceMetadataUnitsLoaded = 0;
+	size_t referenceMetadataUnitsReused = 0;
 	size_t matcherKeyComputations = 0;
 	size_t matcherSignatureLookups = 0;
 	size_t deferredMatchKeysReplayed = 0;

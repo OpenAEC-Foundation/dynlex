@@ -4,6 +4,7 @@ import json
 import os
 import hashlib
 from test_incremental_program_cache import read_program
+from test_incremental_lifecycles import check_lifecycle_inference_reuse
 
 
 def check_interned_literal_identity(root, build):
@@ -32,6 +33,7 @@ def check_interned_literal_identity(root, build):
 
 
 def check_native_partition_edits(root, build):
+    check_lifecycle_inference_reuse(root, build)
     main = root / "partition_main.dl"
     main_source = ('integer means: @intrinsic("type", "int")\n' +
                    ''.join(f'import part{i:02d}.dl\n' for i in range(20)) +

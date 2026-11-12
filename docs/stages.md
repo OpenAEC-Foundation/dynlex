@@ -981,6 +981,12 @@ An evicted matcher entry causes
 matching to run normally on the next code edit.
 Successful matches are rebound to the new tree and expression objects. Failed matches
 restore their trie dependencies, so later definition insertions still retry them.
+Classification and deferred replay share an immutable decoded reference-metadata
+unit. Its source shapes and saved lookup keys are decoded once per content identity;
+later consumers borrow that result without copying or decoding the unit again.
+`reference_metadata_units_loaded` and `reference_metadata_units_reused` report these
+separate operations. This metadata sharing does not bypass lookup-key or pattern-tree
+validation.
 New or removed matching overloads change the relevant tree fingerprint and invalidate
 cached matches from that point in resolution. Precedence-pass results also include
 the syntax families participating in associativity or precedence reachability in
@@ -1207,8 +1213,12 @@ can stop invalidation before linking.
 `optimization_index_ms`, `optimization_backend_ms`, `native_reachability_ms`, and
 `native_unit_ms` separate these costs. `optimization_input_units_built`,
 `optimization_input_units_reused`, `optimization_units_built`, and
-`optimization_units_reused` expose input and optimization reuse. Index construction
-still visits the input set on active edits. `native_functions` counts function
+`optimization_units_reused` expose input and optimization reuse.
+Input preparation also reports `optimization_interface_ms` for declaration and
+environment projection, `optimization_symbol_ms` for definition dependencies,
+`optimization_input_check_ms` for input validation and loading, and
+`optimization_input_build_ms` for constructing and simplifying changed inputs.
+Index construction still visits the input set on active edits. `native_functions` counts function
 definitions in live units; `native_functions_lowered` counts those handed to native
 code generation. `native_unreachable_units` counts optimized units that need no
 native object.
@@ -1484,8 +1494,12 @@ source projections; semantic compatibility compares the projected text digest,
 so a comment insertion does not invalidate the next executable edit.
 
 For active edits, the native cache also persists inference summaries for functions
-with concrete runtime argument and return types, including class pointers. A pure
-function returning a value reuses its summary when its call arguments are not all
+with concrete runtime argument and return types, including class pointers.
+Managed `retain` and `release` bodies use the same concrete-unit summaries and
+dependency checks. An unrelated edit reuses their inference and IR; editing one
+lifecycle body invalidates that unit, while a changed owner layout invalidates
+the corresponding typed lifecycle instantiations.
+A pure function returning a value reuses its summary when its call arguments are not all
 known at compile time. A call with known arguments uses a saved return value when
 available; otherwise it infers the body for compile-time evaluation.
 For a pure function without global access, the

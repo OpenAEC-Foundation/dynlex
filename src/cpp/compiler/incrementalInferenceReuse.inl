@@ -57,8 +57,9 @@ bool canPersistInferenceSummary(
 	const InferenceValueIdentities &identities
 ) {
 	std::set<std::pair<const ClassDefinition *, int>> visiting;
-	return section->type == SectionType::Function && !section->isFlex && instantiation.valid && !instantiation.inferring &&
-		   !instantiation.needsReinfer && instantiation.body &&
+	bool callable = (section->type == SectionType::Function && !section->isFlex) || section->type == SectionType::Retain ||
+					section->type == SectionType::Release;
+	return callable && instantiation.valid && !instantiation.inferring && !instantiation.needsReinfer && instantiation.body &&
 		   inferenceTypeIdentity(instantiation.returnType, identities.classes, visiting).has_value() &&
 		   instantiation.argumentTypes == key.argumentTypes &&
 		   (!instantiation.returnType.isMetaType() || instantiation.purity == InstantiationPurity::Pure) &&

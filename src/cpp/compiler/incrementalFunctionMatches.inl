@@ -67,8 +67,7 @@ ResolvedFunctionMatches resolvedFunctionMatches(
 				visit(child);
 	};
 	visit(section);
-	auto oldEntries =
-		priorEntries ? matcherCache.restoreReferenceKeys(priorEntries->get_ref<const std::string &>()) : std::nullopt;
+	auto oldEntries = priorEntries ? matcherCache.restoreReferenceKeys(priorEntries->get_ref<const std::string &>()) : nullptr;
 	auto oldIdentities =
 		priorFingerprint ? matcherCache.restoreMatchIdentities(priorFingerprint->get_ref<const std::string &>()) : std::nullopt;
 	std::unordered_map<std::string_view, size_t> priorByKey;
@@ -148,12 +147,12 @@ const lsp::SourceFile &resolutionSourceFile(const Section &section) {
 	return *line->sourceFile;
 }
 
-std::optional<std::vector<IncrementalMatcherCache::ReferenceMatchKeys>>
+const std::vector<IncrementalMatcherCache::ReferenceMatchKeys> *
 savedReferenceKeys(const Json &projection, IncrementalMatcherCache &matcherCache, const std::string &path) {
 	const Json &overrides = projection.at("matcher_projection").at("match_overrides");
 	if (overrides.contains(path))
 		return matcherCache.restoreReferenceKeys(overrides.at(path).get_ref<const std::string &>());
 	if (!projection.at("match_entries").contains(path))
-		return std::nullopt;
+		return nullptr;
 	return matcherCache.restoreReferenceKeys(projection.at("match_entries").at(path).get_ref<const std::string &>());
 }

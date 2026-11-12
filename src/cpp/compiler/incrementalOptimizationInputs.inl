@@ -16,6 +16,7 @@ std::vector<OptimizationInput> captureOptimizationInputs(
 	ParseContext &context, const fs::path &directory, const Json *previous, BuildStatistics &statistics,
 	const IncrementalIRReuse *functionReuse, std::set<std::string> &preserved
 ) {
+	auto interfaceStart = Clock::now();
 	llvm::Module &module = *context.llvmModule;
 	std::string prefix = "__dynlex_" + digest(fs::absolute(context.options.inputPath).lexically_normal().string()) + "_";
 	std::unordered_set<std::string> reusedFunctions;
@@ -69,6 +70,8 @@ std::vector<OptimizationInput> captureOptimizationInputs(
 		{"symbols", Json::object()},
 		{"units", Json::object()}
 	};
+	statistics.optimizationInterfaceMilliseconds += elapsedMilliseconds(interfaceStart);
+	auto symbolStart = Clock::now();
 	std::map<std::string, std::set<std::string>> owned, dependencies;
 	for (const llvm::GlobalValue &value : module.global_values()) {
 		if (value.isDeclaration())
@@ -89,8 +92,10 @@ std::vector<OptimizationInput> captureOptimizationInputs(
 		dependencies[unit].insert(name);
 		snapshot["symbols"][name] = std::move(symbol);
 	}
+	statistics.optimizationSymbolMilliseconds += elapsedMilliseconds(symbolStart);
 	std::vector<OptimizationInput> inputs;
 	for (const auto &[unit, names] : owned) {
+		auto checkStart = Clock::now();
 		std::vector<std::string> pending(dependencies[unit].begin(), dependencies[unit].end());
 		while (!pending.empty()) {
 			std::string name = std::move(pending.back());
@@ -120,9 +125,11 @@ std::vector<OptimizationInput> captureOptimizationInputs(
 				throw std::runtime_error("corrupt optimization input: " + key);
 		}
 		std::string identifier = prefix + "unit-" + digest(unit);
+		statistics.optimizationInputCheckMilliseconds += elapsedMilliseconds(checkStart);
 		if (bitcode)
 			statistics.optimizationInputUnitsReused++;
 		else {
+			auto buildStart = Clock::now();
 			llvm::ValueToValueMapTy mapping;
 			auto part = llvm::CloneModule(module, mapping, [&](const llvm::GlobalValue *value) {
 				return !value->isDeclaration() && layout.component(*value) == unit;
@@ -150,6 +157,7 @@ std::vector<OptimizationInput> captureOptimizationInputs(
 			writeEntry(directory / ("optimization-input-" + key + ".entry"), bytes);
 			bitcode = std::move(bytes);
 			statistics.optimizationInputUnitsBuilt++;
+			statistics.optimizationInputBuildMilliseconds += elapsedMilliseconds(buildStart);
 		}
 		current["input_key"] = key;
 		snapshot["units"][unit] = std::move(current);
