@@ -48,6 +48,7 @@
 #include "llvm/Support/Caching.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Process.h"
 #include "llvm/Support/SHA256.h"
 #include "llvm/Support/Threading.h"
 #include "llvm/Support/raw_ostream.h"
@@ -84,6 +85,13 @@ using Clock = std::chrono::steady_clock;
 
 double elapsedMilliseconds(Clock::time_point start) {
 	return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+}
+
+double processCPUMilliseconds() {
+	llvm::sys::TimePoint<> elapsed;
+	std::chrono::nanoseconds user, system;
+	llvm::sys::Process::GetTimeUsage(elapsed, user, system);
+	return std::chrono::duration<double, std::milli>(user + system).count();
 }
 
 std::string digest(std::string_view text) {
@@ -165,29 +173,7 @@ void writeEntry(const fs::path &path, std::string_view payload) {
 
 #include "incrementalProgramCache.inl"
 
-Json observeFile(const std::string &path, lsp::SourceFile *file) {
-	if (!file)
-		return nullptr;
-	return Json{
-		{"content", digest(file->content)},
-		{"canonical", fs::canonical(pathutil::toFilesystemPath(path)).string()},
-		{"internal", file->isInternal}
-	};
-}
-
-class RecordingFileSystem : public lsp::FileSystem {
-  public:
-	lsp::SourceFile *getFile(const std::string &path) override {
-		lsp::SourceFile *file = files.getFile(path);
-		observations[path] = observeFile(path, file);
-		return file;
-	}
-	lsp::SourceFile *cachedFile(const std::string &path) { return files.getFile(path); }
-	Json observations = Json::object();
-
-  private:
-	lsp::LocalFileSystem files;
-};
+#include "incrementalSourceObservations.inl"
 
 #include "incrementalDiagnosticCache.inl"
 #include "incrementalParsedExpressionCache.inl"
@@ -555,9 +541,21 @@ bool compileIncrementally(
 			statistics.cacheRestoreMilliseconds = elapsedMilliseconds(restoreStart);
 			auto saveMatcher = [&]() {
 				auto saveStart = Clock::now();
+				auto phaseStart = saveStart;
+				double phaseCPU = processCPUMilliseconds();
+				auto recordPhase = [&](double &wall, double &cpu) {
+					wall += elapsedMilliseconds(phaseStart);
+					cpu += processCPUMilliseconds() - phaseCPU;
+					phaseStart = Clock::now();
+					phaseCPU = processCPUMilliseconds();
+				};
 				std::string payload = matcherCache.snapshot();
+				statistics.matcherSnapshotBytes += payload.size();
+				recordPhase(statistics.matcherSerializeMilliseconds, statistics.matcherSerializeCPUMilliseconds);
 				std::string key = digest(payload);
+				recordPhase(statistics.matcherDigestMilliseconds, statistics.matcherDigestCPUMilliseconds);
 				writeEntry(directory / ("matcher-" + key + ".entry"), payload);
+				recordPhase(statistics.matcherStoreMilliseconds, statistics.matcherStoreCPUMilliseconds);
 				statistics.matcherSnapshotMilliseconds += elapsedMilliseconds(saveStart);
 				return key;
 			};
@@ -919,6 +917,9 @@ bool compileIncrementally(
 			fs::remove(failedEntry);
 		trimCache(directory);
 		statistics.cacheFinalizeMilliseconds = elapsedMilliseconds(finalizeStart);
+		statistics.fileObservationRequests = recording->observationRequests();
+		statistics.fileObservationsComputed = recording->observationsComputed();
+		statistics.fileObservationsReused = recording->observationsReused();
 		statistics.totalMilliseconds = elapsedMilliseconds(compileStart);
 		if (showStatistics)
 			emitIncrementalStatistics(context, statistics);

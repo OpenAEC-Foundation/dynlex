@@ -88,6 +88,9 @@ struct BuildStatistics {
 	size_t inactiveProjectionMatchesRechecked = 0;
 	size_t reusedDiagnosticRecords = 0;
 	size_t matcherCacheHits = 0;
+	size_t fileObservationRequests = 0;
+	size_t fileObservationsComputed = 0;
+	size_t fileObservationsReused = 0;
 	size_t referenceMetadataUnitsLoaded = 0;
 	size_t referenceMetadataUnitsReused = 0;
 	size_t matcherKeyComputations = 0;
@@ -129,6 +132,13 @@ struct BuildStatistics {
 	double inactiveProjectionMilliseconds = 0;
 	double parserSnapshotMilliseconds = 0;
 	double matcherSnapshotMilliseconds = 0;
+	size_t matcherSnapshotBytes = 0;
+	double matcherSerializeMilliseconds = 0;
+	double matcherSerializeCPUMilliseconds = 0;
+	double matcherDigestMilliseconds = 0;
+	double matcherDigestCPUMilliseconds = 0;
+	double matcherStoreMilliseconds = 0;
+	double matcherStoreCPUMilliseconds = 0;
 	double dependencyGraphMilliseconds = 0;
 	double preinferenceMilliseconds = 0;
 	double codegenMilliseconds = 0;

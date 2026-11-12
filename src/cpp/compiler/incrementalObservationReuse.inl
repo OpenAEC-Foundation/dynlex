@@ -6,7 +6,7 @@ bool observationsStillEquivalent(
 	bool configChanged = false;
 	const Json &configPaths = previous.at("config_paths");
 	for (const auto &[path, observation] : previous.at("files").items()) {
-		Json current = observeFile(path, files.getFile(path));
+		const Json &current = files.observe(path);
 		Json rawObservation = observation;
 		if (rawObservation.is_object())
 			rawObservation.erase("semantic");

@@ -754,6 +754,11 @@ publishes an immutable global before lowering its initializer, allowing cyclic s
 graphs; the initializer must lower to a constant. `deferred body` uses ordinary native
 callable generation, while the body record and receiver intrinsics use their inferred
 expressions. There is no runtime data-section builder pass.
+After cached IR is imported, static references receive names from the first use
+in the ordered function/global IR graph. Their names therefore do not depend on
+which function was generated first or restored from cache. This changes names
+only: separate objects with equal initializers retain separate addresses. Private
+static components unreachable from every function and named global are removed.
 
 Calls with an inferred pure, compile-time-known result materialize it directly
 when their runtime operands lower to LLVM constants, using the same scalar emitter
@@ -870,6 +875,12 @@ comparison uses each source file's configured comment prefix and retains line bo
 between executable text. Observations include source/config contents, canonical source
 identities and failed lookup candidates; a newly created higher-priority import or
 configuration therefore invalidates the result.
+Within a compilation, successful lookups of the same immutable native source
+reuse its content hash and canonical identity, including after observation
+tracking is reset for another stage. Missing lookups are checked again. Each
+compiler process observes sources afresh, so an edit or newly created import
+is visible on the next build. `file_observation_requests`,
+`file_observations_computed`, and `file_observations_reused` report this work.
 The cache records structured warnings and notes, including source locations and
 configured message keys, variants and placeholders. Comment edits relocate their
 source locations without rebuilding the frontend. An edit confined to messages in an
@@ -1031,6 +1042,11 @@ Path snapshots are stored by compiler and tree fingerprint. An edit that keeps
 the initial and final trees identical reuses their fingerprints without reading
 or rebuilding the path lists. A changed tree loads the prior lists on demand.
 `matcher_path_snapshots_loaded` and `matcher_path_snapshots_built` count that work.
+`matcher_snapshot_bytes` reports the serialized matcher payload size.
+`matcher_serialize_ms`, `matcher_digest_ms`, and `matcher_store_ms` separate its
+serialization, content-address calculation, and checksummed storage costs;
+their `_cpu_ms` counterparts measure compiler-process CPU time. These are
+components of the matcher snapshot timer, rather than additional stage costs.
 The matcher still restores the result and its dependencies; changed bodies and
 changed matching environments compute
 their keys normally.

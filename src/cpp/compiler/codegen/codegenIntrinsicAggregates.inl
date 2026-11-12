@@ -8,6 +8,7 @@ generateStaticReferenceIntrinsic(ParseContext &context, Expression *callExpr, co
 		llvm::Constant::getNullValue(getLLVMType(context, valueType)), "section.data"
 	);
 	global->setAlignment(getLLVMABIAlignment(context, valueType));
+	global->setMetadata("dynlex.static.reference", llvm::MDNode::get(*context.llvmContext, {}));
 	context.staticLLVMValues[callExpr] = global;
 	CodegenResult value = generateExpressionCode(context, args[1]);
 	if (!value)

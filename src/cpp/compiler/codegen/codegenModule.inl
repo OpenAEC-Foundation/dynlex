@@ -1,3 +1,5 @@
+#include "codegenStaticReferences.inl"
+
 bool initializeTargetLayout(ParseContext &context) {
 	requireCompilerInvariant(
 		!context.llvmContext && !context.llvmModule && !context.targetMachine, "target layout was initialized twice"
@@ -297,6 +299,7 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 	}
 	if (context.importReusedFunctions && !context.importReusedFunctions(context))
 		return false;
+	stabilizeStaticReferenceIdentities(*context.llvmModule);
 
 	// Finalize debug info before verification
 	if (context.diBuilder)

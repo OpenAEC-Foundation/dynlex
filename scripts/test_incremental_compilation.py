@@ -21,6 +21,8 @@ from test_incremental_body_activation import check_inactive_body_activation
 from test_incremental_storage_origins import check_storage_origin_reuse
 from test_incremental_conversions import check_conversion_reuse
 from test_incremental_matcher_work import check_matcher_fingerprint_work
+from test_incremental_source_observations import check_source_observation_reuse
+from test_incremental_static_references import check_static_reference_identities
 from test_incremental_entry_metadata import check_entry_metadata_reuse
 from test_incremental_diagnostic_units import check_persistent_diagnostic_units, check_preinferred_diagnostic_context
 from test_incremental_definition_units import check_definition_resolution_units
@@ -90,6 +92,8 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_storage_origin_reuse(root, build)
     check_conversion_reuse(root, build)
     check_matcher_fingerprint_work(root, build)
+    check_source_observation_reuse(root, build)
+    check_static_reference_identities(root, build)
     check_entry_metadata_reuse(root, build)
     check_active_resolution_units(root, build)
     check_definition_resolution_units(root, build)
