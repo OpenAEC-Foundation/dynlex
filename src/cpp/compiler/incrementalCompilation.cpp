@@ -188,12 +188,11 @@ void writeEntry(const fs::path &path, std::string_view payload) {
 void recordSemanticSources(Json &result, RecordingFileSystem &files, const ParseContext &context) {
 	result["comment_prefixes"] =
 		Json{{"builtin", context.builtinSyntax.commentPrefix}, {"project", context.projectSyntax.commentPrefix}};
-	result["config_paths"] = Json::array({context.builtinSyntaxConfigPath, context.projectSyntaxConfigPath});
+	result["configuration_files"] = files.configurationObservations;
 	result["syntax_structure"] =
 		Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity});
 	for (auto &[path, observation] : result["files"].items()) {
-		if (observation.is_null() || fs::path(path).extension() != ".dl" || path == context.builtinSyntaxConfigPath ||
-			path == context.projectSyntaxConfigPath)
+		if (observation.is_null() || fs::path(path).extension() != ".dl")
 			continue;
 		lsp::SourceFile *file = files.cachedFile(path);
 		if (!file)
@@ -262,7 +261,6 @@ bool compatibleObservations(const Json &previous, const Json &current, const Par
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context) {
 	const Json &before = previous.at("files");
 	if (before.size() != current.size() ||
-		previous.at("config_paths") != Json::array({context.builtinSyntaxConfigPath, context.projectSyntaxConfigPath}) ||
 		previous.at("syntax_structure") !=
 			Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity}))
 		return false;
@@ -278,8 +276,7 @@ bool compatibleObservations(const Json &previous, const Json &current, const Par
 		if (old == current.at(path))
 			continue;
 		if (!old.is_object() || !current.at(path).is_object() ||
-			(!imported.contains(current.at(path).at("canonical").get<std::string>()) &&
-			 path != context.builtinSyntaxConfigPath && path != context.projectSyntaxConfigPath))
+			!imported.contains(current.at(path).at("canonical").get<std::string>()))
 			return false;
 		old.erase("content");
 		Json now = current.at(path);

@@ -523,6 +523,11 @@ operand. This also applies through ordinary replacement patterns. A type-produci
 impure and cannot be a type constraint.
 
 after we have successfully inferred a function, if it is a pure function and all arguments are compile time known. we execute the function in compile time and retrieve the result from it. evaluating a pure function shouldn't modify anything, only give a compile time value as result.
+Purity includes implicit lifetime operations. Constructing, copying, returning or
+forming arrays of values with custom managed lifecycles can invoke user code and
+contributes an effect, even when a function returns a constant scalar. Plain data
+operations remain pure. These effects use the ordinary instantiation summaries and
+dependency cascade; folding a result cannot discard cleanup or its target checks.
 
 Each root pure evaluation shares one execution budget across nested calls, expressions,
 sections and loop iterations: at most 1,000,000 expression/section entries and 256
@@ -896,8 +901,14 @@ is visible on the next build. `file_observation_requests`,
 `file_observations_computed`, and `file_observations_reused` report this work.
 The cache records structured warnings and notes, including source locations and
 configured message keys, variants and placeholders. Comment edits relocate their
-source locations without rebuilding the frontend. An edit confined to messages in an
-existing `config.dl` rerenders those diagnostics without recompiling.
+source locations without rebuilding the frontend. An edit confined to messages in
+`config.dl` rerenders those diagnostics without recompiling. Configuration reads
+retain their own observations, including missing paths searched during discovery,
+separately from source imports. Creating, deleting, or shadowing a message-only
+configuration therefore updates diagnostics without reevaluating compiler stages
+or touching the executable. Its message block adds no structural syntax identity.
+An imported source named `config.dl` still has an ordinary source dependency.
+Invalid configuration is diagnosed before any cached result can be reused.
 The program entry is a small manifest of observations, diagnostics, object keys,
 and content-addressed keys for generated LLVM bitcode, function projection, dependency
 graph, inference summaries, native units, and optimization-unit inputs.
@@ -1438,7 +1449,16 @@ tables therefore never run ordinary inference against partly restored effects.
 A cache miss rolls back the whole transaction, and trial journals include every
 indirectly restored target. Runtime lifecycle discovery materializes a referenced
 body only when reusable native IR is unavailable, using its inferred argument
-types (including deferred callback receivers). `function_body_inference_passes`
+types and compile-time parameter values (including deferred callback receivers).
+That traversal includes selected calls inside restored bodies: a symbolic type
+fact alone does not satisfy their executable dependency. Each runtime instantiation
+is prepared once. A shared runtime-constant query distinguishes inference observations
+from values whose runtime inputs cannot change. It follows captured and flex bindings,
+fixed parameters and explicit pure intrinsic inputs; mutable storage does not qualify.
+Only those constant pure calls omit the executable demand, while preserving argument
+evaluation, managed temporaries and their effects. Type-valued calls consume argument
+types independently of runtime values.
+`function_body_inference_passes`
 counts actual function-body inference, including this materialization work.
 Summaries restore
 parameter input and output types, constant bindings, and compile-time requirements.

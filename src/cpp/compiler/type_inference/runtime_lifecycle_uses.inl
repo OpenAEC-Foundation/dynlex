@@ -1,3 +1,5 @@
+#include "runtimeConstantCall.h"
+
 // Follow the finalized execution graph, rather than every type instantiated
 // while resolving declarations, overloads or compile-time type queries.
 class RuntimeLifecycleUses {
@@ -99,14 +101,41 @@ class RuntimeLifecycleUses {
 		for (size_t index = 0; index < parameters.size(); index++) {
 			arguments[index].kind = Expression::Kind::TypedPlaceholder;
 			arguments[index].type = instantiation.argumentTypes[index];
+			if (auto constant = instantiation.constantParameterValues.find(parameters[index].name);
+				constant != instantiation.constantParameterValues.end())
+				arguments[index].compileTimeValue = constant->second;
 			bindings.emplace_back(parameters[index].name, &arguments[index]);
 		}
 		// Deferred callbacks infer their receiver from the section schema; the
 		// authored parameter need not declare that concrete type itself.
+		auto required = instantiation.requiredCompileTimeParameters;
 		return ensureSectionInstantiationInferred(
-			context.parseContext, function.definition->section, function.definition, bindings, instantiation.argumentTypes, {},
-			context.currentInstantiation, &context
+			context.parseContext, function.definition->section, function.definition, bindings, instantiation.argumentTypes,
+			required, context.currentInstantiation, &context
 		);
+	}
+	bool prepareSelectedFunction(Expression *expression) {
+		Instantiation &instance = *expression->selectedInstantiation;
+		if (instantiations.contains(&instance) || !instance.inferenceReusedFromCache || instance.bodyInferred)
+			return true;
+		PatternDefinition *definition = expression->selectedCallableDefinition ? expression->selectedCallableDefinition
+																			   : expression->selectedPatternDefinition;
+		auto path = expression->selectedCallableDefinition ? expression->selectedCallablePathIndex
+														   : expression->selectedPatternPathIndex;
+		requireCompilerInvariant(definition && path, "runtime call lost its selected definition path");
+		Section *section = definition->section;
+		auto slot = std::ranges::find_if(section->instantiations, [&](const auto &entry) {
+			return &entry.second == &instance;
+		});
+		requireCompilerInvariant(slot != section->instantiations.end(), "runtime call lost its selected instantiation");
+		requireCompilerInvariant(
+			context.parseContext.reuseInferredInstantiation &&
+				context.parseContext.reuseInferredInstantiation(
+					section, slot->first, instance, ParseContext::InferenceReuseUse::RuntimeCall, &context
+				),
+			"restored runtime dependency lost its inference facts"
+		);
+		return !instance.needsReinfer || prepareCallable({definition, *path, &instance});
 	}
 
 	void collectExpression(Expression *expression, const BindingFrameStack &bindings = {}) {
@@ -136,8 +165,14 @@ class RuntimeLifecycleUses {
 			}
 			collectInstantiation(*function->instantiation, true);
 		}
-		if (expression->selectedInstantiation)
+		bool folded = expression->selectedInstantiation && isCompileTimeKnown(runtimeConstantCallValue(expression, bindings));
+		if (expression->selectedInstantiation) {
+			if (!folded && !prepareSelectedFunction(expression)) {
+				valid = false;
+				return;
+			}
 			collectInstantiation(*expression->selectedInstantiation, expression->selectedCallableDefinition != nullptr);
+		}
 		if (expression->inferredDataValue)
 			collectExpression(expression->inferredDataValue, bindings);
 		BindingFrameStack replacementBindings = bindings;

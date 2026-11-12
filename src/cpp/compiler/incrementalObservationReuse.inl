@@ -3,8 +3,7 @@ bool observationsStillEquivalent(
 	bool &configOnlyChange
 ) {
 	std::vector<std::string> changedSources;
-	bool configChanged = false;
-	const Json &configPaths = previous.at("config_paths");
+	bool configChanged = previous.at("configuration_files") != files.configurationObservations;
 	for (const auto &[path, observation] : previous.at("files").items()) {
 		const Json &current = files.observe(path);
 		Json rawObservation = observation;
@@ -12,13 +11,6 @@ bool observationsStillEquivalent(
 			rawObservation.erase("semantic");
 		if (current == rawObservation)
 			continue;
-		if (path == configPaths[0].get<std::string>() || path == configPaths[1].get<std::string>()) {
-			if (current.is_null() || observation.is_null() || current.at("canonical") != observation.at("canonical") ||
-				current.at("internal") != observation.at("internal"))
-				return false;
-			configChanged = true;
-			continue;
-		}
 		if (current.is_null() || observation.is_null() || fs::path(path).extension() != ".dl" ||
 			!previous.contains("comment_prefixes") || !observation.contains("semantic"))
 			return false;
@@ -30,9 +22,8 @@ bool observationsStillEquivalent(
 		cachedDiagnostics = previous.at("diagnostics").get<std::string>();
 		return true;
 	}
-	if (configPaths != Json::array({context.builtinSyntaxConfigPath, context.projectSyntaxConfigPath}) ||
-		previous.at("syntax_structure") !=
-			Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity}))
+	if (previous.at("syntax_structure") !=
+		Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity}))
 		return false;
 	if (!changedSources.empty() && (context.options.emitDebugInfo || context.options.traceExecution))
 		return false;

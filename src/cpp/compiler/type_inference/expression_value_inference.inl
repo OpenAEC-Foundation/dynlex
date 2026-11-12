@@ -78,6 +78,8 @@ bool ExpressionInferenceSupport::inferArrayLiteral() {
 	expr->type = DataType(DataType::Kind::Array);
 	expr->type.arraySize = static_cast<int>(expr->arguments.size());
 	expr->type.arrayElementType = std::make_shared<DataType>(elementType);
+	if (typeHasManagedLifecycle(expr->type))
+		markCurrentInstantiationImpure(context);
 	return true;
 }
 

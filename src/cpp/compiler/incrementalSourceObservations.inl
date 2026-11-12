@@ -3,11 +3,12 @@
 // or canonicalizing that loaded file again. Missing paths remain live lookups.
 class RecordingFileSystem : public lsp::FileSystem {
   public:
-	lsp::SourceFile *getFile(const std::string &path) override {
+	lsp::SourceFile *getFile(const std::string &path, lsp::FileReadPurpose purpose = lsp::FileReadPurpose::Source) override {
 		requests++;
-		lsp::SourceFile *file = files.getFile(path);
+		Json &observed = purpose == lsp::FileReadPurpose::SyntaxConfiguration ? configurationObservations : observations;
+		lsp::SourceFile *file = files.getFile(path, purpose);
 		if (!file) {
-			observations[path] = nullptr;
+			observed[path] = nullptr;
 			return nullptr;
 		}
 		auto [entry, inserted] = sourceObservations.try_emplace(file);
@@ -20,7 +21,7 @@ class RecordingFileSystem : public lsp::FileSystem {
 			computed++;
 		} else
 			reused++;
-		observations[path] = entry->second;
+		observed[path] = entry->second;
 		return file;
 	}
 	const Json &observe(const std::string &path) {
@@ -32,6 +33,7 @@ class RecordingFileSystem : public lsp::FileSystem {
 	size_t observationsComputed() const { return computed; }
 	size_t observationsReused() const { return reused; }
 	Json observations = Json::object();
+	Json configurationObservations = Json::object();
 
   private:
 	lsp::LocalFileSystem files;

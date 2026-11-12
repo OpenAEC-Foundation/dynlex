@@ -3,7 +3,7 @@ constexpr std::array inferenceStateFields{"all_function_projection", "section_de
 Json inferenceStateManifest(const fs::path &directory, const Json &source) {
 	Json state = Json::object();
 	for (const char *field :
-		 {"files", "config_paths", "syntax_structure", "comment_prefixes", "global_types", "inference_summary_keys",
+		 {"files", "configuration_files", "syntax_structure", "comment_prefixes", "global_types", "inference_summary_keys",
 		  "inference_body_keys", "inference_class_keys"})
 		if (source.contains(field))
 			state[field] = source.at(field);

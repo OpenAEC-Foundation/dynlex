@@ -3,7 +3,7 @@
 
 namespace lsp {
 
-SourceFile *LocalFileSystem::getFile(const std::string &path) {
+SourceFile *LocalFileSystem::getFile(const std::string &path, FileReadPurpose) {
 	// Check cache first
 	auto it = cache.find(path);
 	if (it != cache.end()) {
@@ -21,13 +21,13 @@ SourceFile *LocalFileSystem::getFile(const std::string &path) {
 	return inserted->second.get();
 }
 
-SourceFile *MemoryFileSystem::getFile(const std::string &path) {
+SourceFile *MemoryFileSystem::getFile(const std::string &path, FileReadPurpose purpose) {
 	auto it = files.find(path);
 	if (it != files.end())
 		return it->second.get();
 	if (!fallback)
 		return nullptr;
-	return fallback->getFile(path);
+	return fallback->getFile(path, purpose);
 }
 
 void MemoryFileSystem::setFile(const std::string &path, std::string content) {

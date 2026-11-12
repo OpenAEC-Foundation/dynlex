@@ -331,8 +331,11 @@ static InstantiationPurity classifyPropertyIntrinsicPurity(
 
 static InstantiationPurity
 classifyStoreIntrinsicPurity(Expression *storeExpr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack) {
-	if (!storeExpr || storeExpr->arguments.size() <= 1)
+	if (!storeExpr || storeExpr->arguments.size() <= 2)
 		crashCompilerBug("store purity classification encountered malformed intrinsic arguments");
+	// Copying into managed storage invokes the value's user-defined lifecycles.
+	if (typeHasManagedLifecycle(effectiveInferredExpressionType(storeExpr->arguments[2])))
+		return InstantiationPurity::Impure;
 	ResolvedBindingLayers resolvedDestination =
 		resolveInferenceBindingLayers(storeExpr->arguments[1], flexBindingFrameStack, &context);
 	Expression *destinationExpr = resolvedDestination.expression;
@@ -361,6 +364,12 @@ classifyCustomIntrinsicPurity(Expression *expr, InferenceContext &context, const
 	if (!expr)
 		return InstantiationPurity::Impure;
 	switch (intrinsicKind(expr->intrinsicName)) {
+	case IntrinsicKind::Construct:
+		return typeHasManagedLifecycle(expr->type) ? InstantiationPurity::Impure : InstantiationPurity::Pure;
+	case IntrinsicKind::Return:
+		return expr->arguments.size() > 1 && typeHasManagedLifecycle(effectiveInferredExpressionType(expr->arguments[1]))
+				   ? InstantiationPurity::Impure
+				   : InstantiationPurity::Pure;
 	case IntrinsicKind::SetSubject: {
 		DataType type = effectiveInferredExpressionType(expr->arguments[1]);
 		if (type.isMetaType())

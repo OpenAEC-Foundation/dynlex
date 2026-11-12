@@ -14,6 +14,7 @@
 #include "numberScopeRules.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
+#include "runtimeConstantCall.h"
 #include "sectionFlexBody.h"
 #include "sectionIdentity.h"
 #include "spirv.h"
@@ -691,9 +692,7 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		// Pure calls with constant operands can materialize their inferred result.
 		Instantiation *inst = expr->selectedInstantiation;
 		requireCompilerInvariant(inst != nullptr, "non-flex call reached codegen without its selected instantiation");
-		CompileTimeValue knownResult = inst->purity == InstantiationPurity::Pure
-										   ? resolveStoredCompileTimeValue(expr, context.flexBindingFrames)
-										   : CompileTimeValue{};
+		CompileTimeValue knownResult = runtimeConstantCallValue(expr, context.flexBindingFrames);
 		if (inst->returnType.isMetaType()) {
 			if (isCompileTimeKnown(knownResult))
 				return nullptr;

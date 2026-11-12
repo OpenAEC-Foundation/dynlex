@@ -48,8 +48,6 @@ void appendStructuralConfig(const ConfigNode &node, std::string &identity) {
 	if (node.value)
 		append(*node.value);
 	for (const auto &child : node.children) {
-		if (node.key == "dynlex options" && child->key == "messages")
-			continue;
 		appendStructuralConfig(*child, identity);
 	}
 	identity += ';';
@@ -550,7 +548,7 @@ bool applySyntaxNode(ParseContext &context, std::string_view path, const ConfigN
 }
 
 bool loadSyntaxConfigFile(ParseContext &context, const std::string &path, SyntaxConfig &config) {
-	lsp::SourceFile *file = context.fileSystem->getFile(path);
+	lsp::SourceFile *file = context.fileSystem->getFile(path, lsp::FileReadPurpose::SyntaxConfiguration);
 	if (!file)
 		return true;
 
@@ -577,11 +575,16 @@ bool loadSyntaxConfigFile(ParseContext &context, const std::string &path, Syntax
 	}
 	// Cache inputs consume this identity repeatedly. Retain one digest instead
 	// of copying and hashing the full structural configuration in every unit.
-	std::string identity = config.nonMessageIdentity;
-	appendStructuralConfig(root, identity);
-	llvm::BLAKE3 hash;
-	hash.update(llvm::StringRef(identity));
-	config.nonMessageIdentity = llvm::toHex(hash.final(), true);
+	std::string structure;
+	for (const auto &child : root.children[0]->children)
+		if (child->key != "messages")
+			appendStructuralConfig(*child, structure);
+	if (!structure.empty()) {
+		llvm::BLAKE3 hash;
+		hash.update(llvm::StringRef(config.nonMessageIdentity));
+		hash.update(llvm::StringRef(structure));
+		config.nonMessageIdentity = llvm::toHex(hash.final(), true);
+	}
 	return true;
 }
 
@@ -589,7 +592,7 @@ std::string findProjectSyntaxConfigPath(ParseContext &context, const std::string
 	std::filesystem::path current = std::filesystem::absolute(pathutil::toFilesystemPath(mainPath)).parent_path();
 	for (;;) {
 		std::filesystem::path candidate = current / "config.dl";
-		if (context.fileSystem->getFile(candidate.string()))
+		if (context.fileSystem->getFile(candidate.string(), lsp::FileReadPurpose::SyntaxConfiguration))
 			return candidate.string();
 		if (current == current.root_path())
 			break;
@@ -650,7 +653,7 @@ bool initializeSyntaxConfigs(ParseContext &context, const std::string &mainPath)
 		"/usr/share/dynlex/lib/config.dl",
 	};
 	for (const std::string &candidate : builtinCandidates) {
-		if (!context.fileSystem->getFile(candidate))
+		if (!context.fileSystem->getFile(candidate, lsp::FileReadPurpose::SyntaxConfiguration))
 			continue;
 		if (!loadSyntaxConfigFile(context, candidate, context.builtinSyntax))
 			return false;

@@ -6,6 +6,8 @@
 
 namespace lsp {
 
+enum class FileReadPurpose { Source, SyntaxConfiguration };
+
 // Abstract file system interface for reading source files.
 // This allows the compiler to work with different file sources:
 // - Local file system (CLI mode)
@@ -17,13 +19,14 @@ class FileSystem {
 
 	// Get a source file by path. Returns nullptr if file doesn't exist or can't be read.
 	// Files are cached - subsequent calls with the same path return the same SourceFile*.
-	virtual SourceFile *getFile(const std::string &path) = 0;
+	// The purpose identifies the consuming query; it never changes file contents.
+	virtual SourceFile *getFile(const std::string &path, FileReadPurpose purpose = FileReadPurpose::Source) = 0;
 };
 
 // Local file system implementation - reads directly from disk and caches results
 class LocalFileSystem : public FileSystem {
   public:
-	SourceFile *getFile(const std::string &path) override;
+	SourceFile *getFile(const std::string &path, FileReadPurpose purpose = FileReadPurpose::Source) override;
 
   private:
 	std::unordered_map<std::string, std::unique_ptr<SourceFile>> cache;
@@ -35,7 +38,7 @@ class MemoryFileSystem : public FileSystem {
   public:
 	explicit MemoryFileSystem(std::unique_ptr<FileSystem> fallback = nullptr) : fallback(std::move(fallback)) {}
 
-	SourceFile *getFile(const std::string &path) override;
+	SourceFile *getFile(const std::string &path, FileReadPurpose purpose = FileReadPurpose::Source) override;
 
 	void setFile(const std::string &path, std::string content);
 	void removeFile(const std::string &path);

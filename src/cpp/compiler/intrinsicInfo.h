@@ -118,8 +118,8 @@ enum class IntrinsicTargets { All, Native, NativeOrWasm };
 	X(AtomicFetchSub, "atomic fetch sub", 4, IntrinsicReturnKind::Custom, 3, 3, IntrinsicPurityKind::Impure)
 
 #define DYNLEX_INTRINSIC_RANGED_TABLE(X)                                                                                       \
-	X(Construct, "construct", 2, -1, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure, IntrinsicTargets::All)      \
-	X(Return, "return", 1, 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure, IntrinsicTargets::All)               \
+	X(Construct, "construct", 2, -1, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Custom, IntrinsicTargets::All)    \
+	X(Return, "return", 1, 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Custom, IntrinsicTargets::All)             \
 	X(Call, "call", 4, -1, IntrinsicReturnKind::Custom, 1, 3, IntrinsicPurityKind::Impure, IntrinsicTargets::NativeOrWasm)     \
 	X(VariadicCall, "variadic call", 5, -1, IntrinsicReturnKind::Custom, 1, 4, IntrinsicPurityKind::Impure,                    \
 	  IntrinsicTargets::NativeOrWasm)                                                                                          \
@@ -337,7 +337,8 @@ constexpr bool isShaderRuntimeIntrinsicKind(IntrinsicKind kind) {
 }
 
 static_assert(isAlwaysPureIntrinsicKind(IntrinsicKind::Multiply));
-static_assert(isAlwaysPureIntrinsicKind(IntrinsicKind::Return));
+static_assert(intrinsicPurityKind(IntrinsicKind::Return) == IntrinsicPurityKind::Custom);
+static_assert(intrinsicPurityKind(IntrinsicKind::Construct) == IntrinsicPurityKind::Custom);
 static_assert(intrinsicPurityKind(IntrinsicKind::Store) == IntrinsicPurityKind::Custom);
 static_assert(intrinsicPurityKind(IntrinsicKind::Property) == IntrinsicPurityKind::Custom);
 static_assert(intrinsicPurityKind(IntrinsicKind::Call) == IntrinsicPurityKind::Impure);
