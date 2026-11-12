@@ -1,0 +1,106 @@
+import ../../site/games/farm/art.dl
+import lib/json_builders.dl
+import lib/filesystem.dl
+
+to get [art test JSON numbers from] {a value:values}:
+    set result to a new JSON value of kind the JSON array kind
+    for each value in values:
+        add (a new JSON number from value) to the JSON array result
+    return result
+
+to get [art test JSON color from] {UI paint:color}:
+    return art test JSON numbers from [color's red,color's green,color's blue]
+
+to get [art test JSON bounds from] {UI mesh bounds:bounds}:
+    return art test JSON numbers from [bounds' minimum's x,bounds' minimum's y,bounds' minimum's z,bounds' maximum's x,bounds' maximum's y,bounds' maximum's z]
+
+to get [art test JSON material from] {UI scene material:material}:
+    return a JSON object containing [
+        JSON child "color" is (art test JSON color from material's color),
+        JSON child "emission" is (art test JSON color from material's emission),
+        JSON number "emissionStrength" is (material's emission strength),
+        JSON number "roughness" is (material's roughness),
+        JSON number "metalness" is (material's metalness),
+        JSON number "opacity" is (material's opacity),
+        JSON flag "unlit" is (material's unlit),
+        JSON flag "doubleSided" is (material's double sided),
+        JSON flag "depthWrite" is (material's depth write),
+        JSON number "flags" is (material's flags)
+    ]
+
+to get [art test shape name for] {UI scene mesh:mesh} [in] {a pointer to website farm art library:library}:
+    for each shape in (library's shapes):
+        if (shape's mesh's vertices' data = mesh's vertices' data) and (shape's mesh's indices' data = mesh's indices' data):
+            return shape's name
+    require condition false reporting "A model did not share a library mesh"
+    return the string form of ""
+
+to get [art test JSON snapshot of] {UI scene model:model} [with] {a pointer to website farm art library:library}:
+    set instance to a UI scene instance of model
+    set meshes to a new JSON value of kind the JSON array kind
+    set pivots to a new JSON value of kind the JSON object kind
+    set index to 0
+    for each part in model's parts:
+        set placement to the UI scene placement of part index in instance
+        if index = 0:
+            add a JSON member named "root" with value (art test JSON numbers from (placement's transform's matrix)) to pivots
+        else if part's name != "":
+            add a JSON member named (part's name) with value (art test JSON numbers from (placement's transform's matrix)) to pivots
+        if placement's present:
+            set entry to a JSON object containing [
+                JSON text "shape" is (art test shape name for part's mesh in library),
+                JSON child "matrix" is (art test JSON numbers from (placement's transform's matrix)),
+                JSON child "localBounds" is (art test JSON bounds from part's mesh's bounds),
+                JSON child "worldBounds" is (art test JSON bounds from placement's bounds),
+                JSON child "material" is (art test JSON material from part's material),
+                JSON number "triangles" is ((the length of part's mesh's indices) / 3),
+                JSON flag "castsShadow" is (part's casts shadow),
+                JSON flag "receivesShadow" is (part's receives shadow),
+                JSON flag "visible" is (placement's visible)
+            ]
+            add entry to the JSON array meshes
+        increment index
+    set bounds to a new JSON value of kind the JSON null kind
+    if instance's extent's present:
+        free bounds
+        set bounds to art test JSON bounds from (instance's extent's bounds)
+    close UI scene instance instance
+    return a JSON object containing [JSON child "meshes" is meshes, JSON child "pivots" is pivots, JSON child "bounds" is bounds]
+
+to get [the art test model for] {a pointer to JSON value:entry} [with] {a pointer to website farm art library:library}:
+    set kind to the JSON text named "kind" in entry
+    if kind = "cow":
+        return a Farm cow with library
+    if kind = "farmer":
+        return a Farm farmer with library
+    if kind = "farmer-blue":
+        return a Farm farmer wearing (UI ink 68 136 204) with library
+    if kind = "house":
+        return a Farm house with library
+    if kind = "chicken":
+        return a Farm chicken turned (the JSON number named "seed" in entry) with library
+    if kind = "flag":
+        return a Farm flag colored (UI ink 57 135 178) with library
+    if kind = "eggs":
+        return a Farm egg pile counting ((the JSON number named "count" in entry) as an integer) with library
+    if kind = "item":
+        return a Farm item named (the JSON text named "item" in entry) with library
+    if kind = "compost":
+        return a Farm compost bin with library
+    require condition (kind = "tree") reporting "Unknown art fixture kind"
+    return a Farm tree seeded ((the JSON number named "seed" in entry) as an integer) with library
+
+read the file at "input.json" and set input to it
+require condition (input succeeded) reporting "The art fixture needs its case list"
+parse (input's contents) as JSON and set document to it
+require condition (document succeeded) reporting "The art fixture case list is invalid"
+set library to a website farm art library
+set results to a new JSON value of kind the JSON object kind
+loop index from 0 to (the number of JSON items in document's value):
+    set entry to the JSON value at index index in (document's value)
+    set model to the art test model for entry with (the address of library)
+    set snapshot to art test JSON snapshot of model with (the address of library)
+    add a JSON member named (the JSON text named "id" in entry) with value snapshot to results
+print line the compact JSON form of results
+free results
+free document's value

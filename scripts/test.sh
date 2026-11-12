@@ -815,6 +815,7 @@ if [[ "$suite" == integration ]]; then
     run_auxiliary_test "farm_models" 300 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --group=core --shipped
     run_auxiliary_test "farm_saved_state" 300 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --group=state --shipped
     run_auxiliary_test "farm_state_ownership" 300 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --group=ownership --shipped
+    run_auxiliary_test "farm_art" 180 python3 -B "$PROJECT_DIR/tests/web/farm_art.py" --compiler "$COMPILER"
     run_auxiliary_test "farm_vocabulary_generated" 30 python3 "$SCRIPT_DIR/generate_farm_vocabulary.py" --compiler "$COMPILER" --check
 fi
 run_auxiliary_test "wide_integers_wasm" 60 node "$PROJECT_DIR/tests/web/wide_integers.mjs" "$COMPILER"

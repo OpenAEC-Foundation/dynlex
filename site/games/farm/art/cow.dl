@@ -1,0 +1,42 @@
+import palette.dl
+
+to [add Farm cow leg] {integer:slot} [at] {floating-point number:x} {floating-point number:z} [under] {integer:root} [to] {a pointer to a list:parts} [with] {a pointer to website farm art library:library}:
+    set leg to a Farm art group named (formatted "leg {slot}") at [x,0.49,z] under root in parts
+    add Farm "cylinder" colored (the Farm character paint named "cream") at [0.0,-0.13,0.0] sized [0.055,0.26,0.055] under leg to parts with library
+    add Farm "cylinder" colored (the Farm character paint named "cowBlack") at [0.0,-0.34,0.006] sized [0.062,0.17,0.062] under leg to parts with library
+    add Farm "box" colored (the Farm character paint named "dark") at [0.0,-0.445,0.025] sized [0.13,0.08,0.17] under leg to parts with library
+
+to [add Farm cow eye at] {floating-point number:x} [under] {integer:root} [to] {a pointer to a list:parts} [with] {a pointer to website farm art library:library}:
+    set eye to a Farm art group named "" at [x,0.69,0.428] under root in parts
+    add Farm "sphere" colored (the Farm character paint named "eye") at [0.0,0.0,0.0] sized [0.061,0.052,0.025] turned [-0.08,0.0,0.0] under eye to parts with library
+    add Farm "sphere" colored (the Farm character paint named "pupil") at [0.0,-0.003,0.023] sized [0.027,0.031,0.013] under eye to parts with library
+    add Farm "sphere" colored (the Farm character paint named "highlight") at [-0.009,0.012,0.034] sized [0.008,0.008,0.005] under eye to parts with library
+
+to get [a Farm cow with] {a pointer to website farm art library:library}:
+    set parts to an empty list of UI scene part
+    set root to a Farm art group named "Bessie" at [0.0,0.0,0.0] sized [0.93,0.93,0.93] turned [0.0,0.0,0.0] under -1 in parts
+    add Farm "sphere" colored (the Farm character paint named "coat") at [0.0,0.51,0.0] sized [0.28,0.29,0.36] under root to parts with library
+    add Farm "sphere" colored (the Farm character paint named "cream") at [0.0,0.67,0.27] sized [0.21,0.205,0.16] turned [-0.08,0.0,0.0] under root to parts with library
+    add Farm "sphere" colored (the Farm character paint named "cowNose") at [0.0,0.59,0.405] sized [0.17,0.115,0.08] under root to parts with library
+    add Farm "sphere" colored (the Farm character paint named "cowBlack") at [0.11,0.69,0.426] sized [0.085,0.075,0.008] turned [-0.08,0.0,0.0] under root to parts with library
+    for each x in [-0.076,0.076]:
+        add Farm "sphere" colored (the Farm character paint named "dark") at [x,0.607,0.489] sized [0.018,0.012,0.009] under root to parts with library
+    add Farm cow eye at -0.105 under root to parts with library
+    add Farm cow eye at 0.105 under root to parts with library
+    for each x in [-0.17,0.17]:
+        set tilt to (-0.25) if x < 0.0, else 0.25
+        add Farm "sphere" colored (the Farm character paint named "cream") at [x,0.72,0.31] sized [0.12,0.045,0.072] turned [0.0,0.0,tilt] under root to parts with library
+        set lean to (-0.22) if x < 0.0, else 0.22
+        set turn to 0.2 if x < 0.0, else -0.2
+        add Farm "cone" colored (the Farm character paint named "horn") at [(x * 0.7),0.855,0.29] sized [0.035,0.12,0.035] turned [lean,0.0,turn] under root to parts with library
+    set slot to 0
+    for each z in [-0.2,0.19]:
+        for each x in [-0.18,0.18]:
+            add Farm cow leg slot at x z under root to parts with library
+            increment slot
+    set tail to a Farm art group named "tail" at [0.0,0.64,-0.32] under root in parts
+    add Farm "cylinder" colored (the Farm character paint named "cream") at [0.0,-0.11,-0.02] sized [0.025,0.19,0.025] turned [0.45,0.0,-0.08] under tail to parts with library
+    add Farm "sphere" colored (the Farm character paint named "cowBlack") at [0.0,-0.22,-0.1] sized [0.05,0.07,0.05] under tail to parts with library
+    add Farm "torus" colored (the Farm character paint named "leather") at [0.0,0.64,0.29] sized [0.18,0.18,0.18] turned [1.5707963267948966,0.0,0.0] under root to parts with library
+    add Farm "sphere" colored (the Farm character paint named "brass") at [0.0,0.45,0.34] sized [0.05,0.065,0.035] under root to parts with library
+    return a completed Farm model from parts

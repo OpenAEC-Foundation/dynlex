@@ -1,0 +1,104 @@
+# Farm character colors and physical surface values.
+import parts.dl
+
+to get [the Farm character paint named] {a value:name}:
+    if name = "cream":
+        set result to a Farm art material colored [238, 229, 202] roughness 0.78 metalness 0.0
+        return result
+    if name = "cowBlack":
+        set result to a Farm art material colored [40, 39, 34] roughness 0.78 metalness 0.0
+        return result
+    if name = "cowNose":
+        set result to a Farm art material colored [200, 149, 134] roughness 0.9 metalness 0.0
+        return result
+    if name = "dark":
+        set result to a Farm art material colored [41, 40, 33] roughness 0.78 metalness 0.0
+        return result
+    if name = "eye":
+        set result to a Farm art material colored [248, 242, 223] roughness 0.78 metalness 0.0
+        return result
+    if name = "pupil":
+        set result to a Farm art material colored [23, 19, 15] roughness 0.35 metalness 0.0
+        return result
+    if name = "highlight":
+        set result to a Farm art material colored [255, 255, 255] roughness 0.78 metalness 0.0
+        set result's emission to UI ink 255 255 255
+        set result's emission strength to 0.2
+        return result
+    if name = "horn":
+        set result to a Farm art material colored [216, 200, 148] roughness 0.78 metalness 0.0
+        return result
+    if name = "leather":
+        set result to a Farm art material colored [141, 71, 48] roughness 0.78 metalness 0.0
+        return result
+    if name = "brass":
+        set result to a Farm art material colored [201, 153, 56] roughness 0.35 metalness 0.55
+        return result
+    if name = "denim":
+        set result to a Farm art material colored [53, 93, 118] roughness 0.78 metalness 0.0
+        return result
+    if name = "shirt":
+        set result to a Farm art material colored [199, 122, 67] roughness 0.78 metalness 0.0
+        return result
+    if name = "skin":
+        set result to a Farm art material colored [185, 119, 78] roughness 0.78 metalness 0.0
+        return result
+    if name = "hair":
+        set result to a Farm art material colored [81, 55, 34] roughness 0.78 metalness 0.0
+        return result
+    if name = "straw":
+        set result to a Farm art material colored [210, 165, 76] roughness 0.78 metalness 0.0
+        return result
+    if name = "boot":
+        set result to a Farm art material colored [73, 53, 38] roughness 0.78 metalness 0.0
+        return result
+    if name = "trunk":
+        set result to a Farm art material colored [92, 62, 39] roughness 0.78 metalness 0.0
+        return result
+    if name = "pine":
+        set result to a Farm art material colored [40, 92, 59] roughness 0.78 metalness 0.0
+        return result
+    if name = "pineLight":
+        set result to a Farm art material colored [61, 117, 72] roughness 0.78 metalness 0.0
+        return result
+    if name = "leaf":
+        set result to a Farm art material colored [63, 120, 66] roughness 0.78 metalness 0.0
+        return result
+    if name = "leafLight":
+        set result to a Farm art material colored [97, 147, 78] roughness 0.78 metalness 0.0
+        return result
+    if name = "wall":
+        set result to a Farm art material colored [217, 189, 135] roughness 0.78 metalness 0.0
+        return result
+    if name = "plaster":
+        set result to a Farm art material colored [234, 217, 175] roughness 0.78 metalness 0.0
+        return result
+    if name = "roof":
+        set result to a Farm art material colored [157, 63, 47] roughness 0.78 metalness 0.0
+        return result
+    if name = "roofDark":
+        set result to a Farm art material colored [114, 48, 38] roughness 0.78 metalness 0.0
+        return result
+    if name = "window":
+        set result to a Farm art material colored [131, 189, 208] roughness 0.25 metalness 0.05
+        return result
+    if name = "frame":
+        set result to a Farm art material colored [241, 226, 187] roughness 0.78 metalness 0.0
+        return result
+    if name = "door":
+        set result to a Farm art material colored [91, 57, 38] roughness 0.78 metalness 0.0
+        return result
+    if name = "stone":
+        set result to a Farm art material colored [119, 118, 107] roughness 0.78 metalness 0.0
+        return result
+    if name = "coat":
+        set result to a Farm art material colored [238,229,202] roughness 0.78 metalness 0.0
+        set result's flags to 1 as a 32 bit unsigned integer
+        return result
+    require condition false reporting "Unknown Farm character paint"
+    return a new UI scene material
+
+to get [the Farm water material]:
+    set result to a Farm art material colored [56,151,155] roughness 0.22 metalness 0.25
+    set result's flags to 2 as a 32 bit unsigned integer
+    return result

@@ -1,0 +1,25 @@
+import parts.dl
+
+to get [a Farm flag colored] {UI paint:color} [with] {a pointer to website farm art library:library}:
+    set parts to an empty list of UI scene part
+    set root to a Farm art group named "Flag" at [0.0,0.0,0.0] under -1 in parts
+    add Farm "cylinder" colored [214,193,154] at [0.0,0.67,0.0] sized [0.022,1.34,0.022] under root to parts with library
+    add Farm "small sphere" colored [233,215,168] at [0.0,1.38,0.0] sized [0.047,0.047,0.047] under root to parts with library
+    set material to a UI scene material with color color roughness 0.82 metalness 0.0
+    add Farm piece named "cloth 0" using "box" colored material at [0.22,1.16,0.0] sized [0.43,0.27,0.022] turned [0.0,0.0,0.0] under root to parts with library
+    add Farm piece named "cloth 1" using "box" colored (a Farm art material colored [250,240,213]) at [0.22,1.20,0.014] sized [0.37,0.025,0.006] turned [0.0,0.0,0.0] under root to parts with library
+    add Farm "cylinder" colored [117,110,80] at [0.0,0.015,0.0] sized [0.15,0.03,0.15] under root to parts with library
+    return a completed Farm model from parts
+
+to get [a Farm compost bin with] {a pointer to website farm art library:library}:
+    set parts to an empty list of UI scene part
+    set root to a Farm art group named "Compost" at [0.0,0.0,0.0] under -1 in parts
+    for each x in [-0.4,0.4]:
+        for each z in [-0.36,0.36]:
+            add Farm "box" colored [120,99,66] at [x,0.29,z] sized [0.065,0.58,0.065] under root to parts with library
+    loop row from 0 to 4:
+        for each x in [-0.4,0.4]:
+            add Farm "box" colored [156,131,82] at [x,(0.08 + row * 0.12),0.0] sized [0.05,0.075,0.76] under root to parts with library
+        add Farm "box" colored [156,131,82] at [0.0,(0.08 + row * 0.12),-0.36] sized [0.78,0.075,0.05] under root to parts with library
+    add Farm piece named "heap" using "small sphere" colored (a Farm art material colored [96,77,53]) at [0.0,0.10,0.0] sized [0.37,0.15,0.33] turned [0.0,0.0,0.0] under root to parts with library
+    return a completed Farm model from parts

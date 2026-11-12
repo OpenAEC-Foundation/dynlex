@@ -1,0 +1,58 @@
+import parts.dl
+
+to get [the Farm sack paint for] {a value:kind}:
+    if kind = "seeds":
+        return a Farm art material colored [116,107,54]
+    if kind = "carrots":
+        return a Farm art material colored [230,146,54]
+    if kind = "wheat":
+        return a Farm art material colored [227,187,86]
+    if kind = "hay":
+        return a Farm art material colored [180,174,91]
+    if kind = "eggs":
+        return a Farm art material colored [242,233,214]
+    if kind = "scraps":
+        return a Farm art material colored [94,123,69]
+    if kind = "fertilizer":
+        return a Farm art material colored [105,81,60]
+    require condition false reporting "Unknown Farm sack item"
+    return a new UI scene material
+
+to get [a Farm item named] {a value:kind} [with] {a pointer to website farm art library:library}:
+    set parts to an empty list of UI scene part
+    set root to a Farm art group named kind at [0.0,0.0,0.0] under -1 in parts
+    if (kind = "axe") or ((kind = "hoe") or (kind = "shovel")):
+        set grip to 0.34 if kind = "shovel", else 0.16
+        ignore (a Farm art group named "grip" at [0.0,grip,0.0] under root in parts)
+        add Farm "cylinder" colored [157,112,62] at [0.0,0.23,0.0] sized [0.025,0.46,0.025] under root to parts with library
+        if kind = "axe":
+            add Farm "box" colored [157,172,172] at [0.07,0.40,0.0] sized [0.18,0.12,0.045] under root to parts with library
+        if kind = "hoe":
+            add Farm "box" colored [126,146,152] at [0.0,0.43,0.04] sized [0.18,0.04,0.11] under root to parts with library
+        if kind = "shovel":
+            add Farm "small sphere" colored [131,154,155] at [0.0,0.03,0.0] sized [0.075,0.12,0.025] under root to parts with library
+    else if (kind = "bucket") or (kind = "milk"):
+        ignore (a Farm art group named "grip" at [0.0,0.345,0.0] under root in parts)
+        set paint to a Farm art material colored [132,157,161]
+        set surface to a Farm art material colored [75,130,145]
+        if kind = "milk":
+            set paint to a Farm art material colored [233,229,204]
+            set surface to a Farm art material colored [232,237,223]
+        add Farm "cylinder" colored paint at [0.0,0.13,0.0] sized [0.10,0.24,0.10] under root to parts with library
+        add Farm "cylinder" colored surface at [0.0,0.255,0.0] sized [0.085,0.008,0.085] under root to parts with library
+        add Farm "bucket handle" colored [75,102,107] at [0.0,0.25,0.0] sized [1.0,1.0,1.0] under root to parts with library
+    else if kind = "logs":
+        ignore (a Farm art group named "grip" at [0.0,0.25,0.0] under root in parts)
+        for each x in [-0.07,0.07]:
+            add Farm "cylinder" colored [112,81,58] at [x,0.11,0.0] sized [0.065,0.40,0.065] turned [1.5707963267948966,0.0,0.0] under root to parts with library
+            add Farm "cylinder" colored [200,162,118] at [x,0.11,0.203] sized [0.055,0.006,0.055] turned [1.5707963267948966,0.0,0.0] under root to parts with library
+        for each z in [-0.11,0.11]:
+            add Farm "binding" colored [185,154,98] at [0.0,0.11,z] sized [0.14,0.07,0.07] under root to parts with library
+        add Farm "bucket handle" colored [185,154,98] at [0.0,0.155,0.0] sized [1.0,1.0,1.0] under root to parts with library
+    else:
+        set paint to the Farm sack paint for kind
+        ignore (a Farm art group named "grip" at [0.0,0.30,0.0] under root in parts)
+        add Farm "small sphere" colored [203,181,138] at [0.0,0.14,0.0] sized [0.14,0.18,0.12] under root to parts with library
+        add Farm "cylinder" colored [128,103,73] at [0.0,0.30,0.0] sized [0.052,0.035,0.052] under root to parts with library
+        add Farm "small sphere" colored paint at [0.0,0.14,0.112] sized [0.065,0.075,0.018] under root to parts with library
+    return a completed Farm model from parts

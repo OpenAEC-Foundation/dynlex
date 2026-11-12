@@ -1,0 +1,42 @@
+import assets.dl
+
+to get [a Farm art pose at] {an array:position} [sized] {an array:scale} [turned] {an array:rotation}:
+    return a UI scene pose at (a UI scene vector from position) rotated (a UI scene vector from rotation) scaled (a UI scene vector from scale)
+
+to get [a Farm art group named] {a value:name} [at] {an array:position} [sized] {an array:scale} [turned] {an array:rotation} [under] {integer:parent} [in] {a pointer to a list:parts}:
+    set index to the length of parts
+    append (a UI scene group named name under parent at (a Farm art pose at position sized scale turned rotation)) to parts
+    return index
+
+to get [a Farm art group named] {a value:name} [at] {an array:position} [under] {integer:parent} [in] {a pointer to a list:parts}:
+    return a Farm art group named name at position sized [1.0,1.0,1.0] turned [0.0,0.0,0.0] under parent in parts
+
+to get [a Farm art material colored] {an array:channels} [roughness] {floating-point number:roughness} [metalness] {floating-point number:metalness}:
+    require condition ((the length of channels) = 3) reporting "Farm material colors require three channels"
+    set color to UI ink (the item at 0 in channels) (the item at 1 in channels) (the item at 2 in channels)
+    return a UI scene material with color color roughness roughness metalness metalness
+
+to get [a Farm art material colored] {an array:channels}:
+    return a Farm art material colored channels roughness 0.82 metalness 0.0
+
+to [add Farm piece named] {a value:name} [using] {a value:shape} [colored] {UI scene material:material} [at] {an array:position} [sized] {an array:scale} [turned] {an array:rotation} [under] {integer:parent} [to] {a pointer to a list:parts} [with] {a pointer to website farm art library:library}:
+    set mesh to the Farm shape named shape in library
+    set pose to a Farm art pose at position sized scale turned rotation
+    append (a UI scene mesh part named name under parent using mesh with material material at pose) to parts
+
+to [add Farm] {a value:shape} [colored] {UI scene material:material} [at] {an array:position} [sized] {an array:scale} [turned] {an array:rotation} [under] {integer:parent} [to] {a pointer to a list:parts} [with] {a pointer to website farm art library:library}:
+    add Farm piece named "" using shape colored material at position sized scale turned rotation under parent to parts with library
+
+to [add Farm] {a value:shape} [colored] {UI scene material:material} [at] {an array:position} [sized] {an array:scale} [under] {integer:parent} [to] {a pointer to a list:parts} [with] {a pointer to website farm art library:library}:
+    add Farm shape colored material at position sized scale turned [0.0,0.0,0.0] under parent to parts with library
+
+to [add Farm] {a value:shape} [colored] {an array:channels} [at] {an array:position} [sized] {an array:scale} [turned] {an array:rotation} [under] {integer:parent} [to] {a pointer to a list:parts} [with] {a pointer to website farm art library:library}:
+    add Farm shape colored (a Farm art material colored channels) at position sized scale turned rotation under parent to parts with library
+
+to [add Farm] {a value:shape} [colored] {an array:channels} [at] {an array:position} [sized] {an array:scale} [under] {integer:parent} [to] {a pointer to a list:parts} [with] {a pointer to website farm art library:library}:
+    add Farm shape colored channels at position sized scale turned [0.0,0.0,0.0] under parent to parts with library
+
+to get [a completed Farm model from] {a pointer to a list:parts}:
+    set model to a UI scene model taking parts parts
+    free parts
+    return model

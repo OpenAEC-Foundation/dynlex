@@ -1,0 +1,31 @@
+import parts.dl
+
+to get [a Farm chicken turned] {floating-point number:seed} [with] {a pointer to website farm art library:library}:
+    set parts to an empty list of UI scene part
+    set root to a Farm art group named "Chicken" at [0.0,0.0,0.0] sized [1.0,1.0,1.0] turned [0.0,seed,0.0] under -1 in parts
+    add Farm "small sphere" colored [243,229,201] at [0.0,0.25,0.0] sized [0.19,0.20,0.24] under root to parts with library
+    add Farm "small sphere" colored [225,205,174] at [-0.15,0.24,-0.03] sized [0.055,0.12,0.16] under root to parts with library
+    set head to a Farm art group named "head" at [0.0,0.40,0.16] under root in parts
+    add Farm "small sphere" colored [255,238,211] at [0.0,0.0,0.0] sized [0.105,0.12,0.10] under head to parts with library
+    add Farm "small cone" colored [219,150,59] at [0.0,-0.005,0.13] sized [0.045,0.12,0.045] turned [1.5707963267948966,0.0,0.0] under head to parts with library
+    for each x in [-0.086,0.086]:
+        add Farm "small sphere" colored [37,45,40] at [x,0.025,0.045] sized [0.016,0.018,0.02] under head to parts with library
+    loop index from 0 to 3:
+        add Farm "small sphere" colored [185,68,53] at [0.0,0.115,(0.04 - index * 0.045)] sized [0.026,0.053,0.035] under head to parts with library
+    add Farm "small sphere" colored [200,84,57] at [0.0,-0.10,0.065] sized [0.025,0.06,0.03] under head to parts with library
+    set index to 0
+    for each x in [-0.065,0.065]:
+        set leg to a Farm art group named (formatted "leg {index}") at [x,0.13,0.0] under root in parts
+        add Farm "cylinder" colored [208,154,66] at [0.0,-0.065,0.0] sized [0.012,0.13,0.012] under leg to parts with library
+        add Farm "box" colored [208,154,66] at [0.0,-0.118,0.035] sized [0.045,0.025,0.10] under leg to parts with library
+        increment index
+    loop index from 0 to 3:
+        add Farm "small cone" colored [229,211,184] at [((index - 1) * 0.055),0.33,-0.22] sized [0.07,0.30,0.07] turned [-0.7,0.0,((index - 1) * 0.25)] under root to parts with library
+    return a completed Farm model from parts
+
+to get [a Farm egg pile counting] {integer:count} [with] {a pointer to website farm art library:library}:
+    set parts to an empty list of UI scene part
+    set root to a Farm art group named "Eggs" at [0.0,0.0,0.0] under -1 in parts
+    loop index from 0 to (the minimum of count and 6):
+        add Farm "small sphere" colored [242,233,214] at [((index % 3 - 1) * 0.13),0.09,((index / 3) * 0.16)] sized [0.055,0.085,0.06] turned [0.1,0.0,((index % 2 - 0.5) * 0.4)] under root to parts with library
+    return a completed Farm model from parts

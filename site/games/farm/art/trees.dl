@@ -1,0 +1,41 @@
+import palette.dl
+
+to get [the next Farm art number using] {a pointer to a 32 bit unsigned integer:seed}:
+    set next to (the value at seed) * (1664525 as a 32 bit unsigned integer) + (1013904223 as a 32 bit unsigned integer)
+    store next at seed
+    return (next as a 64 bit floating-point number) / 4294967296.0
+
+to get [a Farm tree seeded] {integer:initial} [with] {a pointer to website farm art library:library}:
+    set seed to initial as a 32 bit unsigned integer
+    if initial = 0:
+        set seed to 1 as a 32 bit unsigned integer
+    set random to the address of seed
+    set height to 1.1 + (the next Farm art number using random) * 0.7
+    set broadleaf to (the next Farm art number using random) > 0.48
+    set width to 0.065 + (the next Farm art number using random) * 0.025
+    set depth to 0.065 + (the next Farm art number using random) * 0.025
+    set parts to an empty list of UI scene part
+    set root to a Farm art group named "Tree" at [0.0,0.0,0.0] under -1 in parts
+    add Farm "cylinder" colored (the Farm character paint named "trunk") at [0.0,(height * 0.31),0.0] sized [width,(height * 0.62),depth] under root to parts with library
+    if broadleaf:
+        set crown to height - 0.36
+        loop index from 0 to 6:
+            set angle to (index * 1.0471975511965976) + (the next Farm art number using random) * 0.35
+            set radius to 0.12 + (the next Farm art number using random) * 0.17
+            set vertical to crown + ((the next Farm art number using random) - 0.3) * 0.24
+            set width to 0.25 + (the next Farm art number using random) * 0.1
+            set tall to 0.24 + (the next Farm art number using random) * 0.14
+            set depth to 0.25 + (the next Farm art number using random) * 0.1
+            set paint to the Farm character paint named "leaf"
+            if (index % 2) != 0:
+                set paint to the Farm character paint named "leafLight"
+            add Farm "leaf sphere" colored paint at [((the cosine of angle) * radius),vertical,((the sine of angle) * radius)] sized [width,tall,depth] under root to parts with library
+        add Farm "leaf sphere" colored (the Farm character paint named "leaf") at [0.0,(crown + 0.18),0.0] sized [0.31,0.32,0.31] under root to parts with library
+    else:
+        loop tier from 0 to 4:
+            set width to (0.42 - tier * 0.065) + (the next Farm art number using random) * 0.035
+            set paint to the Farm character paint named "pine"
+            if (tier % 2) != 0:
+                set paint to the Farm character paint named "pineLight"
+            add Farm "cone" colored paint at [0.0,(height * (0.48 + tier * 0.13)),0.0] sized [width,0.48,width] under root to parts with library
+    return a completed Farm model from parts

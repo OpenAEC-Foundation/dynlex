@@ -1,0 +1,39 @@
+import palette.dl
+
+to [add Farm farmer leg] {integer:slot} [at] {floating-point number:x} [under] {integer:root} [to] {a pointer to a list:parts} [with] {a pointer to website farm art library:library}:
+    set leg to a Farm art group named (formatted "leg {slot}") at [x,0.41,0.0] under root in parts
+    add Farm "cylinder" colored (the Farm character paint named "denim") at [0.0,-0.15,0.0] sized [0.07,0.3,0.07] under leg to parts with library
+    add Farm "box" colored (the Farm character paint named "boot") at [0.0,-0.335,0.035] sized [0.16,0.1,0.22] under leg to parts with library
+
+to [add Farm farmer arm] {integer:slot} [at] {floating-point number:x} [wearing] {UI scene material:shirt} [under] {integer:root} [to] {a pointer to a list:parts} [with] {a pointer to website farm art library:library}:
+    set tilt to (-0.16) if x < 0.0, else 0.16
+    set arm to a Farm art group named (formatted "arm {slot}") at [x,0.72,0.0] sized [1.0,1.0,1.0] turned [0.0,0.0,tilt] under root in parts
+    add Farm "cylinder" colored shirt at [0.0,-0.13,0.0] sized [0.065,0.25,0.065] under arm to parts with library
+    add Farm "sphere" colored (the Farm character paint named "skin") at [0.0,-0.285,0.0] sized [0.075,0.08,0.075] under arm to parts with library
+    ignore (a Farm art group named (formatted "hand {slot}") at [0.0,-0.285,0.045] under arm in parts)
+
+to get [a Farm farmer wearing] {UI paint:color} [with] {a pointer to website farm art library:library}:
+    set parts to an empty list of UI scene part
+    set root to a Farm art group named "Farmer" at [0.0,0.0,0.0] sized [0.88,0.88,0.88] turned [0.0,0.0,0.0] under -1 in parts
+    set shirt to the Farm character paint named "shirt"
+    set shirt's color to color
+    add Farm farmer leg 0 at -0.09 under root to parts with library
+    add Farm farmer leg 1 at 0.09 under root to parts with library
+    add Farm "box" colored shirt at [0.0,0.61,0.0] sized [0.35,0.34,0.23] under root to parts with library
+    add Farm "box" colored (the Farm character paint named "denim") at [0.0,0.59,0.125] sized [0.23,0.31,0.025] under root to parts with library
+    add Farm "box" colored (the Farm character paint named "denim") at [-0.145,0.67,0.13] sized [0.045,0.26,0.025] turned [0.0,0.0,-0.12] under root to parts with library
+    add Farm "box" colored (the Farm character paint named "denim") at [0.145,0.67,0.13] sized [0.045,0.26,0.025] turned [0.0,0.0,0.12] under root to parts with library
+    add Farm farmer arm 0 at -0.225 wearing shirt under root to parts with library
+    add Farm farmer arm 1 at 0.225 wearing shirt under root to parts with library
+    add Farm "sphere" colored (the Farm character paint named "skin") at [0.0,0.87,0.015] sized [0.145,0.155,0.135] under root to parts with library
+    add Farm "sphere" colored (the Farm character paint named "hair") at [0.0,0.93,-0.075] sized [0.15,0.105,0.08] under root to parts with library
+    for each x in [-0.052,0.052]:
+        add Farm "sphere" colored (the Farm character paint named "eye") at [x,0.895,0.137] sized [0.024,0.021,0.01] under root to parts with library
+        add Farm "sphere" colored (the Farm character paint named "pupil") at [x,0.893,0.146] sized [0.011,0.012,0.006] under root to parts with library
+    add Farm "cylinder" colored (the Farm character paint named "straw") at [0.0,1.02,0.0] sized [0.24,0.035,0.24] under root to parts with library
+    add Farm "cylinder" colored (the Farm character paint named "straw") at [0.0,1.07,0.0] sized [0.15,0.1,0.15] under root to parts with library
+    add Farm "box" colored (the Farm character paint named "leather") at [0.0,1.04,0.145] sized [0.31,0.025,0.018] under root to parts with library
+    return a completed Farm model from parts
+
+to get [a Farm farmer with] {a pointer to website farm art library:library}:
+    return a Farm farmer wearing ((the Farm character paint named "shirt")'s color) with library

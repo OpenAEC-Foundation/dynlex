@@ -1,0 +1,51 @@
+# One owning library shares mesh storage between every Farm model.
+import ../../../packages/dynlex-ui/ui/scene_round_meshes.dl
+import ../../../packages/dynlex-ui/ui/scene_surfaces.dl
+import ../../../packages/dynlex-ui/ui/scene_solids.dl
+import ../../../packages/dynlex-ui/ui/scene_instances.dl
+
+class:
+    patterns:
+        website farm shape
+    members:
+        name as a string
+        mesh as UI scene mesh
+
+website farm shapes means: the type of (an empty sequence of website farm shape)
+
+class:
+    patterns:
+        website farm art library
+    members:
+        shapes as website farm shapes
+
+Farm shape {a value:name} using {UI scene mesh:mesh} means: @intrinsic("construct", website farm shape, the string form of name, mesh)
+
+to get [a website farm art library]:
+    set gable to a UI convex prism mesh from [(a UI point at -0.43 and 0.0), (a UI point at 0.43 and 0.0), (a UI point at 0.0 and 0.37)] with depth 0.76
+    set shapes to [
+        Farm shape "box" using (a UI box mesh with 1 by 1 by 1 segments),
+        Farm shape "small sphere" using (a UI sphere mesh with 10 slices and 7 stacks),
+        Farm shape "small cone" using (a UI cylinder mesh with top 0.0 bottom 1.0 height 1.0 around 7 sides capped true),
+        Farm shape "cylinder" using (a UI cylinder mesh with top 1.0 bottom 1.0 height 1.0 around 10 sides capped true),
+        Farm shape "bucket handle" using (a UI torus mesh with radius 0.095 tube 0.01 around 12 slices and 4 sides swept through 180.0 degrees),
+        Farm shape "binding" using (a UI torus mesh with radius 1.0 tube 0.08 around 16 slices and 4 sides swept through 360.0 degrees),
+        Farm shape "sphere" using (a UI sphere mesh with 16 slices and 12 stacks),
+        Farm shape "leaf sphere" using (a UI sphere mesh with 10 slices and 8 stacks),
+        Farm shape "cone" using (a UI cylinder mesh with top 0.0 bottom 1.0 height 1.0 around 10 sides capped true),
+        Farm shape "torus" using (a UI torus mesh with radius 1.0 tube 0.24 around 12 slices and 7 sides swept through 360.0 degrees),
+        Farm shape "gable" using gable,
+        Farm shape "water tile" using (a UI box mesh with 5 by 1 by 5 segments),
+        Farm shape "rock" using (a UI icosahedron mesh),
+        Farm shape "plane" using (a UI plane mesh with 1 by 1 segments),
+        Farm shape "selection ring" using (a UI ring mesh with inner 0.34 outer 0.42 around 32 sides),
+        Farm shape "route ring" using (a UI ring mesh with inner 0.32 outer 0.4 around 32 sides)
+    ]
+    return @intrinsic("construct", website farm art library, a sequence copying shapes)
+
+to get [the Farm shape named] {a value:name} [in] {a pointer to website farm art library:library}:
+    for each shape in (library's shapes):
+        if shape's name = name:
+            return shape's mesh
+    require condition false reporting "Unknown Farm shape"
+    return a new UI scene mesh

@@ -1,0 +1,33 @@
+import palette.dl
+
+to [add Farm house window at] {an array:position} [under] {integer:root} [to] {a pointer to a list:parts} [with] {a pointer to website farm art library:library}:
+    set window to a Farm art group named "" at position under root in parts
+    add Farm "box" colored (the Farm character paint named "frame") at [0.0,0.0,0.0] sized [0.25,0.27,0.035] under window to parts with library
+    add Farm "box" colored (the Farm character paint named "window") at [0.0,0.0,0.022] sized [0.2,0.22,0.025] under window to parts with library
+    add Farm "box" colored (the Farm character paint named "frame") at [0.0,0.0,0.042] sized [0.018,0.23,0.018] under window to parts with library
+    add Farm "box" colored (the Farm character paint named "frame") at [0.0,0.0,0.043] sized [0.21,0.018,0.018] under window to parts with library
+
+to get [a Farm house with] {a pointer to website farm art library:library}:
+    set parts to an empty list of UI scene part
+    set root to a Farm art group named "Home" at [0.0,0.0,0.0] sized [0.88,0.88,0.88] turned [0.0,0.0,0.0] under -1 in parts
+    add Farm "box" colored (the Farm character paint named "wall") at [0.0,0.42,0.0] sized [0.86,0.78,0.76] under root to parts with library
+    add Farm "box" colored (the Farm character paint named "plaster") at [0.0,0.43,0.386] sized [0.82,0.7,0.025] under root to parts with library
+    add Farm "gable" colored (the Farm character paint named "plaster") at [0.0,0.81,-0.38] sized [1.0,1.0,1.0] under root to parts with library
+    # The fixed roof footprint has a 0.43 rise and 0.52 half-width.
+    set angle to 0.6909432280024016
+    set length to 0.6747592163134936
+    for each side in [-1.0,1.0]:
+        add Farm "box" colored (the Farm character paint named "roof") at [(side * 0.26),0.995,0.0] sized [length,0.055,0.96] turned [0.0,0.0,(0.0 - side * angle)] under root to parts with library
+        add Farm "box" colored (the Farm character paint named "roofDark") at [(side * 0.515),0.785,0.0] sized [0.06,0.075,0.99] under root to parts with library
+        for each z in [-0.46,-0.23,0.0,0.23,0.46]:
+            add Farm "box" colored (the Farm character paint named "roofDark") at [(side * 0.26),1.028,z] sized [length,0.012,0.014] turned [0.0,0.0,(0.0 - side * angle)] under root to parts with library
+    add Farm "box" colored (the Farm character paint named "roofDark") at [0.0,1.217,0.0] sized [0.075,0.05,0.99] under root to parts with library
+    add Farm "box" colored (the Farm character paint named "door") at [0.0,0.31,0.405] sized [0.23,0.55,0.055] under root to parts with library
+    add Farm "sphere" colored (the Farm character paint named "brass") at [0.075,0.32,0.447] sized [0.018,0.018,0.012] under root to parts with library
+    add Farm house window at [-0.27,0.53,0.408] under root to parts with library
+    add Farm house window at [0.27,0.53,0.408] under root to parts with library
+    add Farm "box" colored (the Farm character paint named "roofDark") at [0.26,1.22,-0.12] sized [0.15,0.44,0.15] under root to parts with library
+    add Farm "box" colored (the Farm character paint named "stone") at [0.26,1.45,-0.12] sized [0.19,0.08,0.19] under root to parts with library
+    add Farm "box" colored (the Farm character paint named "wall") at [0.0,0.045,0.49] sized [0.5,0.09,0.25] under root to parts with library
+    add Farm "box" colored (the Farm character paint named "wall") at [0.0,0.09,0.58] sized [0.38,0.09,0.15] under root to parts with library
+    return a completed Farm model from parts

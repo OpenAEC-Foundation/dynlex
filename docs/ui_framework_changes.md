@@ -435,5 +435,30 @@ copy ownership, transforms and picks pass native and Wasm O0/O2 checks. The
 shipped browser compiler passes all five camera/geometry fixtures with zero
 retained allocations. Runtime boundary tests reject invalid geometry domains,
 non-finite components, singular/projective transforms and zero normals.
-Farm's scene materials, lighting, renderer, articulated models and interface
-remain unfinished; these shared modules supply the geometry needed for that port.
+Farm's shader materials, lighting, renderer and interface remain unfinished;
+these shared modules supply the geometry needed for that port.
+
+Shared scene models now describe immutable named parts, materials, local XYZ
+Euler poses and parent relationships. Instances retain the prototype while
+owning separate articulation, material and visibility state. Changed pivots
+update their descendants; unaffected branches keep their placement revisions and
+unchanged refreshes do no work. World bounds, inherited pickability and nearest
+instance picking use those same placements. Native/Wasm O0/O2 and the shipped
+browser compiler pass the model checks with zero retained allocations. Boundary
+checks cover invalid poses, physical material values, RGB widths, topology and
+missing or ambiguous part names. Sphere longitude starts at negative X so the
+existing Farm tessellation and texture seam retain their orientation.
+
+Farm's cows, farmers, chickens, houses, seeded trees, flags, egg piles, equipment,
+sacks and compost bins now have DynLex model factories under
+`site/games/farm/art/`. Their physical material data includes emissive highlights,
+metalness, roughness and application flags for the coat and water shaders.
+Meshes are shared from one owning art library. Named pivots preserve legs, arms,
+hands, heads, tails, cloth, compost heaps and equipment grips. Thirty-two cases
+containing 256 meshes match independent snapshots of the original authored
+geometry, transforms, materials and bounds. Native O0/O2, Wasm O0/O2 and the
+shipped browser compiler pass; the complete art fixture peaks at 1,580,995 live
+bytes and releases all allocations. The snapshots are data fixtures, so these
+checks no longer import the old Three.js code. Farm's shader behavior, crop
+geometry, world/animation controller, scene submission, lighting and interface
+still need integration.
