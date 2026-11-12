@@ -152,7 +152,9 @@ struct Instantiation : InstantiationExecutionEffects {
 	// A restored table can omit values that were not portable. Retained caller
 	// code can still depend on those observations after another argument is seen.
 	bool pureReturnValuesComplete = true;
+	bool valueSummaryChanged = false;
 	std::shared_ptr<InstantiatedSectionBody> body;
+	bool bodyInferred = false;
 	std::map<std::vector<unsigned>, llvm::Function *> llvmFunctionsByParameterAddressSpaces;
 	llvm::Function *llvmCallableFunction = nullptr;
 	bool fallsThrough = true;

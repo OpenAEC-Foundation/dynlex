@@ -170,7 +170,7 @@ llvm::Function *generateSpecializedFunction(
 		func->setLinkage(llvm::GlobalValue::ExternalLinkage);
 		return func;
 	}
-	requireCompilerInvariant(!activeInst.inferenceReusedFromCache, "cached inference summary lost its reusable LLVM function");
+	requireCompilerInvariant(activeInst.bodyInferred, "function codegen has no typed executable body");
 
 	size_t argIdx = 0;
 	for (auto &arg : func->args()) {

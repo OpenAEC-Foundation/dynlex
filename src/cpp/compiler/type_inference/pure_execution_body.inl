@@ -4,7 +4,10 @@ static bool ensurePureExecutionBody(
 	PureExecutionState &state, Section *section, Instantiation &instantiation,
 	const std::vector<std::pair<std::string, CompileTimeValue>> &values
 ) {
-	if (!instantiation.inferenceReusedFromCache)
+	if (instantiation.bodyInferred || !instantiation.inferenceReusedFromCache)
+		return true;
+	if (state.parseContext.restoreInferredBody &&
+		state.parseContext.restoreInferredBody(section, instantiation, &state.inferenceContext))
 		return true;
 	requireCompilerInvariant(
 		values.size() == instantiation.argumentTypes.size(), "pure execution argument count differs from its instantiation"

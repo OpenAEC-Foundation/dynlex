@@ -434,6 +434,8 @@ static bool runInstantiationReinferenceLoop(
 		!instantiation.inferenceReusedFromCache || instantiation.pureReturnValuesComplete
 	};
 	instantiation.inferenceReusedFromCache = false;
+	instantiation.bodyInferred = false;
+	instantiation.valueSummaryChanged = false;
 	instantiation.pureReturnValuesComplete = true;
 	size_t reinferPass = 0;
 	constexpr size_t maxReinferPasses = 32;
@@ -491,6 +493,8 @@ static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
 			crashCompilerBug("trial rollback expected to erase a provisional section instantiation, but it was missing");
 		it->section->instantiations.erase(instantiationIt);
 	}
+	for (auto it = journal.classRequestInsertions.rbegin(); it != journal.classRequestInsertions.rend(); ++it)
+		it->first->instantiationRequests.erase(it->second);
 	for (auto it = journal.classInstantiationSizes.rbegin(); it != journal.classInstantiationSizes.rend(); ++it) {
 		if (it->first->instantiations.size() < it->second)
 			crashCompilerBug("trial rollback observed class instantiation list shrink below recorded snapshot");

@@ -257,14 +257,16 @@ static DataType instantiateBoundClassType(
 	if (constructionArgumentTypes && constructionArgumentTypes->size() != classDef->fields.size())
 		return {};
 
-	std::string requestKey = buildClassInstantiationRequestKey(bindingFrameStack, inferenceContext, constructionArgumentTypes);
-	auto completedRequest = classDef->instantiationIndicesByRequest.find(requestKey);
-	if (completedRequest != classDef->instantiationIndicesByRequest.end()) {
+	auto request = buildClassInstantiationRequest(bindingFrameStack, inferenceContext, constructionArgumentTypes);
+	std::string requestKey = classInstantiationRequestKey(request);
+	auto completedRequest = classDef->instantiationRequests.find(requestKey);
+	if (completedRequest != classDef->instantiationRequests.end()) {
 		requireCompilerInvariant(
-			completedRequest->second >= 0 && completedRequest->second < static_cast<int>(classDef->instantiations.size()),
+			completedRequest->second->index >= 0 &&
+				completedRequest->second->index < static_cast<int>(classDef->instantiations.size()),
 			"cached class instantiation request refers to a missing instantiation"
 		);
-		return {DataType::Kind::Type, 0, 0, classDef, completedRequest->second, nullptr, DataType::Kind::Class};
+		return {DataType::Kind::Type, 0, 0, classDef, completedRequest->second->index, nullptr, DataType::Kind::Class};
 	}
 	for (auto active = activeClassInstantiations.rbegin(); active != activeClassInstantiations.rend(); ++active) {
 		if (active->parseContext != &parseContext || active->classDefinition != classDef || active->requestKey != requestKey)
@@ -360,7 +362,7 @@ static DataType instantiateBoundClassType(
 		requireCompilerInvariant(instIndex == newIndex, "new recursive class instantiation did not use its planned index");
 	}
 	resolveStoredSymbolicClassInstantiation(classDef, symbolicIndex, instIndex);
-	cacheClassInstantiationRequest(classDef, requestKey, instIndex);
+	cacheClassInstantiationRequest(classDef, requestKey, std::move(request), instIndex, inferenceContext);
 	activeInstantiation.completed = true;
 	return {DataType::Kind::Type, 0, 0, classDef, instIndex, nullptr, DataType::Kind::Class};
 }

@@ -12,6 +12,7 @@ from test_incremental_summary_units import check_summary_unit_reuse
 from test_incremental_value_queries import check_value_query_dependencies
 from test_incremental_callable_identity import check_callable_identity_reuse
 from test_incremental_symbolic_values import check_symbolic_value_queries
+from test_incremental_typed_bodies import check_typed_body_reuse
 
 
 def graph_for(cache, entry):
@@ -301,6 +302,7 @@ def check_leaf_dependency_cascade(root, build):
     check_value_query_dependencies(root, build)
     check_callable_identity_reuse(root, build)
     check_symbolic_value_queries(root, build)
+    check_typed_body_reuse(root, build)
     leaf_a = root / "leaf_a.dl"
     leaf_b = root / "leaf_b.dl"
     leaf_helper = root / "leaf_helper.dl"

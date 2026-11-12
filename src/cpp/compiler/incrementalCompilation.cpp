@@ -1,10 +1,14 @@
 #include "incrementalCompilation.h"
+#include "bindingResolution.h"
+#include "classInstantiationRequest.h"
 #include "codegen/codegen.h"
 #include "codegen/native.h"
 #include "codegen/targetOptions.h"
 #include "compiler.h"
 #include "dataSections.h"
 #include "expression.h"
+#include "expressionCapture.h"
+#include "incrementalClassRestoration.h"
 #include "incrementalIRReuse.h"
 #include "incrementalMatcherCache.h"
 #include "incrementalModuleBitcode.h"
@@ -314,6 +318,7 @@ std::string renderModule(const llvm::Module &module) {
 // clang-format off: these fragments share declarations in this order.
 #include "incrementalNativeObjects.inl"
 #include "incrementalInferenceSymbolDependencies.inl"
+#include "incrementalClassDependencies.inl"
 #include "incrementalInferenceSummaryStore.inl"
 #include "incrementalNativeLayout.inl"
 #include "incrementalNativeSymbols.inl"
@@ -330,12 +335,17 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalInferenceKeys.inl"
 #include "incrementalInferenceEffects.inl"
 #include "incrementalInferenceParameterState.inl"
+#include "incrementalClassRequests.inl"
+#include "incrementalClassInstantiations.inl"
+#include "incrementalBodySources.inl"
+#include "incrementalBodyReferences.inl"
+#include "incrementalBodyWriter.inl"
+#include "incrementalBodyReader.inl"
 #include "incrementalInferenceReuse.inl"
 
 #include "incrementalInferenceUnitInputs.inl"
 #include "incrementalInferenceUnitGraph.inl"
 #include "incrementalDependencyGraph.inl"
-#include "incrementalClassInstantiations.inl"
 #include "incrementalConstraintProbeReuse.inl"
 #include "incrementalInferenceUnitCheck.inl"
 #include "incrementalRootExecution.inl"
@@ -387,7 +397,9 @@ bool compileIncrementally(
 		}
 		if (!reuseFailedFrontend) {
 			if (auto cached = readProgramManifest(programEntry)) {
-				summaryStore.observe(cached->at("inference_summary_keys"));
+				summaryStore.observe(
+					cached->at("inference_summary_keys"), cached->at("inference_body_keys"), cached->at("inference_class_keys")
+				);
 				previous = std::move(*cached);
 				if (!previousFailure && !initializeSyntaxConfigs(context, context.options.inputPath))
 					return false;
@@ -695,7 +707,11 @@ bool compileIncrementally(
 			context.reuseParsedDefinition = {};
 			context.recordParsedDefinition = {};
 			statistics.reusedInferenceInstantiations = inferenceReuse ? inferenceReuse->reusedCount() : 0;
+			statistics.inferenceSourceExpressionLookups = inferenceReuse ? inferenceReuse->sourceExpressionLookups() : 0;
+			statistics.inferenceSourceExpressionLinesIndexed =
+				inferenceReuse ? inferenceReuse->sourceExpressionLinesIndexed() : 0;
 			context.reuseInferredInstantiation = {};
+			context.restoreInferredBody = {};
 			context.runIncrementalPreinference = {};
 			context.recordCallableLookup = {};
 			context.recordInferenceDependency = {};
@@ -828,7 +844,8 @@ bool compileIncrementally(
 								  result.at("function_instantiations"), &statistics.reusedInferenceSummarySections
 							  )
 							: captureInferenceSummaries(
-								  compiled, sectionPaths, inferenceDiagnosticSources, globalTypes, summaryStore
+								  compiled, sectionPaths, inferenceDiagnosticSources, globalTypes, summaryStore,
+								  nativeInferenceUnits(result.at("function_sections"), result.at("function_instantiations"))
 							  );
 					auto graphStart = Clock::now();
 					result["section_dependency_graph"] = captureSectionDependencyGraph(

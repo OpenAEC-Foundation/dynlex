@@ -16,11 +16,12 @@ static thread_local std::vector<ActiveClassInstantiation> activeClassInstantiati
 static thread_local std::optional<ClassInstantiationTransaction> activeClassInstantiationTransaction;
 static thread_local int nextSymbolicClassInstantiationIndex = -2;
 
-static std::string buildClassInstantiationRequestKey(
+static ClassInstantiationRequest buildClassInstantiationRequest(
 	const BindingFrameStack &bindingFrameStack, InferenceContext *inferenceContext,
 	const std::vector<DataType> *constructionArgumentTypes
 ) {
-	std::vector<std::tuple<std::string, DataType, CompileTimeValue>> parameters;
+	ClassInstantiationRequest request;
+	auto &parameters = request.parameters;
 	if (!bindingFrameStack.empty()) {
 		for (const auto &[name, expression] : bindingFrameStack.topFrame().bindings) {
 			DataType type = resolveKnownExpressionType(expression, bindingFrameStack, inferenceContext);
@@ -31,16 +32,21 @@ static std::string buildClassInstantiationRequestKey(
 	std::sort(parameters.begin(), parameters.end(), [](const auto &left, const auto &right) {
 		return std::get<0>(left) < std::get<0>(right);
 	});
+	if (constructionArgumentTypes)
+		request.constructionArgumentTypes = *constructionArgumentTypes;
+	return request;
+}
 
+std::string classInstantiationRequestKey(const ClassInstantiationRequest &request) {
 	std::string key;
-	for (const auto &[name, type, value] : parameters) {
+	for (const auto &[name, type, value] : request.parameters) {
 		key += std::to_string(name.size()) + ":" + name;
 		key += "=" + encodeDataTypeForCacheKey(type);
 		key += ":" + encodeCompileTimeValueForCacheKey(value) + ";";
 	}
-	if (constructionArgumentTypes) {
+	if (request.constructionArgumentTypes) {
 		key += "#construct";
-		for (const DataType &type : *constructionArgumentTypes)
+		for (const DataType &type : *request.constructionArgumentTypes)
 			key += ":" + encodeDataTypeForCacheKey(type);
 	}
 	return key;
@@ -55,16 +61,23 @@ static void recordClassInstantiationAppend(ClassDefinition *classDefinition) {
 	);
 }
 
-static void cacheClassInstantiationRequest(ClassDefinition *classDefinition, const std::string &requestKey, int index) {
-	auto [it, inserted] = classDefinition->instantiationIndicesByRequest.emplace(requestKey, index);
+static void cacheClassInstantiationRequest(
+	ClassDefinition *classDefinition, const std::string &requestKey, ClassInstantiationRequest request, int index,
+	InferenceContext *context
+) {
+	request.index = index;
+	auto [it, inserted] = classDefinition->instantiationRequests.emplace(
+		requestKey, std::make_shared<const ClassInstantiationRequest>(std::move(request))
+	);
 	if (!inserted) {
-		requireCompilerInvariant(it->second == index, "class instantiation request resolved to inconsistent indices");
+		requireCompilerInvariant(it->second->index == index, "class instantiation request resolved to inconsistent indices");
 		return;
 	}
 	requireCompilerInvariant(
 		activeClassInstantiationTransaction.has_value(), "class instantiation request cache has no active transaction"
 	);
 	activeClassInstantiationTransaction->insertedRequestKeys.push_back({classDefinition, requestKey});
+	recordInferenceClassRequestRestoration(context, classDefinition, requestKey);
 }
 
 static void rollbackClassInstantiationTransaction() {
@@ -73,7 +86,7 @@ static void rollbackClassInstantiationTransaction() {
 	);
 	for (auto it = activeClassInstantiationTransaction->insertedRequestKeys.rbegin();
 		 it != activeClassInstantiationTransaction->insertedRequestKeys.rend(); ++it) {
-		it->first->instantiationIndicesByRequest.erase(it->second);
+		it->first->instantiationRequests.erase(it->second);
 	}
 	for (const auto &[classDefinition, originalSize] : activeClassInstantiationTransaction->originalInstantiationSizes) {
 		requireCompilerInvariant(
@@ -106,7 +119,7 @@ struct ScopedClassInstantiationSavepoint {
 		auto &current = *activeClassInstantiationTransaction;
 		for (size_t index = current.insertedRequestKeys.size(); index > saved->insertedRequestKeys.size(); --index) {
 			const auto &[definition, request] = current.insertedRequestKeys[index - 1];
-			definition->instantiationIndicesByRequest.erase(request);
+			definition->instantiationRequests.erase(request);
 		}
 		for (const auto &[definition, originalSize] : current.originalInstantiationSizes) {
 			auto previous = savedSizes.find(definition);

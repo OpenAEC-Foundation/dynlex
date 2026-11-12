@@ -55,6 +55,9 @@ class InferenceUnitGraphCapture {
 				retain(path, key);
 				for (const Json &target : reference.at("symbolic_dependencies"))
 					units[path][key]["callees"].push_back(target);
+				if (!reference.at("body").is_null())
+					for (const Json &target : reference.at("body").at("dependencies"))
+						units[path][key]["callees"].push_back(target);
 			}
 		for (const auto &[name, owner] : functionSections.items())
 			retain(owner.get<std::string>(), functionKeys.at(name).get<std::string>());

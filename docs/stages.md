@@ -1336,8 +1336,56 @@ Summaries restore
 parameter input and output types, constant bindings, and compile-time requirements.
 Preinference recreates those bindings before inferring a requested variant.
 Pure calls with known arguments can reuse their summaries and observed values
-without a native function body. A later runtime call infers the body before emitting
-its function, retaining the observations still consumed by cached callers.
+without loading an executable body. Typed executable bodies are separate immutable
+records, loaded only when a new argument must be evaluated or reusable native IR
+is unavailable. Loading one retains its selected overloads, concrete callees,
+bindings, expanded sections, static-loop bodies, control-flow outcomes, memory
+diagnostic descriptors, and source identities. Source-template edges bind to the
+current parse context; graph-owned expressions share a context-owned arena.
+Source anchors use owning sections and expression text rather than physical line
+numbers, so preceding comments do not detach a body from its declarations.
+Logical storage scopes are interned as a graph. Invocations name their parent,
+call site, and iteration once; root scopes share the body's type and value tables.
+Nested bodies therefore do not repeat their entire scope ancestry or concrete
+argument layouts. Captured argument expressions retain their binding frames and
+reconstruct process-local identities when loaded.
+Source references use local tables as well: sections, definitions, declarations,
+source lines, and matcher nodes are stored once per body. Ranges and source
+expression edges contain table indices instead of repeated source paths.
+Restoration indexes source expressions once per owning section and memoizes decoded
+source references. `inference_source_expression_lookups` and
+`inference_source_expression_lines_indexed` distinguish requested anchors from
+source lines scanned to construct these indexes.
+Class layouts needed by a typed body or inference facts have separate immutable
+records. Restoration validates the current declaration and existing layout prefix,
+reserves the complete dependency closure, and fills recursive fields before
+committing. Unrelated classes are not loaded. Fact and body restoration use one
+transaction, including referenced function values and trial journals.
+Class records retain the inputs of completed instantiation requests, including
+bound types, constant values, and constructor argument types. Restoration rebuilds
+the request memo with current-process identities after restoring layouts. This
+prevents a repeated request from constructing a duplicate mutually recursive
+layout cycle with different indices. Request insertions participate in both
+restoration rollback and rejected inference trials. A class record with request
+inputs that the persistent value codec cannot represent is ineligible for replay.
+A missing demanded body runs ordinary inference; an unavailable class or callee
+rolls back the restoration. Previously validated observations still consumed by
+cached callers remain attached when a body is loaded or re-inferred.
+`inference_bodies_loaded`, `inference_bodies_encoded`, `inference_bodies_written`,
+`inference_body_load_ms`, and `inference_body_encode_ms` distinguish this work
+from actual body inference. `inference_classes_loaded`, `inference_classes_restored`,
+and `inference_classes_written` expose layout work. Updating observed values retains
+the existing body record; editing a body does not rewrite its unchanged interface
+record.
+Typed body persistence follows its consumers. A pure function producing a value
+keeps its body for future argument evaluations. Any inferred function without
+native IR keeps a body for its first runtime materialization. Other functions
+retain their native IR and inference facts without serializing an unused AST.
+Class-layout references belong to the inference facts independently of a body
+record. Once an impure function acquires native IR, the next snapshot retires
+its former body reference. Valid body-query records remain eligible after their
+last current caller is removed, so reintroducing a call can reuse the earlier
+computation while its source and dependency inputs remain unchanged.
 Interface comparison reevaluates previously observed argument sets. Runtime
 callers depend on the callee's inferred types and effects; compile-time consumers
 also retain fingerprints of the particular arguments and result they read.
@@ -1351,7 +1399,7 @@ performing the computation. `value_dependency_queries_checked` and
 `value_dependency_queries_reused` count comparisons against freshly checked
 results. Unknown or nonportable results retain a body dependency, so an interface
 comparison cannot silently validate an observation it cannot represent.
-When an unchanged cached body is inferred to evaluate a new argument, it retains
+When an unchanged cached body is loaded or inferred to evaluate a new argument, it retains
 previously validated observations still consumed by cached callers. The saved
 completeness flag describes those observations, rather than all possible inputs.
 `preinfer_pure_values_checked` counts the observed calls checked for this comparison.

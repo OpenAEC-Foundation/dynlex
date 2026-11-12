@@ -52,7 +52,14 @@ def check_summary_unit_reuse(root, build):
     after = summary_manifest(root, main)
     assert before.keys() == after.keys()
     assert all(before[path] == after[path] for path in before if path != leaf)
-    assert before[leaf] == after[leaf], "an unchanged interface acquired a different summary payload"
+    assert before[leaf].keys() == after[leaf].keys()
+    for key, prior in before[leaf].items():
+        current = after[leaf][key]
+        assert {name: value for name, value in prior.items() if name != "body"} == \
+               {name: value for name, value in current.items() if name != "body"}, \
+               "an unchanged interface acquired a different summary payload"
+        assert prior["body"]["payload"] != current["body"]["payload"], "a body edit retained its old executable graph"
+    assert edited[0]["inference_bodies_encoded"] == edited[0]["inference_bodies_written"] == 1
     main.write_text('# comment\n' + main.read_text())
     comment = build(entry=main)
     assert comment[0]["frontend_reused"]

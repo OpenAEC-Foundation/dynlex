@@ -7,9 +7,14 @@ class Restoration {
 		owner.restoration = this;
 	}
 	~Restoration() {
-		if (!committed)
+		if (!committed) {
 			for (auto &[slot, entry] : entries)
 				*slot = std::move(entry.original);
+			for (const auto &[definition, size] : classSizes)
+				definition->instantiations.resize(size);
+			for (const auto &[definition, key] : classRequests)
+				definition->instantiationRequests.erase(key);
+		}
 		owner.restoration = nullptr;
 	}
 
@@ -28,6 +33,8 @@ class Restoration {
 			return true;
 		entry.identity = *identity;
 		const Json &summary = *saved;
+		if (!types(summary, owner.summaries.at(path).at(*identity)))
+			return false;
 		auto returnType = decodeInferenceTypeIdentity(summary.at("return_type"), owner.identities.classes);
 		if (!returnType)
 			return false;
@@ -127,9 +134,22 @@ class Restoration {
 		return function;
 	}
 
+#include "incrementalInferenceLayoutRestoration.inl"
+
 	std::optional<Json> identity(const CompileTimeFunction &function) const {
 		auto found = functionIdentities.find(function);
 		return found == functionIdentities.end() ? std::nullopt : std::optional<Json>{found->second};
+	}
+	Instantiation *instance(Section *section, const InstantiationKey &key) {
+		auto found = section->instantiations.find(key);
+		if (found != section->instantiations.end() && found->second.valid && !found->second.inferring &&
+			found->second.returnType.isDeduced() && !found->second.needsReinfer)
+			return &found->second;
+		recordInferenceRestoration(caller, section, key);
+		auto &slot = section->instantiations[key];
+		if (!prepare(section, key, slot, ParseContext::InferenceReuseUse::SymbolicReference))
+			return nullptr;
+		return &slot;
 	}
 
 	bool finish() {
@@ -179,6 +199,8 @@ class Restoration {
 	InferenceContext *caller;
 	std::map<Instantiation *, Entry> entries;
 	std::map<CompileTimeFunction, Json> functionIdentities;
+	std::map<ClassDefinition *, size_t> classSizes;
+	std::vector<std::pair<ClassDefinition *, std::string>> classRequests;
 	std::vector<Reference> references;
 	bool committed = false;
 };

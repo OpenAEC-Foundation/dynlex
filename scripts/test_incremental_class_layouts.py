@@ -66,3 +66,13 @@ def check_class_layout_restoration(root, build):
         "changed class field type was not re-evaluated"
     assert changed[2] != initial[2], "class field type edit did not change its runtime layout"
     assert changed[1:] == build(False, entry=provider)[1:]
+
+    provider = root / "class_field_function_provider.dl"
+    source = source.replace('integer means: @intrinsic("type", "int")\n',
+                            'function [integer]:\n    execute: @intrinsic("return", @intrinsic("type", "int"))\n')
+    provider.write_text(source)
+    initial = build(entry=provider)
+    provider.write_text(source.replace('"type", "int"', '"type", "float"'))
+    changed = build(entry=provider)
+    assert changed[2] != initial[2], "a restored class request hid a changed field-type function"
+    assert changed[1:] == build(False, entry=provider)[1:]

@@ -1,12 +1,16 @@
 using SymbolicInferenceUnits = std::set<std::pair<std::string, std::string>>;
 
+void collectSymbolicInferenceValue(const Json &encoded, SymbolicInferenceUnits &targets) {
+	if (encoded.is_null() || encoded.at(0) != "function")
+		return;
+	Json key{{"argument_types", encoded.at(4)}, {"compile_time_parameters", Json::array()}};
+	targets.emplace(encoded.at(1).get<std::string>(), digest(key.dump()));
+}
+
 Json captureSymbolicInferenceDependencies(const Json &summary) {
 	SymbolicInferenceUnits targets;
 	auto value = [&](const Json &encoded) {
-		if (encoded.at(0) != "function")
-			return;
-		Json key{{"argument_types", encoded.at(4)}, {"compile_time_parameters", Json::array()}};
-		targets.emplace(encoded.at(1).get<std::string>(), digest(key.dump()));
+		collectSymbolicInferenceValue(encoded, targets);
 	};
 	auto constants = [&](const Json &entries) {
 		for (const Json &entry : entries)
@@ -45,8 +49,12 @@ Json captureSymbolicInferenceDependencies(const Json &summary) {
 SymbolicInferenceUnits referencedInferenceFunctions(const Json &summaries) {
 	SymbolicInferenceUnits result;
 	for (const Json &variants : summaries)
-		for (const Json &reference : variants)
+		for (const Json &reference : variants) {
 			for (const Json &target : reference.at("symbolic_dependencies"))
 				result.emplace(target.at(0).get<std::string>(), target.at(1).get<std::string>());
+			if (!reference.at("body").is_null())
+				for (const Json &target : reference.at("body").at("dependencies"))
+					result.emplace(target.at(0).get<std::string>(), target.at(1).get<std::string>());
+		}
 	return result;
 }

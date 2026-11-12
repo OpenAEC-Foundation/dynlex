@@ -154,6 +154,7 @@ bool ensureSectionInstantiationInferred(
 			callerContext->inheritTypeFailureFrom(context);
 		return false;
 	}
+	inst.bodyInferred = !inst.needsReinfer;
 	InstantiationKey refinedKey =
 		buildInstantiationKey(inst.requiredCompileTimeParameters, paramBindings, argTypes, evaluateParameterValue);
 	if (refinedKey != instIt->first) {

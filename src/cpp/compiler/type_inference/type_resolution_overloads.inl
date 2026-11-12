@@ -109,6 +109,7 @@ struct InferenceContext {
 		std::unordered_set<Expression *> seenBorrowedExpressions;
 		std::unordered_set<Variable *> seenVariables;
 		std::vector<std::pair<ClassDefinition *, size_t>> classInstantiationSizes;
+		std::vector<std::pair<ClassDefinition *, std::string>> classRequestInsertions;
 		std::unordered_set<ClassDefinition *> seenClassDefinitions;
 		std::vector<Section *> touchedSections;
 		std::unordered_set<Section *> seenSections;
@@ -197,6 +198,8 @@ struct InferenceContext {
 				if (seenClassDefinitions.insert(entry.first).second)
 					classInstantiationSizes.push_back(std::move(entry));
 			}
+			for (auto &entry : nested.classRequestInsertions)
+				classRequestInsertions.push_back(std::move(entry));
 			for (Section *section : nested.touchedSections) {
 				if (seenSections.insert(section).second)
 					touchedSections.push_back(section);

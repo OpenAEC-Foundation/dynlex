@@ -55,7 +55,7 @@ class InferenceStorageIdentities {
 		return result;
 	}
 
-  private:
+	// Executable-body records share the same declaration and invocation keys.
 	std::optional<Json> encodeDefinition(VariableReference *reference) {
 		if (!reference)
 			return std::nullopt;
@@ -76,6 +76,19 @@ class InferenceStorageIdentities {
 		for (const auto &[key, scope] : context.invocationStorageScopes)
 			invocations.emplace(scope.get(), &key);
 		indexedScopes = true;
+	}
+	const std::pair<Section *, InstantiationKey> *instantiationOrigin(const VariableStorageScope *scope) {
+		if (!indexedScopes)
+			indexScopeOrigins();
+		auto found = instantiations.find(scope);
+		return found == instantiations.end() ? nullptr : found->second;
+	}
+	const std::tuple<std::shared_ptr<const VariableStorageScope>, const Expression *, size_t> *
+	invocationOrigin(const VariableStorageScope *scope) {
+		if (!indexedScopes)
+			indexScopeOrigins();
+		auto found = invocations.find(scope);
+		return found == invocations.end() ? nullptr : found->second;
 	}
 
 	std::optional<Json> encodeScope(const std::shared_ptr<const VariableStorageScope> &scope) {
@@ -130,13 +143,24 @@ class InferenceStorageIdentities {
 		return context.storageScopeForInstantiation(section, *key);
 	}
 
-	static Expression *sourceExpression(const Section &section, const std::string &text, size_t occurrence) {
-		for (const CodeLine *line : section.codeLines)
-			if (line->expression && digest(line->rightTrimmedText) == text && occurrence-- == 0)
-				return line->expression;
-		crashCompilerBug("cached storage invocation lost its source expression");
+	Expression *sourceExpression(const Section &section, const std::string &text, size_t occurrence) const {
+		decodedSourceExpressionLookups++;
+		auto [found, inserted] = decodedSourceExpressions.try_emplace(&section);
+		if (inserted)
+			for (const CodeLine *line : section.codeLines) {
+				decodedSourceExpressionLinesIndexed++;
+				if (line->expression)
+					found->second[digest(line->rightTrimmedText)].push_back(line->expression);
+			}
+		auto expressions = found->second.find(text);
+		if (expressions == found->second.end() || occurrence >= expressions->second.size())
+			crashCompilerBug("cached storage invocation lost its source expression");
+		return expressions->second[occurrence];
 	}
+	size_t sourceExpressionLookups() const { return decodedSourceExpressionLookups; }
+	size_t sourceExpressionLinesIndexed() const { return decodedSourceExpressionLinesIndexed; }
 
+  private:
 	static void
 	indexExpression(const Expression *expression, const Json &site, std::unordered_map<const Expression *, Json> &index) {
 		if (!expression || !index.emplace(expression, site).second)
@@ -151,6 +175,8 @@ class InferenceStorageIdentities {
 		child(expression->dataDeclaration, nullptr);
 	}
 
+  public:
+	// Keep source-template edges attached to this process's canonical nodes.
 	std::optional<Json> encodeExpression(const Expression *expression) {
 		if (!indexedExpressions) {
 			for (const auto &[path, section] : sections) {
@@ -168,7 +194,15 @@ class InferenceStorageIdentities {
 		auto found = expressions.find(expression);
 		return found == expressions.end() ? std::nullopt : std::optional<Json>{found->second};
 	}
+	Expression *decodeExpression(const Json &site) const {
+		Section *section = sections.at(site.at(0).get<std::string>());
+		Expression *expression = sourceExpression(*section, site.at(1).get<std::string>(), site.at(2).get<size_t>());
+		for (const Json &component : site.at(3))
+			expression = component.is_null() ? expression->dataDeclaration : expression->arguments.at(component.get<size_t>());
+		return expression;
+	}
 
+  private:
 	ParseContext &context;
 	const std::map<const Section *, std::string> &paths;
 	const InferenceValueIdentities &identities;
@@ -181,6 +215,10 @@ class InferenceStorageIdentities {
 	std::unordered_map<const VariableStorageScope *, std::optional<Json>> encodedScopes;
 	std::unordered_map<const VariableReference *, Json> definitions;
 	std::unordered_map<const Expression *, Json> expressions;
+	mutable std::unordered_map<const Section *, std::unordered_map<std::string, std::vector<Expression *>>>
+		decodedSourceExpressions;
+	mutable size_t decodedSourceExpressionLookups = 0;
+	mutable size_t decodedSourceExpressionLinesIndexed = 0;
 	bool indexedScopes = false;
 	bool indexedExpressions = false;
 	bool indexedDefinitions = false;

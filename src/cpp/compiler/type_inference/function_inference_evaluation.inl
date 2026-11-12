@@ -328,6 +328,7 @@ static CompileTimeValue executePureInstantiationReturnValue(
 		state.inferenceContext.trialJournal->recordInstantiationWrite(&instantiation);
 	observe(executionResult.value);
 	instantiation.pureReturnValuesByArguments.emplace(std::move(argumentValueKey), executionResult.value);
+	instantiation.valueSummaryChanged = true;
 	return executionResult.value;
 }
 
@@ -736,6 +737,16 @@ static Instantiation *ensureCallableFunctionInstantiationInferred(
 void recordInferenceRestoration(InferenceContext *context, Section *section, const InstantiationKey &key) {
 	if (context && context->trial && context->trialJournal)
 		context->trialJournal->recordSectionInstantiationWrite(section, key);
+}
+
+void recordInferenceClassRestoration(InferenceContext *context, ClassDefinition *definition) {
+	if (context && context->trial && context->trialJournal)
+		context->trialJournal->recordClassInstantiationAppend(definition);
+}
+
+void recordInferenceClassRequestRestoration(InferenceContext *context, ClassDefinition *definition, const std::string &key) {
+	if (context && context->trial && context->trialJournal)
+		context->trialJournal->classRequestInsertions.emplace_back(definition, key);
 }
 
 static CompileTimeValue

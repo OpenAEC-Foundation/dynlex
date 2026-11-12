@@ -169,7 +169,9 @@ std::optional<Json> readProgramManifest(const fs::path &path) {
 	Json manifest = Json::parse(*payload);
 	if (!manifest.contains("payload_keys") || !manifest.at("payload_keys").is_object() ||
 		manifest.at("payload_keys").size() != programPayloadFields.size() || !manifest.contains("inference_summary_keys") ||
-		!manifest.at("inference_summary_keys").is_array())
+		!manifest.at("inference_summary_keys").is_array() || !manifest.contains("inference_body_keys") ||
+		!manifest.at("inference_body_keys").is_array() || !manifest.contains("inference_class_keys") ||
+		!manifest.at("inference_class_keys").is_array())
 		throw std::runtime_error("invalid program cache manifest: " + path.string());
 	const Json &keys = manifest.at("payload_keys");
 	for (const char *field : programPayloadFields) {
@@ -203,10 +205,22 @@ bool hydrateProgramField(Json &program, const fs::path &directory, const char *f
 void writeProgramEntry(const fs::path &path, Json program, const Json *prior = nullptr) {
 	if (program.contains("inference_summaries")) {
 		std::set<std::string> summaries;
+		std::set<std::string> bodies;
+		std::set<std::string> classes;
 		for (const Json &variants : program.at("inference_summaries"))
-			for (const Json &reference : variants)
+			for (const Json &reference : variants) {
 				summaries.insert(reference.at("payload").get<std::string>());
+				for (const Json &definition : reference.at("classes"))
+					classes.insert(definition.at("payload").get<std::string>());
+				if (!reference.at("body").is_null()) {
+					bodies.insert(reference.at("body").at("payload").get<std::string>());
+					for (const Json &definition : reference.at("body").at("classes"))
+						classes.insert(definition.at("payload").get<std::string>());
+				}
+			}
 		program["inference_summary_keys"] = summaries;
+		program["inference_body_keys"] = bodies;
+		program["inference_class_keys"] = classes;
 	}
 	Json keys = program.contains("payload_keys") ? program.at("payload_keys") : Json::object();
 	for (const char *field : programPayloadFields) {

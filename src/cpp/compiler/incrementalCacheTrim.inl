@@ -6,10 +6,20 @@ void trimCache(const fs::path &directory) {
 	};
 	std::vector<Entry> entries;
 	uintmax_t size = 0;
-	constexpr std::array<std::string_view, 11> prefixes{
-		"object-",		 "program-",	 "payload-",		  "matcher-paths-",
-		"matcher-",		 "parser-",		 "errors-",			  "optimization-input-",
-		"optimization-", "native-unit-", "inference-summary-"
+	constexpr std::array<std::string_view, 13> prefixes{
+		"object-",
+		"program-",
+		"payload-",
+		"matcher-paths-",
+		"matcher-",
+		"parser-",
+		"errors-",
+		"optimization-input-",
+		"optimization-",
+		"native-unit-",
+		"inference-summary-",
+		"inference-body-",
+		"inference-class-"
 	};
 	for (const auto &file : fs::directory_iterator(directory)) {
 		if (file.path().extension() != ".entry")

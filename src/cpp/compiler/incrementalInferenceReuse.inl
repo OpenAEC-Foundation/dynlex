@@ -137,20 +137,77 @@ Json captureSectionInferenceSummary(
 	return summaries;
 }
 
+Json captureInferenceFactClasses(
+	const Json &summary, const InferenceValueIdentities &identities, const std::function<InferenceBodySources &()> &sources
+) {
+	std::set<std::string> required;
+	(void)remapInferenceSummaryTypes(summary, [&](const Json &type) {
+		collectInferenceClassDependencies(type, required);
+		return nullptr;
+	});
+	Json records = Json::object();
+	std::stack<std::string> pending;
+	for (const auto &path : required)
+		pending.push(path);
+	while (!pending.empty()) {
+		std::string path = std::move(pending.top());
+		pending.pop();
+		if (records.contains(path))
+			continue;
+		auto *definition = static_cast<ClassSection *>(identities.sections.at(path))->classDefinition;
+		const Json &state = sources().classInstances(definition);
+		records[path] = state;
+		for (const auto &dependency : classInstantiationDependencies(state))
+			pending.push(dependency);
+	}
+	return records;
+}
+
+SymbolicInferenceUnits nativeInferenceUnits(const Json &functions, const Json &keys) {
+	SymbolicInferenceUnits result;
+	for (const auto &[name, owner] : functions.items())
+		result.emplace(owner.get<std::string>(), keys.at(name).get<std::string>());
+	return result;
+}
+
 Json captureInferenceSummaries(
 	ParseContext &context, const std::map<const Section *, std::string> &sectionPaths,
 	const std::set<std::string> &excludedSources, const Json &globalTypes, InferenceSummaryStore &summaryStore,
-	const IncrementalUnitSelection *skipped = nullptr
+	const SymbolicInferenceUnits &native, const IncrementalUnitSelection *skipped = nullptr, const Json *prior = nullptr
 ) {
 	Json summaries = Json::object();
 	InferenceValueIdentities identities(sectionPaths);
 	InferenceStorageIdentities storage(context, sectionPaths, identities);
+	std::unique_ptr<InferenceBodySources> sources;
+	auto sourceRecords = [&]() -> InferenceBodySources & {
+		if (!sources)
+			sources = std::make_unique<InferenceBodySources>(context, identities);
+		return *sources;
+	};
 	for (const auto &[section, path] : sectionPaths) {
 		if (inferenceSummarySourceExcluded(section, excludedSources))
 			continue;
 		Json variants = captureSectionInferenceSummary(section, identities, storage, globalTypes, nullptr, skipped);
-		for (const auto &[key, summary] : variants.items())
-			summaries[path][key] = summaryStore.save(summary);
+		std::map<std::string, const Instantiation *> instances;
+		for (const auto &[key, instance] : section->instantiations)
+			if (auto identity = inferenceSummaryKey(key, identities))
+				instances.emplace(*identity, &instance);
+		for (const auto &[key, summary] : variants.items()) {
+			const Instantiation &instance = *instances.at(key);
+			Json body = nullptr;
+			bool needsBody =
+				(instance.purity == InstantiationPurity::Pure && instance.returnType.kind != DataType::Kind::Void) ||
+				!native.contains({path, key});
+			if (needsBody && instance.inferenceReusedFromCache && prior && prior->contains(path) &&
+				prior->at(path).contains(key))
+				body = prior->at(path).at(key).at("body");
+			else if (needsBody && instance.bodyInferred) {
+				InferenceBodyWriter writer(identities, sourceRecords(), storage);
+				body = summaryStore.saveBody(writer.capture(instance));
+			}
+			Json classes = summaryStore.saveClasses(captureInferenceFactClasses(summary, identities, sourceRecords));
+			summaries[path][key] = summaryStore.save(summary, std::move(body), std::move(classes));
+		}
 	}
 	return summaries;
 }
@@ -189,37 +246,96 @@ class IncrementalInferenceReuse {
 				const Json &reference = summaries.at(sectionPaths.at(section)).at(*keyText);
 				bool hasIR =
 					irReuse.hasReusableIRForInstantiation(section, *keyText, reference.at("needs_global_types").get<bool>());
-				instantiation.needsReinfer |= !hasIR;
+				instantiation.needsReinfer |= !hasIR && !instantiation.bodyInferred;
 				if (hasIR)
 					runtimeValidated.insert(std::move(unit));
 			}
+			if (instantiation.needsReinfer)
+				loadBody(section, key, instantiation, caller);
 			return true;
 		}
-		Restoration transaction(*this, caller);
-		return transaction.prepare(section, key, instantiation, use) && transaction.finish();
+		{
+			Restoration transaction(*this, caller);
+			if (!transaction.prepare(section, key, instantiation, use) || !transaction.finish())
+				return false;
+		}
+		if (instantiation.needsReinfer)
+			loadBody(section, key, instantiation, caller);
+		return true;
 	}
 
-	bool decodeValues(const std::function<bool(const InferenceValueIdentities &)> &decode) {
+	bool loadBody(Section *section, Instantiation &instance, InferenceContext *caller) {
+		for (const auto &[key, slot] : section->instantiations)
+			if (&slot == &instance)
+				return loadBody(section, key, instance, caller);
+		crashCompilerBug("inferred body request has no owning instantiation");
+	}
+	bool loadBody(Section *section, const InstantiationKey &key, Instantiation &instance, InferenceContext *caller) {
+		if (instance.bodyInferred)
+			return true;
+		auto identity = inferenceSummaryKey(key, identities);
+		if (!identity || !eligible->contains(section, *identity))
+			return false;
+		const auto &reference = summaries.at(sectionPaths.at(section)).at(*identity);
+		auto start = Clock::now();
+		auto record = summaryStore.loadBody(reference.at("body"));
+		if (!record)
+			return false;
+		if (!bodySources)
+			bodySources = std::make_unique<InferenceBodySources>(context, identities);
+		Restoration transaction(*this, caller);
+		std::set<std::string> classPaths;
+		for (const auto &[path, _] : reference.at("body").at("classes").items())
+			classPaths.insert(path);
+		if (!transaction.classes(reference.at("body").at("classes"), classPaths))
+			return false;
+		InferenceBodyReader reader(
+			context, identities, *bodySources, storage, [&](Section *owner, const InstantiationKey &arguments) {
+			return transaction.instance(owner, arguments);
+		}
+		);
+		std::shared_ptr<InstantiatedSectionBody> body;
+		try {
+			body = reader.restore(*record);
+		} catch (const UnavailableInferenceBody &) {
+			return false;
+		}
+		if (!transaction.finish())
+			return false;
+		reader.commit();
+		recordInferenceRestoration(caller, section, key);
+		instance.body = std::move(body);
+		instance.bodyInferred = true;
+		instance.needsReinfer = false;
+		context.inferenceBodiesLoaded++;
+		context.inferenceBodyLoadMilliseconds += elapsedMilliseconds(start);
+		return true;
+	}
+
+	bool decodeValues(
+		const Json &summary, const Json &reference, const std::function<bool(const InferenceValueIdentities &)> &decode
+	) {
 		Restoration transaction(*this, nullptr);
-		return decode(identities) && transaction.finish();
+		return transaction.types(summary, reference) && decode(identities) && transaction.finish();
 	}
 
 	size_t reusedCount() const { return count; }
+	size_t sourceExpressionLookups() const { return storage.sourceExpressionLookups(); }
+	size_t sourceExpressionLinesIndexed() const { return storage.sourceExpressionLinesIndexed(); }
 	Json snapshot(
 		const std::map<const Section *, std::string> &paths, const std::set<std::string> &excludedSources,
 		const Json &globalTypes, const Json &functions, const Json &functionKeys, size_t *reusedSections = nullptr
 	) const {
-		std::set<std::pair<std::string, std::string>> native;
-		for (const auto &[name, owner] : functions.items())
-			native.emplace(owner.get<std::string>(), functionKeys.at(name).get<std::string>());
+		auto native = nativeInferenceUnits(functions, functionKeys);
 		IncrementalUnitSelection skipped;
 		if (globalTypes == priorGlobalTypes)
 			for (const auto &[section, keys] : eligible->sections())
 				for (const auto &[key, instantiation] : section->instantiations)
-					if (instantiation.inferenceReusedFromCache)
+					if (instantiation.inferenceReusedFromCache && !instantiation.valueSummaryChanged)
 						if (auto identity = inferenceSummaryKey(key, identities); identity && keys.contains(*identity))
 							skipped.insert(section, *identity);
-		Json result = captureInferenceSummaries(context, paths, excludedSources, globalTypes, summaryStore, &skipped);
+		Json result =
+			captureInferenceSummaries(context, paths, excludedSources, globalTypes, summaryStore, native, &skipped, &summaries);
 		std::set<std::string> freshSections, copiedSections;
 		for (const auto &[path, _] : result.items())
 			freshSections.insert(path);
@@ -233,7 +349,8 @@ class IncrementalInferenceReuse {
 				for (const auto &[key, summary] : summaries.at(path).items()) {
 					if (!keys.contains(key))
 						continue;
-					if (!native.contains({path, key}) && !inferenceSummaryHasValueState(summary))
+					if (!native.contains({path, key}) && summary.at("body").is_null() &&
+						!inferenceSummaryHasValueState(summary))
 						continue;
 					if (summary.at("needs_global_types").get<bool>() && globalTypes != priorGlobalTypes)
 						continue;
@@ -249,6 +366,14 @@ class IncrementalInferenceReuse {
 		std::map<std::string, const Section *> sections;
 		for (const auto &[section, path] : paths)
 			sections.emplace(path, section);
+		auto retireBody = [&](const std::string &path, const std::string &key, Json &reference) {
+			if (native.contains({path, key}) && !reference.at("body").is_null() &&
+				!reference.at("body").at("for_values").get<bool>())
+				reference["body"] = nullptr;
+		};
+		for (auto &[path, variants] : result.items())
+			for (auto &[key, reference] : variants.items())
+				retireBody(path, key, reference);
 		std::stack<std::pair<std::string, std::string>> pending;
 		for (const auto &target : referencedInferenceFunctions(result))
 			pending.push(target);
@@ -271,11 +396,15 @@ class IncrementalInferenceReuse {
 					(reference.at("needs_global_types").get<bool>() && globalTypes != priorGlobalTypes))
 					continue;
 				result[path][key] = reference;
+				retireBody(path, key, result[path][key]);
 				if (!freshSections.contains(path))
 					copiedSections.insert(path);
 			}
 			for (const Json &target : result.at(path).at(key).at("symbolic_dependencies"))
 				pending.emplace(target.at(0).get<std::string>(), target.at(1).get<std::string>());
+			if (!result.at(path).at(key).at("body").is_null())
+				for (const Json &target : result.at(path).at(key).at("body").at("dependencies"))
+					pending.emplace(target.at(0).get<std::string>(), target.at(1).get<std::string>());
 		}
 		if (reusedSections)
 			*reusedSections += copiedSections.size();
@@ -292,6 +421,7 @@ class IncrementalInferenceReuse {
 	InferenceValueIdentities identities;
 	InferenceStorageIdentities storage;
 	InferenceSummaryStore &summaryStore;
+	std::unique_ptr<InferenceBodySources> bodySources;
 	Restoration *restoration = nullptr;
 	std::set<std::pair<const Section *, std::string>> runtimeValidated;
 	size_t count = 0;

@@ -36,6 +36,14 @@ struct BuildStatistics {
 	size_t valueDependencyQueriesReused = 0;
 	size_t inferenceSummaryUnitsEncoded = 0;
 	size_t inferenceSummaryUnitsWritten = 0;
+	size_t inferenceBodiesEncoded = 0;
+	size_t inferenceBodiesWritten = 0;
+	size_t inferenceClassesLoaded = 0;
+	size_t inferenceClassesRestored = 0;
+	size_t inferenceClassesWritten = 0;
+	size_t inferenceSourceExpressionLookups = 0;
+	size_t inferenceSourceExpressionLinesIndexed = 0;
+	double inferenceBodyEncodeMilliseconds = 0;
 	double inferenceSummaryLoadMilliseconds = 0;
 	double inferenceSummaryEncodeMilliseconds = 0;
 	size_t aggregateInferenceUnitsCaptured = 0;

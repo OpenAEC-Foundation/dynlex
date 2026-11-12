@@ -153,7 +153,10 @@ struct ParseContext {
 	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;
 	std::function<bool(Section *, const InstantiationKey &, Instantiation &, InferenceReuseUse, InferenceContext *)>
 		reuseInferredInstantiation;
+	std::function<bool(Section *, Instantiation &, InferenceContext *)> restoreInferredBody;
 	size_t functionBodyInferencePasses = 0;
+	size_t inferenceBodiesLoaded = 0;
+	double inferenceBodyLoadMilliseconds = 0;
 	std::function<void(ParseContext &, const std::function<bool(const IncrementalFunctionRequest &)> &)>
 		runIncrementalPreinference;
 	std::vector<IncrementalFunctionRequest> incrementalReplacementFunctions;
@@ -368,6 +371,8 @@ struct ParseContext {
 	// Owns all VariableReference instances for this compilation.
 	// Other structures keep non-owning raw pointers into this arena.
 	std::vector<std::unique_ptr<VariableReference>> ownedVariableReferences;
+	std::vector<std::shared_ptr<ExpressionStorage>> restoredBodyExpressionArenas;
+	std::vector<std::unique_ptr<PatternReference>> restoredBodyPatternReferences;
 	// Explicit source captures are parsed before pattern definitions. Register
 	// their references after definition parameters have been indexed.
 	std::vector<VariableReference *> pendingExplicitVariableReferences;

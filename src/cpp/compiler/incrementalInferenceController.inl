@@ -52,7 +52,8 @@ class IncrementalInferenceController {
 				if (section == sections.end())
 					continue;
 				for (const auto &[key, summary] : variants.items())
-					if ((inferenceSummaryHasValueState(summary) || symbolic.contains({path, key})) &&
+					if ((!summary.at("body").is_null() || inferenceSummaryHasValueState(summary) ||
+						 symbolic.contains({path, key})) &&
 						!replacements->contains(section->second, key) && check.unchanged({path, key}))
 						eligible->insert(section->second, key);
 			}
@@ -70,6 +71,9 @@ class IncrementalInferenceController {
 												 ParseContext::InferenceReuseUse use, InferenceContext *caller
 											 ) {
 			return inferenceReuse->reuse(section, key, instantiation, use, caller);
+		};
+		context.restoreInferredBody = [this](Section *section, Instantiation &instance, InferenceContext *caller) {
+			return inferenceReuse->loadBody(section, instance, caller);
 		};
 		std::set<InferenceUnitKey> native;
 		for (const auto &[name, owner] : previous.at("function_sections").items())
@@ -143,7 +147,9 @@ class IncrementalInferenceController {
 		const Json *saved = summaryStore.load(previous.at("inference_summaries").at(unit.first).at(unit.second));
 		if (!saved)
 			return nullptr;
-		bool decoded = inferenceReuse->decodeValues([&](const InferenceValueIdentities &identities) {
+		bool decoded = inferenceReuse->decodeValues(
+			*saved, previous.at("inference_summaries").at(unit.first).at(unit.second),
+			[&](const InferenceValueIdentities &identities) {
 			const Json &summary = *saved;
 			auto key = decodeInferenceKey(summary, identities);
 			if (!key || key->argumentTypes.size() != request.parameterNames.size() ||
@@ -163,7 +169,8 @@ class IncrementalInferenceController {
 				request.observedArguments.push_back(std::move(values));
 			}
 			return true;
-		});
+		}
+		);
 		return decoded ? saved : nullptr;
 	}
 

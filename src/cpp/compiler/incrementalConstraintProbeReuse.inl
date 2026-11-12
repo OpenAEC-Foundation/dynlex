@@ -71,7 +71,7 @@ class ConstraintProbePattern {
 
 std::vector<bool> reusableConstraintProbes(
 	const Json &prior, const Json &current, const Json &graph, const std::map<std::string, Section *> &sections,
-	const IncrementalInferenceReads::Keys &changedLookups
+	const IncrementalInferenceReads::Keys &changedLookups, std::set<std::string> &reusableClasses
 ) {
 	if (!stableConstraintProbePrelude(prior, current))
 		return {};
@@ -188,19 +188,51 @@ std::vector<bool> reusableConstraintProbes(
 	std::vector<bool> reusable(items.size(), false);
 	for (size_t index = 0; index < items.size(); index++)
 		reusable[index] = !dirty[index] && (firstDirty == items.size() || (passes[index] == 1 && index < firstDirty));
+	for (const auto &[path, section] : sections)
+		if (section->type == SectionType::Class && !dirtyClosure.contains(path) && !topLevelDependent.contains(path))
+			reusableClasses.insert(path);
 	return reusable;
+}
+
+Json reusableClassInstantiations(const Json &saved, const std::set<std::string> &reusable) {
+	std::set<std::string> clean;
+	for (const auto &[path, state] : saved.items())
+		if (reusable.contains(path) && !state.at("requests").is_null())
+			clean.insert(path);
+	std::map<std::string, std::vector<std::string>> callers;
+	std::stack<std::string> pending;
+	for (const auto &path : clean)
+		for (const auto &dependency : classInstantiationDependencies(saved.at(path))) {
+			callers[dependency].push_back(path);
+			if (!clean.contains(dependency))
+				pending.push(path);
+		}
+	while (!pending.empty()) {
+		std::string path = std::move(pending.top());
+		pending.pop();
+		if (!clean.erase(path))
+			continue;
+		if (auto found = callers.find(path); found != callers.end())
+			for (const auto &caller : found->second)
+				pending.push(caller);
+	}
+	Json result = Json::object();
+	for (const auto &path : clean)
+		result[path] = saved.at(path);
+	return result;
 }
 
 void prepareConstraintProbeReuse(
 	ParseContext &context, const Json &prior, const Json &current, const Json &graph,
 	const std::map<std::string, Section *> &sections, const IncrementalInferenceReads::Keys &changedLookups
 ) {
-	std::vector<bool> reusable = reusableConstraintProbes(prior, current, graph, sections, changedLookups);
+	std::set<std::string> reusableClasses;
+	std::vector<bool> reusable = reusableConstraintProbes(prior, current, graph, sections, changedLookups, reusableClasses);
 	if (std::ranges::none_of(reusable, [](bool value) {
 		return value;
 	}))
 		return;
-	if (!restoreClassInstantiations(prior.at("class_instantiations"), sections))
+	if (!restoreClassInstantiations(reusableClassInstantiations(prior.at("class_instantiations"), reusableClasses), sections))
 		return;
 	const Json &schedule = prior.at("constraint_probe_schedule");
 	context.priorConstraintProbeItems = schedule.at("items").get<std::vector<std::string>>();

@@ -87,7 +87,8 @@
 		auto argumentValues = compileTimeArgumentValueVector(knownValues);
 		if (inst.pureReturnValuesByArguments.contains(argumentValues))
 			context.parseContext.pureValueSummaryHits++;
-		else
+		else if (!inst.bodyInferred && (!context.parseContext.restoreInferredBody ||
+										!context.parseContext.restoreInferredBody(matchedSection, inst, &context)))
 			inst.needsReinfer = true;
 	}
 	std::optional<InstantiationKey> refinedInstantiationKey;
@@ -191,6 +192,7 @@
 		context.currentInstantiation = savedInst;
 		context.memoryFlexBase = callerMemoryFlexBase;
 		inst.valid = inferenceSucceeded;
+		inst.bodyInferred = inst.valid && !inst.needsReinfer;
 		if (inferenceSucceeded && inst.needsReinfer)
 			propagateUnresolvedRecursiveDependencyToCaller(context, savedInst);
 		refinedInstantiationKey =

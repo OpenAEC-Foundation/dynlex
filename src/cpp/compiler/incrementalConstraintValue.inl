@@ -144,8 +144,6 @@ template <typename Classes> DataType decodePortableConstraintType(const Json &en
 }
 
 std::optional<Json> encodePortableConstraint(const TypeConstraint &constraint, const ClassIdentityPaths &classPaths) {
-	if (!constraint.isResolved())
-		return std::nullopt;
 	Json classPath = nullptr;
 	if (constraint.classDefinition) {
 		auto path = classPaths.find(constraint.classDefinition);
@@ -177,12 +175,13 @@ std::optional<Json> encodePortableConstraint(const TypeConstraint &constraint, c
 		 optionalInt(constraint.pointerDepth), optionalInt(constraint.arraySize), optionalInt(constraint.matrixRows),
 		 optionalInt(constraint.matrixColumns), constraint.requiresNumeric, constraint.requiresInteger,
 		 constraint.requiresCompileTimeValue, std::move(element), std::move(classPath),
-		 optionalInt(constraint.classInstantiationIndex), std::move(signature)}
+		 optionalInt(constraint.classInstantiationIndex), std::move(signature), constraint.resolved}
 	);
 }
 
 template <typename Classes> TypeConstraint decodePortableConstraint(const Json &encoded, const Classes &sections) {
 	TypeConstraint constraint = TypeConstraint::any();
+	constraint.resolved = encoded.at(13).get<bool>();
 	if (!encoded.at(0).is_null())
 		constraint.kind = static_cast<DataType::Kind>(encoded.at(0).get<int>());
 	auto optionalInt = [](const Json &value) -> std::optional<int> {
