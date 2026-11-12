@@ -70,6 +70,7 @@ void registerManagedStorage(ParseContext &context, llvm::Value *address, const D
 void registerManagedGlobalStorage(ParseContext &context, llvm::Value *address, const DataType &type);
 void initializeManagedStorage(ParseContext &context, llvm::Value *address, const DataType &type, llvm::Value *ownedValue);
 bool storeManagedValue(ParseContext &context, llvm::Value *address, const DataType &type, llvm::Value *ownedValue);
+void registerManagedTemporaryStorage(ParseContext &context, llvm::Value *address, const DataType &type, Section *ownerSection);
 bool releaseManagedTemporaryStorage(ParseContext &context, llvm::Value *address);
 bool releaseManagedStorageForSection(ParseContext &context, Section *ownerSection);
 bool releaseManagedStorageForReturn(ParseContext &context);
