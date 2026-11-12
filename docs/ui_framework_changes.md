@@ -486,3 +486,30 @@ in the port was corrected after an import-free example confirmed ordinary
 lexical shadowing; this was not a compiler bug. The art test runner now exposes
 captured compiler diagnostics on failure instead of hiding them behind the
 subprocess exception. The crop tests do not depend on Three.js at runtime.
+
+The shared scene library can now submit indexed mesh banks and portable instance
+records through the existing shader driver. Copies of immutable geometry share
+one bank span; indices stay local to that span. Each shader/pass binding tracks
+the uploaded geometry revision, so changes to instance transforms and materials
+do not require another geometry upload. Instance records preserve model matrices,
+inverse-transpose normal columns, linear color and emission, material parameters,
+handedness and exact uint32 effect/shadow flags in 176 bytes. The matching layout
+uses fifteen vertex attributes. Ordinary DynLex shader helpers consume the same
+data for world positions, normals and camera projection.
+
+The core vector library now selects the GPU vector type when compiling a shader,
+with coordinate readers and the same vector arithmetic as CPU code. Explicit
+`set the x coordinate of value to component` operations (and y/z equivalents)
+update either representation while preserving independent copies. Existing record
+field assignment remains available. Cross-product coordinate expressions now have
+explicit grouping. These are library features and source corrections; no C++
+compiler changes were needed in this phase.
+
+Five shared fixture groups pass native O0/O2, Wasm O0/O2 and the shipped compiler,
+releasing all allocations. A private-display pixel probe compiles the actual
+DynLex shader, renders the actual DynLex mesh and instance records, and compares
+the image against CPU-projected positions on both WebGPU and WebGL2. It checks
+depth overlap, mirroring, normal matrices, color conversion, material values,
+all fifteen attributes, unsigned flags, vector arithmetic/updates, zero-vector
+normalization and retained geometry. Both backends pass with no graphics errors.
+The complete core integration suite passes 515 checks with no failures or skips.

@@ -1,0 +1,18 @@
+import lib/shader.dl
+import lib/vector.dl
+
+set input to the shader uniform named "basis" at binding 0 as a GPU vector
+set right to a new vector with x 3.0, y 2.0 and z 1.0
+set sum to (input + right) normalized
+set cross to the cross product of input and right
+set weighted to (input * right) / right
+set difference to weighted - input
+set zero to (a new vector with x 0.0, y 0.0 and z 0.0) normalized
+set copy to input
+set the x coordinate of input to sum's x + difference's x + zero's x
+set the y coordinate of input to (the dot product of copy and right) / 20.0
+set the z coordinate of input to cross' y / 16.0
+if this is a vertex shader:
+    set the output position with x input's x, y input's y, z input's z and w 1.0
+else:
+    set the fragment color with a red channel of input's x, a green channel of input's y, a blue channel of input's z and an alpha channel of 1.0

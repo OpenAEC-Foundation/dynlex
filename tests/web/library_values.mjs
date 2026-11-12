@@ -8,7 +8,7 @@ import {buildRuntimeImports,createRuntimeFilesystem,inspectRuntimeWasmLayout} fr
 import {observeAllocations} from './allocation_probe.mjs';
 const root=path.resolve(import.meta.dirname,'../..');
 const compiler=path.resolve(process.argv[2]??path.join(root,'build/dynlex'));
-const fixtures=['sequence_values','unicode_stream','workspace_edit_text','workspace_text_plan','unicode_properties','text_search'];
+const fixtures=['sequence_values','unicode_stream','workspace_edit_text','workspace_text_plan','unicode_properties','text_search','vector_math','vector_components'];
 assert(process.argv.slice(3).every(argument=>argument==='--shipped' || argument.startsWith('--case=')),'Unknown library fixture option');
 const selected=process.argv.filter(argument=>argument.startsWith('--case=')).map(argument=>argument.slice(7));
 assert(selected.every(name=>fixtures.includes(name)),'Unknown library fixture');

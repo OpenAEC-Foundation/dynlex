@@ -805,7 +805,7 @@ run_auxiliary_test "json_integer64" 30 python3 -B "$SCRIPT_DIR/test_json_integer
 run_auxiliary_test "json_decimal_oracle" 60 node "$PROJECT_DIR/tests/web/json_numbers.mjs" "$COMPILER"
 if [[ "$suite" == integration ]]; then
     run_auxiliary_test "loop_cleanup_targets" 60 node "$PROJECT_DIR/tests/web/compiler_loops.mjs" "$COMPILER" --shipped
-    for fixture in sequence_values unicode_stream workspace_edit_text workspace_text_plan unicode_properties text_search; do
+    for fixture in sequence_values unicode_stream workspace_edit_text workspace_text_plan unicode_properties text_search vector_math vector_components; do
         run_auxiliary_test "${fixture}_targets" 60 node "$PROJECT_DIR/tests/web/library_values.mjs" "$COMPILER" "--case=$fixture" --shipped
     done
     run_auxiliary_test "literal_search_targets" 60 node "$PROJECT_DIR/tests/web/text_search.mjs" "$COMPILER" --shipped
@@ -817,6 +817,7 @@ if [[ "$suite" == integration ]]; then
     run_auxiliary_test "farm_state_ownership" 300 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --group=ownership --shipped
     run_auxiliary_test "farm_art" 180 python3 -B "$PROJECT_DIR/tests/web/farm_art.py" --compiler "$COMPILER"
     run_auxiliary_test "farm_crop_art" 180 python3 -B "$PROJECT_DIR/tests/web/farm_art.py" --compiler "$COMPILER" --case crops
+    run_auxiliary_test "vector_shaders" 20 python3 -B "$SCRIPT_DIR/test_vector_shaders.py" "$COMPILER"
     run_auxiliary_test "farm_vocabulary_generated" 30 python3 "$SCRIPT_DIR/generate_farm_vocabulary.py" --compiler "$COMPILER" --check
 fi
 run_auxiliary_test "wide_integers_wasm" 60 node "$PROJECT_DIR/tests/web/wide_integers.mjs" "$COMPILER"
