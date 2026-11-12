@@ -6,9 +6,7 @@ ClassDefinition *constraintClassForPath(const Json &path, const std::map<std::st
 
 std::optional<Json> encodePortableConstraintType(const DataType &type, const ClassIdentityPaths &classPaths);
 
-std::optional<Json> encodePortableFunctionSignature(
-	const FunctionSignature &signature, const ClassIdentityPaths &classPaths
-) {
+std::optional<Json> encodePortableFunctionSignature(const FunctionSignature &signature, const ClassIdentityPaths &classPaths) {
 	auto result = encodePortableConstraintType(signature.result, classPaths);
 	if (!result)
 		return std::nullopt;
@@ -90,7 +88,7 @@ DataType decodePortableConstraintType(const Json &encoded, const std::map<std::s
 }
 
 std::optional<Json> encodePortableConstraint(const TypeConstraint &constraint, const ClassIdentityPaths &classPaths) {
-	if (!constraint.isResolved())
+	if (!constraint.isResolved() || (constraint.classInstantiationIndex && *constraint.classInstantiationIndex < -1))
 		return std::nullopt;
 	Json classPath = nullptr;
 	if (constraint.classDefinition) {
@@ -151,7 +149,7 @@ TypeConstraint decodePortableConstraint(const Json &encoded, const std::map<std:
 	constraint.classInstantiationIndex = optionalInt(encoded.at(11));
 	if (constraint.classInstantiationIndex)
 		requireCompilerInvariant(
-			constraint.classDefinition &&
+			constraint.classDefinition && *constraint.classInstantiationIndex >= -1 &&
 				*constraint.classInstantiationIndex < static_cast<int>(constraint.classDefinition->instantiations.size()),
 			"saved constraint refers to an unrestored class instantiation"
 		);

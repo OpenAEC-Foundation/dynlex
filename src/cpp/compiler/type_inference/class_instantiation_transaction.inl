@@ -1,3 +1,5 @@
+#include "classInstantiationRequest.h"
+
 struct ActiveClassInstantiation {
 	ParseContext *parseContext{};
 	ClassDefinition *classDefinition{};
@@ -17,34 +19,35 @@ static thread_local std::vector<ActiveClassInstantiation> activeClassInstantiati
 static thread_local std::optional<ClassInstantiationTransaction> activeClassInstantiationTransaction;
 static thread_local int nextSymbolicClassInstantiationIndex = -2;
 
-static std::string buildClassInstantiationRequestKey(
+static ClassInstantiationRequest buildClassInstantiationRequest(
 	const BindingFrameStack &bindingFrameStack, InferenceContext *inferenceContext,
 	const std::vector<DataType> *constructionArgumentTypes
 ) {
-	std::vector<std::tuple<std::string, DataType, CompileTimeValue>> parameters;
+	ClassInstantiationRequest request;
 	if (!bindingFrameStack.empty()) {
 		for (const auto &[name, expression] : bindingFrameStack.topFrame().bindings) {
 			DataType type = resolveKnownExpressionType(expression, bindingFrameStack, inferenceContext);
 			CompileTimeValue value = resolveStoredCompileTimeValue(expression, bindingFrameStack, inferenceContext);
-			parameters.push_back({name, std::move(type), std::move(value)});
+			request.parameters.push_back({name, std::move(type), std::move(value)});
 		}
 	}
-	std::sort(parameters.begin(), parameters.end(), [](const auto &left, const auto &right) {
+	std::sort(request.parameters.begin(), request.parameters.end(), [](const auto &left, const auto &right) {
 		return std::get<0>(left) < std::get<0>(right);
 	});
+	if (constructionArgumentTypes)
+		request.constructionArgumentTypes = *constructionArgumentTypes;
+	return request;
+}
 
-	std::string key;
-	for (const auto &[name, type, value] : parameters) {
-		key += std::to_string(name.size()) + ":" + name;
-		key += "=" + encodeDataTypeForCacheKey(type);
-		key += ":" + encodeCompileTimeValueForCacheKey(value) + ";";
+static std::shared_ptr<const ClassInstantiationRequest> persistentClassInstantiationRequest(ClassInstantiationRequest request) {
+	for (const auto &[name, type, value] : request.parameters) {
+		// Provisional callable instances and captured expression scopes can end
+		// before a snapshot. Runtime request lookup still uses their identities.
+		if (std::holds_alternative<CompileTimeFunction>(value) || std::holds_alternative<ExpressionCapture>(value) ||
+			std::holds_alternative<ArgumentPackValue>(value))
+			return {};
 	}
-	if (constructionArgumentTypes) {
-		key += "#construct";
-		for (const DataType &type : *constructionArgumentTypes)
-			key += ":" + encodeDataTypeForCacheKey(type);
-	}
-	return key;
+	return std::make_shared<const ClassInstantiationRequest>(std::move(request));
 }
 
 static void recordClassInstantiationAppend(ClassDefinition *classDefinition) {
@@ -58,10 +61,14 @@ static void recordClassInstantiationAppend(ClassDefinition *classDefinition) {
 		activeClassInstantiationTransaction->appendedDefinitions.push_back(classDefinition);
 }
 
-static void cacheClassInstantiationRequest(ClassDefinition *classDefinition, const std::string &requestKey, int index) {
-	auto [it, inserted] = classDefinition->instantiationIndicesByRequest.emplace(requestKey, index);
+static void cacheClassInstantiationRequest(
+	ClassDefinition *classDefinition, const std::string &requestKey, int index, ClassInstantiationRequest request
+) {
+	auto [it, inserted] = classDefinition->instantiationsByRequest.emplace(
+		requestKey, ClassInstantiationRequestRecord{index, persistentClassInstantiationRequest(std::move(request))}
+	);
 	if (!inserted) {
-		requireCompilerInvariant(it->second == index, "class instantiation request resolved to inconsistent indices");
+		requireCompilerInvariant(it->second.index == index, "class instantiation request resolved to inconsistent indices");
 		return;
 	}
 	requireCompilerInvariant(
@@ -76,7 +83,7 @@ static void rollbackClassInstantiationTransaction() {
 	);
 	for (auto it = activeClassInstantiationTransaction->insertedRequestKeys.rbegin();
 		 it != activeClassInstantiationTransaction->insertedRequestKeys.rend(); ++it) {
-		it->first->instantiationIndicesByRequest.erase(it->second);
+		it->first->instantiationsByRequest.erase(it->second);
 	}
 	for (const auto &[classDefinition, originalSize] : activeClassInstantiationTransaction->originalInstantiationSizes) {
 		requireCompilerInvariant(
@@ -109,7 +116,7 @@ struct ScopedClassInstantiationSavepoint {
 		auto &current = *activeClassInstantiationTransaction;
 		for (size_t index = current.insertedRequestKeys.size(); index > saved->insertedRequestKeys.size(); --index) {
 			const auto &[definition, request] = current.insertedRequestKeys[index - 1];
-			definition->instantiationIndicesByRequest.erase(request);
+			definition->instantiationsByRequest.erase(request);
 		}
 		for (const auto &[definition, originalSize] : current.originalInstantiationSizes) {
 			auto previous = savedSizes.find(definition);

@@ -1,4 +1,5 @@
 import lib/workspace_edit.dl
+import lib/sequence.dl
 
 to get the required workspace edit parsed from {C string:source}:
     set outcome to the result of parsing source as a workspace edit

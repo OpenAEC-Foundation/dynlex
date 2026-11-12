@@ -159,6 +159,8 @@ inferAddressProvenance(Expression *expression, InferenceContext &context, const 
 													: AddressProvenance{};
 
 	IntrinsicKind kind = intrinsicKind(resolvedExpression->intrinsicName);
+	if (kind == IntrinsicKind::StaticReference)
+		return {.mayTargets = {}, .mayBeStatic = true};
 	if (kind == IntrinsicKind::AddressOf) {
 		std::optional<AddressProvenance> provenance =
 			inferLValueAddressProvenance(resolvedExpression->arguments[1], context, resolvedBindingFrameStack);

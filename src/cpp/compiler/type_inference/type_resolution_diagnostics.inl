@@ -220,6 +220,21 @@ static std::string encodeCompileTimeValueForCacheKey(const CompileTimeValue &val
 	return "?";
 }
 
+std::string classInstantiationRequestKey(const ClassInstantiationRequest &request) {
+	std::string key;
+	for (const auto &[name, type, value] : request.parameters) {
+		key += std::to_string(name.size()) + ":" + name;
+		key += "=" + encodeDataTypeForCacheKey(type);
+		key += ":" + encodeCompileTimeValueForCacheKey(value) + ";";
+	}
+	if (request.constructionArgumentTypes) {
+		key += "#construct";
+		for (const DataType &type : *request.constructionArgumentTypes)
+			key += ":" + encodeDataTypeForCacheKey(type);
+	}
+	return key;
+}
+
 static bool expressionParticipatesInInferenceTrace(Expression *expr) {
 	if (!expr)
 		return false;

@@ -1,4 +1,5 @@
 #include "incrementalCompilation.h"
+#include "classInstantiationRequest.h"
 #include "codegen/codegen.h"
 #include "codegen/native.h"
 #include "codegen/targetOptions.h"
@@ -338,6 +339,7 @@ std::string renderModule(const llvm::Module &module) {
 // clang-format off: these includes depend on the declarations in the preceding files.
 #include "incrementalDependencyGraph.inl"
 #include "incrementalConstraintValue.inl"
+#include "incrementalClassRequests.inl"
 #include "incrementalClassInstantiations.inl"
 #include "incrementalConstraintProbeReuse.inl"
 // clang-format on

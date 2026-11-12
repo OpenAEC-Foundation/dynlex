@@ -427,7 +427,7 @@ We track each variable that could possibly be a constant. A variable reference c
 
 The same execution walk records pointer facts. Address provenance retains a set of possible variable-storage targets,
 an explicit null alternative, static literal storage, and whether other origins are unknown. A null pointer and a value
-containing no pointers are different facts. Assignments replace the destination's facts; alternatives and loop joins combine the possibilities.
+containing no pointers are different facts. A `static reference` identifies immutable static storage, independently of the values or pointer fields in its initializer. Provenance does not recursively re-read that initializer to identify the resulting address. Assignments replace the destination's facts; alternatives and loop joins combine the possibilities.
 Opaque writes discard certainty about affected pointer storage. Numeric operations and conversions on encoded addresses
 retain their possible origins for alias tracking but make their storage uncertain. These facts are opportunistic: DynLex does not guarantee
 memory safety, require ownership annotations, or run an additional safety-analysis pass. Memory diagnostics may report
@@ -989,8 +989,13 @@ Class references are keyed by stable class-section paths. Committed class
 instantiation field types and function signatures are saved with the constraint
 probe schedule. When the class declaration still has the same fields, the
 compiler restores its instantiation table before decoding reusable constraint
-values, including recursive class layouts. An edited class declaration makes
-its saved constraint values ineligible for reuse.
+values, including recursive class layouts. Snapshots also carry each class request's
+parameter types and compile-time values and its optional construction argument types.
+Restoration rebuilds request keys using the current declaration identities, so later
+inference reaches the restored layout instead of creating a second recursive graph.
+Scoped request identities that cannot be persisted leave class-constraint restoration
+unproven. An edited class declaration makes its saved constraint values ineligible
+for reuse.
 `constraint_probes_reused`, `constraint_probes_run`, `constraint_values_reused`, and
 `constraint_expressions_reused` report these separate decisions. The six entries
 of `inference_stage_ms` measure declared constraints, pattern conflicts,

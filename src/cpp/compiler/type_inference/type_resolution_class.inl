@@ -257,14 +257,17 @@ static DataType instantiateBoundClassType(
 	if (constructionArgumentTypes && constructionArgumentTypes->size() != classDef->fields.size())
 		return {};
 
-	std::string requestKey = buildClassInstantiationRequestKey(bindingFrameStack, inferenceContext, constructionArgumentTypes);
-	auto completedRequest = classDef->instantiationIndicesByRequest.find(requestKey);
-	if (completedRequest != classDef->instantiationIndicesByRequest.end()) {
+	ClassInstantiationRequest request =
+		buildClassInstantiationRequest(bindingFrameStack, inferenceContext, constructionArgumentTypes);
+	std::string requestKey = classInstantiationRequestKey(request);
+	auto completedRequest = classDef->instantiationsByRequest.find(requestKey);
+	if (completedRequest != classDef->instantiationsByRequest.end()) {
 		requireCompilerInvariant(
-			completedRequest->second >= 0 && completedRequest->second < static_cast<int>(classDef->instantiations.size()),
+			completedRequest->second.index >= 0 &&
+				completedRequest->second.index < static_cast<int>(classDef->instantiations.size()),
 			"cached class instantiation request refers to a missing instantiation"
 		);
-		return {DataType::Kind::Type, 0, 0, classDef, completedRequest->second, nullptr, DataType::Kind::Class};
+		return {DataType::Kind::Type, 0, 0, classDef, completedRequest->second.index, nullptr, DataType::Kind::Class};
 	}
 	for (auto active = activeClassInstantiations.rbegin(); active != activeClassInstantiations.rend(); ++active) {
 		if (active->parseContext != &parseContext || active->classDefinition != classDef || active->requestKey != requestKey)
@@ -362,7 +365,7 @@ static DataType instantiateBoundClassType(
 	resolveStoredSymbolicClassInstantiation(classDef, symbolicIndex, instIndex);
 	if (activeInstantiation.ownsTransaction && !validateCompletedClassStorage(parseContext, inferenceContext))
 		return {};
-	cacheClassInstantiationRequest(classDef, requestKey, instIndex);
+	cacheClassInstantiationRequest(classDef, requestKey, instIndex, std::move(request));
 	activeInstantiation.completed = true;
 	return {DataType::Kind::Type, 0, 0, classDef, instIndex, nullptr, DataType::Kind::Class};
 }

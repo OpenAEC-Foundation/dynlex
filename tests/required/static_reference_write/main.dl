@@ -1,0 +1,2 @@
+@intrinsic("store", stored, @intrinsic("static reference", 74))
+@intrinsic("store at", stored, 1)

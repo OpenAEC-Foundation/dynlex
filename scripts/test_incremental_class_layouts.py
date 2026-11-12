@@ -2,6 +2,7 @@
 
 
 def check_class_layout_restoration(root, build):
+    check_recursive_request_restoration(root, build)
     check_equivalent_recursive_layouts(root, build)
     check_class_symbol_identity(root, build)
     recursive = root / "recursive_class_constraint.dl"
@@ -167,3 +168,57 @@ to get inspect collection values:
             assert changed[0]["inference_instantiations_reused"] > 0, "class call edit did not reuse inference"
             assert changed[1:] == build(False, entry=main, flags=flags)[1:], "reordered class layouts reused another instantiation's function"
             assert changed[2] == b"01"
+
+
+
+def check_recursive_request_restoration(root, build):
+    baseline = r'''[a|] type means: @intrinsic("type", "type")
+[an|] integer means: @intrinsic("type", "int", 32)
+[a|] pointer to {type:kind} means: @intrinsic("add pointer depth", kind)
+
+class:
+    patterns:
+        [a|] node
+    members:
+        link as a pointer to member
+
+class:
+    patterns:
+        [a|] member
+    members:
+        owner as a pointer to node
+
+to inspect {node:value}: @intrinsic("discard", value)
+
+function [first node]:
+    execute:
+        @intrinsic("return", @intrinsic("call", "libc", "malloc", a pointer to node, @intrinsic("size of", node)))
+
+function [second node]:
+    execute:
+        @intrinsic("discard", 1)
+        @intrinsic("return", @intrinsic("call", "libc", "malloc", a pointer to node, @intrinsic("size of", node)))
+
+@intrinsic("store", left, first node)
+@intrinsic("store", right, second node)
+@intrinsic("discard", [left, right])
+@intrinsic("discard", @intrinsic("call", "libc", "puts", an integer, "graph"))
+@intrinsic("call", "libc", "free", @intrinsic("type", "nothing"), left)
+@intrinsic("call", "libc", "free", @intrinsic("type", "nothing"), right)
+'''
+    parameterized = baseline.replace('[a|] node\n', '[a|] node of {type:kind}\n')
+    parameterized = parameterized.replace('[a|] member\n', '[a|] member of {type:kind}\n')
+    parameterized = parameterized.replace('link as a pointer to member', 'payload as kind\n        link as a pointer to member of kind')
+    parameterized = parameterized.replace('owner as a pointer to node', 'owner as a pointer to node of kind')
+    parameterized = parameterized.replace('{node:value}', '{node of an integer:value}')
+    parameterized = parameterized.replace('a pointer to node,', 'a pointer to node of an integer,')
+    parameterized = parameterized.replace('"size of", node)', '"size of", node of an integer)')
+    for name, source in [('fixed', baseline), ('parameterized', parameterized)]:
+        entry = root / f"recursive_request_{name}.dl"
+        entry.write_text(source)
+        assert build(entry=entry)[1:] == ("", b"graph\n")
+        entry.write_text(source.replace('@intrinsic("discard", 1)', '@intrinsic("discard", 2)'))
+        edited = build(entry=entry)
+        assert edited[0]["constraint_values_reused"] >= 1, "the recursive layouts were not restored"
+        assert edited[0]["inference_instantiations_reused"] >= 1, "the unchanged allocation was not reused"
+        assert edited[1:] == build(False, entry=entry)[1:] == ("", b"graph\n")

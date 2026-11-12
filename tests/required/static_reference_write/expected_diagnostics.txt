@@ -1,0 +1,1 @@
+tests/required/static_reference_write/main.dl:1-34: Error: cannot write to static literal storage

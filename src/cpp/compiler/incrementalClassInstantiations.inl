@@ -2,9 +2,9 @@ Json classInstantiationSource(const ClassDefinition &definition) {
 	Json fields = Json::array();
 	for (const FieldDefinition &field : definition.fields) {
 		requireCompilerInvariant(field.range.line && field.range.line->sourceFile, "class field has no source");
-		fields.push_back(Json::array(
-			{field.name, field.range.line->sourceFile->uri, std::string(field.range.subString), field.alignment}
-		));
+		fields.push_back(
+			Json::array({field.name, field.range.line->sourceFile->uri, std::string(field.range.subString), field.alignment})
+		);
 	}
 	return Json{{"patterns", definition.patternNames}, {"alignment", definition.alignment}, {"fields", std::move(fields)}};
 }
@@ -16,6 +16,9 @@ Json captureClassInstantiations(const std::map<const Section *, std::string> &se
 		if (section->type != SectionType::Class)
 			continue;
 		const ClassDefinition &definition = *static_cast<const ClassSection *>(section)->classDefinition;
+		auto requests = encodeClassInstantiationRequests(definition, classPaths);
+		if (!requests)
+			return nullptr;
 		Json instances = Json::array();
 		for (const ClassInstantiation &instance : definition.instantiations) {
 			requireCompilerInvariant(
@@ -29,12 +32,18 @@ Json captureClassInstantiations(const std::map<const Section *, std::string> &se
 			}
 			instances.push_back(std::move(fields));
 		}
-		result[path] = Json{{"source", classInstantiationSource(definition)}, {"instances", std::move(instances)}};
+		result[path] = Json{
+			{"source", classInstantiationSource(definition)},
+			{"instances", std::move(instances)},
+			{"requests", std::move(*requests)}
+		};
 	}
 	return result;
 }
 
 bool restoreClassInstantiations(const Json &saved, const std::map<std::string, Section *> &sections) {
+	if (saved.is_null())
+		return false;
 	std::map<std::string, ClassDefinition *> classes;
 	for (const auto &[path, entry] : saved.items()) {
 		auto found = sections.find(path);
@@ -56,11 +65,11 @@ bool restoreClassInstantiations(const Json &saved, const std::map<std::string, S
 			std::vector<DataType> fields;
 			for (const Json &encoded : instances.at(index))
 				fields.push_back(decodePortableConstraintType(encoded, sections));
-			requireCompilerInvariant(
-				fields.size() == definition->fields.size(), "saved class instance has incomplete fields"
-			);
+			requireCompilerInvariant(fields.size() == definition->fields.size(), "saved class instance has incomplete fields");
 			definition->instantiations[index].fieldTypes = std::move(fields);
 		}
 	}
+	for (const auto &[path, definition] : classes)
+		restoreClassInstantiationRequests(*definition, saved.at(path).at("requests"), sections);
 	return true;
 }
