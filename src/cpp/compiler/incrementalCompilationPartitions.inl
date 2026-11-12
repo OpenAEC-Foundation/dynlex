@@ -62,10 +62,10 @@ bool emitPartitions(
 		}
 		std::unique_ptr<llvm::Module> part;
 		if (!cached) {
-			llvm::ValueToValueMapTy values;
-			part = llvm::CloneModule(*context.llvmModule, values, [&](const llvm::GlobalValue *value) {
-				return !value->isDeclaration() && dependencies.layout.component(*value) == index;
-			});
+			std::vector<const llvm::GlobalValue *> definitions;
+			for (const Json &name : record.at("symbols"))
+				definitions.push_back(context.llvmModule->getNamedValue(name.get_ref<const std::string &>()));
+			part = cloneModulePartition(*context.llvmModule, definitions, statistics.nativePartitionCloneWork);
 			if (!index.empty())
 				part->setModuleInlineAsm("");
 			llvm::ModuleAnalysisManager analyses;

@@ -61,6 +61,8 @@ struct BuildStatistics {
 	size_t builtObjects = 0;
 	size_t nativePartitionModulesBuilt = 0;
 	size_t nativePartitionModulesSkipped = 0;
+	ModulePartitionCloneWork nativePartitionCloneWork;
+	ModulePartitionCloneWork optimizationInputCloneWork;
 	size_t nativeFunctionDependenciesReused = 0;
 	size_t nativeFunctionFingerprintsComputed = 0;
 	size_t nativeFunctions = 0;

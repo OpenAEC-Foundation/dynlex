@@ -132,9 +132,9 @@ if(NOT LLVM_ENABLE_RTTI)
     # LLVM's ValueMap callback subclasses must use the library's RTTI setting.
     # Other compiler files use RTTI for DynLex's own section hierarchy.
     if(MSVC)
-        set_property(SOURCE src/cpp/compiler/incrementalCompilation.cpp APPEND PROPERTY COMPILE_OPTIONS /GR-)
+        set_property(SOURCE src/cpp/compiler/incrementalCompilation.cpp src/cpp/compiler/incrementalModulePartition.cpp APPEND PROPERTY COMPILE_OPTIONS /GR-)
     else()
-        set_property(SOURCE src/cpp/compiler/incrementalCompilation.cpp APPEND PROPERTY COMPILE_OPTIONS -fno-rtti)
+        set_property(SOURCE src/cpp/compiler/incrementalCompilation.cpp src/cpp/compiler/incrementalModulePartition.cpp APPEND PROPERTY COMPILE_OPTIONS -fno-rtti)
     endif()
 endif()
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
@@ -571,6 +571,17 @@ if(NOT EMSCRIPTEN)
     )
 
     add_executable(
+        dynlex_incremental_module_partition_test EXCLUDE_FROM_ALL
+        tests/cpp/incrementalModulePartitionTest.cpp
+        src/cpp/compiler/incrementalModulePartition.cpp
+    )
+    target_include_directories(dynlex_incremental_module_partition_test PRIVATE src/cpp)
+    dynlex_link_llvm(dynlex_incremental_module_partition_test core support asmparser transformutils)
+    set_target_properties(dynlex_incremental_module_partition_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+
+    add_executable(
         dynlex_path_utils_test EXCLUDE_FROM_ALL
         tests/cpp/pathUtilsTest.cpp
         src/cpp/pathUtils.cpp
@@ -641,6 +652,7 @@ if(DYNLEX_WEB)
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalCompilation\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalMatcherCache\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalIRReuse\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalModulePartition\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/main\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/dap/.*\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/lsp/tcpTransport\\.cpp$")

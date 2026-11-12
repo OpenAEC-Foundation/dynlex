@@ -130,10 +130,10 @@ std::vector<OptimizationInput> captureOptimizationInputs(
 			statistics.optimizationInputUnitsReused++;
 		else {
 			auto buildStart = Clock::now();
-			llvm::ValueToValueMapTy mapping;
-			auto part = llvm::CloneModule(module, mapping, [&](const llvm::GlobalValue *value) {
-				return !value->isDeclaration() && layout.component(*value) == unit;
-			});
+			std::vector<const llvm::GlobalValue *> definitions;
+			for (const std::string &name : names)
+				definitions.push_back(module.getNamedValue(name));
+			auto part = cloneModulePartition(module, definitions, statistics.optimizationInputCloneWork);
 			part->setModuleIdentifier(identifier);
 			part->setModuleInlineAsm(assembly);
 			removeUnusedDeclarations(*part);

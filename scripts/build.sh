@@ -7,14 +7,34 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Parse arguments
 LINT=true
 BUILD_TYPE=Optimized
-for arg in "$@"; do
+JOBS=""
+JOBS_SET=false
+while (( $# )); do
+    arg="$1"
     case $arg in
         --lint=false) LINT=false ;;
         --lint=true) LINT=true ;;
         --debug) BUILD_TYPE=Debug ;;
         --release) BUILD_TYPE=Release; LINT=false ;;
+        -j|--jobs)
+            if (( $# < 2 )); then
+                echo "Missing job count for $arg" >&2
+                exit 2
+            fi
+            JOBS="$2"
+            JOBS_SET=true
+            shift
+            ;;
+        -j[0-9]*) JOBS="${arg#-j}"; JOBS_SET=true ;;
+        --jobs=*) JOBS="${arg#--jobs=}"; JOBS_SET=true ;;
+        *) echo "Unknown build argument: $arg" >&2; exit 2 ;;
     esac
+    shift
 done
+if [[ "$JOBS_SET" == true && ! "$JOBS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Build job count must be a positive integer: $JOBS" >&2
+    exit 2
+fi
 
 dynlex_resolve_bootstrap_compilers
 CLANG="$DYNLEX_LLVM_BOOTSTRAP_CC"
@@ -159,7 +179,9 @@ if [ "$LINT" = "true" ]; then
     fi
 fi
 
-if command -v nproc >/dev/null 2>&1; then
+if [[ -n "$JOBS" ]]; then
+    : # The explicit job count takes precedence over host CPU detection.
+elif command -v nproc >/dev/null 2>&1; then
     JOBS="$(nproc)"
 elif command -v getconf >/dev/null 2>&1; then
     JOBS="$(getconf _NPROCESSORS_ONLN)"

@@ -114,9 +114,8 @@ expression constants, operand groupings, and callable selections join the caller
 trial state. The outer transaction commits or discards those results together with
 the inferred body; retaining only types loses metadata needed by code generation.
 
-Incremental inference summaries omit functions in sources named by inference-stage
-diagnostics and their notes. Warnings already produced during pattern resolution
-do not exclude unrelated function summaries in the same file.
+Incremental inference retains diagnostics as concrete-unit products. A warning
+in one function does not exclude unrelated functions in the same file from reuse.
 
 After the pattern trees stabilize, definitions connected through shared trie
 endpoints form one syntax family, including transitive connections through choice
@@ -1612,6 +1611,15 @@ construct a partition module. `native_partition_modules_built`,
 `native_partition_modules_skipped`, `native_function_dependencies_reused`, and
 `native_dependency_ms` expose this work. The native snapshot is a separate cache payload
 loaded only when native partition processing is required.
+Constructing a changed native partition or ThinLTO input copies only its owned
+definitions. LLVM value remapping materializes referenced declaration interfaces
+on demand, including dependencies in attributes and metadata. Cycles are handled
+by declaring selected definitions before cloning bodies and initializers. Aliases,
+indirect functions, block addresses, COMDAT groups and module metadata retain
+their existing ownership. Unrelated declarations are never copied into the unit.
+`native_partition_definitions_cloned`, `native_partition_declarations_cloned`,
+`optimization_input_definitions_cloned` and `optimization_input_declarations_cloned`
+count these actual allocations; a reused unit contributes zero.
 Interned string literals use content-derived names and hidden ODR linkage, with
 COMDAT selection on supported targets, so importing cached bodies preserves the
 same literal objects instead of introducing renamed duplicates.

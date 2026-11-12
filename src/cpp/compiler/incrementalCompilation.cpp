@@ -12,6 +12,7 @@
 #include "incrementalIRReuse.h"
 #include "incrementalMatcherCache.h"
 #include "incrementalModuleBitcode.h"
+#include "incrementalModulePartition.h"
 #include "incrementalUnitSelection.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
