@@ -202,7 +202,7 @@ bool hydrateProgramField(Json &program, const fs::path &directory, const char *f
 	return true;
 }
 
-void writeProgramEntry(const fs::path &path, Json program, const Json *prior = nullptr) {
+void recordInferencePayloadKeys(Json &program) {
 	if (program.contains("inference_summaries")) {
 		std::set<std::string> summaries;
 		std::set<std::string> bodies;
@@ -222,8 +222,12 @@ void writeProgramEntry(const fs::path &path, Json program, const Json *prior = n
 		program["inference_body_keys"] = bodies;
 		program["inference_class_keys"] = classes;
 	}
+}
+
+template <typename Fields>
+void storeSnapshotPayloads(const fs::path &directory, Json &program, const Fields &fields, const Json *prior = nullptr) {
 	Json keys = program.contains("payload_keys") ? program.at("payload_keys") : Json::object();
-	for (const char *field : programPayloadFields) {
+	for (const char *field : fields) {
 		if (program.contains(field)) {
 			if (prior && prior->contains(field) && prior->at(field) == program.at(field) &&
 				prior->at("payload_keys").contains(field)) {
@@ -234,7 +238,7 @@ void writeProgramEntry(const fs::path &path, Json program, const Json *prior = n
 										  ? encodeSectionGraph(program.at(field)).dump()
 										  : program.at(field).dump();
 				std::string key = digest(payload);
-				writeEntry(programPayloadPath(path.parent_path(), key), payload);
+				writeEntry(programPayloadPath(directory, key), payload);
 				keys[field] = std::move(key);
 			}
 			program.erase(field);
@@ -242,5 +246,10 @@ void writeProgramEntry(const fs::path &path, Json program, const Json *prior = n
 		requireCompilerInvariant(keys.contains(field), "program cache is missing a payload");
 	}
 	program["payload_keys"] = std::move(keys);
+}
+
+void writeProgramEntry(const fs::path &path, Json program, const Json *prior = nullptr) {
+	recordInferencePayloadKeys(program);
+	storeSnapshotPayloads(path.parent_path(), program, programPayloadFields, prior);
 	writeEntry(path, program.dump());
 }

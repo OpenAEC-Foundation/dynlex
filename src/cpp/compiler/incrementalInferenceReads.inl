@@ -22,17 +22,31 @@ class IncrementalInferenceReads {
 		const InferenceReadOwner &owner, const lsp::SourceFile &source, std::string_view signature,
 		const std::vector<CallableFunctionMatch> &matches
 	) {
-		std::string input = source.uri;
-		input.push_back('\0');
-		input.append(signature);
-		std::string key = digest(input);
+		recordQuery(
+			owner, source, Json{{"kind", "callable"}, {"signature", llvm::toHex(llvm::StringRef(signature), true)}}, [&]() {
+			return encodeCandidates(matches);
+		}
+		);
+	}
+
+	void recordConversions(
+		const InferenceReadOwner &owner, const lsp::SourceFile &source, bool implicit,
+		const std::vector<PatternDefinition *> &definitions
+	) {
+		recordQuery(owner, source, Json{{"kind", "conversion"}, {"implicit", implicit}}, [&]() {
+			return encodeConversions(definitions);
+		});
+	}
+
+	template <class Candidates>
+	void recordQuery(const InferenceReadOwner &owner, const lsp::SourceFile &source, Json query, const Candidates &candidates) {
+		query["source"] = source.uri;
+		std::string key = digest(query.dump());
 		auto [entry, inserted] = observations.try_emplace(key);
-		if (inserted)
-			entry->second = Json{
-				{"source", source.uri},
-				{"signature", llvm::toHex(llvm::StringRef(signature), true)},
-				{"candidates", encodeCandidates(matches)}
-			};
+		if (inserted) {
+			query["candidates"] = candidates();
+			entry->second = std::move(query);
+		}
 		if (owner.section) {
 			bySection[sectionPaths.at(owner.section)].insert(key);
 			if (owner.direct)
@@ -85,15 +99,55 @@ class IncrementalInferenceReads {
 				changed.insert(key);
 				continue;
 			}
-			Json candidates = encodeCandidates(findCallableFunctionsBySignature(
-				context, llvm::fromHex(lookup.at("signature").get_ref<const std::string &>()), source->second
-			));
+			Json candidates;
+			if (lookup.at("kind") == "callable")
+				candidates = encodeCandidates(findCallableFunctionsBySignature(
+					context, llvm::fromHex(lookup.at("signature").get_ref<const std::string &>()), source->second
+				));
+			else {
+				requireCompilerInvariant(lookup.at("kind") == "conversion", "unknown inference lookup kind");
+				candidates =
+					encodeConversions(visibleUserConversions(context, *source->second, lookup.at("implicit").get<bool>()));
+			}
 			if (lookup.at("candidates") != candidates)
 				changed.insert(key);
 			validatedObservations[key] = lookup;
 			validatedObservations[key]["candidates"] = std::move(candidates);
 		}
 		checked = prior.size();
+	}
+
+	// Registry membership is available before constraints. Typed lookup inputs
+	// become comparable once the declared-constraint stage has completed.
+	template <class Fingerprint>
+	void finalizeInterfaces(const Json &prior, const Fingerprint &fingerprint, bool includePrior = true) {
+		auto update = [&](const std::string &key, Json &lookup) {
+			if (lookup.at("kind") != "conversion")
+				return;
+			Json interfaces = Json::object();
+			for (const Json &candidate : lookup.at("candidates")) {
+				const auto &path = candidate.at(0).get_ref<const std::string &>();
+				interfaces[path] = fingerprint(path);
+			}
+			if (prior.contains(key) && prior.at(key).at("interfaces") != interfaces)
+				changed.insert(key);
+			lookup["interfaces"] = std::move(interfaces);
+		};
+		if (includePrior)
+			for (const auto &[key, lookup] : prior.items())
+				if (!observations.contains(key) && !validatedObservations.contains(key))
+					validatedObservations[key] = lookup;
+		for (auto &[key, lookup] : observations)
+			update(key, lookup);
+		for (auto &[key, lookup] : validatedObservations)
+			if (!observations.contains(key))
+				update(key, lookup);
+	}
+
+	static std::string fingerprint(const Json &lookup) {
+		return lookup.at("kind") == "conversion"
+				   ? digest(Json::array({lookup.at("candidates"), lookup.at("interfaces")}).dump())
+				   : digest(lookup.at("candidates").dump());
 	}
 
 	const Keys &readsOf(const std::string &path) const {
@@ -142,6 +196,12 @@ class IncrementalInferenceReads {
 	const Keys &changedKeys() const { return changed; }
 
   private:
+	Json encodeConversions(const std::vector<PatternDefinition *> &definitions) const {
+		std::vector<CallableFunctionMatch> matches;
+		for (PatternDefinition *definition : definitions)
+			matches.push_back({definition, 0});
+		return encodeCandidates(matches);
+	}
 	ScopeNode &ensureScope(const Scope &scope, const Section *section) {
 		requireCompilerInvariant(section && (scope || !section->parent), "inference owner has no storage scope");
 		auto [found, inserted] = scopeNodes.try_emplace(scope, ScopeNode{section, {}, {}, {}, {}});

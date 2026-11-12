@@ -3,32 +3,39 @@
 class IncrementalInferenceController {
   public:
 	IncrementalInferenceController(
-		const Json &previous, const Json &observations, const Json &projection,
-		const std::map<const Section *, std::string> &paths, const IncrementalInferenceReads &reads,
-		const Json &frontendDiagnostics, BuildStatistics &statistics, std::unique_ptr<IncrementalIRReuse> &irReuse,
+		const Json &previous, const Json *nativePrevious, const Json &observations, const Json &projection,
+		const std::map<const Section *, std::string> &paths, IncrementalInferenceReads &reads, const Json &frontendDiagnostics,
+		BuildStatistics &statistics, std::unique_ptr<IncrementalIRReuse> &irReuse,
 		std::unique_ptr<IncrementalInferenceReuse> &inferenceReuse, std::unordered_set<const Section *> &graphStable,
-		std::map<std::string, std::string> &fingerprints, InferenceSummaryStore &summaryStore
+		std::map<std::string, std::string> &fingerprints, InferenceSummaryStore &summaryStore, const Json *frozen,
+		const InferenceSourceIndex &sourceIndex
 	)
-		: previous(previous), observations(observations), projection(projection), paths(paths), reads(reads),
-		  frontendDiagnostics(frontendDiagnostics), statistics(statistics), irReuse(irReuse), inferenceReuse(inferenceReuse),
-		  graphStable(graphStable), fingerprints(fingerprints), summaryStore(summaryStore) {}
+		: previous(previous), nativePrevious(nativePrevious), observations(observations), projection(projection), paths(paths),
+		  reads(reads), frontendDiagnostics(frontendDiagnostics), statistics(statistics), irReuse(irReuse),
+		  inferenceReuse(inferenceReuse), graphStable(graphStable), fingerprints(fingerprints), summaryStore(summaryStore),
+		  frozen(frozen), sourceIndex(sourceIndex) {}
 
 	void run(ParseContext &context, const std::function<bool(const ParseContext::IncrementalFunctionRequest &)> &infer) {
 		auto start = Clock::now();
 		const Json &prior = previous.at("all_function_projection");
 		if (context.options.emitDebugInfo || context.options.traceExecution ||
-			!compatibleObservations(previous, observations, context) ||
-			(!compatibleFunctionProjection(prior, projection) && !compatibleGlobalFreeProjection(prior, projection)))
+			!compatibleObservations(previous, observations, context))
 			return;
+		InferenceUnitInputs lookupInputs(context, projection, paths, statistics, fingerprints);
+		reads.finalizeInterfaces(previous.at("section_dependency_graph").at("callable_lookups"), [&](const auto &path) {
+			return lookupInputs.declarationFingerprint(path);
+		});
 		InferenceValueIdentities identities(paths);
 		auto eligible = std::make_shared<IncrementalUnitSelection>();
 		auto replacements = std::make_shared<IncrementalUnitSelection>();
+		auto nativeReplacements = std::make_shared<IncrementalUnitSelection>();
 		SymbolicInferenceUnits symbolic = referencedInferenceFunctions(previous.at("inference_summaries"));
 		std::map<InferenceUnitKey, Json> verifiedValues;
 		std::set<InferenceUnitKey> unavailableValues;
 		for (const auto &[path, variants] : previous.at("inference_summaries").items())
 			for (const auto &[key, reference] : variants.items())
-				if ((reference.at("observed_values").get<bool>() || !reference.at("pure_values_complete").get<bool>()) &&
+				if (!reference.at("failed").get<bool>() &&
+					(reference.at("observed_values").get<bool>() || !reference.at("pure_values_complete").get<bool>()) &&
 					!summaryStore.retain(reference))
 					unavailableValues.emplace(path, key);
 		InferenceUnitCheck check(
@@ -39,32 +46,51 @@ class IncrementalInferenceController {
 		for (const auto &[section, path] : paths)
 			sections.emplace(path, section);
 		auto updateEligible = [&]() {
-			for (const auto &[name, owner] : previous.at("function_sections").items()) {
-				const std::string path = owner.get<std::string>();
-				const std::string key = previous.at("function_instantiations").at(name).get<std::string>();
-				auto section = sections.find(path);
-				if (section != sections.end() && reusableCodegenSection(*section->second) &&
-					!replacements->contains(section->second, key) && check.unchanged({path, key}))
-					eligible->insert(section->second, key);
-			}
+			if (nativePrevious)
+				for (const auto &[name, owner] : nativePrevious->at("function_sections").items()) {
+					const std::string path = owner.get<std::string>();
+					const std::string key = nativePrevious->at("function_instantiations").at(name).get<std::string>();
+					auto section = sections.find(path);
+					if (section != sections.end() && reusableCodegenSection(*section->second) &&
+						!replacements->contains(section->second, key) && check.unchanged({path, key}))
+						eligible->insert(section->second, key);
+				}
 			for (const auto &[path, variants] : previous.at("inference_summaries").items()) {
 				auto section = sections.find(path);
 				if (section == sections.end())
 					continue;
 				for (const auto &[key, summary] : variants.items())
-					if ((!summary.at("body").is_null() || inferenceSummaryHasValueState(summary) ||
-						 symbolic.contains({path, key})) &&
+					if ((summary.at("failed").get<bool>() || !summary.at("body").is_null() ||
+						 inferenceSummaryHasValueState(summary) || symbolic.contains({path, key})) &&
 						!replacements->contains(section->second, key) && check.unchanged({path, key}))
 						eligible->insert(section->second, key);
 			}
 		};
 		updateEligible();
-		irReuse = std::make_unique<IncrementalIRReuse>(
-			context, previous.at("generated_ir").get_ref<const std::string &>(), previous.at("function_sections"),
-			previous.at("callable_functions"), previous.at("function_instantiations"), paths, eligible, replacements
-		);
+		auto nativeEligible = std::make_shared<IncrementalUnitSelection>();
+		auto updateNativeEligible = [&]() {
+			if (!nativePrevious)
+				return;
+			const auto &nativeUnits = nativePrevious->at("section_dependency_graph").at("inference_units");
+			const auto &units = previous.at("section_dependency_graph").at("inference_units");
+			for (const auto &[section, keys] : eligible->sections()) {
+				const auto &path = paths.at(section);
+				for (const auto &key : keys)
+					if (nativeUnits.contains(path) && nativeUnits.at(path).contains(key) &&
+						units.at(path).at(key) == nativeUnits.at(path).at(key))
+						nativeEligible->insert(section, key);
+			}
+		};
+		updateNativeEligible();
+		if (nativePrevious)
+			irReuse = std::make_unique<IncrementalIRReuse>(
+				context, nativePrevious->at("generated_ir").get_ref<const std::string &>(),
+				nativePrevious->at("function_sections"), nativePrevious->at("callable_functions"),
+				nativePrevious->at("function_instantiations"), paths, nativeEligible, nativeReplacements
+			);
 		inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
-			context, previous.at("inference_summaries"), previous.at("global_types"), *irReuse, paths, eligible, summaryStore
+			context, previous.at("inference_summaries"), previous.at("global_types"), irReuse.get(), paths, eligible,
+			summaryStore, sourceIndex, frozen
 		);
 		context.reuseInferredInstantiation = [this](
 												 Section *section, const InstantiationKey &key, Instantiation &instantiation,
@@ -76,9 +102,12 @@ class IncrementalInferenceController {
 			return inferenceReuse->loadBody(section, instance, caller);
 		};
 		std::set<InferenceUnitKey> native;
-		for (const auto &[name, owner] : previous.at("function_sections").items())
-			if (!previous.at("callable_functions").contains(name))
-				native.emplace(owner.get<std::string>(), previous.at("function_instantiations").at(name).get<std::string>());
+		if (nativePrevious)
+			for (const auto &[name, owner] : nativePrevious->at("function_sections").items())
+				if (!nativePrevious->at("callable_functions").contains(name))
+					native.emplace(
+						owner.get<std::string>(), nativePrevious->at("function_instantiations").at(name).get<std::string>()
+					);
 		std::set<const Section *> capturedSections;
 		std::unique_ptr<InferenceBodySources> diagnosticSources;
 		for (auto &[unit, request] : collectRequests(*eligible, native, symbolic)) {
@@ -92,7 +121,7 @@ class IncrementalInferenceController {
 			if (!infer(request))
 				continue;
 			statistics.preinferredInstantiations++;
-			InferenceStorageIdentities storage(context, paths, identities);
+			InferenceStorageIdentities storage(context, paths, identities, sourceIndex);
 			Json current = captureSectionInferenceSummary(
 				request.section, identities, storage, Json(nullptr), &statistics.preinferSummaryInstantiationsCaptured, nullptr,
 				&unit.second
@@ -108,6 +137,17 @@ class IncrementalInferenceController {
 			if (diagnostics && *diagnostics == priorDiagnostics && current.contains(unit.second) &&
 				sameInterface(current.at(unit.second), *priorSummary)) {
 				replacements->insert(request.section, unit.second);
+				if (nativePrevious) {
+					const auto &nativeSummaries = nativePrevious->at("inference_summaries");
+					if (nativeSummaries.contains(unit.first) && nativeSummaries.at(unit.first).contains(unit.second)) {
+						const auto &reference = nativeSummaries.at(unit.first).at(unit.second);
+						const Json *nativeSummary = summaryStore.load(reference);
+						if (!reference.at("failed").get<bool>() && nativeSummary &&
+							sameInterface(current.at(unit.second), *nativeSummary) &&
+							*diagnostics == reference.at("diagnostics"))
+							nativeReplacements->insert(request.section, unit.second);
+					}
+				}
 				Json values = Json::object();
 				for (const Json &observation : current.at(unit.second).at("pure_values")) {
 					Json identity = inferenceValueFingerprints(observation.at(0), observation.at(1));
@@ -120,6 +160,7 @@ class IncrementalInferenceController {
 		}
 		statistics.preinferSummarySectionsCaptured += capturedSections.size();
 		updateEligible();
+		updateNativeEligible();
 		const Json &oldVariants = previous.at("section_dependency_graph").at("instantiations");
 		for (const auto &[section, keys] : eligible->sections()) {
 			const auto &variants = oldVariants.at(paths.at(section));
@@ -130,7 +171,7 @@ class IncrementalInferenceController {
 				statistics.dependencyGraphSectionsReused++;
 			}
 		}
-		bool rootEligible = compatibleFunctionProjection(prior, projection) &&
+		bool rootEligible = nativePrevious == &previous && compatibleFunctionProjection(prior, projection) &&
 							check.unchanged({"root", aggregateGraphVariant}) &&
 							prior.at("declarations") == projection.at("declarations") &&
 							prior.at("initial_matcher_tree") == projection.at("initial_matcher_tree") &&
@@ -224,6 +265,8 @@ class IncrementalInferenceController {
 				continue;
 			statistics.preinferDependencyGraphSectionsChecked++;
 			for (const auto &[key, summary] : summaries.at(path).items()) {
+				if (summary.at("failed").get<bool>())
+					continue;
 				if ((!native.contains({path, key}) && !inferenceSummaryHasValueState(summary) &&
 					 !symbolic.contains({path, key})) ||
 					summary.at("needs_global_types").get<bool>() || eligible.contains(section, key))
@@ -246,9 +289,11 @@ class IncrementalInferenceController {
 			visit(unit);
 		return ordered;
 	}
-	const Json &previous, &observations, &projection;
+	const Json &previous;
+	const Json *nativePrevious;
+	const Json &observations, &projection;
 	const std::map<const Section *, std::string> &paths;
-	const IncrementalInferenceReads &reads;
+	IncrementalInferenceReads &reads;
 	const Json &frontendDiagnostics;
 	BuildStatistics &statistics;
 	std::unique_ptr<IncrementalIRReuse> &irReuse;
@@ -256,4 +301,6 @@ class IncrementalInferenceController {
 	std::unordered_set<const Section *> &graphStable;
 	std::map<std::string, std::string> &fingerprints;
 	InferenceSummaryStore &summaryStore;
+	const Json *frozen;
+	const InferenceSourceIndex &sourceIndex;
 };

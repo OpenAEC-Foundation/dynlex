@@ -27,6 +27,7 @@ from test_incremental_partition_closures import check_partition_closure_work
 from test_incremental_validation import check_capture_note_wording, check_validation_units, check_failed_validation_units, check_capture_scope_queries, check_validation_flow, check_validation_bound_parameters, check_diagnostic_stage_reuse
 from test_incremental_bindings import check_variable_binding_units
 from test_incremental_body_materialization import check_body_materialization
+from test_incremental_inference_failures import check_inference_failures
 from test_incremental_entry_metadata import check_entry_metadata_reuse
 from test_incremental_diagnostic_units import check_persistent_diagnostic_units, check_preinferred_diagnostic_context
 from test_incremental_definition_units import check_definition_resolution_units
@@ -66,7 +67,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         else:
             arguments += ["--no-incremental"]
         result = subprocess.run(arguments, cwd=root, capture_output=True, text=True, timeout=120)
-        if (result.returncode == 0) != success:
+        if result.returncode != (0 if success else 1):
             raise AssertionError(f"wrong build outcome: {arguments}\n{result.stdout}\n{result.stderr}")
         lines = result.stderr.splitlines(keepends=True)
         statistics = [line for line in lines if line.startswith("incremental: ")]
@@ -103,6 +104,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_diagnostic_stage_reuse(root, build)
     check_variable_binding_units(root, build)
     check_body_materialization(root, build)
+    check_inference_failures(root, build)
     check_validation_units(root, build)
     check_failed_validation_units(root, build)
     check_capture_scope_queries(root, build)

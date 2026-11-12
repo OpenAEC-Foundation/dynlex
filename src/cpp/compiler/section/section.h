@@ -21,6 +21,8 @@
 #include <unordered_set>
 #include <vector>
 
+struct InferenceFailure;
+
 namespace llvm {
 class Function;
 } // namespace llvm
@@ -156,6 +158,7 @@ struct Instantiation : InstantiationExecutionEffects {
 	bool valueSummaryChanged = false;
 	// Semantic facts and diagnostic ownership exist before an executable body is demanded.
 	std::shared_ptr<const VariableStorageScope> storageScope;
+	std::shared_ptr<const InferenceFailure> failure;
 	std::shared_ptr<InstantiatedSectionBody> body;
 	bool bodyInferred = false;
 	std::map<std::vector<unsigned>, llvm::Function *> llvmFunctionsByParameterAddressSpaces;

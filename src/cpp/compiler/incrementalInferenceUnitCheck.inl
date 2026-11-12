@@ -10,6 +10,9 @@ class InferenceUnitCheck {
 		  unavailableValues(unavailableValues), verifiedValues(verifiedValues), statistics(statistics) {}
 
 	bool unchanged(const InferenceUnitKey &root) {
+		const auto &units = graph.at("inference_units");
+		if (!units.contains(root.first) || !units.at(root.first).contains(root.second))
+			return false;
 		std::set<InferenceUnitKey> visited;
 		std::stack<std::pair<InferenceUnitKey, bool>> pending;
 		pending.emplace(root, false);
@@ -34,7 +37,7 @@ class InferenceUnitCheck {
 						direct->second = false;
 						continue;
 					}
-					if (digest(reads.observation(lookup, &graph.at("callable_lookups")).at("candidates").dump()) !=
+					if (IncrementalInferenceReads::fingerprint(reads.observation(lookup, &graph.at("callable_lookups"))) !=
 						fingerprint.get_ref<const std::string &>())
 						direct->second = false;
 				}

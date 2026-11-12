@@ -47,6 +47,7 @@ class TargetMachine;
 
 struct CallableFunctionMatch;
 struct InferenceContext;
+struct InferenceProductHooks;
 
 struct VariableBindingHooks;
 
@@ -157,6 +158,7 @@ struct ParseContext {
 		reuseInferredInstantiation;
 	std::function<bool(Section *, Instantiation &, InferenceContext *)> restoreInferredBody;
 	size_t functionBodyInferencePasses = 0;
+	size_t inferenceFailuresReused = 0;
 	size_t sourceBodyClones = 0;
 	size_t sourceFunctionBodyClones = 0;
 	size_t sourceBodyExpressionsCloned = 0;
@@ -212,6 +214,7 @@ struct ParseContext {
 		ResolvedPatternPrecedence,
 		ResolvedPatterns,
 		Validated,
+		InferredConstraints,
 		InferredTypes,
 	};
 	enum class SourceTokenKind {
@@ -467,7 +470,10 @@ struct ParseContext {
 		std::shared_ptr<const VariableStorageScope> storageScope = {}
 	);
 
+	InferenceProductHooks *inferenceProducts = nullptr;
 	std::map<std::pair<Section *, InstantiationKey>, std::shared_ptr<const VariableStorageScope>> instantiationStorageScopes;
+	std::map<std::string, std::shared_ptr<const VariableStorageScope>> logicalInstantiationScopes;
+	std::map<const VariableStorageScope *, std::string> frozenStorageIdentities;
 	std::shared_ptr<const VariableStorageScope> storageScopeForInstantiation(Section *section, const InstantiationKey &key);
 	void refineInstantiationStorageScope(Section *section, const InstantiationKey &before, const InstantiationKey &after);
 	std::map<

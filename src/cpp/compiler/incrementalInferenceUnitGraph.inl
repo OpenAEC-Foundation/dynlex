@@ -12,21 +12,24 @@ class InferenceUnitGraphCapture {
 		const ParseContext &context, const Json &projection, const std::map<const Section *, std::string> &paths,
 		const IncrementalInferenceReads &reads, const Json &graph, Json *priorUnits,
 		const std::map<std::string, std::set<std::string>> &lookupOwners, BuildStatistics &statistics,
-		std::map<std::string, std::string> &fingerprints
+		std::map<std::string, std::string> &fingerprints, const IncrementalInferenceProducts *products
 	)
 		: context(context), paths(paths), identities(paths), reads(reads), graph(graph), priorUnits(priorUnits),
-		  inputs(context, projection, paths, statistics, fingerprints), statistics(statistics) {
+		  inputs(context, projection, paths, statistics, fingerprints), statistics(statistics), products(products) {
 		for (const auto &[key, owners] : lookupOwners)
 			for (const std::string &owner : owners)
 				lookupsByOwner[owner].insert(key);
 	}
 
 	Json capture(const Json &summaries, const Json &functionSections, const Json &functionKeys) {
+		if (products)
+			for (const auto &[scope, key] : products->scopes())
+				mappedScopes.emplace(scope, key);
 		for (const auto &[section, path] : paths) {
 			units[path] = Json::object();
 			for (const auto &[key, instantiation] : section->instantiations) {
-				if (!instantiation.valid || instantiation.inferring || instantiation.needsReinfer ||
-					!instantiation.returnType.isDeduced())
+				if (instantiation.inferring || instantiation.needsReinfer ||
+					(!instantiation.failure && (!instantiation.valid || !instantiation.returnType.isDeduced())))
 					continue;
 				requireCompilerInvariant(instantiation.storageScope != nullptr, "inference graph unit has no storage scope");
 				auto identity = inferenceSummaryKey(key, identities);
@@ -35,16 +38,26 @@ class InferenceUnitGraphCapture {
 			}
 		}
 		mappedScopes.emplace(IncrementalInferenceReads::Scope{}, InferenceUnitKey{"root", aggregateGraphVariant});
+		if (products)
+			for (const auto &[scope, key] : products->scopes()) {
+				Json &node = units[key.first][key.second];
+				if (node.is_null())
+					node = emptyInferenceUnit();
+				mergeScope(node, scope, inputs.section(key.first), false);
+				statistics.inferenceUnitsCaptured++;
+			}
 		for (const auto &[section, path] : paths)
 			for (const auto &[key, instantiation] : section->instantiations) {
-				if (!instantiation.valid || instantiation.inferring || instantiation.needsReinfer ||
-					!instantiation.returnType.isDeduced())
+				if (instantiation.inferring || instantiation.needsReinfer ||
+					(!instantiation.failure && (!instantiation.valid || !instantiation.returnType.isDeduced())))
 					continue;
 				auto identity = inferenceSummaryKey(key, identities);
 				if (!identity)
 					continue;
 				bool reused = instantiation.inferenceReusedFromCache;
-				Json node = reused ? std::move(priorUnit(path, *identity)) : emptyInferenceUnit();
+				Json node = units[path].contains(*identity) ? std::move(units[path][*identity])
+							: reused						? std::move(priorUnit(path, *identity))
+															: emptyInferenceUnit();
 				mergeScope(node, instantiation.storageScope, section, reused);
 				(reused ? statistics.inferenceUnitsReused : statistics.inferenceUnitsCaptured)++;
 				units[path][*identity] = std::move(node);
@@ -89,7 +102,7 @@ class InferenceUnitGraphCapture {
 		return priorUnits->at(path).at(key);
 	}
 	void addLookup(Json &unit, const std::string &key) const {
-		unit["lookups"][key] = digest(reads.observation(key, &graph.at("callable_lookups")).at("candidates").dump());
+		unit["lookups"][key] = IncrementalInferenceReads::fingerprint(reads.observation(key, &graph.at("callable_lookups")));
 	}
 	void mergeScope(Json &unit, const IncrementalInferenceReads::Scope &scope, const Section *section, bool reused) {
 		if (!reused)
@@ -167,6 +180,7 @@ class InferenceUnitGraphCapture {
 	Json *priorUnits;
 	InferenceUnitInputs inputs;
 	BuildStatistics &statistics;
+	const IncrementalInferenceProducts *products;
 	std::map<std::string, IncrementalInferenceReads::Keys> lookupsByOwner;
 	Json units = Json::object();
 	std::map<IncrementalInferenceReads::Scope, InferenceUnitKey, std::owner_less<IncrementalInferenceReads::Scope>>

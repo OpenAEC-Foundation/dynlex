@@ -29,6 +29,8 @@ Json captureSymbolicInferenceDependencies(const Json &summary) {
 			scope(target.at(1));
 	};
 	constants(summary.at("compile_time_parameters"));
+	if (!summary.at("failure").is_null())
+		return targets;
 	for (const Json &constant : summary.at("parameters").at("constants"))
 		value(constant);
 	for (const Json &observation : summary.at("pure_values")) {

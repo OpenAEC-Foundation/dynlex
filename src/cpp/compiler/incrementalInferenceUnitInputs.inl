@@ -42,24 +42,7 @@ class InferenceUnitInputs {
 		input.push_back(context.projectSyntax.nonMessageIdentity);
 		input.push_back(projection.at("precedence_signature"));
 		input.push_back(projection.at("precedence_rules"));
-		Json signatures = Json::array();
-		for (const PatternDefinition *definition : section.patternDefinitions) {
-			Json paths = Json::array();
-			for (const PatternPathSignature &signature : definition->signaturePaths) {
-				Json parameters = Json::array();
-				for (const PatternParameterSignature &parameter : signature.parameters)
-					parameters.push_back(
-						Json::array(
-							{parameter.elementStartPos, constraintTemplate(parameter.constraint),
-							 parameter.requiresCompileTimeValue, parameter.acceptsUnresolvedType,
-							 parameter.hasExplicitTypeConstraint}
-						)
-					);
-				paths.push_back(std::move(parameters));
-			}
-			signatures.push_back(std::move(paths));
-		}
-		input.push_back(std::move(signatures));
+		input.push_back(signatures(section));
 		Json numbers = nullptr;
 		if (section.openingLine) {
 			bool pending = false;
@@ -85,8 +68,36 @@ class InferenceUnitInputs {
 	}
 	bool contains(const std::string &path) const { return sections.contains(path); }
 	const Section *section(const std::string &path) const { return sections.at(path); }
+	const std::string &declarationFingerprint(const std::string &path) {
+		auto [found, inserted] = declarationFingerprints.try_emplace(path);
+		if (inserted) {
+			const Section &section = *sections.at(path);
+			found->second = digest(Json::array({sectionDeclaration(section), signatures(section)}).dump());
+		}
+		return found->second;
+	}
 
   private:
+	Json signatures(const Section &section) const {
+		Json result = Json::array();
+		for (const PatternDefinition *definition : section.patternDefinitions) {
+			Json paths = Json::array();
+			for (const PatternPathSignature &signature : definition->signaturePaths) {
+				Json parameters = Json::array();
+				for (const PatternParameterSignature &parameter : signature.parameters)
+					parameters.push_back(
+						Json::array(
+							{parameter.elementStartPos, constraintTemplate(parameter.constraint),
+							 parameter.requiresCompileTimeValue, parameter.acceptsUnresolvedType,
+							 parameter.hasExplicitTypeConstraint}
+						)
+					);
+				paths.push_back(std::move(parameters));
+			}
+			result.push_back(std::move(paths));
+		}
+		return result;
+	}
 	static bool containsSeparateBody(const Section &section) {
 		return std::ranges::any_of(section.children, [](const Section *child) {
 			return hasCodegenSectionIdentity(*child) || containsSeparateBody(*child);
@@ -132,5 +143,6 @@ class InferenceUnitInputs {
 	ClassIdentityPaths classes;
 	BuildStatistics &statistics;
 	std::map<std::string, const Section *> sections;
+	std::map<std::string, std::string> declarationFingerprints;
 	std::map<std::string, std::string> &fingerprints;
 };

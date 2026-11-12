@@ -59,6 +59,7 @@ static bool definitionsHaveUnresolvedTypeConstraints(const std::vector<PatternDe
 
 #include "deferred_inference_diagnostics.inl"
 #include "execution_state.inl"
+#include "inference_failure_products.inl"
 
 // Reuse a binding only when inferring it made no execution-state change and
 // that exact state still holds. Mutating arguments are replayed at their use.
@@ -403,16 +404,15 @@ static void setRecursiveInferenceFailure(
 	Range diagnosticRange = definition ? definition->range : fallbackRange;
 	if (functionName.empty())
 		functionName = definition ? (std::string)definition->range.subString : "<expression>";
-	std::string detail = renderConfiguredMessage(
-		syntaxConfigForRange(context.parseContext, diagnosticRange), "recursive type inference did not converge", "message",
-		{{"function", functionName}}
+	Diagnostic diagnostic = context.setConfiguredTypeFailure(
+		diagnosticRange, "recursive type inference did not converge", "message", {{"function", functionName}}
 	);
-	context.setTypeFailure(detail);
 	// Candidate failures from the final reinference pass are provisional: the
 	// fixed-point check owns the terminal cause once that pass makes no
 	// progress. Keep unrelated grouping priorities unchanged.
 	Range failureRange = context.typeFailureSnapshot.range.line ? context.typeFailureSnapshot.range : diagnosticRange;
-	context.fail(buildFailureDetailDiagnostic(failureRange, std::move(detail)), 2);
+	diagnostic.range = failureRange;
+	context.fail(std::move(diagnostic), 2);
 }
 
 template <typename InferPassFn>
@@ -439,6 +439,7 @@ static bool runInstantiationReinferenceLoop(
 		!instantiation.inferenceReusedFromCache || instantiation.pureReturnValuesComplete
 	};
 	instantiation.inferenceReusedFromCache = false;
+	instantiation.failure.reset();
 	instantiation.bodyInferred = false;
 	instantiation.valueSummaryChanged = false;
 	instantiation.pureReturnValuesComplete = true;
@@ -473,42 +474,7 @@ static bool runInstantiationReinferenceLoop(
 	}
 }
 
-static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
-	for (auto it = journal.borrowedExpressionUndo.rbegin(); it != journal.borrowedExpressionUndo.rend(); ++it)
-		*it->expression = std::move(it->value);
-	for (Section *section : journal.touchedSections)
-		resetSectionExpressionTypes(section);
-	for (auto it = journal.variableTypeUndo.rbegin(); it != journal.variableTypeUndo.rend(); ++it) {
-		it->variable->type = it->type;
-		it->variable->typeOriginRange = it->typeOriginRange;
-		it->variable->typeOriginFloatLiteralReplacement = it->typeOriginFloatLiteralReplacement;
-	}
-	for (auto it = journal.instantiationUndo.rbegin(); it != journal.instantiationUndo.rend(); ++it) {
-		*it->instantiation = std::move(*it->value);
-	}
-	for (auto it = journal.sectionInstantiationUndo.rbegin(); it != journal.sectionInstantiationUndo.rend(); ++it) {
-		auto instantiationIt = it->section->instantiations.find(it->key);
-		if (it->existed) {
-			if (instantiationIt == it->section->instantiations.end()) {
-				crashCompilerBug(
-					"trial rollback lost a previously-existing section instantiation; instantiation map changed unexpectedly"
-				);
-			}
-			instantiationIt->second = it->value;
-			continue;
-		}
-		if (instantiationIt == it->section->instantiations.end())
-			crashCompilerBug("trial rollback expected to erase a provisional section instantiation, but it was missing");
-		it->section->instantiations.erase(instantiationIt);
-	}
-	for (auto it = journal.classRequestInsertions.rbegin(); it != journal.classRequestInsertions.rend(); ++it)
-		it->first->instantiationRequests.erase(it->second);
-	for (auto it = journal.classInstantiationSizes.rbegin(); it != journal.classInstantiationSizes.rend(); ++it) {
-		if (it->first->instantiations.size() < it->second)
-			crashCompilerBug("trial rollback observed class instantiation list shrink below recorded snapshot");
-		it->first->instantiations.resize(it->second);
-	}
-}
+#include "inference_trial_rollback.inl"
 
 static bool instantiationKeyHasOnlyKnownCompileTimeParameters(const InstantiationKey &key) {
 	for (const auto &[parameterName, value] : key.compileTimeParameters) {
@@ -912,15 +878,14 @@ appendUnboundParameterTrace(InferenceContext &context, Expression *argumentExpre
 			Range elementRange = findUnboundParameterElementRange(context, name);
 			if (!elementRange.line)
 				return;
-			std::string message = renderConfiguredMessage(
-				syntaxConfigForRange(context.parseContext, elementRange), "unbound choice parameter", "message",
-				{{"name", name}}
+			RelatedInfo note = configuredRelatedInfo(
+				context.parseContext, elementRange, "unbound choice parameter", "message", elementRange, {{"name", name}}
 			);
 			for (const RelatedInfo &existing : relatedInfo) {
-				if (existing.message == message)
+				if (existing.message == note.message)
 					return;
 			}
-			relatedInfo.push_back({std::move(message), elementRange});
+			relatedInfo.push_back(std::move(note));
 			return;
 		}
 		for (Expression *argument : expression->arguments)

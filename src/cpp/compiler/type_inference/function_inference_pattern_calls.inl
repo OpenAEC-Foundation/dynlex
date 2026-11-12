@@ -282,12 +282,11 @@ static std::optional<ImplicitPatternOverload> selectOverloadUsingImplicitConvers
 		return std::nullopt;
 	}
 	if (overload.ambiguous) {
-		std::string detail = renderConfiguredMessage(
-			syntaxConfigForRange(context.parseContext, expr->range), "ambiguous overload for call", "message",
+		Diagnostic diagnostic = context.setConfiguredTypeFailure(
+			expr->range, "ambiguous overload for call", "message",
 			{{"call", (std::string)expr->range.subString}, {"argument_types", formatTypeList(argTypesForOverload)}}
 		);
-		context.setTypeFailure(detail);
-		context.fail(buildFailureDetailDiagnostic(expr->range, detail), overloadFailurePriority(expr->range));
+		context.fail(std::move(diagnostic), overloadFailurePriority(expr->range));
 		return std::nullopt;
 	}
 	if (!overload) {
@@ -339,14 +338,12 @@ static std::optional<ImplicitPatternOverload> selectOverloadUsingImplicitConvers
 				uniqueCandidates.insert(pattern);
 			}
 		}
-		std::string detail = renderConfiguredMessage(
-			syntaxConfigForRange(context.parseContext, expr->range), "no overload matches call",
-			candidates.empty() ? "message" : "with overloads",
+		Diagnostic diagnostic = context.setConfiguredTypeFailure(
+			expr->range, "no overload matches call", candidates.empty() ? "message" : "with overloads",
 			{{"call", (std::string)expr->range.subString},
 			 {"argument_types", formatTypeList(argTypesForOverload)},
 			 {"overloads", candidates}}
 		);
-		context.setTypeFailure(detail);
 		std::vector<RelatedInfo> implicitPromotionRelatedInfo;
 		for (PatternDefinition *candidate : defs) {
 			for (size_t pathIndex : matchingPatternPathIndices(expr->patternMatch->nodesPassed, candidate)) {
@@ -370,10 +367,8 @@ static std::optional<ImplicitPatternOverload> selectOverloadUsingImplicitConvers
 		context.typeFailureRelatedInfo.insert(
 			context.typeFailureRelatedInfo.end(), implicitPromotionRelatedInfo.begin(), implicitPromotionRelatedInfo.end()
 		);
-		context.fail(
-			buildFailureDetailDiagnostic(expr->range, detail, implicitPromotionRelatedInfo),
-			overloadFailurePriority(expr->range)
-		);
+		diagnostic.relatedInfo = std::move(implicitPromotionRelatedInfo);
+		context.fail(std::move(diagnostic), overloadFailurePriority(expr->range));
 		return std::nullopt;
 	}
 	PatternDefinition *def = overload.definition;

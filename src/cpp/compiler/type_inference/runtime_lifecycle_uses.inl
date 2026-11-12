@@ -128,9 +128,9 @@ class RuntimeLifecycleUses {
 					requireCompilerInvariant(
 						!context.typeFailureDetail.empty(), "callable restoration failed without a diagnostic"
 					);
-					context.addDiagnosticWithCurrentTrace(
-						buildFailureDetailDiagnostic(expression->range, context.typeFailureDetail)
-					);
+					context.addDiagnosticWithCurrentTrace(buildFailureDetailDiagnostic(
+						expression->range, context.typeFailureDetail, {}, context.configuredTypeFailureDetail
+					));
 				}
 				return;
 			}

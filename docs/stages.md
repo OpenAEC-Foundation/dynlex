@@ -916,6 +916,32 @@ unchanged source or message-only configuration edit replays the errors without
 rerunning the frontend. A later code edit reuses a failed lookup only while its
 source and candidate pattern tree are equivalent; a successful build retires the
 failed snapshot.
+Concrete inference results have a semantic snapshot independent of successful native
+output. A failed build retains completed healthy units and terminal failed units,
+including typed bodies, class facts, selected dependencies and relative diagnostics.
+Rejected grouping trials freeze these portable products before their instantiation
+slots and class layouts are rolled back. Logical storage identities include structural
+type identities, so reusing a physical class-layout index cannot alias another query.
+An intervening parse failure carries the last semantic snapshot forward. Editing an
+unrelated function can reuse the unchanged error; introducing a matching pattern
+invalidates the affected result through its ordinary matching inputs.
+Conversion queries retain their visible registry, implicit-only mode, and each
+candidate's compiled declaration and parameter constraints, including candidates
+whose source constraints reject the argument. Registry membership is available
+before constraint inference; typed lookup inputs are compared after that stage
+completes. Adding a conversion or changing its accepted domain therefore rechecks
+the units that consulted it. Outcome-body reads remain separate dependencies.
+`inference_failures_reused` counts concrete failed results restored from that snapshot.
+The last native snapshot has a separate eligibility proof: agreement with newer
+semantic facts alone does not validate machine code generated for older types.
+
+Preinference runs before entry execution establishes global types. A speculative
+read waits when its global type is unavailable, and a failed preinference probe is
+provisional until an actual demand establishes the error. It cannot become a terminal
+cached failure or a complete typed body. Configured failure details retain their
+message keys and placeholders through inference transactions and nested diagnostic
+messages, allowing wording-only edits to rerender both whole-build and concrete-unit
+error products.
 The compiler linker build ID (or executable content digest when the format has no
 build ID), effective compiler options and host CPU features identify the computation. Modification timestamps are never a correctness criterion.
 Build-ID inspection opens binary bytes without a null-terminator requirement,
@@ -1434,10 +1460,13 @@ reconstruct process-local identities when loaded.
 Source references use local tables as well: sections, definitions, declarations,
 source lines, and matcher nodes are stored once per body. Ranges and source
 expression edges contain table indices instead of repeated source paths.
-Restoration indexes source expressions once per owning section and memoizes decoded
-source references. `inference_source_expression_lookups` and
-`inference_source_expression_lines_indexed` distinguish requested anchors from
-source lines scanned to construct these indexes.
+Canonical source edges and lexical declaration identities share one index built
+at the resolved-pattern boundary, before inference mutates borrowed expressions.
+Compact parent and child edges preserve the same view for encoding and restoration;
+portable descriptors are materialized only when requested. Trial snapshots reuse
+this index. `inference_source_index_builds`, `inference_source_expressions_indexed`,
+`inference_source_expressions_encoded`, `inference_source_expression_lookups`, and
+`inference_source_index_ms` expose construction and actual descriptor work.
 Each concrete instantiation retains its canonical storage scope independently of
 its optional executable body. Fact restoration, diagnostic publication, value-read
 tracking and dependency capture use that scope without cloning source expressions.

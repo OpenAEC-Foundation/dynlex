@@ -33,7 +33,7 @@ static PatternTypeConstraintProbe probeDeclaredTypeConstraint(
 	}
 	if (!deferred && (!inferred || !producedType) && trialContext.hasTypeFailureDiagnostic)
 		item.failureDiagnostic = trialContext.typeFailureDiagnostic;
-	rollbackTrialJournal(journal);
+	rollbackTrialJournal(trialContext, journal);
 	applyGroupingSnapshot(originalGrouping);
 	item.expression = originalGrouping.root;
 	recomputeRanges(item.expression);

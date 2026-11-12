@@ -21,9 +21,10 @@ RetainedGraphVariants retainedGraphVariants(const IncrementalIRReuse *reuse, con
 
 Json captureSectionDependencyGraph(
 	const ParseContext &context, const Json &program, const std::map<const Section *, std::string> &paths,
-	const IncrementalInferenceReads &inferenceReads, const Json &probeLookups, BuildStatistics &statistics,
+	IncrementalInferenceReads &inferenceReads, const Json &probeLookups, BuildStatistics &statistics,
 	std::map<std::string, std::string> &fingerprints, Json *previous = nullptr,
-	const std::unordered_set<const Section *> &stable = {}, const RetainedGraphVariants &retained = {}
+	const std::unordered_set<const Section *> &stable = {}, const RetainedGraphVariants &retained = {},
+	const IncrementalInferenceProducts *products = nullptr
 ) {
 	const bool hadPrevious = previous != nullptr;
 	Json graph = hadPrevious ? std::move(*previous)
@@ -39,6 +40,10 @@ Json captureSectionDependencyGraph(
 	Json &reverse = graph.at("reverse");
 	Json &instantiations = graph.at("instantiations");
 	const Json &priorLookups = graph.at("callable_lookups");
+	InferenceUnitInputs lookupInputs(context, program.at("all_function_projection"), paths, statistics, fingerprints);
+	inferenceReads.finalizeInterfaces(priorLookups, [&](const auto &path) {
+		return lookupInputs.declarationFingerprint(path);
+	}, false);
 	const Json &priorReads = graph.at("inference_reads");
 	Json sectionReads = Json::object();
 	std::map<std::string, std::set<std::string>> lookupOwners;
@@ -78,6 +83,9 @@ Json captureSectionDependencyGraph(
 				instantiatedKeys.insert(*identity);
 			currentIdentities.emplace(&instantiation, std::move(identity));
 		}
+		if (products && products->variants().contains(path))
+			for (const auto &[key, _] : products->variants().at(path))
+				instantiatedKeys.insert(key);
 		// A retained pure value can have no native function and no body visited
 		// in this build. Its dependency variant belongs to the saved result.
 		if (const auto &summaries = program.at("inference_summaries"); summaries.contains(path))
@@ -120,6 +128,11 @@ Json captureSectionDependencyGraph(
 		for (Section *dependency : matched)
 			direct.insert(paths.at(dependency));
 		Json variants = Json::object();
+		if (products && products->variants().contains(path))
+			for (const auto &[key, selected] : products->variants().at(path)) {
+				variants[key] = selected;
+				direct.insert(selected.begin(), selected.end());
+			}
 		std::set<std::string> aggregateDependencies;
 		bool hasAggregateVariant = retainedKeys.contains(aggregateGraphVariant);
 		bool retainPriorLookups = !retainedKeys.empty() || (context.reuseRootExecution && section == context.mainSection);
@@ -239,7 +252,7 @@ Json captureSectionDependencyGraph(
 	graph["inference_units"] =
 		InferenceUnitGraphCapture(
 			context, program.at("all_function_projection"), paths, inferenceReads, graph, priorUnits, lookupOwners, statistics,
-			fingerprints
+			fingerprints, products
 		)
 			.capture(program.at("inference_summaries"), program.at("function_sections"), program.at("function_instantiations"));
 	for (const auto &[path, variants] : graph.at("inference_units").items())

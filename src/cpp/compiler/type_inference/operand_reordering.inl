@@ -604,9 +604,10 @@ class GroupingInferenceTransaction {
 		  savedSubject(context.currentSubject), savedTypesValid(context.typesValid),
 		  savedSuppressDiagnostics(context.suppressDiagnostics),
 		  savedSuppressReinferPassDiagnostics(context.suppressReinferPassDiagnostics),
-		  savedTypeFailureDetail(context.typeFailureDetail), savedTypeFailureRelatedInfo(context.typeFailureRelatedInfo),
-		  savedTypeFailureSnapshot(context.typeFailureSnapshot), savedTypeFailureDiagnostic(context.typeFailureDiagnostic),
-		  savedTypeFailurePriority(context.typeFailurePriority),
+		  savedTypeFailureDetail(context.typeFailureDetail),
+		  savedConfiguredTypeFailureDetail(context.configuredTypeFailureDetail),
+		  savedTypeFailureRelatedInfo(context.typeFailureRelatedInfo), savedTypeFailureSnapshot(context.typeFailureSnapshot),
+		  savedTypeFailureDiagnostic(context.typeFailureDiagnostic), savedTypeFailurePriority(context.typeFailurePriority),
 		  savedHasTypeFailureDiagnostic(context.hasTypeFailureDiagnostic), savedTrialJournal(context.trialJournal),
 		  savedGroupingTrialJournal(context.groupingTrialJournal), savedFixedGroupingRoots(context.fixedGroupingRoots),
 		  savedResolvedGroupingRoots(context.resolvedGroupingRoots),
@@ -644,7 +645,7 @@ class GroupingInferenceTransaction {
 		requireCompilerInvariant(active, "grouping inference transaction was resolved twice");
 		recursiveInferenceObservation.discard();
 		groupingJournal.rollback();
-		rollbackTrialJournal(journal);
+		rollbackTrialJournal(context, journal);
 		restoreSavedState();
 		active = false;
 	}
@@ -712,6 +713,7 @@ class GroupingInferenceTransaction {
 	bool savedSuppressDiagnostics;
 	bool savedSuppressReinferPassDiagnostics;
 	std::string savedTypeFailureDetail;
+	std::shared_ptr<const ConfiguredDiagnosticMessage> savedConfiguredTypeFailureDetail;
 	std::vector<RelatedInfo> savedTypeFailureRelatedInfo;
 	DiagnosticExpressionSnapshot savedTypeFailureSnapshot;
 	Diagnostic savedTypeFailureDiagnostic;
@@ -758,6 +760,7 @@ class GroupingInferenceTransaction {
 		context.suppressDiagnostics = savedSuppressDiagnostics;
 		context.suppressReinferPassDiagnostics = savedSuppressReinferPassDiagnostics;
 		context.typeFailureDetail = std::move(savedTypeFailureDetail);
+		context.configuredTypeFailureDetail = std::move(savedConfiguredTypeFailureDetail);
 		context.typeFailureRelatedInfo = std::move(savedTypeFailureRelatedInfo);
 		context.typeFailureSnapshot = savedTypeFailureSnapshot;
 		context.typeFailureDiagnostic = std::move(savedTypeFailureDiagnostic);
@@ -830,7 +833,10 @@ static bool validateGroupingInTrial(
 				context.typeFailureSnapshot.range.line ? context.typeFailureSnapshot.range : failureSnapshot.range;
 			considerGroupingFailure(
 				trialFailure,
-				buildFailureDetailDiagnostic(failureRange, context.typeFailureDetail, context.typeFailureRelatedInfo), 1
+				buildFailureDetailDiagnostic(
+					failureRange, context.typeFailureDetail, context.typeFailureRelatedInfo, context.configuredTypeFailureDetail
+				),
+				1
 			);
 		}
 	}

@@ -35,6 +35,21 @@ class Restoration {
 		const Json &summary = *saved;
 		if (!types(summary, owner.summaries.at(path).at(*identity)))
 			return false;
+		if (!summary.at("failure").is_null()) {
+			if (summary.at("needs_global_types").get<bool>() && !owner.globalTypesUnchanged())
+				return false;
+			Instantiation &facts = entry.facts;
+			facts.argumentTypes = key.argumentTypes;
+			facts.storageScope = owner.context.storageScopeForInstantiation(section, key);
+			if (!owner.bodySources)
+				owner.bodySources = std::make_unique<InferenceBodySources>(owner.context, owner.identities);
+			facts.failure =
+				restoreInferenceFailure(owner.context, summary.at("failure"), *owner.bodySources, facts.storageScope);
+			facts.valid = false;
+			facts.inferenceReusedFromCache = true;
+			entry.ready = true;
+			return true;
+		}
 		auto returnType = decodeInferenceTypeIdentity(summary.at("return_type"), owner.identities.classes);
 		if (!returnType)
 			return false;
@@ -75,7 +90,7 @@ class Restoration {
 		bool pureValue = facts.purity == InstantiationPurity::Pure && facts.returnType.kind != DataType::Kind::Void;
 		bool requiresBody = use != ParseContext::InferenceReuseUse::SymbolicReference &&
 							(use != ParseContext::InferenceReuseUse::ConstantCall || !pureValue || needsGlobalTypes);
-		entry.hasIR = requiresBody && owner.irReuse.hasReusableIRForInstantiation(section, *identity, [&]() {
+		entry.hasIR = requiresBody && owner.irReuse && owner.irReuse->hasReusableIRForInstantiation(section, *identity, [&]() {
 			return needsGlobalTypes || owner.globalTypesUnchanged();
 		});
 		facts.inferenceReusedFromCache = true;
@@ -172,6 +187,8 @@ class Restoration {
 			);
 			if (entry.hasIR)
 				owner.runtimeValidated.emplace(entry.section, entry.identity);
+			if (slot->failure)
+				owner.context.inferenceFailuresReused++;
 			owner.count++;
 		}
 		committed = true;

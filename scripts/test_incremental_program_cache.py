@@ -152,6 +152,9 @@ def decode_inference_summary(encoded):
                                      for definition, invocation in value["targets"]]}
 
     summary = encoded["summary"]
+    if summary["failure"] is not None:
+        return {**summary, "argument_types": [types[index] for index in summary["argument_types"]],
+                "compile_time_parameters": constants(summary["compile_time_parameters"])}
     effects = summary["global_effects"]
     parameters = summary["parameters"]
     return {

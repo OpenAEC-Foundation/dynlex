@@ -18,18 +18,7 @@ class InferenceBodySources {
 		for (const auto &[section, path] : identities.paths) {
 			for (const auto &[name, reference] : section->variableDefinitions)
 				declarations.emplace(reference, Json::array({path, name}));
-			for (const auto &[key, instance] : section->instantiations)
-				instances.emplace(&instance, std::pair{section, &key});
 		}
-	}
-	const std::pair<const Section *, const InstantiationKey *> &instance(const Instantiation *value) const {
-		return instances.at(value);
-	}
-	const Json &classInstances(const ClassDefinition *definition) {
-		auto [found, inserted] = classRecords.try_emplace(definition);
-		if (inserted)
-			found->second = captureClassDefinitionInstances(*definition, identities);
-		return found->second;
 	}
 
 	Json section(const Section *value) const { return value ? Json(identities.paths.at(value)) : Json(nullptr); }
@@ -174,6 +163,4 @@ class InferenceBodySources {
 	std::map<std::string, CodeLine *> decodedLines, generatedLines;
 	std::map<std::pair<const lsp::SourceFile *, int>, CodeLine *> physicalLines;
 	std::unordered_map<const VariableReference *, Json> declarations;
-	std::unordered_map<const Instantiation *, std::pair<const Section *, const InstantiationKey *>> instances;
-	std::map<const ClassDefinition *, Json> classRecords;
 };

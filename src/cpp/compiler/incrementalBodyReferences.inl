@@ -23,8 +23,6 @@ class InferenceBodyReferenceWriter {
 	}
 	Json node(const PatternTreeNode *value) { return intern("nodes", sources.node(value)); }
 	Json expressionSource(Json value) { return intern("expression_sources", anchor(std::move(value))); }
-	const auto &instance(const Instantiation *value) const { return sources.instance(value); }
-	const Json &classInstances(const ClassDefinition *value) { return sources.classInstances(value); }
 	Json take() { return std::move(records); }
 
   private:

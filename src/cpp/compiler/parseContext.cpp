@@ -1,6 +1,7 @@
 #include "parseContext.h"
 #include "compileTimeValue.h"
 #include "expression.h"
+#include "inferenceProductHooks.h"
 #include "matchProgress.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
@@ -333,8 +334,17 @@ std::shared_ptr<InstantiatedSectionBody> ParseContext::cloneSectionBody(
 
 std::shared_ptr<const VariableStorageScope>
 ParseContext::storageScopeForInstantiation(Section *section, const InstantiationKey &key) {
+	auto identity = inferenceProducts ? inferenceProducts->storageIdentity(section, key) : std::nullopt;
 	auto [entry, inserted] = instantiationStorageScopes.try_emplace({section, key});
-	if (inserted)
+	if (identity) {
+		auto [logical, fresh] = logicalInstantiationScopes.try_emplace(*identity);
+		if (fresh)
+			logical->second = !inserted && !frozenStorageIdentities.contains(entry->second.get())
+								  ? entry->second
+								  : std::make_shared<VariableStorageScope>();
+		entry->second = logical->second;
+		frozenStorageIdentities[entry->second.get()] = *identity;
+	} else if (inserted || (inferenceProducts && frozenStorageIdentities.contains(entry->second.get())))
 		entry->second = std::make_shared<VariableStorageScope>();
 	return entry->second;
 }
@@ -344,6 +354,14 @@ void ParseContext::refineInstantiationStorageScope(
 ) {
 	auto scope = instantiationStorageScopes.extract({section, before});
 	requireCompilerInvariant(!scope.empty(), "refined instantiation has no storage scope");
+	if (auto previous = frozenStorageIdentities.find(scope.mapped().get()); previous != frozenStorageIdentities.end()) {
+		logicalInstantiationScopes.erase(previous->second);
+		frozenStorageIdentities.erase(previous);
+	}
+	if (auto identity = inferenceProducts ? inferenceProducts->storageIdentity(section, after) : std::nullopt) {
+		logicalInstantiationScopes[*identity] = scope.mapped();
+		frozenStorageIdentities[scope.mapped().get()] = *identity;
+	}
 	instantiationStorageScopes.insert_or_assign({section, after}, std::move(scope.mapped()));
 }
 

@@ -1,3 +1,5 @@
+#include "conversionLookup.h"
+
 struct ConversionCandidate {
 	PatternDefinition *definition{};
 	size_t pathIndex{};
@@ -89,7 +91,7 @@ static std::optional<ConversionOutcome> probeConversionOutcome(
 	std::optional<ConversionOutcome> result;
 	if (inferred && call->type.isDeduced() && call->type.kind != DataType::Kind::Void)
 		result = ConversionOutcome{call->type, isCompileTimeKnown(trialContext.lookupExpressionValue(call))};
-	rollbackTrialJournal(journal);
+	rollbackTrialJournal(trialContext, journal);
 	return result;
 }
 
@@ -100,9 +102,14 @@ static ConversionLookup findUserConversion(
 	if (!source || isInsertedConversionCall(source) || !source->type.isDeduced() || !targetConstraint.isResolved()) {
 		return {};
 	}
-	PatternTreeNode *root = context.parseContext.patternTrees[(int)SectionType::Conversion];
-	if (!root || !root->argumentChild || !source->range.line || !source->range.line->sourceFile)
+	if (!source->range.line || !source->range.line->sourceFile)
 		return {};
+	const auto &sourceFile = *source->range.line->sourceFile;
+	auto definitions = visibleUserConversions(context.parseContext, sourceFile, implicitOnly);
+	if (context.parseContext.inferenceProducts)
+		context.recordDependencyRead([&](const InferenceReadOwner &owner) {
+			context.parseContext.inferenceProducts->conversionLookup(owner, sourceFile, implicitOnly, definitions);
+		});
 
 	const DataType sourceType = source->type;
 	CompileTimeValue sourceValue = context.lookupExpressionValue(source);
@@ -115,14 +122,7 @@ static ConversionLookup findUserConversion(
 	};
 	std::vector<ConversionCandidate> matches;
 	bool hasDeferredCandidate = false;
-	for (PatternDefinition *definition : root->argumentChild->matchingDefinitions) {
-		if (!definition || !definition->section || !definition->section->isConversion)
-			continue;
-		if (implicitOnly && !definition->section->isImplicitConversion)
-			continue;
-		if (!isPatternDefinitionVisibleFromSource(*definition, *source->range.line->sourceFile))
-			continue;
-
+	for (PatternDefinition *definition : definitions) {
 		PatternOverloadSelection sourceSelection = selectOverload(
 			{definition}, {source}, definition->indexedNodePaths.front(), {sourceType}, {compileTimeKnown},
 			resolveSourceConstraint
@@ -183,12 +183,10 @@ static void reportAmbiguousUserConversion(
 	InferenceContext &context
 ) {
 	requireCompilerInvariant(source != nullptr && candidates.size() > 1, "invalid ambiguous conversion diagnostic");
-	std::string detail = renderConfiguredMessage(
-		syntaxConfigForRange(context.parseContext, source->range), "ambiguous conversion", "message",
+	Diagnostic diagnostic = context.setConfiguredTypeFailure(
+		source->range, "ambiguous conversion", "message",
 		{{"from_type", typeToUserName(source->type)}, {"to_type", targetDescription}}
 	);
-	context.setTypeFailure(detail);
-	Diagnostic diagnostic = buildFailureDetailDiagnostic(source->range, detail);
 	for (const ConversionCandidate &candidate : candidates)
 		diagnostic.relatedInfo.push_back({"Conversion is defined here", candidate.definition->range});
 	context.fail(std::move(diagnostic), 1);

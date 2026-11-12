@@ -59,11 +59,24 @@ bool ensureSectionInstantiationInferred(
 		publishDeferredInferenceDiagnostics(publication, inst);
 		return inst.valid;
 	}
+	if (inst.failure) {
+		if (callerContext)
+			replayInferenceFailure(*callerContext, *inst.failure);
+		return false;
+	}
 	if (inst.inferring)
 		return inst.returnType.isDeduced() && inst.valid;
 
 	ScopedSectionLocalVariableState calleeVariableState(section);
 	InferenceContext context(parseContext, callerContext && callerContext->trial);
+	struct RetainTrialProducts {
+		InferenceContext &child;
+		InferenceContext *caller;
+		~RetainTrialProducts() {
+			if (child.trial)
+				caller->absorbTrialResultsFrom(child);
+		}
+	} retainTrialProducts{context, callerContext};
 	if (callerContext) {
 		context.inheritDiagnosticContext(*callerContext);
 		context.dependencyReads = callerContext->dependencyReads;
@@ -75,6 +88,7 @@ bool ensureSectionInstantiationInferred(
 		context.unresolvedPatternConstraintSignal = callerContext->unresolvedPatternConstraintSignal;
 	}
 	Instantiation *savedInst = context.currentInstantiation;
+	int failureBase = static_cast<int>(context.diagnosticTraceDepth());
 	Range fallbackRange = definition			 ? definition->range
 						  : section->openingLine ? Range(section->openingLine, section->openingLine->patternText)
 												 : Range{};
@@ -140,6 +154,8 @@ bool ensureSectionInstantiationInferred(
 	context.currentInstantiation = savedInst;
 	inst.inferring = false;
 	inst.valid = inferenceSucceeded;
+	if (!inferenceSucceeded && !inst.needsReinfer)
+		inst.failure = captureInferenceFailure(context, failureBase);
 	if (callerContext) {
 		if (inferenceSucceeded && inst.needsReinfer)
 			propagateUnresolvedRecursiveDependencyToCaller(*callerContext, callerInstantiation);
@@ -147,11 +163,15 @@ bool ensureSectionInstantiationInferred(
 		if (!inferenceSucceeded || !context.typesValid)
 			callerContext->typesValid = false;
 	}
-	if (!inst.valid || !context.typesValid)
+	if (!inst.valid || !context.typesValid) {
+		noteInferenceProduct(inst, context);
 		return false;
+	}
 
 	if (!inst.needsReinfer && !validateLocalVariableTypes(section, *inst.body, context)) {
 		inst.valid = false;
+		inst.failure = captureInferenceFailure(context, failureBase);
+		noteInferenceProduct(inst, context);
 		if (callerContext)
 			callerContext->inheritTypeFailureFrom(context);
 		return false;
@@ -171,7 +191,6 @@ bool ensureSectionInstantiationInferred(
 	}
 	// The body and its trial metadata must survive together. A child context
 	// owns constants, groupings and callable selections until its caller commits.
-	if (context.trial)
-		callerContext->absorbTrialResultsFrom(context);
+	noteInferenceProduct(inst, context);
 	return inst.returnType.isDeduced();
 }

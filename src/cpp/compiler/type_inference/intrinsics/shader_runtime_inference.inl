@@ -17,12 +17,9 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 			return false;
 		}
 		auto failWithDetail = [&](std::string_view diagnosticKey) {
-			std::string detail = renderConfiguredMessage(
-				syntaxConfigForRange(context.parseContext, expr->arguments[1]->range), diagnosticKey, "message",
-				{{"name", *name}}
-			);
-			context.setTypeFailure(detail);
-			context.fail(buildFailureDetailDiagnostic(expr->arguments[1]->range, detail), 0);
+			Diagnostic diagnostic =
+				context.setConfiguredTypeFailure(expr->arguments[1]->range, diagnosticKey, "message", {{"name", *name}});
+			context.fail(std::move(diagnostic), 0);
 		};
 		if (kind == IntrinsicKind::ShaderInput) {
 			bool knownInput = *name == "FragCoord" || *name == "Position";
@@ -44,12 +41,9 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 			CompileTimeValue bindingValue = context.lookupExpressionValue(expr->arguments[2]);
 			std::optional<std::int64_t> binding = getCompileTimeIntegerValue(bindingValue);
 			if (!binding || *binding < 0 || static_cast<std::uint64_t>(*binding) > UINT32_MAX) {
-				std::string detail = renderConfiguredMessage(
-					syntaxConfigForRange(context.parseContext, expr->arguments[2]->range), "shader uniform binding invalid",
-					"message"
-				);
-				context.setTypeFailure(detail);
-				context.fail(buildFailureDetailDiagnostic(expr->arguments[2]->range, detail), 0);
+				Diagnostic diagnostic =
+					context.setConfiguredTypeFailure(expr->arguments[2]->range, "shader uniform binding invalid", "message");
+				context.fail(std::move(diagnostic), 0);
 				return false;
 			}
 		}
@@ -70,21 +64,17 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 	if (context.parseContext.options.emitSPIRV &&
 		context.parseContext.options.shaderStage == ParseContext::ShaderStage::Compute &&
 		(kind == IntrinsicKind::ShaderOutput || kind == IntrinsicKind::ShaderUniform)) {
-		std::string detail = renderConfiguredMessage(
-			syntaxConfigForRange(context.parseContext, expr->range), "shader operation unavailable for stage", "message",
-			{{"operation", expr->intrinsicName}}
+		Diagnostic diagnostic = context.setConfiguredTypeFailure(
+			expr->range, "shader operation unavailable for stage", "message", {{"operation", expr->intrinsicName}}
 		);
-		context.setTypeFailure(detail);
-		context.fail(buildFailureDetailDiagnostic(expr->range, detail), 0);
+		context.fail(std::move(diagnostic), 0);
 		return false;
 	}
 	if (!context.parseContext.options.emitSPIRV) {
-		std::string detail = renderConfiguredMessage(
-			syntaxConfigForRange(context.parseContext, expr->range), "shader operation unavailable", "message",
-			{{"operation", expr->intrinsicName}}
+		Diagnostic diagnostic = context.setConfiguredTypeFailure(
+			expr->range, "shader operation unavailable", "message", {{"operation", expr->intrinsicName}}
 		);
-		context.setTypeFailure(detail);
-		context.fail(buildFailureDetailDiagnostic(expr->range, detail), 0);
+		context.fail(std::move(diagnostic), 0);
 		return false;
 	}
 	return true;

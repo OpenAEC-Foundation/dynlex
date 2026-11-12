@@ -17,9 +17,7 @@
 			if (argTypeResult.deferred && context.currentInstantiation)
 				return false;
 			if (context.trial) {
-				context.setTypeFailure(renderConfiguredMessage(
-					syntaxConfigForRange(context.parseContext, expr->range), "undeduced argument type in trial inference"
-				));
+				context.setConfiguredTypeFailure(expr->range, "undeduced argument type in trial inference");
 				DefinitionPatternElement *parameterElement = findParameterElement(def->patternElements, parameterName);
 				if (parameterElement && parameterElement->promotedFromVariableLike && argumentExpression &&
 					argumentExpression->kind == Expression::Kind::Variable && argumentExpression->variable &&
@@ -80,6 +78,10 @@
 		);
 		requireCompilerInvariant(prepared, "cached pure observations changed before runtime use");
 	}
+	if (inst.failure) {
+		replayInferenceFailure(context, *inst.failure);
+		return true;
+	}
 	if (knownCallArguments && inst.inferenceReusedFromCache && inst.purity == InstantiationPurity::Pure &&
 		inst.returnType.kind != DataType::Kind::Void) {
 		auto argumentValues = compileTimeArgumentValueVector(knownValues);
@@ -94,6 +96,7 @@
 	if (!inst.inferring && hasReusableInstantiation)
 		publishDeferredInferenceDiagnostics(context, inst);
 	if (!inst.inferring && !hasReusableInstantiation) {
+		int failureBase = static_cast<int>(context.diagnosticTraceDepth());
 		ScopedSectionLocalVariableState calleeVariableState(matchedSection);
 		if (context.trial)
 			inst.body = context.cloneSectionBody(matchedSection, nullptr, storageScope);
@@ -187,6 +190,8 @@
 		);
 		if (inferenceSucceeded && !inst.needsReinfer)
 			inferenceSucceeded = validateLocalVariableTypes(matchedSection, *inst.body, context);
+		if (!inferenceSucceeded && !inst.needsReinfer)
+			inst.failure = captureInferenceFailure(context, failureBase);
 		context.currentVariableValues = std::move(callerKnownConstants);
 		context.currentAddressState = std::move(callerAddressState);
 		context.currentSubject = callerSubject;
@@ -204,6 +209,7 @@
 		observeUnresolvedRecursiveDependency(context);
 	}
 	if (!inst.valid) {
+		noteInferenceProduct(inst, context);
 		context.typesValid = false;
 		return true;
 	}
@@ -268,5 +274,6 @@
 		context.parseContext.refineInstantiationStorageScope(matchedSection, instantiationKey, *refinedInstantiationKey);
 	}
 	context.setExpressionValue(expr, context.lookupExpressionValue(expr));
+	noteInferenceProduct(inst, context);
 	return true;
 }

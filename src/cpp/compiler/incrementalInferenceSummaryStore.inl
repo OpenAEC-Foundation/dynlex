@@ -128,17 +128,24 @@ class InferenceSummaryStore {
 		for (const Json &reference : classes)
 			for (const Json &target : reference.at("symbolic_dependencies"))
 				dependencies.emplace(target.at(0).get<std::string>(), target.at(1).get<std::string>());
-		return Json{
+		Json result{
 			{"diagnostics", std::move(diagnostics)},
 			{"body", std::move(body)},
 			{"classes", std::move(classes)},
 			{"payload", std::move(key)},
-			{"purity", summary.at("purity")},
 			{"needs_global_types", summary.at("needs_global_types")},
-			{"observed_values", !summary.at("pure_values").empty()},
 			{"symbolic_dependencies", dependencies},
-			{"pure_values_complete", summary.at("pure_values_complete")}
+			{"failed", !summary.at("failure").is_null()}
 		};
+		if (summary.at("failure").is_null())
+			result.update(
+				Json{
+					{"purity", summary.at("purity")},
+					{"observed_values", !summary.at("pure_values").empty()},
+					{"pure_values_complete", summary.at("pure_values_complete")}
+				}
+			);
+		return result;
 	}
 
   private:

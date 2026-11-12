@@ -616,6 +616,7 @@ bool inferTypes(ParseContext &parseContext) {
 	finishStage();
 	if (!validatePatternDefinitionConflicts(parseContext))
 		return false;
+	parseContext.compilationStage = ParseContext::CompilationStage::InferredConstraints;
 	finishStage();
 	if (parseContext.runIncrementalPreinference) {
 		auto inferRequest = [&](const ParseContext::IncrementalFunctionRequest &request) {

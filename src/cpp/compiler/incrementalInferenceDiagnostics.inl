@@ -52,15 +52,12 @@ Diagnostic restoreUnitDiagnostic(
 	return diagnostic;
 }
 
-std::optional<Json> captureInferenceDiagnostics(
-	const ParseContext &context, const std::shared_ptr<const VariableStorageScope> &scope,
-	const std::function<InferenceBodySources &()> &sources, InferenceStorageIdentities &storage
+std::optional<Json> captureInferenceDiagnosticRecords(
+	const std::vector<Diagnostic> &diagnostics, const std::function<InferenceBodySources &()> &sources,
+	InferenceStorageIdentities &storage
 ) {
 	Json records = Json::array();
-	auto found = context.deferredInferenceDiagnostics.find(scope);
-	if (found == context.deferredInferenceDiagnostics.end())
-		return records;
-	for (const Diagnostic &diagnostic : found->second) {
+	for (const Diagnostic &diagnostic : diagnostics) {
 		const auto &emission = *diagnostic.emission;
 		Json message = inferenceDiagnosticText(diagnostic.message, diagnostic.configuredMessage);
 		Json range = sources().range(diagnostic.range);
@@ -80,6 +77,16 @@ std::optional<Json> captureInferenceDiagnostics(
 		records.push_back(std::move(record));
 	}
 	return records;
+}
+
+std::optional<Json> captureInferenceDiagnostics(
+	const ParseContext &context, const std::shared_ptr<const VariableStorageScope> &scope,
+	const std::function<InferenceBodySources &()> &sources, InferenceStorageIdentities &storage
+) {
+	auto found = context.deferredInferenceDiagnostics.find(scope);
+	return found == context.deferredInferenceDiagnostics.end()
+			   ? std::optional<Json>{Json::array()}
+			   : captureInferenceDiagnosticRecords(found->second, sources, storage);
 }
 
 void restoreInferenceDiagnostics(
@@ -108,12 +115,14 @@ void restoreInferenceDiagnostics(
 	context.inferenceDiagnosticRecordsRestored += records.size();
 }
 
-Json captureRootInferenceDiagnostics(ParseContext &context, const std::map<const Section *, std::string> &paths) {
+Json captureRootInferenceDiagnostics(
+	ParseContext &context, const std::map<const Section *, std::string> &paths, const InferenceSourceIndex &sourceIndex
+) {
 	auto root = context.deferredInferenceDiagnostics.find({});
 	if (root == context.deferredInferenceDiagnostics.end() || root->second.empty())
 		return Json::array();
 	InferenceValueIdentities identities(paths);
-	InferenceStorageIdentities storage(context, paths, identities);
+	InferenceStorageIdentities storage(context, paths, identities, sourceIndex);
 	InferenceBodySources sources(context, identities);
 	auto records = captureInferenceDiagnostics(context, {}, [&]() -> auto & {
 		return sources;

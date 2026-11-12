@@ -4,7 +4,9 @@
 #include "codegen/codegen.h"
 #include "codegen/native.h"
 #include "codegen/targetOptions.h"
+#include "compileTimeValue.h"
 #include "compiler.h"
+#include "conversionLookup.h"
 #include "dataSections.h"
 #include "expression.h"
 #include "expressionCapture.h"
@@ -14,6 +16,8 @@
 #include "incrementalModuleBitcode.h"
 #include "incrementalModulePartition.h"
 #include "incrementalUnitSelection.h"
+#include "inferenceFailure.h"
+#include "inferenceProductHooks.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
 #include "numberScopeRules.h"
@@ -331,13 +335,16 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalInferenceParameterState.inl"
 #include "incrementalClassRequests.inl"
 #include "incrementalClassInstantiations.inl"
+#include "incrementalInferenceClassSnapshot.inl"
 #include "incrementalBodySources.inl"
 #include "incrementalInferenceDiagnostics.inl"
+#include "incrementalInferenceFailure.inl"
 #include "incrementalValidation.inl"
 #include "incrementalBodyReferences.inl"
 #include "incrementalBodyWriter.inl"
 #include "incrementalBodyReader.inl"
 #include "incrementalInferenceReuse.inl"
+#include "incrementalInferenceProducts.inl"
 
 #include "incrementalInferenceUnitInputs.inl"
 #include "incrementalInferenceUnitGraph.inl"
@@ -346,6 +353,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalInferenceUnitCheck.inl"
 #include "incrementalRootExecution.inl"
 #include "incrementalInferenceController.inl"
+#include "incrementalInferenceState.inl"
 // clang-format on
 
 #include "incrementalStatisticsReport.inl"
@@ -382,6 +390,10 @@ bool compileIncrementally(
 		std::string previousParserKey;
 		if (auto cached = readEntry(failedEntry)) {
 			previousFailure = Json::parse(*cached);
+			if (const auto &state = previousFailure->at("inference_state"); !state.is_null())
+				summaryStore.observe(
+					state.at("inference_summary_keys"), state.at("inference_body_keys"), state.at("inference_class_keys")
+				);
 			if (!initializeSyntaxConfigs(context, context.options.inputPath))
 				return false;
 			reuseFailedFrontend =
@@ -659,6 +671,7 @@ bool compileIncrementally(
 			for (const auto &[path, section] : sections)
 				sectionPaths.emplace(section, path);
 			IncrementalInferenceReads inferenceReads(sectionPaths);
+			IncrementalInferenceProducts products(context, sectionPaths, summaryStore, inferenceReads, statistics);
 			InferenceValueIdentities valueIdentities(sectionPaths);
 			// Signatures and scope rules are finalized before preinference. Their
 			// source inputs stay immutable through body inference and persistence.
@@ -666,6 +679,9 @@ bool compileIncrementally(
 			std::unique_ptr<IncrementalIRReuse> functionReuse;
 			std::unique_ptr<IncrementalInferenceReuse> inferenceReuse;
 			std::unordered_set<const Section *> graphStable;
+			Json *priorInference = previous ? &*previous : nullptr;
+			if (previousFailure && !previousFailure->at("inference_state").is_null())
+				priorInference = &previousFailure->at("inference_state");
 			if (compiled && !reuseTypeInference) {
 				context.recordInferenceDependency = [&](const auto &owner, const auto &dependency, const auto &scope) {
 					inferenceReads.recordDependency(owner, dependency, scope);
@@ -679,48 +695,21 @@ bool compileIncrementally(
 				context.recordCallableLookup = [&](const auto &owner, const auto &source, auto signature, const auto &matches) {
 					inferenceReads.record(owner, source, signature, matches);
 				};
-				if (previous) {
-					auto payloadStart = Clock::now();
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "section_dependency_graph");
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "inference_summaries");
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "generated_ir");
-					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
-					const Json &prior = previous->at("all_function_projection");
-					const Json &graph = previous->at("section_dependency_graph");
-					if (prior.at("final_matcher_tree") != finalMatcherTree ||
-						prior.at("declarations") != resolvedFunctionProjection.at("declarations"))
-						inferenceReads.validate(context, graph.at("callable_lookups"));
-					if (compatibleObservations(*previous, recording->observations, context))
-						prepareConstraintProbeReuse(
-							context, prior, resolvedFunctionProjection, graph, sections, inferenceReads.changedKeys()
-						);
-					auto controller = std::make_shared<IncrementalInferenceController>(
-						*previous, recording->observations, resolvedFunctionProjection, sectionPaths, inferenceReads,
-						frontendDiagnosticRecords, statistics, functionReuse, inferenceReuse, graphStable,
-						inferenceInputFingerprints, summaryStore
-					);
-					context.runIncrementalPreinference =
-						[controller](
-							ParseContext &inferred,
-							const std::function<bool(const ParseContext::IncrementalFunctionRequest &)> &infer
-						) {
-						controller->run(inferred, infer);
-					};
-				}
+#include "incrementalInferenceSetup.inl"
 			}
 			stageStart = Clock::now();
 			if (compiled && !reuseTypeInference)
 				compiled = finishTypeInference(context);
 			statistics.inferenceMilliseconds = elapsedMilliseconds(stageStart);
 			statistics.reusedRootExecution = context.reuseRootExecution;
-			if (compiled) {
+			if (compiled || context.hasCompleted(ParseContext::CompilationStage::InferredConstraints)) {
 				if (reuseTypeInference) {
 					const Json &inferred = previous->at("all_function_projection");
 					for (const char *field : {"constraint_probe_schedule", "class_instantiations"})
 						resolvedFunctionProjection[field] = inferred.at(field);
 				} else {
 					resolvedFunctionProjection["constraint_probe_schedule"] =
-						captureConstraintProbeSchedule(context, sectionPaths, inferenceReads, previous ? &*previous : nullptr);
+						captureConstraintProbeSchedule(context, sectionPaths, inferenceReads, priorInference);
 					resolvedFunctionProjection["class_instantiations"] = captureClassInstantiations(sectionPaths);
 				}
 			}
@@ -735,9 +724,6 @@ bool compileIncrementally(
 			context.reuseParsedDefinition = {};
 			context.recordParsedDefinition = {};
 			statistics.reusedInferenceInstantiations = inferenceReuse ? inferenceReuse->reusedCount() : 0;
-			statistics.inferenceSourceExpressionLookups = inferenceReuse ? inferenceReuse->sourceExpressionLookups() : 0;
-			statistics.inferenceSourceExpressionLinesIndexed =
-				inferenceReuse ? inferenceReuse->sourceExpressionLinesIndexed() : 0;
 			context.reuseInferredInstantiation = {};
 			context.restoreInferredBody = {};
 			context.runIncrementalPreinference = {};
@@ -879,16 +865,18 @@ bool compileIncrementally(
 								  result.at("function_instantiations"), &statistics.reusedInferenceSummarySections
 							  )
 							: captureInferenceSummaries(
-								  compiled, sectionPaths, globalTypes, summaryStore,
-								  nativeInferenceUnits(result.at("function_sections"), result.at("function_instantiations"))
+								  compiled, products.sourceIndex(), sectionPaths, globalTypes, summaryStore,
+								  nativeInferenceUnits(result.at("function_sections"), result.at("function_instantiations")),
+								  nullptr, nullptr, false, &products.references()
 							  );
-					result["root_diagnostics"] = captureRootInferenceDiagnostics(compiled, sectionPaths);
+					result["root_diagnostics"] =
+						captureRootInferenceDiagnostics(compiled, sectionPaths, products.sourceIndex());
 					auto graphStart = Clock::now();
 					result["section_dependency_graph"] = captureSectionDependencyGraph(
 						compiled, result, sectionPaths, inferenceReads,
 						result.at("all_function_projection").at("constraint_probe_schedule").at("callable_lookups"), statistics,
-						inferenceInputFingerprints, previous ? &previous->at("section_dependency_graph") : nullptr, graphStable,
-						retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr)
+						inferenceInputFingerprints, priorInference ? &priorInference->at("section_dependency_graph") : nullptr,
+						graphStable, retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr), &products
 					);
 					statistics.dependencyGraphMilliseconds = elapsedMilliseconds(graphStart);
 					retainInferenceInputPaths(
@@ -949,6 +937,20 @@ bool compileIncrementally(
 				};
 				recordSemanticSources(result, *recording, context);
 				result["validation_units"] = validation.snapshot();
+				Json state = nullptr;
+				if (context.hasCompleted(ParseContext::CompilationStage::InferredConstraints)) {
+					auto snapshotStart = Clock::now();
+					state = inferenceStateManifest(
+						directory, captureFailedInferenceState(
+									   context, *recording, resolvedFunctionProjection, sectionPaths, inferenceReads,
+									   inferenceReuse.get(), summaryStore, statistics, inferenceInputFingerprints,
+									   priorInference, graphStable, previous ? &*previous : nullptr, products
+								   )
+					);
+					statistics.snapshotMilliseconds += elapsedMilliseconds(snapshotStart);
+				} else if (priorInference)
+					state = inferenceStateManifest(directory, *priorInference);
+				result["inference_state"] = std::move(state);
 				writeEntry(failedEntry, result.dump());
 			}
 		}

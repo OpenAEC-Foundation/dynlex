@@ -64,7 +64,8 @@ static bool inferExpression(
 			DiagnosticExpressionSnapshot failureSnapshot =
 				context.typeFailureSnapshot.range.line ? context.typeFailureSnapshot : originalDiagnostic;
 			diagnostic = buildTypeFailureDiagnostic(
-				context.parseContext, failureSnapshot, context.typeFailureDetail, context.typeFailureRelatedInfo
+				context.parseContext, failureSnapshot, context.typeFailureDetail, context.typeFailureRelatedInfo,
+				context.configuredTypeFailureDetail
 			);
 		}
 		appendNumberRuleOrigins(context.parseContext, expr, diagnostic.relatedInfo);

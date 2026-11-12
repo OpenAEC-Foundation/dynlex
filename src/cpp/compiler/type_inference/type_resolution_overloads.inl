@@ -405,6 +405,7 @@ struct InferenceContext {
 	bool suppressDiagnostics = false;
 	bool suppressReinferPassDiagnostics = false;
 	std::string typeFailureDetail;
+	std::shared_ptr<const ConfiguredDiagnosticMessage> configuredTypeFailureDetail;
 	std::vector<RelatedInfo> typeFailureRelatedInfo;
 	DiagnosticExpressionSnapshot typeFailureSnapshot;
 	Diagnostic typeFailureDiagnostic;
@@ -631,13 +632,24 @@ struct InferenceContext {
 		addDiagnostic(std::move(diagnostic));
 	}
 
-	void setTypeFailure(std::string detail) {
+	void setTypeFailure(std::string detail, std::shared_ptr<const ConfiguredDiagnosticMessage> configured = {}) {
 		typesValid = false;
 		if (typeFailureDetail.empty()) {
 			typeFailureDetail = std::move(detail);
+			configuredTypeFailureDetail = std::move(configured);
 			typeFailureRelatedInfo = captureInferenceTraceRelatedInfo();
 			typeFailureSnapshot = captureDiagnosticExpressionSnapshot(currentExpression());
 		}
+	}
+	Diagnostic setConfiguredTypeFailure(
+		Range range, std::string_view key, std::string_view variant = "message",
+		std::vector<std::pair<std::string, std::string>> replacements = {}
+	) {
+		Diagnostic diagnostic;
+		diagnostic.range = range;
+		diagnostic.setConfiguredMessage(parseContext, range, key, variant, std::move(replacements));
+		setTypeFailure(diagnostic.message, diagnostic.configuredMessage);
+		return diagnostic;
 	}
 
 	void fail(Diagnostic diagnostic, int priority = 1, bool includeInferenceTrace = true) {
@@ -653,6 +665,7 @@ struct InferenceContext {
 
 	void clearTypeFailure() {
 		typeFailureDetail.clear();
+		configuredTypeFailureDetail.reset();
 		typeFailureRelatedInfo.clear();
 		typeFailureSnapshot = {};
 		typeFailureDiagnostic = Diagnostic();
@@ -669,6 +682,7 @@ struct InferenceContext {
 		if (!typeFailureDetail.empty() || other.typeFailureDetail.empty())
 			return;
 		typeFailureDetail = other.typeFailureDetail;
+		configuredTypeFailureDetail = other.configuredTypeFailureDetail;
 		typeFailureRelatedInfo = other.typeFailureRelatedInfo;
 		typeFailureSnapshot = other.typeFailureSnapshot;
 	}

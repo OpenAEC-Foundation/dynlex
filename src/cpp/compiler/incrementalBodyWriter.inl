@@ -1,9 +1,11 @@
 class InferenceBodyWriter {
   public:
 	InferenceBodyWriter(
-		const InferenceValueIdentities &identities, InferenceBodySources &sources, InferenceStorageIdentities &storage
+		const InferenceValueIdentities &identities, InferenceBodySources &sources, InferenceStorageIdentities &storage,
+		InferenceClassSnapshot &classSnapshot, std::function<CompileTimeValue(const Expression *)> readValue = {}
 	)
-		: identities(identities), sources(sources), storage(storage) {}
+		: identities(identities), sources(sources), storage(storage), classSnapshot(classSnapshot),
+		  readValue(std::move(readValue)) {}
 	Json capture(const Instantiation &instance) {
 		for (const auto &argument : instance.argumentTypes)
 			addTypeClasses(argument);
@@ -255,7 +257,7 @@ class InferenceBodyWriter {
 		const auto &path = identities.classes.at(definition);
 		if (classRecords.contains(path))
 			return;
-		classRecords[path] = sources.classInstances(definition);
+		classRecords[path] = classSnapshot.instances(definition);
 		dependencies.emplace(path, "*");
 		for (const auto &instance : definition->instantiations)
 			for (const auto &field : instance.fieldTypes)
@@ -274,13 +276,15 @@ class InferenceBodyWriter {
 	Json instance(const Instantiation *value) {
 		if (!value)
 			return nullptr;
-		const auto &[section, key] = sources.instance(value);
+		const auto *origin = storage.instantiationOrigin(value->storageScope.get());
+		requireCompilerInvariant(origin, "inferred body instance has no logical storage origin");
+		const auto &[section, key] = *origin;
 		Json arguments = Json::array(), constants = Json::array();
-		for (const auto &argument : key->argumentTypes)
+		for (const auto &argument : key.argumentTypes)
 			arguments.push_back(type(argument));
-		for (const auto &[name, constant] : key->compileTimeParameters)
+		for (const auto &[name, constant] : key.compileTimeParameters)
 			constants.push_back(Json::array({name, this->value(constant)}));
-		auto identity = inferenceSummaryKey(*key, identities);
+		auto identity = inferenceSummaryKey(key, identities);
 		dependencies.emplace(identities.paths.at(section), identity.value_or("*"));
 		return Json::array({sources.section(section), std::move(arguments), std::move(constants)});
 	}
@@ -372,7 +376,7 @@ class InferenceBodyWriter {
 			{"reference", std::move(reference)},
 			{"kind", static_cast<int>(item.kind)},
 			{"type", type(item.type)},
-			{"value", value(item.compileTimeValue)},
+			{"value", value(readValue ? readValue(&item) : item.compileTimeValue)},
 			{"memory", Json::array(
 						   {diagnostic(item.memoryFacts.value), diagnostic(item.memoryFacts.address),
 							diagnostic(item.memoryFacts.effects)}
@@ -422,6 +426,8 @@ class InferenceBodyWriter {
 	const InferenceValueIdentities &identities;
 	InferenceBodyReferenceWriter sources;
 	InferenceStorageIdentities &storage;
+	InferenceClassSnapshot &classSnapshot;
+	std::function<CompileTimeValue(const Expression *)> readValue;
 	std::unordered_map<const Expression *, size_t> expressionIndices;
 	std::unordered_map<const InstantiatedSectionBody *, size_t> bodyIndices;
 	std::unordered_map<const VariableReference *, size_t> variableIndices;
