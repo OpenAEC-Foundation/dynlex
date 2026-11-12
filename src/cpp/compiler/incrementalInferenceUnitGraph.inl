@@ -25,24 +25,27 @@ class InferenceUnitGraphCapture {
 		for (const auto &[section, path] : paths) {
 			units[path] = Json::object();
 			for (const auto &[key, instantiation] : section->instantiations) {
-				if (!instantiation.valid || instantiation.inferring || instantiation.needsReinfer || !instantiation.body)
+				if (!instantiation.valid || instantiation.inferring || instantiation.needsReinfer ||
+					!instantiation.returnType.isDeduced())
 					continue;
+				requireCompilerInvariant(instantiation.storageScope != nullptr, "inference graph unit has no storage scope");
 				auto identity = inferenceSummaryKey(key, identities);
 				if (identity)
-					mappedScopes.emplace(instantiation.body->storageScope, InferenceUnitKey{path, *identity});
+					mappedScopes.emplace(instantiation.storageScope, InferenceUnitKey{path, *identity});
 			}
 		}
 		mappedScopes.emplace(IncrementalInferenceReads::Scope{}, InferenceUnitKey{"root", aggregateGraphVariant});
 		for (const auto &[section, path] : paths)
 			for (const auto &[key, instantiation] : section->instantiations) {
-				if (!instantiation.valid || instantiation.inferring || instantiation.needsReinfer || !instantiation.body)
+				if (!instantiation.valid || instantiation.inferring || instantiation.needsReinfer ||
+					!instantiation.returnType.isDeduced())
 					continue;
 				auto identity = inferenceSummaryKey(key, identities);
 				if (!identity)
 					continue;
 				bool reused = instantiation.inferenceReusedFromCache;
 				Json node = reused ? std::move(priorUnit(path, *identity)) : emptyInferenceUnit();
-				mergeScope(node, instantiation.body->storageScope, section, reused);
+				mergeScope(node, instantiation.storageScope, section, reused);
 				(reused ? statistics.inferenceUnitsReused : statistics.inferenceUnitsCaptured)++;
 				units[path][*identity] = std::move(node);
 			}

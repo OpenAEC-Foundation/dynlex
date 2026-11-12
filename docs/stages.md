@@ -1438,6 +1438,17 @@ Restoration indexes source expressions once per owning section and memoizes deco
 source references. `inference_source_expression_lookups` and
 `inference_source_expression_lines_indexed` distinguish requested anchors from
 source lines scanned to construct these indexes.
+Each concrete instantiation retains its canonical storage scope independently of
+its optional executable body. Fact restoration, diagnostic publication, value-read
+tracking and dependency capture use that scope without cloning source expressions.
+Ordinary calls and callable requests check reusable facts and native IR before
+materializing a source body. A new compile-time input loads the saved typed body;
+ordinary inference clones source only when no reusable executable body is available.
+Lifecycle discovery visits typed bodies when present and retains the native
+dependency closure for reused functions. `source_function_body_clones`,
+`source_body_clones`, `source_body_expressions_cloned` and `source_body_clone_ms`
+expose the remaining source-template materialization work separately from typed
+body loading and inference.
 Class layouts needed by a typed body or inference facts have separate immutable
 records. Restoration validates the current declaration and existing layout prefix,
 reserves the complete dependency closure, and fills recursive fields before

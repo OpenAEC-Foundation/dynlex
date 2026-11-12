@@ -31,13 +31,10 @@ bool ensureSectionInstantiationInferred(
 	if (instIt == section->instantiations.end())
 		instIt = section->instantiations.emplace(instantiationKey, Instantiation{}).first;
 	Instantiation &inst = instIt->second;
-	auto storageScope =
-		inst.body ? inst.body->storageScope : parseContext.storageScopeForInstantiation(section, instantiationKey);
+	auto storageScope = parseContext.storageScopeForInstantiation(section, instantiationKey);
+	inst.storageScope = storageScope;
 	if (callerContext)
 		callerContext->recordBodyRead(*section, storageScope);
-	if (!inst.body)
-		inst.body = callerContext ? callerContext->cloneSectionBody(section, nullptr, storageScope)
-								  : parseContext.cloneSectionBody(section, false, nullptr, storageScope);
 	if (inst.argumentTypes.empty())
 		inst.argumentTypes = argTypes;
 	else
@@ -110,7 +107,7 @@ bool ensureSectionInstantiationInferred(
 		context.currentVariableValues.clear();
 		context.currentAddressState = {};
 		context.currentSubject = {};
-		if (context.trial)
+		if (context.trial || !inst.body)
 			inst.body = context.cloneSectionBody(section, nullptr, storageScope);
 		parseContext.functionBodyInferencePasses++;
 		bool passSucceeded = inferSection(section, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);

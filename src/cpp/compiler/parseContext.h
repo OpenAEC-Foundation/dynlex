@@ -157,6 +157,10 @@ struct ParseContext {
 		reuseInferredInstantiation;
 	std::function<bool(Section *, Instantiation &, InferenceContext *)> restoreInferredBody;
 	size_t functionBodyInferencePasses = 0;
+	size_t sourceBodyClones = 0;
+	size_t sourceFunctionBodyClones = 0;
+	size_t sourceBodyExpressionsCloned = 0;
+	double sourceBodyCloneMilliseconds = 0;
 	size_t inferenceBodiesLoaded = 0;
 	double inferenceBodyLoadMilliseconds = 0;
 	std::function<void(ParseContext &, const std::function<bool(const IncrementalFunctionRequest &)> &)>

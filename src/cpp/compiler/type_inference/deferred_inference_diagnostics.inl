@@ -4,8 +4,8 @@ static void publishDeferredInferenceDiagnostics(InferenceContext &context, const
 	if (context.parseContext.deferredInferenceDiagnostics.empty() || (context.trial && !context.pendingDiagnostics) ||
 		context.suppressDiagnostics)
 		return;
-	requireCompilerInvariant(instance.body != nullptr, "deferred diagnostic publication requires its concrete body");
-	auto found = context.parseContext.deferredInferenceDiagnostics.find(instance.body->storageScope);
+	requireCompilerInvariant(instance.storageScope != nullptr, "deferred diagnostic publication requires its unit scope");
+	auto found = context.parseContext.deferredInferenceDiagnostics.find(instance.storageScope);
 	if (found == context.parseContext.deferredInferenceDiagnostics.end())
 		return;
 	for (const Diagnostic &stored : found->second) {

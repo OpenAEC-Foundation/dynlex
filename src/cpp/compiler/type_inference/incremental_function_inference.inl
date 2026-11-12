@@ -42,7 +42,7 @@ static bool inferIncrementalFunction(ParseContext &parseContext, const ParseCont
 		if (instantiation.purity == InstantiationPurity::Pure && instantiation.returnType.kind != DataType::Kind::Void) {
 			InferenceContext context(parseContext);
 			context.currentInstantiation = &instantiation;
-			InferenceContext::DependencyOwner owner{section, nullptr, instantiation.body->storageScope};
+			InferenceContext::DependencyOwner owner{section, nullptr, instantiation.storageScope};
 			context.dependencyReads.owner = &owner;
 			context.currentInstantiatedSectionBody = instantiation.body.get();
 			PureExecutionState execution(parseContext, context);

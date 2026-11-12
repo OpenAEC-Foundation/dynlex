@@ -131,7 +131,6 @@ llvm::Function *generateSpecializedFunction(
 	requireCompilerInvariant(!activeInst.inferring, "in-progress function instantiation reached codegen");
 	requireCompilerInvariant(!activeInst.needsReinfer, "unfinished function instantiation reached codegen");
 	requireCompilerInvariant(activeInst.returnType.isDeduced(), "function without a deduced return type reached codegen");
-	requireCompilerInvariant(activeInst.body != nullptr, "function without an inferred body reached codegen");
 	std::vector<size_t> runtimeParameterIndices = collectRuntimeParameterIndices(activeInst, paramBindings);
 	std::vector<std::string> runtimeParameterNames;
 	runtimeParameterNames.reserve(runtimeParameterIndices.size());

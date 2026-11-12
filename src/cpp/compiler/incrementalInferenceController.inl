@@ -99,7 +99,7 @@ class IncrementalInferenceController {
 			);
 			capturedSections.insert(request.section);
 			const auto &instance = request.section->instantiations.at(request.key);
-			auto diagnostics = captureInferenceDiagnostics(context, instance.body->storageScope, [&]() -> auto & {
+			auto diagnostics = captureInferenceDiagnostics(context, instance.storageScope, [&]() -> auto & {
 				if (!diagnosticSources)
 					diagnosticSources = std::make_unique<InferenceBodySources>(context, identities);
 				return *diagnosticSources;

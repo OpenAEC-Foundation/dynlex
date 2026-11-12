@@ -27,11 +27,18 @@ class RuntimeLifecycleUses {
 	void collectInstantiation(Instantiation &instantiation, bool callable = false) {
 		if (!instantiations.insert(&instantiation).second)
 			return;
-		requireCompilerInvariant(instantiation.body != nullptr, "runtime function has no inferred body");
 		collectType(instantiation.returnType);
 		if (callable)
 			for (const DataType &parameter : instantiation.argumentTypes)
 				collectType(parameter);
+		if (!instantiation.bodyInferred) {
+			requireCompilerInvariant(
+				instantiation.inferenceReusedFromCache && instantiation.valid && !instantiation.needsReinfer,
+				"runtime function has neither an inferred body nor reusable facts"
+			);
+			return;
+		}
+		requireCompilerInvariant(instantiation.body != nullptr, "runtime function has no inferred body");
 		collectBody(*instantiation.body);
 	}
 

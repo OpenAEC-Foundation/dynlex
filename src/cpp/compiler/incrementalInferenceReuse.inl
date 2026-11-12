@@ -59,8 +59,11 @@ bool canPersistInferenceSummary(
 	std::set<std::pair<const ClassDefinition *, int>> visiting;
 	bool callable = (section->type == SectionType::Function && !section->isFlex) || section->type == SectionType::Retain ||
 					section->type == SectionType::Release;
-	return callable && instantiation.valid && !instantiation.inferring && !instantiation.needsReinfer && instantiation.body &&
-		   inferenceTypeIdentity(instantiation.returnType, identities.classes, visiting).has_value() &&
+	if (!callable || !instantiation.valid || instantiation.inferring || instantiation.needsReinfer ||
+		!instantiation.returnType.isDeduced())
+		return false;
+	requireCompilerInvariant(instantiation.storageScope != nullptr, "inferred unit has no storage scope");
+	return inferenceTypeIdentity(instantiation.returnType, identities.classes, visiting).has_value() &&
 		   instantiation.argumentTypes == key.argumentTypes &&
 		   (!instantiation.returnType.isMetaType() || instantiation.purity == InstantiationPurity::Pure) &&
 		   !instantiation.memoryViolation;
@@ -190,7 +193,7 @@ Json captureInferenceSummaries(
 			captureSectionInferenceSummary(section, identities, storage, globalTypes, nullptr, skipped, nullptr, &instances);
 		for (const auto &[key, summary] : variants.items()) {
 			const Instantiation &instance = *instances.at(key);
-			auto diagnostics = captureInferenceDiagnostics(context, instance.body->storageScope, sourceRecords, storage);
+			auto diagnostics = captureInferenceDiagnostics(context, instance.storageScope, sourceRecords, storage);
 			if (!diagnostics)
 				continue;
 			Json body = nullptr;
@@ -303,6 +306,7 @@ class IncrementalInferenceReuse {
 			return false;
 		reader.commit();
 		recordInferenceRestoration(caller, section, key);
+		requireCompilerInvariant(body->storageScope == instance.storageScope, "restored body changed its unit scope");
 		instance.body = std::move(body);
 		instance.bodyInferred = true;
 		instance.needsReinfer = false;

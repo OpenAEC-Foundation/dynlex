@@ -270,9 +270,9 @@ static CompileTimeValue executePureInstantiationReturnValue(
 		instantiation.returnType.kind == DataType::Kind::Void)
 		return {};
 	requireCompilerInvariant(
-		static_cast<bool>(instantiation.body), "pure execution encountered an instantiation without an inferred body"
+		static_cast<bool>(instantiation.storageScope), "pure execution encountered an instantiation without a unit scope"
 	);
-	state.recordValueRead(*section, instantiation.body->storageScope);
+	state.recordValueRead(*section, instantiation.storageScope);
 	std::vector<CompileTimeValue> argumentValueKey = compileTimeArgumentValueVector(argumentValues);
 	std::optional<InferenceReadOwner> valueOwner;
 	if (!state.valueReadOwners.empty())
@@ -280,7 +280,7 @@ static CompileTimeValue executePureInstantiationReturnValue(
 	auto observe = [&](const CompileTimeValue &value) {
 		if (const auto &record = state.parseContext.recordInferenceValue) {
 			auto emit = [&](const InferenceReadOwner &owner) {
-				record(owner, *section, instantiation.body->storageScope, argumentValueKey, value);
+				record(owner, *section, instantiation.storageScope, argumentValueKey, value);
 			};
 			if (valueOwner)
 				emit(*valueOwner);
@@ -303,7 +303,7 @@ static CompileTimeValue executePureInstantiationReturnValue(
 	requireCompilerInvariant(
 		instantiation.body->sourceSection == section, "pure execution encountered an instantiation body for another section"
 	);
-	ScopedPureValueReads valueReads(state, section, instantiation.body->storageScope);
+	ScopedPureValueReads valueReads(state, section, instantiation.storageScope);
 	for (const auto &[parameterName, value] : argumentValues) {
 		Variable *parameterVariable = findExecutionSectionVariable(section, parameterName);
 		if (!parameterVariable || !parameterVariable->definition)

@@ -71,10 +71,7 @@ class Restoration {
 		facts.pureReturnValuesByArguments = std::move(*values);
 		facts.pureReturnValuesComplete = summary.at("pure_values_complete").get<bool>();
 		facts.body = entry.original.body;
-		if (!facts.body)
-			facts.body = owner.context.cloneSectionBody(
-				section, false, nullptr, owner.context.storageScopeForInstantiation(section, key)
-			);
+		facts.storageScope = owner.context.storageScopeForInstantiation(section, key);
 		bool pureValue = facts.purity == InstantiationPurity::Pure && facts.returnType.kind != DataType::Kind::Void;
 		bool requiresBody = use != ParseContext::InferenceReuseUse::SymbolicReference &&
 							(use != ParseContext::InferenceReuseUse::ConstantCall || !pureValue || needsGlobalTypes);
@@ -120,7 +117,7 @@ class Restoration {
 		if (!entries.contains(&slot)) {
 			if (slot.inferring)
 				return std::nullopt;
-			if (!slot.valid || !slot.body || !slot.returnType.isDeduced() || slot.needsReinfer) {
+			if (!slot.valid || !slot.returnType.isDeduced() || slot.needsReinfer) {
 				stage(section, key, slot);
 				slot.argumentTypes = key.argumentTypes;
 				slot.returnType = *result;
@@ -166,7 +163,7 @@ class Restoration {
 			requireCompilerInvariant(entry.ready, "inference restoration left an undecoded unit");
 			*slot = std::move(entry.facts);
 			restoreInferenceDiagnostics(
-				owner.context, slot->body->storageScope,
+				owner.context, slot->storageScope,
 				owner.summaries.at(owner.sectionPaths.at(entry.section)).at(entry.identity).at("diagnostics"), [&]() -> auto & {
 				if (!owner.bodySources)
 					owner.bodySources = std::make_unique<InferenceBodySources>(owner.context, owner.identities);

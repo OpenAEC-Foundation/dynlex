@@ -13,6 +13,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Target/TargetMachine.h"
+#include <chrono>
 #include <iostream>
 #include <iterator>
 #include <unordered_set>
@@ -304,6 +305,12 @@ std::shared_ptr<InstantiatedSectionBody> ParseContext::cloneSectionBody(
 ) {
 	if (!section)
 		return {};
+	auto cloneStarted = std::chrono::steady_clock::now();
+	sourceBodyClones++;
+	if (!parentBody && !section->isFlex &&
+		(section->type == SectionType::Function || section->type == SectionType::Retain ||
+		 section->type == SectionType::Release))
+		sourceFunctionBodyClones++;
 	auto body = std::make_shared<InstantiatedSectionBody>();
 	body->sourceSection = section;
 	body->storageScope = storageScope ? std::move(storageScope) : std::make_shared<VariableStorageScope>();
@@ -315,6 +322,9 @@ std::shared_ptr<InstantiatedSectionBody> ParseContext::cloneSectionBody(
 			*body->expressions, line ? line->expression : nullptr, preserveInferenceMetadata, body.get()
 		));
 	}
+	sourceBodyExpressionsCloned += body->expressions->expressions.size();
+	sourceBodyCloneMilliseconds +=
+		std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - cloneStarted).count();
 	body->childBodies.reserve(section->children.size());
 	for (Section *child : section->children)
 		body->childBodies.push_back(cloneSectionBody(child, preserveInferenceMetadata, body.get(), body->storageScope));

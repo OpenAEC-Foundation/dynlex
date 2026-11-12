@@ -49,8 +49,8 @@
 	if (context.trial && context.trialJournal)
 		context.trialJournal->recordSectionInstantiationWrite(matchedSection, instantiationKey);
 	Instantiation &inst = matchedSection->instantiations[instantiationKey];
-	auto storageScope = inst.body ? inst.body->storageScope
-								  : context.parseContext.storageScopeForInstantiation(matchedSection, instantiationKey);
+	auto storageScope = context.parseContext.storageScopeForInstantiation(matchedSection, instantiationKey);
+	inst.storageScope = storageScope;
 	context.recordBodyRead(*matchedSection, storageScope);
 	expr->selectedInstantiation = &inst;
 	if (inst.argumentTypes.empty()) {
@@ -67,8 +67,6 @@
 		}, knownBindings, knownValues);
 	}
 	if (!inst.returnType.isDeduced() && context.parseContext.reuseInferredInstantiation) {
-		if (!inst.body)
-			inst.body = context.cloneSectionBody(matchedSection, nullptr, storageScope);
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 		context.parseContext.reuseInferredInstantiation(
 			matchedSection, instantiationKey, inst,

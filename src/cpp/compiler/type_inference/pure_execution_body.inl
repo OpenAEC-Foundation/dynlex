@@ -29,7 +29,7 @@ static bool ensurePureExecutionBody(
 		bindings.emplace_back(values[index].first, &argument);
 	}
 	const auto *savedOwner = context.dependencyReads.owner;
-	InferenceContext::DependencyOwner owner{section, savedOwner, instantiation.body->storageScope};
+	InferenceContext::DependencyOwner owner{section, savedOwner, instantiation.storageScope};
 	if (!state.valueReadOwners.empty()) {
 		owner.section = state.valueReadOwners.back().section;
 		owner.scope = state.valueReadOwners.back().scope;

@@ -154,6 +154,8 @@ struct Instantiation : InstantiationExecutionEffects {
 	// code can still depend on those observations after another argument is seen.
 	bool pureReturnValuesComplete = true;
 	bool valueSummaryChanged = false;
+	// Semantic facts and diagnostic ownership exist before an executable body is demanded.
+	std::shared_ptr<const VariableStorageScope> storageScope;
 	std::shared_ptr<InstantiatedSectionBody> body;
 	bool bodyInferred = false;
 	std::map<std::vector<unsigned>, llvm::Function *> llvmFunctionsByParameterAddressSpaces;
