@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { setTimeout as pause } from 'node:timers/promises';
 import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, verifySourceHover, verifySourceInspection, verifySourceFixes, verifySourceCallColor, verifySourceCallColors, verifySourceNavigationAppearance } from './editor_feature_checks.mjs';
 import {canvasControls} from './canvas_controls.mjs';
+import {verifySourceSearch} from './source_search_checks.mjs';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
 const graphicsMode = process.argv[3] || 'system';
@@ -314,6 +315,7 @@ try {
   await verifySourceCompletion({command,evaluate,waitFor,key,capture,
     source:'get t',prefix:'import lib/river_challenge.dl\n\n',name:'river'});
   await verifySourcePaste({command,evaluate,waitFor,key,source:plan});
+  await verifySourceSearch({command,waitFor,key,capture,source:plan,query:'get the hay in the boat',replacement:'get hay in the boat',name:'river'});
   await verifySourceNavigationAppearance({waitFor,disabled:true});
   await verifySourceDefinition({command,evaluate,waitFor,key,capture,source:plan,line:1,column:4,filename:'river_challenge.dl',name:'river'});
   await verifySourceHover({command,evaluate,waitFor,key,capture,source:plan,name:'river'});
@@ -322,10 +324,10 @@ try {
   await verifySourceCallColors({command,waitFor,key,capture,source:plan,name:'river'});
   await pause(100);
   assert.equal(await evaluate('window.siteProbe.marks.length'),0,'Editing retained execution marks from another snapshot');
-  await clickText('Run plan ▶');
+  await key('Enter','Enter',13,2);
   await waitFor('window.siteProbe.texts.includes("THE RIVER / EVERYONE MADE IT")');
   await capture('river-solved');
-  await wheel(320);
+  await clickText('3 / 3');
   await waitFor('window.siteProbe.texts.includes("3 / 3")');
   await clickText('4× speed');
   await clickText('Replay ▶');

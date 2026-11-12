@@ -1,5 +1,6 @@
 import interface.dl
 import actions.dl
+import programs/commands.dl
 import games/river/rendering.dl
 
 # Replies have explicit owners and purposes. Platform services do not decide UI state.
@@ -58,7 +59,6 @@ to get receive website reply {a pointer to JSON value:response} for {integer:job
     return false
 
 to read website input {a pointer to UI view:view}:
-    handle website program shortcut in view
     if view's input kind = 7:
         set state to the website state in (view's instance)
         set index to 0
@@ -183,6 +183,7 @@ function open the DynLex website using {a pointer to UI driver:driver} with {a p
         open website account with (the website account configuration) in state
         bind (the control labeled "River scene" in instance) in instance to (the function named "paint the website river $") for event 1
         bind website links in (instance's description) for instance
+        bind website program commands in state
         bind (the control labeled "IDE source" in instance) in instance to (the function named "notice website source edit $") for event 0
         bind (the control labeled "Shader source" in instance) in instance to (the function named "notice website source edit $") for event 0
         bind (the control labeled "IDE modes" in instance) in instance to (the function named "notice website editor mode $") for event 0

@@ -1,0 +1,58 @@
+import ../../site/programs/commands.dl
+import site_fixture.dl
+
+set invocations to 0
+set destination to ""
+
+function record website command {a pointer to UI instance:instance}:
+    globals:
+        invocations
+        destination
+    execute:
+        increment invocations
+        set destination to instance's event target's destination
+
+set instance to an instance of website fixture
+set view to a new UI view
+set view's instance to the address of instance
+set view's active to true
+set state to a new website state
+set state's view to the address of view
+set instance's state to (the address of state) as a pointer
+prepare website fixture editors in (the address of state)
+show page "/index.html" in (the address of instance)
+bind website program commands in (the address of state)
+for each description in (the website program descriptions):
+    set target to the control labeled (description's run control) in (the address of instance)
+    bind target in (the address of instance) to (the function named "record website command $") for event 0
+
+set source to the UI layout for element (the control labeled "Studio source" in (the address of instance)) in (view's layout)
+activate UI layout source in (the address of view)
+set view's input kind to 3
+set view's key press to 257
+set view's modifiers to 2
+require condition (process UI key bindings in (the address of view)) reporting "Studio did not bind Control+Enter through shared key dispatch."
+require condition ((invocations = 1) and (destination = "action:run-studio")) reporting "Studio activated a different program."
+set view's key press to 257
+set view's modifiers to 8
+require condition (process UI key bindings in (the address of view)) reporting "Studio did not bind Command+Enter."
+require condition (invocations = 2) reporting "The shared command did not activate its Run control."
+set target to the control labeled "Run studio sketch ▶" in (the address of instance)
+set UI control target enabled false in (the address of instance)
+set view's key press to 257
+require condition (process UI key bindings in (the address of view)) reporting "A disabled Run command leaked its shortcut."
+require condition (invocations = 2) reporting "A command activated a disabled Run control."
+set view's key press to 257
+set view's modifiers to 3
+require condition ((process UI key bindings in (the address of view)) = false) reporting "An unbound modifier combination ran a program."
+show page "/ide/index.html" in (the address of instance)
+set the value of "IDE modes" in (the address of instance) to 1
+set source to the UI layout for element (the control labeled "Shader source" in (the address of instance)) in (view's layout)
+activate UI layout source in (the address of view)
+set view's key press to 257
+set view's modifiers to 2
+require condition (process UI key bindings in (the address of view)) reporting "An editor in a tab did not receive the shared Run command."
+require condition ((invocations = 3) and (destination = "action:run-ide")) reporting "The shader editor used another pane's program."
+release website fixture editors in (the address of state)
+close the address of instance
+print line "Website Run shortcuts use shared scoped commands, the matching control and its enabled policy."

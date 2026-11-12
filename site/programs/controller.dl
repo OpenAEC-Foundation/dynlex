@@ -193,20 +193,3 @@ to select website editor mode {integer:mode} in {a pointer to website state:stat
     set the text of "IDE status" in instance to "Ready."
     set the text of "IDE diagnostics" in instance to "Checking source…"
     set the text of "IDE analysis" in instance to "Analyzing…"
-
-to handle website program shortcut in {a pointer to UI view:view}:
-    if (view's input kind != 3) or (view's input code != 257):
-        return nothing
-    if (view's modifiers bitwise and 10) = 0:
-        return nothing
-    set source to view's selection's caret source
-    if source = @intrinsic("construct", a pointer to UI text source):
-        return nothing
-    set index to 0
-    loop while index < the length of (the website program descriptions):
-        set description to the item at index in (the website program descriptions)
-        if source's element = (the active UI editor within (the control labeled (description's source) in (view's instance)) in (view's instance)):
-            run website program index in (the website state in (view's instance))
-            set view's key press to -1
-            return nothing
-        increment index

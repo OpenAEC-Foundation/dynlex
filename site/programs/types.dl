@@ -11,15 +11,16 @@ class:
         filename as a C string
         traced as a boolean
         show output as a boolean
+        run control as a C string
         run action as a C string
         stop action as a C string
 
 the website program descriptions means: [
-    @intrinsic("construct", website program description, "Square field", "Square field output", "Square field status", "", "main.dl", false, true, "action:run-square", "action:stop-square"),
-    @intrinsic("construct", website program description, "Vocabulary", "Vocabulary output", "Vocabulary status", "", "main.dl", false, true, "action:run-vocabulary", "action:stop-vocabulary"),
-    @intrinsic("construct", website program description, "IDE modes", "IDE output", "IDE status", "", "main.dl", false, true, "action:run-ide", "action:stop-ide"),
-    @intrinsic("construct", website program description, "Studio source", "Studio output", "Studio status", "", "main.dl", false, true, "action:run-studio", "action:stop-studio"),
-    @intrinsic("construct", website program description, "River source", "River diagnostics", "River status", "import lib/river_challenge.dl\n\n", "river.dl", true, false, "action:run-river", "action:stop-river")
+    @intrinsic("construct", website program description, "Square field", "Square field output", "Square field status", "", "main.dl", false, true, "Run square field ▶", "action:run-square", "action:stop-square"),
+    @intrinsic("construct", website program description, "Vocabulary", "Vocabulary output", "Vocabulary status", "", "main.dl", false, true, "Run vocabulary ▶", "action:run-vocabulary", "action:stop-vocabulary"),
+    @intrinsic("construct", website program description, "IDE modes", "IDE output", "IDE status", "", "main.dl", false, true, "Run program ▶", "action:run-ide", "action:stop-ide"),
+    @intrinsic("construct", website program description, "Studio source", "Studio output", "Studio status", "", "main.dl", false, true, "Run studio sketch ▶", "action:run-studio", "action:stop-studio"),
+    @intrinsic("construct", website program description, "River source", "River diagnostics", "River status", "import lib/river_challenge.dl\n\n", "river.dl", true, false, "Run plan ▶", "action:run-river", "action:stop-river")
 ]
 
 class:

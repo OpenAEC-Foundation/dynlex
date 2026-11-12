@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { setTimeout as pause } from 'node:timers/promises';
 import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, verifySourceHover, verifySourceInspection, verifySourceFixes, verifySourceCallColor, verifySourceCallColors, verifySourceNavigationAppearance } from './editor_feature_checks.mjs';
 import {canvasControls} from './canvas_controls.mjs';
+import {verifySourceSearch} from './source_search_checks.mjs';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
 const graphicsMode = process.argv[3] || 'system';
@@ -243,13 +244,14 @@ try {
   await verifySourceCompletion({command,evaluate,waitFor,key,capture,
     source:'import lib/std.dl\npri',prefix:'',name:'ide'});
   await verifySourcePaste({command,evaluate,waitFor,key,source:'import lib/std.dl\nprint line 7'});
+  await verifySourceSearch({command,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',query:'7',replacement:'8',name:'ide'});
   await verifySourceNavigationAppearance({waitFor,disabled:true});
   await verifySourceDefinition({command,evaluate,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',line:1,column:0,filename:'string.dl',name:'ide'});
   await verifySourceHover({command,evaluate,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',name:'ide'});
   await verifySourceInspection({command,evaluate,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',name:'ide'});
   await verifySourceFixes({command,evaluate,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',name:'ide'});
   await verifySourceCallColors({command,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',name:'ide'});
-  await click(237,287);
+  await key('Enter','Enter',13,2);
   await waitFor('window.siteProbe.texts.includes("7")');
   await click(120,480); await key('KeyA','a',65,2);
   await command('Input.insertText', { text:'import lib/std.dl\nprint line ""' });

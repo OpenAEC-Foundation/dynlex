@@ -91,6 +91,9 @@ even while an import is displayed. Loading a new linked program or saved plan
 starts fresh editing/navigation state through the same shared library API.
 Run and language analysis package the same project files, filename and protected
 prefix through one shared source builder.
+Control/Command+Enter activates each editor's Run control through shared scoped
+key bindings, including both IDE tabs. Find/Replace, its keyboard shortcuts and
+atomic undo come from the same source-pane controller in Studio and River.
 River's hidden vocabulary import is part of the analysis document; the shared
 mapper converts its UTF-16 results back to the visible UTF-8 source. Language
 results use separate presentation slots from River execution feedback.

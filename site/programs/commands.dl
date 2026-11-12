@@ -1,0 +1,20 @@
+# Program commands activate the same retained Run controls as pointer input.
+import ../packages/dynlex-ui/ui/key_bindings.dl
+import types.dl
+import ../state.dl
+
+to bind website Run control {UI reference:target} within {UI reference:node} in {a pointer to UI instance:instance}:
+    if the UI element node is a source editor:
+        for each modifiers in [2, 8]:
+            bind UI key 257 with modifiers modifiers from node in instance activating target
+    set index to 0
+    loop while index < node's count:
+        bind website Run control target within (the UI child at index in node) in instance
+        increment index
+
+to bind website program commands in {a pointer to website state:state}:
+    set instance to state's view's instance
+    for each description in (the website program descriptions):
+        set source to the control labeled (description's source) in instance
+        set target to the control labeled (description's run control) in instance
+        bind website Run control target within source in instance
