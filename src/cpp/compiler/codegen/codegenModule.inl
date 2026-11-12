@@ -29,6 +29,18 @@ bool initializeTargetLayout(ParseContext &context) {
 		return false;
 	}
 	context.llvmModule->setDataLayout(context.targetMachine->createDataLayout());
+	if (!context.options.noMain && !context.options.emitSPIRV && !context.options.emitWASM) {
+		auto *integerType = llvm::Type::getInt32Ty(*context.llvmContext);
+		auto *pointerType = llvm::PointerType::get(*context.llvmContext, 0);
+		context.commandLineArgumentCountGlobal = new llvm::GlobalVariable(
+			*context.llvmModule, integerType, false, llvm::GlobalValue::InternalLinkage, llvm::ConstantInt::get(integerType, 0),
+			"dynlex.command_line_argument_count"
+		);
+		context.commandLineArgumentValuesGlobal = new llvm::GlobalVariable(
+			*context.llvmModule, pointerType, false, llvm::GlobalValue::InternalLinkage,
+			llvm::Constant::getNullValue(pointerType), "dynlex.command_line_argument_values"
+		);
+	}
 	return true;
 }
 
@@ -131,16 +143,6 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 	// No first pass — non-flex functions are generated on-demand via monomorphization.
 	const bool generatesMain = !context.options.noMain;
 	const bool supportsCommandLineArguments = generatesMain && !context.options.emitSPIRV && !context.options.emitWASM;
-	if (supportsCommandLineArguments) {
-		context.commandLineArgumentCountGlobal = new llvm::GlobalVariable(
-			*context.llvmModule, builder.getInt32Ty(), false, llvm::GlobalValue::InternalLinkage, builder.getInt32(0),
-			"dynlex.command_line_argument_count"
-		);
-		context.commandLineArgumentValuesGlobal = new llvm::GlobalVariable(
-			*context.llvmModule, builder.getPtrTy(), false, llvm::GlobalValue::InternalLinkage,
-			llvm::Constant::getNullValue(builder.getPtrTy()), "dynlex.command_line_argument_values"
-		);
-	}
 
 	// In SPIR-V mode, declare shader I/O globals before generating code.
 	llvm::GlobalVariable *shaderInputGlobal = nullptr;

@@ -256,6 +256,9 @@ We sort all expression arguments by their source position, since they did not ge
 Before type resolution starts, the compiler initializes the selected target's LLVM data layout. This does not generate or
 reorder code. It supplies the target ABI facts needed by compile-time operations such as `size of`; later code generation uses
 the same module and layout.
+Native executable module setup also declares the argument-count and argument-values globals with their initializers.
+Inference-time IR reuse can therefore validate these globals before code generation starts. The entry-point body stores
+the actual command-line arguments when the program runs.
 
 `size of` requires a concrete runtime type with a complete layout. A class with uninferred members remains generic even
 after constructing instances of it; requesting its size reports a source diagnostic. Use the type of a particular instance
