@@ -378,7 +378,17 @@ struct ParseContext {
 	std::vector<VariableReference *> pendingExplicitVariableReferences;
 	// A conversion source is usable only while its selected call storage lives.
 	// Failed trials and replaced bodies expire these entries before finalization.
-	std::unordered_set<std::string> emittedOperandGroupingWarnings;
+	std::unordered_set<std::string> emittedDiagnosticKeys;
+	bool incrementalPreinferenceActive = false;
+	std::unordered_set<const DiagnosticPublication *> preinferencePublications;
+	std::map<std::shared_ptr<const VariableStorageScope>, int, std::owner_less<std::shared_ptr<const VariableStorageScope>>>
+		preinferenceTraceBases;
+	std::map<
+		std::shared_ptr<const VariableStorageScope>, std::vector<Diagnostic>,
+		std::owner_less<std::shared_ptr<const VariableStorageScope>>>
+		deferredInferenceDiagnostics;
+	size_t preinferredDiagnosticsDeferred = 0;
+	size_t deferredInferenceDiagnosticsPublished = 0;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
 	// Parse-time source token annotations for metadata syntax that is not represented as normal functions.
@@ -392,7 +402,24 @@ struct ParseContext {
 	ParseContext();
 	~ParseContext();
 	bool hasCompleted(CompilationStage stage) const { return compilationStage >= stage; }
-	void addDiagnostic(Diagnostic diagnostic) { diagnostics.push_back(std::move(diagnostic)); }
+	[[gnu::noinline]] void addDiagnostic(Diagnostic diagnostic) {
+		const DiagnosticEmission *emission = diagnostic.emission.get();
+		if (emission && emission->publication) {
+			if (incrementalPreinferenceActive) {
+				if (!preinferencePublications.insert(emission->publication.get()).second)
+					return;
+			} else {
+				if (emission->publication->published)
+					return;
+				emission->publication->published = true;
+			}
+		}
+		if (emission && !emission->key.empty() && !emittedDiagnosticKeys.insert(emission->key).second)
+			return;
+		if (emission && emission->publication && !incrementalPreinferenceActive)
+			deferredInferenceDiagnosticsPublished++;
+		diagnostics.push_back(std::move(diagnostic));
+	}
 	CodeLine *createCodeLine(
 		lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string text, std::vector<SourceSlice> sourceSlices
 	);

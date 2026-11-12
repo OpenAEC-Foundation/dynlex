@@ -97,7 +97,9 @@ class IncrementalInferenceController {
 				&unit.second
 			);
 			capturedSections.insert(request.section);
-			if (current.contains(unit.second) && sameInterface(current.at(unit.second), *priorSummary)) {
+			const auto &instance = request.section->instantiations.at(request.key);
+			bool hasDiagnostics = context.deferredInferenceDiagnostics.contains(instance.body->storageScope);
+			if (!hasDiagnostics && current.contains(unit.second) && sameInterface(current.at(unit.second), *priorSummary)) {
 				replacements->insert(request.section, unit.second);
 				Json values = Json::object();
 				for (const Json &observation : current.at(unit.second).at("pure_values")) {

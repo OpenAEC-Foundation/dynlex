@@ -4,64 +4,55 @@ static bool inferExpression(
 ) {
 	GroupingSnapshot initialGrouping = captureGroupingSnapshot(expr);
 	DiagnosticExpressionSnapshot originalDiagnostic = captureDiagnosticExpressionSnapshot(expr);
-	std::vector<InferenceContext::OperandGroupingWarning> localGroupingWarnings;
-	auto *savedPendingOperandGroupingWarnings = context.pendingOperandGroupingWarnings;
-	bool ownsPendingOperandGroupingWarnings = savedPendingOperandGroupingWarnings == nullptr;
-	if (ownsPendingOperandGroupingWarnings)
-		context.pendingOperandGroupingWarnings = &localGroupingWarnings;
+	std::vector<Diagnostic> localDiagnostics;
+	auto *savedPendingDiagnostics = context.pendingDiagnostics;
+	bool ownsPendingDiagnostics = savedPendingDiagnostics == nullptr;
+	if (ownsPendingDiagnostics)
+		context.pendingDiagnostics = &localDiagnostics;
 	bool savedDetectGroupingAmbiguity = context.detectGroupingAmbiguity;
 	if (!context.trial)
 		context.detectGroupingAmbiguity = true;
 	struct GroupingContextRestore {
 		InferenceContext &context;
-		std::vector<InferenceContext::OperandGroupingWarning> *savedPendingOperandGroupingWarnings;
+		std::vector<Diagnostic> *savedPendingDiagnostics;
 		bool savedDetectGroupingAmbiguity;
 		~GroupingContextRestore() {
-			context.pendingOperandGroupingWarnings = savedPendingOperandGroupingWarnings;
+			context.pendingDiagnostics = savedPendingDiagnostics;
 			context.detectGroupingAmbiguity = savedDetectGroupingAmbiguity;
 		}
-	} groupingContextRestore{context, savedPendingOperandGroupingWarnings, savedDetectGroupingAmbiguity};
+	} groupingContextRestore{context, savedPendingDiagnostics, savedDetectGroupingAmbiguity};
 	bool detectAmbiguity = context.detectGroupingAmbiguity;
 	std::unordered_set<Expression *> selectedFixedGroupingRoots;
 	GroupingSnapshot selectedGrouping;
-	std::vector<InferenceContext::OperandGroupingWarning> selectedGroupingWarnings;
+	std::vector<Diagnostic> selectedDiagnostics;
 	std::string storedValidRendered;
 	std::string ambiguousAlternativeRendered;
 	bool foundValidGrouping = false;
 	bool groupingAmbiguous = false;
-	auto queueSelectedGroupingWarnings = [&]() {
-		if (!context.pendingOperandGroupingWarnings)
+	auto queueSelectedDiagnostics = [&]() {
+		if (!context.pendingDiagnostics)
 			return;
-		context.pendingOperandGroupingWarnings->insert(
-			context.pendingOperandGroupingWarnings->end(), selectedGroupingWarnings.begin(), selectedGroupingWarnings.end()
+		context.pendingDiagnostics->insert(
+			context.pendingDiagnostics->end(), selectedDiagnostics.begin(), selectedDiagnostics.end()
 		);
 	};
 	auto queueCurrentGroupingWarning = [&](std::string chosenGrouping, std::string alternativeGrouping) {
-		if (!context.pendingOperandGroupingWarnings)
+		if (!context.pendingDiagnostics)
 			return;
-		context.pendingOperandGroupingWarnings->push_back({
-			expr ? expr->range : Range(),
-			originalDiagnostic.text,
-			std::move(chosenGrouping),
-			std::move(alternativeGrouping),
-			context.captureInferenceTraceRelatedInfo(expr),
-		});
+		Range range = expr ? expr->range : Range();
+		Diagnostic diagnostic(
+			context.parseContext, Diagnostic::Level::Warning, "ambiguous operand grouping", range, "expression",
+			originalDiagnostic.text, "chosen", chosenGrouping, "alternative", alternativeGrouping
+		);
+		diagnostic.editEmission().key = buildOperandGroupingWarningKey(range, chosenGrouping, alternativeGrouping);
+		diagnostic.relatedInfo = context.captureInferenceTraceRelatedInfo(expr);
+		context.queueDiagnostic(std::move(diagnostic));
 	};
-	auto emitOwnedGroupingWarnings = [&]() {
-		if (!ownsPendingOperandGroupingWarnings || context.trial)
+	auto emitOwnedDiagnostics = [&]() {
+		if (!ownsPendingDiagnostics || context.trial)
 			return;
-		for (const auto &warning : localGroupingWarnings) {
-			std::string warningKey =
-				buildOperandGroupingWarningKey(warning.range, warning.chosenGrouping, warning.alternativeGrouping);
-			if (context.parseContext.emittedOperandGroupingWarnings.insert(warningKey).second) {
-				Diagnostic diagnostic(
-					context.parseContext, Diagnostic::Level::Warning, "ambiguous operand grouping", warning.range, "expression",
-					warning.expressionText, "chosen", warning.chosenGrouping, "alternative", warning.alternativeGrouping
-				);
-				diagnostic.relatedInfo = warning.relatedInfo;
-				context.addDiagnostic(std::move(diagnostic));
-			}
-		}
+		for (const Diagnostic &diagnostic : localDiagnostics)
+			context.addDiagnostic(diagnostic);
 	};
 	auto emitTypeFailureDiagnostic = [&]() {
 		if (context.trial)
@@ -133,7 +124,7 @@ static bool inferExpression(
 			emitTypeFailureDiagnostic();
 			return false;
 		}
-		emitOwnedGroupingWarnings();
+		emitOwnedDiagnostics();
 		return true;
 	}
 
@@ -158,11 +149,11 @@ static bool inferExpression(
 		expr = candidateExpr;
 		std::unordered_set<Expression *> resolvedGroupingRoots;
 		GroupingSnapshot candidateGrouping;
-		std::vector<InferenceContext::OperandGroupingWarning> candidateGroupingWarnings;
+		std::vector<Diagnostic> candidateDiagnostics;
 		std::unique_ptr<GroupingInferenceTransaction> candidateTransaction;
 		bool accepted = validateGroupingInTrial(
 			expr, context, fixedGroupingRoots, flexBindingFrameStack, originalDiagnostic, requireVoidResult, &trialFailure,
-			&resolvedGroupingRoots, &candidateGrouping, &candidateGroupingWarnings, &candidateTransaction
+			&resolvedGroupingRoots, &candidateGrouping, &candidateDiagnostics, &candidateTransaction
 		);
 		if (!accepted)
 			return GroupingEnumerationProgress::EmittedContinue;
@@ -178,7 +169,7 @@ static bool inferExpression(
 		// type, then revisit the deferred alternatives in the next body pass.
 		if (!foundValidGrouping || (selectedGroupingDeferred && !candidateDeferred)) {
 			selectedGrouping = std::move(candidateGrouping);
-			selectedGroupingWarnings = std::move(candidateGroupingWarnings);
+			selectedDiagnostics = std::move(candidateDiagnostics);
 			storedValidRendered = candidateRendered;
 			selectedFixedGroupingRoots = std::move(resolvedGroupingRoots);
 			foundValidGrouping = true;
@@ -210,8 +201,8 @@ static bool inferExpression(
 			promoteSelectedTransaction(lastAcceptedTransaction);
 			if (encounteredDeferredGrouping && !selectedGroupingDeferred)
 				observeUnresolvedRecursiveDependency(context);
-			queueSelectedGroupingWarnings();
-			emitOwnedGroupingWarnings();
+			queueSelectedDiagnostics();
+			emitOwnedDiagnostics();
 			return true;
 		}
 		applyGroupingSnapshot(selectedGrouping);
@@ -227,10 +218,10 @@ static bool inferExpression(
 		}
 		if (encounteredDeferredGrouping && !selectedGroupingDeferred)
 			observeUnresolvedRecursiveDependency(context);
-		queueSelectedGroupingWarnings();
+		queueSelectedDiagnostics();
 		if (groupingAmbiguous)
 			queueCurrentGroupingWarning(storedValidRendered, ambiguousAlternativeRendered);
-		emitOwnedGroupingWarnings();
+		emitOwnedDiagnostics();
 		return true;
 	}
 

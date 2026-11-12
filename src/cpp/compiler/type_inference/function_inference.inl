@@ -56,6 +56,7 @@ static bool definitionsHaveUnresolvedTypeConstraints(const std::vector<PatternDe
 	});
 }
 
+#include "deferred_inference_diagnostics.inl"
 #include "execution_state.inl"
 
 // Reuse a binding only when inferring it made no execution-state change and
@@ -422,6 +423,9 @@ static bool runInstantiationReinferenceLoop(
 	InferenceContext &context, Instantiation &instantiation, PatternDefinition *definition, const Range &fallbackRange,
 	std::string functionName, bool canDeferToCaller, InferPassFn &&inferPass
 ) {
+	if (context.parseContext.incrementalPreinferenceActive)
+		context.parseContext.preinferenceTraceBases[instantiation.body->storageScope] =
+			static_cast<int>(context.diagnosticTraceDepth());
 	struct RetainedPureValues {
 		Instantiation &instantiation;
 		decltype(Instantiation::pureReturnValuesByArguments) values;
@@ -672,7 +676,7 @@ static bool expressionContainsTargetExpression(Expression *expr, Expression *tar
 static bool expressionIsLValueOnlyUse(const InferenceContext &context, Expression *expr) {
 	if (!expr || context.expressionStack.size() < 2)
 		return false;
-	Expression *consumer = context.expressionStack[context.expressionStack.size() - 2];
+	Expression *consumer = context.expressionStack[context.expressionStack.size() - 2].expression;
 	if (!consumer || consumer->kind != Expression::Kind::IntrinsicCall)
 		return false;
 	IntrinsicKind kind = intrinsicKind(consumer->intrinsicName);

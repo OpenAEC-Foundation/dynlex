@@ -25,7 +25,9 @@ static bool inferIncrementalFunction(ParseContext &parseContext, const ParseCont
 			argument.compileTimeValue = constant->second;
 		bindings.emplace_back(name, &argument);
 	}
-	size_t diagnosticCount = parseContext.diagnostics.size();
+	ScopedPreinferenceDiagnostics diagnosticScope(
+		parseContext, parseContext.storageScopeForInstantiation(section, request.key)
+	);
 	bool inferred = ensureSectionInstantiationInferred(
 		parseContext, section, definition, bindings, request.key.argumentTypes, request.requiredCompileTimeParameters, nullptr,
 		nullptr
@@ -60,7 +62,7 @@ static bool inferIncrementalFunction(ParseContext &parseContext, const ParseCont
 			}
 		}
 	}
-	if (!inferred)
-		parseContext.diagnostics.resize(diagnosticCount);
+	if (inferred)
+		diagnosticScope.accept();
 	return inferred;
 }

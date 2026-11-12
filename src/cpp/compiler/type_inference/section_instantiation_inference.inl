@@ -55,14 +55,20 @@ bool ensureSectionInstantiationInferred(
 		parseContext.reuseInferredInstantiation(
 			section, instantiationKey, inst, ParseContext::InferenceReuseUse::Callable, callerContext
 		);
-	if (inst.returnType.isDeduced() && !inst.needsReinfer)
+	if (inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer) {
+		InferenceContext publication(parseContext, callerContext && callerContext->trial);
+		if (callerContext)
+			publication.inheritDiagnosticContext(*callerContext);
+		publishDeferredInferenceDiagnostics(publication, inst);
 		return inst.valid;
+	}
 	if (inst.inferring)
 		return inst.returnType.isDeduced() && inst.valid;
 
 	ScopedSectionLocalVariableState calleeVariableState(section);
 	InferenceContext context(parseContext, callerContext && callerContext->trial);
 	if (callerContext) {
+		context.inheritDiagnosticContext(*callerContext);
 		context.dependencyReads = callerContext->dependencyReads;
 		// Cached instantiations cannot consume the caller's tracked constants.
 		// Only globals and instantiation-key parameter constants enter a pass.
@@ -70,8 +76,6 @@ bool ensureSectionInstantiationInferred(
 			callerContext->trial ? &callerContext->trialExpressionValues : callerContext->inheritedTrialExpressionValues;
 		context.trialJournal = callerContext->trialJournal;
 		context.unresolvedPatternConstraintSignal = callerContext->unresolvedPatternConstraintSignal;
-		context.suppressDiagnostics = callerContext->suppressDiagnostics;
-		context.suppressReinferPassDiagnostics = callerContext->suppressReinferPassDiagnostics;
 	}
 	Instantiation *savedInst = context.currentInstantiation;
 	Range fallbackRange = definition			 ? definition->range

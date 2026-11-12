@@ -93,6 +93,8 @@
 	}
 	std::optional<InstantiationKey> refinedInstantiationKey;
 	bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer;
+	if (!inst.inferring && hasReusableInstantiation)
+		publishDeferredInferenceDiagnostics(context, inst);
 	if (!inst.inferring && !hasReusableInstantiation) {
 		ScopedSectionLocalVariableState calleeVariableState(matchedSection);
 		if (context.trial)

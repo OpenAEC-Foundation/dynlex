@@ -40,12 +40,11 @@ struct InferenceContext {
 		bool operator==(const SubjectState &other) const { return setter == other.setter && ambiguous == other.ambiguous; }
 	};
 
-	struct OperandGroupingWarning {
-		Range range;
-		std::string expressionText;
-		std::string chosenGrouping;
-		std::string alternativeGrouping;
-		std::vector<RelatedInfo> relatedInfo;
+	struct ExpressionFrame {
+		Expression *expression;
+		std::shared_ptr<const VariableStorageScope> owner;
+		int ownerBase;
+		bool operator==(const ExpressionFrame &) const = default;
 	};
 
 	struct TrialCodeLineGrouping {
@@ -420,8 +419,9 @@ struct InferenceContext {
 	const FixedGroupingScope *fixedGroupingRoots{};
 	std::unordered_set<Expression *> *resolvedGroupingRoots{};
 	bool detectGroupingAmbiguity = false;
-	std::vector<OperandGroupingWarning> *pendingOperandGroupingWarnings{};
-	std::vector<Expression *> expressionStack;
+	std::vector<Diagnostic> *pendingDiagnostics{};
+	std::vector<ExpressionFrame> expressionStack;
+	const InferenceContext *diagnosticCaller = nullptr;
 	std::unordered_map<Expression *, CompileTimeValue> trialExpressionValues;
 	const std::unordered_map<Expression *, CompileTimeValue> *inheritedTrialExpressionValues{};
 	std::unordered_map<CodeLine *, TrialCodeLineGrouping> trialCodeLineGroupings;
@@ -470,35 +470,116 @@ struct InferenceContext {
 		flexCallSiteSectionStack = other.flexCallSiteSectionStack;
 	}
 
-	void addDiagnostic(Diagnostic diagnostic) {
-		if (!trial && !suppressDiagnostics && !suppressReinferPassDiagnostics)
-			parseContext.addDiagnostic(std::move(diagnostic));
+	void inheritDiagnosticContext(const InferenceContext &other) {
+		pendingDiagnostics = other.pendingDiagnostics;
+		diagnosticCaller = &other;
+		detectGroupingAmbiguity = other.detectGroupingAmbiguity;
+		suppressDiagnostics = other.suppressDiagnostics;
+		suppressReinferPassDiagnostics = other.suppressReinferPassDiagnostics;
 	}
 
-	Expression *currentExpression() const { return expressionStack.empty() ? nullptr : expressionStack.back(); }
+	void addDiagnostic(Diagnostic diagnostic) {
+		if (!trial && !suppressDiagnostics && !suppressReinferPassDiagnostics) {
+			prepareDiagnostic(diagnostic);
+			parseContext.addDiagnostic(std::move(diagnostic));
+		}
+	}
 
-	void pushExpression(Expression *expression) { expressionStack.push_back(expression); }
+	std::shared_ptr<const VariableStorageScope> diagnosticOwner() const {
+		if (!parseContext.incrementalPreinferenceActive || !currentInstantiation)
+			return {};
+		requireCompilerInvariant(currentInstantiation->body != nullptr, "diagnostic owner has no instantiated body");
+		return currentInstantiation->body->storageScope;
+	}
+	void prepareDiagnostic(Diagnostic &diagnostic) const {
+		if (!parseContext.incrementalPreinferenceActive)
+			return;
+		auto &emission = diagnostic.editEmission();
+		if (!emission.owner) {
+			emission.owner = diagnosticOwner();
+			if (emission.owner)
+				emission.traceBase = parseContext.preinferenceTraceBases.at(emission.owner);
+		}
+		if (!emission.publication)
+			emission.publication = std::make_shared<DiagnosticPublication>();
+	}
+	void queueDiagnostic(Diagnostic diagnostic) {
+		prepareDiagnostic(diagnostic);
+		if (pendingDiagnostics)
+			pendingDiagnostics->push_back(std::move(diagnostic));
+		else
+			addDiagnostic(std::move(diagnostic));
+	}
+
+	Expression *currentExpression() const { return expressionStack.empty() ? nullptr : expressionStack.back().expression; }
+
+	void pushExpression(Expression *expression) {
+		auto owner = diagnosticOwner();
+		int base = owner ? parseContext.preinferenceTraceBases.at(owner) : -1;
+		expressionStack.push_back({expression, std::move(owner), base});
+	}
 
 	void popExpression() {
 		requireCompilerInvariant(!expressionStack.empty(), "Expression stack underflow during type inference");
 		expressionStack.pop_back();
 	}
 
+	size_t diagnosticTraceDepth() const {
+		size_t depth = 0;
+		for (const InferenceContext *context = this; context; context = context->diagnosticCaller)
+			depth += context->expressionStack.size();
+		return depth;
+	}
+
 	std::vector<RelatedInfo> captureInferenceTraceRelatedInfo(Expression *currentExpressionOverride = nullptr) const {
 		std::vector<RelatedInfo> relatedInfo;
 		std::unordered_set<Expression *> seenExpressions;
+		size_t totalDepth = diagnosticTraceDepth();
 		if (currentExpressionOverride && expressionParticipatesInInferenceTrace(currentExpressionOverride) &&
 			currentExpressionOverride->range.line) {
-			relatedInfo.push_back({describeInferenceTraceFrame(currentExpressionOverride), currentExpressionOverride->range});
+			auto owner = diagnosticOwner();
+			int base = owner ? parseContext.preinferenceTraceBases.at(owner) : -1;
+			int depth = static_cast<int>(totalDepth);
+			size_t offset = totalDepth;
+			for (const InferenceContext *context = this; context; context = context->diagnosticCaller) {
+				offset -= context->expressionStack.size();
+				auto position =
+					std::ranges::find(context->expressionStack, currentExpressionOverride, &ExpressionFrame::expression);
+				if (position != context->expressionStack.end()) {
+					owner = position->owner;
+					base = position->ownerBase;
+					depth = static_cast<int>(offset + (position - context->expressionStack.begin()));
+					break;
+				}
+			}
+			relatedInfo.push_back(
+				{describeInferenceTraceFrame(currentExpressionOverride),
+				 currentExpressionOverride->range,
+				 {},
+				 std::move(owner),
+				 depth,
+				 base}
+			);
 			seenExpressions.insert(currentExpressionOverride);
 		}
-		for (auto it = expressionStack.rbegin(); it != expressionStack.rend(); ++it) {
-			Expression *expression = *it;
-			if (!expressionParticipatesInInferenceTrace(expression) || !expression->range.line)
-				continue;
-			if (!seenExpressions.insert(expression).second)
-				continue;
-			relatedInfo.push_back({describeInferenceTraceFrame(expression), expression->range});
+		size_t offset = totalDepth;
+		for (const InferenceContext *context = this; context; context = context->diagnosticCaller) {
+			offset -= context->expressionStack.size();
+			for (auto it = context->expressionStack.rbegin(); it != context->expressionStack.rend(); ++it) {
+				Expression *expression = it->expression;
+				if (!expressionParticipatesInInferenceTrace(expression) || !expression->range.line)
+					continue;
+				if (!seenExpressions.insert(expression).second)
+					continue;
+				relatedInfo.push_back(
+					{describeInferenceTraceFrame(expression),
+					 expression->range,
+					 {},
+					 it->owner,
+					 static_cast<int>(offset + (context->expressionStack.rend() - it - 1)),
+					 it->ownerBase}
+				);
+			}
 		}
 		return relatedInfo;
 	}

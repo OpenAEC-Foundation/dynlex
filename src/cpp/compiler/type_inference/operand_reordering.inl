@@ -624,8 +624,7 @@ class GroupingInferenceTransaction {
 		  savedHasTypeFailureDiagnostic(context.hasTypeFailureDiagnostic), savedTrialJournal(context.trialJournal),
 		  savedGroupingTrialJournal(context.groupingTrialJournal), savedFixedGroupingRoots(context.fixedGroupingRoots),
 		  savedResolvedGroupingRoots(context.resolvedGroupingRoots),
-		  savedDetectGroupingAmbiguity(context.detectGroupingAmbiguity),
-		  savedPendingOperandGroupingWarnings(context.pendingOperandGroupingWarnings),
+		  savedDetectGroupingAmbiguity(context.detectGroupingAmbiguity), savedPendingDiagnostics(context.pendingDiagnostics),
 		  savedExpressionStack(context.expressionStack),
 		  savedInheritedTrialExpressionValues(context.inheritedTrialExpressionValues),
 		  trialFixedGroupingRoots(fixedGroupingRoots),
@@ -634,7 +633,7 @@ class GroupingInferenceTransaction {
 		context.trialJournal = &journal;
 		context.groupingTrialJournal = &groupingJournal;
 		context.detectGroupingAmbiguity = true;
-		context.pendingOperandGroupingWarnings = &groupingWarnings;
+		context.pendingDiagnostics = &queuedDiagnostics;
 		context.fixedGroupingRoots = &trialFixedGroupingScope;
 		context.resolvedGroupingRoots = &trialFixedGroupingRoots;
 		context.typesValid = true;
@@ -651,7 +650,7 @@ class GroupingInferenceTransaction {
 
 	const std::unordered_set<Expression *> &resolvedGroupingRoots() const { return trialFixedGroupingRoots; }
 
-	std::vector<InferenceContext::OperandGroupingWarning> takeGroupingWarnings() { return std::move(groupingWarnings); }
+	std::vector<Diagnostic> takeDiagnostics() { return std::move(queuedDiagnostics); }
 	bool dependsOnRecursiveDependency() const { return recursiveInferenceObservation.ownerObserved(); }
 	bool observedRecursiveDependency() const { return recursiveInferenceObservation.observed(); }
 
@@ -737,12 +736,12 @@ class GroupingInferenceTransaction {
 	const InferenceContext::FixedGroupingScope *savedFixedGroupingRoots;
 	std::unordered_set<Expression *> *savedResolvedGroupingRoots;
 	bool savedDetectGroupingAmbiguity;
-	std::vector<InferenceContext::OperandGroupingWarning> *savedPendingOperandGroupingWarnings;
-	std::vector<Expression *> savedExpressionStack;
+	std::vector<Diagnostic> *savedPendingDiagnostics;
+	std::vector<InferenceContext::ExpressionFrame> savedExpressionStack;
 	const std::unordered_map<Expression *, CompileTimeValue> *savedInheritedTrialExpressionValues;
 	std::unordered_set<Expression *> trialFixedGroupingRoots;
 	InferenceContext::FixedGroupingScope trialFixedGroupingScope;
-	std::vector<InferenceContext::OperandGroupingWarning> groupingWarnings;
+	std::vector<Diagnostic> queuedDiagnostics;
 	bool active = true;
 
 	void restoreConfiguration() {
@@ -753,7 +752,7 @@ class GroupingInferenceTransaction {
 		context.fixedGroupingRoots = savedFixedGroupingRoots;
 		context.resolvedGroupingRoots = savedResolvedGroupingRoots;
 		context.detectGroupingAmbiguity = savedDetectGroupingAmbiguity;
-		context.pendingOperandGroupingWarnings = savedPendingOperandGroupingWarnings;
+		context.pendingDiagnostics = savedPendingDiagnostics;
 		context.inheritedTrialExpressionValues = savedInheritedTrialExpressionValues;
 	}
 
@@ -803,7 +802,7 @@ static bool validateGroupingInTrial(
 	const BindingFrameStack &flexBindingFrameStack, const DiagnosticExpressionSnapshot &failureSnapshot,
 	bool requireVoidResult = false, GroupingFailure *trialFailure = nullptr,
 	std::unordered_set<Expression *> *resolvedGroupingRoots = nullptr, GroupingSnapshot *resolvedGroupingSnapshot = nullptr,
-	std::vector<InferenceContext::OperandGroupingWarning> *resolvedGroupingWarnings = nullptr,
+	std::vector<Diagnostic> *resolvedDiagnostics = nullptr,
 	std::unique_ptr<GroupingInferenceTransaction> *retainedTransaction = nullptr
 ) {
 	ExpressionNodeSet originalExpressionNodes;
@@ -835,8 +834,8 @@ static bool validateGroupingInTrial(
 	}
 	if (trialSucceeded && resolvedGroupingSnapshot)
 		*resolvedGroupingSnapshot = captureGroupingSnapshot(expr);
-	if (trialSucceeded && resolvedGroupingWarnings)
-		*resolvedGroupingWarnings = transaction->takeGroupingWarnings();
+	if (trialSucceeded && resolvedDiagnostics)
+		*resolvedDiagnostics = transaction->takeDiagnostics();
 	if (!trialSucceeded) {
 		if (context.hasTypeFailureDiagnostic) {
 			considerGroupingFailure(trialFailure, context.typeFailureDiagnostic, context.typeFailurePriority);

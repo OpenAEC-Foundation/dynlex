@@ -22,6 +22,7 @@ from test_incremental_storage_origins import check_storage_origin_reuse
 from test_incremental_conversions import check_conversion_reuse
 from test_incremental_matcher_work import check_matcher_fingerprint_work
 from test_incremental_entry_metadata import check_entry_metadata_reuse
+from test_incremental_diagnostic_units import check_preinferred_diagnostic_context
 from test_incremental_definition_units import check_definition_resolution_units
 from test_incremental_resolution_units import check_active_resolution_units, check_implicit_parameter_classification_cascade
 from test_incremental_lifecycle_replacements import check_lifecycle_replacement_roots
@@ -379,6 +380,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_inactive_edit_with_unrelated_warning(root, build)
     check_frontend_warning_inference_reuse(root, build)
     check_inference_warning_rechecked(root, build)
+    check_preinferred_diagnostic_context(root, build, output)
     check_inactive_edit_after_warning_wording(root, build)
     check_runtime_pure_value_summary(root, build)
     check_global_match_reuse_after_execution_edit(root, build)

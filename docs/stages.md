@@ -1550,6 +1550,23 @@ anew and linked to them. A changed interface continues through callers until an
 equivalent interface is found or the entry point is reached. This path compares
 inferred results rather than guessing from edited source text.
 
+Preinference holds diagnostics relative to the concrete unit's logical storage
+scope. Its publication and duplicate-suppression state stays speculative. A
+selected call adds its current outer inference trace and queues those diagnostics
+through the same grouping transaction as ordinary inference. Shared publication
+identities prevent repeated calls or enclosing units from publishing the same
+emission twice. Removing the last call leaves its speculative diagnostics
+unpublished. Callable validation inherits its caller's pending diagnostic queue,
+ambiguity-detection setting and trace; a committed function-value trial therefore
+retains warnings from the selected body. A unit that produces a new diagnostic
+keeps its callers dependent until their calling context is checked. Matching
+return types alone do not establish an equivalent result. A separate caller
+chain supplies diagnostic ancestry; the local expression stack identifies the
+expression currently being inferred. Return-type reuse requires a valid
+instantiation, so failed exposed-unit inference is retried at its actual
+validation request. `preinferred_diagnostics_deferred` counts unit-relative
+records, and `deferred_inference_diagnostics_published` counts actual emissions.
+
 At O0, native emission divides the generated IR
 into independently linkable LLVM components keyed by stable symbol names. Independent
 functions do not share hash buckets; a changed function does not lower unrelated
