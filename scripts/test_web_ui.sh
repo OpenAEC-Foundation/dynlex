@@ -27,6 +27,7 @@ python3 "$PROJECT_DIR/scripts/generate_farm_vocabulary.py" --check
 node "$PROJECT_DIR/tests/web/farm_vocabulary.mjs"
 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$PROJECT_DIR/build/dynlex" --shipped
 python3 "$PROJECT_DIR/tests/web/farm_art.py" --compiler "$PROJECT_DIR/build/dynlex"
+python3 "$PROJECT_DIR/tests/web/farm_art.py" --compiler "$PROJECT_DIR/build/dynlex" --case crops
 node "$PROJECT_DIR/tests/web/library_values.mjs" "$PROJECT_DIR/build/dynlex" --shipped
 node "$PROJECT_DIR/tests/web/farm.mjs"
 node "$PROJECT_DIR/tests/web/farm_arguments.mjs"

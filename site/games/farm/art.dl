@@ -1,5 +1,6 @@
 import art/chickens.dl
 import art/cow.dl
+import art/crops.dl
 import art/farmer.dl
 import art/house.dl
 import art/items.dl

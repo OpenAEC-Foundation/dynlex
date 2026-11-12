@@ -1,0 +1,31 @@
+import carrots.dl
+import wheat.dl
+
+to get [the Farm crop stage for] {floating-point number:growth}:
+    if growth < 0.2:
+        return 0
+    if growth < 0.7:
+        return 1
+    return 2
+
+to get [a Farm crop named] {a value:kind} [at stage] {integer:stage} [with] {a pointer to website farm art library:library}:
+    require condition ((kind = "carrots") or (kind = "wheat")) reporting "Unknown Farm crop kind"
+    require condition (0 <= stage <= 2) reporting "A Farm crop stage must be zero, one or two"
+    set batch to a UI mesh builder
+    set columns to 3 if kind = "wheat", else 2
+    loop row from 0 to 3:
+        loop column from 0 to columns:
+            set seed to row * columns + column
+            set spacing to 0.23 if columns = 3, else 0.39
+            set center to ((columns - 1) as a floating-point number) / 2.0
+            set x to (column - center) * spacing + (the sine of (seed * 17.0)) * 0.023
+            set z to (row - 1) * 0.28 + (the cosine of (seed * 11.0)) * 0.019
+            if kind = "carrots":
+                add Farm carrot at x z seeded seed at stage stage to batch with library
+            else:
+                add Farm wheat at x z seeded seed at stage stage to batch with library
+    set mesh to a completed UI mesh from batch
+    set material to a UI scene material with color (UI ink 255 255 255) roughness 0.86 metalness 0.0
+    set material's double sided to true
+    set pose to an identity UI scene pose
+    return a UI scene model from [a UI scene group named (formatted "{kind}-{stage}") under -1 at pose, a UI scene mesh part named "" under 0 using mesh with material material at pose]

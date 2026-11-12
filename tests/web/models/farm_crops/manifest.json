@@ -1,0 +1,150 @@
+{
+  "sourceRevision": "6189c4f21863a54fd4355463d3270e8fcee13cca",
+  "format": "Triangle vertices: little-endian float32 position, normal, linear RGB",
+  "cases": [
+    {
+      "id": "carrots-0",
+      "kind": "carrots",
+      "stage": 0,
+      "data": "carrots-0.bin.gz",
+      "vertices": 20952,
+      "triangles": 6984,
+      "bounds": [
+        -0.360476553440094,
+        0.022265838459134102,
+        -0.4061364531517029,
+        0.3799046277999878,
+        0.4099999964237213,
+        0.4949589669704437
+      ],
+      "roughness": 0.86,
+      "metalness": 0,
+      "opacity": 1,
+      "doubleSided": true,
+      "castsShadow": true,
+      "receivesShadow": true,
+      "bytes": 754272,
+      "compressed": 138459
+    },
+    {
+      "id": "carrots-1",
+      "kind": "carrots",
+      "stage": 1,
+      "data": "carrots-1.bin.gz",
+      "vertices": 44028,
+      "triangles": 14676,
+      "bounds": [
+        -0.391275018453598,
+        -0.1850000023841858,
+        -0.4358585476875305,
+        0.3799046277999878,
+        0.4099999964237213,
+        0.4949589669704437
+      ],
+      "roughness": 0.86,
+      "metalness": 0,
+      "opacity": 1,
+      "doubleSided": true,
+      "castsShadow": true,
+      "receivesShadow": true,
+      "bytes": 1585008,
+      "compressed": 285892
+    },
+    {
+      "id": "carrots-2",
+      "kind": "carrots",
+      "stage": 2,
+      "data": "carrots-1.bin.gz",
+      "vertices": 44028,
+      "triangles": 14676,
+      "bounds": [
+        -0.391275018453598,
+        -0.1850000023841858,
+        -0.4358585476875305,
+        0.3799046277999878,
+        0.4099999964237213,
+        0.4949589669704437
+      ],
+      "roughness": 0.86,
+      "metalness": 0,
+      "opacity": 1,
+      "doubleSided": true,
+      "castsShadow": true,
+      "receivesShadow": true,
+      "bytes": 1585008,
+      "compressed": 285892
+    },
+    {
+      "id": "wheat-0",
+      "kind": "wheat",
+      "stage": 0,
+      "data": "wheat-0.bin.gz",
+      "vertices": 1836,
+      "triangles": 612,
+      "bounds": [
+        -0.358561635017395,
+        -0.0009072148823179305,
+        -0.42171740531921387,
+        0.3935835063457489,
+        0.5640057921409607,
+        0.4509289860725403
+      ],
+      "roughness": 0.86,
+      "metalness": 0,
+      "opacity": 1,
+      "doubleSided": true,
+      "castsShadow": true,
+      "receivesShadow": true,
+      "bytes": 66096,
+      "compressed": 11893
+    },
+    {
+      "id": "wheat-1",
+      "kind": "wheat",
+      "stage": 1,
+      "data": "wheat-1.bin.gz",
+      "vertices": 18576,
+      "triangles": 6192,
+      "bounds": [
+        -0.358561635017395,
+        -0.0009072148823179305,
+        -0.42171740531921387,
+        0.3935835063457489,
+        0.8754594922065735,
+        0.4509289860725403
+      ],
+      "roughness": 0.86,
+      "metalness": 0,
+      "opacity": 1,
+      "doubleSided": true,
+      "castsShadow": true,
+      "receivesShadow": true,
+      "bytes": 668736,
+      "compressed": 81588
+    },
+    {
+      "id": "wheat-2",
+      "kind": "wheat",
+      "stage": 2,
+      "data": "wheat-2.bin.gz",
+      "vertices": 18576,
+      "triangles": 6192,
+      "bounds": [
+        -0.358561635017395,
+        -0.0009072148823179305,
+        -0.42171740531921387,
+        0.3935835063457489,
+        0.8754594922065735,
+        0.4509289860725403
+      ],
+      "roughness": 0.86,
+      "metalness": 0,
+      "opacity": 1,
+      "doubleSided": true,
+      "castsShadow": true,
+      "receivesShadow": true,
+      "bytes": 668736,
+      "compressed": 81682
+    }
+  ]
+}

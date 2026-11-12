@@ -1,0 +1,34 @@
+import crop_geometry.dl
+
+to [add Farm wheat at] {floating-point number:x} {floating-point number:z} [seeded] {integer:seed} [at stage] {integer:stage} [to] {a pointer to UI mesh builder:batch} [with] {a pointer to website farm art library:library}:
+    set gold to stage = 2
+    set paint to UI ink 194 154 65 if gold, else UI ink 105 146 74
+    set height to 0.51 + 0.055 * (the sine of (seed * 2.7))
+    set bend to a new vector with x ((the sine of (seed * 1.8)) * 0.045), y 0.0 and z ((the cosine of (seed as a floating-point number)) * 0.045)
+    set base to a new vector with x x, y 0.0 and z z
+    set neck to base + bend
+    set neck's y to height
+    add Farm crop stem from base to neck width 0.008 colored paint to batch with library
+    loop index from 0 to 3:
+        set angle to seed * 1.9 + index * 2.5
+        set start to base + (neck - base) * (0.22 + index * 0.21)
+        set finish to start + (a new vector with x ((the cosine of angle) * 0.16), y 0.06 and z ((the sine of angle) * 0.16))
+        set {leaf paint} to UI ink 188 161 83 if gold, else UI ink 86 134 65
+        add Farm crop leaf from start to finish width 0.019 colored leaf paint arched by 0.07 to batch
+    if stage = 0:
+        return nothing
+    set ear to neck + (a new vector with x (bend's x), y 0.23 and z (bend's z))
+    add Farm crop stem from neck to ear width 0.005 colored paint to batch with library
+    loop row from 0 to 6:
+        set point to neck + (ear - neck) * ((row as a floating-point number) / 6.0)
+        set taper to 1.0 - row * 0.09
+        for each side in [-1.0,1.0]:
+            set turn to a quaternion for rotation around (a new vector with x 0.0, y 0.0 and z 1.0) by ((0.0 - side * 0.47) * 57.29577951308232) degrees
+            set center to point + (a new vector with x (side * 0.017 * taper), y 0.016 and z 0.0)
+            set {grain paint} to UI ink 151 172 88
+            if gold:
+                set grain paint to UI ink 218 182 95 if side < 0.0, else UI ink 229 197 120
+            add Farm crop shape "grain" colored grain paint at center scaled (a new vector with x (0.018 * taper), y (0.038 * taper) and z (0.014 * taper)) oriented turn to batch with library
+            set awn to center + (a new vector with x (side * 0.041), y (0.09 + 0.014 * (the sine of ((seed + row) as a floating-point number))) and z 0.006)
+            set {awn paint} to UI ink 229 202 131 if gold, else UI ink 166 183 105
+            add Farm crop stem from center to awn width 0.0018 colored awn paint to batch with library

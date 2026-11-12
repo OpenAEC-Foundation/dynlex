@@ -39,7 +39,11 @@ to get [a website farm art library]:
         Farm shape "rock" using (a UI icosahedron mesh),
         Farm shape "plane" using (a UI plane mesh with 1 by 1 segments),
         Farm shape "selection ring" using (a UI ring mesh with inner 0.34 outer 0.42 around 32 sides),
-        Farm shape "route ring" using (a UI ring mesh with inner 0.32 outer 0.4 around 32 sides)
+        Farm shape "route ring" using (a UI ring mesh with inner 0.32 outer 0.4 around 32 sides),
+        Farm shape "crop stalk" using (a UI cylinder mesh with top 1.0 bottom 1.0 height 1.0 around 5 sides capped true),
+        Farm shape "carrot root" using (a UI cylinder mesh with top 0.0 bottom 1.0 height 1.0 around 9 sides capped true),
+        Farm shape "carrot shoulder" using (a UI sphere mesh with 10 slices and 6 stacks),
+        Farm shape "grain" using (a UI sphere mesh with 5 slices and 4 stacks)
     ]
     return @intrinsic("construct", website farm art library, a sequence copying shapes)
 

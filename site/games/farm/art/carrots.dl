@@ -1,0 +1,36 @@
+import crop_geometry.dl
+
+to [add Farm carrot at] {floating-point number:x} {floating-point number:z} [seeded] {integer:seed} [at stage] {integer:stage} [to] {a pointer to UI mesh builder:batch} [with] {a pointer to website farm art library:library}:
+    set base to a new vector with x x, y 0.025 and z z
+    if stage > 0:
+        set orange to UI ink 216 129 43
+        add Farm crop shape "carrot shoulder" colored orange at (a new vector with x x, y -0.025 and z z) scaled (a new vector with x 0.055, y 0.043 and z 0.055) to batch with library
+        set turn to a quaternion for rotation around (a new vector with x 1.0, y 0.0 and z 0.0) by 180.0 degrees
+        add Farm crop shape "carrot root" colored orange at (a new vector with x x, y -0.105 and z z) scaled (a new vector with x 0.049, y 0.16 and z 0.049) oriented turn to batch with library
+    set fronds to 3 if stage = 0, else 6
+    loop frond from 0 to fronds:
+        set angle to frond * 2.399 + seed * 0.7
+        set radial to a new vector with x (the cosine of angle), y 0.0 and z (the sine of angle)
+        set across to a new vector with x (0.0 - radial's z), y 0.0 and z (radial's x)
+        set reach to 0.15 + 0.045 * (the sine of (seed + frond * 2.0))
+        set tip to base + radial * reach
+        set tip's y to 0.30 + 0.075 * (the cosine of (frond * 1.7 + seed))
+        set paints to [UI ink 63 120 53, UI ink 85 141 61, UI ink 50 108 55]
+        set paint to the item at (frond % 3) in paints
+        add Farm crop stem from base to tip width 0.0045 colored (UI ink 100 137 66) to batch with library
+        loop pair from 0 to 5:
+            set phase to 0.30 + pair * 0.125
+            set origin to base + (tip - base) * phase
+            set length to 0.075 * (1.0 - phase) + 0.023
+            for each side in [-1.0,1.0]:
+                set end to (origin + across * (side * length)) + radial * 0.037
+                set end's y to end's y + 0.025
+                add Farm crop leaf from origin to end width (0.013 * (1.0 - phase) + 0.004) colored paint arched by 0.009 to batch
+                if pair < 3:
+                    for each fork in [-1.0,1.0]:
+                        set branch to origin + (end - origin) * 0.48
+                        set tooth to end + radial * (fork * 0.026)
+                        add Farm crop leaf from branch to tooth width 0.0055 colored paint arched by 0.005 to batch
+        set start to base + (tip - base) * 0.78
+        set end to tip + (a new vector with x 0.0, y 0.035 and z 0.0)
+        add Farm crop leaf from start to end width 0.012 colored paint arched by 0.025 to batch

@@ -1,0 +1,47 @@
+import parts.dl
+import ../../../packages/dynlex-ui/ui/scene_baking.dl
+import ../../../packages/dynlex-ui/ui/scene_normals.dl
+import ../../../packages/dynlex-ui/ui/scene_rotations.dl
+
+to [add Farm crop shape] {a value:name} [colored] {UI paint:color} [at] {vector:position} [scaled] {vector:scale} [oriented] {quaternion:rotation} [to] {a pointer to UI mesh builder:batch} [with] {a pointer to website farm art library:library}:
+    set matrix to a UI scene matrix at position oriented rotation scaled scale
+    set transform to a UI scene transform from matrix
+    append UI mesh (the Farm shape named name in library) through transform tinted (linear UI ink from color) to batch
+
+to [add Farm crop shape] {a value:name} [colored] {UI paint:color} [at] {vector:position} [scaled] {vector:scale} [to] {a pointer to UI mesh builder:batch} [with] {a pointer to website farm art library:library}:
+    add Farm crop shape name colored color at position scaled scale oriented (the identity quaternion) to batch with library
+
+to [add Farm crop stem from] {vector:start} [to] {vector:finish} [width] {floating-point number:width} [colored] {UI paint:color} [to] {a pointer to UI mesh builder:batch} [with] {a pointer to website farm art library:library}:
+    set delta to finish - start
+    set center to (start + finish) * 0.5
+    set scale to a new vector with x width, y (the length of delta) and z width
+    set rotation to the UI scene rotation from direction (a new vector with x 0.0, y 1.0 and z 0.0) to direction delta
+    add Farm crop shape "crop stalk" colored color at center scaled scale oriented rotation to batch with library
+
+to [add Farm crop leaf from] {vector:start} [to] {vector:finish} [width] {floating-point number:width} [colored] {UI paint:color} [arched by] {floating-point number:arch} [to] {a pointer to UI mesh builder:batch}:
+    set delta to finish - start
+    set side to (a new vector with x (0.0 - delta's z), y 0.0 and z (delta's x)) normalized
+    set side to side * width
+    set vertices to an empty list of UI mesh vertex
+    set indices to an empty list of a 32 bit unsigned integer
+    set zero to a new vector with x 0.0, y 0.0 and z 0.0
+    loop row from 0 through 4:
+        set phase to (row as a floating-point number) / 4.0
+        set taper to the sine of (3.141592653589793 * phase)
+        set center to start + delta * phase
+        set center's y to center's y + taper * arch
+        for each direction in [-1.0,0.0,1.0]:
+            set point to center + side * (direction * taper)
+            set point's y to point's y - (the absolute value of direction) * taper * width * 0.25
+            append UI mesh vertex at point normal zero uv 0.0 0.0 to vertices
+        if row < 4:
+            loop column from 0 to 2:
+                set first to row * 3 + column
+                append UI mesh triangle first (first + 3) (first + 1) to indices
+                append UI mesh triangle (first + 1) (first + 3) (first + 4) to indices
+    recalculate UI mesh normals in vertices using indices
+    set leaf to a UI scene mesh taking vertices vertices and indices indices
+    free vertices
+    free indices
+    set identity to a UI scene transform from (an identity graphics matrix)
+    append UI mesh leaf through identity tinted (linear UI ink from color) to batch

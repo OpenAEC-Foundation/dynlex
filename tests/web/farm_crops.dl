@@ -1,0 +1,59 @@
+import ../../site/games/farm/art.dl
+import lib/json_builders.dl
+import lib/filesystem.dl
+
+to [write crop test bytes from] {a pointer:data} [counting] {integer:count} [to] {string:path}:
+    set contents to a new string from (data as a pointer to a byte) containing count bytes
+    write contents to the file at path and set written to it
+    require condition (written succeeded) reporting "The crop fixture could not write its mesh data"
+
+to get [crop test JSON bounds from] {UI mesh bounds:bounds}:
+    set result to a new JSON value of kind the JSON array kind
+    for each value in [bounds' minimum's x,bounds' minimum's y,bounds' minimum's z,bounds' maximum's x,bounds' maximum's y,bounds' maximum's z]:
+        add (a new JSON number from value) to the JSON array result
+    return result
+
+read the file at "input.json" and set input to it
+require condition (input succeeded) reporting "The crop fixture needs its case list"
+parse (input's contents) as JSON and set document to it
+require condition (document succeeded) reporting "The crop fixture case list is invalid"
+set library to a website farm art library
+set results to a new JSON value of kind the JSON array kind
+loop index from 0 to (the number of JSON items in document's value):
+    set entry to the JSON value at index index in (document's value)
+    set id to the JSON text named "id" in entry
+    set kind to the JSON text named "kind" in entry
+    set stage to (the JSON number named "stage" in entry) as an integer
+    set model to a Farm crop named kind at stage stage with (the address of library)
+    require condition ((the length of model's parts) = 2) reporting "A crop bed must contain one batched mesh"
+    set part to the item at 1 in model's parts
+    set mesh to part's mesh
+    set vertices to the length of mesh's vertices
+    set indices to the length of mesh's indices
+    require condition ((the length of mesh's colors) = vertices) reporting "Crop colors do not cover their vertices"
+    write crop test bytes from ((mesh's vertices' data) as a pointer) counting (vertices * 32) to (formatted "{id}.vertices")
+    write crop test bytes from ((mesh's indices' data) as a pointer) counting (indices * 4) to (formatted "{id}.indices")
+    write crop test bytes from ((mesh's colors' data) as a pointer) counting (vertices * 12) to (formatted "{id}.colors")
+    set material to part's material
+    set snapshot to a JSON object containing [
+        JSON text "id" is id,
+        JSON number "vertices" is vertices,
+        JSON number "indices" is indices,
+        JSON child "bounds" is (crop test JSON bounds from mesh's bounds),
+        JSON number "roughness" is (material's roughness),
+        JSON number "metalness" is (material's metalness),
+        JSON number "opacity" is (material's opacity),
+        JSON flag "doubleSided" is (material's double sided),
+        JSON flag "castsShadow" is (part's casts shadow),
+        JSON flag "receivesShadow" is (part's receives shadow)
+    ]
+    add snapshot to the JSON array results
+set levels to [0.0,0.1999,0.2,0.6999,0.7,1.0]
+set expected to [0,0,1,1,2,2]
+set index to 0
+for each growth in levels:
+    require condition ((the Farm crop stage for growth) = (the item at index in expected)) reporting "The crop growth thresholds changed"
+    increment index
+print line the compact JSON form of results
+free results
+free document's value

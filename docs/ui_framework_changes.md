@@ -459,6 +459,30 @@ containing 256 meshes match independent snapshots of the original authored
 geometry, transforms, materials and bounds. Native O0/O2, Wasm O0/O2 and the
 shipped browser compiler pass; the complete art fixture peaks at 1,580,995 live
 bytes and releases all allocations. The snapshots are data fixtures, so these
-checks no longer import the old Three.js code. Farm's shader behavior, crop
-geometry, world/animation controller, scene submission, lighting and interface
+checks no longer import the old Three.js code. Farm's shader behavior,
+world/animation controller, scene submission, lighting and interface
 still need integration.
+
+Scene meshes now own a separate float32 linear RGB stream, with explicit white
+colors on untinted primitives. The existing position/normal/UV record remains
+32 bytes; colors use twelve bytes per vertex. All mesh constructors supply
+complete streams. Baking merges indexed geometry, transforms normals, multiplies
+vertex tints and preserves outward winding under mirroring. Area-weighted normal
+generation supports custom surfaces and retains zero normals at unused or
+wholly degenerate vertices. Quaternion orientations align stems between finite
+directions. The existing UI painter and scene data share one sRGB conversion and
+linear color type. Native/Wasm O0/O2, browser-compiler, data-boundary and actual
+background WebGPU/WebGL form and pixel checks pass.
+
+The crop port preserves the authored finely divided carrot leaves, shoulders,
+roots, wheat stems, grains and awns at every growth stage. Each bed is one indexed
+colored mesh. Six independent compressed surface fixtures cover all 49,332
+oriented triangles, comparing every position, normal and linear RGB component.
+Native O0/O2, Wasm O0/O2 and browser-compiler output match within a maximum error
+of 0.00000008940696716308594. Wasm crop generation peaks at 2,092,235 live bytes
+and releases all allocations. Sphere/cylinder triangle diagonals and cone-tip
+normal selection now match the authored topology. A gold-grain tint assignment
+in the port was corrected after an import-free example confirmed ordinary
+lexical shadowing; this was not a compiler bug. The art test runner now exposes
+captured compiler diagnostics on failure instead of hiding them behind the
+subprocess exception. The crop tests do not depend on Three.js at runtime.
