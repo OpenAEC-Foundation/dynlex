@@ -25,6 +25,7 @@
 #include "sectionIdentity.h"
 #include "syntaxConfig.h"
 #include "validation.h"
+#include "variableBindings.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
@@ -308,6 +309,8 @@ std::string renderModule(const llvm::Module &module) {
 
 // clang-format off: these fragments share declarations in this order.
 #include "incrementalNativeObjects.inl"
+#include "incrementalSourceScopes.inl"
+#include "incrementalVariableBindings.inl"
 #include "incrementalInferenceSymbolDependencies.inl"
 #include "incrementalClassDependencies.inl"
 #include "incrementalInferenceSummaryStore.inl"
@@ -573,7 +576,12 @@ bool compileIncrementally(
 				statistics.parserSnapshotMilliseconds += elapsedMilliseconds(saveStart);
 				return key;
 			};
-			IncrementalValidation validation(context, statistics, [&]() {
+			IncrementalSourceScopes sourceScopes(context);
+			IncrementalVariableBindings bindings(
+				context, matcherCache, statistics, sourceScopes, initialMatcherProjection, previous ? &*previous : nullptr,
+				previousFailure ? &*previousFailure : nullptr
+			);
+			IncrementalValidation validation(context, statistics, sourceScopes, [&]() {
 				Json records = Json::object();
 				if (previous) {
 					auto start = Clock::now();
@@ -594,7 +602,7 @@ bool compileIncrementally(
 			std::map<std::string, Section *> sections;
 			std::string finalMatcherTree;
 			if (compiled) {
-				collectSections(context.mainSection, "root", sections);
+				sections = sourceScopes.canonical();
 				finalMatcherTree = matcherTreeSignature(context);
 				matcherPaths.retain(finalMatcherTree, context);
 			}
@@ -639,6 +647,7 @@ bool compileIncrementally(
 				);
 			if (compiled) {
 				auto projectionStart = Clock::now();
+				resolvedFunctionProjection["binding_units"] = bindings.snapshot();
 				resolvedFunctionProjection["initial_parameter_counts"] = initialParameterCounts.snapshot();
 				resolvedFunctionProjection["matcher_projection"] =
 					initialMatcherProjection.finish(resolvedFunctionProjection, matcherCache);
@@ -928,11 +937,13 @@ bool compileIncrementally(
 				std::string diagnostics;
 				std::set<std::string> diagnosticSources;
 				Json records = captureCachedDiagnostics(context, diagnostics, diagnosticSources);
+				Json savedBindings = bindings.snapshot();
 				Json result{
 					{"files", recording->observations},
 					{"diagnostics", diagnostics},
 					{"diagnostic_records", std::move(records)},
 					{"diagnostic_sources", std::move(diagnosticSources)},
+					{"binding_units", std::move(savedBindings)},
 					{"matcher_key", saveMatcher()},
 					{"parser_key", saveParser()}
 				};

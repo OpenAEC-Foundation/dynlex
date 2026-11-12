@@ -4,6 +4,7 @@ class IncrementalValidation {
 	using Read = std::tuple<Section *, ValidationRead, std::string>;
 	ParseContext &context;
 	BuildStatistics &statistics;
+	IncrementalSourceScopes &sourceScopes;
 	std::function<Json()> load;
 	Json records = Json::object();
 	bool loaded = false, prepared = false;
@@ -26,13 +27,8 @@ class IncrementalValidation {
 		if (prepared)
 			return;
 		loadRecords();
-		std::map<std::string, Section *> collected;
-		collectSections(context.mainSection, "root", collected);
-		for (const auto &[path, section] : collected) {
-			std::string compact = digest(path);
-			paths.emplace(section, compact);
-			sections.emplace(compact, section);
-		}
+		paths = sourceScopes.identities();
+		sections = sourceScopes.compact();
 		for (const auto &[section, path] : paths)
 			for (const auto &[name, reference] : section->variableDefinitions)
 				declarations.emplace(reference, Json::array({path, name}));
@@ -142,8 +138,10 @@ class IncrementalValidation {
 	}
 
   public:
-	IncrementalValidation(ParseContext &context, BuildStatistics &statistics, std::function<Json()> load)
-		: context(context), statistics(statistics), load(std::move(load)) {}
+	IncrementalValidation(
+		ParseContext &context, BuildStatistics &statistics, IncrementalSourceScopes &sourceScopes, std::function<Json()> load
+	)
+		: context(context), statistics(statistics), sourceScopes(sourceScopes), load(std::move(load)) {}
 	bool run() {
 		ValidationHooks hooks;
 		hooks.work = &statistics.validation;

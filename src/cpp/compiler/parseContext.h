@@ -48,6 +48,8 @@ class TargetMachine;
 struct CallableFunctionMatch;
 struct InferenceContext;
 
+struct VariableBindingHooks;
+
 struct ParseContext {
 	enum class InferenceReuseUse { RuntimeCall, ConstantCall, Callable, SymbolicReference };
 	struct IncrementalFunctionRequest {
@@ -376,6 +378,7 @@ struct ParseContext {
 	// Explicit source captures are parsed before pattern definitions. Register
 	// their references after definition parameters have been indexed.
 	std::vector<VariableReference *> pendingExplicitVariableReferences;
+	VariableBindingHooks *variableBindingHooks = nullptr;
 	// A conversion source is usable only while its selected call storage lives.
 	// Failed trials and replaced bodies expire these entries before finalization.
 	std::unordered_set<std::string> emittedDiagnosticKeys;

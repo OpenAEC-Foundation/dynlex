@@ -1180,6 +1180,32 @@ invalidation. Query and dependency-unit counters separate reused graph metadata
 from work performed for the edit; `classification_ms` measures the stage. Pattern-tree
 keys combine active definition contributions independent of insertion order;
 removing and readding the same definition restores its earlier key.
+
+Variable ownership has separate persistent products after expression expansion.
+Queries are partitioned by spelling and lexical function boundary. A declared
+global reader joins the ancestor domains it can reach before ownership is
+computed, preserving capture checks for nested functions. Products record scope
+identities, definition ordinals and reference-group ordinals rather than pointers.
+Named scope metadata and relative declaration/reference ordering identify each
+input; changing a literal value need not change that binding result.
+Completed products survive a later failure and an intervening earlier-stage
+failure. A completed binding stage retires queries that no longer exist.
+
+Unchanged ordinary bodies can retain their binding-input fingerprint through
+the source-body and resolution products, declaration environment, configuration,
+precedence and nonexecution-source observations. Other domains check their named
+scope inputs directly. Receiver lowering fixes the source scope tree before its
+identity index is shared by binding replay, capture validation and the frontend
+snapshot. Data-call preparation changes expressions and initializers without
+changing that tree.
+`binding_units_evaluated`, `binding_units_reused`, `binding_inputs_reused` and
+`binding_references_classified` distinguish ownership analysis from input reuse.
+`binding_references_rebound` and `binding_groups_materialized` count the live
+references and variables still recreated by this frontend. Cached ownership does
+not yet eliminate that reconstruction. `binding_ms`, `binding_input_ms`,
+`binding_lookup_ms`, `binding_evaluation_ms` and `binding_record_ms` separate the
+stage cost from its cache and analysis costs.
+
 Matcher input literals are encoded as hex byte sequences so non-ASCII punctuation
 substrings remain portable. Their records belong to classification units rather
 than a program-wide literal set. `cached_body_selection_ms` measures early selection.

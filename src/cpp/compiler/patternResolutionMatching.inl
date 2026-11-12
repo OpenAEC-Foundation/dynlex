@@ -1,6 +1,6 @@
 #include "patternResolutionDataNames.inl"
 #include "patternResolutionVariableDeclarations.inl"
-#include "patternResolutionVariableGroups.inl"
+#include "variableBindings.h"
 
 static void removeVariableReferencesFromMatch(
 	ParseContext &context, PatternReference *reference, PatternMatch &match, std::vector<Section *> &affectedSections,

@@ -18,6 +18,10 @@ struct TemporaryObjects {
 
 struct BuildStatistics {
 	ValidationWork validation;
+	VariableBindingWork bindings;
+	size_t bindingInputsReused = 0;
+	double bindingInputMilliseconds = 0, bindingLookupMilliseconds = 0, bindingEvaluationMilliseconds = 0,
+		   bindingRecordMilliseconds = 0;
 	std::string cacheDirectory;
 	std::string cacheEntry;
 	bool reusedFrontend = false;
