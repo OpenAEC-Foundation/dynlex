@@ -19,6 +19,9 @@ VariableReference *globalEffectReference(Section *section, const std::string &na
 
 std::optional<Json>
 encodeGlobalEffects(const Section *section, const Instantiation &instantiation, InferenceStorageIdentities &storage) {
+	std::set<Json> accessed;
+	for (VariableReference *reference : instantiation.accessedGlobalReferences)
+		accessed.insert(storage.encodeDefinition(reference).value());
 	Json writes = Json::object();
 	for (VariableReference *reference : instantiation.writtenGlobalReferences) {
 		auto name = globalEffectName(section, reference);
@@ -57,7 +60,9 @@ encodeGlobalEffects(const Section *section, const Instantiation &instantiation, 
 	auto escaped = storage.encodeProvenance(instantiation.externallyEscapedGlobalProvenance);
 	if (!escaped)
 		return std::nullopt;
-	return Json{{"writes", writes}, {"constants", constants}, {"taken", taken}, {"escaped", std::move(*escaped)}};
+	return Json{
+		{"accessed", accessed}, {"writes", writes}, {"constants", constants}, {"taken", taken}, {"escaped", std::move(*escaped)}
+	};
 }
 
 bool canDecodeGlobalEffects(const Json &encoded, const InferenceStorageIdentities &storage) {
@@ -76,6 +81,8 @@ bool canDecodeGlobalEffects(const Json &encoded, const InferenceStorageIdentitie
 void decodeGlobalEffects(
 	Section *section, const Json &encoded, Instantiation &instantiation, InferenceStorageIdentities &storage
 ) {
+	for (const Json &definition : encoded.at("accessed"))
+		instantiation.accessedGlobalReferences.insert(storage.decodeDefinition(definition));
 	for (const auto &[name, provenance] : encoded.at("writes").items()) {
 		VariableReference *reference = globalEffectReference(section, name);
 		instantiation.writtenGlobalReferences.insert(reference);

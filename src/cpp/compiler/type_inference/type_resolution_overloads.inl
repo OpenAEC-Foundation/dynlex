@@ -692,6 +692,18 @@ struct InferenceContext {
 		setAddressProvenance(variableStorageKey(reference, currentInstantiatedSectionBody), std::move(provenance));
 	}
 
+	void noteAccessedGlobalReference(VariableReference *reference) {
+		if (!currentInstantiation)
+			return;
+		VariableReference *key = normalizeReference(reference);
+		requireCompilerInvariant(key, "global access lost its declaration");
+		if (trial) {
+			requireCompilerInvariant(trialJournal, "trial global-access mutation requires a rollback journal");
+			trialJournal->recordInstantiationWrite(currentInstantiation);
+		}
+		currentInstantiation->accessedGlobalReferences.insert(key);
+	}
+
 	void noteWrittenGlobalReference(VariableReference *reference) {
 		if (!currentInstantiation || !reference)
 			return;
@@ -701,6 +713,7 @@ struct InferenceContext {
 				requireCompilerInvariant(trialJournal, "trial global-write mutation requires a rollback journal");
 				trialJournal->recordInstantiationWrite(currentInstantiation);
 			}
+			currentInstantiation->accessedGlobalReferences.insert(key);
 			currentInstantiation->writtenGlobalReferences.insert(key);
 		}
 	}

@@ -148,6 +148,8 @@ bool ExpressionInferenceSupport::inferVariable() {
 				var->type = type->type.toReferencedType();
 			}
 		}
+		if (var->isGlobal)
+			context.noteAccessedGlobalReference(var->definition);
 		if (context.currentInstantiation && var->isGlobal && !var->dataInitializer && !expressionIsLValueOnlyUse(context, expr))
 			markCurrentInstantiationImpure(context);
 		restoreRefinedVariableType(expr, var, context);

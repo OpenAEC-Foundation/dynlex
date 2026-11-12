@@ -10,6 +10,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Linker/Linker.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <vector>
@@ -90,7 +91,7 @@ const IncrementalIRReuse::Dependencies &IncrementalIRReuse::dependenciesOf(const
 
 bool IncrementalIRReuse::reusableClosure(
 	const llvm::Function &function, llvm::Module &current, std::unordered_set<std::string> &names,
-	bool allowUnmaterializedGlobals
+	const std::function<bool()> &globalInputsUnchanged
 ) const {
 	std::string name = function.getName().str();
 	if (!previousFunctions.contains(name))
@@ -110,21 +111,21 @@ bool IncrementalIRReuse::reusableClosure(
 	const Dependencies &dependencies = dependenciesOf(function);
 	for (const llvm::GlobalVariable *old : dependencies.mutableGlobals) {
 		llvm::GlobalVariable *now = current.getGlobalVariable(old->getName(), true);
-		if (!now && allowUnmaterializedGlobals)
+		if (!now && globalInputsUnchanged())
 			continue;
 		if (!now || now->getValueType() != old->getValueType() || now->getLinkage() != old->getLinkage() ||
 			!now->hasInitializer() || !old->hasInitializer() || now->getInitializer() != old->getInitializer())
 			return false;
 	}
 	for (const llvm::Function *dependency : dependencies.functions) {
-		if (!reusableClosure(*dependency, current, names, allowUnmaterializedGlobals))
+		if (!reusableClosure(*dependency, current, names, globalInputsUnchanged))
 			return false;
 	}
 	return true;
 }
 
 bool IncrementalIRReuse::hasReusableIRForInstantiation(
-	const Section *section, const std::string &key, bool allowUnmaterializedGlobals
+	const Section *section, const std::string &key, const std::function<bool()> &globalInputsUnchanged
 ) const {
 	if (!eligible->contains(section, key))
 		return false;
@@ -135,12 +136,22 @@ bool IncrementalIRReuse::hasReusableIRForInstantiation(
 	auto names = owner->second.find(key);
 	if (names == owner->second.end())
 		return false;
+	std::optional<bool> globalsValid;
+	auto validateGlobals = [&]() {
+		if (!globalsValid) {
+			deferredGlobalChecks++;
+			globalsValid = globalInputsUnchanged();
+			if (*globalsValid)
+				deferredGlobalHits++;
+		}
+		return *globalsValid;
+	};
 	for (const std::string &name : names->second) {
 		const llvm::Function *function = previousModule->getFunction(name);
 		if (!function || function->isDeclaration())
 			return false;
 		std::unordered_set<std::string> closure;
-		if (!reusableClosure(*function, *currentModule, closure, allowUnmaterializedGlobals))
+		if (!reusableClosure(*function, *currentModule, closure, validateGlobals))
 			return false;
 	}
 	return true;
@@ -165,7 +176,9 @@ bool IncrementalIRReuse::reuse(
 	if (!old || old->isDeclaration() || old->getFunctionType() != function->getFunctionType())
 		return false;
 	std::unordered_set<std::string> names;
-	if (!reusableClosure(*old, *function->getParent(), names, reusedRoot))
+	if (!reusableClosure(*old, *function->getParent(), names, [&]() {
+		return reusedRoot;
+	}))
 		return false;
 	reusedNames.insert(names.begin(), names.end());
 	return true;
@@ -176,7 +189,9 @@ bool IncrementalIRReuse::reuseRoot() {
 	requireCompilerInvariant(entry && !entry->isDeclaration(), "cached executable has no entry-point body");
 	std::unordered_set<std::string> closure;
 	for (const llvm::Function *dependency : dependenciesOf(*entry).functions)
-		if (!reusableClosure(*dependency, *currentModule, closure, true))
+		if (!reusableClosure(*dependency, *currentModule, closure, []() {
+			return true;
+		}))
 			return false;
 	reusedNames.insert(closure.begin(), closure.end());
 	reusedRoot = true;

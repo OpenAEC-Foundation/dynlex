@@ -86,6 +86,7 @@ struct InstantiationProgressSnapshot {
 	std::vector<DataType> argumentTypes;
 	std::unordered_map<std::string, DataType> parameterOutputTypesByName;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
+	std::unordered_set<VariableReference *> accessedGlobalReferences;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
 	GlobalAddressProvenance finalGlobalAddressProvenance;
@@ -111,6 +112,7 @@ static std::unique_ptr<InstantiationProgressSnapshot> snapshotInstantiationProgr
 	snapshot->argumentTypes = instantiation.argumentTypes;
 	snapshot->parameterOutputTypesByName = instantiation.parameterOutputTypesByName;
 	snapshot->constantParameterValues = instantiation.constantParameterValues;
+	snapshot->accessedGlobalReferences = instantiation.accessedGlobalReferences;
 	snapshot->writtenGlobalReferences = instantiation.writtenGlobalReferences;
 	snapshot->finalGlobalConstantValues = instantiation.finalGlobalConstantValues;
 	snapshot->finalGlobalAddressProvenance = instantiation.finalGlobalAddressProvenance;
@@ -130,10 +132,11 @@ static std::unique_ptr<InstantiationProgressSnapshot> snapshotInstantiationProgr
 
 static void joinAddressProvenance(AddressProvenance &destination, const AddressProvenance &source);
 
-// Applies a callee's global write effects to the caller context, mirroring a
-// direct store to each written global: the caller's own effect summary and the
-// value produced by the callee in the current execution state.
-static void mergeCalleeGlobalWritesIntoCaller(InferenceContext &context, const Instantiation &inst) {
+// Retain the global type inputs of every callee, including read-only accesses,
+// as well as the writes applied to the caller's current execution state.
+static void mergeCalleeGlobalEffectsIntoCaller(InferenceContext &context, const Instantiation &inst) {
+	for (VariableReference *reference : inst.accessedGlobalReferences)
+		context.noteAccessedGlobalReference(reference);
 	for (VariableReference *reference : inst.addressTakenGlobalReferences)
 		context.currentAddressState.write().addressTakenVariables.insert({reference, nullptr});
 	for (VariableReference *reference : inst.writtenGlobalReferences) {

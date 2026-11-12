@@ -44,10 +44,7 @@ class InferenceStorageIdentities {
 	AddressProvenance decodeProvenance(const Json &encoded) {
 		AddressProvenance result;
 		for (const Json &target : encoded.at("targets")) {
-			const Json &definition = target.at(0);
-			Section *section = sections.at(definition.at(0).get<std::string>());
-			VariableReference *reference = section->variableDefinitions.at(definition.at(1).get<std::string>());
-			result.mayTargets.insert({normalizeBindingReference(reference), decodeScope(target.at(1))});
+			result.mayTargets.insert({decodeDefinition(target.at(0)), decodeScope(target.at(1))});
 		}
 		result.mayBeNull = encoded.at("null").get<bool>();
 		result.unknown = encoded.at("unknown").get<bool>();
@@ -56,6 +53,10 @@ class InferenceStorageIdentities {
 	}
 
 	// Executable-body records share the same declaration and invocation keys.
+	VariableReference *decodeDefinition(const Json &definition) const {
+		Section *section = sections.at(definition.at(0).get<std::string>());
+		return normalizeBindingReference(section->variableDefinitions.at(definition.at(1).get<std::string>()));
+	}
 	std::optional<Json> encodeDefinition(VariableReference *reference) {
 		if (!reference)
 			return std::nullopt;

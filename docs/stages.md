@@ -1226,6 +1226,18 @@ cached function imports do not renumber type identities or invalidate unrelated
 object partitions. Reused function IR
 retains the native libraries required by external calls, so a caller edit cannot
 drop a link dependency.
+Inference effects retain the global declarations accessed by each concrete call,
+including accesses reached through callees. Cached facts restore these declaration
+identities alongside writes and address provenance. Callers therefore validate
+global types before accepting IR whose dependency closure reads those globals,
+even when the caller has no direct global reference. Local parameters with the
+same name do not change the identity of a callee's global declaration.
+Referenced callback code also contributes IR dependencies without being executed
+by the referencing function. If its globals are not materialized yet, IR validation
+queries the current global type inputs before accepting the saved closure. This
+proof is evaluated at most once per concrete IR query. Existing globals still
+require matching LLVM types, linkage, and initializers. `cached_ir_global_input_checks`
+and `cached_ir_global_input_hits` count these deferred checks and successful proofs.
 Dependency reachability handles recursive call cycles; an unchanged cycle remains
 reusable when none of its reachable functions changed. The compiler scans each
 cached function's LLVM dependencies once per build, including references in

@@ -1,6 +1,7 @@
 #pragma once
 #include "incrementalUnitSelection.h"
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <nlohmann/json.hpp>
@@ -28,7 +29,7 @@ class IncrementalIRReuse {
 	);
 	bool reuse(Section *section, llvm::Function *function, const nlohmann::json &currentFunctionInstantiations);
 	bool hasReusableIRForInstantiation(
-		const Section *section, const std::string &key, bool allowUnmaterializedGlobals = false
+		const Section *section, const std::string &key, const std::function<bool()> &globalInputsUnchanged
 	) const;
 	bool reuseRoot();
 	bool rootReused() const { return reusedRoot; }
@@ -36,6 +37,8 @@ class IncrementalIRReuse {
 	size_t reusedCount() const { return reusedNames.size(); }
 	size_t dependencyScans() const { return dependencyCache.size(); }
 	size_t dependencyHits() const { return dependencyCacheHits; }
+	size_t globalInputChecks() const { return deferredGlobalChecks; }
+	size_t globalInputHits() const { return deferredGlobalHits; }
 	const std::unordered_set<std::string> &reusedFunctionNames() const { return reusedNames; }
 
   private:
@@ -47,7 +50,7 @@ class IncrementalIRReuse {
 	bool selected(const std::string &name, const IncrementalUnitSelection &selection) const;
 	bool reusableClosure(
 		const llvm::Function &function, llvm::Module &current, std::unordered_set<std::string> &names,
-		bool allowUnmaterializedGlobals = false
+		const std::function<bool()> &globalInputsUnchanged
 	) const;
 	std::unique_ptr<llvm::Module> previousModule;
 	llvm::Module *currentModule;
@@ -63,4 +66,6 @@ class IncrementalIRReuse {
 	bool reusedRoot = false;
 	mutable std::unordered_map<const llvm::Function *, Dependencies> dependencyCache;
 	mutable size_t dependencyCacheHits = 0;
+	mutable size_t deferredGlobalChecks = 0;
+	mutable size_t deferredGlobalHits = 0;
 };

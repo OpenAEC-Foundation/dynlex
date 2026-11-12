@@ -99,7 +99,8 @@ Json captureSectionInferenceSummary(
 		auto returnProvenance = storage.encodeProvenance(instantiation.returnAddressProvenance);
 		if (!returnProvenance)
 			continue;
-		bool needsGlobalTypes = !hasNoGlobalAccess(section) || !instantiation.writtenGlobalReferences.empty() ||
+		bool needsGlobalTypes = !hasNoGlobalAccess(section) || !instantiation.accessedGlobalReferences.empty() ||
+								!instantiation.writtenGlobalReferences.empty() ||
 								!instantiation.addressTakenGlobalReferences.empty() ||
 								instantiation.externallyEscapedGlobalProvenance != AddressProvenance{};
 		if (needsGlobalTypes && globalTypes.is_null())
@@ -243,9 +244,9 @@ class IncrementalInferenceReuse {
 			auto unit = std::pair{static_cast<const Section *>(section), *keyText};
 			if ((use == ParseContext::InferenceReuseUse::RuntimeCall || use == ParseContext::InferenceReuseUse::Callable) &&
 				!runtimeValidated.contains(unit)) {
-				const Json &reference = summaries.at(sectionPaths.at(section)).at(*keyText);
-				bool hasIR =
-					irReuse.hasReusableIRForInstantiation(section, *keyText, reference.at("needs_global_types").get<bool>());
+				bool hasIR = irReuse.hasReusableIRForInstantiation(section, *keyText, [&]() {
+					return globalTypesUnchanged();
+				});
 				instantiation.needsReinfer |= !hasIR && !instantiation.bodyInferred;
 				if (hasIR)
 					runtimeValidated.insert(std::move(unit));
@@ -412,6 +413,10 @@ class IncrementalInferenceReuse {
 	}
 
   private:
+	bool globalTypesUnchanged() const {
+		auto current = captureGlobalTypeProjection(sectionPaths);
+		return current && *current == priorGlobalTypes;
+	}
 	ParseContext &context;
 	const Json &summaries;
 	const Json &priorGlobalTypes;

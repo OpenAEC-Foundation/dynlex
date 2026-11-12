@@ -74,6 +74,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"root_execution_reused", statistics.reusedRootExecution},
 					  {"cached_ir_dependency_scans", statistics.cachedIRDependencyScans},
 					  {"cached_ir_dependency_hits", statistics.cachedIRDependencyHits},
+					  {"cached_ir_global_input_checks", statistics.cachedIRGlobalInputChecks},
+					  {"cached_ir_global_input_hits", statistics.cachedIRGlobalInputHits},
 					  {"functions_ir_reused", statistics.reusedFunctionIR},
 					  {"dependency_graph_sections_reused", statistics.dependencyGraphSectionsReused},
 					  {"preinfer_dependency_graph_sections_checked", statistics.preinferDependencyGraphSectionsChecked},

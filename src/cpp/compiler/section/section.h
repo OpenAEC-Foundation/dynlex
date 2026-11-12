@@ -121,6 +121,7 @@ inline InstantiationKey buildInstantiationKey(
 // Effects of executing a function, separate from its inferred representation.
 struct InstantiationExecutionEffects {
 	std::unordered_map<std::string, DataType> parameterOutputTypesByName;
+	std::unordered_set<VariableReference *> accessedGlobalReferences;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
 	GlobalAddressProvenance finalGlobalAddressProvenance;

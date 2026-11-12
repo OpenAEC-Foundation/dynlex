@@ -107,6 +107,7 @@
 			context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr, [&]() -> bool {
 			seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 			beginParameterOutputReinference(inst);
+			inst.accessedGlobalReferences.clear();
 			inst.writtenGlobalReferences.clear();
 			inst.finalGlobalConstantValues.clear();
 			inst.finalGlobalAddressProvenance.clear();
@@ -223,7 +224,7 @@
 		if (binding != paramBindings.end())
 			refineStorageExpressionType(binding->second, outputType, context, flexBindingFrameStack);
 	}
-	mergeCalleeGlobalWritesIntoCaller(context, inst);
+	mergeCalleeGlobalEffectsIntoCaller(context, inst);
 	mergeInstantiationPurityIntoCaller(context, inst);
 	AddressProvenance callArgumentProvenance;
 	for (const auto &[parameterName, argumentExpression] : paramBindings) {

@@ -39,11 +39,8 @@ class Restoration {
 		if (!returnType)
 			return false;
 		bool needsGlobalTypes = summary.at("needs_global_types").get<bool>();
-		if (needsGlobalTypes) {
-			auto current = captureGlobalTypeProjection(owner.sectionPaths);
-			if (!current || *current != owner.priorGlobalTypes)
-				return false;
-		}
+		if (needsGlobalTypes && !owner.globalTypesUnchanged())
+			return false;
 		// This signature is visible only to the record decoder. valid remains
 		// false until every referenced unit has complete, validated facts.
 		slot.argumentTypes = key.argumentTypes;
@@ -81,7 +78,9 @@ class Restoration {
 		bool pureValue = facts.purity == InstantiationPurity::Pure && facts.returnType.kind != DataType::Kind::Void;
 		bool requiresBody = use != ParseContext::InferenceReuseUse::SymbolicReference &&
 							(use != ParseContext::InferenceReuseUse::ConstantCall || !pureValue || needsGlobalTypes);
-		entry.hasIR = requiresBody && owner.irReuse.hasReusableIRForInstantiation(section, *identity, needsGlobalTypes);
+		entry.hasIR = requiresBody && owner.irReuse.hasReusableIRForInstantiation(section, *identity, [&]() {
+			return needsGlobalTypes || owner.globalTypesUnchanged();
+		});
 		facts.inferenceReusedFromCache = true;
 		facts.needsReinfer = requiresBody && !entry.hasIR;
 		entry.ready = true;

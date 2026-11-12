@@ -83,6 +83,7 @@ bool ensureSectionInstantiationInferred(
 		context, inst, definition, fallbackRange, std::move(functionName), callerInstantiation != nullptr, [&]() {
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 		beginParameterOutputReinference(inst);
+		inst.accessedGlobalReferences.clear();
 		inst.writtenGlobalReferences.clear();
 		inst.finalGlobalConstantValues.clear();
 		inst.finalGlobalAddressProvenance.clear();

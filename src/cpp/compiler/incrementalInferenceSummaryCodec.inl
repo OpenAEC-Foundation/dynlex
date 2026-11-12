@@ -148,6 +148,7 @@ template <typename Remap> Json remapInferenceSummaryTypes(const Json &summary, c
 			for (const auto &[name, constant] : value.at("constants").items())
 				constants[name] = remapInferenceValue(constant, remap);
 			record[field] = Json{
+				{"accessed", value.at("accessed")},
 				{"writes", std::move(effects)},
 				{"constants", std::move(constants)},
 				{"taken", value.at("taken")},
