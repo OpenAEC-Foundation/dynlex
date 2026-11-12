@@ -28,7 +28,9 @@ def check_entry_metadata_reuse(root, build):
     lifecycle = build(entry=main)
     assert lifecycle[1:] == build(False, entry=main)[1:]
     assert lifecycle[2] == b"after\nreleased\n"
-    assert not lifecycle[0]["root_execution_reused"], "changed cleanup body retained its caller entry"
+    assert lifecycle[0]["root_execution_reused"], "an equivalent cleanup interface rebuilt its caller entry"
+    assert lifecycle[0]["function_body_inference_passes"] == 1
+    assert lifecycle[0]["native_functions_lowered"] == 1
     main.write_text(main.read_text().replace(
         'payload type means: @intrinsic("type", "int")',
         'payload type means: @intrinsic("type", "float")',

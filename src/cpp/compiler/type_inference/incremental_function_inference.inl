@@ -1,9 +1,12 @@
 static bool inferIncrementalFunction(ParseContext &parseContext, const ParseContext::IncrementalFunctionRequest &request) {
 	Section *section = request.section;
+	bool ordinaryFunction = section->type == SectionType::Function && !section->patternDefinitions.empty();
 	requireCompilerInvariant(
-		section->type == SectionType::Function && !section->patternDefinitions.empty(),
-		"incremental preinference requires a function definition"
+		ordinaryFunction || section->type == SectionType::Retain || section->type == SectionType::Release,
+		"incremental preinference requires a callable definition"
 	);
+	PatternDefinition *definition = ordinaryFunction ? section->patternDefinitions.front() : nullptr;
+	Range sourceRange = definition ? definition->range : Range(section->openingLine, section->openingLine->patternText);
 	requireCompilerInvariant(
 		request.parameterNames.size() == request.key.argumentTypes.size(), "incremental preinference lost a parameter type"
 	);
@@ -13,7 +16,7 @@ static bool inferIncrementalFunction(ParseContext &parseContext, const ParseCont
 		Expression &argument = arguments[index];
 		argument.kind = Expression::Kind::TypedPlaceholder;
 		argument.type = request.key.argumentTypes[index];
-		argument.range = section->patternDefinitions.front()->range;
+		argument.range = sourceRange;
 		const std::string &name = request.parameterNames[index];
 		auto constant = std::ranges::find_if(request.key.compileTimeParameters, [&](const auto &entry) {
 			return entry.first == name;
@@ -24,8 +27,8 @@ static bool inferIncrementalFunction(ParseContext &parseContext, const ParseCont
 	}
 	size_t diagnosticCount = parseContext.diagnostics.size();
 	bool inferred = ensureSectionInstantiationInferred(
-		parseContext, section, section->patternDefinitions.front(), bindings, request.key.argumentTypes,
-		request.requiredCompileTimeParameters, nullptr, nullptr
+		parseContext, section, definition, bindings, request.key.argumentTypes, request.requiredCompileTimeParameters, nullptr,
+		nullptr
 	);
 	if (inferred) {
 		auto found = section->instantiations.find(request.key);

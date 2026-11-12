@@ -24,9 +24,10 @@ class InferenceUnitInputs {
 			for (const auto &[uri, source] : projection.at("ambient_sources").items())
 				ambient[uri] = source.at("digest");
 		input.push_back(
-			!section.parent							 ? ambient
-			: projection.at("bodies").contains(path) ? projection.at("bodies").at(path)
-													 : Json(digest(sourceBody(section).dump()))
+			!section.parent ? ambient
+			: projection.at("bodies").contains(path) && !containsSeparateBody(section)
+				? projection.at("bodies").at(path)
+				: Json(digest(sourceBody(section).dump()))
 		);
 		for (const char *field : {"matches", "function_declarations"})
 			input.push_back(projection.at(field).contains(path) ? projection.at(field).at(path) : Json(nullptr));
@@ -86,13 +87,20 @@ class InferenceUnitInputs {
 	const Section *section(const std::string &path) const { return sections.at(path); }
 
   private:
+	static bool containsSeparateBody(const Section &section) {
+		return std::ranges::any_of(section.children, [](const Section *child) {
+			return hasCodegenSectionIdentity(*child) || containsSeparateBody(*child);
+		});
+	}
 	static Json sourceBody(const Section &section) {
 		Json lines = Json::array(), children = Json::array();
 		for (const CodeLine *line : section.codeLines)
 			if (!line->rightTrimmedText.empty())
 				lines.push_back(Json::array({line->sourceFile->uri, line->rightTrimmedText}));
+		// Nested generated bodies own their source reads. Their enclosing unit
+		// consumes the declaration, including body-driven parameter promotion.
 		for (const Section *child : section.children)
-			children.push_back(sourceBody(*child));
+			children.push_back(hasCodegenSectionIdentity(*child) ? sectionDeclaration(*child) : sourceBody(*child));
 		return Json::array({static_cast<int>(section.type), std::move(lines), std::move(children)});
 	}
 	template <typename T> static Json optional(const std::optional<T> &value) { return value ? Json(*value) : Json(nullptr); }

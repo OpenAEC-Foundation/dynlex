@@ -1499,6 +1499,10 @@ Managed `retain` and `release` bodies use the same concrete-unit summaries and
 dependency checks. An unrelated edit reuses their inference and IR; editing one
 lifecycle body invalidates that unit, while a changed owner layout invalidates
 the corresponding typed lifecycle instantiations.
+An enclosing unit fingerprints the declarations of separately generated child
+units, rather than their executable bodies. A lifecycle body edit therefore
+leaves its class's layout-source input unchanged; adding or removing a lifecycle
+declaration still changes that input.
 A pure function returning a value reuses its summary when its call arguments are not all
 known at compile time. A call with known arguments uses a saved return value when
 available; otherwise it infers the body for compile-time evaluation.
@@ -1536,8 +1540,9 @@ when those functions and their dependencies are unchanged. Replay compares the
 current inferred global types; IR import separately compares the emitted global
 types and initializers. The changed top-level body is inferred and generated.
 
-For functions with one pattern path, restorable concrete argument types, and restorable
-execution effects, the compiler can infer affected instantiations in dependency order.
+For ordinary functions with one pattern path and for lifecycle bodies, given
+restorable concrete argument types and execution effects, the compiler can infer
+affected instantiations in dependency order.
 It compares every instantiation's return type and execution effects with the prior
 summary. An equivalent interface stops invalidation at that instantiation: higher callers
 retain their inference summaries and LLVM bodies, while the function is generated

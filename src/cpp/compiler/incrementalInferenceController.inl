@@ -174,6 +174,22 @@ class IncrementalInferenceController {
 		return decoded ? saved : nullptr;
 	}
 
+	static std::optional<std::vector<std::string>> parameterNames(const Section &section) {
+		if (section.type == SectionType::Retain || section.type == SectionType::Release)
+			return std::vector<std::string>{std::string(managedLifecycleParameterName)};
+		if (section.type != SectionType::Function || section.isFlex || section.patternDefinitions.size() != 1 ||
+			section.patternDefinitions.front()->indexedPaths.size() != 1)
+			return std::nullopt;
+		std::vector<std::string> names;
+		for (const PatternElement &element : section.patternDefinitions.front()->indexedPaths.front())
+			if (element.type == PatternElement::Variable) {
+				if (element.isArgumentPack)
+					return std::nullopt;
+				names.push_back(element.text);
+			}
+		return names;
+	}
+
 	std::vector<std::pair<InferenceUnitKey, Request>> collectRequests(
 		const IncrementalUnitSelection &eligible, const std::set<InferenceUnitKey> &native,
 		const SymbolicInferenceUnits &symbolic
@@ -181,28 +197,20 @@ class IncrementalInferenceController {
 		const Json &prior = previous.at("all_function_projection"), &summaries = previous.at("inference_summaries");
 		std::map<InferenceUnitKey, Request> candidates;
 		for (const auto &[section, path] : paths) {
-			if (section->type != SectionType::Function || section->isFlex || !hasNoGlobalAccess(section) ||
-				!summaries.contains(path) || section->patternDefinitions.size() != 1 ||
-				section->patternDefinitions.front()->indexedPaths.size() != 1 ||
-				!prior.at("function_declarations").contains(path) || !projection.at("function_declarations").contains(path) ||
+			if (!hasNoGlobalAccess(section) || !summaries.contains(path) || !prior.at("function_declarations").contains(path) ||
+				!projection.at("function_declarations").contains(path) ||
 				prior.at("function_declarations").at(path) != projection.at("function_declarations").at(path))
 				continue;
-			statistics.preinferDependencyGraphSectionsChecked++;
-			std::vector<std::string> names;
-			bool pack = false;
-			for (const PatternElement &element : section->patternDefinitions.front()->indexedPaths.front())
-				if (element.type == PatternElement::Variable) {
-					pack |= element.isArgumentPack;
-					names.push_back(element.text);
-				}
-			if (pack)
+			auto names = parameterNames(*section);
+			if (!names)
 				continue;
+			statistics.preinferDependencyGraphSectionsChecked++;
 			for (const auto &[key, summary] : summaries.at(path).items()) {
 				if ((!native.contains({path, key}) && !inferenceSummaryHasValueState(summary) &&
 					 !symbolic.contains({path, key})) ||
 					summary.at("needs_global_types").get<bool>() || eligible.contains(section, key))
 					continue;
-				candidates.emplace(InferenceUnitKey{path, key}, Request{const_cast<Section *>(section), names, {}, {}, {}});
+				candidates.emplace(InferenceUnitKey{path, key}, Request{const_cast<Section *>(section), *names, {}, {}, {}});
 			}
 		}
 		std::vector<std::pair<InferenceUnitKey, Request>> ordered;

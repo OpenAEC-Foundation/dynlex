@@ -19,14 +19,13 @@ def check_lifecycle_replacement_roots(root, build):
     )
     main.write_text(source)
     assert build(entry=main)[2] == b"managed\nbefore\n"
-    for before, after, expected, requires_entry_reuse in (
-        ('integer, "managed"', 'integer, "changed"', b"changed\nbefore\n", True),
-        ('integer, "before"', 'integer, "after"', b"changed\nafter\n", False),
+    for before, after, expected in (
+        ('integer, "managed"', 'integer, "changed"', b"changed\nbefore\n"),
+        ('integer, "before"', 'integer, "after"', b"changed\nafter\n"),
     ):
         main.write_text(main.read_text().replace(before, after))
         edited = build(entry=main)
-        if requires_entry_reuse:
-            assert edited[0]["root_execution_reused"] and edited[0]["preinferred_instantiations"] >= 1
+        assert edited[0]["root_execution_reused"] and edited[0]["preinferred_instantiations"] >= 1
         assert edited[2] == expected
         assert edited[1:] == build(False, entry=main)[1:]
     valid = main.read_text()
