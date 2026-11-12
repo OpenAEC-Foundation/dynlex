@@ -10,6 +10,7 @@ set state to a new website state
 set state's services to the browser UI service provider
 set state's view to the address of view
 set instance's state to (the address of state) as a pointer
+prepare website fixture editors in (the address of state)
 initialize the website river in (the address of state)
 ignore follow website river action (the string form of "action:river") in (the address of state)
 require condition (state's river's audio's status = 1) reporting "Opening River did not load its sounds"
@@ -86,5 +87,6 @@ loop while pending != @intrinsic("construct", a pointer to website request):
     deallocate pending
     set pending to next
 free state's river's coding
+release website fixture editors in (the address of state)
 close the address of instance
 print line "River audio owns decoding, idle deadlines, muting, visibility, cue boundaries, pause, speed and failure cleanup in DynLex."

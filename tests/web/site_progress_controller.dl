@@ -13,6 +13,7 @@ function [check the progress fixture] {integer:scenario}:
         set state's services to the browser UI service provider
         set state's view to the address of view
         set instance's state to (the address of state) as a pointer
+        prepare website fixture editors in (the address of state)
         initialize the website river in (the address of state)
         open website progress in (the address of state)
         if scenario = 0:
@@ -23,12 +24,18 @@ function [check the progress fixture] {integer:scenario}:
             set the text of "River source" in (the address of instance) to "cross the river"
             ignore record website coding goal "passenger" using key "loaded" in (state's river's coding)
             ignore record website coding goal "passenger" using key "loaded" in (state's river's coding)
+            set editor to the UI source editor labeled "River source" in (state's language)
+            synchronize UI source workspace (state's language) at 1.0 seconds
+            set helper to a UI source document named "helper.dl" at "file:///lib/helper.dl" containing "An imported definition" in (editor's document's project)
+            visit UI source document helper selecting 0 through 1 in editor in (the address of view)
             save website river progress in (the address of state)
             require condition ((the website coding count of "passenger" in (state's river's coding)) = 1) reporting "A repeated event was counted twice"
             require condition ((the value of "Game resume" in (the address of instance)) = 1) reporting "A saved game did not offer Continue"
             set first to the compact JSON form of (state's progress's document)
             save website river progress in (the address of state)
             require condition ((the compact JSON form of (state's progress's document)) = first) reporting "An unchanged save received a new revision"
+            require condition (editor's document = helper) reporting "Saving the main program navigated away from an imported file."
+            require condition (go back in UI source editor editor in (the address of view)) reporting "The saved program lost its navigation history."
             @intrinsic("call", "host", "progress_fixture", nothing, 1)
             set the text of "River source" in (the address of instance) to "new unsaved code"
             save website river progress in (the address of state)
@@ -55,6 +62,7 @@ function [check the progress fixture] {integer:scenario}:
             set next to pending's next
             deallocate pending
             set pending to next
+        release website fixture editors in (the address of state)
         close (the address of instance)
 
 check the progress fixture 0

@@ -108,6 +108,15 @@ document-scoped; tests that reload explicitly reinstall it in the new document.
 The website migration also exercised the following compiler paths. These are
 language and compiler fixes, with no website-specific syntax or inference rules.
 
+River's hover checks exposed two further inspection defects. Owner lookup could
+choose an unrelated called function merely because it could see the caller's
+variable. Candidate owners now require a binding in their own section. Value
+lookup also searched for the first expression sharing a variable's identity,
+which reused earlier values after assignment or runtime input. Hover and semantic
+constant markers now inspect the actual source occurrence and its inferred body.
+Import-free ownership, reassignment, unknown-input and local-instance fixtures
+exercise the same protocol through the native and browser compilers.
+
 | Symptom | Root cause and change | Regression coverage |
 | --- | --- | --- |
 | Static descriptions could not read nested aggregate values. | Immutable aggregate loads now fold through initialized globals; static-reference globals are published without fabricated zero initializers. | `static_aggregate_reads` |
@@ -125,6 +134,7 @@ language and compiler fixes, with no website-specific syntax or inference rules.
 | Reordered calls exchanged cached bodies for different class layouts, or lost their cached LLVM function. | Symbols use stable declaration identities and full concrete type identities, including nested arrays and callback signatures. Codegen shares the cache's graph encoder. | `check_class_symbol_identity` in `scripts/test_incremental_class_layouts.py`, `unbound_class_symbol` |
 | Hover reported unresolved types inside instantiated functions. | Hover reads the selected inferred body for expression and variable types; type and constant lookup share instance selection. | `scripts/test_lsp_hover_instances.py`, Web compiler smoke, actual shared-client connection |
 | Hovering a parameter declaration returned the whole function signature. | Declaration lookup uses the scope containing the recorded reference, independently of the header line's outer syntax section. | `scripts/test_lsp_hover_instances.py`, Web compiler smoke |
+| Hover markup corrupted values containing backticks, quotes or control characters. | Code spans now choose safe delimiters. Parsing and all three compiler string-display paths share one escape alphabet and canonical quoted-string formatter. | Import-free `tests/lsp/hover_markup`, native LSP suite and Web smoke |
 
 The shared editor additionally fixes UTF-16 workspace-edit planning, protected
 prefix ranges, completion edits and continuation commands, Unicode insertion and
@@ -192,3 +202,38 @@ a file revives its model. External library snapshots remain independent of that
 provided file map. Read-only controls pull their document content instead of
 writing preceding control text over a refreshed import. The project still
 synchronizes its main file when the selected imported source is unavailable.
+
+Source controls retain independent per-file edit states, including undo/redo,
+selection, scrolling, semantic spans and execution marks. Definition visits no
+longer replace the main program used by Run and Save. Website actions use these
+shared project APIs, and River execution marks target the main document even
+while an imported definition is displayed. Source panes are static compositions
+of ordinary controls with scoped contextual callbacks, rather than a second
+set of hit-testing and button behavior.
+
+Fresh program loading now clears edit history and retires the matching IME
+session even when the new bytes equal the preceding source. The prior
+text-equality shortcut retained another program's redo entries and accepted its
+late input events. Background loads preserve unrelated editor focus and
+composition. Borrowed input is retained before clearing active or parked state.
+
+A source-hover regression also exposed an invisible editor animation: document
+editors approached a hover value that their renderer never used. Only buttons
+and links now animate that tint, so an unchanged editor tooltip can become idle.
+
+Selectable popovers now publish ordinary floating-layout geometry to the shared
+hit tester. Their surface blocks controls behind it, including padding, and
+dismissing it retires that geometry between paints. Completion menus use that
+same path and keep their captions out of document selection. Hovering a text
+popover preserves the source caret and keyboard input; clicking its text scopes
+selection and immediately retires the preceding input context. Escape returns
+source tools to their retained editor location. Tiny viewports hide popovers
+until their padding and content can fit.
+
+Opening an import enabled Back and Main file before the source control. Focus
+reconciliation retained only a numeric position, so those new controls took the
+editor's keyboard focus and prevented Alt+Left. The shared focus collector now
+preserves the focused layout's identity when its ordinal was not explicitly
+changed. Disabled or hidden targets still leave the focus list, and explicit
+Tab navigation retains its normal ordering. Source-pane and queued-focus tests
+cover the change after painting, rather than calling navigation actions directly.

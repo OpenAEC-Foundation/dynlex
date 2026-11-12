@@ -5,7 +5,8 @@ import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { setTimeout as pause } from 'node:timers/promises';
-import { verifySourceCompletion, verifySourcePaste } from './editor_feature_checks.mjs';
+import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, verifySourceHover } from './editor_feature_checks.mjs';
+import {canvasControls} from './canvas_controls.mjs';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
 const graphicsMode = process.argv[3] || 'system';
@@ -125,7 +126,7 @@ try {
   });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: await fs.readFile(new URL('./fixtures/ui-color-probe.js', import.meta.url), 'utf8') });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], completions: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], commands: [], marks: [], requests: [], contexts: [], sources: [], decoded: 0, frames: new Set() };
+    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], completions: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], marks: [], requests: [], contexts: [], sources: [], decoded: 0, frames: new Set() };
     const scheduleFrame = requestAnimationFrame.bind(window), cancelFrame = cancelAnimationFrame.bind(window);
     window.requestAnimationFrame = callback => {
       let id = scheduleFrame(time => { window.siteProbe.frames.delete(id); callback(time); });
@@ -151,7 +152,6 @@ try {
       const env = imports?.env;
       if (env?.ui_text_mask) {
         const begin = env.ui_begin, mask = env.ui_text_mask, triangles = env.ui_triangles;
-        const captions = new Map();
         const decoder = new TextDecoder();
         const request = env.ui_request;
         env.ui_request = (surface,name,pointer,count) => {
@@ -166,12 +166,12 @@ try {
           window.siteProbe.pictures.push(decoder.decode(new Uint8Array(env.__linear_memory.buffer,pointer,count)));
           return picture(surface,view,image,done,pointer,count);
         };
-        env.ui_begin = (...args) => { window.siteProbe.visible = []; window.siteProbe.commands = []; window.siteProbe.marks = []; return begin(...args); };
+        env.ui_begin = (...args) => { window.siteProbe.visible = []; window.siteProbe.marks = []; return begin(...args); };
         env.ui_text_mask = (font, pointer, count, ...args) => {
           const result = mask(font, pointer, count, ...args);
           if (result) {
             const caption = decoder.decode(new Uint8Array(env.__linear_memory.buffer, pointer, count));
-            captions.set(result, caption); window.siteProbe.visible.push(caption);
+            window.siteProbe.visible.push(caption);
           }
           return result;
         };
@@ -182,17 +182,6 @@ try {
             const palettes=[[104,153,178],[80,153,114],[196,153,66],[201,88,63]];
             if(Math.abs(vertices[7]-100/255)<0.0001 && palettes.some(ink=>ink.every((value,index)=>Math.abs(linear(value)-vertices[4+index])<0.0001)))
               window.siteProbe.marks.push({x:vertices[0],y:vertices[1]});
-          }
-          if (captions.has(texture)) {
-            const vertices = new Float32Array(env.__linear_memory.buffer,pointer,count*8);
-            let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
-            for(let i=0;i<vertices.length;i+=8) {
-              left=Math.min(left,vertices[i]);right=Math.max(right,vertices[i]);
-              top=Math.min(top,vertices[i+1]);bottom=Math.max(bottom,vertices[i+1]);
-            }
-            left=Math.max(left,x,0);top=Math.max(top,y,0);
-            right=Math.min(right,x+width,innerWidth);bottom=Math.min(bottom,y+height,innerHeight);
-            if(right>left && bottom>top) window.siteProbe.commands.push({text:captions.get(texture),x:(left+right)/2,y:(top+bottom)/2});
           }
           return triangles(surface,pointer,count,texture,x,y,width,height);
         };
@@ -269,60 +258,10 @@ try {
   await capture(resumeOnly?'river-resume-start':'desktop');
   console.log(JSON.stringify(await evaluate('({title:document.title,api:window.siteProbe.api,paints:window.siteProbe.paints})')));
   if(graphicsMode !== 'system') assert.equal(await evaluate('window.siteProbe.api'),graphicsMode === 'webgpu' ? 'webgpu' : 'webgl2');
-  const click = async (x,y) => {
-    await command('Input.dispatchMouseEvent',{type:'mouseMoved',x,y});
-    await command('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});
-    await command('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});
-  };
-  const textVisible = text => `window.siteProbe.commands.some(entry => entry.text === ${JSON.stringify(text)})`;
-  const clickText = async (text,settle=350) => {
-    let stationary=0;
-    const position='JSON.stringify(window.siteProbe.commands.map(item=>[item.text,Math.round(item.x),Math.round(item.y)]))';
-    // Text is painted one wrapped line at a time. Resolve the complete caption
-    // before choosing a visible line, including mobile multiline links.
-    const locate=`(() => {
-      const target=${JSON.stringify(text)},entries=window.siteProbe.commands;
-      for(let start=0;start<entries.length;start++) {
-        let caption='',point;
-        for(let end=start;end<Math.min(entries.length,start+8);end++) {
-          const entry=entries[end];
-          caption+=(caption?' ':'')+entry.text;
-          if(entry.y>(innerWidth<700?140:80)&&entry.y<innerHeight-20) point??=entry;
-          if(caption===target&&point) return point;
-          if(!target.startsWith(caption)) break;
-        }
-      }
-      return null;
-    })()`;
-    for(let attempt=0;attempt<100;attempt++) {
-      let point = await evaluate(locate);
-      if(point) {
-        await pause(settle);
-        point = await evaluate(locate);
-        if(point) { await click(point.x,point.y); return; }
-      }
-      const before=await evaluate(position);
-      const cursor = await evaluate('({x:innerWidth-20,y:Math.min(innerHeight-60,700)})');
-      await command('Input.dispatchMouseEvent',{type:'mouseMoved',...cursor});
-      // Begin a missing-caption search at the page's start. Searching down to
-      // the footer and back can exhaust a fixed budget on the tall mobile page.
-      await command('Input.dispatchMouseEvent',{type:'mouseWheel',...cursor,deltaX:0,deltaY:attempt===0?-100000:400});
-      await pause(550);
-      stationary=(await evaluate(position))===before?stationary+1:0;
-      if(stationary>=2) break;
-    }
-    await capture('river-command-missing');
-    throw new Error('Could not reveal command: '+text+'\n'+await evaluate('JSON.stringify({counts:window.siteProbe.texts.filter(text=>/\\d \\/ \\d|far shore|CODING GOALS/.test(text)),visible:window.siteProbe.commands.map(item=>item.text)})'));
-  };
+  const {click,clickText,textVisible,wheel}=canvasControls({command,evaluate,capture});
   const key = async (code,key,number,modifiers=0) => {
     await command('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:number,modifiers});
     await command('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:number,modifiers});
-  };
-  const wheel = async deltaY => {
-    const cursor = await evaluate('({x:innerWidth-20,y:Math.min(innerHeight-60,700)})');
-    await command('Input.dispatchMouseEvent',{type:'mouseMoved',...cursor});
-    await command('Input.dispatchMouseEvent',{type:'mouseWheel',...cursor,deltaX:0,deltaY});
-    await pause(200);
   };
   const source = await fs.readFile(new URL('./fixtures/river_solution.dl',import.meta.url),'utf8');
   const plan = source.slice(source.indexOf('\n')+1).trimStart();
@@ -375,6 +314,8 @@ try {
   await verifySourceCompletion({command,evaluate,waitFor,key,capture,
     source:'get t',prefix:'import lib/river_challenge.dl\n\n',name:'river'});
   await verifySourcePaste({command,evaluate,waitFor,key,source:plan});
+  await verifySourceDefinition({command,evaluate,waitFor,key,capture,source:plan,line:1,column:4,filename:'river_challenge.dl',name:'river'});
+  await verifySourceHover({command,evaluate,waitFor,key,capture,source:plan,name:'river'});
   await pause(100);
   assert.equal(await evaluate('window.siteProbe.marks.length'),0,'Editing retained execution marks from another snapshot');
   await clickText('Run plan ▶');

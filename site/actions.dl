@@ -42,7 +42,7 @@ to follow website link {a pointer to UI instance:instance}:
     if destination = "action:open-example":
         select website editor mode 0 in state
         set parent to the parent of (instance's event target) within (instance's description)
-        set the text of "IDE source" in instance to (parent's content)
+        load website source "IDE source" from (the string form of (parent's content)) in state
         navigate to (the string form of "/ide/index.html") in state
         return nothing
     if (destination has "action:download" at offset 0) or (destination = "action:retry-downloads"):

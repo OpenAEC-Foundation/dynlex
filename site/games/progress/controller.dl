@@ -34,13 +34,13 @@ to [refresh website progress controls in] {a pointer to website state:state}:
 
 to [apply website progress to the games in] {a pointer to website state:state}:
     set games to the JSON member named "games" in (state's progress's document)
-    set the text of "River source" in (state's view's instance) to the website river starter source
+    load website source "River source" from (the string form of (the website river starter source)) in state
     set state's river's solved to false
     free state's river's coding
     set state's river's coding to new website coding progress for "river"
     if games has JSON member named "river":
         set data to the JSON member named "data" in (the JSON member named "river" in games)
-        set the text of "River source" in (state's view's instance) to (the JSON text named "source" in data)
+        load website source "River source" from (the JSON text named "source" in data) in state
         set state's river's solved to the JSON boolean named "solved" in data
         free state's river's coding
         set state's river's coding to a copy of JSON node (the JSON member named "coding" in data)
@@ -135,7 +135,8 @@ to [save website game] {C string:game} containing {a pointer to JSON value:data}
 to [save website river progress in] {a pointer to website state:state}:
     if state's progress's status != 1:
         return nothing
+    set editor to the UI source editor labeled "River source" in (state's language)
     save website game "river" containing (a JSON object containing [
-        JSON text "source" is (the UI value for (the control labeled "River source" in (state's view's instance)) in (state's view's instance))'s text,
+        JSON text "source" is (the UI main source of editor in (state's language) at (state's view's seconds) seconds),
         JSON flag "solved" is (state's river's solved), JSON child "coding" is (a copy of JSON node (state's river's coding))
     ]) in state

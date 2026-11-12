@@ -1,6 +1,7 @@
 import ../packages/dynlex-ui/ui/shaders.dl
 import ../state.dl
 import ../editor/shader.dl
+import ../editor/language.dl
 import events.dl
 
 to stop website [program] {integer:index} in {a pointer to website state:state}:
@@ -37,6 +38,7 @@ to run website [program] {integer:index} in {a pointer to website state:state}:
         if state's shader editor's source failed:
             load the website shader source in state
             return nothing
+    refresh website source editor metadata in state
     set other to 0
     loop while other < the length of (the website program descriptions):
         stop website program other in state
@@ -46,7 +48,8 @@ to run website [program] {integer:index} in {a pointer to website state:state}:
     set instance to state's view's instance
     set editor to the active UI editor within (the control labeled (description's source) in instance) in instance
     require condition (editor != @intrinsic("construct", UI reference)) reporting "The program source has no active editor"
-    set source to (the UI value for editor in instance)'s text
+    set {source editor} to the UI source editor labeled (editor's text) in (state's language)
+    set source to the UI main source of source editor in (state's language) at (state's view's seconds) seconds
     set program's source to source
     set program's result to 0
     set program's output to ""
@@ -58,10 +61,7 @@ to run website [program] {integer:index} in {a pointer to website state:state}:
     set the text of (description's status) in instance to "Compiling…"
     if program's started != (0 as a pointer):
         @intrinsic("call pointer", program's started, nothing, index, state)
-    set source to (the string form of (description's prefix)) + source
-    set name to the string form of (description's filename)
-    if index = 2:
-        set name to the website source filename in state
+    set name to source editor's document's project's entry's filename
     set target to "cpu"
     set stages to a new JSON value of kind the JSON array kind
     if (index = 2) and (the website editor uses shaders in state):
@@ -71,11 +71,12 @@ to run website [program] {integer:index} in {a pointer to website state:state}:
         set state's shader editor's preview's paused to false
         set state's shader editor's preview's active to false
         set the text of "Pause preview" in instance to "Pause preview"
+    set sources to the UI source files of (source editor's document's project)
     request "compiler" containing (a JSON object containing [
         JSON text "operation" is "compile", JSON text "target" is target, JSON text "entry" is name,
         JSON flag "traced" is (description's traced),
         JSON child "stages" is stages,
-        JSON child "sources" is (a JSON object containing [JSON text name is source])
+        JSON child "sources" is sources
     ]) for purpose 6 indexed index in state
     set program's request to state's requests' id
 

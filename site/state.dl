@@ -55,10 +55,15 @@ to get the website source filename in {a pointer to website state:state}:
     return (the UI value for (the control labeled (the website source filename label in state) in (state's view's instance)) in (state's view's instance))'s text
 
 to get the website source editor in {a pointer to website state:state}:
-    return the active UI editor within (the control labeled "IDE modes" in (state's view's instance)) in (state's view's instance)
+    set node to the active UI editor within (the control labeled "IDE modes" in (state's view's instance)) in (state's view's instance)
+    return the UI source editor labeled (node's text) in (state's language)
 
 to get the website source text in {a pointer to website state:state}:
-    return (the UI value for (the website source editor in state) in (state's view's instance))'s text
+    return the UI main source of (the website source editor in state) in (state's language) at (state's view's seconds) seconds
+
+to [load website source] {C string:label} [from] {string:source} [in] {a pointer to website state:state}:
+    set editor to the UI source editor labeled label in (state's language)
+    load UI main source of editor in (state's view) from source at (state's view's seconds) seconds
 
 to request {C string:service} containing {a pointer to JSON value:payload} for purpose {integer:job} indexed {integer:index} in {a pointer to website state:state}:
     set data to the compact JSON form of payload

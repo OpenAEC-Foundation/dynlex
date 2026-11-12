@@ -9,7 +9,7 @@ to load the website shader source in {a pointer to website state:state}:
     require condition (editor's source request = 0) reporting "The shader source is already loading"
     set editor's source failed to false
     set instance to state's view's instance
-    set the text of "Shader source" in instance to ""
+    load website source "Shader source" from "" in state
     set the text of "Shader filename" in instance to ((the string form of (editor's description's id)) + ".dl")
     set the text of "IDE status" in instance to "Loading shader source…"
     set path to "assets/shaders/" + ((the string form of (editor's description's id)) + ".dl")
@@ -28,7 +28,7 @@ to get receive website shader source {a pointer to JSON value:response} in {a po
         fail the website shader source in state
         request "log" containing (a JSON object containing [JSON text "level" is "error", JSON text "message" is "The requested shader source could not be loaded."]) for purpose 0 indexed 0 in state
         return false
-    set the text of "Shader source" in (state's view's instance) to (the JSON text named "text" in response)
+    load website source "Shader source" from (the JSON text named "text" in response) in state
     set the text of "Run program ▶" in (state's view's instance) to "Recompile shader ↻"
     return true
 

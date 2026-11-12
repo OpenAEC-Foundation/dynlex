@@ -24,7 +24,7 @@ website page home page at "/index.html" titled "DynLex — Make the language par
         region "Square field sketch" using columns appearance:
             region "Square field source" using card appearance:
                 paragraph "SKETCH_00 / square-field.dl" using signal appearance
-                editor "Square field" containing "import lib/std.dl\n\nsquare value means: value * value\n\nprint line square 8" using code appearance
+                source pane "Square field" containing "import lib/std.dl\n\nsquare value means: value * value\n\nprint line square 8" using code appearance
                 link "Run square field ▶" to "action:run-square" using primary link appearance
                 link "Stop square field ■" to "action:stop-square" using link appearance
             region "Square field result" using card appearance:
@@ -80,11 +80,11 @@ website page home page at "/index.html" titled "DynLex — Make the language par
         region "Vocabulary lab" using card appearance:
             tab group "Vocabulary" using vocabulary tabs appearance:
                 tab "Define":
-                    editor "Vocabulary definition" containing "import lib/std.dl\n\nto show line message: print line message\n\nshow line \"The sketch is alive.\"" using code appearance
+                    source pane "Vocabulary definition" containing "import lib/std.dl\n\nto show line message: print line message\n\nshow line \"The sketch is alive.\"" using code appearance
                 tab "Call":
-                    editor "Vocabulary call" containing "import lib/std.dl\n\nto show line message: print line message\n\nshow line \"The sketch is alive.\"" using code appearance
+                    source pane "Vocabulary call" containing "import lib/std.dl\n\nto show line message: print line message\n\nshow line \"The sketch is alive.\"" using code appearance
                 tab "Remix":
-                    editor "Vocabulary remix" containing "import lib/std.dl\n\nto show line message: print line message\n\nto announce line message: show line message\n\nannounce line \"The sketch is alive.\"" using code appearance
+                    source pane "Vocabulary remix" containing "import lib/std.dl\n\nto show line message: print line message\n\nto announce line message: show line message\n\nannounce line \"The sketch is alive.\"" using code appearance
             link "Run vocabulary ▶" to "action:run-vocabulary" using primary link appearance
             link "Stop vocabulary ■" to "action:stop-vocabulary" using link appearance
             paragraph "Vocabulary output" containing "Run the vocabulary example to see its output." using output appearance
@@ -97,7 +97,7 @@ website page home page at "/index.html" titled "DynLex — Make the language par
         region "Studio sketch" using columns appearance:
             region "Studio sketch source" using card appearance:
                 paragraph "main.dl" using signal appearance
-                editor "Studio source" containing "import lib/std.dl\n\ndouble value means: value * 2\n\nprint line double 21" using code appearance
+                source pane "Studio source" containing "import lib/std.dl\n\ndouble value means: value * 2\n\nprint line double 21" using code appearance
                 link "Run studio sketch ▶" to "action:run-studio" using primary link appearance
                 link "Stop studio sketch ■" to "action:stop-studio" using link appearance
             region "Studio sketch result" using card appearance:

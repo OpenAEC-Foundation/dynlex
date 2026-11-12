@@ -5,7 +5,8 @@ import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { setTimeout as pause } from 'node:timers/promises';
-import { verifySourceCompletion, verifySourcePaste } from './editor_feature_checks.mjs';
+import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, verifySourceHover } from './editor_feature_checks.mjs';
+import {canvasControls} from './canvas_controls.mjs';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
 const graphicsMode = process.argv[3] || 'system';
@@ -217,11 +218,7 @@ try {
   };
   await capture('desktop');
   console.log(JSON.stringify(await evaluate('({title:document.title,api:window.siteProbe.api,paints:window.siteProbe.paints})')));
-  const click = async (x,y) => {
-    await command('Input.dispatchMouseEvent',{type:'mouseMoved',x,y});
-    await command('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});
-    await command('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});
-  };
+  const {click,clickText,clickVisibleText}=canvasControls({command,evaluate,capture});
   await click(335,627); await pause(1500); await capture('terrain');
   await click(335,627); await pause(1500); await capture('nano');
   await click(800,22); await pause(700); await capture('challenges');
@@ -246,6 +243,8 @@ try {
   await verifySourceCompletion({command,evaluate,waitFor,key,capture,
     source:'import lib/std.dl\npri',prefix:'',name:'ide'});
   await verifySourcePaste({command,evaluate,waitFor,key,source:'import lib/std.dl\nprint line 7'});
+  await verifySourceDefinition({command,evaluate,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',line:1,column:0,filename:'string.dl',name:'ide'});
+  await verifySourceHover({command,evaluate,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',name:'ide'});
   await click(237,287);
   await waitFor('window.siteProbe.texts.includes("7")');
   await click(120,480); await key('KeyA','a',65,2);
@@ -289,14 +288,14 @@ try {
   await click(905,22);
   await waitFor('location.hash === "#language"'); await pause(1000);
   await capture('vocabulary');
-  await click(1024,437); await click(120,510);
+  await clickText('Remix'); await clickVisibleText('import lib/std.dl');
   await key('Enter','Enter',13,2);
   await command('Input.dispatchMouseEvent',{type:'mouseWheel',x:1100,y:700,deltaX:0,deltaY:300});
   await waitFor('window.siteProbe.texts.includes("The sketch is alive.")');
-  await click(905,22); await pause(1000); await click(256,437); await click(120,510);
+  await click(905,22); await pause(1000); await clickText('Define'); await clickVisibleText('import lib/std.dl');
   await key('KeyA','a',65,2);
   await command('Input.insertText',{text:'import lib/std.dl\nprint line "Retained definition"'});
-  await click(1024,437); await click(256,437); await click(640,774);
+  await clickText('Remix'); await clickText('Define'); await clickText('Run vocabulary ▶');
   await command('Input.dispatchMouseEvent',{type:'mouseWheel',x:1100,y:700,deltaX:0,deltaY:300});
   await waitFor('window.siteProbe.texts.includes("Retained definition")');
   await capture('vocabulary-executed');

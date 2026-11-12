@@ -2,6 +2,7 @@
 # unrelated documentation pages. Application composition stays in application.dl.
 import ../../site/pages/home.dl
 import ../../site/pages/ide.dl
+import ../../site/editor/language.dl
 
 document website fixture:
     home page
@@ -15,3 +16,15 @@ to get [a website shader test driver]:
     set driver to a new UI driver
     set driver's shader operations to the browser UI shader operations
     return driver
+
+# Controllers use real document geometry without creating a native window.
+import ../../site/packages/dynlex-ui/ui/document_layout.dl
+
+to [prepare website fixture editors in] {a pointer to website state:state}:
+    set view to state's view
+    set view's layout to a document UI layout for (view's instance's description) inside (view's instance's description)
+    open website source editors in state
+
+to [release website fixture editors in] {a pointer to website state:state}:
+    free UI source workspace (state's language)
+    release UI layout (state's view's layout)

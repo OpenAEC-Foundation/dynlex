@@ -16,6 +16,7 @@ set state's services to the browser UI service provider
 set state's view to the address of view
 set state's shader editor's description to the custom website shader
 set instance's state to (the address of state) as a pointer
+prepare website fixture editors in (the address of state)
 set still to a new website shader view
 set still's resource to 1 as a pointer
 set still's program to a JSON object containing [JSON child "passes" is (a JSON array containing [a JSON object containing [JSON child "uniforms" is (a new JSON-RPC array)]])]
@@ -94,5 +95,6 @@ loop while pending != @intrinsic("construct", a pointer to website request):
     set next to pending's next
     deallocate pending
     set pending to next
+release website fixture editors in (the address of state)
 close the address of instance
 print line "Shader compilation, last-successful previews, playback and cancellation share DynLex state."

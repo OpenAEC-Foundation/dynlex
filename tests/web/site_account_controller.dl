@@ -12,6 +12,7 @@ function [check account controller case] {integer:scenario}:
         set state's services to the browser UI service provider
         set state's view to the address of view
         set instance's state to (the address of state) as a pointer
+        prepare website fixture editors in (the address of state)
         set stateptr to the address of state
         set account to the address of (state's account)
         initialize the website river in stateptr
@@ -107,6 +108,7 @@ function [check account controller case] {integer:scenario}:
             set next to pending's next
             deallocate pending
             set pending to next
+        release website fixture editors in (the address of state)
         close (the address of instance)
 
 check account controller case 0

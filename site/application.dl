@@ -177,8 +177,8 @@ function open the DynLex website using {a pointer to UI driver:driver} with {a p
         store 1.0 into (state's shader weights) at 0
         set state's route to "/index.html"
         set view's close action to (the function named "close the website $") as a pointer
-        initialize the website river in state
         open website source editors in state
+        initialize the website river in state
         open website progress in state
         open website account with (the website account configuration) in state
         bind (the control labeled "River scene" in instance) in instance to (the function named "paint the website river $") for event 1

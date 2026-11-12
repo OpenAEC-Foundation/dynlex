@@ -84,9 +84,9 @@ to apply website editor entry {a pointer to JSON value:query} in {a pointer to w
     set state's shader editor's source failed to false
     set the text of (the website source filename label in state) in instance to name
     if (source's length > 0) or (encoded's length > 0):
-        set the text of ((the website source editor in state)'s text) in instance to source
+        load website source ((the website source editor in state)'s node's text) from source in state
     else if mode = 1:
-        set the text of "Shader source" in instance to the default website shader source
+        load website source "Shader source" from (the string form of (the default website shader source)) in state
     set the text of "IDE status" in instance to "Ready."
     if mode = 0:
         set the text of "IDE output" in instance to "Run the program to see its output."

@@ -12,6 +12,7 @@ set state to a new website state
 set state's services to the browser UI service provider
 set state's view to the address of view
 set instance's state to (the address of state) as a pointer
+prepare website fixture editors in (the address of state)
 initialize the website river in (the address of state)
 set state's river's artwork to 1
 set state's river's audio's status to 2
@@ -19,6 +20,10 @@ require condition ((the UI element (the control labeled "River play" in (the add
 require condition (follow website river action (the string form of "action:river") in (the address of state)) reporting "The challenge action was not registered"
 require condition ((the value of "Challenge views" in (the address of instance)) = 1) reporting "Opening the river did not select its UI"
 set the text of "River source" in (the address of instance) to "get the sheep in the boat\nrow to the other side"
+set editor to the UI source editor labeled "River source" in (state's language)
+set main to editor's document
+set helper to a UI source document named "helper.dl" at "file:///lib/helper.dl" containing "An imported definition" in (main's project)
+show UI source document helper in editor in (the address of view)
 ignore follow website river action (the string form of "action:river-step") in (the address of state)
 set index to the website program for source "River source"
 set program to state's programs + index
@@ -32,7 +37,8 @@ set reply to a JSON object containing [JSON number "milliseconds" is 1]
 receive website execution reply for index in (the address of state)
 free reply
 require condition ((program's phase = 3) and (state's river's playing)) reporting "A valid trace did not begin its presentation"
-set annotation to (the UI value for (the control labeled "River source" in (the address of instance)) in (the address of instance))'s marks
+set annotation to (the UI text state for main in editor in (the address of instance))'s marks
+require condition ((the UI value for (editor's node) in (the address of instance))'s marks = @intrinsic("construct", a pointer to UI text mark)) reporting "Executing the main program marked the displayed imported file."
 require condition ((annotation != @intrinsic("construct", a pointer to UI text mark)) and (annotation's start = 0)) reporting "The executing instruction was not marked in its source"
 advance website river playback (the address of (state's river)) by 0.56
 require condition ((state's river's paused) and (state's river's scene's cargo = 1)) reporting "The requested first step did not stop after loading"
@@ -67,5 +73,6 @@ loop while pending != @intrinsic("construct", a pointer to website request):
     deallocate pending
     set pending to next
 free state's river's coding
+release website fixture editors in (the address of state)
 close the address of instance
 print line "River controls select the challenge, compile a single step, replay, change speed, reset, reveal hints and clear stale edits."

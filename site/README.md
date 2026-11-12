@@ -80,6 +80,17 @@ coordinate conversion. Studio, River and the homepage sketches use this path.
 Completion requests, suggestion selection, text edits, continuation commands and
 undo use the shared overlay and standard text-edit planner. Website code enables
 the tools once and forwards language-service messages.
+Delayed hover inspection uses the same selectable text popover in every source
+pane, including imported read-only files. Hover preserves the editor's keyboard
+focus; selecting the popover text uses ordinary Unicode selection and copy.
+Source panes compose the editor with ordinary Back/Main file buttons and a
+filename. F12 opens imported definitions read-only, and Alt+Left returns with the
+previous selection and scroll. Per-file undo and annotations stay with their
+source. Run, Save and River's execution marks use the project's main document,
+even while an import is displayed. Loading a new linked program or saved plan
+starts fresh editing/navigation state through the same shared library API.
+Run and language analysis package the same project files, filename and protected
+prefix through one shared source builder.
 River's hidden vocabulary import is part of the analysis document; the shared
 mapper converts its UTF-16 results back to the visible UTF-8 source. Language
 results use separate presentation slots from River execution feedback.

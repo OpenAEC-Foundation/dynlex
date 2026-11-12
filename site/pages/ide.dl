@@ -26,10 +26,10 @@ website page IDE page at "/ide/index.html" titled "DynLex Studio" described "Wri
             tab group "IDE modes" using IDE tabs appearance:
                 tab "Program":
                     paragraph "IDE filename" containing "main.dl" using signal appearance
-                    editor "IDE source" containing "import lib/std.dl\n\nprint line \"Hello from DynLex.\"" using IDE code appearance
+                    source pane "IDE source" containing "import lib/std.dl\n\nprint line \"Hello from DynLex.\"" using IDE code appearance
                 tab "Shader":
                     paragraph "Shader filename" containing "shader.dl" using signal appearance
-                    editor "Shader source" containing the default website shader source using IDE code appearance
+                    source pane "Shader source" containing the default website shader source using IDE code appearance
             region "Studio result" using card appearance:
                 view group "IDE result" using document stack appearance:
                     region "Program result" using document stack appearance:
