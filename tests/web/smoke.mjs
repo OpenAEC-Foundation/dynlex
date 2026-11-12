@@ -232,6 +232,36 @@ for (const [version, expected] of [[1, "a 32-bit integer"], [2, "a pointer to a 
 }
 notifyLsp("textDocument/didClose", {textDocument: {uri: instanceHoverUri}});
 
+const ownershipHoverCases = JSON.parse(await readFile(new URL("../lsp/hover_ownership/expected.json", import.meta.url), "utf8"));
+for (const test of ownershipHoverCases) {
+  const source = await readFile(new URL("../lsp/hover_ownership/" + test.source, import.meta.url), "utf8");
+  const uri = "file:///workspace/hover-ownership-" + test.source;
+  notifyLsp("textDocument/didOpen", {textDocument: {uri, languageId: "dynlex", version: 1, text: source}});
+  const data = requestLsp("textDocument/semanticTokens/full", {textDocument: {uri}}).data;
+  const tokens = [];
+  let line = 0, column = 0;
+  for (let index = 0; index < data.length; index += 5) {
+    const [deltaLine, deltaColumn, length, kind, modifiers] = data.slice(index, index + 5);
+    line += deltaLine; column = deltaLine ? deltaColumn : column + deltaColumn;
+    tokens.push({line, column, length, kind, modifiers});
+  }
+  for (const point of test.points) {
+    const position = {line: point.line, character: source.split('\n')[point.line].lastIndexOf(point.word) + 1};
+    const result = requestLsp("textDocument/hover", {textDocument: {uri}, position});
+    if (Object.hasOwn(point, "value")) assert.deepEqual(result.contents, {kind: "markdown", value: point.value});
+    else assert.ok(result.contents.value.startsWith("type:\n\n```dynlex\n" + point.type + "\n```"), JSON.stringify(result));
+    if (Object.hasOwn(point, "constant")) {
+      const legend = initializeResult.capabilities.semanticTokensProvider.legend;
+      const token = tokens.find(token => token.line === position.line &&
+        token.column <= position.character && position.character < token.column + token.length);
+      assert.equal(legend.tokenTypes[token.kind], "variable");
+      assert.equal(Boolean(token.modifiers & (1 << legend.tokenModifiers.indexOf("constant"))), point.constant);
+      assert.equal(Boolean(token.modifiers & (1 << legend.tokenModifiers.indexOf("definition"))), point.definition);
+    }
+  }
+  notifyLsp("textDocument/didClose", {textDocument: {uri}});
+}
+
 const markupHoverUri = "file:///workspace/hover-markup.dl";
 const markupHoverSource = await readFile(new URL("../lsp/hover_markup/main.dl", import.meta.url), "utf8");
 const markupHoverExpected = JSON.parse(await readFile(new URL("../lsp/hover_markup/expected.json", import.meta.url), "utf8"));

@@ -68,32 +68,6 @@ Expression *InstantiatedSectionBody::findCloneOf(const Expression *templateExpre
 	return nullptr;
 }
 
-std::optional<CompileTimeValue>
-InstantiatedSectionBody::compileTimeValueForReference(const VariableReference *reference) const {
-	if (!reference)
-		return std::nullopt;
-	for (Expression *root : lineExpressions) {
-		std::optional<CompileTimeValue> result;
-		visitExpressionTree(root, [&](Expression *expression) {
-			if (expression->kind != Expression::Kind::Variable || expression->variable != reference ||
-				std::holds_alternative<std::monostate>(expression->compileTimeValue))
-				return false;
-			result = expression->compileTimeValue;
-			return true;
-		});
-		if (result)
-			return result;
-	}
-	for (const auto &child : childBodies) {
-		if (!child)
-			continue;
-		std::optional<CompileTimeValue> result = child->compileTimeValueForReference(reference);
-		if (result)
-			return result;
-	}
-	return std::nullopt;
-}
-
 void Section::collectPatternReferencesAndSections(
 	std::list<PatternReference *> &bodyReferences, std::list<PatternReference *> &globalReferences,
 	std::list<Section *> &sections, bool insideDefinition

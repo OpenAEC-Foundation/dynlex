@@ -10,6 +10,7 @@
 #include "section.h"
 #include "sectionType.h"
 #include "semanticTokens.h"
+#include "sourceExpressionFacts.h"
 #include "sourceFile.h"
 #include "syntaxConfig.h"
 #include "textDocument.h"
@@ -85,83 +86,19 @@ static Section *findOwningVariableSection(Section *fromSection, VariableReferenc
 	return nullptr;
 }
 
-static bool directExpressionHasConstant(const ParseContext &context, const VariableReference *reference) {
-	if (!reference)
+static bool hasStoredConstantAtSource(const ParseContext &context, const ::Range &range, const std::string &name) {
+	if (!context.hasCompleted(ParseContext::CompilationStage::InferredTypes) || !range.line)
 		return false;
-	for (CodeLine *line : context.codeLines) {
-		if (!line || !line->expression)
-			continue;
-		bool found = false;
-		visitExpressionTree(line->expression, [&](Expression *expression) {
-			found = expression->kind == Expression::Kind::Variable && expression->variable == reference &&
-					isCompileTimeKnown(expression->compileTimeValue);
-			return found;
-		});
-		if (found)
-			return true;
-	}
-	return false;
-}
-
-static bool hasStoredConstantValue(const ParseContext &context, const VariableReference *reference) {
-	if (!reference)
-		return false;
-	if (directExpressionHasConstant(context, reference))
-		return true;
-	VariableReference *definition = reference->definition ? reference->definition : const_cast<VariableReference *>(reference);
-	if (directExpressionHasConstant(context, definition))
-		return true;
-
-	Section *startSection = reference->range.line ? reference->range.line->section : nullptr;
-	Section *ownerSection = findOwningVariableSection(startSection, definition, reference->name);
-	Section *section = ownerSection ? ownerSection : startSection;
+	if (const Expression *expression = sourceVariableExpressionAt(range.line->expression, range.sourceStart()))
+		return sourceExpressionHasConstant(expression);
+	// A signature parameter is described by its instance, outside body expressions.
+	Section *owner = findOwningVariableSection(range.line->section, nullptr, name);
+	Section *section = sourceInstantiationOwner(owner);
 	if (!section)
 		return false;
-	bool matchesOwnedDefinition = false;
-	if (ownerSection) {
-		auto variableIt = ownerSection->variables.find(reference->name);
-		matchesOwnedDefinition = variableIt != ownerSection->variables.end() && variableIt->second;
-	}
-	for (const auto &[argTypes, inst] : section->instantiations) {
-		(void)argTypes;
-		if (inst.body && inst.body->compileTimeValueForReference(reference).has_value())
-			return true;
-		if (inst.body && inst.body->compileTimeValueForReference(definition).has_value())
-			return true;
-		if (matchesOwnedDefinition) {
-			auto paramIt = inst.constantParameterValues.find(reference->name);
-			if (paramIt != inst.constantParameterValues.end() && isCompileTimeKnown(paramIt->second))
-				return true;
-		}
-	}
-	return false;
-}
-
-static bool isCompileTimeVariableReference(const ParseContext &context, const VariableReference *reference) {
-	return hasStoredConstantValue(context, reference);
-}
-
-static bool isCompileTimeVariableByName(const ParseContext &context, const ::Range &range) {
-	if (!range.line || !range.line->section)
-		return false;
-	const std::string name = std::string(range.subString);
-	Section *owner = findOwningVariableSection(range.line->section, nullptr, name);
-	if (!owner)
-		return false;
-	auto variableIt = owner->variables.find(name);
-	if (variableIt == owner->variables.end() || !variableIt->second)
-		return false;
-	VariableReference *definition = variableIt->second->definition;
-	if (!definition)
-		return false;
-	if (directExpressionHasConstant(context, definition))
-		return true;
-	for (const auto &[argTypes, inst] : owner->instantiations) {
-		(void)argTypes;
-		if (inst.body && inst.body->compileTimeValueForReference(definition).has_value())
-			return true;
-		auto paramIt = inst.constantParameterValues.find(name);
-		if (paramIt != inst.constantParameterValues.end() && isCompileTimeKnown(paramIt->second))
+	for (const auto &[key, instance] : section->instantiations) {
+		auto parameter = instance.constantParameterValues.find(name);
+		if (parameter != instance.constantParameterValues.end() && isCompileTimeKnown(parameter->second))
 			return true;
 	}
 	return false;
@@ -328,7 +265,8 @@ std::vector<SemanticToken> collectLiveLineSemanticTokens(
 					escaped = false;
 				}
 			}
-			tokens.push_back({static_cast<int>(start), static_cast<int>(std::min(i, code.size())), SemanticTokenType::String, 0}
+			tokens.push_back(
+				{static_cast<int>(start), static_cast<int>(std::min(i, code.size())), SemanticTokenType::String, 0}
 			);
 			continue;
 		}
@@ -423,7 +361,7 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 						continue;
 					addMappedTokenWithModifiers(
 						*mappedRange, SemanticTokenType::Variable,
-						semanticTokenModifiers(ref->isDefinition(), isCompileTimeVariableReference(context, ref))
+						semanticTokenModifiers(ref->isDefinition(), hasStoredConstantAtSource(context, ref->range, ref->name))
 					);
 				}
 			}
@@ -446,7 +384,9 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 		case ParseContext::SourceTokenKind::Variable:
 			addTokenWithModifiers(
 				annotation.range, SemanticTokenType::Variable,
-				semanticTokenModifiers(false, isCompileTimeVariableByName(context, annotation.range))
+				semanticTokenModifiers(
+					false, hasStoredConstantAtSource(context, annotation.range, std::string(annotation.range.subString))
+				)
 			);
 			break;
 		case ParseContext::SourceTokenKind::Number:
@@ -489,7 +429,8 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 				addTokenWithModifiers(
 					expr->range, SemanticTokenType::Variable,
 					semanticTokenModifiers(
-						expr->variable->isDefinition(), isCompileTimeVariableReference(context, expr->variable)
+						expr->variable->isDefinition(),
+						context.hasCompleted(ParseContext::CompilationStage::InferredTypes) && sourceExpressionHasConstant(expr)
 					)
 				);
 			}

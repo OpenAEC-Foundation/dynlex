@@ -1299,6 +1299,13 @@ their ordinary compilation pipeline.
 # LSP Interaction
 
 When hovering over an expression, the already-evaluated compile-time value and type are shown.
+The source occurrence maps to its inferred expression in the selected callable
+instance. Repeated uses of one variable can have different values, including an
+explicitly unknown value after runtime input. Hover and semantic constant markers
+read these occurrence-specific facts; they never borrow an earlier known value
+from another use of that binding. Signature parameters use their instance's
+parameter facts because their declarations are outside executable expressions.
+Nested definitions form independent instance boundaries.
 
 Compiler ranges and source slices use UTF-8 byte offsets. Editor-facing APIs use
 UTF-16 columns: incoming edits and cursor positions convert to bytes, and outgoing

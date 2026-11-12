@@ -1,0 +1,4 @@
+@intrinsic("store", answer, 7)
+@intrinsic("discard", answer)
+@intrinsic("store", answer, @intrinsic("call", "libc", "getchar", @intrinsic("type", "int", 32)))
+@intrinsic("discard", answer)

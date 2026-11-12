@@ -93,20 +93,6 @@ static VariableReference *findVariableReferenceInDocument(
 	return nullptr;
 }
 
-static Expression *findVariableExpressionAtSource(Expression *expr, const std::string &uri, int line, int character) {
-	if (!expr)
-		return nullptr;
-	for (Expression *arg : expr->arguments) {
-		if (!arg)
-			continue;
-		if (Expression *nested = findVariableExpressionAtSource(arg, uri, line, character))
-			return nested;
-	}
-	if (expr->kind == Expression::Kind::Variable && rangeContainsSource(expr->range, uri, line, character))
-		return expr;
-	return nullptr;
-}
-
 static std::string formatCompileTimeValue(const CompileTimeValue &value) {
 	if (const auto *integer = std::get_if<WideInteger>(&value))
 		return integer->toString();
@@ -170,16 +156,6 @@ static Json makeVariableHoverContents(const std::string &typeText, const std::op
 	return Json{{"kind", "markdown"}, {"value", markdown.str()}};
 }
 
-static Section *findNearestInstantiatedSectionForHover(Section *section) {
-	if (!section)
-		return nullptr;
-	for (Section *current = section; current; current = current->parent) {
-		if (!current->instantiations.empty())
-			return current;
-	}
-	return section;
-}
-
 static const Instantiation *findSelectedInstantiationForSection(
 	Section *ownerSection, const std::string &selectionKey,
 	const std::unordered_map<std::string, std::string> &selectedInstantiationBySelectionKey
@@ -222,19 +198,16 @@ static const Instantiation *findSelectedInstantiationForSection(
 	return &ownerSection->instantiations.begin()->second;
 }
 
-static Expression *lookupExpressionForHover(
-	Expression *expr, Section *ownerSection, const std::string &selectionKey,
+static const Expression *lookupExpressionForHover(
+	const Expression *expr, Section *ownerSection, const std::string &selectionKey,
 	const std::unordered_map<std::string, std::string> &selectedInstantiationBySelectionKey
 ) {
 	if (!expr)
 		return nullptr;
-	Section *instantiatedOwnerSection = findNearestInstantiatedSectionForHover(ownerSection);
+	Section *instantiatedOwnerSection = sourceInstantiationOwner(ownerSection);
 	const Instantiation *selectedInstantiation =
 		findSelectedInstantiationForSection(instantiatedOwnerSection, selectionKey, selectedInstantiationBySelectionKey);
-	if (selectedInstantiation) {
-		return selectedInstantiation->body ? selectedInstantiation->body->findCloneOf(expr) : nullptr;
-	}
-	return expr;
+	return inferredSourceExpression(expr, selectedInstantiation);
 }
 
 static std::optional<DataType> lookupReferenceTypeInBody(const InstantiatedSectionBody &body, VariableReference *reference) {
@@ -259,12 +232,17 @@ static std::optional<DataType> lookupReferenceTypeInBody(const InstantiatedSecti
 }
 
 static DataType lookupVariableHoverType(
-	Section *ownerSection, VariableReference *reference, VariableReference *definition, const std::string &name,
-	const std::string &selectionKey, const std::unordered_map<std::string, std::string> &selections,
-	const DataType &templateType
+	const Expression *sourceExpression, Section *sourceScope, Section *ownerSection, VariableReference *reference,
+	VariableReference *definition, const std::string &name, const std::string &selectionKey,
+	const std::unordered_map<std::string, std::string> &selections, const DataType &templateType
 ) {
+	if (sourceExpression) {
+		const Expression *expression =
+			lookupExpressionForHover(sourceExpression, sourceScope, makeSelectionKey(sourceExpression->range), selections);
+		return expression ? expression->type : DataType{};
+	}
 	const Instantiation *instance =
-		findSelectedInstantiationForSection(findNearestInstantiatedSectionForHover(ownerSection), selectionKey, selections);
+		findSelectedInstantiationForSection(sourceInstantiationOwner(ownerSection), selectionKey, selections);
 	if (!instance)
 		return templateType;
 	if (instance->body) {
@@ -278,66 +256,26 @@ static DataType lookupVariableHoverType(
 	return parameter != instance->parameterTypesByName.end() ? parameter->second : DataType{};
 }
 
-static std::optional<CompileTimeValue> lookupConstantValueInInstantiation(
-	const Instantiation &instantiation, VariableReference *referenceAtHover, VariableReference *variableDefinition,
-	const std::string &variableName
-) {
-	if (instantiation.body && referenceAtHover) {
-		if (std::optional<CompileTimeValue> value = instantiation.body->compileTimeValueForReference(referenceAtHover))
-			return value;
-	}
-	if (instantiation.body && variableDefinition) {
-		if (std::optional<CompileTimeValue> value = instantiation.body->compileTimeValueForReference(variableDefinition))
-			return value;
-	}
-	auto parameterIt = instantiation.constantParameterValues.find(variableName);
-	if (parameterIt == instantiation.constantParameterValues.end() && variableDefinition &&
-		variableDefinition->name != variableName) {
-		parameterIt = instantiation.constantParameterValues.find(variableDefinition->name);
-	}
-	if (parameterIt != instantiation.constantParameterValues.end() && isCompileTimeKnown(parameterIt->second))
-		return parameterIt->second;
-	return std::nullopt;
-}
-
-static std::optional<CompileTimeValue>
-lookupDirectExpressionValueForReference(const ParseContext &parseContext, VariableReference *reference) {
-	if (!reference)
-		return std::nullopt;
-	for (CodeLine *line : parseContext.codeLines) {
-		if (!line || !line->expression)
-			continue;
-		std::optional<CompileTimeValue> result;
-		visitExpressionTree(line->expression, [&](Expression *expression) {
-			if (expression->kind != Expression::Kind::Variable || expression->variable != reference ||
-				!isCompileTimeKnown(expression->compileTimeValue))
-				return false;
-			result = expression->compileTimeValue;
-			return true;
-		});
-		if (result)
-			return result;
-	}
-	return std::nullopt;
-}
-
 static std::optional<CompileTimeValue> lookupHoverConstantValue(
-	const ParseContext &parseContext, Section *ownerSection, VariableReference *referenceAtHover,
-	VariableReference *variableDefinition, const std::string &variableName, const std::string &selectionKey,
-	const std::unordered_map<std::string, std::string> &selectedInstantiationBySelectionKey
+	const Expression *sourceExpression, Section *sourceScope, Section *ownerSection, VariableReference *definition,
+	const std::string &variableName, const std::string &selectionKey,
+	const std::unordered_map<std::string, std::string> &selections
 ) {
-	if (const Instantiation *instance = findSelectedInstantiationForSection(
-			findNearestInstantiatedSectionForHover(ownerSection), selectionKey, selectedInstantiationBySelectionKey
-		)) {
-		return lookupConstantValueInInstantiation(*instance, referenceAtHover, variableDefinition, variableName);
+	if (sourceExpression) {
+		const Expression *expression =
+			lookupExpressionForHover(sourceExpression, sourceScope, makeSelectionKey(sourceExpression->range), selections);
+		return expression ? std::optional<CompileTimeValue>(getExpressionCompileTimeValue(expression)) : std::nullopt;
 	}
-
-	if (std::optional<CompileTimeValue> value = lookupDirectExpressionValueForReference(parseContext, referenceAtHover))
-		return value;
-	if (std::optional<CompileTimeValue> value = lookupDirectExpressionValueForReference(parseContext, variableDefinition))
-		return value;
-
-	return std::nullopt;
+	// Signature parameters have no executable expression at their declaration.
+	const Instantiation *instance =
+		findSelectedInstantiationForSection(sourceInstantiationOwner(ownerSection), selectionKey, selections);
+	if (!instance)
+		return std::nullopt;
+	auto parameter = instance->constantParameterValues.find(variableName);
+	if (parameter == instance->constantParameterValues.end() && definition && definition->name != variableName)
+		parameter = instance->constantParameterValues.find(definition->name);
+	return parameter != instance->constantParameterValues.end() ? std::optional<CompileTimeValue>(parameter->second)
+																: std::nullopt;
 }
 
 static PatternDefinition *matchedPatternDefinitionForHover(const Expression *expr) {
@@ -386,7 +324,8 @@ resolveCursorData(ParseContext &context, const std::string &uri, int line, int c
 		Expression *expr = findDeepestExpression(codeLine->expression, localOffset);
 		if (Expression *sourceVariable = findVariableArgumentAtOffset(codeLine->expression, localOffset))
 			expr = sourceVariable;
-		else if (Expression *sourceVariable = findVariableExpressionAtSource(codeLine->expression, uri, line, character))
+		else if (Expression *sourceVariable =
+					 sourceVariableExpressionAt(codeLine->expression, codeLine->mapOffsetToSource(localOffset, true)))
 			expr = sourceVariable;
 
 		CursorResolution resolved;
@@ -475,6 +414,20 @@ std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const T
 	if (!hasCompilationStage(context, ParseContext::CompilationStage::InferredTypes))
 		return std::nullopt;
 
+	std::optional<CursorResolution> resolved =
+		resolveCursorData(*context, params.textDocument.uri, params.position.line, params.position.character);
+	if (!resolved.has_value() && params.position.character > 0) {
+		resolved = resolveCursorData(*context, params.textDocument.uri, params.position.line, params.position.character - 1);
+	} else if (resolved.has_value() && !resolved->referenceAtCursor && params.position.character > 0) {
+		std::optional<CursorResolution> previousCharResolved =
+			resolveCursorData(*context, params.textDocument.uri, params.position.line, params.position.character - 1);
+		if (previousCharResolved.has_value() && previousCharResolved->referenceAtCursor)
+			resolved = std::move(previousCharResolved);
+	}
+	const Expression *sourceVariable =
+		resolved && resolved->expr && resolved->expr->kind == Expression::Kind::Variable ? resolved->expr : nullptr;
+	Section *sourceScope = sourceVariable ? resolved->codeLine->section : nullptr;
+
 	for (const ParseContext::SourceTokenAnnotation &annotation : context->sourceTokenAnnotations) {
 		if (annotation.kind != ParseContext::SourceTokenKind::Variable)
 			continue;
@@ -506,13 +459,13 @@ std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const T
 			annotation.range.line->section, params.textDocument.uri, params.position.line, params.position.character
 		);
 		std::optional<CompileTimeValue> value = lookupHoverConstantValue(
-			*context, ownerSection, reference, ownedVariable->definition, variableName, selectionKey,
+			sourceVariable, sourceScope, ownerSection, ownedVariable->definition, variableName, selectionKey,
 			selectedInstantiationBySelectionKey
 		);
 		bool hasKnownValue = value.has_value() && isCompileTimeKnown(*value);
 		std::string typeText = typeToUserName(lookupVariableHoverType(
-			ownerSection, reference, ownedVariable->definition, variableName, selectionKey, selectedInstantiationBySelectionKey,
-			ownedVariable->type
+			sourceVariable, sourceScope, ownerSection, reference, ownedVariable->definition, variableName, selectionKey,
+			selectedInstantiationBySelectionKey, ownedVariable->type
 		));
 		if (typeText.empty() && !hasKnownValue)
 			continue;
@@ -571,16 +524,6 @@ std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const T
 		}
 	}
 
-	std::optional<CursorResolution> resolved =
-		resolveCursorData(*context, params.textDocument.uri, params.position.line, params.position.character);
-	if (!resolved.has_value() && params.position.character > 0) {
-		resolved = resolveCursorData(*context, params.textDocument.uri, params.position.line, params.position.character - 1);
-	} else if (resolved.has_value() && !resolved->referenceAtCursor && params.position.character > 0) {
-		std::optional<CursorResolution> previousCharResolved =
-			resolveCursorData(*context, params.textDocument.uri, params.position.line, params.position.character - 1);
-		if (previousCharResolved.has_value() && previousCharResolved->referenceAtCursor)
-			resolved = std::move(previousCharResolved);
-	}
 	if (resolved.has_value()) {
 		Expression *expr = resolved->expr;
 		PatternDefinition *matchedPattern = resolved->matchedPattern;
@@ -592,7 +535,7 @@ std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const T
 			if (!expressionOwnerSection && expr->range.line)
 				expressionOwnerSection = expr->range.line->section;
 			std::string selectionKey = makeSelectionKey(expr->range);
-			Expression *instanceExpression =
+			const Expression *instanceExpression =
 				lookupExpressionForHover(expr, expressionOwnerSection, selectionKey, selectedInstantiationBySelectionKey);
 			std::optional<CompileTimeValue> expressionValue =
 				instanceExpression ? std::optional<CompileTimeValue>(getExpressionCompileTimeValue(instanceExpression))
@@ -641,12 +584,12 @@ std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const T
 					ownedVariable = ownerSection->findVariable(variableName);
 
 				std::string typeText = typeToUserName(lookupVariableHoverType(
-					ownerSection, referenceAtHover, variableDefinition, variableName, selectionKey,
+					sourceVariable, sourceScope, ownerSection, referenceAtHover, variableDefinition, variableName, selectionKey,
 					selectedInstantiationBySelectionKey, ownedVariable ? ownedVariable->type : (expr ? expr->type : DataType{})
 				));
 
 				std::optional<CompileTimeValue> value = lookupHoverConstantValue(
-					*context, ownerSection, referenceAtHover, variableDefinition, variableName, selectionKey,
+					sourceVariable, sourceScope, ownerSection, variableDefinition, variableName, selectionKey,
 					selectedInstantiationBySelectionKey
 				);
 				bool hasKnownValue = value.has_value() && isCompileTimeKnown(*value);
@@ -695,12 +638,12 @@ std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const T
 		ownedVariable = variableIt->second;
 
 	std::string typeText = typeToUserName(lookupVariableHoverType(
-		ownerSection, referenceAtHover, variableDefinition, variableName, selectionKey, selectedInstantiationBySelectionKey,
-		ownedVariable ? ownedVariable->type : DataType{}
+		sourceVariable, sourceScope, ownerSection, referenceAtHover, variableDefinition, variableName, selectionKey,
+		selectedInstantiationBySelectionKey, ownedVariable ? ownedVariable->type : DataType{}
 	));
 
 	std::optional<CompileTimeValue> value = lookupHoverConstantValue(
-		*context, ownerSection, referenceAtHover, variableDefinition, variableName, selectionKey,
+		sourceVariable, sourceScope, ownerSection, variableDefinition, variableName, selectionKey,
 		selectedInstantiationBySelectionKey
 	);
 	bool hasKnownValue = value.has_value() && isCompileTimeKnown(*value);
