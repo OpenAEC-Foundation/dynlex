@@ -52,6 +52,8 @@ void ParseContext::retainInferenceDiagnostic(const Diagnostic &diagnostic) {
 	}
 	if (diagnostic.emission->owner)
 		owners[diagnostic.emission->owner] = diagnostic.emission->traceBase;
+	for (const auto &[scope, base] : diagnostic.emission->retentionScopes)
+		owners.try_emplace(scope, base);
 	for (const RelatedInfo &note : diagnostic.relatedInfo)
 		if (note.inferenceOwner)
 			owners[note.inferenceOwner] = note.inferenceOwnerBase;

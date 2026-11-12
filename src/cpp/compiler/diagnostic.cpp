@@ -28,7 +28,9 @@ Diagnostic Diagnostic::relativeToInference(int base) const {
 			note.inferenceDepth -= base;
 			note.inferenceOwnerBase -= base;
 		}
-	if (auto &metadata = relative.editEmission(); metadata.traceBase >= 0)
+	auto &metadata = relative.editEmission();
+	metadata.retentionScopes.clear(); // Actual callers supply their own retention scopes on replay.
+	if (metadata.traceBase >= 0)
 		metadata.traceBase -= base;
 	return relative;
 }

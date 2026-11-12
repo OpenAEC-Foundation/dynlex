@@ -24,6 +24,7 @@ from test_incremental_matcher_work import check_matcher_fingerprint_work
 from test_incremental_source_observations import check_source_observation_reuse
 from test_incremental_static_references import check_static_reference_identities
 from test_incremental_partition_closures import check_partition_closure_work
+from test_incremental_validation import check_capture_note_wording, check_validation_units, check_failed_validation_units, check_capture_scope_queries, check_validation_flow, check_validation_bound_parameters
 from test_incremental_entry_metadata import check_entry_metadata_reuse
 from test_incremental_diagnostic_units import check_persistent_diagnostic_units, check_preinferred_diagnostic_context
 from test_incremental_definition_units import check_definition_resolution_units
@@ -96,6 +97,12 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_source_observation_reuse(root, build)
     check_static_reference_identities(root, build)
     check_partition_closure_work(root, build)
+    check_capture_note_wording(root, build)
+    check_validation_units(root, build)
+    check_failed_validation_units(root, build)
+    check_capture_scope_queries(root, build)
+    check_validation_flow(root, build)
+    check_validation_bound_parameters(root, build)
     check_entry_metadata_reuse(root, build)
     check_active_resolution_units(root, build)
     check_definition_resolution_units(root, build)

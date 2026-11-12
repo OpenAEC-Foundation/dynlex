@@ -20,7 +20,8 @@ static void publishDeferredInferenceDiagnostics(InferenceContext &context, const
 			}
 		if (emission.traceBase >= 0)
 			emission.traceBase += base;
-		context.appendCurrentInferenceTrace(diagnostic);
+		if (emission.traceBase >= 0)
+			context.appendCurrentInferenceTrace(diagnostic);
 		context.queueDiagnostic(std::move(diagnostic));
 	}
 }

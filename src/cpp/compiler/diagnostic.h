@@ -22,6 +22,7 @@ struct DiagnosticEmission {
 	std::string discriminator;
 	std::shared_ptr<DiagnosticPublication> publication;
 	std::shared_ptr<const VariableStorageScope> owner;
+	std::vector<std::pair<std::shared_ptr<const VariableStorageScope>, int>> retentionScopes;
 	int traceBase = -1;
 };
 

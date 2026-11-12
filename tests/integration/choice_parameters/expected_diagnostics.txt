@@ -1,0 +1,4 @@
+tests/integration/choice_parameters/main.dl:6-11: Warning: Pattern argument 'frame' is assigned before being read
+  note: Defined as argument here tests/integration/choice_parameters/main.dl:38-43
+tests/integration/choice_parameters/main.dl:6-9: Warning: Pattern argument 'gap' is assigned before being read
+  note: Defined as argument here tests/integration/choice_parameters/main.dl:32-35

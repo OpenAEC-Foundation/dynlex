@@ -514,6 +514,15 @@ struct InferenceContext {
 		}
 		if (!emission.publication)
 			emission.publication = std::make_shared<DiagnosticPublication>();
+		// Caller products retain diagnostics independently of visible trace notes.
+		// Metadata stays on pending diagnostics until their trial is accepted.
+		for (const InferenceContext *context = this; context; context = context->diagnosticCaller) {
+			auto owner = context->diagnosticOwner();
+			if (owner && std::ranges::none_of(emission.retentionScopes, [&](const auto &entry) {
+				return entry.first == owner;
+			}))
+				emission.retentionScopes.emplace_back(owner, context->diagnosticTraceBase(owner));
+		}
 	}
 	void queueDiagnostic(Diagnostic diagnostic) {
 		prepareDiagnostic(diagnostic);

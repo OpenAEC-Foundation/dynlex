@@ -616,6 +616,7 @@ bool FlexInferenceScope::enter(Expression *expr, const PatternCallResolution &re
 	});
 	if (!bodyInferred || !context.typesValid)
 		return;
+	validateVariableUsage(context, matchedSection, flexBody.get(), callBindingFrameStack, context.diagnosticOwner());
 	Expression *templateBodyExpression = flexPatternBodyExpression(def);
 	Expression *bodyExpr = flexBody->expressionForLine(templateBodyExpression->range.line);
 	if (!bodyExpr) {

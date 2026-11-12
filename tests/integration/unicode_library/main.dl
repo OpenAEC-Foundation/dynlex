@@ -35,7 +35,7 @@ to get a four byte string from {integer:first} then {integer:second} then {integ
     store fourth as a byte into the data of text at 3
     return text
 
-to print validation of {string:text}:
+to print [validation] of {string:text}:
     validate text as UTF-8 and set validation to it
     print the status of validation
     print ":"

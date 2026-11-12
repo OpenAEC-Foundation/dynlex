@@ -36,6 +36,12 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 	BodyReferenceOwnership bodyReferences = bodyReferenceOwnership(context.mainSection);
 	std::cerr << "incremental: "
 			  << Json{{"cache_directory", statistics.cacheDirectory},
+					  {"validation_units_evaluated", statistics.validation.evaluated},
+					  {"validation_units_reused", statistics.validation.reused},
+					  {"validation_diagnostics_restored", statistics.validation.diagnosticsRestored},
+					  {"validation_capture_references_visited", statistics.validation.referencesVisited},
+					  {"validation_scope_fingerprints_computed", statistics.validation.fingerprintsComputed},
+					  {"validation_references_fingerprinted", statistics.validation.referencesFingerprinted},
 					  {"cache_entry", statistics.cacheEntry},
 					  {"frontend_reused", statistics.reusedFrontend},
 					  {"type_inference_reused", statistics.reusedTypeInference},

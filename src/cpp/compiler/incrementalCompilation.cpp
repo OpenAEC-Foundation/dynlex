@@ -24,6 +24,7 @@
 #include "section/variable.h"
 #include "sectionIdentity.h"
 #include "syntaxConfig.h"
+#include "validation.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
@@ -255,7 +256,10 @@ bool compatibleObservations(const Json &previous, const Json &current, const Par
 
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context) {
 	const Json &before = previous.at("files");
-	if (before.size() != current.size())
+	if (before.size() != current.size() ||
+		previous.at("config_paths") != Json::array({context.builtinSyntaxConfigPath, context.projectSyntaxConfigPath}) ||
+		previous.at("syntax_structure") !=
+			Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity}))
 		return false;
 	std::set<std::string> imported;
 	for (const auto &[canonical, _] : context.importedFiles)
@@ -269,8 +273,8 @@ bool compatibleObservations(const Json &previous, const Json &current, const Par
 		if (old == current.at(path))
 			continue;
 		if (!old.is_object() || !current.at(path).is_object() ||
-			!imported.contains(current.at(path).at("canonical").get<std::string>()) ||
-			path == context.builtinSyntaxConfigPath || path == context.projectSyntaxConfigPath)
+			(!imported.contains(current.at(path).at("canonical").get<std::string>()) &&
+			 path != context.builtinSyntaxConfigPath && path != context.projectSyntaxConfigPath))
 			return false;
 		old.erase("content");
 		Json now = current.at(path);
@@ -326,6 +330,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalClassInstantiations.inl"
 #include "incrementalBodySources.inl"
 #include "incrementalInferenceDiagnostics.inl"
+#include "incrementalValidation.inl"
 #include "incrementalBodyReferences.inl"
 #include "incrementalBodyWriter.inl"
 #include "incrementalBodyReader.inl"
@@ -568,8 +573,23 @@ bool compileIncrementally(
 				statistics.parserSnapshotMilliseconds += elapsedMilliseconds(saveStart);
 				return key;
 			};
+			IncrementalValidation validation(context, statistics, [&]() {
+				Json records = Json::object();
+				if (previous) {
+					auto start = Clock::now();
+					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "validation_units");
+					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(start);
+					records = previous->at("validation_units");
+				}
+				if (previousFailure)
+					for (const auto &[path, record] : previousFailure->at("validation_units").items())
+						records[path] = record;
+				return records;
+			});
 			auto stageStart = Clock::now();
-			bool compiled = compileBeforeTypeInference(context.options.inputPath, context);
+			bool compiled = compileBeforeTypeInference(context.options.inputPath, context, [&]() {
+				return validation.run();
+			});
 			statistics.frontendMilliseconds = elapsedMilliseconds(stageStart);
 			std::map<std::string, Section *> sections;
 			std::string finalMatcherTree;
@@ -749,10 +769,14 @@ bool compileIncrementally(
 					);
 				}
 				if (success) {
-					std::cerr << previous->at("diagnostics").get_ref<const std::string &>();
+					auto diagnostics = renderCachedDiagnostics(*previous, *recording, context, {});
+					requireCompilerInvariant(diagnostics.has_value(), "unchanged diagnostic sources lost their ranges");
+					std::cerr << *diagnostics;
 					context.diagnostics.clear();
 					statistics.reusedDiagnosticRecords = previous->at("diagnostic_records").size();
 					Json result = *previous;
+					result["diagnostics"] = std::move(*diagnostics);
+					result["validation_units"] = validation.snapshot();
 					result["files"] = recording->observations;
 					result["inactive_projection"] = std::move(inactiveProjection);
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
@@ -814,6 +838,7 @@ bool compileIncrementally(
 					result["matcher_key"] = saveMatcher();
 					result["parser_key"] = saveParser();
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
+					result["validation_units"] = validation.snapshot();
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
 					if (functionReuse) {
 						for (const std::string &name : functionReuse->reusedFunctionNames()) {
@@ -910,6 +935,7 @@ bool compileIncrementally(
 					{"parser_key", saveParser()}
 				};
 				recordSemanticSources(result, *recording, context);
+				result["validation_units"] = validation.snapshot();
 				writeEntry(failedEntry, result.dump());
 			}
 		}

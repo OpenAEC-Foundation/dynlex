@@ -1,0 +1,2 @@
+tests/required/flex_variable_usage/main.dl:23-27: Warning: Pattern argument 'item' is assigned before being read
+  note: Defined as argument here tests/required/flex_variable_usage/main.dl:10-14

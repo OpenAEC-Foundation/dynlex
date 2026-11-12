@@ -17,6 +17,7 @@ struct TemporaryObjects {
 };
 
 struct BuildStatistics {
+	ValidationWork validation;
 	std::string cacheDirectory;
 	std::string cacheEntry;
 	bool reusedFrontend = false;

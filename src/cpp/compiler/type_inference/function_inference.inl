@@ -16,6 +16,7 @@ static bool inferExpression(
 static DataType ensureExpressionType(Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
 [[gnu::noinline]] static void resetExpressionTypes(Expression *expr);
 #include "type_resolution.inl"
+#include "variable_usage_validation.inl"
 #include <bit>
 #include <memory>
 
@@ -451,6 +452,9 @@ static bool runInstantiationReinferenceLoop(
 			if (!instantiation.needsReinfer)
 				return false;
 		} else if (!instantiation.needsReinfer) {
+			validateVariableUsage(
+				context, instantiation.body->sourceSection, instantiation.body.get(), {}, instantiation.body->storageScope
+			);
 			return true;
 		}
 		if (*afterPass == *beforePass) {

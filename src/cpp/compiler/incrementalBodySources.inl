@@ -116,6 +116,22 @@ class InferenceBodySources {
 	Range range(const Json &value) {
 		return value.is_null() ? Range{} : Range(line(value.at(0)), value.at(1).get<int>(), value.at(2).get<int>());
 	}
+	bool containsRange(const Json &value) const {
+		if (value.is_null())
+			return true;
+		const Json &line = value.at(0);
+		if (line.contains("source"))
+			return decodedLines.contains(line.at("source").dump());
+		for (const char *field : {"section", "opening"})
+			if (!line.at(field).is_null() && !identities.sections.contains(line.at(field).get<std::string>()))
+				return false;
+		if (!decodedLines.contains(line.at("origin").dump()))
+			return false;
+		for (const Json &slice : line.at("slices"))
+			if (!decodedLines.contains(slice.at(2).dump()))
+				return false;
+		return true;
+	}
 
 	Json node(const PatternTreeNode *value) const {
 		if (!value)

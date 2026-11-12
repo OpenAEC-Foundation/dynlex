@@ -31,7 +31,7 @@ def check_recent_cache_entries(root, build):
         if case == "active":
             assert edited[0]["optimization_units_reused"] > 0, edited[0]
         elif case == "inactive":
-            assert edited[0]["type_inference_reused"] and edited[0]["cache_payloads_loaded"] == 1, edited[0]
+            assert edited[0]["type_inference_reused"] and edited[0]["cache_payloads_loaded"] == 2, edited[0]
         else:
             assert edited[0]["frontend_reused"] and edited[0]["cache_payloads_loaded"] == 0, edited[0]
         repeated = build(entry=main, flags=("-O2",))
@@ -220,7 +220,7 @@ def check_program_payloads(root, build):
     manifest = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
     assert set(manifest["payload_keys"]) == {
         "all_function_projection", "section_dependency_graph", "inference_summaries", "generated_ir", "native_units",
-        "optimization_units"
+        "optimization_units", "validation_units"
     }
     assert all(field not in manifest for field in manifest["payload_keys"])
     summary_blob = directory / f"payload-{manifest['payload_keys']['inference_summaries']}.entry"
@@ -242,7 +242,7 @@ def check_program_payloads(root, build):
     assert commented[1:] == build(False, entry=main)[1:]
     main.write_text("# comment\n" + source.replace('"first"', '"second"'))
     edited = build(entry=main)
-    assert edited[0]["cache_payloads_loaded"] == 5
+    assert edited[0]["cache_payloads_loaded"] == 6
     assert edited[1:] == build(False, entry=main)[1:]
     edited_program = read_program(root / "cache", main)
     units = edited_program["section_dependency_graph"]["inference_units"]
@@ -278,6 +278,6 @@ def check_program_payloads(root, build):
     build(entry=main)
     main.write_text(unused_source.replace('"discard", 1', '"discard", 2'))
     unused = build(entry=main)
-    assert unused[0]["type_inference_reused"] and unused[0]["cache_payloads_loaded"] == 1, \
+    assert unused[0]["type_inference_reused"] and unused[0]["cache_payloads_loaded"] == 2, \
         "unused edit loaded dependency, inference, or generated-code payloads"
     assert unused[1:] == build(False, entry=main)[1:]

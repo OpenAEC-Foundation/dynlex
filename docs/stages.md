@@ -116,6 +116,20 @@ the inferred body; retaining only types loses metadata needed by code generation
 
 Incremental inference retains diagnostics as concrete-unit products. A warning
 in one function does not exclude unrelated functions in the same file from reuse.
+Variable-usage warnings consume typed bodies after overload selection, including
+the selected flex expansions and declaration-based argument bindings. Uninstantiated
+definitions have no typed usage to diagnose. These declaration warnings are retained
+with their concrete inference units without acquiring caller traces on cache replay.
+Caller retention scopes are explicit diagnostic metadata, so reusing an enclosing
+unit also replays nested warnings which have no visible call-trace notes.
+The analysis follows evaluation order and joins the typed control-flow alternatives.
+Only parameters bound by the concrete call have incoming values; omitted choice
+parameters are locals. Releasing an initialized managed parameter before replacement
+consumes its incoming value.
+Lexical capture checks remain before inference. Their scope read sets and structured
+diagnostic products persist independently of successful native output, including
+across intervening failures in earlier stages. Message-only configuration edits
+rerender both primary diagnostics and related notes.
 
 After the pattern trees stabilize, definitions connected through shared trie
 endpoints form one syntax family, including transitive connections through choice

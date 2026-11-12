@@ -596,7 +596,7 @@ void destroyTypeConstraintExpression(Expression *root) {
 	destroy(root);
 }
 
-bool compileBeforeTypeInference(const std::string &path, ParseContext &context) {
+bool compileBeforeTypeInference(const std::string &path, ParseContext &context, const std::function<bool()> &validation) {
 	auto stageStart = std::chrono::steady_clock::now();
 	size_t stageIndex = 0;
 	auto finishStage = [&]() {
@@ -626,7 +626,7 @@ bool compileBeforeTypeInference(const std::string &path, ParseContext &context) 
 	context.compilationStage = ParseContext::CompilationStage::ResolvedPatterns;
 	finishStage();
 
-	if (!validate(context))
+	if (!validation())
 		return false;
 	context.compilationStage = ParseContext::CompilationStage::Validated;
 
@@ -634,6 +634,12 @@ bool compileBeforeTypeInference(const std::string &path, ParseContext &context) 
 		return false;
 	finishStage();
 	return true;
+}
+
+bool compileBeforeTypeInference(const std::string &path, ParseContext &context) {
+	return compileBeforeTypeInference(path, context, [&]() {
+		return validate(context);
+	});
 }
 
 bool finishTypeInference(ParseContext &context) {
@@ -712,8 +718,7 @@ importSourceFile(const std::string &path, ParseContext &context, const std::stri
 
 		// check if the line is an import statement
 		std::string_view importText = trimLeadingWhitespace(line->rightTrimmedText);
-		if (std::optional<std::string_view> importPathView =
-				extractDirectiveArgument(importText, syntax.importKeyword)) {
+		if (std::optional<std::string_view> importPathView = extractDirectiveArgument(importText, syntax.importKeyword)) {
 			// recursively import the file, replacing this line with the imported content
 			std::string importingDir =
 				std::filesystem::path(pathutil::toFilesystemPath(sourceFile->uri.empty() ? path : sourceFile->uri))
@@ -726,10 +731,11 @@ importSourceFile(const std::string &path, ParseContext &context, const std::stri
 				context.addDiagnostic(Diagnostic(
 					context, Diagnostic::Level::Error, "failed to import source file",
 					Range(
-						line, static_cast<int>(importText.data() - line->rightTrimmedText.data() + syntax.importKeyword.length()),
+						line,
+						static_cast<int>(importText.data() - line->rightTrimmedText.data() + syntax.importKeyword.length()),
 						line->rightTrimmedText.length()
-					), "path",
-					importPath
+					),
+					"path", importPath
 				));
 				return false;
 			}

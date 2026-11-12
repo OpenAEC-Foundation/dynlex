@@ -39,7 +39,7 @@ print line 5 tripled
 print line result
 
 # test 5: function with globals: DOES modify the global
-function set result to value times multiplier:
+function set [result] to value times multiplier:
     globals: result
     execute:
         set result to (value * multiplier)

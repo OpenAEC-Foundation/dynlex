@@ -645,6 +645,7 @@ bool inferTypes(ParseContext &parseContext) {
 			return false;
 		}
 		auto &rootDiagnostics = parseContext.deferredInferenceDiagnostics[{}];
+		validateVariableUsage(context, parseContext.mainSection, nullptr, {}, {});
 		for (size_t index = firstDiagnostic; index < parseContext.diagnostics.size(); index++) {
 			Diagnostic diagnostic = parseContext.diagnostics[index];
 			context.prepareDiagnostic(diagnostic);
