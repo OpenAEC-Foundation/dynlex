@@ -6,6 +6,7 @@ assert.equal(output, 'Shared code links retain Unicode source, filenames, autoru
 assert.equal(requests[0].service, 'compiler');
 assert.equal(requests[0].payload.entry, 'linked.dl');
 assert.equal(requests[0].payload.sources['linked.dl'], 'import lib/std.dl\nprint line "linked é😀"');
+assert.equal(requests[0].payload.sources['provided.dl'], 'a project helper means: 7');
 assert.deepEqual(requests.slice(1).map(request => request.service), ['log', 'log', 'log', 'log', 'fetch', 'fetch', 'compiler']);
 assert.equal(requests[5].payload.url, 'assets/shaders/endless-terrain.dl');
 assert.equal(requests[6].payload.url, 'assets/shaders/nano-choreography.dl');

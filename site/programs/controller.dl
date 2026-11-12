@@ -38,7 +38,6 @@ to run website [program] {integer:index} in {a pointer to website state:state}:
         if state's shader editor's source failed:
             load the website shader source in state
             return nothing
-    refresh website source editor metadata in state
     set other to 0
     loop while other < the length of (the website program descriptions):
         stop website program other in state

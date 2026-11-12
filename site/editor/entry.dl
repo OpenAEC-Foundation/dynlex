@@ -82,7 +82,10 @@ to apply website editor entry {a pointer to JSON value:query} in {a pointer to w
     select website editor mode mode in state
     set state's shader editor's description to the custom website shader
     set state's shader editor's source failed to false
-    set the text of (the website source filename label in state) in instance to name
+    if mode = 1:
+        configure the website shader source named name in state
+    else:
+        configure the website source editor "IDE source" named name prefixed by "" using UI CPU analysis in state
     if (source's length > 0) or (encoded's length > 0):
         load website source ((the website source editor in state)'s node's text) from source in state
     else if mode = 1:

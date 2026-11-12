@@ -84,3 +84,42 @@ export async function verifySourceHover({command,evaluate,waitFor,key,capture,so
   await waitFor(`document.querySelector('textarea').value===${JSON.stringify(source)}`);
   console.log('Shared hover and keyboard ownership passed:',name);
 }
+
+export async function verifySourceInspection({command,evaluate,waitFor,key,capture,source,name}) {
+  const program='function inspect value {value}:\n    execute:\n        @intrinsic("return", value)\n\n@intrinsic("discard", inspect value 7)\n@intrinsic("discard", inspect value "boat")';
+  const outline='↑ ↓ choose · Enter open · Esc close';
+  const instances='↑ ↓ choose · Enter select · Esc close';
+  await key('KeyA','a',65,2);
+  await command('Input.insertText',{text:program});
+  await waitFor(`document.querySelector('textarea').value===${JSON.stringify(program)}`);
+  await key('F9','F9',120);
+  await waitFor(`window.siteProbe.visible.includes(${JSON.stringify(outline)}) && !window.siteProbe.visible.includes('Finding sections…')`);
+  await capture(name+'-outline');
+  await key('Home','Home',36);
+  await key('Enter','Enter',13);
+  await waitFor(`document.querySelector("textarea").selectionStart===${program.indexOf('inspect value')}`);
+  await key('Home','Home',36,2);
+  for(let column=0;column<25;column++) await key('ArrowRight','ArrowRight',39);
+  await key('F8','F8',119);
+  const labels='window.siteProbe.visible.filter(text=>text.startsWith("inspect value {") && text.endsWith(":value}"))';
+  await waitFor(`window.siteProbe.visible.includes(${JSON.stringify(instances)}) && (${labels}).length===2`);
+  const options=await evaluate(labels);
+  assert(options.some(label=>label.includes('byte')) && options.some(label=>label.includes('integer')),
+    'The inferred-instance fixture did not expose both call types.');
+  await capture(name+'-instances');
+  await key('End','End',35);
+  await key('Enter','Enter',13);
+  await waitFor(`!window.siteProbe.visible.includes(${JSON.stringify(instances)})`);
+  await waitFor('window.colorProbe.some(item=>item.text.trim()==="value")');
+  const point=await evaluate('window.colorProbe.filter(item=>item.text.trim()==="value")[0]');
+  await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:point.x,y:point.y});
+  const expected=options[1].match(/^inspect value \{(.+):value\}$/)[1];
+  await waitFor(`window.siteProbe.visible.includes(${JSON.stringify(expected)})`);
+  assert(await evaluate('document.activeElement===document.querySelector("textarea")'),
+    'Instance inspection took keyboard focus away from the source.');
+  await capture(name+'-selected-instance');
+  await key('KeyA','a',65,2);
+  await command('Input.insertText',{text:source});
+  await waitFor(`document.querySelector('textarea').value===${JSON.stringify(source)}`);
+  console.log('Shared outline and inferred-instance selection passed:',name);
+}

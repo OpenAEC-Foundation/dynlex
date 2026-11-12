@@ -9,11 +9,17 @@ set state's services to the browser UI service provider
 set state's view to the address of view
 set instance's state to (the address of state) as a pointer
 prepare website fixture editors in (the address of state)
+set editor to the UI source editor labeled "IDE source" in (state's language)
+set main to editor's document's project's entry
+set provided to a JSON object containing [JSON text "provided.dl" is "a project helper means: 7"]
+configure UI source document main named (main's filename) at (main's uri) prefixed by (main's prefix) using (a copy of JSON-RPC node (main's project's profiles)) with files provided
+free provided
 set source to the string form of "import lib/std.dl\nprint line \"linked é😀\""
 set query to a JSON object containing [JSON text "code64" is (the Base64 URL form of source), JSON text "name" is "linked.dl", JSON text "autorun" is "1"]
 apply website editor entry query in (the address of state)
+require condition (main's project's files has JSON member named "provided.dl") reporting "Loading a renamed source discarded its provided project files."
 require condition ((the UI value for (the control labeled "IDE source" in (the address of instance)) in (the address of instance))'s text = source) reporting "The shared source link lost Unicode text"
-require condition ((the UI value for (the control labeled "IDE filename" in (the address of instance)) in (the address of instance))'s text = "linked.dl") reporting "The shared source link lost its filename"
+require condition ((the website source filename in (the address of state)) = "linked.dl") reporting "The shared source link lost its filename"
 require condition ((the item at 2 in (state's programs))'s phase = 1) reporting "The shared source link did not honor autorun"
 set request to state's requests' id
 set the text of "IDE source" in (the address of instance) to "edited source"
@@ -38,7 +44,7 @@ require condition ((the UI value for (the control labeled "IDE source" in (the a
 set query to a JSON object containing [JSON text "code" is "must not load", JSON text "name" is "../outside.dl"]
 apply website editor entry query in (the address of state)
 free query
-require condition ((the UI value for (the control labeled "IDE filename" in (the address of instance)) in (the address of instance))'s text = "plain.dl") reporting "A source link accepted directory traversal"
+require condition ((the website source filename in (the address of state)) = "plain.dl") reporting "A source link accepted directory traversal"
 set query to a JSON object containing [JSON text "mode" is "unknown", JSON text "code" is "must not load"]
 apply website editor entry query in (the address of state)
 free query

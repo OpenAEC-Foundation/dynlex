@@ -1,4 +1,5 @@
 import ../state.dl
+import configuration.dl
 import ../shaders/program.dl
 import ../shaders/rendering.dl
 import ../packages/dynlex-ui/ui/texture_shapes.dl
@@ -10,7 +11,7 @@ to load the website shader source in {a pointer to website state:state}:
     set editor's source failed to false
     set instance to state's view's instance
     load website source "Shader source" from "" in state
-    set the text of "Shader filename" in instance to ((the string form of (editor's description's id)) + ".dl")
+    configure the website shader source named ((the string form of (editor's description's id)) + ".dl") in state
     set the text of "IDE status" in instance to "Loading shader source…"
     set path to "assets/shaders/" + ((the string form of (editor's description's id)) + ".dl")
     request "fetch" containing (a JSON object containing [JSON text "url" is path]) for purpose 9 indexed 0 in state

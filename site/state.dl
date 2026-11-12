@@ -48,11 +48,8 @@ class:
 to get the website editor uses shaders in {a pointer to website state:state}:
     return (the value of "IDE modes" in (state's view's instance)) = 1
 
-to get the website source filename label in {a pointer to website state:state}:
-    return "Shader filename" if (the website editor uses shaders in state), else "IDE filename"
-
 to get the website source filename in {a pointer to website state:state}:
-    return (the UI value for (the control labeled (the website source filename label in state) in (state's view's instance)) in (state's view's instance))'s text
+    return (the website source editor in state)'s document's project's entry's filename
 
 to get the website source editor in {a pointer to website state:state}:
     set node to the active UI editor within (the control labeled "IDE modes" in (state's view's instance)) in (state's view's instance)

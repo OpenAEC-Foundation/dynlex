@@ -105,6 +105,22 @@ document-scoped; tests that reload explicitly reinstall it in the new document.
 
 ## Website and shared editor fixes
 
+Studio and River now share the same source-pane controls, completion menu,
+outline and inferred-instance chooser. The choice popover is a reusable DynLex
+UI component with shared placement, clipping, disabled rows, scrolling and input
+capture. F9 visits nested authored sections; F8 selects an inferred instance at
+the caret. Inspection works in read-only imports and uses the same Unicode and
+hidden-prefix mapping as other editor features. Semantic colors and hover facts
+refresh only after an instance selection is acknowledged; edited documents
+reject obsolete replies. No application-specific editor event handlers are
+needed for these tools.
+The shared interaction lifecycle also cancels queued automatic completion when
+an explicit tool opens. Choice padding and disabled rows now use the arrow
+cursor instead of retaining the source editor's text cursor.
+Website filenames now come from the shared project model. Source links and
+shader loads configure that model directly, preserving provided project files.
+The duplicate filename paragraphs and per-frame metadata polling were removed.
+
 The website migration also exercised the following compiler paths. These are
 language and compiler fixes, with no website-specific syntax or inference rules.
 

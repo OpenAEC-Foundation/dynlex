@@ -1,0 +1,14 @@
+# Application entry points configure project metadata; the UI model owns it.
+import ../state.dl
+
+to [configure the website source editor] {C string:label} [named] {string:filename} [prefixed by] {string:prefix} [using] {a pointer to JSON value:profiles} [in] {a pointer to website state:state}:
+    set editor to the UI source editor labeled label in (state's language)
+    set document to editor's document's project's entry
+    configure UI source document document named filename at ("file:///workspace/" + filename) prefixed by prefix using profiles with files (document's project's files)
+
+to [configure the website shader source named] {string:filename} [in] {a pointer to website state:state}:
+    set profiles to UI fragment analysis
+    if state's shader editor's description's geometry's kind != 0:
+        free profiles
+        set profiles to UI vertex and fragment analysis
+    configure the website source editor "Shader source" named filename prefixed by "" using profiles in state
