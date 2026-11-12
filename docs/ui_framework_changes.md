@@ -513,3 +513,23 @@ depth overlap, mirroring, normal matrices, color conversion, material values,
 all fifteen attributes, unsigned flags, vector arithmetic/updates, zero-vector
 normalization and retained geometry. Both backends pass with no graphics errors.
 The complete core integration suite passes 515 checks with no failures or skips.
+
+Scene instances also accept checked affine anchors before their local root pose
+and model transforms. Held models can follow an animated hand's exact placement,
+including shear, nonuniform scale and mirroring. Bounds, picking and shader
+records use those same composed transforms. Anchor changes invalidate all model
+roots and their descendants; unchanged anchors preserve the cached revision.
+Native O0/O2, Wasm O0/O2 and browser-compiler tests cover attachments, multiple
+roots, root articulation, normal matrices, independent instances and detaching,
+with zero retained allocations. The pixel probe also passes on both backends
+with an angled camera and fully overlapping triangles at different depths.
+The actual Farm equipment/animation controller still needs to use this API.
+
+Projection now requires a float32 4-by-4 camera matrix. Native O0/O2 and the
+shipped compiler reject scalar, vector and other matrix shapes instead of
+accepting an unrelated multiply operation. Valid WGSL/GLSL and reflection remain
+byte-identical to the pixel-tested shaders. The final 242-file SDK matches its
+committed UI/runtime sources. All four Studio/River WebGPU/WebGL browser runs
+pass, including versioned asset URLs; the rebuilt application binary is unchanged.
+The final camera constraint affects only an unimported source helper and the SDK
+source catalog, verified against the complete application dependency graph.
