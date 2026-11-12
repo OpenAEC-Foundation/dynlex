@@ -5,7 +5,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { setTimeout as pause } from 'node:timers/promises';
-import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, verifySourceHover, verifySourceInspection, verifySourceFixes, verifySourceCallColor, verifySourceCallColors } from './editor_feature_checks.mjs';
+import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, verifySourceHover, verifySourceInspection, verifySourceFixes, verifySourceCallColor, verifySourceCallColors, verifySourceNavigationAppearance } from './editor_feature_checks.mjs';
 import {canvasControls} from './canvas_controls.mjs';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
@@ -243,6 +243,7 @@ try {
   await verifySourceCompletion({command,evaluate,waitFor,key,capture,
     source:'import lib/std.dl\npri',prefix:'',name:'ide'});
   await verifySourcePaste({command,evaluate,waitFor,key,source:'import lib/std.dl\nprint line 7'});
+  await verifySourceNavigationAppearance({waitFor,disabled:true});
   await verifySourceDefinition({command,evaluate,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',line:1,column:0,filename:'string.dl',name:'ide'});
   await verifySourceHover({command,evaluate,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',name:'ide'});
   await verifySourceInspection({command,evaluate,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',name:'ide'});

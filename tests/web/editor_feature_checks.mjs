@@ -4,6 +4,17 @@ import {setTimeout as pause} from 'node:timers/promises';
 
 const callColors=JSON.parse(await fs.readFile(new URL('../../shared/call-colors.json',import.meta.url),'utf8'));
 
+export async function verifySourceNavigationAppearance({waitFor,disabled}) {
+  for(const label of ['Back','Main file']) {
+    await waitFor(`(() => {
+      const action=window.colorProbe.find(item=>item.text.trim()===${JSON.stringify(label)});
+      const available=window.colorProbe.find(item=>item.text.trim()==='Outline');
+      if(!action || !available) return false;
+      return action.ink.every((value,index)=>${disabled?'value+0.01<available.ink[index]':'Math.abs(value-available.ink[index])<0.0001'});
+    })()`);
+  }
+}
+
 export async function verifySourceCallColor({waitFor,text,depth=0}) {
   const channels=callColors[depth].dark.match(/../g).map(channel=>{
     const value=parseInt(channel,16)/255;
@@ -83,6 +94,7 @@ export async function verifySourceDefinition({command,evaluate,waitFor,key,captu
   for(let character=0;character<column;character++) await key('ArrowRight','ArrowRight',39);
   await key('F12','F12',123);
   await waitFor(`window.siteProbe.visible.includes(${JSON.stringify(filename+' · Read only')})`);
+  await verifySourceNavigationAppearance({waitFor,disabled:false});
   await capture(name+'-definition');
   await key('ArrowLeft','ArrowLeft',37,1);
   await waitFor(`!window.siteProbe.visible.includes(${JSON.stringify(filename+' · Read only')}) && document.querySelector('textarea').value===${JSON.stringify(source)}`);

@@ -139,6 +139,14 @@ shared editor now retains both, matches generic type/modifier style rules, and
 includes modifier legends in its color cache identity. Default nested-call
 colors are generated from the existing canonical palette for both ordinary and
 embedded editors; no application-specific color decoder is needed.
+Disabled document controls computed muted colors in a local appearance, but
+paragraph and editor drawing read the original colors. Shared foreground
+presentation now covers document captions, inline links, semantic text, desktop
+fields, switches, buttons and ribbon captions. Authored appearances and semantic
+colors stay intact when controls change state.
+Disabling a hovered inline link also removes its underline before another pointer
+event; the recording-driver regression checks the emitted geometry and its
+restoration alongside text colors.
 
 The website migration also exercised the following compiler paths. These are
 language and compiler fixes, with no website-specific syntax or inference rules.
