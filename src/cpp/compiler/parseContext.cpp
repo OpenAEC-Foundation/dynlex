@@ -157,8 +157,34 @@ PatternMatch *ParseContext::match(
 	return finish(nullptr);
 }
 
-void ParseContext::registerShaderUniform(std::string uniformName, std::uint32_t binding, Range range) {
-	shaderUniforms.push_back({std::move(uniformName), binding, std::move(range)});
+bool ParseContext::registerShaderUniform(std::string uniformName, std::uint32_t binding, DataType type, Range range) {
+	for (const ShaderUniform &previous : shaderUniforms) {
+		if (previous.name == uniformName) {
+			if (previous.binding != binding) {
+				addDiagnostic(Diagnostic(
+					*this, Diagnostic::Level::Error, "shader uniform binding inconsistent", range, "name", uniformName, "first",
+					std::to_string(previous.binding), "second", std::to_string(binding)
+				));
+				return false;
+			}
+			if (previous.type != type) {
+				addDiagnostic(
+					Diagnostic(*this, Diagnostic::Level::Error, "shader uniform type inconsistent", range, "name", uniformName)
+				);
+				return false;
+			}
+			return true;
+		}
+		if (previous.binding == binding) {
+			addDiagnostic(Diagnostic(
+				*this, Diagnostic::Level::Error, "shader uniform binding duplicate", range, "binding", std::to_string(binding),
+				"first", previous.name, "second", uniformName
+			));
+			return false;
+		}
+	}
+	shaderUniforms.push_back({std::move(uniformName), binding, std::move(type), std::move(range)});
+	return true;
 }
 
 void ParseContext::registerShaderVertexInput(std::string name, std::uint32_t location, DataType type, Range range) {

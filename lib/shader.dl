@@ -42,5 +42,7 @@ function set [the|] shader interpolant named {a value:name} with an x coordinate
 [the|] shader interpolant w named name means: the element at 3 in @intrinsic("shader interpolant input", name)
 # Shader uniforms (values passed from host each frame)
 
-the shader time means: @intrinsic("shader uniform", "time", 0)
-the shader render pass means: @intrinsic("shader uniform", "render_pass", 1)
+[the|] shader uniform named {a value:name} at binding {a value:slot} as {type:kind} means: @intrinsic("shader uniform", name, slot, kind)
+
+the shader time means: @intrinsic("shader uniform", "time", 0, @intrinsic("type", "float", 32))
+the shader render pass means: @intrinsic("shader uniform", "render_pass", 1, @intrinsic("type", "float", 32))

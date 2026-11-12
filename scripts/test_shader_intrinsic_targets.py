@@ -25,7 +25,7 @@ SHADER_INTRINSICS = {
     ),
     "shader uniform": (
         IGNORE_VALUE
-        + '''the shader time means: @intrinsic("shader uniform", "time", 0)
+        + '''the shader time means: @intrinsic("shader uniform", "time", 0, @intrinsic("type", "float", 32))
 
 ignore the shader time
 ''',
@@ -120,40 +120,40 @@ ignore the invalid shader input
     ),
     (
         "duplicate-uniform-binding",
-        '@intrinsic("discard", @intrinsic("shader uniform", "time", 4))\n'
-        '@intrinsic("discard", @intrinsic("shader uniform", "width", 4))\n'
+        '@intrinsic("discard", @intrinsic("shader uniform", "time", 4, @intrinsic("type", "float", 32)))\n'
+        '@intrinsic("discard", @intrinsic("shader uniform", "width", 4, @intrinsic("type", "float", 32)))\n'
         '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n',
         ("--emit-spirv", "--shader-stage=fragment"),
         "Shader uniform binding 4 is assigned to both 'time' and 'width'",
     ),
     (
         "inconsistent-uniform-name",
-        '@intrinsic("discard", @intrinsic("shader uniform", "time", 4))\n'
-        '@intrinsic("discard", @intrinsic("shader uniform", "time", 7))\n'
+        '@intrinsic("discard", @intrinsic("shader uniform", "time", 4, @intrinsic("type", "float", 32)))\n'
+        '@intrinsic("discard", @intrinsic("shader uniform", "time", 7, @intrinsic("type", "float", 32)))\n'
         '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n',
         ("--emit-spirv", "--shader-stage=fragment"),
         "Shader uniform 'time' is assigned to both binding 4 and binding 7",
     ),
     (
         "empty-uniform-name",
-        '@intrinsic("discard", @intrinsic("shader uniform", "", 0))\n',
+        '@intrinsic("discard", @intrinsic("shader uniform", "", 0, @intrinsic("type", "float", 32)))\n',
         ("--emit-spirv", "--shader-stage=fragment"),
         "shader uniform requires a non-empty string literal name",
     ),
     (
         "out-of-range-uniform-binding",
-        '@intrinsic("discard", @intrinsic("shader uniform", "time", 4294967296))\n',
+        '@intrinsic("discard", @intrinsic("shader uniform", "time", 4294967296, @intrinsic("type", "float", 32)))\n',
         ("--emit-spirv", "--shader-stage=fragment"),
         "Shader uniform binding must be a non-negative 32-bit compile-time integer",
     ),
 )
 EXPLICIT_UNIFORM_STAGE_SHADERS = {
     "vertex": (
-        '@intrinsic("discard", @intrinsic("shader uniform", "width", 2))\n'
+        '@intrinsic("discard", @intrinsic("shader uniform", "width", 2, @intrinsic("type", "float", 32)))\n'
         '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.0, 0.0, 0.0, 1.0))\n'
     ),
     "fragment": (
-        '@intrinsic("discard", @intrinsic("shader uniform", "time", 0))\n'
+        '@intrinsic("discard", @intrinsic("shader uniform", "time", 0, @intrinsic("type", "float", 32)))\n'
         '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n'
     ),
 }
@@ -227,7 +227,7 @@ REPEATED_UNIFORM_LOAD_SHADER = '''function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-the shader time means: @intrinsic("shader uniform", "time", 0)
+the shader time means: @intrinsic("shader uniform", "time", 0, @intrinsic("type", "float", 32))
 
 [a|] floating-point number means: @intrinsic("type", "float")
 

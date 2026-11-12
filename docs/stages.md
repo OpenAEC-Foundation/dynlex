@@ -888,6 +888,14 @@ including any BSS that has no active data segment. The module defines its own st
 browser runtime supplies linear memory and host functions, reads that linked heap boundary, and allocates from it;
 it does not compute another stack or static-data layout. Relocatable objects are never treated as executable modules.
 
+Shader uniforms declare a nonempty name, an unsigned 32-bit binding, and a compile-time type
+using `@intrinsic("shader uniform", name, binding, type)`. Numeric 32-bit scalars and
+vectors of two through four components preserve their signedness. Float32 matrices
+of two through four rows and columns use explicitly padded row records with a sixteen-byte row stride.
+Each uniform occupies one block member at offset zero. Repeated declarations must
+agree on name, binding and type. Browser reflection reports the scalar kind, row
+count and column count from the emitted block layout.
+
 LLVM expands wide arithmetic according to the selected target. The browser runtime
 provides LLVM's i128 compiler-runtime arithmetic and numeric conversion imports
 using exact BigInt limbs. Floating-point conversions round directly to the target
@@ -906,6 +914,12 @@ vertex outputs and fragment inputs receive identical locations regardless of sou
 the four floating-point components while the intrinsic layer owns the stage restrictions and interface storage classes.
 The SPIR-V 1.4+ entry-point interface contains all emitted module globals, including private variables, while excluding
 function-local storage. The entry-point checker validates emitted shader modules with `spirv-val --target-env vulkan1.3`.
+
+Shader integer lowering preserves signed opcode interpretation in operand and
+result types, with bitcasts at signless SSA boundaries. This includes numeric
+conversions, division, remainders, shifts, comparisons and signed GLSL extrema.
+Constant logical addresses use typed, losslessly narrowed indices instead of
+unnecessarily requiring 64-bit indexing.
 
 # Incremental Native Builds
 

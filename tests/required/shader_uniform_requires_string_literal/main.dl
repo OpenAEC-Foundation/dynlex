@@ -2,4 +2,4 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-ignore @intrinsic("shader uniform", 1, 0)
+ignore @intrinsic("shader uniform", 1, 0, @intrinsic("type", "float", 32))

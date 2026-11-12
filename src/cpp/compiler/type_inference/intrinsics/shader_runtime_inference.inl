@@ -54,6 +54,11 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 				context.fail(buildFailureDetailDiagnostic(expr->arguments[2]->range, detail), 0);
 				return false;
 			}
+			auto reference = getCompileTimeTypeReferenceValue(context.lookupExpressionValue(expr->arguments[3]));
+			if (!reference || !shaderUniformLayout(reference->type.toReferencedType())) {
+				failWithDetail("shader uniform type invalid");
+				return false;
+			}
 		}
 		if (kind == IntrinsicKind::ShaderVertexInput) {
 			auto location = getCompileTimeIntegerValue(context.lookupExpressionValue(expr->arguments[2]));

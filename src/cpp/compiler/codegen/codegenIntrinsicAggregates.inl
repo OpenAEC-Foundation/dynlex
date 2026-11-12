@@ -247,7 +247,7 @@ generateShaderVertexInput(ParseContext &context, Expression *callExpr, const std
 [[gnu::noinline]] static CodegenResult
 generateShaderUniformIntrinsic(ParseContext &context, Expression *callExpr, const std::vector<Expression *> &args) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	// The SPIR-V patcher wraps this scalar global in a set-zero UBO at the explicit binding.
+	// The SPIR-V patcher wraps the value in a set-zero uniform block.
 	std::string uniformName = getCompileTimeString(context, args[1]);
 	requireCompilerInvariant(!uniformName.empty(), "shader uniform reached codegen without a validated name");
 	std::optional<std::int64_t> bindingValue =
@@ -256,20 +256,47 @@ generateShaderUniformIntrinsic(ParseContext &context, Expression *callExpr, cons
 		bindingValue && *bindingValue >= 0 && static_cast<std::uint64_t>(*bindingValue) <= UINT32_MAX,
 		"shader uniform reached codegen without a validated binding"
 	);
-	context.registerShaderUniform(
-		uniformName, static_cast<std::uint32_t>(*bindingValue), intrinsicDiagnosticRange(context, callExpr)
-	);
+	DataType valueType = finalizedExpressionType(context, callExpr);
+	if (!context.registerShaderUniform(
+			uniformName, static_cast<std::uint32_t>(*bindingValue), valueType, intrinsicDiagnosticRange(context, callExpr)
+		))
+		return CodegenResult::failure();
+	llvm::Type *llvmType = getLLVMType(context, valueType);
+	llvm::Type *storageType = llvmType;
+	const bool matrix = valueType.kind == DataType::Kind::Matrix;
+	if (matrix) {
+		llvm::SmallVector<llvm::Type *, 8> fields;
+		auto *rowType = llvm::FixedVectorType::get(builder.getFloatTy(), valueType.matrixColumns());
+		for (int row = 0; row < valueType.matrixRows(); ++row) {
+			fields.push_back(rowType);
+			if (valueType.matrixColumns() == 2)
+				fields.push_back(llvm::FixedVectorType::get(builder.getFloatTy(), 2));
+			else if (valueType.matrixColumns() == 3)
+				fields.push_back(builder.getFloatTy());
+		}
+		storageType = llvm::StructType::get(builder.getContext(), fields);
+	}
 	std::string globalName = "ubo_" + uniformName;
 	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
 	if (!global) {
-		llvm::Type *f32Ty = builder.getFloatTy();
 		global = new llvm::GlobalVariable(
-			*context.llvmModule, f32Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, globalName, nullptr,
+			*context.llvmModule, storageType, false, llvm::GlobalValue::ExternalLinkage, nullptr, globalName, nullptr,
 			llvm::GlobalValue::NotThreadLocal, 3
 		);
-		global->setInitializer(llvm::Constant::getNullValue(f32Ty));
+		global->setInitializer(llvm::Constant::getNullValue(storageType));
 	}
-	return builder.CreateLoad(builder.getFloatTy(), global, uniformName + "_val");
+	requireCompilerInvariant(global->getValueType() == storageType, "uniform global disagrees with its registered type");
+	llvm::Value *stored = builder.CreateLoad(storageType, global, uniformName + "_val");
+	if (!matrix)
+		return stored;
+	// Explicit padding remains visible in WGSL, which has no array-stride annotation.
+	llvm::Value *value = llvm::Constant::getNullValue(llvmType);
+	const unsigned step = valueType.matrixColumns() < 4 ? 2 : 1;
+	for (unsigned row = 0; row < static_cast<unsigned>(valueType.matrixRows()); ++row) {
+		llvm::Value *field = builder.CreateExtractValue(stored, row * step, "uniform_row");
+		value = builder.CreateInsertValue(value, field, row, "uniform_matrix");
+	}
+	return value;
 }
 
 [[gnu::noinline]] static CodegenResult

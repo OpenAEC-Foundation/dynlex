@@ -204,6 +204,8 @@ dynlex options:
         shader uniform binding invalid: "Shader uniform binding must be a non-negative 32-bit compile-time integer"
         shader uniform binding duplicate: "Shader uniform binding {binding} is assigned to both '{first}' and '{second}'"
         shader uniform binding inconsistent: "Shader uniform '{name}' is assigned to both binding {first} and binding {second}"
+        shader uniform type invalid: "Shader uniform requires a 32-bit numeric scalar, a vector of 2 through 4 components, or a float32 matrix of 2 through 4 rows and columns"
+        shader uniform type inconsistent: "Shader uniform '{name}' uses different types"
         function intrinsic requires string literal: "function reference must be a compile-time string literal"
         unknown function reference: "Unknown function reference: {signature}"
         ambiguous function reference: "Ambiguous function reference: {signature}"

@@ -15,7 +15,7 @@ getOrCreateVertexInputType(std::vector<uint32_t> &binary, uint32_t opcode, std::
 	return identity;
 }
 
-static void patchSignedVertexInputs(std::vector<uint32_t> &binary, const std::vector<ShaderIoVar> &variables) {
+static void patchSignedShaderInputs(std::vector<uint32_t> &binary, const std::vector<ShaderIoVar> &variables) {
 	for (const auto &variable : variables) {
 		if (variable.signedComponents == 0)
 			continue;
@@ -35,7 +35,8 @@ static void patchSignedVertexInputs(std::vector<uint32_t> &binary, const std::ve
 			interfaceType = getOrCreateVertexInputType(binary, spvOpTypeVector, {interfaceType, variable.signedComponents});
 		if (interfaceType == originalType)
 			continue;
-		uint32_t interfacePointer = getOrCreateVertexInputType(binary, spvOpTypePointer, {spvStorageClassInput, interfaceType});
+		uint32_t interfacePointer =
+			getOrCreateVertexInputType(binary, spvOpTypePointer, {variable.storageClass, interfaceType});
 		for (size_t position = 5; position < binary.size();) {
 			uint32_t length = spvWordCount(binary[position]);
 			uint32_t opcode = spvOpcode(binary[position]);

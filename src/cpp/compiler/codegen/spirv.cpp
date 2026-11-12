@@ -1,11 +1,13 @@
 #include "spirv.h"
 #include "compilerUtils.h"
 #include "parseContext.h"
+#include "shaderUniformType.h"
 #include "targetOptions.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Operator.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/TargetSelect.h"
@@ -16,6 +18,8 @@
 #include <algorithm>
 #include <cstring>
 #include <fstream>
+#include <functional>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -36,6 +40,7 @@ static constexpr uint32_t spvOpConstant = 43;
 static constexpr uint32_t spvOpLoad = 61;
 static constexpr uint32_t spvOpStore = 62;
 static constexpr uint32_t spvOpAccessChain = 65;
+static constexpr uint32_t spvOpInBoundsAccessChain = 66;
 static constexpr uint32_t spvOpBitcast = 124;
 
 // SPIR-V constants
@@ -224,9 +229,15 @@ struct ShaderIoVar {
 	uint32_t decorationValue;	   // BuiltIn ID or Location number
 	bool isUBO = false;			   // true = Uniform block (needs Block/Binding/DescriptorSet/Offset decorations)
 	uint32_t binding = 0;		   // UBO binding point
-	uint32_t signedComponents = 0; // Signed input scalar (1) or vector width (2..4).
+	uint32_t signedComponents = 0; // Signed interface scalar (1) or vector width (2..4).
+	uint32_t uniformRows = 0;
+	uint32_t uniformColumns = 0;
+	uint32_t uniformStorageType = 0;
 };
 
+#include "spirvIndexWidths.inl"
+#include "spirvIntegerSemantics.inl"
+#include "spirvPointerStorage.inl"
 #include "spirvVertexInputs.inl"
 
 // Post-process SPIR-V binary to convert exported functions to shader entry points.
@@ -392,7 +403,7 @@ static bool patchShaderBinary(
 		pos += wc;
 	}
 
-	patchSignedVertexInputs(output, vars);
+	patchSignedShaderInputs(output, vars);
 
 	// Find insertion point for decorations (before first OpType instruction)
 	size_t decorInsertPos = output.size();
@@ -408,16 +419,8 @@ static bool patchShaderBinary(
 		pos += wc2;
 	}
 
-	// For UBO vars, wrap the scalar type in a struct and fix all references.
-	// The codegen emits a plain float global; we transform it into:
-	//   %StructType = OpTypeStruct %float
-	//   %PtrUniformStruct = OpTypePointer Uniform %StructType
-	//   %PtrUniformFloat = OpTypePointer Uniform %float
-	//   %uint_0 = OpConstant %uint 0
-	//   %var = OpVariable %PtrUniformStruct Uniform
-	//   ...
-	//   %ptr = OpAccessChain %PtrUniformFloat %var %uint_0
-	//   %val = OpLoad %float %ptr
+	// Uniform values live in one-member blocks. Padded row structures preserve
+	// matrix layout across Vulkan, WGSL and GLSL without implicit array strides.
 	const bool hasUniform = std::any_of(vars.begin(), vars.end(), [](const ShaderIoVar &variable) {
 		return variable.isUBO;
 	});
@@ -426,9 +429,9 @@ static bool patchShaderBinary(
 		if (!v.isUBO)
 			continue;
 
-		// Find the old pointer type and float type from the variable
+		// Find the old pointer type and value type from the variable
 		uint32_t oldPtrTypeId = 0;
-		uint32_t floatTypeId = 0;
+		uint32_t valueTypeId = 0;
 		for (pos = 5; pos < output.size();) {
 			uint32_t wc2 = spvWordCount(output[pos]);
 			uint32_t op2 = spvOpcode(output[pos]);
@@ -438,31 +441,40 @@ static bool patchShaderBinary(
 				oldPtrTypeId = output[pos + 1];
 			pos += wc2;
 		}
-		// Get the float type from the old pointer type
+		// Get the value type from the old pointer type
 		for (pos = 5; pos < output.size();) {
 			uint32_t wc2 = spvWordCount(output[pos]);
 			uint32_t op2 = spvOpcode(output[pos]);
 			if (wc2 == 0)
 				break;
 			if (op2 == spvOpTypePointer && wc2 >= 4 && output[pos + 1] == oldPtrTypeId)
-				floatTypeId = output[pos + 3];
+				valueTypeId = output[pos + 3];
 			pos += wc2;
 		}
 
 		// Allocate new IDs
+		if (v.uniformRows > 1) {
+			bool rowStruct = false;
+			const uint32_t fields = v.uniformRows * (v.uniformColumns < 4 ? 2 : 1);
+			for (pos = 5; pos < output.size(); pos = nextSpvInstruction(output, pos))
+				if (spvOpcode(output[pos]) == spvOpTypeStruct && output[pos + 1] == valueTypeId)
+					rowStruct = spvWordCount(output[pos]) == fields + 2;
+			requireCompilerInvariant(rowStruct, "matrix uniform is missing its padded SPIR-V row structure");
+			v.uniformStorageType = valueTypeId;
+		}
 		uint32_t structTypeId = allocateSpvId(output);
 		uint32_t ptrUniformStructId = allocateSpvId(output);
-		uint32_t ptrUniformFloatId = allocateSpvId(output);
+		uint32_t ptrUniformValueId = allocateSpvId(output);
 		v.structTypeId = structTypeId;
 
-		// Find where to insert new types (before first OpVariable)
+		// Insert after the value's types and before this variable.
 		size_t typeInsertPos = output.size();
 		for (pos = 5; pos < output.size();) {
 			uint32_t wc2 = spvWordCount(output[pos]);
 			uint32_t op2 = spvOpcode(output[pos]);
 			if (wc2 == 0)
 				break;
-			if (op2 == spvOpVariable) {
+			if (op2 == spvOpVariable && output[pos + 2] == v.id) {
 				typeInsertPos = pos;
 				break;
 			}
@@ -471,20 +483,20 @@ static bool patchShaderBinary(
 
 		// Insert new type declarations
 		std::vector<uint32_t> newTypes;
-		// OpTypeStruct structTypeId floatTypeId
+		// OpTypeStruct structTypeId valueTypeId
 		newTypes.push_back(spvInstWord(3, spvOpTypeStruct));
 		newTypes.push_back(structTypeId);
-		newTypes.push_back(floatTypeId);
+		newTypes.push_back(valueTypeId);
 		// OpTypePointer ptrUniformStructId Uniform structTypeId
 		newTypes.push_back(spvInstWord(4, spvOpTypePointer));
 		newTypes.push_back(ptrUniformStructId);
 		newTypes.push_back(spvStorageClassUniform);
 		newTypes.push_back(structTypeId);
-		// OpTypePointer ptrUniformFloatId Uniform floatTypeId
+		// OpTypePointer ptrUniformValueId Uniform valueTypeId
 		newTypes.push_back(spvInstWord(4, spvOpTypePointer));
-		newTypes.push_back(ptrUniformFloatId);
+		newTypes.push_back(ptrUniformValueId);
 		newTypes.push_back(spvStorageClassUniform);
-		newTypes.push_back(floatTypeId);
+		newTypes.push_back(valueTypeId);
 		output.insert(output.begin() + typeInsertPos, newTypes.begin(), newTypes.end());
 
 		// Fix the OpVariable to use the new struct pointer type
@@ -504,6 +516,12 @@ static bool patchShaderBinary(
 			uint32_t op2 = spvOpcode(output[pos]);
 			if (wc2 == 0)
 				break;
+			if ((op2 == spvOpAccessChain || op2 == spvOpInBoundsAccessChain) && wc2 >= 5 && output[pos + 3] == v.id) {
+				output[pos] = spvInstWord(wc2 + 1, op2);
+				output.insert(output.begin() + pos + 4, uniformIndexId);
+				pos += wc2 + 1;
+				continue;
+			}
 			if (op2 == spvOpLoad && wc2 >= 4 && output[pos + 3] == v.id) {
 				// Original: OpLoad %float %result %var [Aligned N]
 				// Replace with: OpAccessChain %ptrUniformFloat %acId %var %uint0
@@ -514,7 +532,7 @@ static bool patchShaderBinary(
 				std::vector<uint32_t> replacement;
 				// OpAccessChain
 				replacement.push_back(spvInstWord(5, spvOpAccessChain));
-				replacement.push_back(ptrUniformFloatId);
+				replacement.push_back(ptrUniformValueId);
 				replacement.push_back(accessChainId);
 				replacement.push_back(v.id);
 				replacement.push_back(uniformIndexId);
@@ -533,10 +551,28 @@ static bool patchShaderBinary(
 		}
 	}
 
+	patchShaderAccessChainStorage(output);
+	preserveShaderIntegerSemantics(output);
+
 	// Add decorations for I/O variables
 	std::vector<uint32_t> newDecors;
+	std::unordered_set<uint32_t> decoratedUniformStorage;
 	for (const auto &v : vars) {
 		if (v.isUBO) {
+			if (v.uniformStorageType && decoratedUniformStorage.insert(v.uniformStorageType).second) {
+				const uint32_t step = v.uniformColumns < 4 ? 2 : 1;
+				for (uint32_t row = 0; row < v.uniformRows; ++row) {
+					newDecors.insert(
+						newDecors.end(),
+						{spvInstWord(5, spvOpMemberDecorate), v.uniformStorageType, row * step, spvDecorationOffset, row * 16}
+					);
+					if (step == 2)
+						newDecors.insert(
+							newDecors.end(), {spvInstWord(5, spvOpMemberDecorate), v.uniformStorageType, row * step + 1,
+											  spvDecorationOffset, row * 16 + v.uniformColumns * 4}
+						);
+				}
+			}
 			// Block decoration on the struct type
 			newDecors.push_back(spvInstWord(3, spvOpDecorate));
 			newDecors.push_back(v.structTypeId);
@@ -601,38 +637,6 @@ std::unique_ptr<llvm::TargetMachine> createSPIRVTargetMachine(ParseContext &cont
 	));
 }
 
-static bool collectShaderUniforms(ParseContext &context, std::vector<ParseContext::ShaderUniform> &uniforms) {
-	for (const ParseContext::ShaderUniform &uniform : context.shaderUniforms) {
-		bool exactDuplicate = false;
-		for (const ParseContext::ShaderUniform &previous : uniforms) {
-			if (previous.name == uniform.name) {
-				if (previous.binding != uniform.binding) {
-					context.addDiagnostic(Diagnostic(
-						context, Diagnostic::Level::Error, "shader uniform binding inconsistent", uniform.range, "name",
-						uniform.name, "first", std::to_string(previous.binding), "second", std::to_string(uniform.binding)
-					));
-					return false;
-				}
-				exactDuplicate = true;
-				break;
-			}
-			if (previous.binding == uniform.binding) {
-				context.addDiagnostic(Diagnostic(
-					context, Diagnostic::Level::Error, "shader uniform binding duplicate", uniform.range, "binding",
-					std::to_string(uniform.binding), "first", previous.name, "second", uniform.name
-				));
-				return false;
-			}
-		}
-		if (!exactDuplicate)
-			uniforms.push_back(uniform);
-	}
-	std::sort(uniforms.begin(), uniforms.end(), [](const auto &left, const auto &right) {
-		return left.binding < right.binding;
-	});
-	return true;
-}
-
 static bool collectShaderVertexInputs(ParseContext &context, std::vector<ParseContext::ShaderVertexInput> &inputs) {
 	for (const auto &input : context.shaderVertexInputs) {
 		bool duplicate = false;
@@ -668,9 +672,10 @@ bool emitSPIRVModule(ParseContext &context) {
 	std::string outputPath = context.options.outputPath;
 	if (outputPath.empty())
 		outputPath = context.options.inputPath + ".spv";
-	std::vector<ParseContext::ShaderUniform> shaderUniforms;
-	if (!collectShaderUniforms(context, shaderUniforms))
-		return false;
+	auto shaderUniforms = context.shaderUniforms;
+	std::sort(shaderUniforms.begin(), shaderUniforms.end(), [](const auto &left, const auto &right) {
+		return left.binding < right.binding;
+	});
 	std::vector<ParseContext::ShaderVertexInput> vertexInputs;
 	if (!collectShaderVertexInputs(context, vertexInputs))
 		return false;
@@ -678,6 +683,7 @@ bool emitSPIRVModule(ParseContext &context) {
 	requireCompilerInvariant(context.targetMachine != nullptr, "SPIR-V emission requires an initialized target machine");
 	llvm::TargetMachine &targetMachine = *context.targetMachine;
 	defineShaderOutputVectorSeeds(*context.llvmModule);
+	lowerShaderAddressIndices(*context.llvmModule);
 
 	std::error_code ec;
 	llvm::raw_fd_ostream dest(outputPath, ec, llvm::sys::fs::OF_None);
@@ -749,6 +755,13 @@ bool emitSPIRVModule(ParseContext &context) {
 		uboVar.decorationValue = 0;
 		uboVar.isUBO = true;
 		uboVar.binding = uniform.binding;
+		auto layout = shaderUniformLayout(uniform.type);
+		requireCompilerInvariant(layout.has_value(), "uniform codegen lost its validated layout");
+		uboVar.uniformRows = layout->rows;
+		uboVar.uniformColumns = layout->columns;
+		if (uniform.type.kind == DataType::Kind::Int ||
+			(uniform.type.kind == DataType::Kind::Vector && uniform.type.aggregateElementType().kind == DataType::Kind::Int))
+			uboVar.signedComponents = layout->columns;
 		ioVars.push_back(uboVar);
 	}
 

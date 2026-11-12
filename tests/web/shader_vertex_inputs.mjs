@@ -27,6 +27,6 @@ assert.deepEqual(compile(source,'vertex'),{uniforms:[],vertexInputs:[
 ]});
 assert.deepEqual(compile(input('point',0,vector(2))+output,'vertex'),{uniforms:[],vertexInputs:[{name:'point',location:0,format:'float32x2'}]});
 // Reusing a compiler must remove reflection left by its preceding stage.
-assert.deepEqual(compile('@intrinsic("discard", @intrinsic("shader uniform", "time", 1))\n'+output,'fragment'),{uniforms:[{name:'time',group:0,binding:1}],vertexInputs:[]});
+assert.deepEqual(compile('@intrinsic("discard", @intrinsic("shader uniform", "time", 1, @intrinsic("type", "float", 32)))\n'+output,'fragment'),{uniforms:[{name:'time',group:0,binding:1,type:{scalar:'float32',rows:1,columns:1}}],vertexInputs:[]});
 assert.deepEqual(compile(output,'vertex'),{uniforms:[],vertexInputs:[]});
 console.log('Browser compiler reflects typed vertex inputs, Unicode names and locations without stale stage metadata.');

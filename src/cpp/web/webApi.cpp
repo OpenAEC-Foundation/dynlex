@@ -355,6 +355,51 @@ bool reflectShaderSpirv(
 			reflectedUniform["name"] = spirvName.substr(prefix.size());
 			reflectedUniform["group"] = compiler.get_decoration(uniform.id, spv::DecorationDescriptorSet);
 			reflectedUniform["binding"] = compiler.get_decoration(uniform.id, spv::DecorationBinding);
+			const auto &block = compiler.get_type(uniform.base_type_id);
+			requireCompilerInvariant(block.member_types.size() == 1, "uniform block has an unexpected member count");
+			const auto &value = compiler.get_type(block.member_types.front());
+			const char *scalar = nullptr;
+			uint32_t rows = 1, columns = value.vecsize;
+			if (value.basetype == spirv_cross::SPIRType::Struct) {
+				requireCompilerInvariant(!value.member_types.empty(), "matrix uniform storage has no rows");
+				const auto &row = compiler.get_type(value.member_types.front());
+				columns = row.vecsize;
+				const uint32_t step = columns < 4 ? 2 : 1;
+				rows = value.member_types.size() / step;
+				requireCompilerInvariant(
+					row.basetype == spirv_cross::SPIRType::Float && row.width == 32 && row.columns == 1 && row.array.empty() &&
+						columns >= 2 && columns <= 4 && rows >= 2 && rows <= 4 && value.member_types.size() == rows * step &&
+						compiler.get_declared_struct_size(value) == rows * 16,
+					"matrix uniform has an unsupported physical layout"
+				);
+				for (uint32_t index = 0; index < rows; ++index) {
+					requireCompilerInvariant(
+						value.member_types[index * step] == value.member_types.front() &&
+							compiler.type_struct_member_offset(value, index * step) == index * 16,
+						"matrix uniform rows have inconsistent storage"
+					);
+					if (step == 2) {
+						const auto &padding = compiler.get_type(value.member_types[index * step + 1]);
+						requireCompilerInvariant(
+							padding.basetype == spirv_cross::SPIRType::Float && padding.width == 32 && padding.columns == 1 &&
+								padding.vecsize == 4 - columns && padding.array.empty() &&
+								compiler.type_struct_member_offset(value, index * step + 1) == index * 16 + columns * 4,
+							"matrix uniform padding has inconsistent storage"
+						);
+					}
+				}
+				scalar = "float32";
+			} else {
+				scalar = value.basetype == spirv_cross::SPIRType::Float	 ? "float32"
+						 : value.basetype == spirv_cross::SPIRType::Int	 ? "sint32"
+						 : value.basetype == spirv_cross::SPIRType::UInt ? "uint32"
+																		 : nullptr;
+				requireCompilerInvariant(
+					scalar && value.width == 32 && value.columns == 1 && value.array.empty(),
+					"uniform block has an unsupported reflected type"
+				);
+			}
+			reflectedUniform["type"] = {{"scalar", scalar}, {"rows", rows}, {"columns", columns}};
 			uniforms.push_back(std::move(reflectedUniform));
 		}
 		std::sort(uniforms.begin(), uniforms.end(), [](const nlohmann::json &left, const nlohmann::json &right) {

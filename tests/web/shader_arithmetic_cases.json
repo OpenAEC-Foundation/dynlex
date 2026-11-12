@@ -1,0 +1,16 @@
+[
+  {"name":"signed division","scalar":"sint32","operation":"divide","samples":[-7,3],"divisor":-8},
+  {"name":"signed remainder","scalar":"sint32","operation":"modulo","samples":[-7,3],"divisor":-4},
+  {"name":"arithmetic right shift","scalar":"sint32","operation":"shift right","samples":[-8,1],"divisor":-16},
+  {"name":"signed negation","scalar":"sint32","operation":"negate","samples":[-7,0],"divisor":28},
+  {"name":"signed absolute value","scalar":"sint32","operation":"abs","samples":[-7,0],"divisor":28},
+  {"name":"signed minimum","scalar":"sint32","operation":"min","samples":[-7,3],"divisor":-28},
+  {"name":"signed maximum","scalar":"sint32","operation":"max","samples":[-7,3],"divisor":12},
+  {"name":"float to signed integer","scalar":"float32","operation":"cast","conversion":"int","samples":[-7.75,0],"divisor":-28},
+  {"name":"float to unsigned integer","scalar":"float32","operation":"cast","conversion":"uint","samples":[7.75,0],"divisor":28},
+  {"name":"logical right shift","scalar":"uint32","operation":"shift right","samples":[4294967295,31],"divisor":4},
+  {"name":"unsigned division","scalar":"uint32","operation":"divide","samples":[4294967295,2147483647],"divisor":8},
+  {"name":"unsigned remainder","scalar":"uint32","operation":"modulo","samples":[4294967295,4294967294],"divisor":4},
+  {"name":"unsigned minimum","scalar":"uint32","operation":"min","samples":[2147483648,4294967295],"divisor":8589934592},
+  {"name":"unsigned maximum","scalar":"uint32","operation":"max","samples":[0,2147483648],"divisor":8589934592}
+]

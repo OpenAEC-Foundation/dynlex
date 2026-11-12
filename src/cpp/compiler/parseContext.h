@@ -57,6 +57,7 @@ struct ParseContext {
 	struct ShaderUniform {
 		std::string name;
 		std::uint32_t binding = 0;
+		DataType type;
 		Range range;
 	};
 	struct ShaderVertexInput {
@@ -380,7 +381,7 @@ struct ParseContext {
 		PatternReference *reference, MatchOptions options = {}, MatchDependencies *dependencies = nullptr,
 		bool countBodyResolution = false
 	);
-	void registerShaderUniform(std::string uniformName, std::uint32_t binding, Range range);
+	bool registerShaderUniform(std::string uniformName, std::uint32_t binding, DataType type, Range range);
 	void registerShaderVertexInput(std::string name, std::uint32_t location, DataType type, Range range);
 	void registerShaderInterpolantName(const std::string &interpolantName);
 	VariableReference *createVariableReference(Range range, const std::string &name);
