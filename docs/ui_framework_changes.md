@@ -147,6 +147,27 @@ colors stay intact when controls change state.
 Disabling a hovered inline link also removes its underline before another pointer
 event; the recording-driver regression checks the emitted geometry and its
 restoration alongside text colors.
+Responsive documents now lay out and paint ordinary single-line fields, switches
+and choice fields, using the same editing, undo, composition, activation and
+focus code as classic windows. Editing no longer replaces a document field's
+declared font and padding. Classic fields also refresh their retained line
+geometry before drawing, and all single-line horizontal scrolling uses the same
+text-scroll state. Initial and programmatic field values use the existing
+single-line input policy.
+Choice fields now keep their stable names separate from their initial selected
+text. Ribbon declarations supply that initial value explicitly as well.
+Dropdowns previously required every option to fit in the window and maintained
+their own keyboard and drawing paths. They now use the same bounded choice
+surface as editor completion, outlines and diagnostic actions. Placement,
+scrolling, disabled selection and keyboard input are shared. Dropdown pointer
+acceptance remains on release, including cancellation when dragging away;
+completion retains acceptance on press. Document popups inherit the control's
+font and colors. The old popup-index state and its readers and writers were
+removed. Shared regressions cover long lists, small viewports, capture loss and
+authored presentation alongside editor and ribbon behavior.
+Choice placement also replaces its fixed 24-pixel line assumption with actual
+anchor bounds. Tall controls and transformed source carets use the same
+above/below placement without overlapping an anchor when there is room beside it.
 
 The website migration also exercised the following compiler paths. These are
 language and compiler fixes, with no website-specific syntax or inference rules.
