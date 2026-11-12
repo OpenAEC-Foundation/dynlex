@@ -5,7 +5,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { setTimeout as pause } from 'node:timers/promises';
-import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, verifySourceHover, verifySourceInspection, verifySourceFixes } from './editor_feature_checks.mjs';
+import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, verifySourceHover, verifySourceInspection, verifySourceFixes, verifySourceCallColor, verifySourceCallColors } from './editor_feature_checks.mjs';
 import {canvasControls} from './canvas_controls.mjs';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
@@ -247,6 +247,7 @@ try {
   await verifySourceHover({command,evaluate,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',name:'ide'});
   await verifySourceInspection({command,evaluate,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',name:'ide'});
   await verifySourceFixes({command,evaluate,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',name:'ide'});
+  await verifySourceCallColors({command,waitFor,key,capture,source:'import lib/std.dl\nprint line 7',name:'ide'});
   await click(237,287);
   await waitFor('window.siteProbe.texts.includes("7")');
   await click(120,480); await key('KeyA','a',65,2);
@@ -267,7 +268,7 @@ try {
   await command('Input.insertText',{text:'import lib/std.dl\nprint line "😀"'});
   await waitFor(`window.siteProbe.diagnostics.slice(${beforeValid}).some(result => result.diagnostics.length === 0)`);
   await waitFor(`window.colorProbe.some(item => item.text.includes('😀') && Math.abs(item.ink[0] - Math.pow((230/255+0.055)/1.055,2.4)) < 0.0001)`);
-  await waitFor(`window.colorProbe.some(item => item.text.includes('print') && Math.abs(item.ink[0] - Math.pow((104/255+0.055)/1.055,2.4)) < 0.0001)`);
+  await verifySourceCallColor({waitFor,text:'print line'});
   await capture('ide-analysis');
   await pause(1000);
   const analyzed = await evaluate('window.siteProbe.paints');

@@ -134,6 +134,11 @@ Fixes requested during analysis initially captured an empty diagnostic list.
 Source queries now support a parameter-preparation callback at dispatch, after
 analysis settles. Fixes use it to refresh their diagnostic context, and reusing a
 feature slot clears the previous callback.
+Semantic presentation previously ignored token modifiers and their legend. The
+shared editor now retains both, matches generic type/modifier style rules, and
+includes modifier legends in its color cache identity. Default nested-call
+colors are generated from the existing canonical palette for both ordinary and
+embedded editors; no application-specific color decoder is needed.
 
 The website migration also exercised the following compiler paths. These are
 language and compiler fixes, with no website-specific syntax or inference rules.

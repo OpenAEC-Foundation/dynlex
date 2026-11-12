@@ -1,0 +1,4 @@
+one means: 1
+{value} doubled means: @intrinsic("add", value, value)
+to show {value}: @intrinsic("discard", value)
+show one doubled doubled

@@ -5,7 +5,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { setTimeout as pause } from 'node:timers/promises';
-import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, verifySourceHover, verifySourceInspection, verifySourceFixes } from './editor_feature_checks.mjs';
+import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, verifySourceHover, verifySourceInspection, verifySourceFixes, verifySourceCallColor, verifySourceCallColors } from './editor_feature_checks.mjs';
 import {canvasControls} from './canvas_controls.mjs';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
@@ -274,7 +274,7 @@ try {
   await waitFor('window.siteProbe.texts.includes("THE RIVER / WAITING FOR A PLAN")');
   // Observe actual text draw colors, rather than just the server's token reply.
   await waitFor(`window.colorProbe.some(item => item.text.includes('# The official names') && Math.abs(item.ink[0] - Math.pow((149/255+0.055)/1.055,2.4)) < 0.0001)`);
-  await waitFor(`window.colorProbe.some(item => item.text.includes('get') && Math.abs(item.ink[0] - Math.pow((104/255+0.055)/1.055,2.4)) < 0.0001)`);
+  await verifySourceCallColor({waitFor,text:'get'});
   await pause(500); await capture('river-ready');
   const idle = await evaluate('window.siteProbe.paints');
   await pause(500);
@@ -318,6 +318,7 @@ try {
   await verifySourceHover({command,evaluate,waitFor,key,capture,source:plan,name:'river'});
   await verifySourceInspection({command,evaluate,waitFor,key,capture,source:plan,name:'river'});
   await verifySourceFixes({command,evaluate,waitFor,key,capture,source:plan,name:'river'});
+  await verifySourceCallColors({command,waitFor,key,capture,source:plan,name:'river'});
   await pause(100);
   assert.equal(await evaluate('window.siteProbe.marks.length'),0,'Editing retained execution marks from another snapshot');
   await clickText('Run plan ▶');

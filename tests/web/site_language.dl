@@ -22,7 +22,7 @@ require condition (language's phase = 1) reporting "Language analysis did not in
 set response to a new JSON-RPC null
 receive website language reply response at step 1 in (the address of state)
 free response
-set provider to a JSON object containing [JSON child "legend" is (a JSON object containing [JSON child "tokenTypes" is (a JSON array containing [a new JSON-RPC text for "string"])])]
+set provider to a JSON object containing [JSON child "legend" is (a JSON object containing [JSON child "tokenTypes" is (a JSON array containing [a new JSON-RPC text for "string"]), JSON child "tokenModifiers" is (a new JSON-RPC array)])]
 set capabilities to a JSON object containing [JSON child "semanticTokensProvider" is provider]
 set response to a JSON array containing [a JSON object containing [JSON number "id" is 2, JSON child "result" is (a JSON object containing [JSON child "capabilities" is capabilities])]]
 receive website language reply response at step 2 in (the address of state)

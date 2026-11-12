@@ -2,6 +2,30 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {setTimeout as pause} from 'node:timers/promises';
 
+const callColors=JSON.parse(await fs.readFile(new URL('../../shared/call-colors.json',import.meta.url),'utf8'));
+
+export async function verifySourceCallColor({waitFor,text,depth=0}) {
+  const channels=callColors[depth].dark.match(/../g).map(channel=>{
+    const value=parseInt(channel,16)/255;
+    return value<=0.04045?value/12.92:Math.pow((value+0.055)/1.055,2.4);
+  });
+  await waitFor(`window.colorProbe.some(item=>item.text.trim()===${JSON.stringify(text)} && item.ink.every((value,index)=>Math.abs(value-${JSON.stringify(channels)}[index])<0.0001))`);
+}
+
+export async function verifySourceCallColors({command,waitFor,key,capture,source,name}) {
+  const program=await fs.readFile(new URL('./fixtures/editor_call_colors.dl',import.meta.url),'utf8');
+  await key('KeyA','a',65,2);
+  await command('Input.insertText',{text:program});
+  await waitFor(`document.querySelector('textarea').value===${JSON.stringify(program)}`);
+  for(const [text,depth] of [['show',0],['one',3],['doubled',2],['doubled',1]])
+    await verifySourceCallColor({waitFor,text,depth});
+  await capture(name+'-call-colors');
+  await key('KeyA','a',65,2);
+  await command('Input.insertText',{text:source});
+  await waitFor(`document.querySelector('textarea').value===${JSON.stringify(source)}`);
+  console.log('Shared compiler-derived nested-call colors passed:',name);
+}
+
 export async function verifySourcePaste({command,evaluate,waitFor,key,source}) {
   const menu = 'window.siteProbe.visible.includes("↑ ↓ choose  ·  Enter insert  ·  Esc close")';
   await key('KeyA','a',65,2);
