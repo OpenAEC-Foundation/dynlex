@@ -1,0 +1,1 @@
+Literal search shares non-overlapping UTF-8 ranges, simple case folding, identifier boundaries and invalid-text reporting.

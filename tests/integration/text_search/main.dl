@@ -1,0 +1,47 @@
+import lib/text_search.dl
+import lib/check.dl
+import lib/text.dl
+
+to [expect literal search] {string:text} [for] {string:query} [matching case] {boolean:sensitive} [whole words] {boolean:whole} [to find] {an array:ranges}:
+    set result to literal text matches in text for query matching case sensitive requiring whole words whole
+    require condition (result's status = 0) reporting "A valid literal search failed."
+    require condition ((the length of (result's matches)) = (the length of ranges)) reporting "A literal search returned the wrong number of matches."
+    set index to 0
+    loop while index < the length of ranges:
+        set actual to the item at index in (result's matches)
+        set expected to the item at index in ranges
+        require condition ((actual's start = (the item at 0 in expected)) and (actual's end = (the item at 1 in expected))) reporting "A literal search returned the wrong original UTF-8 range."
+        increment index
+
+expect literal search "banana" for "ana" matching case true whole words false to find [[1, 4]]
+expect literal search "aaaaa" for "aa" matching case true whole words false to find [[0, 2], [2, 4]]
+expect literal search "ababaababac" for "ababac" matching case true whole words false to find [[5, 11]]
+expect literal search "αKk𐐀é" for "k" matching case false whole words false to find [[2, 5], [5, 6]]
+expect literal search "αKk𐐀é" for "𐐨" matching case false whole words false to find [[6, 10]]
+expect literal search "Σςσ" for "σ" matching case false whole words false to find [[0, 2], [2, 4], [4, 6]]
+expect literal search "cat cat_ caté chat cat" for "cat" matching case true whole words true to find [[0, 3], [20, 23]]
+expect literal search "ß ẞ ss" for "ß" matching case false whole words false to find [[0, 2], [3, 6]]
+expect literal search "I i İ ı" for "i" matching case false whole words true to find [[0, 1], [2, 3]]
+expect literal search "🙂é\n🙂é" for "é\n🙂" matching case true whole words false to find [[4, 11]]
+set empty to literal text matches in "abc" for "" matching case false requiring whole words false
+require condition ((empty's status = 0) and ((the length of (empty's matches)) = 0)) reporting "An empty query produced matches."
+set malformed to a new string buffer containing 1 bytes
+store (255 as a byte) into (the data of malformed) at 0
+set invalid to literal text matches in malformed for "a" matching case true requiring whole words false
+require condition ((invalid's status = 1) and (invalid's error byte = 0)) reporting "Malformed source text was accepted."
+set invalid to literal text matches in "a" for malformed matching case true requiring whole words false
+require condition ((invalid's status = 2) and (invalid's error byte = 0)) reporting "A malformed query was accepted."
+set invalid to literal text matches in malformed for "" matching case true requiring whole words false
+require condition (invalid's status = 1) reporting "An empty query hid invalid source text."
+set absent to literal text matches in "abc" for "z" matching case false requiring whole words true
+require condition ((absent's status = 0) and ((the length of (absent's matches)) = 0)) reporting "A missing query produced a match."
+set source to ("a" repeated 200000 times) + "b"
+set query to ("a" repeated 5000 times) + "b"
+set large to literal text matches in source for query matching case true requiring whole words false
+require condition ((the length of (large's matches)) = 1) reporting "A long repeated prefix lost its final match."
+set last to the item at 0 in (large's matches)
+require condition ((last's start = 195000) and (last's end = 200001)) reporting "A repeated prefix changed the original byte range."
+set retained to large
+set large to absent
+require condition ((the item at 0 in (retained's matches))'s start = 195000) reporting "Copying a search result lost its owned ranges."
+print line "Literal search shares non-overlapping UTF-8 ranges, simple case folding, identifier boundaries and invalid-text reporting."

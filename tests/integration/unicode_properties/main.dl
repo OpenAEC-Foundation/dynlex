@@ -1,0 +1,25 @@
+import lib/unicode_properties.dl
+import lib/check.dl
+
+require condition ((the Unicode simple case fold of 65) = 97) reporting "ASCII case folding failed."
+require condition ((the Unicode simple case fold of 8490) = 107) reporting "Kelvin case folding failed."
+require condition ((the Unicode simple case fold of 962) = 963) reporting "Final sigma case folding failed."
+require condition ((the Unicode simple case fold of 66560) = 66600) reporting "Astral case folding failed."
+require condition ((the Unicode simple case fold of 7838) = 223) reporting "Simple sharp-s folding failed."
+require condition ((the Unicode simple case fold of 304) = 304) reporting "Locale-specific folding leaked into default search."
+require condition (769 is a Unicode word character) reporting "A combining mark split an identifier word."
+require condition (20013 is a Unicode word character) reporting "An ideograph was excluded from identifier words."
+require condition (8204 is a Unicode word character) reporting "A join control split an identifier word."
+require condition ((128578 is a Unicode word character) = false) reporting "An emoji was classified as an identifier word."
+require condition ((45 is a Unicode word character) = false) reporting "Punctuation was classified as an identifier word."
+set checksum to 2166136261 as a 64 bit integer
+set code to 0
+loop while code < 1114112:
+    set folded to the Unicode simple case fold of code
+    set checksum to ((checksum bitwise xor folded) * 16777619) bitwise and 4294967295
+    set word to 1 if (code is a Unicode word character), else 0
+    set checksum to ((checksum bitwise xor word) * 16777619) bitwise and 4294967295
+    increment code
+# Independently calculated from every entry in the upstream data files.
+require condition (checksum = 4293959731) reporting "Unicode properties disagree with the complete pinned database."
+print line "Unicode 17 simple case folding and identifier word properties are shared scalar operations."

@@ -1,0 +1,102 @@
+# Literal Unicode search with original UTF-8 byte ranges and linear KMP matching.
+# Status 0 succeeds, 1 reports invalid source UTF-8, and 2 invalid query UTF-8.
+import lib/unicode.dl
+import lib/utf8.dl
+import lib/unicode_properties.dl
+import lib/sequence.dl
+
+class:
+    patterns:
+        text search match
+    members:
+        start as an integer
+        end as an integer
+
+class:
+    patterns:
+        text search result
+    members:
+        status as an integer
+        error byte as an integer
+        matches as a sequence
+
+local function literal search code {integer:code} matching case {boolean:sensitive}:
+    execute:
+        if sensitive:
+            return code
+        return the Unicode simple case fold of code
+
+local function literal search span from {integer:start} through {integer:finish} has word boundaries in {string:text}:
+    execute:
+        if start > 0:
+            set previous to the previous UTF8 boundary before start in text
+            if ((the UTF8 character at previous in text)'s code) is a Unicode word character:
+                return false
+        if finish < text's length:
+            if ((the UTF8 character at finish in text)'s code) is a Unicode word character:
+                return false
+        return true
+
+to get [literal text matches in] {string:text} [for] {string:query} [matching case] {boolean:sensitive} [requiring whole words] {boolean:whole}:
+    set result to @intrinsic("construct", text search result, 0, -1, an empty sequence of text search match)
+    validate text as UTF-8 and set validation to it
+    if validation failed:
+        set result's status to 1
+        set result's error byte to the error byte offset of validation
+        return result
+    validate query as UTF-8 and set validation to it
+    if validation failed:
+        set result's status to 2
+        set result's error byte to the error byte offset of validation
+        return result
+    if query's length = 0:
+        return result
+    # A UTF-8 byte length bounds its scalar count, with no extra source copy.
+    set codes to the checked allocation from (0 as a pointer) resized to (query's length) items of integer
+    set count and cursor to 0
+    loop while cursor < query's length:
+        set character to the UTF8 character at cursor in query
+        store (literal search code (character's code) matching case sensitive) into codes at count
+        increment count
+        set cursor to character's next
+    set failure to the checked allocation from (0 as a pointer) resized to count items of integer
+    store 0 into failure at 0
+    set index to 1
+    loop while index < count:
+        set matched to the item at (index - 1) in failure
+        set code to the item at index in codes
+        loop while (matched > 0) and ((the item at matched in codes) != code):
+            set matched to the item at (matched - 1) in failure
+        if (the item at matched in codes) = code:
+            increment matched
+        store matched into failure at index
+        increment index
+    set starts to the checked allocation from (0 as a pointer) resized to count items of integer
+    set found to an empty list of text search match
+    set cursor, seen and matched to 0
+    loop while cursor < text's length:
+        set character to the UTF8 character at cursor in text
+        store cursor into starts at (seen mod count)
+        set code to literal search code (character's code) matching case sensitive
+        loop while (matched > 0) and ((the item at matched in codes) != code):
+            set matched to the item at (matched - 1) in failure
+        if (the item at matched in codes) = code:
+            increment matched
+        increment seen
+        set cursor to character's next
+        if matched = count:
+            set start to the item at ((seen - count) mod count) in starts
+            set accepted to true
+            if whole:
+                set accepted to literal search span from start through cursor has word boundaries in text
+            if accepted:
+                append (@intrinsic("construct", text search match, start, cursor)) to found
+                set matched to 0
+            else:
+                set matched to the item at (matched - 1) in failure
+    deallocate starts
+    deallocate failure
+    deallocate codes
+    set result's matches to a sequence taking the items from found
+    free found
+    return result

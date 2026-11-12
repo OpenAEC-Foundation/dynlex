@@ -1,0 +1,26 @@
+import lib/text_search.dl
+import lib/filesystem.dl
+import lib/json_builders.dl
+
+read the file at "input.search" and set input to it
+require condition (input succeeded) reporting "The text search test input is missing."
+parse (input's contents) as JSON and set parsed to it
+require condition (parsed succeeded) reporting "The text search test input is invalid."
+set cases to parsed's value
+set output to a new JSON value of kind the JSON array kind
+set index to 0
+loop while index < cases's length:
+    set entry to the JSON value at index index in cases
+    set result to literal text matches in (the JSON text named "text" in entry) for (the JSON text named "query" in entry) matching case (the JSON boolean named "sensitive" in entry) requiring whole words (the JSON boolean named "whole" in entry)
+    require condition (result's status = 0) reporting "A generated valid search failed."
+    set ranges to a new JSON value of kind the JSON array kind
+    set position to 0
+    loop while position < the length of (result's matches):
+        set match to the item at position in (result's matches)
+        add (a JSON array containing [a new JSON number from (match's start), a new JSON number from (match's end)]) to the JSON array ranges
+        increment position
+    add ranges to the JSON array output
+    increment index
+print line the compact JSON form of output
+free output
+free cases

@@ -301,3 +301,13 @@ preserves the focused layout's identity when its ordinal was not explicitly
 changed. Disabled or hidden targets still leave the focus list, and explicit
 Tab navigation retains its normal ordering. Source-pane and queued-focus tests
 cover the change after painting, rather than calling navigation actions directly.
+
+Literal Unicode matching now lives in `lib/text_search.dl`, independent of any
+editor or platform. It returns original UTF-8 byte ranges and uses linear KMP
+matching, Unicode 17 simple case folding and explicit identifier-word boundaries.
+Pinned upstream data and its license are stored in the repository; generation
+works offline and the generated tables remain immutable static arrays. Tests
+cover every code point's property checksum and compare 7,024 search cases with
+an independent oracle across native, WebAssembly and the shipped compiler.
+This is the shared matching engine; the Find/Replace controls remain unfinished.
+The full integration suite passes all 503 checks with the new library modules.

@@ -781,6 +781,7 @@ run_auxiliary_test "web_path_library" 30 node "$PROJECT_DIR/tests/web/path_libra
 run_auxiliary_test "web_memory_layout" 30 node "$PROJECT_DIR/tests/web/memory_layout.mjs" "$COMPILER"
 run_auxiliary_test "web_runtime_math" 30 node "$PROJECT_DIR/tests/web/runtime_math.mjs" "$COMPILER"
 run_auxiliary_test "web_host_callbacks" 30 node "$PROJECT_DIR/tests/web/host_callbacks.mjs" "$COMPILER"
+run_auxiliary_test "unicode_property_data" 10 python3 -B "$SCRIPT_DIR/generate_unicode_properties.py" --check
 run_auxiliary_test "path_host_runtime" 20 python3 -B "$SCRIPT_DIR/test_path_host_runtime.py"
 run_auxiliary_test \
     "filesystem_transaction_runtime" 20 python3 -B "$SCRIPT_DIR/test_filesystem_transaction_runtime.py"
@@ -802,7 +803,9 @@ run_auxiliary_test "json_integer64" 30 python3 -B "$SCRIPT_DIR/test_json_integer
 run_auxiliary_test "json_decimal_oracle" 60 node "$PROJECT_DIR/tests/web/json_numbers.mjs" "$COMPILER"
 if [[ "$suite" == integration ]]; then
     run_auxiliary_test "loop_cleanup_targets" 60 node "$PROJECT_DIR/tests/web/compiler_loops.mjs" "$COMPILER" --shipped
-    run_auxiliary_test "library_values_targets" 60 node "$PROJECT_DIR/tests/web/library_values.mjs" "$COMPILER" --shipped
+    run_auxiliary_test "library_values_targets" 60 node "$PROJECT_DIR/tests/web/library_values.mjs" "$COMPILER" --group=core --shipped
+    run_auxiliary_test "search_values_targets" 60 node "$PROJECT_DIR/tests/web/library_values.mjs" "$COMPILER" --group=search --shipped
+    run_auxiliary_test "literal_search_targets" 60 node "$PROJECT_DIR/tests/web/text_search.mjs" "$COMPILER" --shipped
     run_auxiliary_test "site_shaders" 60 python3 -B "$PROJECT_DIR/tests/web/site_runtime.py" --compiler "$COMPILER" --case site_shader_program --case site_shader_buffers
     run_auxiliary_test "site_routes" 10 python3 -B "$PROJECT_DIR/tests/web/site_routes.py"
     # Includes 2,019 independent action/condition scenarios and a 900-turn team.
