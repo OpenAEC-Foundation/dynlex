@@ -66,10 +66,6 @@ bool canPersistInferenceSummary(
 		   !instantiation.memoryViolation;
 }
 
-bool inferenceSummarySourceExcluded(const Section *section, const std::set<std::string> &excludedSources) {
-	return !section->openingLine || excludedSources.contains(section->openingLine->sourceFile->uri);
-}
-
 bool inferenceSummaryHasValueState(const Json &summary) {
 	return summary.at("purity").get<int>() == static_cast<int>(InstantiationPurity::Pure) &&
 		   !summary.at("needs_global_types").get<bool>() &&
@@ -175,9 +171,9 @@ SymbolicInferenceUnits nativeInferenceUnits(const Json &functions, const Json &k
 }
 
 Json captureInferenceSummaries(
-	ParseContext &context, const std::map<const Section *, std::string> &sectionPaths,
-	const std::set<std::string> &excludedSources, const Json &globalTypes, InferenceSummaryStore &summaryStore,
-	const SymbolicInferenceUnits &native, const IncrementalUnitSelection *skipped = nullptr, const Json *prior = nullptr
+	ParseContext &context, const std::map<const Section *, std::string> &sectionPaths, const Json &globalTypes,
+	InferenceSummaryStore &summaryStore, const SymbolicInferenceUnits &native,
+	const IncrementalUnitSelection *skipped = nullptr, const Json *prior = nullptr
 ) {
 	Json summaries = Json::object();
 	InferenceValueIdentities identities(sectionPaths);
@@ -189,13 +185,14 @@ Json captureInferenceSummaries(
 		return *sources;
 	};
 	for (const auto &[section, path] : sectionPaths) {
-		if (inferenceSummarySourceExcluded(section, excludedSources))
-			continue;
 		std::map<std::string, const Instantiation *> instances;
 		Json variants =
 			captureSectionInferenceSummary(section, identities, storage, globalTypes, nullptr, skipped, nullptr, &instances);
 		for (const auto &[key, summary] : variants.items()) {
 			const Instantiation &instance = *instances.at(key);
+			auto diagnostics = captureInferenceDiagnostics(context, instance.body->storageScope, sourceRecords, storage);
+			if (!diagnostics)
+				continue;
 			Json body = nullptr;
 			bool needsBody =
 				(instance.purity == InstantiationPurity::Pure && instance.returnType.kind != DataType::Kind::Void) ||
@@ -208,7 +205,7 @@ Json captureInferenceSummaries(
 				body = summaryStore.saveBody(writer.capture(instance));
 			}
 			Json classes = summaryStore.saveClasses(captureInferenceFactClasses(summary, identities, sourceRecords));
-			summaries[path][key] = summaryStore.save(summary, std::move(body), std::move(classes));
+			summaries[path][key] = summaryStore.save(summary, std::move(body), std::move(classes), std::move(*diagnostics));
 		}
 	}
 	return summaries;
@@ -325,8 +322,8 @@ class IncrementalInferenceReuse {
 	size_t sourceExpressionLookups() const { return storage.sourceExpressionLookups(); }
 	size_t sourceExpressionLinesIndexed() const { return storage.sourceExpressionLinesIndexed(); }
 	Json snapshot(
-		const std::map<const Section *, std::string> &paths, const std::set<std::string> &excludedSources,
-		const Json &globalTypes, const Json &functions, const Json &functionKeys, size_t *reusedSections = nullptr
+		const std::map<const Section *, std::string> &paths, const Json &globalTypes, const Json &functions,
+		const Json &functionKeys, size_t *reusedSections = nullptr
 	) const {
 		auto native = nativeInferenceUnits(functions, functionKeys);
 		IncrementalUnitSelection skipped;
@@ -336,14 +333,11 @@ class IncrementalInferenceReuse {
 					if (instantiation.inferenceReusedFromCache && !instantiation.valueSummaryChanged)
 						if (auto identity = inferenceSummaryKey(key, identities); identity && keys.contains(*identity))
 							skipped.insert(section, *identity);
-		Json result =
-			captureInferenceSummaries(context, paths, excludedSources, globalTypes, summaryStore, native, &skipped, &summaries);
+		Json result = captureInferenceSummaries(context, paths, globalTypes, summaryStore, native, &skipped, &summaries);
 		std::set<std::string> freshSections, copiedSections;
 		for (const auto &[path, _] : result.items())
 			freshSections.insert(path);
 		for (const auto &[section, keys] : eligible->sections()) {
-			if (inferenceSummarySourceExcluded(section, excludedSources))
-				continue;
 			const std::string &path = sectionPaths.at(section);
 			if (summaries.contains(path)) {
 				bool encodedCurrentVariants = result.contains(path) && !result.at(path).empty();
@@ -389,8 +383,7 @@ class IncrementalInferenceReuse {
 				auto section = sections.find(path);
 				// A reference describes a dependency, not a guarantee that its
 				// independently evictable facts remain available in the cache.
-				if (section == sections.end() || !eligible->contains(section->second, key) ||
-					inferenceSummarySourceExcluded(section->second, excludedSources) || !summaries.contains(path) ||
+				if (section == sections.end() || !eligible->contains(section->second, key) || !summaries.contains(path) ||
 					!summaries.at(path).contains(key))
 					continue;
 				const Json &reference = summaries.at(path).at(key);

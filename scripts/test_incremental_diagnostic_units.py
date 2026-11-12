@@ -3,6 +3,111 @@
 import re
 
 
+def check_persistent_diagnostic_units(root, build):
+    folder = root / 'persistent_diagnostic_units'
+    folder.mkdir()
+    main = folder / 'main.dl'
+    source = '''integer means: @intrinsic("type", "int")
+function return value:
+    replacement: @intrinsic("return", value)
+to get left - right:
+    return @intrinsic("subtract", left, right)
+to get value adjusted:
+    return value
+to get the tested form of value:
+    return value - 1 adjusted
+to get the wrapped form of value:
+    return the tested form of value
+to stable:
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "stable"))
+to edited:
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "before"))
+'''
+    direct = '@intrinsic("discard", the tested form of @intrinsic("command line argument count"))\n'
+    wrapped = '@intrinsic("discard", the wrapped form of @intrinsic("command line argument count"))\n'
+    initial = source + wrapped + 'stable\nedited\n'
+    main.write_text(initial)
+    cold = build(entry=main)
+    assert cold[1].count('Warning:') == 1
+    changed = initial.replace('integer, "before"', 'integer, "after"')
+    main.write_text(changed)
+    edited = build(entry=main)
+    assert edited[1:] == build(False, entry=main)[1:]
+    assert edited[0]['function_body_inference_passes'] < cold[0]['function_body_inference_passes'], \
+        'one warning excluded every inference unit in its source file'
+    assert edited[0]['root_execution_reused'], 'a retained warning forced entry-point inference'
+    assert edited[0]['functions_ir_reused'] >= 4
+    assert edited[0]['inference_diagnostic_units_restored'] >= 1
+    assert edited[0]['inference_diagnostic_records_restored'] >= 1
+
+    # Moving a warning's callers changes its trace, while its body remains cached.
+    for calls in (direct + wrapped, wrapped + direct, direct, wrapped):
+        main.write_text(changed[:changed.index(wrapped)] + calls + 'stable\nedited\n')
+        moved = build(entry=main)
+        assert moved[1:] == build(False, entry=main)[1:], 'a cached warning retained its old caller trace'
+        assert moved[1].count('Warning:') == 1
+        assert moved[0]['inference_instantiations_reused'] >= 2
+
+    # A previously warning-producing child can become warning-free without
+    # changing its return type. Its cached parents must drop the old warning.
+    clean_source = source.replace('return value - 1 adjusted', 'return (value - 1) adjusted')
+    main.write_text(clean_source + wrapped + 'stable\nedited\n')
+    removed = build(entry=main)
+    assert removed[1:] == build(False, entry=main)[1:]
+    assert not removed[1], 'an equivalent return type retained a stale diagnostic'
+    main.write_text(source + wrapped + 'stable\nedited\n')
+    added = build(entry=main)
+    assert added[1:] == build(False, entry=main)[1:]
+    assert added[1].count('Warning:') == 1
+    main.write_text(source + 'stable\nedited\n')
+    unused = build(entry=main)
+    assert unused[1:] == build(False, entry=main)[1:]
+    assert not unused[1], 'an unused cached diagnostic was published'
+
+    # Retained warnings use the current configured wording after a code edit.
+    config = folder / 'config.dl'
+    config.write_text('dynlex options:\n    messages:\n'
+                      '        ambiguous operand grouping: "New wording for {expression}"\n')
+    main.write_text(source + wrapped + 'stable\nedited\n')
+    build(entry=main)
+    main.write_text(initial.replace('integer, "before"', 'integer, "after"'))
+    configured = build(entry=main)
+    assert configured[1:] == build(False, entry=main)[1:]
+    assert 'New wording' in configured[1]
+    assert configured[0]['root_execution_reused']
+
+    # Root observations exclude later exposed-function validation. Replaying an
+    # entry warning must preserve the order and multiplicity of those warnings.
+    exposed = ('to get the other form of value:\n    return value - 1 adjusted\n'
+               'exposed function another:\n'
+               '    execute: @intrinsic("discard", the other form of @intrinsic("command line argument count"))\n')
+    main.write_text(source + exposed + wrapped + 'stable\nedited\n')
+    build(entry=main)
+    main.write_text(source.replace('integer, "before"', 'integer, "after"') + exposed + wrapped + 'stable\nedited\n')
+    phase_replay = build(entry=main)
+    assert phase_replay[0]['root_execution_reused']
+    assert phase_replay[1:] == build(False, entry=main)[1:]
+    assert phase_replay[1].count('Warning:') == 2
+    revised_exposed = exposed.replace('return value - 1 adjusted', 'return (value - 1) adjusted')
+    main.write_text(source.replace('integer, "before"', 'integer, "after"') + revised_exposed + wrapped + 'stable\nedited\n')
+    phase_removed = build(entry=main)
+    assert phase_removed[0]['root_execution_reused']
+    assert phase_removed[1:] == build(False, entry=main)[1:]
+    assert phase_removed[1].count('Warning:') == 1, 'entry replay published a stale exposed-stage warning'
+
+    # Each typed unit needs its own product even when another unit's warning
+    # suppressed its publication in the preceding build.
+    byte = ('@intrinsic("discard", the tested form of @intrinsic("cast", '
+            '@intrinsic("command line argument count"), @intrinsic("type", "int", 8)))\n')
+    main.write_text(source + direct + byte + 'stable\nedited\n')
+    variants = build(entry=main)
+    assert variants[1].count('Warning:') == 1
+    main.write_text(source + byte + direct + 'stable\nedited\n')
+    reordered = build(entry=main)
+    assert reordered[1:] == build(False, entry=main)[1:], 'a suppressed typed warning was absent from its cached unit'
+    assert reordered[1].count('Warning:') == 1
+
+
 def check_preinferred_diagnostic_context(root, build, output):
     source = '''integer means: @intrinsic("type", "int")
 function return value:

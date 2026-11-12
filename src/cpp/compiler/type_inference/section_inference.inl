@@ -638,9 +638,18 @@ bool inferTypes(ParseContext &parseContext) {
 	InferenceContext context(parseContext);
 	context.currentVariableValues.clear();
 	context.currentAddressState = {};
-	if (!parseContext.reuseRootExecution && !inferSection(parseContext.mainSection, nullptr, nullptr, context, {})) {
-		emitPendingInferenceFailure(context);
-		return false;
+	if (!parseContext.reuseRootExecution) {
+		size_t firstDiagnostic = parseContext.diagnostics.size();
+		if (!inferSection(parseContext.mainSection, nullptr, nullptr, context, {})) {
+			emitPendingInferenceFailure(context);
+			return false;
+		}
+		auto &rootDiagnostics = parseContext.deferredInferenceDiagnostics[{}];
+		for (size_t index = firstDiagnostic; index < parseContext.diagnostics.size(); index++) {
+			Diagnostic diagnostic = parseContext.diagnostics[index];
+			context.prepareDiagnostic(diagnostic);
+			rootDiagnostics.push_back(std::move(diagnostic));
+		}
 	}
 	finishStage();
 	std::function<bool(Section *)> inferExposedFunctions = [&](Section *section) {

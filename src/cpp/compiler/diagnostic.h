@@ -15,10 +15,11 @@ struct VariableStorageScope;
 
 struct DiagnosticPublication {
 	bool published = false;
+	std::string identity;
 };
 
 struct DiagnosticEmission {
-	std::string key;
+	std::string discriminator;
 	std::shared_ptr<DiagnosticPublication> publication;
 	std::shared_ptr<const VariableStorageScope> owner;
 	int traceBase = -1;
@@ -101,6 +102,8 @@ struct Diagnostic {
 
 	static Diagnostic configParseError(std::string_view message, Range range);
 	std::string toString() const;
+	Diagnostic relativeToInference(int base) const;
+	bool sameEmission(const Diagnostic &other) const;
 	void setConfiguredMessage(
 		const ParseContext &context, Range syntaxRange, std::string_view key, std::string_view variant,
 		std::vector<std::pair<std::string, std::string>> placeholders = {}

@@ -1531,8 +1531,19 @@ prevents reuse. A summary that accesses globals requires the same structural glo
 types as the previous build. A summary
 is reused only if its source body, compiled pattern declarations, observed concrete
 dependencies and its cached IR closure are unchanged. Other instantiations still
-run ordinary inference. A function in a file with diagnostics gets no inference
-summary, so its warnings are regenerated. Functions imported from cached IR count as active when
+run ordinary inference. Each concrete unit also retains a diagnostic product with
+unit-relative inference traces, configured message identities, quick fixes and
+source anchors. Restoring its facts restores that product without publishing it;
+the selected call supplies its current outer trace. Shared publication identities
+prevent enclosing products and repeated calls from emitting a warning twice.
+A selected diagnostic is retained before display-level duplicate suppression,
+so every typed instantiation and enclosing unit has its own product even if
+another call displayed that warning first. Entry execution has a separate
+observation product, captured before exposed-function and lifecycle validation;
+replaying entry IR publishes only that product. Later validation retains its
+own demand and publication order.
+A warning in one function therefore does not exclude other functions in the same
+file from inference reuse. Functions imported from cached IR count as active when
 deciding whether an edited body can be ignored. This prevents a later callee edit
 from reusing the preceding build's type inference and executable.
 An edit to top-level executable code can retain global-reading function summaries
@@ -1559,13 +1570,17 @@ emission twice. Removing the last call leaves its speculative diagnostics
 unpublished. Callable validation inherits its caller's pending diagnostic queue,
 ambiguity-detection setting and trace; a committed function-value trial therefore
 retains warnings from the selected body. A unit that produces a new diagnostic
-keeps its callers dependent until their calling context is checked. Matching
-return types alone do not establish an equivalent result. A separate caller
+keeps its callers dependent until their calling context is checked. Removing a
+diagnostic has the same requirement. Invalidation stops only when both the
+inference interface and the relative diagnostic product remain equivalent.
+Matching return types alone do not establish an equivalent result. A separate caller
 chain supplies diagnostic ancestry; the local expression stack identifies the
 expression currently being inferred. Return-type reuse requires a valid
 instantiation, so failed exposed-unit inference is retried at its actual
 validation request. `preinferred_diagnostics_deferred` counts unit-relative
 records, and `deferred_inference_diagnostics_published` counts actual emissions.
+`inference_diagnostic_units_restored` and `inference_diagnostic_records_restored`
+count loaded unit products and records, including the entry observation.
 
 At O0, native emission divides the generated IR
 into independently linkable LLVM components keyed by stable symbol names. Independent

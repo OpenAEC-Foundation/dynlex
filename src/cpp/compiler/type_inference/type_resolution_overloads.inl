@@ -486,19 +486,31 @@ struct InferenceContext {
 	}
 
 	std::shared_ptr<const VariableStorageScope> diagnosticOwner() const {
-		if (!parseContext.incrementalPreinferenceActive || !currentInstantiation)
-			return {};
-		requireCompilerInvariant(currentInstantiation->body != nullptr, "diagnostic owner has no instantiated body");
-		return currentInstantiation->body->storageScope;
+		// Signature probes use a bodyless instantiation for purity tracking.
+		// Diagnostic ownership follows executable inference units instead.
+		for (const DependencyOwner *owner = dependencyReads.owner; owner; owner = owner->parent)
+			if ((owner->section->type == SectionType::Function && !owner->section->isFlex) ||
+				owner->section->type == SectionType::Retain || owner->section->type == SectionType::Release) {
+				requireCompilerInvariant(owner->scope != nullptr, "inference diagnostic unit has no logical scope");
+				return owner->scope;
+			}
+		return {};
+	}
+	int diagnosticTraceBase(const std::shared_ptr<const VariableStorageScope> &owner) const {
+		if (!owner)
+			return -1;
+		for (const InferenceContext *context = this; context; context = context->diagnosticCaller)
+			for (const ExpressionFrame &frame : context->expressionStack)
+				if (frame.owner == owner)
+					return frame.ownerBase;
+		return static_cast<int>(diagnosticTraceDepth());
 	}
 	void prepareDiagnostic(Diagnostic &diagnostic) const {
-		if (!parseContext.incrementalPreinferenceActive)
-			return;
 		auto &emission = diagnostic.editEmission();
 		if (!emission.owner) {
 			emission.owner = diagnosticOwner();
 			if (emission.owner)
-				emission.traceBase = parseContext.preinferenceTraceBases.at(emission.owner);
+				emission.traceBase = diagnosticTraceBase(emission.owner);
 		}
 		if (!emission.publication)
 			emission.publication = std::make_shared<DiagnosticPublication>();
@@ -515,7 +527,7 @@ struct InferenceContext {
 
 	void pushExpression(Expression *expression) {
 		auto owner = diagnosticOwner();
-		int base = owner ? parseContext.preinferenceTraceBases.at(owner) : -1;
+		int base = diagnosticTraceBase(owner);
 		expressionStack.push_back({expression, std::move(owner), base});
 	}
 
@@ -538,7 +550,7 @@ struct InferenceContext {
 		if (currentExpressionOverride && expressionParticipatesInInferenceTrace(currentExpressionOverride) &&
 			currentExpressionOverride->range.line) {
 			auto owner = diagnosticOwner();
-			int base = owner ? parseContext.preinferenceTraceBases.at(owner) : -1;
+			int base = diagnosticTraceBase(owner);
 			int depth = static_cast<int>(totalDepth);
 			size_t offset = totalDepth;
 			for (const InferenceContext *context = this; context; context = context->diagnosticCaller) {

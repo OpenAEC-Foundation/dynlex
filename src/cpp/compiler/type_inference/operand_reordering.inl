@@ -205,20 +205,6 @@ static std::string renderResolvedExpression(Expression *expr) {
 	return rendered.empty() && !expr->range.subString.empty() ? (std::string)expr->range.subString : rendered;
 }
 
-static std::string
-buildOperandGroupingWarningKey(const Range &range, std::string_view chosenGrouping, std::string_view alternativeGrouping) {
-	std::string key = std::to_string(reinterpret_cast<uintptr_t>(range.line));
-	key += "|";
-	key += std::to_string(range.start());
-	key += "|";
-	key += std::to_string(range.end());
-	key += "|";
-	key += chosenGrouping;
-	key += "|";
-	key += alternativeGrouping;
-	return key;
-}
-
 enum class GroupingEnumerationProgress {
 	NoCandidate,
 	EmittedContinue,

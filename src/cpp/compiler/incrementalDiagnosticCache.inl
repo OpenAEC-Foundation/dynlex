@@ -126,23 +126,6 @@ Json captureCachedDiagnostics(const ParseContext &context, std::string &rendered
 	return records;
 }
 
-std::set<std::string> diagnosticSourcesAfter(const ParseContext &context, size_t firstDiagnostic) {
-	requireCompilerInvariant(firstDiagnostic <= context.diagnostics.size(), "diagnostic stage boundary exceeds diagnostic count");
-	std::set<std::string> sources;
-	auto addRange = [&](const Range &range) {
-		for (const lsp::SourceFile *source : {range.sourceStart().sourceFile, range.sourceEnd().sourceFile})
-			if (source)
-				sources.insert(source->uri);
-	};
-	for (size_t index = firstDiagnostic; index < context.diagnostics.size(); index++) {
-		const Diagnostic &diagnostic = context.diagnostics[index];
-		addRange(diagnostic.range);
-		for (const RelatedInfo &note : diagnostic.relatedInfo)
-			addRange(note.range);
-	}
-	return sources;
-}
-
 std::optional<std::string> renderCachedRange(
 	const Json &record, RecordingFileSystem &files, const Json &prefixes, const std::set<std::string> &changedSources,
 	std::unordered_map<std::string, std::vector<int>> &lineNumbers

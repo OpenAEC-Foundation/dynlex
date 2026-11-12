@@ -1,0 +1,113 @@
+// Unit products contain relative inference traces, portable source anchors and
+// configured messages. Publication identities are shared across enclosing units.
+Json inferenceDiagnosticText(std::string_view text, const std::shared_ptr<const ConfiguredDiagnosticMessage> &configured) {
+	Json result = cachedDiagnosticText(text, configured);
+	if (configured)
+		result["text"] = "";
+	return result;
+}
+
+std::optional<Json> captureInferenceDiagnostics(
+	const ParseContext &context, const std::shared_ptr<const VariableStorageScope> &scope,
+	const std::function<InferenceBodySources &()> &sources, InferenceStorageIdentities &storage
+) {
+	Json records = Json::array();
+	auto found = context.deferredInferenceDiagnostics.find(scope);
+	if (found == context.deferredInferenceDiagnostics.end())
+		return records;
+	for (const Diagnostic &diagnostic : found->second) {
+		const auto &emission = *diagnostic.emission;
+		Json message = inferenceDiagnosticText(diagnostic.message, diagnostic.configuredMessage);
+		Json range = sources().range(diagnostic.range);
+		if (emission.publication->identity.empty()) {
+			auto origin = storage.encodeScope(emission.owner);
+			if (!origin)
+				return std::nullopt; // This unit requires an encodable logical emission origin.
+			emission.publication->identity = digest(
+				Json::array({std::move(*origin), range, static_cast<int>(diagnostic.level), message, emission.discriminator})
+					.dump()
+			);
+		}
+		Json related = Json::array(), fixes = Json::array();
+		for (const RelatedInfo &note : diagnostic.relatedInfo)
+			related.push_back(
+				Json::array(
+					{inferenceDiagnosticText(note.message, note.configuredMessage), sources().range(note.range),
+					 note.inferenceDepth}
+				)
+			);
+		for (const DiagnosticFix &fix : diagnostic.quickFixes)
+			fixes.push_back(Json::array({fix.title, sources().range(fix.range), fix.replacement}));
+		records.push_back(
+			Json{
+				{"level", static_cast<int>(diagnostic.level)},
+				{"message", std::move(message)},
+				{"range", std::move(range)},
+				{"related", std::move(related)},
+				{"fixes", std::move(fixes)},
+				{"discriminator", emission.discriminator},
+				{"publication", emission.publication->identity}
+			}
+		);
+	}
+	return records;
+}
+
+void restoreInferenceDiagnostics(
+	ParseContext &context, const std::shared_ptr<const VariableStorageScope> &scope, const Json &records,
+	const std::function<InferenceBodySources &()> &sources
+) {
+	// Logical scope identities survive rejected trials. Decode each immutable
+	// cached product once even when its fact slot is restored again.
+	if (records.empty() || context.deferredInferenceDiagnostics.contains(scope))
+		return;
+	auto &restored = context.deferredInferenceDiagnostics[scope];
+	auto configured = [](const Json &text) -> std::shared_ptr<const ConfiguredDiagnosticMessage> {
+		return text.at("configured").is_null()
+				   ? nullptr
+				   : std::make_shared<const ConfiguredDiagnosticMessage>(restoreConfiguredMessage(text.at("configured")));
+	};
+	for (const Json &record : records) {
+		Diagnostic diagnostic;
+		diagnostic.level = static_cast<Diagnostic::Level>(record.at("level").get<int>());
+		diagnostic.message = renderCachedDiagnosticText(context, record.at("message"));
+		diagnostic.configuredMessage = configured(record.at("message"));
+		diagnostic.range = sources().range(record.at("range"));
+		auto &emission = diagnostic.editEmission();
+		emission.discriminator = record.at("discriminator").get<std::string>();
+		emission.owner = scope;
+		emission.traceBase = 0;
+		const auto &identity = record.at("publication").get_ref<const std::string &>();
+		auto [publication, inserted] = context.inferenceDiagnosticPublications.try_emplace(identity);
+		if (inserted)
+			publication->second = std::make_shared<DiagnosticPublication>(DiagnosticPublication{false, identity});
+		emission.publication = publication->second;
+		for (const Json &note : record.at("related")) {
+			int depth = note.at(2).get<int>();
+			diagnostic.relatedInfo.push_back(
+				{renderCachedDiagnosticText(context, note.at(0)), sources().range(note.at(1)), configured(note.at(0)),
+				 depth >= 0 ? scope : nullptr, depth, depth >= 0 ? 0 : -1}
+			);
+		}
+		for (const Json &fix : record.at("fixes"))
+			diagnostic.quickFixes.push_back(
+				{fix.at(0).get<std::string>(), sources().range(fix.at(1)), fix.at(2).get<std::string>()}
+			);
+		restored.push_back(std::move(diagnostic));
+	}
+	context.inferenceDiagnosticUnitsRestored++;
+	context.inferenceDiagnosticRecordsRestored += records.size();
+}
+
+Json captureRootInferenceDiagnostics(ParseContext &context, const std::map<const Section *, std::string> &paths) {
+	auto root = context.deferredInferenceDiagnostics.find({});
+	if (root == context.deferredInferenceDiagnostics.end() || root->second.empty())
+		return Json::array();
+	InferenceValueIdentities identities(paths);
+	InferenceStorageIdentities storage(context, paths, identities);
+	InferenceBodySources sources(context, identities);
+	auto records = captureInferenceDiagnostics(context, {}, [&]() -> auto & {
+		return sources;
+	}, storage);
+	return records ? std::move(*records) : Json(nullptr);
+}

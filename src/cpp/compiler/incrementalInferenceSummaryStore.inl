@@ -110,7 +110,7 @@ class InferenceSummaryStore {
 
 	bool retain(const Json &reference) const { return available.at(reference.at("payload").get_ref<const std::string &>()); }
 
-	Json save(const Json &summary, Json body, Json classes) {
+	Json save(const Json &summary, Json body, Json classes, Json diagnostics) {
 		auto start = Clock::now();
 		std::string payload = encodeInferenceSummary(summary).dump();
 		std::string key = digest(payload);
@@ -129,6 +129,7 @@ class InferenceSummaryStore {
 			for (const Json &target : reference.at("symbolic_dependencies"))
 				dependencies.emplace(target.at(0).get<std::string>(), target.at(1).get<std::string>());
 		return Json{
+			{"diagnostics", std::move(diagnostics)},
 			{"body", std::move(body)},
 			{"classes", std::move(classes)},
 			{"payload", std::move(key)},

@@ -62,7 +62,5 @@ static bool inferIncrementalFunction(ParseContext &parseContext, const ParseCont
 			}
 		}
 	}
-	if (inferred)
-		diagnosticScope.accept();
 	return inferred;
 }

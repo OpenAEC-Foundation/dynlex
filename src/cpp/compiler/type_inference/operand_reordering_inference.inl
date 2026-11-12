@@ -44,7 +44,7 @@ static bool inferExpression(
 			context.parseContext, Diagnostic::Level::Warning, "ambiguous operand grouping", range, "expression",
 			originalDiagnostic.text, "chosen", chosenGrouping, "alternative", alternativeGrouping
 		);
-		diagnostic.editEmission().key = buildOperandGroupingWarningKey(range, chosenGrouping, alternativeGrouping);
+		diagnostic.editEmission().discriminator = chosenGrouping + "|" + alternativeGrouping;
 		diagnostic.relatedInfo = context.captureInferenceTraceRelatedInfo(expr);
 		context.queueDiagnostic(std::move(diagnostic));
 	};

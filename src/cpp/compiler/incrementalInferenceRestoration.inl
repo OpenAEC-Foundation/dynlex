@@ -165,6 +165,14 @@ class Restoration {
 		for (auto &[slot, entry] : entries) {
 			requireCompilerInvariant(entry.ready, "inference restoration left an undecoded unit");
 			*slot = std::move(entry.facts);
+			restoreInferenceDiagnostics(
+				owner.context, slot->body->storageScope,
+				owner.summaries.at(owner.sectionPaths.at(entry.section)).at(entry.identity).at("diagnostics"), [&]() -> auto & {
+				if (!owner.bodySources)
+					owner.bodySources = std::make_unique<InferenceBodySources>(owner.context, owner.identities);
+				return *owner.bodySources;
+			}
+			);
 			if (entry.hasIR)
 				owner.runtimeValidated.emplace(entry.section, entry.identity);
 			owner.count++;

@@ -423,9 +423,6 @@ static bool runInstantiationReinferenceLoop(
 	InferenceContext &context, Instantiation &instantiation, PatternDefinition *definition, const Range &fallbackRange,
 	std::string functionName, bool canDeferToCaller, InferPassFn &&inferPass
 ) {
-	if (context.parseContext.incrementalPreinferenceActive)
-		context.parseContext.preinferenceTraceBases[instantiation.body->storageScope] =
-			static_cast<int>(context.diagnosticTraceDepth());
 	struct RetainedPureValues {
 		Instantiation &instantiation;
 		decltype(Instantiation::pureReturnValuesByArguments) values;

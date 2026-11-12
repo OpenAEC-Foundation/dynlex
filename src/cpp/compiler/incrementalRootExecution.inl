@@ -29,8 +29,8 @@ bool reusableRootExecution(
 ) {
 	if (context.options.noMain || !context.scopeRuleWarnings.empty() ||
 		context.diagnostics.size() != frontendDiagnostics.size() ||
-		!sameFrontendDiagnosticRecords(frontendDiagnostics, previous.at("diagnostic_records")) ||
-		context.constraintValuesReused != context.constraintProbeItems.size())
+		!sameFrontendDiagnosticRecords(frontendDiagnostics, previous.at("frontend_diagnostic_records")) ||
+		previous.at("root_diagnostics").is_null() || context.constraintValuesReused != context.constraintProbeItems.size())
 		return false;
 	return prepareRootClassLayouts(previous.at("all_function_projection").at("class_instantiations"), sectionPaths);
 }

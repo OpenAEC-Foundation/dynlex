@@ -338,6 +338,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalClassRequests.inl"
 #include "incrementalClassInstantiations.inl"
 #include "incrementalBodySources.inl"
+#include "incrementalInferenceDiagnostics.inl"
 #include "incrementalBodyReferences.inl"
 #include "incrementalBodyWriter.inl"
 #include "incrementalBodyReader.inl"
@@ -582,7 +583,6 @@ bool compileIncrementally(
 			std::set<std::string> frontendDiagnosticSources;
 			Json frontendDiagnosticRecords =
 				compiled ? captureCachedDiagnostics(context, frontendDiagnosticText, frontendDiagnosticSources) : Json::array();
-			size_t frontendDiagnosticCount = context.diagnostics.size();
 			Json inactiveProjection;
 			stageStart = Clock::now();
 			bool reuseTypeInference = compiled && previous &&
@@ -803,8 +803,6 @@ bool compileIncrementally(
 					std::string diagnostics;
 					std::set<std::string> diagnosticSources;
 					Json diagnosticRecords = captureCachedDiagnostics(compiled, diagnostics, diagnosticSources);
-					std::set<std::string> inferenceDiagnosticSources =
-						diagnosticSourcesAfter(compiled, frontendDiagnosticCount);
 					Json result{
 						{"files", recording->observations},
 						{"generated_ir", std::move(generatedIR)},
@@ -842,13 +840,14 @@ bool compileIncrementally(
 					result["inference_summaries"] =
 						inferenceReuse
 							? inferenceReuse->snapshot(
-								  sectionPaths, inferenceDiagnosticSources, globalTypes, result.at("function_sections"),
+								  sectionPaths, globalTypes, result.at("function_sections"),
 								  result.at("function_instantiations"), &statistics.reusedInferenceSummarySections
 							  )
 							: captureInferenceSummaries(
-								  compiled, sectionPaths, inferenceDiagnosticSources, globalTypes, summaryStore,
+								  compiled, sectionPaths, globalTypes, summaryStore,
 								  nativeInferenceUnits(result.at("function_sections"), result.at("function_instantiations"))
 							  );
+					result["root_diagnostics"] = captureRootInferenceDiagnostics(compiled, sectionPaths);
 					auto graphStart = Clock::now();
 					result["section_dependency_graph"] = captureSectionDependencyGraph(
 						compiled, result, sectionPaths, inferenceReads,

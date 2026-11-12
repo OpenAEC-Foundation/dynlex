@@ -80,6 +80,7 @@ class IncrementalInferenceController {
 			if (!previous.at("callable_functions").contains(name))
 				native.emplace(owner.get<std::string>(), previous.at("function_instantiations").at(name).get<std::string>());
 		std::set<const Section *> capturedSections;
+		std::unique_ptr<InferenceBodySources> diagnosticSources;
 		for (auto &[unit, request] : collectRequests(*eligible, native, symbolic)) {
 			if (check.unchanged(unit)) {
 				eligible->insert(request.section, unit.second);
@@ -98,8 +99,14 @@ class IncrementalInferenceController {
 			);
 			capturedSections.insert(request.section);
 			const auto &instance = request.section->instantiations.at(request.key);
-			bool hasDiagnostics = context.deferredInferenceDiagnostics.contains(instance.body->storageScope);
-			if (!hasDiagnostics && current.contains(unit.second) && sameInterface(current.at(unit.second), *priorSummary)) {
+			auto diagnostics = captureInferenceDiagnostics(context, instance.body->storageScope, [&]() -> auto & {
+				if (!diagnosticSources)
+					diagnosticSources = std::make_unique<InferenceBodySources>(context, identities);
+				return *diagnosticSources;
+			}, storage);
+			const Json &priorDiagnostics = previous.at("inference_summaries").at(unit.first).at(unit.second).at("diagnostics");
+			if (diagnostics && *diagnostics == priorDiagnostics && current.contains(unit.second) &&
+				sameInterface(current.at(unit.second), *priorSummary)) {
 				replacements->insert(request.section, unit.second);
 				Json values = Json::object();
 				for (const Json &observation : current.at(unit.second).at("pure_values")) {
@@ -131,8 +138,17 @@ class IncrementalInferenceController {
 							sameRootGlobalBindings(prior.at("global_resolution"), projection.at("global_resolution")) &&
 							prior.at("scope_rule_bodies") == projection.at("scope_rule_bodies") &&
 							reusableRootExecution(context, previous, frontendDiagnostics, paths);
-		if (rootEligible && reuseRootWithGlobalTypes(context, previous, paths, *irReuse))
+		if (rootEligible && reuseRootWithGlobalTypes(context, previous, paths, *irReuse)) {
 			graphStable.insert(context.mainSection);
+			restoreInferenceDiagnostics(context, {}, previous.at("root_diagnostics"), [&]() -> auto & {
+				if (!diagnosticSources)
+					diagnosticSources = std::make_unique<InferenceBodySources>(context, identities);
+				return *diagnosticSources;
+			});
+			if (auto root = context.deferredInferenceDiagnostics.find({}); root != context.deferredInferenceDiagnostics.end())
+				for (const Diagnostic &diagnostic : root->second)
+					context.addDiagnostic(diagnostic);
+		}
 		statistics.preinferenceMilliseconds = elapsedMilliseconds(start);
 	}
 

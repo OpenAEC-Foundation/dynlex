@@ -41,6 +41,32 @@ void deletePatternTree(PatternTreeNode *node, std::unordered_set<PatternTreeNode
 
 ParseContext::ParseContext() = default;
 
+void ParseContext::retainInferenceDiagnostic(const Diagnostic &diagnostic) {
+	if (diagnostic.level == Diagnostic::Level::Error || !diagnostic.emission || !diagnostic.emission->publication)
+		return;
+	using Scope = std::shared_ptr<const VariableStorageScope>;
+	std::map<Scope, int, std::owner_less<Scope>> owners;
+	if (incrementalPreinferenceActive) {
+		requireCompilerInvariant(preinferenceDiagnosticRoot != nullptr, "speculative diagnostic lost its root query");
+		owners[preinferenceDiagnosticRoot] = 0;
+	}
+	if (diagnostic.emission->owner)
+		owners[diagnostic.emission->owner] = diagnostic.emission->traceBase;
+	for (const RelatedInfo &note : diagnostic.relatedInfo)
+		if (note.inferenceOwner)
+			owners[note.inferenceOwner] = note.inferenceOwnerBase;
+	for (const auto &[owner, base] : owners) {
+		auto &records = deferredInferenceDiagnostics[owner];
+		if (std::ranges::none_of(records, [&](const Diagnostic &prior) {
+			return prior.sameEmission(diagnostic);
+		})) {
+			records.push_back(diagnostic.relativeToInference(base));
+			if (incrementalPreinferenceActive)
+				preinferredDiagnosticsDeferred++;
+		}
+	}
+}
+
 void ParseContext::printDiagnostics() {
 	for (Diagnostic d : diagnostics) {
 		std::cerr << d.toString() << "\n";

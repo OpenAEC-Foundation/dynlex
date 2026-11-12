@@ -380,15 +380,17 @@ struct ParseContext {
 	// Failed trials and replaced bodies expire these entries before finalization.
 	std::unordered_set<std::string> emittedDiagnosticKeys;
 	bool incrementalPreinferenceActive = false;
+	std::shared_ptr<const VariableStorageScope> preinferenceDiagnosticRoot;
 	std::unordered_set<const DiagnosticPublication *> preinferencePublications;
-	std::map<std::shared_ptr<const VariableStorageScope>, int, std::owner_less<std::shared_ptr<const VariableStorageScope>>>
-		preinferenceTraceBases;
+	std::map<std::string, std::shared_ptr<DiagnosticPublication>> inferenceDiagnosticPublications;
 	std::map<
 		std::shared_ptr<const VariableStorageScope>, std::vector<Diagnostic>,
 		std::owner_less<std::shared_ptr<const VariableStorageScope>>>
 		deferredInferenceDiagnostics;
 	size_t preinferredDiagnosticsDeferred = 0;
 	size_t deferredInferenceDiagnosticsPublished = 0;
+	size_t inferenceDiagnosticUnitsRestored = 0;
+	size_t inferenceDiagnosticRecordsRestored = 0;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
 	// Parse-time source token annotations for metadata syntax that is not represented as normal functions.
@@ -402,7 +404,9 @@ struct ParseContext {
 	ParseContext();
 	~ParseContext();
 	bool hasCompleted(CompilationStage stage) const { return compilationStage >= stage; }
+	void retainInferenceDiagnostic(const Diagnostic &diagnostic);
 	[[gnu::noinline]] void addDiagnostic(Diagnostic diagnostic) {
+		retainInferenceDiagnostic(diagnostic);
 		const DiagnosticEmission *emission = diagnostic.emission.get();
 		if (emission && emission->publication) {
 			if (incrementalPreinferenceActive) {
@@ -411,11 +415,23 @@ struct ParseContext {
 			} else {
 				if (emission->publication->published)
 					return;
+				if (!emission->publication->identity.empty()) {
+					auto [canonical, inserted] =
+						inferenceDiagnosticPublications.try_emplace(emission->publication->identity, emission->publication);
+					if (canonical->second->published)
+						return;
+					canonical->second->published = true;
+				}
 				emission->publication->published = true;
 			}
 		}
-		if (emission && !emission->key.empty() && !emittedDiagnosticKeys.insert(emission->key).second)
-			return;
+		if (emission && !emission->discriminator.empty()) {
+			std::string key = std::to_string(reinterpret_cast<uintptr_t>(diagnostic.range.line)) + "|" +
+							  std::to_string(diagnostic.range.start()) + "|" + std::to_string(diagnostic.range.end()) + "|" +
+							  emission->discriminator;
+			if (!emittedDiagnosticKeys.insert(std::move(key)).second)
+				return;
+		}
 		if (emission && emission->publication && !incrementalPreinferenceActive)
 			deferredInferenceDiagnosticsPublished++;
 		diagnostics.push_back(std::move(diagnostic));
