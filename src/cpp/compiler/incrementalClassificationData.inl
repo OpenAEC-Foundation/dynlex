@@ -5,15 +5,12 @@ std::string IncrementalMatcherCache::recordClassificationData(const Json &value)
 	std::string packed(1, '\5');
 	packed.append(reinterpret_cast<const char *>(bytes.data()), bytes.size());
 	std::string key = digest(packed);
-	if (auto previous = previousEntries.find(key); previous != previousEntries.end())
-		recorded[key] = previous->second;
-	else
-		recorded[key] = std::move(packed);
+	recordValue(key, std::move(packed));
 	return key;
 }
 
 std::optional<IncrementalMatcherCache::Json> IncrementalMatcherCache::restoreClassificationData(std::string_view key) {
-	auto entry = previousEntries.find(key);
+	auto entry = findPrevious(key);
 	if (entry == previousEntries.end())
 		return std::nullopt;
 	std::string_view packed = entry->second;

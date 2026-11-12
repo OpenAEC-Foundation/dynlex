@@ -142,6 +142,7 @@ struct BuildStatistics {
 	double parserSnapshotMilliseconds = 0;
 	double matcherSnapshotMilliseconds = 0;
 	size_t matcherSnapshotBytes = 0;
+	IncrementalMatcherCache::StorageStatistics matcherStorage;
 	double matcherSerializeMilliseconds = 0;
 	double matcherSerializeCPUMilliseconds = 0;
 	double matcherDigestMilliseconds = 0;

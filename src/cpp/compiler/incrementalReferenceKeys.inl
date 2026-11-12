@@ -11,10 +11,7 @@ std::string IncrementalMatcherCache::recordReferenceKeys(const std::vector<Patte
 		appendString(packed, reference->match ? std::string_view(reference->initialMatcherKey) : std::string_view{});
 	}
 	std::string key = digest(packed);
-	if (auto previous = previousEntries.find(key); previous != previousEntries.end())
-		recorded[key] = previous->second;
-	else
-		recorded[key] = std::move(packed);
+	recordValue(key, std::move(packed));
 	return key;
 }
 
@@ -24,7 +21,7 @@ IncrementalMatcherCache::restoreReferenceKeys(std::string_view key) {
 		referenceMetadataReuseCount++;
 		return &decoded->second;
 	}
-	auto entry = previousEntries.find(key);
+	auto entry = findPrevious(key);
 	if (entry == previousEntries.end())
 		return nullptr;
 	std::string_view packed = entry->second;
@@ -62,15 +59,12 @@ std::string IncrementalMatcherCache::recordMatchIdentities(const std::vector<std
 	for (std::string_view identity : identities)
 		appendString(packed, identity);
 	std::string key = digest(packed);
-	if (auto previous = previousEntries.find(key); previous != previousEntries.end())
-		recorded[key] = previous->second;
-	else
-		recorded[key] = std::move(packed);
+	recordValue(key, std::move(packed));
 	return key;
 }
 
 std::optional<std::vector<std::string_view>> IncrementalMatcherCache::restoreMatchIdentities(std::string_view key) {
-	auto entry = previousEntries.find(key);
+	auto entry = findPrevious(key);
 	if (entry == previousEntries.end())
 		return std::nullopt;
 	std::string_view packed = entry->second;

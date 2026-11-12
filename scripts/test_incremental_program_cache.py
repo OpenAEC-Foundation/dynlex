@@ -46,7 +46,7 @@ def check_cache_eviction(root, build):
     old_entries = []
     for prefix, digit in (("object-", "f"), ("parser-", "e"),
                           ("optimization-input-", "d"), ("optimization-", "c"),
-                          ("inference-summary-", "b")):
+                          ("inference-summary-", "b"), ("matcher-segment-", "a")):
         old = namespace / (prefix + digit * 64 + ".entry")
         with old.open("wb") as sparse:
             sparse.truncate(512 * 1024 * 1024 + 1)

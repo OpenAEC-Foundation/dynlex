@@ -28,13 +28,13 @@ IncrementalMatcherCache::recordBodyResolution(const std::vector<std::pair<size_t
 		}
 	}
 	std::string key = digest(packed);
-	recorded[key] = std::move(packed);
+	recordValue(key, std::move(packed));
 	return key;
 }
 
 std::optional<std::vector<IncrementalMatcherCache::BodyResolution>>
 IncrementalMatcherCache::restoreBodyResolution(std::string_view key) {
-	auto entry = previousEntries.find(key);
+	auto entry = findPrevious(key);
 	if (entry == previousEntries.end())
 		return std::nullopt;
 	std::string_view packed = entry->second;

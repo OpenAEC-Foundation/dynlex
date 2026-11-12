@@ -1,6 +1,8 @@
 #pragma once
 #include "patternMatch.h"
+#include <array>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -20,12 +22,21 @@ struct PatternTreeNode;
 class IncrementalMatcherCache {
   public:
 	using Json = nlohmann::json;
-	IncrementalMatcherCache(ParseContext &context, std::string_view previous);
+	using LoadSegment = std::function<std::optional<std::string>(std::string_view)>;
+	IncrementalMatcherCache(ParseContext &context, std::string_view previous, LoadSegment loadSegment);
 	std::optional<PatternMatch *> reuse(PatternReference *reference, MatchOptions options, MatchDependencies *dependencies);
 	void
 	record(PatternReference *reference, MatchOptions options, const PatternMatch *match, const MatchDependencies *dependencies);
-	std::string snapshot() const;
-	bool contains(std::string_view key) const;
+	struct Snapshot {
+		std::string index;
+		std::vector<std::pair<std::string, std::string>> segments;
+	};
+	struct StorageStatistics {
+		size_t loaded = 0, missing = 0, built = 0, reused = 0, loadedBytes = 0;
+	};
+	Snapshot snapshot();
+	const StorageStatistics &storageStatistics() const { return storage; }
+	bool contains(std::string_view key);
 	void retain(std::string_view key);
 	struct BodyResolution {
 		size_t referenceIndex;
@@ -65,6 +76,17 @@ class IncrementalMatcherCache {
 	ParseContext &context;
 	std::unordered_map<std::string_view, std::string_view> previousEntries;
 	std::map<std::string, std::variant<std::string, std::string_view>> recorded;
+	struct Segment {
+		std::string key;
+		size_t entries = 0;
+		bool loaded = false;
+		std::string bytes;
+	};
+	std::array<Segment, 256> segments;
+	LoadSegment loadSegment;
+	StorageStatistics storage;
+	decltype(previousEntries)::iterator findPrevious(std::string_view key);
+	void recordValue(const std::string &key, std::string value);
 	std::unordered_map<std::string_view, std::vector<ReferenceMatchKeys>> decodedReferenceKeys;
 	size_t referenceMetadataLoadCount = 0;
 	size_t referenceMetadataReuseCount = 0;

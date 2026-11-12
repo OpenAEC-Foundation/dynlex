@@ -12,12 +12,17 @@ void IncrementalClassification::prepare() {
 		prior = cache.restoreClassificationData(projection.at("classifications").get_ref<const std::string &>());
 		if (prior)
 			for (const Json &unit : prior->at("units")) {
+				// The index can outlive one of its independently evicted products.
+				// Such a unit computes its metadata normally; intact units still replay.
+				if (!std::ranges::all_of(std::array{Queries, Provides, Outputs}, [&](Field field) {
+					return cache.contains(unit.at(field).get_ref<const std::string &>());
+				}))
+					continue;
 				oldUnits.emplace(unit.at(Path).get<std::string>(), &unit);
 				// A failed build may publish its matcher payload instead of this
 				// successful program's payload. Retain the topology's complete closure.
 				for (Field field : {Queries, Provides, Outputs}) {
 					const std::string &key = unit.at(field).get_ref<const std::string &>();
-					requireCompilerInvariant(cache.contains(key), "classification topology has an absent metadata unit");
 					cache.retain(key);
 				}
 			}

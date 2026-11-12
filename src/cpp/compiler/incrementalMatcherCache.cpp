@@ -19,7 +19,7 @@
 
 namespace {
 using Json = IncrementalMatcherCache::Json;
-constexpr std::string_view matcherCacheHeader = "DynLex matcher results v5\n";
+constexpr std::string_view matcherCacheHeader = "DynLex matcher results v6\n";
 
 // A failed lookup can inspect an orphaned trie node left by a definition that
 // was removed during resolution. The next process may build the same active
@@ -136,50 +136,14 @@ void appendDeclarationVisibility(Fingerprint &key, const Range &declaration, con
 }
 } // namespace
 
-IncrementalMatcherCache::IncrementalMatcherCache(ParseContext &context, std::string_view previous) : context(context) {
-	if (previous.empty())
-		return;
-	if (!previous.starts_with(matcherCacheHeader))
-		throw std::runtime_error("invalid incremental matcher cache header");
-	size_t position = matcherCacheHeader.size();
-	while (position < previous.size()) {
-		if (previous.size() - position < 64)
-			throw std::runtime_error("truncated incremental matcher cache key");
-		std::string_view cacheKey = previous.substr(position, 64);
-		position += 64;
-		if (!std::all_of(cacheKey.begin(), cacheKey.end(), [](char character) {
-			return (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f');
-		}))
-			throw std::runtime_error("invalid incremental matcher cache key");
-		std::uint64_t length = readLength(previous, position);
-		if (length > previous.size() - position)
-			throw std::runtime_error("truncated incremental matcher cache value");
-		auto [_, inserted] = previousEntries.emplace(cacheKey, previous.substr(position, static_cast<size_t>(length)));
-		if (!inserted)
-			throw std::runtime_error("duplicate incremental matcher cache key");
-		position += static_cast<size_t>(length);
-	}
-}
+#include "incrementalMatcherSegments.inl"
 
-std::string IncrementalMatcherCache::snapshot() const {
-	std::string result(matcherCacheHeader);
-	result.reserve(recorded.size() * 256);
-	for (const auto &[key, value] : recorded) {
-		result += key;
-		std::string_view entry = std::holds_alternative<std::string_view>(value)
-									 ? std::get<std::string_view>(value)
-									 : std::string_view(std::get<std::string>(value));
-		appendLength(result, entry.size());
-		result.append(entry.data(), entry.size());
-	}
-	return result;
-}
-
-bool IncrementalMatcherCache::contains(std::string_view key) const { return previousEntries.contains(key); }
+bool IncrementalMatcherCache::contains(std::string_view key) { return findPrevious(key) != previousEntries.end(); }
 
 void IncrementalMatcherCache::retain(std::string_view key) {
-	std::string_view value = previousEntries.at(key);
-	recorded[std::string(key)] = value;
+	auto entry = findPrevious(key);
+	requireCompilerInvariant(entry != previousEntries.end(), "retained matcher metadata is unavailable");
+	recorded[std::string(key)] = entry->second;
 }
 
 #include "incrementalBodyResolutionCache.inl"
@@ -598,10 +562,10 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 	bool prevalidated = !reference->prevalidatedMatcherKey.empty();
 	std::string cacheKey = prevalidated ? std::exchange(reference->prevalidatedMatcherKey, std::string{})
 										: key(*reference, dependencies != nullptr);
-	auto entry = previousEntries.find(cacheKey);
+	auto entry = findPrevious(cacheKey);
 	if (entry == previousEntries.end() && prevalidated) {
 		cacheKey = key(*reference, dependencies != nullptr);
-		entry = previousEntries.find(cacheKey);
+		entry = findPrevious(cacheKey);
 		prevalidated = false;
 	}
 	if (entry == previousEntries.end()) {
@@ -675,7 +639,7 @@ void IncrementalMatcherCache::record(
 	if (match) {
 		std::string packed(1, '\1');
 		if (appendMatch(packed, *reference, *match)) {
-			recorded[reference->incrementalMatcherKey] = std::move(packed);
+			recordValue(reference->incrementalMatcherKey, std::move(packed));
 		} else
 			reference->incrementalMatcherKey.clear();
 		return;
@@ -691,5 +655,5 @@ void IncrementalMatcherCache::record(
 		appendNode(packed, dependency.node);
 		appendString(packed, dependency.literal);
 	}
-	recorded[reference->incrementalMatcherKey] = std::move(packed);
+	recordValue(reference->incrementalMatcherKey, std::move(packed));
 }

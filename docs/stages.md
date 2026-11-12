@@ -1035,11 +1035,17 @@ function tree used for nested matches. Adding an unrelated pattern can therefore
 matches in unchanged calls, even when the added source line shifts their line numbers.
 Definition fingerprints use pattern content and order without absolute line numbers, so
 inserting an executable line before unchanged definitions also keeps their matches.
-Matcher results live in a separate content-addressed cache entry with a compact index
-and individually encoded results. An unchanged or comment-only build reads only the
+Matcher results live in content-addressed segments selected by the first byte of
+their input digest. A small index records each segment's payload key and entry
+count. Segments load on demand, and their storage owns the string views used by
+restored metadata. Snapshot capture retains a segment directly when its complete
+set of live keys and values is unchanged; only changed segments are encoded,
+hashed and written. Removed records do not survive merely because another record
+in their segment is still live. An unchanged or comment-only build reads only the
 program manifest, so it does not parse matcher results merely to relink the executable.
-An evicted matcher entry causes
-matching to run normally on the next code edit.
+An evicted index causes normal matching on the next code edit. An evicted segment
+discards only its own results; other segments remain reusable. Corrupt entries
+report their cache error instead of silently becoming misses.
 Successful matches are rebound to the new tree and expression objects. Failed matches
 restore their trie dependencies, so later definition insertions still retry them.
 Classification and deferred replay share an immutable decoded reference-metadata
@@ -1092,7 +1098,12 @@ Path snapshots are stored by compiler and tree fingerprint. An edit that keeps
 the initial and final trees identical reuses their fingerprints without reading
 or rebuilding the path lists. A changed tree loads the prior lists on demand.
 `matcher_path_snapshots_loaded` and `matcher_path_snapshots_built` count that work.
-`matcher_snapshot_bytes` reports the serialized matcher payload size.
+`matcher_snapshot_bytes` reports newly serialized segment and index bytes.
+`matcher_segments_loaded`, `matcher_segments_missing`, `matcher_segments_built`,
+`matcher_segments_reused`, and `matcher_segment_bytes_loaded` distinguish cache
+reads, partial eviction, new payloads and directly retained payloads. Segment
+encoding and content fingerprints belong to `matcher_serialize_ms`; the index
+fingerprint belongs to `matcher_digest_ms`.
 `matcher_serialize_ms`, `matcher_digest_ms`, and `matcher_store_ms` separate its
 serialization, content-address calculation, and checksummed storage costs;
 their `_cpu_ms` counterparts measure compiler-process CPU time. These are

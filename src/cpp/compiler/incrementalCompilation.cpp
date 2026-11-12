@@ -500,7 +500,9 @@ bool compileIncrementally(
 			context.recordParsedDefinition = [&](Range range, const std::vector<DefinitionPatternElement> &elements) {
 				parserCache.recordDefinition(range, elements);
 			};
-			IncrementalMatcherCache matcherCache(context, previousMatches);
+			IncrementalMatcherCache matcherCache(context, previousMatches, [&](std::string_view key) {
+				return readEntry(directory / ("matcher-segment-" + std::string(key) + ".entry"));
+			});
 			InitialParameterCounts initialParameterCounts(
 				context, previous ? &*previous : nullptr, recording->observations, statistics.parameterCountCacheMilliseconds
 			);
@@ -567,11 +569,17 @@ bool compileIncrementally(
 					phaseStart = Clock::now();
 					phaseCPU = processCPUMilliseconds();
 				};
-				std::string payload = matcherCache.snapshot();
+				auto snapshot = matcherCache.snapshot();
+				const std::string &payload = snapshot.index;
 				statistics.matcherSnapshotBytes += payload.size();
+				for (const auto &[key, bytes] : snapshot.segments)
+					statistics.matcherSnapshotBytes += bytes.size();
+				statistics.matcherStorage = matcherCache.storageStatistics();
 				recordPhase(statistics.matcherSerializeMilliseconds, statistics.matcherSerializeCPUMilliseconds);
 				std::string key = digest(payload);
 				recordPhase(statistics.matcherDigestMilliseconds, statistics.matcherDigestCPUMilliseconds);
+				for (const auto &[segmentKey, bytes] : snapshot.segments)
+					writeEntry(directory / ("matcher-segment-" + segmentKey + ".entry"), bytes);
 				writeEntry(directory / ("matcher-" + key + ".entry"), payload);
 				recordPhase(statistics.matcherStoreMilliseconds, statistics.matcherStoreCPUMilliseconds);
 				statistics.matcherSnapshotMilliseconds += elapsedMilliseconds(saveStart);
