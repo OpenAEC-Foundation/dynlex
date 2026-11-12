@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import {setTimeout as pause} from 'node:timers/promises';
 
 export async function verifySourcePaste({command,evaluate,waitFor,key,source}) {
@@ -122,4 +123,33 @@ export async function verifySourceInspection({command,evaluate,waitFor,key,captu
   await command('Input.insertText',{text:source});
   await waitFor(`document.querySelector('textarea').value===${JSON.stringify(source)}`);
   console.log('Shared outline and inferred-instance selection passed:',name);
+}
+
+export async function verifySourceFixes({command,evaluate,waitFor,key,capture,source,name}) {
+  const program=await fs.readFile(new URL('./fixtures/editor_quickfix.dl',import.meta.url),'utf8');
+  const conversion='@intrinsic("cast", value, @intrinsic("type", "int", 32))';
+  const fixed=program.replace('    return value\n',`    return ${conversion}\n`);
+  assert.notEqual(fixed,program,'The quick-fix fixture lost its conflicting return.');
+  await key('KeyA','a',65,2);
+  await command('Input.insertText',{text:program});
+  await waitFor(`document.querySelector('textarea').value===${JSON.stringify(program)}`);
+  await key('Home','Home',36,2);
+  for(let row=0;row<5;row++) await key('ArrowDown','ArrowDown',40);
+  await key('Home','Home',36);
+  for(let column=0;column<11;column++) await key('ArrowRight','ArrowRight',39);
+  // The request may precede analysis; its diagnostic context must refresh at dispatch.
+  await key('F7','F7',118);
+  await waitFor('window.siteProbe.visible.includes("Convert returned value to a 32-bit integer")');
+  await capture(name+'-fixes');
+  const uri=await evaluate('window.siteProbe.diagnostics.findLast(item=>item.diagnostics.some(problem=>problem.data?.quickFixes?.some(fix=>fix.title==="Convert returned value to a 32-bit integer"))).uri');
+  await evaluate('window.siteProbe.diagnostics=[]');
+  await key('Enter','Enter',13);
+  await waitFor(`document.querySelector('textarea').value===${JSON.stringify(fixed)}`);
+  await waitFor(`window.siteProbe.diagnostics.some(item=>item.uri===${JSON.stringify(uri)} && item.diagnostics.length===0)`);
+  await key('KeyZ','z',90,2);
+  await waitFor(`document.querySelector('textarea').value===${JSON.stringify(program)}`);
+  await key('KeyA','a',65,2);
+  await command('Input.insertText',{text:source});
+  await waitFor(`document.querySelector('textarea').value===${JSON.stringify(source)}`);
+  console.log('Shared quick fix, fresh analysis and undo passed:',name);
 }

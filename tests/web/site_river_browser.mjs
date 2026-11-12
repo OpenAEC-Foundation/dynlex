@@ -5,7 +5,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { setTimeout as pause } from 'node:timers/promises';
-import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, verifySourceHover, verifySourceInspection } from './editor_feature_checks.mjs';
+import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, verifySourceHover, verifySourceInspection, verifySourceFixes } from './editor_feature_checks.mjs';
 import {canvasControls} from './canvas_controls.mjs';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
@@ -317,6 +317,7 @@ try {
   await verifySourceDefinition({command,evaluate,waitFor,key,capture,source:plan,line:1,column:4,filename:'river_challenge.dl',name:'river'});
   await verifySourceHover({command,evaluate,waitFor,key,capture,source:plan,name:'river'});
   await verifySourceInspection({command,evaluate,waitFor,key,capture,source:plan,name:'river'});
+  await verifySourceFixes({command,evaluate,waitFor,key,capture,source:plan,name:'river'});
   await pause(100);
   assert.equal(await evaluate('window.siteProbe.marks.length'),0,'Editing retained execution marks from another snapshot');
   await clickText('Run plan ▶');

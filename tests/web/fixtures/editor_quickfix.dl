@@ -1,0 +1,8 @@
+import lib/std.dl
+
+to get widened {value}:
+    if value > 0:
+        return value + 32
+    return value
+
+@intrinsic("discard", widened (65 as a byte))

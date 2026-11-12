@@ -120,6 +120,20 @@ cursor instead of retaining the source editor's text cursor.
 Website filenames now come from the shared project model. Source links and
 shader loads configure that model directly, preserving provided project files.
 The duplicate filename paragraphs and per-frame metadata polling were removed.
+Source navigation also restored a captured initial read-only flag, discarding
+later policy updates. Controls now retain application policy while their bound
+documents supply content protection; the shared editing gate combines both.
+Regression coverage includes locking, unlocking, edits after returning, and
+policy changes made while viewing an import.
+Quick fixes now use shared diagnostic selection, Unicode ranges, action menus,
+command handling and atomic source-text transactions. Staging an edit does not
+apply part of it when another target is protected, read only, unavailable or
+stale. Parked sources retain independent undo and caret state. Application
+callbacks run after all affected models and buffers are updated.
+Fixes requested during analysis initially captured an empty diagnostic list.
+Source queries now support a parameter-preparation callback at dispatch, after
+analysis settles. Fixes use it to refresh their diagnostic context, and reusing a
+feature slot clears the previous callback.
 
 The website migration also exercised the following compiler paths. These are
 language and compiler fixes, with no website-specific syntax or inference rules.
