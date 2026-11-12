@@ -1087,7 +1087,9 @@ The existing binary matcher cache stores each unit's reference indices, direct
 variable outcomes, exact source spans and positive or failed lookup keys. The
 JSON projection stores only the unit's content key. Restored matches and variable
 references rejoin the ordinary expansion and precedence-invalidation machinery.
-Bodies with prior diagnostics run the normal resolver.
+Bodies in files with prior frontend diagnostics run the normal resolver. Typed
+inference diagnostics have their own retained products and do not exclude those
+files from body-resolution or declaration-classification reuse.
 `body_resolution_units_reused` and `body_resolution_references_restored`
 count this restoration, separately from references evaluated by the resolver.
 Declaration classification has its own persistent dependency graph. Its inputs
@@ -1158,8 +1160,8 @@ An unchanged top-level body without nested definitions can restore its parameter
 classification when its dependencies and lexical environment remain valid and its
 saved body resolution is available. The compiler installs those parameters through
 the normal binding operations before indexing the declaration. Bodies with prior
-diagnostics still run normal resolution. The source projection and body digest
-establish that a skipped body's text is unchanged.
+frontend diagnostics still run normal resolution. The source projection and body
+digest establish that a skipped body's text is unchanged.
 Body digests frame source-file transitions as well as text: moving identical code
 between files can change file-local overload visibility. A changed body can reuse
 only its header when its classification input and complete dependency closure are

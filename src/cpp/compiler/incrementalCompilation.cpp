@@ -781,6 +781,7 @@ bool compileIncrementally(
 					result["inactive_projection"] = std::move(inactiveProjection);
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
+					result["frontend_diagnostic_sources"] = std::move(frontendDiagnosticSources);
 					result["matcher_key"] = saveMatcher();
 					result["parser_key"] = saveParser();
 					recordNativeOutput(result, statistics, &*previous);
@@ -840,6 +841,7 @@ bool compileIncrementally(
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
 					result["validation_units"] = validation.snapshot();
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
+					result["frontend_diagnostic_sources"] = std::move(frontendDiagnosticSources);
 					if (functionReuse) {
 						for (const std::string &name : functionReuse->reusedFunctionNames()) {
 							functionSections.emplace(name, previous->at("function_sections").at(name).get<std::string>());

@@ -1,6 +1,35 @@
 """Typed usage diagnostics and lexical capture checks retain their own products."""
 
 
+def check_diagnostic_stage_reuse(root, build):
+    main = root / 'diagnostic_stage_reuse.dl'
+    source = ('to warn {item}: @intrinsic("store", item, 0)\n'
+              'to stable {item}: @intrinsic("discard", item)\n'
+              'to changing: @intrinsic("discard", 0)\n'
+              'warn @intrinsic("command line argument count")\nstable 1\nchanging\n')
+    main.write_text(source)
+    first = build(entry=main)
+    assert 'assigned before being read' in first[1]
+    main.write_text(source.replace('"discard", 0', '"discard", 1'))
+    edited = build(entry=main)
+    assert edited[1:] == build(False, entry=main)[1:]
+    assert edited[0]['classification_units_reused'] >= 2, edited[0]
+    assert edited[0]['body_resolution_units_reused'] >= 2, edited[0]
+    assert edited[0]['body_resolution_reference_visits'] < first[0]['body_resolution_reference_visits']
+
+    # Resolver warnings must remain visible after an unrelated edit too.
+    main = root / 'resolution_warning_stage.dl'
+    source = ('element means: 1\n'
+              'to choose element: @intrinsic("discard", element)\n'
+              'to changing: @intrinsic("discard", 0)\nchoose element\nchanging\n')
+    main.write_text(source)
+    assert 'Ambiguous single-word reference' in build(entry=main)[1]
+    main.write_text(source.replace('"discard", 0', '"discard", 1'))
+    resolver = build(entry=main)
+    assert resolver[1:] == build(False, entry=main)[1:]
+    assert 'Ambiguous single-word reference' in resolver[1]
+
+
 def check_capture_note_wording(root, build):
     folder = root / "capture_note_wording"
     folder.mkdir()

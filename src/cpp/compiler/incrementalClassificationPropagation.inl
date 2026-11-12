@@ -2,7 +2,7 @@ bool IncrementalClassification::canReuse(Unit &unit) {
 	if (!prior || unit.environment || !unit.old || context.options.emitDebugInfo || context.options.traceExecution ||
 		unit.section->parent != context.mainSection || !reusableResolutionSection(*unit.section) || unit.references.empty())
 		return false;
-	for (const Json &source : previous->at("diagnostic_sources"))
+	for (const Json &source : previous->at("frontend_diagnostic_sources"))
 		if (source == resolutionSourceFile(*unit.section).uri)
 			return false;
 	if (!sameBody(unit.path)) {

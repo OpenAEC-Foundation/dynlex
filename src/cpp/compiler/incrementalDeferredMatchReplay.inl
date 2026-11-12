@@ -52,7 +52,7 @@ void prepareDeferredMatchReplay(
 			if (!bodies.contains(path) || !prior.at("bodies").contains(path) || bodies.at(path) != prior.at("bodies").at(path))
 				return;
 	}
-	std::set<std::string> diagnosticSources = previous.at("diagnostic_sources").get<std::set<std::string>>();
+	std::set<std::string> diagnosticSources = previous.at("frontend_diagnostic_sources").get<std::set<std::string>>();
 	for (const auto &owner : currentProjection.owners) {
 		const std::string &path = owner.path;
 		const Section *section = owner.section;
