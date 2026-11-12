@@ -6,15 +6,28 @@ import ../packages/dynlex-ui/ui/shaders.dl
 import ../packages/dynlex-ui/ui/invalidation.dl
 import lib/json_builders.dl
 
-to get shader values for {a pointer to JSON value:program} at {floating-point number:seconds} sized {integer:width} by {integer:height}:
+to [supply website shader inputs to] {a pointer:resource} [using] {a pointer to JSON value:program} [at] {floating-point number:seconds} [sized] {integer:width} [by] {integer:height} [in] {a pointer to UI view:view}:
     set passes to the JSON member named "passes" in program
-    set result to a new JSON value of kind the JSON array kind
     set index to 0
     loop while index < passes's length:
         set pass to the JSON value at index index in passes
-        add (a JSON object containing [JSON number "time" is seconds, JSON number "width" is width, JSON number "height" is height, JSON number "render_pass" is (the JSON number named "renderPass" in pass)]) to the JSON array result
+        set uniforms to the JSON member named "uniforms" in pass
+        set cursor to 0
+        loop while cursor < uniforms's length:
+            set uniform to the JSON value at index cursor in uniforms
+            set name to the JSON text named "name" in uniform
+            set value to seconds
+            if name = "width":
+                set value to width as a 64 bit floating-point number
+            else if name = "height":
+                set value to height as a 64 bit floating-point number
+            else if name = "render_pass":
+                set value to the JSON number named "renderPass" in pass
+            set group to (the JSON number named "group" in uniform) as an integer
+            set binding to (the JSON number named "binding" in uniform) as an integer
+            set UI shader resource pass index in view uniform group group binding binding to (a UI float shader value from value)
+            increment cursor
         increment index
-    return result
 
 to get the rendered website shader {a pointer to website shader view:scene} sized {integer:width} by {integer:height} in {a pointer to UI view:view}:
     if scene's texture's resource != (0 as a pointer):
@@ -29,10 +42,8 @@ to get the rendered website shader {a pointer to website shader view:scene} size
             set UI shader (scene's resource) pass 0 in view to draws (draws + 0) counting 1
             release mesh
             set scene's mesh width to width
-    set values to shader values for (scene's program) at (scene's seconds) sized width by height
-    set payload to the compact JSON form of values
-    free values
-    set scene's texture to a UI texture from shader (scene's resource) sized width by height using payload in view
+    supply website shader inputs to (scene's resource) using (scene's program) at (scene's seconds) sized width by height in view
+    set scene's texture to a UI texture from shader (scene's resource) sized width by height in view
     set scene's rendered seconds to scene's seconds
     return scene's texture
 

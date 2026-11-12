@@ -6,7 +6,8 @@ export async function recordWebsiteProgram(file, { synchronousService=()=>{throw
   throw new Error('The controller unexpectedly cancelled a platform request');
 } } = {}) {
   const bytes = await readFile(file);
-  const output = [], requests = [], cancelled = [], calls=[],shaderCalls=[];
+  const output = [], requests = [], cancelled = [], calls=[],shaderCalls=[],uniformCalls=[];
+  const shaderInputs=new Map();
   const runtime = buildRuntimeImports(output, createRuntimeFilesystem(), inspectRuntimeWasmLayout(bytes));
   const decoder = new TextDecoder(), memory = runtime.env.__linear_memory;
   const text = (pointer, count) => decoder.decode(new Uint8Array(memory.buffer, pointer, count));
@@ -29,8 +30,12 @@ export async function recordWebsiteProgram(file, { synchronousService=()=>{throw
     return requests.length;
   };
   runtime.env.ui_cancel_request = id => { cancelled.push(id); return cancelRequest(id); };
-  runtime.env.ui_shader_frame = (surface,resource,width,height,pointer,count) =>
-    renderShader({surface,resource,width,height,values:JSON.parse(text(pointer,count))});
+  runtime.env.ui_shader_uniform = (surface,resource,pass,group,binding,scalar,rows,columns,pointer,count) => {
+    const input={surface,resource,pass,group,binding,scalar,rows,columns,data:[...new Uint8Array(memory.buffer,pointer,count)]};
+    uniformCalls.push(input);shaderInputs.set(`${surface}:${resource}:${pass}:${group}:${binding}`,input);
+  };
+  runtime.env.ui_shader_frame = (surface,resource,width,height) =>
+    renderShader({surface,resource,width,height,inputs:[...shaderInputs.values()].filter(input=>input.surface===surface&&input.resource===resource)});
   runtime.env.ui_shader_vertex_buffer = (surface,resource,pass,slot,pointer,count) =>
     shaderCalls.push({operation:'vertex',surface,resource,pass,slot,data:[...new Uint8Array(memory.buffer,pointer,count)]});
   runtime.env.ui_shader_index_buffer = (surface,resource,pass,pointer,count) =>
@@ -44,5 +49,5 @@ export async function recordWebsiteProgram(file, { synchronousService=()=>{throw
   const { instance } = await WebAssembly.instantiate(bytes, runtime);
   try { instance.exports.main(); }
   catch (error) { throw new Error(output.join(''), { cause: error }); }
-  return { output: output.join(''), requests, cancelled, calls, shaderCalls };
+  return { output: output.join(''), requests, cancelled, calls, shaderCalls, uniformCalls };
 }

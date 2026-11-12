@@ -8,8 +8,8 @@ to get test shader stage {C string:name} with {integer:binding}:
         JSON text "webgpu" is (the string form of name), JSON text "webgl" is (the string form of name),
         JSON child "vertexInputs" is inputs,
         JSON child "uniforms" is (a JSON array containing [
-            a JSON object containing [JSON text "name" is "time", JSON number "group" is 0, JSON number "binding" is 0],
-            a JSON object containing [JSON text "name" is "width", JSON number "group" is 0, JSON number "binding" is binding]
+            a JSON object containing [JSON text "name" is "time", JSON number "group" is 0, JSON number "binding" is 0, JSON child "type" is (a JSON object containing [JSON text "scalar" is "float32", JSON number "rows" is 1, JSON number "columns" is 1])],
+            a JSON object containing [JSON text "name" is "width", JSON number "group" is 0, JSON number "binding" is binding, JSON child "type" is (a JSON object containing [JSON text "scalar" is "float32", JSON number "rows" is 1, JSON number "columns" is 1])]
         ])
     ]
 
@@ -63,3 +63,10 @@ require condition (linked failed) reporting "A uniform acquired two bindings wit
 require condition (linked's error != "") reporting "A failed shader linkage lost its error"
 free stages
 print line "Shader descriptions share source linking, reflected bindings and geometry passes."
+
+set unsupported to a JSON array containing [a JSON object containing [JSON text "name" is "camera", JSON child "type" is (a JSON object containing [JSON text "scalar" is "float32", JSON number "rows" is 4, JSON number "columns" is 4])]]
+require condition ((the error supplying website shader uniforms from unsupported) != "") reporting "The preview accepted a uniform it cannot supply."
+free unsupported
+set unsupported to a JSON array containing [a JSON object containing [JSON text "name" is "time", JSON child "type" is (a JSON object containing [JSON text "scalar" is "float32", JSON number "rows" is 1, JSON number "columns" is 3])]]
+require condition ((the error supplying website shader uniforms from unsupported) != "") reporting "The preview accepted a vector for its scalar clock."
+free unsupported

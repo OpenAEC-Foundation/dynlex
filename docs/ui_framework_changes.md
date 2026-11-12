@@ -361,3 +361,56 @@ Studio and River now use one retained Find/Replace controller, including Unicode
 Native text, annotations and Snake interaction/rendering checks pass; WebGPU and WebGL2 command, editor and form checks pass. Four full website browser runs pass, including Find/Replace and keyboard Run in Studio and River, execution, language tools, progress, audio, mobile layout and downloads. The integration run passed 502 checks; its remaining shipped-library check passes after rebuilding the browser compiler with the renamed workspace helpers. Fresh shipped core/search fixtures and the independent 11,024-case search oracle also pass without retained allocations.
 
 Shared scene camera and triangle-picking helpers now reuse the core vector and column-major graphics libraries. Tests cover perspective clipping, viewport resizing, projection/ray agreement, mixed numeric precision, ground intersections, triangle winding, edges and transformed geometry. Native, WebAssembly and rebuilt-browser-compiler executions pass. These helpers prepare Farm's scene integration; Farm's renderer and interface are still unfinished.
+
+Typed shader inputs now declare a numeric type explicitly. Float32, signed int32
+and unsigned int32 scalars/vectors preserve their GPU interface types; float32
+matrices use row vectors with sixteen-byte strides. The SPIR-V patcher previously
+retargeted uniform globals without retargeting optimized element pointers. A
+minimal, import-free 2x2 matrix/vector multiplication reproduced a Workgroup
+pointer into a Uniform block at O2. Derived access-chain pointers now inherit the
+base pointer's storage class. All 21 supported input shapes validate at O0/O2,
+and the 350 required compiler checks pass.
+
+The shared UI shader driver now transfers packed numeric bytes. Owned DynLex
+values provide scalar/vector/matrix construction, integer range and whole-number
+checks, float32 finiteness checks, zero padding and column-major graphics-matrix
+conversion. This removes per-frame JSON values and host-side numeric packing.
+Cross-stage linkage compares complete input types. The website's existing shader
+previews use the new uploads and reject inputs their preview controls cannot
+supply during linkage. Native and WebAssembly value, driver and linkage fixtures
+pass at both optimization levels; Wasm allocations return to zero. Driver-width
+and numeric-range tests pass as well. Browser reflection, WGSL/GLSL translation and actual GPU pixel checks now pass
+for all 21 input shapes on WebGPU and WebGL2.
+
+GPU translation checks also exposed two portability issues. LLVM's byte-address
+optimization introduced 64-bit constant indices for small matrix rows. Shader
+address lowering now reconstructs typed accesses and narrows only constants
+whose signed value is preserved. Native optimized matrix modules no longer need
+ShaderInt64 and translate through Naga. A subsequent background WebGPU pixel
+probe proved that WGSL emission dropped SPIR-V array strides: a matrix read the
+padding slot instead of the next row. Uniform matrices now use explicit padded
+row structures; reflection derives their logical dimensions from the validated
+physical rows and offsets. The native compiler validates all 21 shapes at both
+optimization levels with that layout. The rebuilt browser compiler and complete
+GPU/GL corpus pass with this layout.
+
+The complete GPU corpus caught signed arithmetic that looked valid to SPIR-V
+validation but changed meaning during translation. LLVM's signless values were
+declared unsigned, so Naga converted a negative int32 to a positive float and
+interpreted signed division and shifts through unsigned types. Shader lowering
+now makes each opcode's signed/unsigned interpretation explicit in its operand
+and result types, preserving the original SSA bits at its boundaries. Fourteen
+independent signed/unsigned arithmetic fixtures pass native SPIR-V validation at
+O0/O2 and actual background WebGPU pixel checks after translation. The rebuilt browser compiler passes the combined 35-case matrix/arithmetic
+corpus on both WebGPU and WebGL2.
+
+WebGL2 additionally exposed GLSL's different signed-remainder behavior for
+negative operands. Signed remainder now lowers to exact truncating integer
+division, multiplication and subtraction. All fourteen arithmetic cases pass
+actual WebGL2 pixels too. Final verification includes 350 required checks,
+native shader validation at O0/O2, browser reflection/translation, and all 35
+compiled shaders rendered through both backends alongside the shared form and
+buffer-submission regressions. The website SDK is repinned to the verified compiler/UI revisions. Website
+shader models, buffer updates and all four Studio/River browser runs pass on
+WebGPU and WebGL2. The local preview is updated; the complete integration suite
+is running separately.

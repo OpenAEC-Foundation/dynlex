@@ -20,6 +20,19 @@ to get [the error supplying website shader inputs from] {a pointer to JSON value
         increment index
     return ""
 
+to get [the error supplying website shader uniforms from] {a pointer to JSON value:uniforms}:
+    set index to 0
+    loop while index < uniforms's length:
+        set uniform to the JSON value at index index in uniforms
+        set name to the JSON text named "name" in uniform
+        if ((name != "time") and (name != "width")) and ((name != "height") and (name != "render_pass")):
+            return "The preview supplies time, width, height and render_pass uniforms"
+        set kind to the JSON member named "type" in uniform
+        if ((the JSON text named "scalar" in kind) != "float32") or (((the JSON number named "rows" in kind) != 1.0) or ((the JSON number named "columns" in kind) != 1.0)):
+            return "Preview uniforms require float32 scalar inputs"
+        increment index
+    return ""
+
 to get [a linked render pass for] {live shader:shader} [drawing geometry] {boolean:mesh} [using] {a pointer to JSON value:stages} [stored as] {C string:kind}:
     set fragment to the JSON member named "fragment" in stages
     set uniforms to a new JSON-RPC array
@@ -29,6 +42,8 @@ to get [a linked render pass for] {live shader:shader} [drawing geometry] {boole
         set error to the error from merging UI shader bindings from source into uniforms
         if error = "":
             set error to the error supplying website shader inputs from source
+    if error = "":
+        set error to the error supplying website shader uniforms from uniforms
     if error != "":
         free uniforms
         return a failed UI shader linkage reporting error

@@ -30,7 +30,7 @@ select website editor mode 1 in (the address of state)
 set the text of "IDE output" in (the address of instance) to "Retained program output"
 run website program 2 in (the address of state)
 require condition ((the item at 2 in (state's programs))'s phase = 1) reporting "The shader did not start compiling"
-set stage to a JSON object containing [JSON text "webgpu" is "code", JSON text "webgl" is "code", JSON child "vertexInputs" is (a new JSON-RPC array), JSON child "uniforms" is (a JSON array containing [a JSON object containing [JSON text "name" is "time", JSON number "group" is 0, JSON number "binding" is 0]])]
+set stage to a JSON object containing [JSON text "webgpu" is "code", JSON text "webgl" is "code", JSON child "vertexInputs" is (a new JSON-RPC array), JSON child "uniforms" is (a JSON array containing [a JSON object containing [JSON text "name" is "time", JSON number "group" is 0, JSON number "binding" is 0, JSON child "type" is (a JSON object containing [JSON text "scalar" is "float32", JSON number "rows" is 1, JSON number "columns" is 1])]])]
 set response to a JSON object containing [JSON number "status" is 0, JSON number "milliseconds" is 1.5, JSON child "stages" is (a JSON object containing [JSON child "fragment" is stage])]
 receive website compilation response for 2 in (the address of state)
 free response
