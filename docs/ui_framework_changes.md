@@ -343,3 +343,11 @@ WebGPU/WebGL2 text/editor input, all website controllers, SDK artifact checks an
 four full Studio/River browser runs pass. This phase changes DynLex library/UI
 code and embeds the new standard modules in the browser compiler; it adds no
 C++ compiler fix.
+
+Literal matching now accepts an explicit line-break equivalence policy. It can
+match CRLF, LF and lone CR while retaining the original UTF-8 endpoints, without
+normalizing a second source string. All callers use the new signature. The
+independent corpus now covers 11,024 cases at both native/Wasm optimization
+levels and through the rebuilt browser compiler, with no retained allocations;
+the full integration suite again passes 503 checks. A library-notice manifest
+also makes the compiler-supplied notices available to application packagers.

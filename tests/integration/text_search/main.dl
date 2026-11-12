@@ -2,8 +2,8 @@ import lib/text_search.dl
 import lib/check.dl
 import lib/text.dl
 
-to [expect literal search] {string:text} [for] {string:query} [matching case] {boolean:sensitive} [whole words] {boolean:whole} [to find] {an array:ranges}:
-    set result to literal text matches in text for query matching case sensitive requiring whole words whole
+to [expect literal search] {string:text} [for] {string:query} [matching case] {boolean:sensitive} [whole words] {boolean:whole} [line breaks alike] {boolean:newlines} [to find] {an array:ranges}:
+    set result to literal text matches in text for query matching case sensitive requiring whole words whole treating line breaks alike newlines
     require condition (result's status = 0) reporting "A valid literal search failed."
     require condition ((the length of (result's matches)) = (the length of ranges)) reporting "A literal search returned the wrong number of matches."
     set index to 0
@@ -13,31 +13,36 @@ to [expect literal search] {string:text} [for] {string:query} [matching case] {b
         require condition ((actual's start = (the item at 0 in expected)) and (actual's end = (the item at 1 in expected))) reporting "A literal search returned the wrong original UTF-8 range."
         increment index
 
-expect literal search "banana" for "ana" matching case true whole words false to find [[1, 4]]
-expect literal search "aaaaa" for "aa" matching case true whole words false to find [[0, 2], [2, 4]]
-expect literal search "ababaababac" for "ababac" matching case true whole words false to find [[5, 11]]
-expect literal search "αKk𐐀é" for "k" matching case false whole words false to find [[2, 5], [5, 6]]
-expect literal search "αKk𐐀é" for "𐐨" matching case false whole words false to find [[6, 10]]
-expect literal search "Σςσ" for "σ" matching case false whole words false to find [[0, 2], [2, 4], [4, 6]]
-expect literal search "cat cat_ caté chat cat" for "cat" matching case true whole words true to find [[0, 3], [20, 23]]
-expect literal search "ß ẞ ss" for "ß" matching case false whole words false to find [[0, 2], [3, 6]]
-expect literal search "I i İ ı" for "i" matching case false whole words true to find [[0, 1], [2, 3]]
-expect literal search "🙂é\n🙂é" for "é\n🙂" matching case true whole words false to find [[4, 11]]
-set empty to literal text matches in "abc" for "" matching case false requiring whole words false
+expect literal search "banana" for "ana" matching case true whole words false line breaks alike false to find [[1, 4]]
+expect literal search "aaaaa" for "aa" matching case true whole words false line breaks alike false to find [[0, 2], [2, 4]]
+expect literal search "ababaababac" for "ababac" matching case true whole words false line breaks alike false to find [[5, 11]]
+expect literal search "αKk𐐀é" for "k" matching case false whole words false line breaks alike false to find [[2, 5], [5, 6]]
+expect literal search "αKk𐐀é" for "𐐨" matching case false whole words false line breaks alike false to find [[6, 10]]
+expect literal search "Σςσ" for "σ" matching case false whole words false line breaks alike false to find [[0, 2], [2, 4], [4, 6]]
+expect literal search "cat cat_ caté chat cat" for "cat" matching case true whole words true line breaks alike false to find [[0, 3], [20, 23]]
+expect literal search "ß ẞ ss" for "ß" matching case false whole words false line breaks alike false to find [[0, 2], [3, 6]]
+expect literal search "I i İ ı" for "i" matching case false whole words true line breaks alike false to find [[0, 1], [2, 3]]
+expect literal search "🙂é\n🙂é" for "é\n🙂" matching case true whole words false line breaks alike false to find [[4, 11]]
+expect literal search "é\r\n🙂" for "\n🙂" matching case true whole words false line breaks alike true to find [[2, 8]]
+expect literal search "é\r\n🙂" for "\n🙂" matching case true whole words false line breaks alike false to find [[3, 8]]
+expect literal search "K\r\n𐐀" for "k\n𐐨" matching case false whole words false line breaks alike true to find [[0, 9]]
+expect literal search "x\r\ny x\ny x\ry" for "x\ny" matching case true whole words true line breaks alike true to find [[0, 4], [5, 8], [9, 12]]
+expect literal search "\r\r\n" for "\n\n" matching case true whole words false line breaks alike true to find [[0, 3]]
+set empty to literal text matches in "abc" for "" matching case false requiring whole words false treating line breaks alike false
 require condition ((empty's status = 0) and ((the length of (empty's matches)) = 0)) reporting "An empty query produced matches."
 set malformed to a new string buffer containing 1 bytes
 store (255 as a byte) into (the data of malformed) at 0
-set invalid to literal text matches in malformed for "a" matching case true requiring whole words false
+set invalid to literal text matches in malformed for "a" matching case true requiring whole words false treating line breaks alike false
 require condition ((invalid's status = 1) and (invalid's error byte = 0)) reporting "Malformed source text was accepted."
-set invalid to literal text matches in "a" for malformed matching case true requiring whole words false
+set invalid to literal text matches in "a" for malformed matching case true requiring whole words false treating line breaks alike false
 require condition ((invalid's status = 2) and (invalid's error byte = 0)) reporting "A malformed query was accepted."
-set invalid to literal text matches in malformed for "" matching case true requiring whole words false
+set invalid to literal text matches in malformed for "" matching case true requiring whole words false treating line breaks alike false
 require condition (invalid's status = 1) reporting "An empty query hid invalid source text."
-set absent to literal text matches in "abc" for "z" matching case false requiring whole words true
+set absent to literal text matches in "abc" for "z" matching case false requiring whole words true treating line breaks alike false
 require condition ((absent's status = 0) and ((the length of (absent's matches)) = 0)) reporting "A missing query produced a match."
 set source to ("a" repeated 200000 times) + "b"
 set query to ("a" repeated 5000 times) + "b"
-set large to literal text matches in source for query matching case true requiring whole words false
+set large to literal text matches in source for query matching case true requiring whole words false treating line breaks alike false
 require condition ((the length of (large's matches)) = 1) reporting "A long repeated prefix lost its final match."
 set last to the item at 0 in (large's matches)
 require condition ((last's start = 195000) and (last's end = 200001)) reporting "A repeated prefix changed the original byte range."

@@ -11,7 +11,7 @@ set output to a new JSON value of kind the JSON array kind
 set index to 0
 loop while index < cases's length:
     set entry to the JSON value at index index in cases
-    set result to literal text matches in (the JSON text named "text" in entry) for (the JSON text named "query" in entry) matching case (the JSON boolean named "sensitive" in entry) requiring whole words (the JSON boolean named "whole" in entry)
+    set result to literal text matches in (the JSON text named "text" in entry) for (the JSON text named "query" in entry) matching case (the JSON boolean named "sensitive" in entry) requiring whole words (the JSON boolean named "whole" in entry) treating line breaks alike (the JSON boolean named "newlines" in entry)
     require condition (result's status = 0) reporting "A generated valid search failed."
     set ranges to a new JSON value of kind the JSON array kind
     set position to 0

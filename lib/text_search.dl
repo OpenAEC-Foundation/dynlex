@@ -37,7 +37,17 @@ local function literal search span from {integer:start} through {integer:finish}
                 return false
         return true
 
-to get [literal text matches in] {string:text} [for] {string:query} [matching case] {boolean:sensitive} [requiring whole words] {boolean:whole}:
+local function [the literal search character at] {integer:offset} [in] {string:text} [treating line breaks alike] {boolean:newlines}:
+    execute:
+        set character to the UTF8 character at offset in text
+        if newlines and (character's code = 13):
+            set character's code to 10
+            if character's next < text's length:
+                if (the character at (character's next) in text) = (10 as a byte):
+                    increment character's next
+        return character
+
+to get [literal text matches in] {string:text} [for] {string:query} [matching case] {boolean:sensitive} [requiring whole words] {boolean:whole} [treating line breaks alike] {boolean:newlines}:
     set result to @intrinsic("construct", text search result, 0, -1, an empty sequence of text search match)
     validate text as UTF-8 and set validation to it
     if validation failed:
@@ -55,7 +65,7 @@ to get [literal text matches in] {string:text} [for] {string:query} [matching ca
     set codes to the checked allocation from (0 as a pointer) resized to (query's length) items of integer
     set count and cursor to 0
     loop while cursor < query's length:
-        set character to the UTF8 character at cursor in query
+        set character to the literal search character at cursor in query treating line breaks alike newlines
         store (literal search code (character's code) matching case sensitive) into codes at count
         increment count
         set cursor to character's next
@@ -75,7 +85,7 @@ to get [literal text matches in] {string:text} [for] {string:query} [matching ca
     set found to an empty list of text search match
     set cursor, seen and matched to 0
     loop while cursor < text's length:
-        set character to the UTF8 character at cursor in text
+        set character to the literal search character at cursor in text treating line breaks alike newlines
         store cursor into starts at (seen mod count)
         set code to literal search code (character's code) matching case sensitive
         loop while (matched > 0) and ((the item at matched in codes) != code):

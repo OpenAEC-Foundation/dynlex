@@ -5,12 +5,16 @@
 ```dynlex
 import lib/text_search.dl
 
-set result to literal text matches in "K k" for "k" matching case false requiring whole words false
+set result to literal text matches in "K k" for "k" matching case false requiring whole words false treating line breaks alike false
 for each match in (result's matches):
     print line (formatted "{match's start}..{match's end}")
 # 0..3
 # 4..5
 ```
+
+Enable `treating line breaks alike true` to match CRLF, LF and lone CR as the
+same newline. A match still covers the original bytes, including both bytes of
+CRLF; no normalized source copy is built. With `false`, line breaks are exact.
 
 Ranges use an inclusive start and exclusive end. Matches do not overlap. An
 empty query returns no matches. The result owns an immutable sequence; copies

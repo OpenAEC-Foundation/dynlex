@@ -21,12 +21,22 @@ for(const line of (await fs.readFile(path.join(data,'DerivedGeneralCategory.txt'
 }
 word[0x200c]=word[0x200d]=1;
 const folded=code=>fold.get(code)??code;
-function expected({text,query,sensitive,whole}) {
-  const characters=[];let bytes=0;
+function expected({text,query,sensitive,whole,newlines}) {
+  const raw=[];let bytes=0;
   for(const value of text) {
     const end=bytes+Buffer.byteLength(value);
-    characters.push({code:value.codePointAt(0),start:bytes,end});bytes=end;
+    raw.push({code:value.codePointAt(0),start:bytes,end});bytes=end;
   }
+  const characters=[];
+  for(let index=0;index<raw.length;index++) {
+    const current={...raw[index]};
+    if(newlines && current.code===13) {
+      current.code=10;
+      if(raw[index+1]?.code===10) current.end=raw[++index].end;
+    }
+    characters.push(current);
+  }
+  if(newlines) query=query.replace(/\r\n?/g,'\n');
   const wanted=Array.from(query,value=>sensitive?value.codePointAt(0):folded(value.codePointAt(0)));
   const found=[];
   if(wanted.length===0)return found;
@@ -42,11 +52,11 @@ function expected({text,query,sensitive,whole}) {
 }
 const cases=[];
 for(const [source,target] of fold) {
-  for(const sensitive of [false,true])cases.push({text:String.fromCodePoint(source)+' '+String.fromCodePoint(target),query:String.fromCodePoint(target),sensitive,whole:false});
+  for(const sensitive of [false,true])cases.push({text:String.fromCodePoint(source)+' '+String.fromCodePoint(target),query:String.fromCodePoint(target),sensitive,whole:false,newlines:false});
 }
 let seed=0xd1e17;
 const random=limit=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed%limit;};
-const alphabet=Array.from('abcABCkKKΣσς𐐀𐐨ßẞéé🙂中_ \n\t\0İıकाची\u200c\u200d');
+const alphabet=Array.from('abcABCkKKΣσς𐐀𐐨ßẞéé🙂中_ \r\n\t\0İıकाची\u200c\u200d');
 for(let iteration=0;iteration<1000;iteration++) {
   const text=Array.from({length:random(49)},()=>alphabet[random(alphabet.length)]).join('');
   let query;
@@ -54,7 +64,7 @@ for(let iteration=0;iteration<1000;iteration++) {
     const scalars=Array.from(text),start=random(scalars.length);
     query=scalars.slice(start,start+1+random(6)).join('');
   } else query=Array.from({length:random(9)},()=>alphabet[random(alphabet.length)]).join('');
-  for(const sensitive of [false,true])for(const whole of [false,true])cases.push({text,query,sensitive,whole});
+  for(const sensitive of [false,true])for(const whole of [false,true])for(const newlines of [false,true])cases.push({text,query,sensitive,whole,newlines});
 }
 const oracle=cases.map(expected), input=JSON.stringify(cases);
 const directory=await fs.mkdtemp(path.join(os.tmpdir(),'dynlex-text-search-'));
