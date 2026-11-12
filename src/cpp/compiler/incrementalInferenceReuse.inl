@@ -78,7 +78,7 @@ bool inferenceSummaryHasValueState(const Json &summary) {
 Json captureSectionInferenceSummary(
 	const Section *section, const InferenceValueIdentities &identities, InferenceStorageIdentities &storage,
 	const Json &globalTypes, size_t *capturedInstantiations = nullptr, const IncrementalUnitSelection *skipped = nullptr,
-	const std::string *onlyKey = nullptr
+	const std::string *onlyKey = nullptr, std::map<std::string, const Instantiation *> *capturedInstances = nullptr
 ) {
 	Json summaries = Json::object();
 	for (const auto &[key, instantiation] : section->instantiations) {
@@ -131,6 +131,8 @@ Json captureSectionInferenceSummary(
 			}
 		);
 		summaries[identity] = std::move(record);
+		if (capturedInstances)
+			(*capturedInstances)[identity] = &instantiation;
 		if (capturedInstantiations)
 			(*capturedInstantiations)++;
 	}
@@ -187,11 +189,9 @@ Json captureInferenceSummaries(
 	for (const auto &[section, path] : sectionPaths) {
 		if (inferenceSummarySourceExcluded(section, excludedSources))
 			continue;
-		Json variants = captureSectionInferenceSummary(section, identities, storage, globalTypes, nullptr, skipped);
 		std::map<std::string, const Instantiation *> instances;
-		for (const auto &[key, instance] : section->instantiations)
-			if (auto identity = inferenceSummaryKey(key, identities))
-				instances.emplace(*identity, &instance);
+		Json variants =
+			captureSectionInferenceSummary(section, identities, storage, globalTypes, nullptr, skipped, nullptr, &instances);
 		for (const auto &[key, summary] : variants.items()) {
 			const Instantiation &instance = *instances.at(key);
 			Json body = nullptr;
