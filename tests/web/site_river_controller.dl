@@ -24,6 +24,9 @@ set editor to the UI source editor labeled "River source" in (state's language)
 set main to editor's document
 set helper to a UI source document named "helper.dl" at "file:///lib/helper.dl" containing "An imported definition" in (main's project)
 show UI source document helper in editor in (the address of view)
+set {main state} to the UI text state for main in editor in (the address of instance)
+mark UI text (main state's text) in layer "search" at priority 20 in main state
+add UI text mark (UI ink 210 170 55) from 0 to 3 with opacity 70 in layer "search" in main state
 ignore follow website river action (the string form of "action:river-step") in (the address of state)
 set index to the website program for source "River source"
 set program to state's programs + index
@@ -37,8 +40,10 @@ set reply to a JSON object containing [JSON number "milliseconds" is 1]
 receive website execution reply for index in (the address of state)
 free reply
 require condition ((program's phase = 3) and (state's river's playing)) reporting "A valid trace did not begin its presentation"
-set annotation to (the UI text state for main in editor in (the address of instance))'s marks
-require condition ((the UI value for (editor's node) in (the address of instance))'s marks = @intrinsic("construct", a pointer to UI text mark)) reporting "Executing the main program marked the displayed imported file."
+set execution to the UI text mark layer named "execution" in main state
+require condition (execution != @intrinsic("construct", a pointer to UI text mark layer)) reporting "The executing instruction has no annotation layer"
+set annotation to execution's marks
+require condition ((the UI value for (editor's node) in (the address of instance))'s mark layers = @intrinsic("construct", a pointer to UI text mark layer)) reporting "Executing the main program marked the displayed imported file."
 require condition ((annotation != @intrinsic("construct", a pointer to UI text mark)) and (annotation's start = 0)) reporting "The executing instruction was not marked in its source"
 advance website river playback (the address of (state's river)) by 0.56
 require condition ((state's river's paused) and (state's river's scene's cargo = 1)) reporting "The requested first step did not stop after loading"
@@ -51,6 +56,8 @@ require condition (state's river's speed = 4) reporting "Speed did not cycle to 
 ignore follow website river action (the string form of "action:river-reset") in (the address of state)
 require condition ((state's river's scene's bank = 0) and (state's river's trace's count = 2)) reporting "Reset did not retain a replayable plan"
 require condition ((the UI value for (the control labeled "River world state" in (the address of instance)) in (the address of instance))'s text = "THE RIVER / WAITING FOR A PLAN") reporting "Reset still described the previous replay as ended"
+require condition ((the UI text mark layer named "search" in main state)'s marks' end = 3) reporting "Resetting execution also cleared independent search marks"
+require condition ((the UI text mark layer named "execution" in main state) = @intrinsic("construct", a pointer to UI text mark layer)) reporting "Resetting execution retained its annotation layer"
 run website program index in (the address of state)
 set reply to a JSON object containing [JSON number "status" is 0, JSON number "artifact" is 43, JSON number "milliseconds" is 0.5]
 receive website compilation reply for index in (the address of state)

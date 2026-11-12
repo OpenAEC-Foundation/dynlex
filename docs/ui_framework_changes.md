@@ -311,3 +311,35 @@ cover every code point's property checksum and compare 7,024 search cases with
 an independent oracle across native, WebAssembly and the shipped compiler.
 This is the shared matching engine; the Find/Replace controls remain unfinished.
 The full integration suite passes all 503 checks with the new library modules.
+
+Text background marks now belong to named layers with independent source
+snapshots and paint priorities. Refreshing or clearing one feature preserves the
+other layers. The painter caches snapshot checks per layer and frame, then walks
+ordered marks across rows, resetting its cursor for repeated or backward paints.
+Borrowed names and source strings remain valid when replacing their own layer.
+All declarations, fixtures and application consumers migrate to the new API;
+the old single-layer state and aliases are removed. River uses an execution
+layer and its controller tests keep an independent search layer while resetting
+execution in a parked main buffer.
+
+Plain `text area` and `read only text area` declarations reuse the shared text
+input, selection, undo, wrapping, scrolling, annotation and appearance paths.
+They provide multiline input without registering a language source document.
+The shared multiline classifier covers both these controls and source editors;
+workspace discovery still registers only source editors. This allows search
+queries and program text to use the same editing behavior with distinct roles.
+
+A final field regression exposed a rendering split: classic single-line fields
+used the shared row painter during composition but bypassed it for normal text.
+Their normal path now uses the same painter, so named marks render in classic
+fields as well as responsive fields and editors. Classic field appearances also
+carry their actual surface color into the shared disabled-ink calculation.
+
+Verification for these shared controls includes 17 fixture identities at both
+optimization levels on native and WebAssembly, with no retained Wasm allocations;
+the extended classic-field painter regression and related input cases pass on
+both targets too. Actual native field/area input and marked-source rendering,
+WebGPU/WebGL2 text/editor input, all website controllers, SDK artifact checks and
+four full Studio/River browser runs pass. This phase changes DynLex library/UI
+code and embeds the new standard modules in the browser compiler; it adds no
+C++ compiler fix.
