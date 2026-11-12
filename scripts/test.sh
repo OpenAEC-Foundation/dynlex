@@ -805,8 +805,9 @@ run_auxiliary_test "json_integer64" 30 python3 -B "$SCRIPT_DIR/test_json_integer
 run_auxiliary_test "json_decimal_oracle" 60 node "$PROJECT_DIR/tests/web/json_numbers.mjs" "$COMPILER"
 if [[ "$suite" == integration ]]; then
     run_auxiliary_test "loop_cleanup_targets" 60 node "$PROJECT_DIR/tests/web/compiler_loops.mjs" "$COMPILER" --shipped
-    run_auxiliary_test "library_values_targets" 60 node "$PROJECT_DIR/tests/web/library_values.mjs" "$COMPILER" --group=core --shipped
-    run_auxiliary_test "search_values_targets" 60 node "$PROJECT_DIR/tests/web/library_values.mjs" "$COMPILER" --group=search --shipped
+    for fixture in sequence_values unicode_stream workspace_edit_text workspace_text_plan unicode_properties text_search; do
+        run_auxiliary_test "${fixture}_targets" 60 node "$PROJECT_DIR/tests/web/library_values.mjs" "$COMPILER" "--case=$fixture" --shipped
+    done
     run_auxiliary_test "literal_search_targets" 60 node "$PROJECT_DIR/tests/web/text_search.mjs" "$COMPILER" --shipped
     run_auxiliary_test "site_shaders" 60 python3 -B "$PROJECT_DIR/tests/web/site_runtime.py" --compiler "$COMPILER" --case site_shader_program --case site_shader_buffers
     run_auxiliary_test "site_routes" 10 python3 -B "$PROJECT_DIR/tests/web/site_routes.py"

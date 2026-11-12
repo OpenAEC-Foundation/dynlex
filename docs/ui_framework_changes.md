@@ -412,5 +412,28 @@ native shader validation at O0/O2, browser reflection/translation, and all 35
 compiled shaders rendered through both backends alongside the shared form and
 buffer-submission regressions. The website SDK is repinned to the verified compiler/UI revisions. Website
 shader models, buffer updates and all four Studio/River browser runs pass on
-WebGPU and WebGL2. The local preview is updated; the complete integration suite
-is running separately.
+WebGPU and WebGL2. The local preview is updated. The complete integration run
+finished with 504 passes and one timeout in the grouped owning-value tests.
+Every fixture passed when rerun separately: native O0/O2, native-generated Wasm
+and browser-compiler-generated Wasm, with zero retained Wasm allocations. The
+test runner now gives each fixture its own unchanged sixty-second limit instead
+of sharing one limit across several fixtures and both compilers. All six cases
+pass under those limits; no compiler behavior or test expectations were changed.
+
+The shared UI library now also owns indexed 3D geometry: segmented planes and
+boxes, spheres, tapered cylinders and cones, partial tori, rings, flat
+icosahedra and convex polygon extrusions. These cover the primitive geometry
+used by Farm's existing artwork, including subdivided water tiles, bucket
+handles and the house gable. Vertices use a portable 32-byte position/normal/UV
+record and uint32 indices. Immutable mesh copies share their storage and retain
+local bounds. Shared affine transforms provide checked inverses,
+inverse-transpose normals and mirrored handedness; mesh picking rejects missed
+local bounds and returns the nearest intersection in world coordinates.
+
+Geometry, normals, UVs, dimensions, outward triangle winding, enclosed volume,
+copy ownership, transforms and picks pass native and Wasm O0/O2 checks. The
+shipped browser compiler passes all five camera/geometry fixtures with zero
+retained allocations. Runtime boundary tests reject invalid geometry domains,
+non-finite components, singular/projective transforms and zero normals.
+Farm's scene materials, lighting, renderer, articulated models and interface
+remain unfinished; these shared modules supply the geometry needed for that port.
