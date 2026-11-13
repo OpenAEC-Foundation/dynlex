@@ -1,0 +1,21 @@
+import ../../site/games/farm/lighting.dl
+import lib/json_builders.dl
+
+to get [the Farm lighting JSON vector from] {vector:value}:
+    return a JSON array containing [a new JSON number from (the x of value), a new JSON number from (the y of value), a new JSON number from (the z of value)]
+
+set queries to a new JSON value of kind the JSON array kind
+loop level from 0 to 2:
+    set size to 8 if level = 0, else 4
+    set roughness to 0.0 if level = 0, else 0.65
+    loop face from 0 to 6:
+        loop y from 0 to size:
+            loop x from 0 to size:
+                set direction to the UI scene cube direction on face face at ((x + 0.5) / size) ((y + 0.5) / size)
+                set color to the website Farm sky reflection along direction at roughness roughness using 128 samples
+                add (a JSON object containing [
+                    JSON number "level" is level, JSON child "direction" is (the Farm lighting JSON vector from direction),
+                    JSON child "color" is (the Farm lighting JSON vector from color)
+                ]) to the JSON array queries
+print line the compact JSON form of queries
+free queries

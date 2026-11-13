@@ -1,0 +1,1 @@
+Farm sky preserves the original horizon, hemisphere and HDR sun; mirror and rough reflection levels share the DynLex sampler.
