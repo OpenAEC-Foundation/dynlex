@@ -41,7 +41,9 @@ try {
     if(process.argv.includes('--shipped')) {
       const request=path.join(directory,'request.json');
       await fs.writeFile(request,JSON.stringify({sources:{[entry]:source},jobs:[{entry,kind:'wasm',output:name+'.wasm'}]}));
-      execFileSync(process.execPath,[path.join(root,'scripts/compile_project.mjs'),request,directory],{cwd:root,stdio:'inherit',timeout:30000});
+      // Include cold startup of the shipped LLVM/Wasm compiler. On one CPU,
+      // the previous compiler already takes about 32 seconds for workspace edits.
+      execFileSync(process.execPath,[path.join(root,'scripts/compile_project.mjs'),request,directory],{cwd:root,stdio:'inherit',timeout:60000});
       await runWasm(name,'shipped compiler/Wasm');
     }
   }

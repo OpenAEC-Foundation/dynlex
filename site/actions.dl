@@ -14,7 +14,7 @@ to follow website link {a pointer to UI instance:instance}:
     if destination = "action:resume-game":
         set destination to "action:" + (the JSON text named "lastGame" in (state's progress's document))
     if (destination = "action:river") or (destination = "action:challenge-gallery"):
-        pause website Farm in state
+        leave website Farm in state
     if destination = "action:farm":
         stop website river effects in state
         stop website program (the website program for source "River source") in state

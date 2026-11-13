@@ -59,9 +59,16 @@ set instance's event target to the control labeled "Reset farm" in (the address 
 follow website link (the address of instance)
 require condition ((state's farm's document's world's tick = 0) and (state's farm's playing = false)) reporting "Reset did not replace the live world and stop playback"
 require condition ((state's farm's drawing = 0) and (state's farm's drawing name is empty)) reporting "Reset retained the unfinished area from the previous world"
+# An in-flight role compilation must not resume the simulation after leaving.
+set index to the website program for source "Farm source"
+set program to state's programs + index
+set instance's event target to the control labeled "Give this role to Ada" in (the address of instance)
+follow website link (the address of instance)
+require condition (program's phase = 1) reporting "The role button did not start the pending compilation"
 set instance's event target to the UI element labeled "← Choose a challenge" in farm challenge
 follow website link (the address of instance)
 require condition ((the value of "Challenge views" in (the address of instance)) = 0) reporting "Returning to the gallery did not leave the Farm view"
+require condition (program's phase = 0) reporting "Leaving Farm retained an in-flight role compilation that can restart playback"
 close website Farm in (the address of state)
 set pending to state's requests
 loop while pending != (0 as a pointer to website request):

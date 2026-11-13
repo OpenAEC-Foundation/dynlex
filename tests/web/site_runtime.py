@@ -15,7 +15,7 @@ from source_package import SourcePackage
 
 def compilation_budget(name):
     # The production dispatcher links both the source workspace and 3D scene.
-    return 600 if name in ['site_farm_controller', 'site_farm_profiles'] else 180
+    return 600 if name in ['site_farm_controller', 'site_farm_profiles', 'site_reply_ownership'] else 180
 
 
 def main():

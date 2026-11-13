@@ -19,7 +19,7 @@ to apply location {a pointer to JSON value:location} to {a pointer to website st
     if path has "/" at offset (path's length - 1):
         set path to path + "index.html"
     if path != "/index.html":
-        pause website Farm in state
+        leave website Farm in state
     set pages to the site's pages
     set index to 0
     set found to false

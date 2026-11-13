@@ -42,6 +42,10 @@ to [pause website Farm in] {a pointer to website state:state}:
     set state's farm's focused to false
     release website Farm gesture in state cancelled true
 
+to [leave website Farm in] {a pointer to website state:state}:
+    pause website Farm in state
+    stop website program (the website program for source "Farm source") in state
+
 to [initialize the website Farm in] {a pointer to website state:state}:
     set state's progress's loaded to (the function named "reload website Farm progress in $") as a pointer
     set program to state's programs + (the website program for source "Farm source")

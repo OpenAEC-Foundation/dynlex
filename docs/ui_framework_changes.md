@@ -638,12 +638,43 @@ independent signature probes of the same declared value. The native required sui
 passes all 352 cases after this correction.
 The rebuilt browser compiler and its official smoke tests pass as well.
 
-The Farm page now uses its declared controls, the shared source workspace and
-program callbacks, and the DynLex scene renderer. Dispatcher tests cover opening,
+Farm's opening abort came from an exposed `action:farm` link without its
+application controller registration. Its route now initializes the saved document,
+editor and scene lazily. The Farm page uses its declared controls, the shared
+source workspace and program callbacks, and the DynLex scene renderer. Dispatcher tests cover opening,
 flags, work areas, playback, reset and gallery navigation. A captured-pointer
 profile-switch regression exposed a controller error: cancelling the gesture
 saved the old world after the new store had been selected. Presentation and
 persistence are now separate; cancellation cannot write progress. Reset and
 profile changes clear unfinished drawing and capture state. Both native-emitted
 Wasm and the shipped browser compiler pass these controller tests with no retained
-allocations. Final page/browser and deployment checks are still pending.
+allocations.
+
+Actual page checks pass in WebGPU and WebGL with no WebGPU adapter. They open
+Farm through its homepage link, render the scene, run a turn, play/pause/reset,
+compile and apply the Lumberjack role through the shared compiler service, orbit
+the camera and return to the gallery. No runtime errors are reported. The
+verified build is live on the existing local preview server. Deployment migration
+and the remaining Farm execution annotations, overlays and saved-role rebuilding
+are still unfinished.
+
+Leaving Farm also cancels an in-flight role compilation. Previously only the
+simulation paused, so a late successful compilation could start playback after
+returning to the gallery or navigating to another page. The dispatcher regression
+starts a real compiler request through the role button and verifies its cancellation
+and complete allocation cleanup on exit.
+
+Integration time guards now account for cold compiler startup and the multiple
+targets in each group. A one-CPU comparison of the previous and current shipped
+compilers took 31.7 and 32.7 seconds for the same workspace-edit case, exceeding
+its old 30-second process limit; both compiled results match the expected output
+and release every allocation. The library target group includes three native
+compilations and a shipped-compiler invocation. Shader and Farm model groups also
+receive time for their complete sets of compilations and executions.
+
+Validation after Farm wiring: all 352 required compiler checks pass. The full
+integration run passed 515 checks; its three timed-out groups pass in focused
+reruns with the corrected guards. All 15 website controller cases pass, including
+the production input loop's queued-reply retirement with zero retained
+allocations. That fixture now uses the whole-application compilation budget,
+because its input dispatcher includes the Farm renderer and editor callbacks.
