@@ -59,6 +59,9 @@ to get [follow website Farm role action] {string:destination} [in] {a pointer to
         update website Farm world view in state instantly false
         return true
     if destination = "action:farm-step-worker":
+        if the website Farm has pending saved roles in state:
+            prepare website Farm saved roles in state
+            return true
         step website farm worker actor in (document's world) using roles (document's roles)
         update website Farm world view in state instantly false
         return true

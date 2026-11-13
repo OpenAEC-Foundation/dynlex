@@ -3,6 +3,7 @@ import role_controls.dl
 import clock.dl
 import land_controls.dl
 import input.dl
+import frame.dl
 
 to [reset website Farm tools in] {a pointer to website state:state}:
     cancel website Farm area drawing in state
@@ -27,6 +28,8 @@ to [reload website Farm progress in] {a pointer to website state:state}:
     set program to state's programs + (the website program for source "Farm source")
     set program's source and program's output to ""
     set session's pending actor and session's pending role to ""
+    set session's rebuilding and session's rebuild failed to false
+    set session's rebuild stopped to false
     reset website Farm tools in state
     free website farm document (session's document)
     set session's document to 0 as a pointer to website farm document
@@ -54,6 +57,7 @@ to [initialize the website Farm in] {a pointer to website state:state}:
     set instance to state's view's instance
     set the "Give this role to Ada" control in instance enabled false
     set the "Retry Farm view" control in instance enabled false
+    set the "Retry saved roles" control in instance enabled false
     bind (the control labeled "Farm source" in instance) in instance to (the function named "notice website Farm source edit $") for event 0
     for each label in ["Farm people", "Farm role", "Farm flags", "Farm flag color", "Farm areas", "Farm speed", "Farm action", "Farm supply"]:
         bind (the control labeled label in instance) in instance to (the function named "notice website Farm field $") for event 0
@@ -80,6 +84,8 @@ to get [follow website Farm action] {string:destination} [in] {a pointer to webs
     set session to the address of (state's farm)
     if destination = "action:farm":
         open website Farm document in state
+        set session's rebuild stopped to false
+        prepare website Farm saved roles in state
         set the value of "Challenge views" in (state's view's instance) to 2
         if session's graphics phase = 0:
             load website Farm graphics in state
@@ -96,15 +102,24 @@ to get [follow website Farm action] {string:destination} [in] {a pointer to webs
         return true
     set document to session's document
     set world to document's world
+    if destination = "action:farm-retry-roles":
+        set session's rebuild failed to false
+        set session's rebuild stopped to false
+        prepare website Farm saved roles in state
+        return true
     if destination = "action:farm-play":
         set session's playing to session's playing = false
         if session's playing = false:
             stop website Farm clock in state
+        prepare website Farm saved roles in state
         start website Farm clock in state
         refresh website Farm controls in state
         request a UI redraw in (state's view)
         return true
     if destination = "action:farm-step":
+        if the website Farm has pending saved roles in state:
+            prepare website Farm saved roles in state
+            return true
         pause website Farm in state
         advance the website farm world world using roles (document's roles) with workers running true
         update website Farm world view in state instantly false
@@ -115,6 +130,8 @@ to get [follow website Farm action] {string:destination} [in] {a pointer to webs
         reset website Farm tools in state
         free website farm document document
         set session's document to the initial website farm document
+        set session's rebuilding and session's rebuild failed to false
+        set session's rebuild stopped to false
         show website Farm role (session's document's role id) in state
         set the text of "Farm worker name" in (state's view's instance) to "Ada"
         if session's renderer != (0 as a pointer to website Farm renderer):
@@ -171,10 +188,12 @@ to [notice website Farm field] {a pointer to UI instance:instance}:
     set session to the address of (state's farm)
     set label to instance's event target's text
     if label = "Farm people":
-        stop website program (the website program for source "Farm source") in state
+        if session's rebuilding = false:
+            stop website program (the website program for source "Farm source") in state
         choose website Farm person (the website Farm choice in "Farm people" in state) in state
     if label = "Farm role":
-        stop website program (the website program for source "Farm source") in state
+        if session's rebuilding = false:
+            stop website program (the website program for source "Farm source") in state
         show website Farm role (the website Farm choice in "Farm role" in state) in state
     if label = "Farm flags":
         set session's selected flag to the website Farm choice in "Farm flags" in state

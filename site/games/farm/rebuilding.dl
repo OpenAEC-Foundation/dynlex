@@ -1,0 +1,69 @@
+import session.dl
+import clock.dl
+import ../../programs/controller.dl
+
+# Saved plans are updated through the same compiler service as an explicit Run.
+# They use applied source, independently of the selected or edited draft.
+to [prepare website Farm saved roles in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    if (session's rebuilding or session's rebuild failed) or session's rebuild stopped:
+        return nothing
+    set index to the website program for source "Farm source"
+    set program to state's programs + index
+    if (program's phase = 1) or (program's phase = 2):
+        return nothing
+    set other to 0
+    loop while other < the length of (the website program descriptions):
+        if (other != index) and ((state's programs + other)'s phase = 1):
+            set the text of "Farm preparation status" in (state's view's instance) to "Waiting for the current compilation to finish…"
+            refresh website Farm controls in state
+            return nothing
+        increment other
+    for each role in (session's document's roles):
+        if role's needs rebuilding:
+            require condition (role's prepared) reporting "A saved role awaiting rebuilding must own its previous plan"
+            stop website Farm clock in state
+            set session's pending role to role's id
+            set session's pending actor to ""
+            set session's rebuilding to true
+            set editor to the UI source editor labeled "Farm source" in (state's language)
+            ignore (the UI main source of editor in (state's language) at (state's view's seconds) seconds)
+            compile website program index from source (role's applied) using editor in state
+            return nothing
+    set the text of "Farm preparation status" in (state's view's instance) to ""
+    start website Farm clock in state
+    refresh website Farm controls in state
+
+to [fail website Farm saved role rebuilding with] {string:detail} [in] {a pointer to website state:state}:
+    set state's farm's rebuild failed to true
+    set instance to state's view's instance
+    set the text of "Farm preparation status" in instance to "An error occurred. Check the log."
+    set the text of "Farm diagnostics" in instance to ""
+    set the text of "Farm status" in instance to "Saved role update failed."
+    request "log" containing (a JSON object containing [JSON text "message" is ("Updating saved Farm role " + state's farm's pending role + ": " + detail)]) for purpose 0 indexed 0 in state
+
+to [finish website Farm saved role rebuilding] {integer:index} [in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    set session's rebuilding to false
+    set program to state's programs + index
+    if program's result = 1:
+        set description to the item at index in (the website program descriptions)
+        set plan to the website farm plan from (program's output) dropping (the website prefix line count of description) source lines
+        set role to the website farm role identified by (session's pending role) in (session's document's roles)
+        set error to rebuild website farm role role using plan plan in (session's document's world)
+        free website farm plan the address of plan
+        if error is empty:
+            save website Farm progress in state
+            prepare website Farm saved roles in state
+        else:
+            fail website Farm saved role rebuilding with error in state
+    else if program's result = 2:
+        fail website Farm saved role rebuilding with (program's output) in state
+    else if program's result = 3:
+        fail website Farm saved role rebuilding with (the string form of "The compiler or program service failed") in state
+    else:
+        require condition (program's result = 4) reporting "A saved-role callback has an unknown result"
+        set session's rebuild failed to false
+        set session's rebuild stopped to true
+        set the text of "Farm preparation status" in (state's view's instance) to "Saved role updating stopped. Retry to continue."
+    refresh website Farm controls in state

@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {recordWebsiteProgram} from './recording_runtime.mjs';
-import {createFarm} from '../../web/farm-world.js';
-import {createRoles} from '../../web/farm-roles.js';
-import {readProgress} from '../../web/game-progress.js';
-const old={version:1,games:{river:{updatedAt:12,data:{source:'take the sheep',solved:true}},
-  farm:{updatedAt:11,data:{world:createFarm(),roles:createRoles(),selected:'player',roleId:'lumberjack',speed:2}}},lastGame:'river'};
-const text=JSON.stringify(old),expected=readProgress(text),memory=new Map(),writes=[];
+// Captured before retiring the JavaScript implementation; never regenerate on test runs.
+const {input,expected}=JSON.parse(await readFile(new URL('./fixtures/progress-controller.json',import.meta.url),'utf8'));
+const text=JSON.stringify(input),memory=new Map(),writes=[];
 let quota=false,corrupt=false,phase=0,stamps=0;
 const {output,requests,calls}=await recordWebsiteProgram(process.argv[2],{
   hooks:{progress_fixture(id) {

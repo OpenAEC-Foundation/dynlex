@@ -42,10 +42,25 @@ zero rescue progress. Unknown seen keys and counts above the visible target are
 preserved, and replaying an already seen event cannot count it again. Resetting
 or editing the scene retains the player's progress.
 
+When Farm opens with roles marked for rebuilding, its DynLex controller compiles
+their applied source snapshots sequentially. Newer drafts remain editable and
+keep their language-service context. Worker execution waits for rebuilding;
+positions, instruction counters and loop frames are preserved. An incompatible
+compiled control flow retains the saved plan and reports an explicit retry.
+Leaving the challenge or switching profiles cancels pending work.
+
+Farm and River execution annotations use the shared editor's independent text
+mark layers. Farm marks the selected worker's current action and leading
+condition only when the displayed role's draft matches its applied source.
+Source ranges use the common UTF-16-to-UTF-8 mapping, including CRLF lines and
+supplementary Unicode characters. Imported-file views retain their own colors,
+search marks and selection while main-file execution changes.
+
 Verification includes `tests/integration/site_progress`, the storage-controller
 fixture in `tests/web/site_runtime.py`, and `tests/web/progress_model.mjs`. The
-latter compares native and shipped-browser-compiler output with the replaced
-implementation until final migration cleanup freezes those fixtures.
+latter compares native and shipped-browser-compiler output with 193 independent
+recorded cases. The model and storage-controller fixtures retain their source
+revision and checksums; normal test runs never regenerate them.
 
 Numeric JSON constructors use the shared DynLex decimal conversion library rather
 than the human-facing display formatter. It writes the shortest decimal that

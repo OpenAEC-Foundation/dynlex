@@ -33,8 +33,7 @@ jobs:
           set -euo pipefail
           test -f src/web/ide/public/compiler/dynlex_web.js
           test -f src/web/ide/public/compiler/dynlex_web.wasm
-          DYNLEX_WEB_BASE="/releases/$RELEASE/" ./scripts/build_web_root.sh
-          node ./scripts/prepare_web_deployment.mjs "$RELEASE" "$RUNNER_TEMP/site"
+          python3 scripts/build_site.py --base "/releases/$RELEASE/" --output "$RUNNER_TEMP/site"
           test -f "$RUNNER_TEMP/site/compiler/dynlex_web.js"
           test -f "$RUNNER_TEMP/site/compiler/dynlex_web.wasm"
 

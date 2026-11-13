@@ -5,6 +5,7 @@ assert.equal(output,'Program owners receive start, success, compile failure, pla
 assert.equal(requests[0].payload.entry,'river.dl');
 assert.equal(requests[0].payload.traced,true);
 assert(requests[0].payload.sources['river.dl'].startsWith('import lib/river_challenge.dl\n\n# The official names'));
-assert.equal(requests.length,5);
-assert.deepEqual(cancelled,[4]);
+assert.equal(requests.length,6);
+assert.equal(requests[5].payload.sources['river.dl'],'import lib/river_challenge.dl\n\n# Applied snapshot 🌽\nrow to the other side');
+assert.deepEqual(cancelled,[4,6]);
 console.log('Website program lifecycle, prefix diagnostics and protocol output tests passed.');

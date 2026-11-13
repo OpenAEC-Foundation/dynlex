@@ -1,4 +1,5 @@
 import control_choices.dl
+import annotations.dl
 
 to [refresh website Farm controls in] {a pointer to website state:state}:
     set session to the address of (state's farm)
@@ -19,7 +20,7 @@ to [refresh website Farm controls in] {a pointer to website state:state}:
     set the text of "Pause worker" in instance to ("Resume worker" if actor's paused, else "Pause worker")
     set code to false
     if role != (0 as a pointer to website farm role):
-        set code to role's source is not empty
+        set code to (role's source trimmed) is not empty
         set the text of "Farm code title" in instance to (role's name + ".dl")
         set caption to the string form of "WRITE YOUR CODE"
         if code:
@@ -29,26 +30,35 @@ to [refresh website Farm controls in] {a pointer to website state:state}:
                 for each worker in (world's workers):
                     if worker's role = role's id:
                         increment count
-                set caption to formatted "{count} workers using this code"
+                set noun to "worker" if count = 1, else "workers"
+                set caption to formatted "{count} {noun} using this code"
+            if role's needs rebuilding:
+                set caption to "UPDATING SAVED ROLE" if session's rebuilding and (session's pending role = role's id), else "SAVED ROLE NEEDS UPDATING"
         set the text of "Farm code state" in instance to caption
     else:
         set the text of "Farm code title" in instance to "Create a role to start"
         set the text of "Farm code state" in instance to "WRITE YOUR CODE"
     set program to state's programs + (the website program for source "Farm source")
     set busy to (program's phase = 1) or (program's phase = 2)
+    set pending to the website Farm has pending saved roles in state
+    set the value of "Farm preparation notices" in instance to (1 if pending, else 0)
+    set the "Retry saved roles" control in instance enabled (pending and (busy = false))
     set the "Give this role to Ada" control in instance enabled ((code and (busy = false)) and (actor's id != "player"))
     set the text of "Give this role to Ada" in instance to ((the string form of "Apply to everyone in this role") if (role != (0 as a pointer to website farm role)) and (actor's role = document's role id), else ("Give this role to " + actor's name))
     set the "Farm source" control in instance enabled (role != (0 as a pointer to website farm role))
-    set the "Copy role" control in instance enabled (role != (0 as a pointer to website farm role))
-    set the "Delete role" control in instance enabled (role != (0 as a pointer to website farm role))
+    set the "Create role" control in instance enabled (session's rebuilding = false)
+    set the "Copy role" control in instance enabled ((role != (0 as a pointer to website farm role)) and (session's rebuilding = false))
+    set the "Delete role" control in instance enabled ((role != (0 as a pointer to website farm role)) and (session's rebuilding = false))
     set the "Remove role" control in instance enabled (actor's role is not empty)
     set ready to false
     if actor's role is not empty:
         set assigned to the website farm role identified by (actor's role) in (document's roles)
-        set ready to assigned's prepared and ((actor's held = false) and ((actor's routine's position) < (the length of assigned's program's code)))
+        set ready to (assigned's prepared and (pending = false)) and ((actor's held = false) and ((actor's routine's position) < (the length of assigned's program's code)))
     set {worker controls} to the control labeled "Farm worker controls" in instance
     set UI control (the UI element labeled "One instruction" in worker controls) enabled ready in instance
     set the text of "Start farm ▶" in instance to ("Pause farm Ⅱ" if session's playing, else "Start farm ▶")
+    set the "Start farm ▶" control in instance enabled ((pending = false) or session's playing)
+    set the "One turn" control in instance enabled (pending = false)
     set the value of "Farm speed" in instance to (document's speed - 1)
     set the text of "Farm turn" in instance to (formatted "TURN {world's tick}")
     set day to world's tick / 100 + 1
@@ -94,3 +104,4 @@ to [refresh website Farm controls in] {a pointer to website state:state}:
     set planted to the minimum of 4 and (the website coding count of "planting" in (world's coding))
     set eggs to the minimum of 6 and (the website coding count of "eggs" in (world's coding))
     set the text of "Farm goal progress" in instance to (formatted "Watering {count}/4 · Planting {planted}/4 · Eggs {eggs}/6")
+    refresh website Farm annotations in state

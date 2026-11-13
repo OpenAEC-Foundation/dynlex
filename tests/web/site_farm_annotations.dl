@@ -1,0 +1,82 @@
+import ../../site/games/farm/annotations.dl
+import site_fixture.dl
+
+set instance to an instance of website fixture
+set driver to a website shader test driver
+set view to a new UI view
+set view's driver to the address of driver
+set view's instance to the address of instance
+set state to a new website state
+set state's view to the address of view
+set instance's state to (the address of state) as a pointer
+prepare website fixture editors in (the address of state)
+set state's farm's document to the initial website farm document
+set document to state's farm's document
+set role to the item at 0 in (document's roles)
+set actor to the item at 0 in (document's world's workers)
+set source to the string form of "# 🌽\r\nif i can reach it:\r\n    wait"
+set role's source to source
+set condition to a new website farm instruction
+set condition's operation to the website farm test operation
+set condition's identifier to 1
+set condition's target to the website farm subject target
+set condition's destination to 2
+set condition's source to @intrinsic("construct", website execution range, true, 1, 0, 1, 17)
+set action to the website Farm instruction named "wait"
+set action's source to @intrinsic("construct", website execution range, true, 2, 4, 2, 8)
+set plan to an empty website farm plan
+append condition to plan's code
+append action to plan's code
+apply website farm plan plan from source to role for actor in (document's world)
+set actor's routine's position to 2
+set actor's routine's traced to true
+set actor's routine's source to action's source
+set actor's routine's condition source to condition's source
+set actor's routine's condition branch to 1
+set actor's routine's message to "Waited."
+load website source "Farm source" from source in (the address of state)
+set editor to the UI source editor labeled "Farm source" in (state's language)
+set main to editor's document
+color UI text source in (editor's node) in (the address of instance)
+add UI text color (UI ink 11 22 33) from 0 to 2 in (editor's node) in (the address of instance)
+set colors to (the UI value for (editor's node) in (the address of instance))'s colors
+set helper to a UI source document named "helper.dl" at "file:///lib/helper.dl" containing "An imported definition" in (main's project)
+show UI source document helper in editor in (the address of view)
+set {main state} to the UI text state for main in editor in (the address of instance)
+mark UI text source in layer "search" at priority 20 in main state
+add UI text mark (UI ink 210 170 55) from 0 to 2 with opacity 70 in layer "search" in main state
+
+refresh website Farm annotations in (the address of state)
+set execution to the UI text mark layer named "execution" in main state
+require condition ((execution != (0 as a pointer to UI text mark layer)) and ((execution's marks' start = 32) and (execution's marks' end = 36))) reporting "Farm execution did not map CRLF and Unicode source to editor byte offsets"
+set branch to the UI text mark layer named "condition" in main state
+require condition ((branch != (0 as a pointer to UI text mark layer)) and ((branch's marks' start = 8) and (branch's marks' end = 25))) reporting "The condition leading to a Farm action has no independent annotation"
+require condition ((branch's marks' ink's red = 80) and (execution's marks' ink's red = 104)) reporting "Farm actions and true conditions lost their distinct colors"
+require condition ((main state's colors = colors) and ((the UI text mark layer named "search" in main state)'s marks' end = 2)) reporting "Farm execution replaced semantic colors or search results"
+require condition (((the UI value for (editor's node) in (the address of instance))'s mark layers) = (0 as a pointer to UI text mark layer)) reporting "Farm execution marked the displayed imported file instead of its main source"
+require condition ((the UI value for (the control labeled "Farm execution" in (the address of instance)) in (the address of instance))'s text = "Condition is true. Waited.") reporting "Farm execution did not explain the condition and action"
+
+set actor's routine's source to condition's source
+set actor's routine's branch to 0
+set actor's routine's condition branch to -1
+refresh website Farm annotations in (the address of state)
+set execution to the UI text mark layer named "execution" in main state
+require condition ((execution's marks' start = 8) and (execution's marks' ink's red = 196)) reporting "A false Farm condition did not replace the current instruction annotation"
+require condition ((the UI text mark layer named "condition" in main state) = (0 as a pointer to UI text mark layer)) reporting "Stepping a condition retained the previous action's condition layer"
+set role's source to source + "\r\n# A new draft"
+refresh website Farm annotations in (the address of state)
+require condition ((the UI text mark layer named "execution" in main state) = (0 as a pointer to UI text mark layer)) reporting "An edited draft retained execution from its applied source"
+require condition ((main state's colors = colors) and ((the UI text mark layer named "search" in main state)'s marks' end = 2)) reporting "Clearing Farm execution removed another editor feature's annotations"
+set role's source to source
+set role's needs rebuilding to true
+refresh website Farm annotations in (the address of state)
+require condition ((the UI text mark layer named "execution" in main state) = (0 as a pointer to UI text mark layer)) reporting "A saved role showed obsolete source ranges before rebuilding"
+set role's needs rebuilding to false
+set document's selected to "player"
+refresh website Farm annotations in (the address of state)
+require condition ((the UI text mark layer named "execution" in main state) = (0 as a pointer to UI text mark layer)) reporting "Selecting the player retained another worker's instruction"
+free website farm document document
+free website farm plan the address of plan
+release website fixture editors in (the address of state)
+close the address of instance
+print line "Farm execution shares editor mark layers, maps Unicode and CRLF, isolates main-file execution from imports, and clears stale ranges without losing search or colors."

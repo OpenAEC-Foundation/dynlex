@@ -1,8 +1,16 @@
 import session.dl
 import ../../programs/controller.dl
 import clock.dl
+import rebuilding.dl
 
 to [notice website Farm start] {integer:index} [in] {a pointer to website state:state}:
+    if state's farm's rebuilding:
+        set role to the website farm role identified by (state's farm's pending role) in (state's farm's document's roles)
+        set the text of "Farm preparation status" in (state's view's instance) to ("Updating saved role: " + role's name + "…")
+        refresh website Farm controls in state
+        return nothing
+    set state's farm's rebuild failed to false
+    set state's farm's rebuild stopped to false
     set document to state's farm's document
     set state's farm's pending actor to document's selected
     set state's farm's pending role to document's role id
@@ -10,10 +18,15 @@ to [notice website Farm start] {integer:index} [in] {a pointer to website state:
     refresh website Farm controls in state
 
 to [notice website Farm finish] {integer:index} [in] {a pointer to website state:state}:
+    if state's farm's rebuilding:
+        finish website Farm saved role rebuilding index in state
+        return nothing
     set program to state's programs + index
     if program's result = 1:
         set description to the item at index in (the website program descriptions)
         set plan to the website farm plan from (program's output) dropping (the website prefix line count of description) source lines
+        if plan's error is empty:
+            set plan's error to the website farm source error in plan for (program's source)
         if plan's error is empty:
             set document to state's farm's document
             set role to the website farm role identified by (state's farm's pending role) in (document's roles)
@@ -22,6 +35,7 @@ to [notice website Farm finish] {integer:index} [in] {a pointer to website state
             set state's farm's playing to true
             set the text of "Farm execution" in (state's view's instance) to "Role applied. Workers with this role now share these instructions."
             update website Farm world view in state instantly false
+            prepare website Farm saved roles in state
             start website Farm clock in state
         else:
             set the text of "Farm diagnostics" in (state's view's instance) to (plan's error)
@@ -30,7 +44,8 @@ to [notice website Farm finish] {integer:index} [in] {a pointer to website state
 
 to [notice website Farm source edit] {a pointer to UI instance:instance}:
     set state to the website state in instance
-    stop website program (the website program for source "Farm source") in state
+    if state's farm's rebuilding = false:
+        stop website program (the website program for source "Farm source") in state
     set role to the website Farm viewed role in state
     require condition (role != (0 as a pointer to website farm role)) reporting "An editable Farm source must belong to a role"
     set editor to the UI source editor labeled "Farm source" in (state's language)

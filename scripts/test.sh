@@ -816,6 +816,7 @@ if [[ "$suite" == integration ]]; then
     run_auxiliary_test "literal_search_targets" 60 node "$PROJECT_DIR/tests/web/text_search.mjs" "$COMPILER" --shipped
     run_auxiliary_test "site_shaders" 180 python3 -B "$PROJECT_DIR/tests/web/site_runtime.py" --compiler "$COMPILER" --case site_shader_program --case site_shader_buffers
     run_auxiliary_test "site_routes" 10 python3 -B "$PROJECT_DIR/tests/web/site_routes.py"
+    run_auxiliary_test "site_preview" 10 python3 -B "$PROJECT_DIR/tests/web/site_preview.py"
     # Includes 2,019 independent action/condition scenarios and a 900-turn team.
     # This group compiles six distinct programs at O0/O2 and in the shipped
     # compiler before checking its eight model corpora, including 900 turns.

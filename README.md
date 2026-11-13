@@ -96,29 +96,27 @@ Run the compiler WASM smoke test:
 ./scripts/test_web_smoke.sh
 ```
 
-Run the web app:
+Build the DynLex website with its pinned UI source package:
 
 ```bash
-cd src/web/ide
-npm install
-npm run dev
+python3 scripts/build_site.py
 ```
 
-Refresh the deployable static web root (`web/`) after IDE changes:
+Serve the generated `build/site` directory:
 
 ```bash
-./scripts/build_web_root.sh
+./scripts/view_web.sh 7000
 ```
 
-View the deployable web site (`web/`) locally and open it in your browser:
-
-```bash
-./scripts/view_web.sh
-```
+The helper prints the preview URL. Open that URL in your browser. Set
+`DYNLEX_WEB_ROOT` to serve another build directory.
 
 Web layout:
-- `src/web/ide/`: IDE source (Vite + Monaco)
-- `web/`: deployable web root (site/wiki source + built IDE assets)
+- `site/`: DynLex page declarations, controllers, games and static assets
+- `site/dependencies/dynlex-ui.zip`: pinned shared UI source package
+- `src/web/compiler/`: compiler and program worker transport
+- `src/web/ide/public/compiler/`: shipped compiler and runtime payloads
+- `build/site/`: generated website, also used by the deployment workflow
 
 The web app uses:
 - one editable `/workspace/*.dl` entry file plus read-only imported definitions

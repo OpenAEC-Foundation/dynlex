@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-WEB_ROOT_DIR="$PROJECT_DIR/web"
+WEB_ROOT_DIR="${DYNLEX_WEB_ROOT:-$PROJECT_DIR/build/site}"
 HOST="${DYNLEX_WEB_HOST:-127.0.0.1}"
 PORT="${1:-8000}"
 URL="http://$HOST:$PORT/index.html"
@@ -15,44 +15,11 @@ fi
 
 if [ ! -f "$WEB_ROOT_DIR/index.html" ]; then
     echo "Missing web root entry: $WEB_ROOT_DIR/index.html"
-    echo "Run ./scripts/build_web_root.sh first."
+    echo "Run python3 $PROJECT_DIR/scripts/build_site.py first."
     exit 1
 fi
 
-open_browser() {
-    if command -v xdg-open >/dev/null 2>&1; then
-        xdg-open "$URL" >/dev/null 2>&1 || true
-        return
-    fi
-    if command -v open >/dev/null 2>&1; then
-        open "$URL" >/dev/null 2>&1 || true
-        return
-    fi
-    if command -v wslview >/dev/null 2>&1; then
-        wslview "$URL" >/dev/null 2>&1 || true
-        return
-    fi
-    if command -v powershell.exe >/dev/null 2>&1; then
-        powershell.exe -NoProfile -Command "Start-Process '$URL'" >/dev/null 2>&1 || true
-        return
-    fi
-    echo "Open this URL manually: $URL"
-}
-
+WEB_ROOT_DIR="$(cd "$WEB_ROOT_DIR" && pwd)"
 echo "Serving $WEB_ROOT_DIR at $URL"
-python3 "$SCRIPT_DIR/serve_web.py" "$PORT" --bind "$HOST" --directory "$WEB_ROOT_DIR" &
-SERVER_PID=$!
-
-cleanup() {
-    kill "$SERVER_PID" >/dev/null 2>&1 || true
-}
-trap cleanup EXIT INT TERM
-
-sleep 0.6
-if ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
-    echo "Failed to start local web server on $HOST:$PORT"
-    exit 1
-fi
-
-open_browser
-wait "$SERVER_PID"
+cd "$PROJECT_DIR"
+exec python3 "$SCRIPT_DIR/serve_web.py" "$PORT" --bind "$HOST" --directory "$WEB_ROOT_DIR"

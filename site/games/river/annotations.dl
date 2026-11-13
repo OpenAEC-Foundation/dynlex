@@ -1,6 +1,6 @@
 import ../../state.dl
 import ../source.dl
-import ../../packages/dynlex-ui/ui/text_marks.dl
+import ../annotations.dl
 
 to get [the website river source error in] {website river trace:trace} for {string:source}:
     scan lines in source and set scanned to it
@@ -32,15 +32,13 @@ to [refresh website river annotations in] {a pointer to website state:state}:
     if (river's marked position = river's shown position) and (river's marked failure = river's failed):
         return nothing
     set program to state's programs + (the website program for source "River source")
-    set span to the website source span of (river's shown's source) in (program's source)
     mark UI text (program's source) in layer "execution" at priority 10 in value
-    if span's valid and (span's last > span's first):
-        set ink to UI ink 104 153 178
-        if river's shown's branch != -1:
-            set ink to (UI ink 80 153 114) if (river's shown's branch = 1), else (UI ink 196 153 66)
-        if river's failed:
-            set ink to UI ink 201 88 63
-        add UI text mark ink from (span's first) to (span's last) with opacity 100 in layer "execution" in value
+    set ink to UI ink 104 153 178
+    if river's shown's branch != -1:
+        set ink to (UI ink 80 153 114) if (river's shown's branch = 1), else (UI ink 196 153 66)
+    if river's failed:
+        set ink to UI ink 201 88 63
+    ignore add website execution mark from (river's shown's source) in (program's source) using ink to layer "execution" in value
     if editor's document = editor's document's project's entry:
         invalidate instance
     set river's marked position to river's shown position

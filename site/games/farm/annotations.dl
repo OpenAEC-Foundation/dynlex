@@ -1,0 +1,54 @@
+import control_models.dl
+import ../annotations.dl
+import ../../editor/language.dl
+
+to [refresh website Farm annotations in] {a pointer to website state:state}:
+    set instance to state's view's instance
+    set document to state's farm's document
+    set actor to the website farm actor identified by (document's selected) in (document's world)
+    set role to the website Farm viewed role in state
+    set editor to the UI source editor labeled "Farm source" in (state's language)
+    set value to the UI text state for (editor's document's project's entry) in editor in instance
+    set shown to false
+    set message to the string form of "Create a role and write its instructions."
+    if actor's id = "player":
+        set message to "You move and work directly. Choose a worker to watch their code."
+    else if role != (0 as a pointer to website farm role):
+        set message to "Give this role to the selected worker to watch it run."
+        if role's needs rebuilding:
+            set message to "This saved role needs updating before it can run."
+        else if role's source != role's applied:
+            set message to "Apply your edits to watch this code run."
+        else if (actor's role = role's id) and role's prepared:
+            set message to "Role applied. Pause this worker to step through the instructions."
+            if actor's routine's traced:
+                set shown to true
+                set message to actor's routine's message
+                if actor's routine's finished:
+                    set message to the finished website farm role message
+                else if actor's routine's branch != -1:
+                    set message to "Condition is true · take this branch." if actor's routine's branch = 1, else "Condition is false · skip this branch."
+                if actor's routine's condition branch != -1:
+                    set truth to "true" if actor's routine's condition branch = 1, else "false"
+                    set message to formatted "Condition is {truth}. {message}"
+    if shown:
+        mark UI text (role's applied) in layer "execution" at priority 10 in value
+        set ink to UI ink 104 153 178
+        if actor's routine's branch != -1:
+            set ink to (UI ink 80 153 114) if actor's routine's branch = 1, else (UI ink 196 153 66)
+        ignore add website execution mark from (actor's routine's source) in (role's applied) using ink to layer "execution" in value
+        ignore clear UI text marks in layer "condition" in value
+        if actor's routine's condition branch != -1:
+            mark UI text (role's applied) in layer "condition" at priority 9 in value
+            set ink to (UI ink 80 153 114) if actor's routine's condition branch = 1, else (UI ink 196 153 66)
+            ignore add website execution mark from (actor's routine's condition source) in (role's applied) using ink to layer "condition" in value
+        if editor's document = editor's document's project's entry:
+            invalidate instance
+    else:
+        if clear website execution marks in value:
+            if editor's document = editor's document's project's entry:
+                invalidate instance
+        set program to state's programs + (the website program for source "Farm source")
+        if ((program's phase = 1) or (program's phase = 2)) and (state's farm's rebuilding = false):
+            set message to "Reading the role…"
+    set the text of "Farm execution" in instance to message

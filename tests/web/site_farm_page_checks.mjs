@@ -6,6 +6,7 @@ export async function verifyFarmPage({ command, evaluate, waitFor, controls, cap
   await waitFor('window.colorProbe.some(item => item.text === "Meadow Farm")');
   await controls.clickText('Whole farm');
   await waitFor('window.siteProbe.farmFrames.length > 1');
+  await waitFor('!window.siteProbe.visible.includes("Preparing the Farm…")');
   const scene = await evaluate('window.siteProbe.farmDraws.at(-1)');
   assert(scene.count > 0, 'The Farm must draw the actual scene mesh instances.');
   await capture('farm-scene');
@@ -23,6 +24,7 @@ export async function verifyFarmPage({ command, evaluate, waitFor, controls, cap
   await evaluate('window.siteProbe.texts.length = 0');
   await controls.clickText('Give this role to Ada');
   await waitFor('window.siteProbe.texts.some(text => text.startsWith("Role applied."))');
+  await waitFor('window.siteProbe.texts.includes("1 worker using this code")');
   assert((await evaluate('window.siteProbe.compilations')).includes('farm.dl'),
     'Farm roles must run through the same compiler service as the IDE.');
   await capture('farm-role');

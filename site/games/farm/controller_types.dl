@@ -21,6 +21,9 @@ class:
         held key as an integer
         pending actor as a string
         pending role as a string
+        rebuilding as a boolean
+        rebuild failed as a boolean
+        rebuild stopped as a boolean
         selected flag as a string
         flag color as a string
         selected area as a string

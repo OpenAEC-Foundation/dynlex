@@ -22,16 +22,17 @@ set instruction's source's start column to 4
 set instruction's source's end line to 1
 set instruction's source's end column to 14
 replace item at index 1 in (marked's code) with instruction
-set error to rebuild website farm role role using plan marked
+set error to rebuild website farm role role using plan marked in world
 require condition (error is empty) reporting "Source mapping rejected unchanged Farm control flow."
 require condition ((worker's routine's position = 2) and ((worker's direction = 1) and ((worker's paused) and (worker's held)))) reporting "Rebuilding reset a worker or its controls."
 require condition ((role's needs rebuilding = false) and (role's source ends with "# A draft to keep")) reporting "Rebuilding lost a draft or kept its pending flag."
+require condition ((worker's routine's traced = false) and (worker's routine's source's known = false)) reporting "Rebuilding retained source ranges from the previous language version."
 set changed to a copy of website farm plan marked
 set opening to the item at 0 in (changed's code)
 set opening's count to 2
 replace item at index 0 in (changed's code) with opening
 set role's needs rebuilding to true
-set error to rebuild website farm role role using plan changed
+set error to rebuild website farm role role using plan changed in world
 require condition (error is not empty) reporting "Rebuilding accepted a changed loop count."
 require condition ((role's needs rebuilding) and ((the item at 0 in (role's program's code))'s count = -1)) reporting "A failed rebuild replaced the live plan."
 set worker's paused to false

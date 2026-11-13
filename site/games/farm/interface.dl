@@ -10,6 +10,11 @@ document farm challenge using farm panel appearance:
             paragraph "Farm weather" containing "CLEAR SKIES" using farm signal appearance
             paragraph "Farm day" containing "DAY 1" using farm signal appearance
             link "← Choose a challenge" to "action:challenge-gallery" using farm action appearance
+    view group "Farm preparation notices" using no UI appearance:
+        region "Farm preparation idle" using no UI appearance:
+        region "Farm preparation notice" using farm card appearance:
+            paragraph "Farm preparation status" containing "" using farm body appearance
+            link "Retry saved roles" to "action:farm-retry-roles" using farm action appearance
     region "Farm body" using farm columns appearance:
         region "Farm landscape" using stack appearance:
             region "Farm world" using farm card appearance:

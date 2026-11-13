@@ -1,0 +1,17 @@
+import source.dl
+import ../packages/dynlex-ui/ui/text_marks.dl
+
+to get [add website execution mark from] {website execution range:range} [in] {string:source} [using] {UI paint:ink} [to layer] {string:layer} [in] {a pointer to UI text state:value}:
+    if range's known = false:
+        return false
+    set span to the website source span of range in source
+    require condition (span's valid) reporting "An execution annotation does not belong to its source snapshot"
+    if span's last > span's first:
+        add UI text mark ink from (span's first) to (span's last) with opacity 100 in layer layer in value
+        return true
+    return false
+
+to get [clear website execution marks in] {a pointer to UI text state:value}:
+    set changed to clear UI text marks in layer "execution" in value
+    set changed to (clear UI text marks in layer "condition" in value) or changed
+    return changed

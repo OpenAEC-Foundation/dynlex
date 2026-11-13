@@ -9,13 +9,14 @@ import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, veri
 import {canvasControls} from './canvas_controls.mjs';
 import {verifySourceSearch} from './source_search_checks.mjs';
 import {verifyFarmPage} from './site_farm_page_checks.mjs';
+import {verifyFarmRestore} from './site_farm_restore_checks.mjs';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
 const graphicsMode = process.argv[3] || 'system';
 const assetBase = process.argv[4] || '/';
 assert(['system', 'webgpu', 'webgl-no-adapter', 'webgl-no-api'].includes(graphicsMode));
 assert(assetBase.startsWith('/') && assetBase.endsWith('/'));
-const pagePaths = new Set(['/']);
+const pagePaths = new Set(['/', '/install.sh']);
 for (const page of JSON.parse(await fs.readFile(path.join(directory, 'routes.json'), 'utf8'))) {
   pagePaths.add(page.path); pagePaths.add(page.path.slice(0, page.path.lastIndexOf('/') + 1));
 }
@@ -59,6 +60,9 @@ const chrome = spawn(process.env.CHROME || 'google-chrome', [
 let stderr = ''; chrome.stderr.on('data', data => { stderr += data; });
 let socket;
 try {
+  const installer = await fetch(`http://127.0.0.1:${server.address().port}/install.sh`);
+  assert.equal(installer.status, 200, 'The advertised installer is missing from the website build.');
+  assert.equal(await installer.text(), await fs.readFile(new URL('../../site/public/install.sh', import.meta.url), 'utf8'));
   let port;
   for (let count = 0; count < 150; count++) {
     try { port = Number((await fs.readFile(path.join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0]); break; }
@@ -248,6 +252,7 @@ try {
   const {click,clickText,clickVisibleText}=canvasControls({command,evaluate,capture});
   if (process.env.DYNLEX_SITE_SCENARIO === 'farm') {
     await verifyFarmPage({command,evaluate,waitFor,controls:canvasControls({command,evaluate,capture}),capture});
+    await verifyFarmRestore({command,evaluate,waitFor,controls:canvasControls({command,evaluate,capture}),capture});
   } else {
   await click(335,627); await pause(1500); await capture('terrain');
   await click(335,627); await pause(1500); await capture('nano');

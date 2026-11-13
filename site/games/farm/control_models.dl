@@ -4,6 +4,12 @@ import examples.dl
 import interface.dl
 import ../../packages/dynlex-ui/ui/option_models.dl
 
+to get [the website Farm has pending saved roles in] {a pointer to website state:state}:
+    for each role in (state's farm's document's roles):
+        if role's needs rebuilding:
+            return true
+    return false
+
 to get [the retained Farm choice] {string:current} [among] {UI option values:options}:
     for each option in options:
         if option's id = current:

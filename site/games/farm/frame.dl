@@ -1,0 +1,20 @@
+import rebuilding.dl
+
+to [advance the website Farm in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    if session's document = (0 as a pointer to website farm document):
+        return nothing
+    set visible to false
+    if (state's route = "/index.html") and ((the value of "Challenge views" in (state's view's instance)) = 2):
+        set canvas to the UI layout labeled "Farm scene" in (state's view's layout)
+        if canvas != (0 as a pointer to UI layout):
+            set visible to ((canvas's painted bounds' y + canvas's painted bounds' height) > 0.0) and (canvas's painted bounds' y < state's view's height)
+    set session's active to visible
+    if visible:
+        if the website Farm has pending saved roles in state:
+            prepare website Farm saved roles in state
+    if visible and (session's renderer != (0 as a pointer to website Farm renderer)):
+        set elapsed to the maximum of 0.0 and (state's view's seconds - session's last frame)
+        ignore (advance website Farm renderer (session's renderer) over elapsed seconds dragging (session's pointer entity if session's pointer moved, else (the string form of "")))
+        animate UI view (state's view)
+    set session's last frame to state's view's seconds

@@ -59,6 +59,16 @@ def write_routes(site, stage, pages, base):
     (stage / 'routes.json').write_text(json.dumps(pages, indent=2) + '\n')
 
 
+def copy_public_files(site, stage):
+    for source in sorted((site / 'public').rglob('*')):
+        if source.is_file():
+            target = stage / source.relative_to(site / 'public')
+            if target.exists():
+                raise FileExistsError(target)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=Path('build/site'))
@@ -145,6 +155,7 @@ def main():
         fonts = sorted(path.relative_to(stage).as_posix() for path in (stage / 'assets/fonts').glob('*.ttf'))
         fonts += sorted(path.relative_to(stage).as_posix() for path in (stage / 'packages/dynlex-ui/assets/fonts').glob('*.ttf'))
         (stage / 'application.json').write_text(json.dumps({'module': 'application.wasm', 'fonts': fonts}, indent=2) + '\n')
+        copy_public_files(site, stage)
         if output.exists():
             shutil.rmtree(output)
         output.parent.mkdir(parents=True, exist_ok=True)

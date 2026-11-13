@@ -166,7 +166,7 @@ awns, with seedlings, green growth and mature plants. Each bed uses a single
 colored mesh to keep the detailed foliage economical to render.
 
 After changing the generated library, run `scripts/build_web.sh` followed by
-`scripts/build_web_root.sh` to refresh the browser compiler's embedded libraries.
+`python3 scripts/build_site.py` to refresh the generated site and compiler payload.
 Reload an already-open preview after rebuilding: its running compiler worker
 retains the libraries from the build it loaded.
 Use `scripts/view_web.sh 8880` for the local preview. Its server prevents asset

@@ -61,6 +61,11 @@ require condition ((ended = 4) and (result = 4)) reporting "Stopping compilation
 run website program index in (the address of state)
 fail website program index in (the address of state)
 require condition ((begun = 4) and ((ended = 5) and (result = 3))) reporting "A platform failure did not notify its owner"
+run website program index from source (the string form of "# Applied snapshot 🌽\nrow to the other side") in (the address of state)
+require condition ((begun = 5) and (program's source = "# Applied snapshot 🌽\nrow to the other side")) reporting "A supplied compilation snapshot did not reach its program owner"
+require condition (((the UI value for (the control labeled "River source" in (the address of instance)) in (the address of instance))'s text) = source) reporting "Running a supplied snapshot replaced the visible editor draft"
+stop website program index in (the address of state)
+require condition ((ended = 6) and (result = 4)) reporting "Stopping a snapshot compilation did not notify its owner"
 set pending to state's requests
 loop while pending != @intrinsic("construct", a pointer to website request):
     set next to pending's next

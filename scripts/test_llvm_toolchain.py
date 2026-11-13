@@ -53,7 +53,7 @@ class LlvmToolchainTests(unittest.TestCase):
                     "metadata/release-manifest.txt",
                     "scripts/llvm_toolchain.sh",
                     "scripts/release-asset.sh",
-                    "web/install.sh",
+                    "site/public/install.sh",
                 ],
                 check=True,
                 capture_output=True,
@@ -66,7 +66,7 @@ class LlvmToolchainTests(unittest.TestCase):
                 "metadata/release-manifest.txt",
                 "scripts/llvm_toolchain.sh",
                 "scripts/release-asset.sh",
-                "web/install.sh",
+                "site/public/install.sh",
             ):
                 contents = (checkout_root / relative_path).read_bytes()
                 self.assertNotIn(b"\r\n", contents, relative_path)

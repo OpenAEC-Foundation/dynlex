@@ -27,7 +27,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("port", nargs="?", type=int, default=8000)
     parser.add_argument("--bind", default="127.0.0.1")
-    parser.add_argument("--directory", type=Path, default=Path(__file__).resolve().parent.parent / "web")
+    parser.add_argument("--directory", type=Path, default=Path(__file__).resolve().parent.parent / "build/site")
     parser.add_argument("--deployment", action="store_true", help="Use deployment cache headers for navigation tests")
     args = parser.parse_args()
     handler = partial(WebHandler, directory=str(args.directory), deployment=args.deployment)

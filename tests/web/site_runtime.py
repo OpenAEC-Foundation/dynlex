@@ -15,7 +15,7 @@ from source_package import SourcePackage
 
 def compilation_budget(name):
     # The production dispatcher links both the source workspace and 3D scene.
-    return 600 if name in ['site_farm_controller', 'site_farm_profiles', 'site_reply_ownership'] else 180
+    return 600 if name in ['site_farm_controller', 'site_farm_profiles', 'site_farm_rebuilding', 'site_reply_ownership'] else 180
 
 
 def main():
@@ -25,8 +25,10 @@ def main():
     cases.append('site_program_commands')
     cases.append('site_farm_controller')
     cases.append('site_farm_profiles')
+    cases.append('site_farm_rebuilding')
+    cases.append('site_farm_annotations')
     renderers = ['site_farm_renderer']
-    browser_cases = renderers + ['site_farm_controller', 'site_farm_profiles']
+    browser_cases = renderers + ['site_farm_controller', 'site_farm_profiles', 'site_farm_rebuilding', 'site_farm_annotations']
     cases.extend(renderers)
     models = ['site_shader_program', 'site_farm_interface', 'site_farm_landscape', 'site_farm_camera', 'site_farm_lighting', 'site_farm_materials', 'site_farm_characters', 'site_farm_fences', 'site_farm_flags', 'site_farm_areas']
     models.append('site_farm_picking')

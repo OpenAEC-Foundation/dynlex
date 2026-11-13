@@ -30,25 +30,43 @@ to stop website [program] {integer:index} in {a pointer to website state:state}:
     set the text of (description's status) in (state's view's instance) to "Stopped."
     notify website program index with result 4 in state
 
-to run website [program] {integer:index} in {a pointer to website state:state}:
+to get [prepare website program] {integer:index} in {a pointer to website state:state}:
     if (index = 2) and (the website editor uses shaders in state):
         if state's shader editor's source request != 0:
             set the text of "IDE status" in (state's view's instance) to "Loading shader source…"
-            return nothing
+            return false
         if state's shader editor's source failed:
             load the website shader source in state
-            return nothing
+            return false
     set other to 0
     loop while other < the length of (the website program descriptions):
         stop website program other in state
         increment other
-    set program to state's programs + index
+    return true
+
+to get [the source editor of website program] {integer:index} in {a pointer to website state:state}:
     set description to the item at index in (the website program descriptions)
     set instance to state's view's instance
     set editor to the active UI editor within (the control labeled (description's source) in instance) in instance
     require condition (editor != @intrinsic("construct", UI reference)) reporting "The program source has no active editor"
-    set {source editor} to the UI source editor labeled (editor's text) in (state's language)
-    set source to the UI main source of source editor in (state's language) at (state's view's seconds) seconds
+    return the UI source editor labeled (editor's text) in (state's language)
+
+to run website [program] {integer:index} in {a pointer to website state:state}:
+    if prepare website program index in state:
+        set editor to the source editor of website program index in state
+        set source to the UI main source of editor in (state's language) at (state's view's seconds) seconds
+        compile website program index from source source using editor in state
+
+to run website [program] {integer:index} [from source] {string:source} in {a pointer to website state:state}:
+    if prepare website program index in state:
+        set editor to the source editor of website program index in state
+        ignore (the UI main source of editor in (state's language) at (state's view's seconds) seconds)
+        compile website program index from source source using editor in state
+
+to [compile website program] {integer:index} [from source] {string:source} [using] {a pointer to UI source editor:source editor} in {a pointer to website state:state}:
+    set program to state's programs + index
+    set description to the item at index in (the website program descriptions)
+    set instance to state's view's instance
     set program's source to source
     set program's result to 0
     set program's output to ""
@@ -70,7 +88,7 @@ to run website [program] {integer:index} in {a pointer to website state:state}:
         set state's shader editor's preview's paused to false
         set state's shader editor's preview's active to false
         set the text of "Pause preview" in instance to "Pause preview"
-    set sources to the UI source files of (source editor's document's project)
+    set sources to the UI source files of (source editor's document's project) with main source source
     request "compiler" containing (a JSON object containing [
         JSON text "operation" is "compile", JSON text "target" is target, JSON text "entry" is name,
         JSON flag "traced" is (description's traced),

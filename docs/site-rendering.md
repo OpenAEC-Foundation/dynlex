@@ -1,9 +1,15 @@
 # Farm rendering migration
 
-Farm's geometry, materials, cameras and lighting are being moved to DynLex using
-the pinned shared UI SDK. Connection to the website remains pending while the
-world renderer and controller are completed. The separate rendering probes use
-their own build directory.
+Farm's geometry, materials, cameras, lighting and website controls are written
+in DynLex using the pinned shared UI SDK. The challenge opens from the homepage,
+renders its world, accepts pointer and keyboard input, and compiles roles through
+the same compiler service as the standard editor. The separate rendering probes
+use their own build directory.
+
+`interface.dl` declares the controls. `controller.dl`, `session.dl` and the focused
+control modules connect them to the portable simulation and account progress.
+The browser host supplies graphics, storage and worker services. Leaving the
+challenge cancels pending role compilation and pauses its clock.
 
 The landscape now renders through `site/games/farm/program.dl`, a DynLex render
 graph using the shared scene ABI. The landscape alone groups 617 initial mesh
