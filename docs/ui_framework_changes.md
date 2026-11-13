@@ -624,5 +624,6 @@ body edit could reject valid source or crash when a cached probe was committed.
 Scope-rule expressions now carry static type-constraint purpose, and inactive-body
 reuse skips runtime expressions only. The import-free edit regression is
 `scripts/test_incremental_scope_rules.py`; it runs through the required incremental
-suite. All 351 required tests pass after the correction. Full integration
-verification and the remaining Farm UI/controller migration are still pending.
+suite. All 351 required tests and all 518 integration tests pass after the
+correction. The browser compiler rebuild and official Web smoke tests pass too.
+The remaining Farm UI/controller migration is still pending.
