@@ -169,13 +169,13 @@ class IncrementalInferenceReads {
 		return found == probeDependencies.end() ? empty : found->second;
 	}
 
-	Keys readsOfProbe(size_t index, const Json *priorSchedule, bool reused) const {
+	Keys readsOfProbe(size_t index, const Json *priorSchedule, std::optional<size_t> previousIndex) const {
 		Keys keys;
 		if (auto found = byProbe.find(index); found != byProbe.end())
 			keys = found->second;
-		if (reused) {
+		if (previousIndex) {
 			requireCompilerInvariant(priorSchedule, "reused constraint probe has no saved lookup observations");
-			for (const Json &key : priorSchedule->at("callable_lookups").at(index))
+			for (const Json &key : priorSchedule->at("callable_lookups").at(*previousIndex))
 				keys.insert(key.get_ref<const std::string &>());
 		}
 		return keys;

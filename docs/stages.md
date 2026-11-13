@@ -978,39 +978,50 @@ After resolution, each successful type-constraint probe's pass and the sections
 read by its expression are saved with the function projection. Variable
 definitions are mapped to their owning sections; their source ranges can lie
 on a function's header line, which belongs to its parent section. A later build
-reuses unaffected first-pass probes before the first affected item when declarations,
-pattern trees, precedence, scope rules, and source outside function bodies are
-unchanged. The saved dependency graph also invalidates a probe when an edited
+reuses unaffected probes at their recorded readiness pass. Each query retains
+its source visibility, owning declaration and reads. Compiled declarations are
+compared individually, including flex and class patterns; adding, removing or
+changing one does not discard unrelated queries. Precedence, scope rules and
+the surrounding source outside pattern definitions still establish context.
+The constraint-context projection masks pattern declarations and execution because
+their individual fingerprints and reader edges account for those inputs. Removing
+a flex definition therefore invalidates its readers instead of the whole stage.
+The saved dependency graph also invalidates a probe when an edited
 body reaches a definition or binding read by its expression. Every probe attempt
 records syntactic candidates and bindings, including deferred attempts and
 rejected grouping trials. Body edits use those recorded edges instead of a
 textual approximation: editing subtraction cannot invalidate a literal type name
-merely because the name contains a hyphen. Later-pass
-probes and probes after the first affected item run again so a changed
-constraint can resolve earlier and cascade in order.
+merely because the name contains a hyphen. Each probe also links its reads to
+the declaration whose signature it determines. Invalidation follows those edges
+and ordinary callers to a fixed point, including signature dependencies between
+probes. Independent queries retain their values and parsed-expression products
+even when an earlier probe changed or they originally needed a later pass.
 An edit confined to top-level execution can retain a probe whose recorded
 dependency roots exclude the top-level section. The nonexecution source
 projection checks that declarations and other ambient code are unchanged;
 probes that read top-level declarations, or call a function that reads globals,
 run again through the saved reverse dependency graph.
-Adding an ordinary function retains saved probes when prior function declarations
-and scope rules are unchanged, the source outside functions is unchanged, and the
-new pattern cannot match any saved constraint text or current pattern reference.
+New or changed pattern declarations invalidate a saved probe only when a visible
+canonical path can match its text, or the changed declaration reaches one of its
+recorded dependencies. Removed declarations follow their saved reader edges.
 Candidate paths require every fixed literal, independently for each choice
 alternative. Captures do not make a path universal when it still requires words
 or punctuation. Queries use complete lexer words and punctuation bytes; a word
-such as `in` is absent from `integer`. Current references contribute their
-normalized matcher input and numeric argument spellings, including their combined
-literals. Surrounding source strings and intrinsic names do not enter that query.
-Potential matches rerun the probes. Global declaration identities use positions
+such as `in` is absent from `integer`. The query uses the constraint text;
+changed ordinary body matches propagate through their owning graph units.
+Surrounding source strings do not enter that query.
+Potential matches rerun the affected probes. Global declaration identities use positions
 within their source files, so adding lines to an earlier imported file does not
 change the identity of an unchanged global declaration.
 The cache also records resolved constraint values and their dependency roots. When a
 probe is reusable and its result has a portable type identity, the compiler
 installs that result directly in the current declaration and carries
 forward its dependency roots. It also skips parsing that constraint expression when
-the saved probe schedule still matches. If the schedule changes, omitted expressions
-are parsed before inference. Other results are committed by inference as before.
+a saved query identity matches. Readiness, values and dependency roots are aligned
+by identity before inference, so inserting or removing a declaration cannot shift
+another query's result. Retained lookup reads use the same identity to locate their
+original record when the next snapshot is captured. Other results are committed
+by inference as before.
 Class references are keyed by stable class-section paths. Committed class
 instantiation field types and function signatures are saved with the constraint
 probe schedule. When the class declaration still has the same fields, the

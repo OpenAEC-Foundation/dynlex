@@ -186,15 +186,7 @@ static bool classifyPatternTypeConstraintDependencies(
 	return true;
 }
 
-static bool canOmitReusableConstraintExpression(
-	const ParseContext &context, size_t index, const DeclaredTypeConstraintWorkItem &item,
-	DeclaredConstraintIdentities &identities
-) {
-	return context.reuseDeclaredConstraintProbes && index < context.priorConstraintProbeItems.size() &&
-		   index < context.priorConstraintProbeReusable.size() && index < context.priorConstraintProbeValues.size() &&
-		   context.priorConstraintProbeReusable[index] && context.priorConstraintProbeValues[index] &&
-		   context.priorConstraintProbeItems[index] == identities.identity(item);
-}
+#include "declared_constraint_reuse.inl"
 
 static bool collectDeclaredTypeConstraintWorkItems(
 	ParseContext &parseContext, Section *section, std::vector<DeclaredTypeConstraintWorkItem> &items,
@@ -253,7 +245,7 @@ static bool collectDeclaredTypeConstraintWorkItems(
 				item.element = &element;
 				item.diagnosticRange = definition->range;
 				item.typeConstraintName = element.typeConstraintName;
-				bool omitExpression = canOmitReusableConstraintExpression(parseContext, items.size(), item, identities);
+				bool omitExpression = canOmitReusableConstraintExpression(parseContext, item, identities);
 				Expression *expression =
 					omitExpression ? nullptr
 								   : createTypeConstraintExpression(parseContext, definition->section, constraintRange);
@@ -292,7 +284,7 @@ static bool collectDeclaredTypeConstraintWorkItems(
 			item.diagnosticRange = reference->declaredTypeConstraintRange;
 			item.typeConstraintName = reference->declaredTypeConstraintName;
 			item.sourceSection = section;
-			bool omitExpression = canOmitReusableConstraintExpression(parseContext, items.size(), item, identities);
+			bool omitExpression = canOmitReusableConstraintExpression(parseContext, item, identities);
 			Expression *expression =
 				omitExpression ? nullptr
 							   : createTypeConstraintExpression(parseContext, section, reference->declaredTypeConstraintRange);
@@ -328,7 +320,7 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 	} provisionalDomainScope{parseContext};
 	materializeExplicitPatternParameterDefinitions(parseContext);
 	std::vector<DeclaredTypeConstraintWorkItem> items;
-	DeclaredConstraintIdentities identities(parseContext.mainSection);
+	DeclaredConstraintIdentities identities(parseContext);
 	size_t diagnosticsBeforeParsing = parseContext.diagnostics.size();
 	if (!collectDeclaredTypeConstraintWorkItems(parseContext, parseContext.mainSection, items, identities))
 		return false;
@@ -344,6 +336,7 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 		parseContext.constraintProbeItems.push_back(identities.identity(item));
 		parseContext.constraintProbeTexts.push_back(item.typeConstraintName);
 	}
+	alignDeclaredConstraintQueries(parseContext, identities);
 	bool reuseProbes = parseContext.reuseDeclaredConstraintProbes &&
 					   parseContext.priorConstraintProbeItems == parseContext.constraintProbeItems &&
 					   parseContext.priorConstraintProbePasses.size() == items.size() &&

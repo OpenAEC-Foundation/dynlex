@@ -78,10 +78,13 @@ Json captureAllFunctionProjection(
 	Json matchEntries = Json::object();
 	std::map<const Section *, std::string> paths;
 	std::unordered_set<const Section *> reusable;
+	std::unordered_set<const Section *> constraintDefinitions;
 	std::unordered_set<const Section *> selectedSections;
 	size_t declarationSections = 0;
 	for (const auto &[path, section] : sections) {
 		paths.emplace(section, path);
+		if (!section->patternDefinitions.empty())
+			constraintDefinitions.insert(section);
 		if (section->type == SectionType::Function && !section->patternDefinitions.empty()) {
 			if (!containsNestedDefinition(*section)) {
 				selected[path] = sectionIdentity(*section);
@@ -133,11 +136,13 @@ Json captureAllFunctionProjection(
 		}
 	}
 	Json declarations = Json::object();
+	Json patternDeclarations = Json::object();
 	Json allDeclarationEntries = Json::array();
 	Json ambientDeclarationEntries = Json::array();
 	Json currentGlobalResolution = globalResolutionIdentity(*context.mainSection);
 	if (reuseDeclarations) {
 		declarations = prior->at("function_declarations");
+		patternDeclarations = prior->at("pattern_declarations");
 		if (projectionWork)
 			projectionWork->declarationSectionsReused += declarationSections - changedDeclarations;
 	} else {
@@ -170,6 +175,7 @@ Json captureAllFunctionProjection(
 			if (reusableSection)
 				declarations[path] = entry;
 			if (!section->patternDefinitions.empty()) {
+				patternDeclarations[path] = digest(entry.dump());
 				entry["path"] = path;
 				if (reusableSection)
 					allDeclarationEntries.push_back(std::move(entry));
@@ -196,6 +202,7 @@ Json captureAllFunctionProjection(
 	phaseStart = Clock::now();
 	projection["bodies"] = std::move(bodyDigests);
 	projection["function_declarations"] = std::move(declarations);
+	projection["pattern_declarations"] = std::move(patternDeclarations);
 	projection["ambient_declarations"] =
 		reuseDeclarations ? prior->at("ambient_declarations") : Json(digest(ambientDeclarationEntries.dump()));
 	if (projectionWork)
@@ -207,6 +214,10 @@ Json captureAllFunctionProjection(
 	projection["ambient_nonexecution_sources"] = sourceProjection(
 		context, observations, reusable, true, true, true, prior ? &prior->at("ambient_nonexecution_sources") : nullptr,
 		projectionWork
+	);
+	projection["constraint_context_sources"] = sourceProjection(
+		context, observations, constraintDefinitions, true, true, true,
+		prior ? &prior->at("constraint_context_sources") : nullptr, projectionWork
 	);
 	if (projectionWork)
 		projectionWork->ambientMilliseconds += elapsedMilliseconds(phaseStart);
