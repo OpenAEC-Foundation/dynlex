@@ -1,6 +1,7 @@
 bool optimizeIncrementalModule(
-	ParseContext &context, const fs::path &directory, const std::string &compilerIdentity, const Json &options, Json *previous,
-	BuildStatistics &statistics, const IncrementalIRReuse *functionReuse
+	ParseContext &context, const fs::path &directory, const ProgramPayloads &retainedPayloads,
+	const std::string &compilerIdentity, const Json &options, Json *previous, BuildStatistics &statistics,
+	const IncrementalIRReuse *functionReuse
 ) {
 	if (!context.options.optimizationLevel)
 		return true;
@@ -11,7 +12,7 @@ bool optimizeIncrementalModule(
 	auto inputStart = Clock::now();
 	if (previous) {
 		auto payloadStart = Clock::now();
-		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "optimization_units");
+		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "optimization_units");
 		statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 	}
 	std::set<std::string> preserved;

@@ -545,6 +545,21 @@ if(NOT EMSCRIPTEN)
     )
 
     add_executable(
+        dynlex_incremental_cache_entry_test EXCLUDE_FROM_ALL
+        tests/cpp/incrementalCacheEntryTest.cpp
+        $<TARGET_OBJECTS:dynlex_compiler_objects>
+    )
+    target_compile_definitions(dynlex_incremental_cache_entry_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_DEFINITIONS>
+    )
+    target_compile_options(dynlex_incremental_cache_entry_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_OPTIONS>
+    )
+    target_link_libraries(dynlex_incremental_cache_entry_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},LINK_LIBRARIES>
+    )
+
+    add_executable(
         dynlex_expression_ownership_test EXCLUDE_FROM_ALL
         tests/cpp/expressionOwnershipTest.cpp
         $<TARGET_OBJECTS:dynlex_compiler_objects>
@@ -639,6 +654,7 @@ if(DYNLEX_WEB)
 
     set(DYNLEX_WEB_SOURCES ${PROJECT_SOURCES})
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalCompilation\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalCacheEntry\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalMatcherCache\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalIRReuse\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/main\\.cpp$")

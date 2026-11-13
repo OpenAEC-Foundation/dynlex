@@ -5,6 +5,7 @@
 #include "codegen/targetOptions.h"
 #include "compiler.h"
 #include "expression.h"
+#include "incrementalCacheEntry.h"
 #include "incrementalIRReuse.h"
 #include "incrementalMatcherCache.h"
 #include "incrementalModuleBitcode.h"
@@ -68,8 +69,8 @@
 namespace {
 using Json = nlohmann::json;
 namespace fs = std::filesystem;
-constexpr std::string_view cacheHeader = "DynLex incremental cache v1\n";
-constexpr uintmax_t maximumEntryBytes = 256 * 1024 * 1024;
+constexpr std::string_view cacheHeader = IncrementalCacheEntry::header;
+constexpr uintmax_t maximumEntryBytes = IncrementalCacheEntry::maximumBytes;
 constexpr uintmax_t maximumCacheBytes = 512 * 1024 * 1024;
 constexpr unsigned partitionCount = 16;
 using Clock = std::chrono::steady_clock;
@@ -97,25 +98,10 @@ std::string readFile(const fs::path &path) {
 }
 
 std::optional<std::string> readEntry(const fs::path &path) {
-	std::error_code error;
-	if (!fs::exists(path, error)) {
-		if (error)
-			throw fs::filesystem_error("cannot inspect cache entry", path, error);
+	auto entry = IncrementalCacheEntry::open(path);
+	if (!entry)
 		return std::nullopt;
-	}
-	std::string entry;
-	try {
-		entry = readFile(path);
-	} catch (const fs::filesystem_error &exception) {
-		if (exception.code() == std::errc::no_such_file_or_directory)
-			return std::nullopt; // Another build may have evicted this entry.
-		throw;
-	}
-	const size_t payloadOffset = cacheHeader.size() + 65;
-	if (entry.size() < payloadOffset || !entry.starts_with(cacheHeader) || entry[payloadOffset - 1] != '\n' ||
-		digest(std::string_view(entry).substr(payloadOffset)) != entry.substr(cacheHeader.size(), 64))
-		throw std::runtime_error("corrupt cache entry: " + path.string());
-	return entry.substr(payloadOffset);
+	return std::string(entry->payload());
 }
 
 void writeEntry(const fs::path &path, std::string_view payload) {
@@ -368,6 +354,7 @@ bool compileIncrementally(
 		statistics.cacheEntry = programEntry.string();
 		bool success = false;
 		std::optional<Json> previous;
+		ProgramPayloads retainedPayloads;
 		std::optional<Json> previousFailure;
 		bool reusePreviousFrontend = false;
 		bool reuseFailedFrontend = false;
@@ -388,7 +375,7 @@ bool compileIncrementally(
 				previousParserKey = previousFailure->at("parser_key").get<std::string>();
 		}
 		if (!reuseFailedFrontend) {
-			if (auto cached = readProgramManifest(programEntry)) {
+			if (auto cached = readProgramManifest(programEntry, retainedPayloads)) {
 				previous = std::move(*cached);
 				if (!previousFailure && !initializeSyntaxConfigs(context, context.options.inputPath))
 					return false;
@@ -430,11 +417,12 @@ bool compileIncrementally(
 					success = *cachedLink;
 				} else {
 					auto payloadStart = Clock::now();
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
+					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "ir");
 					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 					restoreCachedModule(context, *previous, programEntry);
 					success = emitPartitions(
-						context, directory, compilerIdentity, options, libraries, statistics, &*previous, nullptr, true
+						context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics, &*previous,
+						nullptr, true
 					);
 					if (success)
 						(*previous)["object_keys"] = statistics.objectKeys;
@@ -457,7 +445,7 @@ bool compileIncrementally(
 		} else {
 			if (previous) {
 				auto payloadStart = Clock::now();
-				statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "all_function_projection");
+				statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "all_function_projection");
 				statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 			}
 			auto restoreStart = Clock::now();
@@ -642,10 +630,11 @@ bool compileIncrementally(
 			if (compiled && !reuseTypeInference) {
 				if (previous) {
 					auto payloadStart = Clock::now();
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "section_dependency_graph");
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "inference_summaries");
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "unoptimized_ir");
+					statistics.cachePayloadsLoaded +=
+						hydrateProgramField(*previous, retainedPayloads, "section_dependency_graph");
+					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "inference_summaries");
+					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "ir");
+					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "unoptimized_ir");
 					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 					if (compatibleObservations(*previous, recording->observations, context))
 						prepareConstraintProbeReuse(
@@ -765,11 +754,12 @@ bool compileIncrementally(
 						statistics.objectKeys = objectKeys;
 					} else {
 						auto payloadStart = Clock::now();
-						statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
+						statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "ir");
 						statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 						restoreCachedModule(context, *previous, programEntry);
 						success = emitPartitions(
-							context, directory, compilerIdentity, options, libraries, statistics, &*previous, nullptr, true
+							context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics, &*previous,
+							nullptr, true
 						);
 					}
 				}
@@ -902,8 +892,8 @@ bool compileIncrementally(
 						}
 					}
 					if (!reusedGeneratedCode && !emitPartitions(
-													compiled, directory, compilerIdentity, options, libraries, statistics,
-													previous ? &*previous : nullptr, functionReuse.get(),
+													compiled, directory, retainedPayloads, compilerIdentity, options, libraries,
+													statistics, previous ? &*previous : nullptr, functionReuse.get(),
 													previous && previous->at("ir") == result.at("ir")
 												))
 						return false;
@@ -927,8 +917,8 @@ bool compileIncrementally(
 					optimizationStart = Clock::now();
 				}, [&](ParseContext &generated) {
 					return optimizeIncrementalModule(
-						generated, directory, compilerIdentity, options, previous ? &*previous : nullptr, statistics,
-						functionReuse.get()
+						generated, directory, retainedPayloads, compilerIdentity, options, previous ? &*previous : nullptr,
+						statistics, functionReuse.get()
 					);
 				});
 				statistics.codegenMilliseconds = elapsedMilliseconds(stageStart);

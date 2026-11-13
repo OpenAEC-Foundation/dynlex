@@ -683,7 +683,7 @@ run_auxiliary_test() {
     local test_name="$1"
     local required_test=false
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|incremental_compilation|data_declaration_cache|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout)
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|incremental_compilation|incremental_cache_entries|data_declaration_cache|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout)
         required_test=true ;;
     esac
     if [[ "$suite" == required && "$required_test" != true ]] ||
@@ -738,6 +738,7 @@ run_auxiliary_test "entrypoint_checker" 60 python3 -B "$SCRIPT_DIR/test_entrypoi
 run_auxiliary_test "numeric_literals" 30 python3 -B "$SCRIPT_DIR/test_numeric_literals.py" "$PROJECT_DIR"
 run_auxiliary_test "class_layout" 30 python3 -B "$SCRIPT_DIR/test_class_layout.py" "$PROJECT_DIR"
 run_auxiliary_test "incremental_compilation" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR"
+run_auxiliary_test "incremental_cache_entries" 600 python3 -B "$SCRIPT_DIR/test_incremental_cache_entries.py" "$PROJECT_DIR"
 run_auxiliary_test "incremental_compilation_integration" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --integration
 run_auxiliary_test "address_provenance" 600 python3 -B "$SCRIPT_DIR/test_address_provenance.py" "$PROJECT_DIR"
 run_auxiliary_test "expression_ownership" 600 python3 -B "$SCRIPT_DIR/test_expression_ownership.py" "$PROJECT_DIR"
