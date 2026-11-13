@@ -163,7 +163,7 @@ remaining measured costs, not by table order alone.
 | I003 | P01/P22: reduce cache-finalization work | Parked; measured candidate, not accepted | 17:26–18:49 CET, one extension. Isolated compiler `ef722bb9...` based on `14fa0b78` reduces fast-path paired CPU by 15.6–19.6%; all eight executable/diagnostic comparisons pass and 464 integration checks pass in 971.2 s. Required gate still returns 124 at 120.12 s. Preserve `codex/incremental-cache-finalization`; no merge or complete-goal claim. Stop cache micro-iterations and return to frontend units. |
 | I004 | P03/P06: retain unchanged body syntax and materialize only on relevant demand | Parked; not accepted | 18:52–20:04 CET, one extension used. The minimal work test proves unchanged bodies are still assembled despite matcher reuse. Added a demand-capable source slot and ownership tests; its isolated contract probe passes and the full compiler rebuild is finishing. No persisted body provider is installed, no syntax units are skipped, and no performance benefit is claimed. Correct deferral also requires classification query metadata, resolved-match/binding products, and avoiding eager expansion/source-index consumers. Keep this experiment isolated; do not merge scaffolding as an optimization. |
 | I005 | P06/P10: exclude only diagnostic-owning units from matcher reuse | Complete: keep, with a limited performance claim | 20:04–20:46 CET, no extension. Candidate `37e3681b` / compiler `b6774332...`. Seven independent first-unused-edit pairs improve CPU 1.3090→0.9451 s, paired ratio 0.7213 [0.6650, 0.7544]. Repeated edits improve only 1–2%, below the initial steady-state expectation. All eight executable/diagnostic comparisons pass; 328 required checks pass uncached in 99.254 s and 464 integration checks in 821.954 s. Three-line recovery repro verifies retained body products; successful snapshots still prune removed units. Accept this optimization for the verified first-edit workload, without claiming a 28% steady-state gain. |
-| I006 | P00: prepare and validate the accepted snapshot without the parked body-syntax prototype | Active | Started 20:46 CET; first deadline 21:31 CET. Keep I004's commits on their isolated branch. Apply I005 to the I003 snapshot, rebuild, verify the unchanged 120-second gate, integration behavior, artifact parity and first-edit/steady-state performance on that exact source tree. Merge/push only the accepted snapshot; preserve usable benchmark artifacts before disposing a merged worktree. The full all-stage incremental objective remains active. |
+| I006 | P00: prepare and validate the accepted snapshot without the parked body-syntax prototype | Active; one extension used | Started 20:46 CET; first deadline 21:31 CET, extended deadline 22:16 CET. Exact source `13a3f819`, compiler `4a9cde56...`, excludes I004's unconsumed source-slot prototype and dormant work test. It passes 328 required checks uncached in 112.912 s, 464 integration checks in 890.112 s, eight-case artifact/diagnostic parity, and seven independent first-edit pairs (CPU 1.3007→0.9536 s; paired ratio 0.7306 [0.7091, 0.7885]). The extension completes merging, root-build verification and cleanup; no further optimization is added to I006. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -454,3 +454,27 @@ fix, but its current branch also contains I004 prerequisites that have no syntax
 cache consumer. I006 will exclude those prototype commits from the mergeable
 snapshot and validate the exact resulting tree. No merge or full-goal completion
 is recorded yet.
+
+### I006 exact-snapshot verification
+
+The accepted-only snapshot has no `SourceExpression` type, no lazy-source provider
+placeholder and no unimplemented body-syntax test in its proposed patch. Its
+required and integration drivers verify unchanged compiler/source identities.
+Seven ordinary unused-body edit pairs show CPU 0.9368→0.8912 s and paired ratio
+0.9379 [0.9371, 0.9616]. Active-body medians are 1.9309→1.8981 s, but their paired
+interval includes no improvement. Seven independently populated first-edit pairs
+show CPU 1.3007→0.9536 s and ratio 0.7306 [0.7091, 0.7885]. All executable and
+diagnostic comparisons pass. The three-pair cold-build result is screening data,
+not an established general cold-build improvement.
+
+Evidence: `i006-required.json`, `i006-integration.json`, `i006-comparison.json`,
+`i006-first-edit-summary.json`. Archived executables embed this worktree's data
+paths, so `compiler-data/manifest.json` preserves their exact library/runtime
+bytes and compiler hashes. Its replay helper can temporarily materialize those
+recorded data paths after worktree disposal; its frozen benchmark launcher keeps
+the original measurement script and uses the live repository only for Git source
+archives. Existing directories are verified and preserved.
+
+The full objective remains incomplete: unchanged source and section processing
+still runs broadly. After the accepted snapshot is integrated, return to P02/P03
+and their consumers rather than extending cache-maintenance work.
