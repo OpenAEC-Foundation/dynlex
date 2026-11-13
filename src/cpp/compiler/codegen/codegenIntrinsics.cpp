@@ -16,6 +16,7 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/IntrinsicsSPIRV.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include <algorithm>
@@ -446,6 +447,20 @@ CodegenResult generateIntrinsicCode(
 		return generateShaderInputIntrinsic(context, callExpr, args, kind);
 	if (kind == IntrinsicKind::ShaderUniform)
 		return generateShaderUniformIntrinsic(context, callExpr, args);
+	if (kind == IntrinsicKind::ShaderDerivative) {
+		std::string axis = getCompileTimeString(context, args[1]);
+		requireCompilerInvariant(axis == "x" || axis == "y", "shader derivative lost its validated axis");
+		llvm::Value *value = nullptr;
+		if (!generateIntrinsicRuntimeValue(context, args[2], value))
+			return CodegenResult::failure();
+		auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+		auto *operation = builder.CreateIntrinsic(
+			axis == "x" ? llvm::Intrinsic::spv_ddx : llvm::Intrinsic::spv_ddy, {value->getType()}, {value}
+		);
+		operation->getCalledFunction()->setConvergent();
+		operation->setConvergent();
+		return operation;
+	}
 	if (kind == IntrinsicKind::ShaderImage || kind == IntrinsicKind::ShaderSampler)
 		return nullptr;
 	if (kind == IntrinsicKind::ShaderSampleLevel || kind == IntrinsicKind::ShaderSampleCompare)

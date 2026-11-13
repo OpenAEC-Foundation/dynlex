@@ -793,6 +793,7 @@ run_auxiliary_test "shader_interpolants" 30 python3 -B "$SCRIPT_DIR/test_shader_
 run_auxiliary_test "shader_uniforms" 30 python3 -B "$SCRIPT_DIR/test_shader_uniforms.py" "$COMPILER"
 run_auxiliary_test "shader_resources" 30 python3 -B "$SCRIPT_DIR/test_shader_resources.py" "$COMPILER"
 run_auxiliary_test "shader_integer_semantics" 30 python3 -B "$SCRIPT_DIR/test_shader_integer_semantics.py" "$COMPILER"
+run_auxiliary_test "shader_derivatives" 30 python3 -B "$SCRIPT_DIR/test_shader_derivatives.py" "$COMPILER"
 run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"
 run_auxiliary_test "native_platform_targets" 30 python3 -B "$SCRIPT_DIR/test_native_platform_targets.py" "$PROJECT_DIR" "$COMPILER"

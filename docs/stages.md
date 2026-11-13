@@ -963,6 +963,12 @@ interpolation; different names cannot occupy one location. Signed interface valu
 SPIR-V signedness, with bitcasts at LLVM's signless load and store boundaries. `FrontFacing` is a
 Boolean fragment-only `shader input`. The standard shader library supplies natural-language
 wrappers; no application-specific syntax is involved.
+`shader derivative` takes a compile-time axis (`x` or `y`) and a runtime float32
+scalar or vector of two through four components. It preserves the operand type,
+is fragment-only, and emits LLVM's SPIR-V derivative intrinsic. The operation is
+convergent and cannot be evaluated as a pure function of one invocation's value.
+Derivatives must execute in uniform control flow across neighboring fragments;
+browser translation retains the target's derivative-uniformity validation.
 The SPIR-V 1.4+ entry-point interface contains all emitted module globals, including private variables, while excluding
 function-local storage. The entry-point checker validates emitted shader modules with `spirv-val --target-env vulkan1.3`.
 

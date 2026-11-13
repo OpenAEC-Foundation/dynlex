@@ -1,4 +1,8 @@
 void ExpressionInferenceSupport::inferCustomIntrinsic(IntrinsicKind kind) {
+	if (kind == IntrinsicKind::ShaderDerivative) {
+		expr->type = expr->arguments[2]->type;
+		return;
+	}
 	if (kind == IntrinsicKind::ShaderImage || kind == IntrinsicKind::ShaderSampler) {
 		expr->type = {kind == IntrinsicKind::ShaderImage ? DataType::Kind::ShaderImage : DataType::Kind::ShaderSampler};
 		return;

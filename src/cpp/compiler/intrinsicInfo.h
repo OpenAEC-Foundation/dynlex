@@ -88,6 +88,7 @@ enum class IntrinsicTargets { All, Native, NativeOrWasm };
 	X(ShaderSampler, "shader sampler", 4, IntrinsicReturnKind::Custom, 1, 3, IntrinsicPurityKind::Pure)                        \
 	X(ShaderSampleLevel, "shader sample level", 5, IntrinsicReturnKind::Custom, 1, 2, IntrinsicPurityKind::Impure)             \
 	X(ShaderSampleCompare, "shader sample compare", 5, IntrinsicReturnKind::Float, 1, 2, IntrinsicPurityKind::Impure)          \
+	X(ShaderDerivative, "shader derivative", 3, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Impure)                \
 	X(ExtractElement, "extract element", 3, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                      \
 	X(InsertElement, "insert element", 4, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                        \
 	X(Function, "function", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                   \
@@ -340,7 +341,7 @@ constexpr bool isShaderRuntimeIntrinsicKind(IntrinsicKind kind) {
 		   kind == IntrinsicKind::ShaderInterpolantInput || kind == IntrinsicKind::ShaderInterpolantOutput ||
 		   kind == IntrinsicKind::ShaderUniform || kind == IntrinsicKind::ShaderOutput || kind == IntrinsicKind::ShaderImage ||
 		   kind == IntrinsicKind::ShaderSampler || kind == IntrinsicKind::ShaderSampleLevel ||
-		   kind == IntrinsicKind::ShaderSampleCompare;
+		   kind == IntrinsicKind::ShaderSampleCompare || kind == IntrinsicKind::ShaderDerivative;
 }
 
 static_assert(isAlwaysPureIntrinsicKind(IntrinsicKind::Multiply));

@@ -8,6 +8,8 @@ import lib/std.dl
 the fragment coordinates means: @intrinsic("shader input", "FragCoord")
 the fragment x coordinate means: the element at 0 in @intrinsic("shader input", "FragCoord")
 the fragment y coordinate means: the element at 1 in @intrinsic("shader input", "FragCoord")
+the horizontal shader derivative of {a value:value} means: @intrinsic("shader derivative", "x", value)
+the vertical shader derivative of {a value:value} means: @intrinsic("shader derivative", "y", value)
 function set the fragment color with a red channel of {a value:red}, a green channel of {a value:green}, a blue channel of {a value:blue} and an alpha channel of {a value:alpha}:
     replacement:
         @intrinsic(

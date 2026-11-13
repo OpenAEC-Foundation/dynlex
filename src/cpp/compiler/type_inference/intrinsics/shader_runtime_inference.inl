@@ -154,5 +154,25 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 	}
 	if (!context.parseContext.options.emitSPIRV)
 		return failUnavailableTarget();
+	if (kind == IntrinsicKind::ShaderDerivative) {
+		auto fail = [&](size_t argument, std::string_view key) {
+			std::string detail =
+				renderConfiguredMessage(syntaxConfigForRange(context.parseContext, expr->range), key, "message");
+			context.setTypeFailure(detail);
+			context.fail(buildFailureDetailDiagnostic(expr->arguments[argument]->range, detail), 0);
+			return false;
+		};
+		if (context.parseContext.options.shaderStage != ParseContext::ShaderStage::Fragment)
+			return fail(0, "shader derivative unavailable");
+		CompileTimeValue axisValue = context.lookupExpressionValue(expr->arguments[1]);
+		const auto *axis = std::get_if<std::string>(&axisValue);
+		if (!axis || (*axis != "x" && *axis != "y"))
+			return fail(1, "shader derivative axis invalid");
+		const DataType &type = expr->arguments[2]->type;
+		const DataType &scalar = type.isVector() ? type.vectorElementType() : type;
+		if (scalar != DataType(DataType::Kind::Float, 4) ||
+			(type.isVector() && (type.vectorSize() < 2 || type.vectorSize() > 4)))
+			return fail(2, "shader derivative type invalid");
+	}
 	return true;
 }
