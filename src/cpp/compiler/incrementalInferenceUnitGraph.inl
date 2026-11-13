@@ -2,7 +2,11 @@ using InferenceUnitKey = std::pair<std::string, std::string>;
 
 Json emptyInferenceUnit() {
 	return Json{
-		{"sources", Json::object()}, {"callees", Json::array()}, {"lookups", Json::object()}, {"values", Json::array()}
+		{"sources", Json::object()},
+		{"callees", Json::array()},
+		{"lookups", Json::object()},
+		{"values", Json::array()},
+		{"global_inputs", Json::object()}
 	};
 }
 
@@ -12,10 +16,12 @@ class InferenceUnitGraphCapture {
 		const ParseContext &context, const Json &projection, const std::map<const Section *, std::string> &paths,
 		const IncrementalInferenceReads &reads, const Json &graph, Json *priorUnits,
 		const std::map<std::string, std::set<std::string>> &lookupOwners, BuildStatistics &statistics,
-		std::map<std::string, std::string> &fingerprints, const IncrementalInferenceProducts *products
+		std::map<std::string, std::string> &fingerprints, const IncrementalInferenceProducts *products,
+		InferenceGlobalInputs &globalInputs, const std::map<std::string, std::set<std::string>> &retained
 	)
 		: context(context), paths(paths), identities(paths), reads(reads), graph(graph), priorUnits(priorUnits),
-		  inputs(context, projection, paths, statistics, fingerprints), statistics(statistics), products(products) {
+		  inputs(context, projection, paths, statistics, fingerprints), statistics(statistics), products(products),
+		  globalInputs(globalInputs), retained(retained) {
 		for (const auto &[key, owners] : lookupOwners)
 			for (const std::string &owner : owners)
 				lookupsByOwner[owner].insert(key);
@@ -44,6 +50,7 @@ class InferenceUnitGraphCapture {
 				if (node.is_null())
 					node = emptyInferenceUnit();
 				mergeScope(node, scope, inputs.section(key.first), false);
+				node["global_inputs"] = products->references().at(key.first).at(key.second).at("global_inputs");
 				statistics.inferenceUnitsCaptured++;
 			}
 		for (const auto &[section, path] : paths)
@@ -59,16 +66,20 @@ class InferenceUnitGraphCapture {
 							: reused						? std::move(priorUnit(path, *identity))
 															: emptyInferenceUnit();
 				mergeScope(node, instantiation.storageScope, section, reused);
+				node["global_inputs"] = globalInputs.capture(instantiation).value_or(Json(nullptr));
 				(reused ? statistics.inferenceUnitsReused : statistics.inferenceUnitsCaptured)++;
 				units[path][*identity] = std::move(node);
 			}
 		Json root = context.reuseRootExecution ? std::move(priorUnit("root", aggregateGraphVariant)) : emptyInferenceUnit();
 		mergeScope(root, {}, context.mainSection, context.reuseRootExecution);
+		if (!context.reuseRootExecution)
+			root["global_inputs"] = globalInputs.captureScope({}).value_or(Json(nullptr));
 		(context.reuseRootExecution ? statistics.inferenceUnitsReused : statistics.inferenceUnitsCaptured)++;
 		units["root"][aggregateGraphVariant] = std::move(root);
 		for (const auto &[path, variants] : summaries.items())
 			for (const auto &[key, reference] : variants.items()) {
 				retain(path, key);
+				units[path][key]["global_inputs"] = reference.at("global_inputs");
 				for (const Json &target : reference.at("symbolic_dependencies"))
 					units[path][key]["callees"].push_back(target);
 				if (!reference.at("body").is_null())
@@ -93,10 +104,39 @@ class InferenceUnitGraphCapture {
 				std::set<Json> values(unit.at("values").begin(), unit.at("values").end());
 				unit["values"] = values;
 			}
+		propagateGlobalInputs();
 		return std::move(units);
 	}
 
   private:
+	void propagateGlobalInputs() {
+		std::map<InferenceUnitKey, std::set<InferenceUnitKey>> callers;
+		std::queue<InferenceUnitKey> pending;
+		std::set<InferenceUnitKey> queued;
+		for (const auto &[path, variants] : units.items())
+			for (const auto &[key, unit] : variants.items()) {
+				InferenceUnitKey owner{path, key};
+				for (const auto &callee : unit.at("callees"))
+					callers[{callee.at(0).get<std::string>(), callee.at(1).get<std::string>()}].insert(owner);
+				for (const auto &query : unit.at("values"))
+					callers[{query.at(0).get<std::string>(), query.at(1).get<std::string>()}].insert(owner);
+				if (unit.at("global_inputs").is_null() || !unit.at("global_inputs").empty()) {
+					pending.push(owner);
+					queued.insert(owner);
+				}
+			}
+		while (!pending.empty()) {
+			auto dependency = pending.front();
+			pending.pop();
+			queued.erase(dependency);
+			const Json &inputs = units.at(dependency.first).at(dependency.second).at("global_inputs");
+			for (const auto &caller : callers[dependency]) {
+				Json &current = units.at(caller.first).at(caller.second).at("global_inputs");
+				if (mergeInferenceGlobalInputs(current, inputs) && queued.insert(caller).second)
+					pending.push(caller);
+			}
+		}
+	}
 	Json &priorUnit(const std::string &path, const std::string &key) const {
 		requireCompilerInvariant(priorUnits, "reused inference unit has no prior graph");
 		return priorUnits->at(path).at(key);
@@ -151,6 +191,17 @@ class InferenceUnitGraphCapture {
 			return;
 		if (key == aggregateGraphVariant) {
 			Json aggregate = emptyInferenceUnit();
+			if (retained.contains(path) && retained.at(path).contains(key))
+				aggregate["global_inputs"] = priorUnit(path, key).at("global_inputs");
+			for (const auto &[arguments, instance] : inputs.section(path)->instantiations) {
+				if ((!instance.valid && !instance.failure) || instance.needsReinfer || instance.inferring)
+					continue;
+				auto captured = globalInputs.capture(instance);
+				mergeInferenceGlobalInputs(aggregate["global_inputs"], captured.value_or(Json(nullptr)));
+			}
+			if (products && products->references().contains(path))
+				for (const auto &[variant, reference] : products->references().at(path).items())
+					mergeInferenceGlobalInputs(aggregate["global_inputs"], reference.at("global_inputs"));
 			aggregate["sources"][path] = inputs.fingerprint(path);
 			for (const Json &dependency : graph.at("forward").at(path))
 				aggregate["callees"].push_back(Json::array({dependency, aggregateGraphVariant}));
@@ -181,6 +232,8 @@ class InferenceUnitGraphCapture {
 	InferenceUnitInputs inputs;
 	BuildStatistics &statistics;
 	const IncrementalInferenceProducts *products;
+	InferenceGlobalInputs &globalInputs;
+	const std::map<std::string, std::set<std::string>> &retained;
 	std::map<std::string, IncrementalInferenceReads::Keys> lookupsByOwner;
 	Json units = Json::object();
 	std::map<IncrementalInferenceReads::Scope, InferenceUnitKey, std::owner_less<IncrementalInferenceReads::Scope>>

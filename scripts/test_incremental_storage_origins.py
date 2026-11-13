@@ -1,7 +1,10 @@
 """Preserve lexical pointer origins when replaying inference summaries."""
 
+from test_incremental_global_inputs import check_global_type_inputs
+
 
 def check_storage_origin_reuse(root, build):
+    check_global_type_inputs(root, build)
     declarations = (
         'integer means: @intrinsic("type", "int")\n'
         'function origin {integer:number}:\n'

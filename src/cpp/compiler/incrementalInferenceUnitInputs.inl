@@ -31,13 +31,7 @@ class InferenceUnitInputs {
 		);
 		for (const char *field : {"matches", "function_declarations"})
 			input.push_back(projection.at(field).contains(path) ? projection.at(field).at(path) : Json(nullptr));
-		if (!hasNoGlobalAccess(&section)) {
-			Json bindings = projection.at("global_resolution");
-			for (size_t group = 0; group < 2; group++)
-				for (auto &[name, location] : bindings.at(group).items())
-					location.erase(location.begin() + 1); // Physical lines do not identify a global binding.
-			input.push_back(std::move(bindings));
-		}
+		input.push_back(globalBindings(section));
 		input.push_back(context.builtinSyntax.nonMessageIdentity);
 		input.push_back(context.projectSyntax.nonMessageIdentity);
 		input.push_back(projection.at("precedence_signature"));
@@ -78,6 +72,31 @@ class InferenceUnitInputs {
 	}
 
   private:
+	Json globalBindings(const Section &section) const {
+		std::set<std::string> names;
+		auto collect = [&](auto &&self, const Section &scope) -> void {
+			names.insert(scope.globalVariables.begin(), scope.globalVariables.end());
+			for (const Section *child : scope.children)
+				if (child->runsInEnclosingBody())
+					self(self, *child);
+		};
+		collect(collect, section);
+		const Json &resolution = projection.at("global_resolution");
+		Json bindings = Json::object();
+		for (const std::string &name : names) {
+			Json locations = Json::array();
+			for (size_t group = 0; group < 2; group++) {
+				auto found = resolution.at(group).find(name);
+				// Physical lines do not identify a global binding.
+				locations.push_back(
+					found == resolution.at(group).end() ? Json(nullptr) : Json::array({found->at(0), found->at(2)})
+				);
+			}
+			locations.push_back(std::ranges::find(resolution.at(2), Json(name)) != resolution.at(2).end());
+			bindings[name] = std::move(locations);
+		}
+		return bindings;
+	}
 	Json signatures(const Section &section) const {
 		Json result = Json::array();
 		for (const PatternDefinition *definition : section.patternDefinitions) {

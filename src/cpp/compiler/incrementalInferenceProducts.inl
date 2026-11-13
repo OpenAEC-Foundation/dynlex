@@ -10,7 +10,8 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 		ParseContext &context, const std::map<const Section *, std::string> &paths, InferenceSummaryStore &store,
 		IncrementalInferenceReads &reads, BuildStatistics &statistics
 	)
-		: context(context), paths(paths), identities(paths), store(store), reads(reads), sourceIdentities(paths, statistics) {
+		: context(context), paths(paths), identities(paths), store(store), reads(reads), sourceIdentities(paths, statistics),
+		  globalInputQueries(paths, sourceIdentities, statistics) {
 		context.inferenceProducts = this;
 	}
 	~IncrementalInferenceProducts() { context.inferenceProducts = nullptr; }
@@ -23,6 +24,9 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 	}
 	void completed(const Instantiation &instance, std::vector<Diagnostic> diagnostics) override {
 		pendingDiagnostics[instance.storageScope] = std::move(diagnostics);
+	}
+	void globalInput(const InferenceReadOwner &owner, VariableReference *reference) override {
+		globalInputQueries.observe(owner, reference);
 	}
 	void conversionLookup(
 		const InferenceReadOwner &owner, const lsp::SourceFile &source, bool implicit,
@@ -40,9 +44,9 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 		auto identity = inferenceSummaryKey(key, identities);
 		if (!identity)
 			return;
-		Json globals = captureGlobalTypeProjection(paths).value_or(Json(nullptr));
 		InferenceStorageIdentities storage(context, paths, identities, sourceIdentities);
-		Json summary = captureSectionInferenceSummary(section, identities, storage, globals, nullptr, nullptr, &*identity);
+		Json summary =
+			captureSectionInferenceSummary(section, identities, storage, globalInputQueries, nullptr, nullptr, &*identity);
 		if (!summary.contains(*identity))
 			return;
 		if (!sources)
@@ -94,6 +98,7 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 	const Scopes &scopes() const { return queryScopes; }
 	const auto &variants() const { return selectedVariants; }
 	const InferenceSourceIndex &sourceIndex() const { return sourceIdentities; }
+	InferenceGlobalInputs &globalInputs() const { return globalInputQueries; }
 
   private:
 	ParseContext &context;
@@ -102,6 +107,7 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 	InferenceSummaryStore &store;
 	IncrementalInferenceReads &reads;
 	InferenceSourceIndex sourceIdentities;
+	mutable InferenceGlobalInputs globalInputQueries;
 	std::unique_ptr<InferenceBodySources> sources;
 	std::map<Scope, std::vector<Diagnostic>, std::owner_less<Scope>> pendingDiagnostics;
 	Json recorded = Json::object();

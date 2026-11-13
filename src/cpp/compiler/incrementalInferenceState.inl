@@ -42,18 +42,18 @@ Json captureFailedInferenceState(
 	Json keys = native ? native->at("function_instantiations") : Json::object();
 	Json globals = captureGlobalTypeProjection(paths).value_or(Json(nullptr));
 	Json state{{"files", files.observations}, {"all_function_projection", projection}, {"global_types", globals}};
-	state["inference_summaries"] =
-		reuse ? reuse->snapshot(paths, globals, functions, keys, nullptr, true)
-			  : captureInferenceSummaries(
-					context, products.sourceIndex(), paths, globals, store, {}, nullptr, nullptr, true, &products.references()
-				);
+	state["inference_summaries"] = reuse ? reuse->snapshot(paths, functions, keys, nullptr, true)
+										 : captureInferenceSummaries(
+											   context, products.sourceIndex(), paths, products.globalInputs(), store, {},
+											   nullptr, nullptr, true, &products.references()
+										   );
 	// No native definitions were produced by this failed compilation. Semantic
 	// unit products, including errors, retain their own reachable dependency graph.
 	state["function_sections"] = Json::object();
 	state["function_instantiations"] = Json::object();
 	state["section_dependency_graph"] = captureSectionDependencyGraph(
 		context, state, paths, reads, projection.at("constraint_probe_schedule").at("callable_lookups"), statistics,
-		fingerprints, prior ? &prior->at("section_dependency_graph") : nullptr, stable, {}, &products
+		fingerprints, products.globalInputs(), prior ? &prior->at("section_dependency_graph") : nullptr, stable, {}, &products
 	);
 	recordSemanticSources(state, files, context);
 	return state;

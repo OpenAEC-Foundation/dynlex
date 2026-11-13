@@ -11,10 +11,10 @@ bool hasNoGlobalAccess(const Section *section) {
 }
 
 Json encodePureReturnValues(
-	const Section *section, const Instantiation &instantiation, const InferenceValueIdentities &identities
+	const Instantiation &instantiation, const InferenceValueIdentities &identities, bool hasGlobalInputs
 ) {
 	Json results = Json::array();
-	if (instantiation.purity != InstantiationPurity::Pure || !hasNoGlobalAccess(section))
+	if (instantiation.purity != InstantiationPurity::Pure || hasGlobalInputs)
 		return results;
 	for (const auto &[arguments, value] : instantiation.pureReturnValuesByArguments) {
 		auto encodedValue = encodeInferenceValue(value, identities);
@@ -81,13 +81,13 @@ bool canPersistInferenceSummary(
 bool inferenceSummaryHasValueState(const Json &summary) {
 	return !summary.at("failed").get<bool>() &&
 		   summary.at("purity").get<int>() == static_cast<int>(InstantiationPurity::Pure) &&
-		   !summary.at("needs_global_types").get<bool>() &&
+		   summary.at("global_inputs").empty() &&
 		   (summary.at("observed_values").get<bool>() || !summary.at("pure_values_complete").get<bool>());
 }
 
 Json captureSectionInferenceSummary(
 	const Section *section, const InferenceValueIdentities &identities, InferenceStorageIdentities &storage,
-	const Json &globalTypes, size_t *capturedInstantiations = nullptr, const IncrementalUnitSelection *skipped = nullptr,
+	InferenceGlobalInputs &globals, size_t *capturedInstantiations = nullptr, const IncrementalUnitSelection *skipped = nullptr,
 	const std::string *onlyKey = nullptr, std::map<std::string, const Instantiation *> *capturedInstances = nullptr
 ) {
 	Json summaries = Json::object();
@@ -100,12 +100,12 @@ Json captureSectionInferenceSummary(
 		const std::string identity = digest(encodedKey->dump());
 		if ((skipped && skipped->contains(section, identity)) || (onlyKey && identity != *onlyKey))
 			continue;
+		auto globalInputs = globals.capture(instantiation);
+		if (!globalInputs)
+			continue;
 		if (instantiation.failure) {
-			bool needsGlobals = !hasNoGlobalAccess(section) || !instantiation.accessedGlobalReferences.empty();
-			if (needsGlobals && globalTypes.is_null())
-				continue;
 			Json record = std::move(*encodedKey);
-			record["needs_global_types"] = needsGlobals;
+			record["global_inputs"] = std::move(*globalInputs);
 			summaries[identity] = std::move(record);
 			if (capturedInstances)
 				(*capturedInstances)[identity] = &instantiation;
@@ -114,20 +114,14 @@ Json captureSectionInferenceSummary(
 		auto parameters = encodeInferenceParameters(instantiation, identities);
 		if (!parameters)
 			continue;
-		auto globalEffects = encodeGlobalEffects(section, instantiation, storage);
+		auto globalEffects = encodeGlobalEffects(instantiation, storage);
 		if (!globalEffects)
 			continue;
 		auto returnProvenance = storage.encodeProvenance(instantiation.returnAddressProvenance);
 		if (!returnProvenance)
 			continue;
-		bool needsGlobalTypes = !hasNoGlobalAccess(section) || !instantiation.accessedGlobalReferences.empty() ||
-								!instantiation.writtenGlobalReferences.empty() ||
-								!instantiation.addressTakenGlobalReferences.empty() ||
-								instantiation.externallyEscapedGlobalProvenance != AddressProvenance{};
-		if (needsGlobalTypes && globalTypes.is_null())
-			continue;
 		std::set<std::pair<const ClassDefinition *, int>> visiting;
-		Json pureValues = encodePureReturnValues(section, instantiation, identities);
+		Json pureValues = encodePureReturnValues(instantiation, identities, !globalInputs->empty());
 		bool pureValuesComplete =
 			instantiation.pureReturnValuesComplete && pureValues.size() == instantiation.pureReturnValuesByArguments.size();
 		Json record = std::move(*encodedKey);
@@ -147,7 +141,7 @@ Json captureSectionInferenceSummary(
 				{"return_intrinsic", instantiation.hasReturnIntrinsic},
 				{"unknown_write", instantiation.writesThroughUnknownAddress},
 				{"unknown_escape", instantiation.externallyEscapesUnknownAddress},
-				{"needs_global_types", needsGlobalTypes},
+				{"global_inputs", std::move(*globalInputs)},
 				{"pure_values", std::move(pureValues)},
 				{"pure_values_complete", pureValuesComplete},
 				{"global_effects", std::move(*globalEffects)}
@@ -193,7 +187,7 @@ Json captureInferenceFactClasses(
 void mergeInferenceObservedValues(Json &current, const Json &prior) {
 	if (!current.at("failure").is_null() || !prior.at("failure").is_null() ||
 		current.at("purity") != static_cast<int>(InstantiationPurity::Pure) || current.at("purity") != prior.at("purity") ||
-		current.at("needs_global_types").get<bool>() || prior.at("needs_global_types").get<bool>() ||
+		!current.at("global_inputs").empty() || !prior.at("global_inputs").empty() ||
 		current.at("return_type") != prior.at("return_type"))
 		return;
 	std::map<Json, Json> observations;
@@ -218,7 +212,7 @@ SymbolicInferenceUnits nativeInferenceUnits(const Json &functions, const Json &k
 
 Json captureInferenceSummaries(
 	ParseContext &context, const InferenceSourceIndex &sourceIndex, const std::map<const Section *, std::string> &sectionPaths,
-	const Json &globalTypes, InferenceSummaryStore &summaryStore, const SymbolicInferenceUnits &native,
+	InferenceGlobalInputs &globals, InferenceSummaryStore &summaryStore, const SymbolicInferenceUnits &native,
 	const IncrementalUnitSelection *skipped = nullptr, const Json *prior = nullptr, bool keepBodies = false,
 	const Json *frozen = nullptr
 ) {
@@ -235,7 +229,7 @@ Json captureInferenceSummaries(
 	for (const auto &[section, path] : sectionPaths) {
 		std::map<std::string, const Instantiation *> instances;
 		Json variants =
-			captureSectionInferenceSummary(section, identities, storage, globalTypes, nullptr, skipped, nullptr, &instances);
+			captureSectionInferenceSummary(section, identities, storage, globals, nullptr, skipped, nullptr, &instances);
 		for (auto &[key, summary] : variants.items()) {
 			const Instantiation &instance = *instances.at(key);
 			if (instance.failure)
@@ -271,11 +265,12 @@ class IncrementalInferenceReuse {
 #include "incrementalInferenceRestoration.inl"
   public:
 	IncrementalInferenceReuse(
-		ParseContext &context, const Json &summaries, const Json &priorGlobalTypes, const IncrementalIRReuse *irReuse,
-		const std::map<const Section *, std::string> &sectionPaths, std::shared_ptr<IncrementalUnitSelection> eligible,
-		InferenceSummaryStore &summaryStore, const InferenceSourceIndex &sourceIndex, const Json *frozen = nullptr
+		ParseContext &context, const Json &summaries, const Json &units, InferenceGlobalInputs &globalInputs,
+		const IncrementalIRReuse *irReuse, const std::map<const Section *, std::string> &sectionPaths,
+		std::shared_ptr<IncrementalUnitSelection> eligible, InferenceSummaryStore &summaryStore,
+		const InferenceSourceIndex &sourceIndex, const Json *frozen = nullptr
 	)
-		: context(context), summaries(summaries), priorGlobalTypes(priorGlobalTypes), irReuse(irReuse),
+		: context(context), summaries(summaries), units(units), globalInputs(globalInputs), irReuse(irReuse),
 		  eligible(std::move(eligible)), sectionPaths(sectionPaths), identities(sectionPaths),
 		  storage(context, sectionPaths, identities, sourceIndex), sourceIndex(sourceIndex), summaryStore(summaryStore),
 		  frozen(frozen) {
@@ -301,9 +296,7 @@ class IncrementalInferenceReuse {
 			auto unit = std::pair{static_cast<const Section *>(section), *keyText};
 			if ((use == ParseContext::InferenceReuseUse::RuntimeCall || use == ParseContext::InferenceReuseUse::Callable) &&
 				!runtimeValidated.contains(unit)) {
-				bool hasIR = irReuse && irReuse->hasReusableIRForInstantiation(section, *keyText, [&]() {
-					return globalTypesUnchanged();
-				});
+				bool hasIR = irReuse && irReuse->hasReusableIRForInstantiation(section, *keyText);
 				instantiation.needsReinfer |= !hasIR && !instantiation.bodyInferred;
 				if (hasIR)
 					runtimeValidated.insert(std::move(unit));
@@ -380,19 +373,18 @@ class IncrementalInferenceReuse {
 
 	size_t reusedCount() const { return count; }
 	Json snapshot(
-		const std::map<const Section *, std::string> &paths, const Json &globalTypes, const Json &functions,
-		const Json &functionKeys, size_t *reusedSections = nullptr, bool keepBodies = false
+		const std::map<const Section *, std::string> &paths, const Json &functions, const Json &functionKeys,
+		size_t *reusedSections = nullptr, bool keepBodies = false
 	) const {
 		auto native = nativeInferenceUnits(functions, functionKeys);
 		IncrementalUnitSelection skipped;
-		if (globalTypes == priorGlobalTypes)
-			for (const auto &[section, keys] : eligible->sections())
-				for (const auto &[key, instantiation] : section->instantiations)
-					if (instantiation.inferenceReusedFromCache && !instantiation.valueSummaryChanged)
-						if (auto identity = inferenceSummaryKey(key, identities); identity && keys.contains(*identity))
-							skipped.insert(section, *identity);
+		for (const auto &[section, keys] : eligible->sections())
+			for (const auto &[key, instantiation] : section->instantiations)
+				if (instantiation.inferenceReusedFromCache && !instantiation.valueSummaryChanged)
+					if (auto identity = inferenceSummaryKey(key, identities); identity && keys.contains(*identity))
+						skipped.insert(section, *identity);
 		Json result = captureInferenceSummaries(
-			context, sourceIndex, paths, globalTypes, summaryStore, native, &skipped, &summaries, keepBodies, frozen
+			context, sourceIndex, paths, globalInputs, summaryStore, native, &skipped, &summaries, keepBodies, frozen
 		);
 		std::set<std::string> freshSections, copiedSections;
 		for (const auto &[path, _] : result.items())
@@ -407,8 +399,6 @@ class IncrementalInferenceReuse {
 						continue;
 					if (!summary.at("failed").get<bool>() && !native.contains({path, key}) && summary.at("body").is_null() &&
 						!inferenceSummaryHasValueState(summary))
-						continue;
-					if (summary.at("needs_global_types").get<bool>() && globalTypes != priorGlobalTypes)
 						continue;
 					if ((!result.contains(path) || !result.at(path).contains(key)) && summaryStore.retain(summary)) {
 						result[path][key] = summary;
@@ -426,8 +416,7 @@ class IncrementalInferenceReuse {
 			for (auto &[key, reference] : variants.items())
 				if (!reference.at("failed").get<bool>() && reference.at("body").is_null() &&
 					eligible->contains(sections.at(path), key) && summaries.contains(path) &&
-					summaries.at(path).contains(key) &&
-					(!reference.at("needs_global_types").get<bool>() || globalTypes == priorGlobalTypes))
+					summaries.at(path).contains(key) && globalInputClosureUnchanged(path, key))
 					reference["body"] = summaries.at(path).at(key).at("body");
 		auto retireBody = [&](const std::string &path, const std::string &key, Json &reference) {
 			if (!keepBodies && native.contains({path, key}) && !reference.at("body").is_null() &&
@@ -454,8 +443,7 @@ class IncrementalInferenceReuse {
 					!summaries.at(path).contains(key))
 					continue;
 				const Json &reference = summaries.at(path).at(key);
-				if (!summaryStore.retain(reference) ||
-					(reference.at("needs_global_types").get<bool>() && globalTypes != priorGlobalTypes))
+				if (!summaryStore.retain(reference))
 					continue;
 				result[path][key] = reference;
 				retireBody(path, key, result[path][key]);
@@ -474,13 +462,14 @@ class IncrementalInferenceReuse {
 	}
 
   private:
-	bool globalTypesUnchanged() const {
-		auto current = captureGlobalTypeProjection(sectionPaths);
-		return current && *current == priorGlobalTypes;
+	bool globalInputClosureUnchanged(const std::string &path, const std::string &key) const {
+		return units.contains(path) && units.at(path).contains(key) &&
+			   globalInputs.unchanged(units.at(path).at(key).at("global_inputs"));
 	}
 	ParseContext &context;
 	const Json &summaries;
-	const Json &priorGlobalTypes;
+	const Json &units;
+	InferenceGlobalInputs &globalInputs;
 	const IncrementalIRReuse *irReuse;
 	std::shared_ptr<IncrementalUnitSelection> eligible;
 	const std::map<const Section *, std::string> &sectionPaths;

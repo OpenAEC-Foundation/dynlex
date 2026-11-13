@@ -75,6 +75,7 @@
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <queue>
 #include <set>
 #include <stack>
 #include <stdexcept>
@@ -329,6 +330,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalInferenceValues.inl"
 #include "incrementalInferenceKeys.inl"
 #include "incrementalInferenceEffects.inl"
+#include "incrementalInferenceGlobalInputs.inl"
 #include "incrementalInferenceParameterState.inl"
 #include "incrementalClassRequests.inl"
 #include "incrementalClassInstantiations.inl"
@@ -866,11 +868,11 @@ bool compileIncrementally(
 					result["inference_summaries"] =
 						inferenceReuse
 							? inferenceReuse->snapshot(
-								  sectionPaths, globalTypes, result.at("function_sections"),
-								  result.at("function_instantiations"), &statistics.reusedInferenceSummarySections
+								  sectionPaths, result.at("function_sections"), result.at("function_instantiations"),
+								  &statistics.reusedInferenceSummarySections
 							  )
 							: captureInferenceSummaries(
-								  compiled, products.sourceIndex(), sectionPaths, globalTypes, summaryStore,
+								  compiled, products.sourceIndex(), sectionPaths, products.globalInputs(), summaryStore,
 								  nativeInferenceUnits(result.at("function_sections"), result.at("function_instantiations")),
 								  nullptr, nullptr, false, &products.references()
 							  );
@@ -880,8 +882,9 @@ bool compileIncrementally(
 					result["section_dependency_graph"] = captureSectionDependencyGraph(
 						compiled, result, sectionPaths, inferenceReads,
 						result.at("all_function_projection").at("constraint_probe_schedule").at("callable_lookups"), statistics,
-						inferenceInputFingerprints, priorInference ? &priorInference->at("section_dependency_graph") : nullptr,
-						graphStable, retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr), &products
+						inferenceInputFingerprints, products.globalInputs(),
+						priorInference ? &priorInference->at("section_dependency_graph") : nullptr, graphStable,
+						retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr), &products
 					);
 					statistics.dependencyGraphMilliseconds = elapsedMilliseconds(graphStart);
 					retainInferenceInputPaths(

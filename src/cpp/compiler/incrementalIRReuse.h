@@ -21,16 +21,15 @@ struct Instantiation;
 
 class IncrementalIRReuse {
   public:
+	using GlobalInputCheck = std::function<bool(const Section *, const std::string &)>;
 	IncrementalIRReuse(
 		ParseContext &context, const std::string &previousIR, const nlohmann::json &previousFunctions,
 		const nlohmann::json &previousCallableFunctions, const nlohmann::json &previousFunctionInstantiations,
 		std::map<const Section *, std::string> sectionPaths, std::shared_ptr<IncrementalUnitSelection> eligible,
-		std::shared_ptr<IncrementalUnitSelection> replacements
+		std::shared_ptr<IncrementalUnitSelection> replacements, GlobalInputCheck globalInputCheck
 	);
 	bool reuse(Section *section, llvm::Function *function, const nlohmann::json &currentFunctionInstantiations);
-	bool hasReusableIRForInstantiation(
-		const Section *section, const std::string &key, const std::function<bool()> &globalInputsUnchanged
-	) const;
+	bool hasReusableIRForInstantiation(const Section *section, const std::string &key) const;
 	bool reuseRoot();
 	bool rootReused() const { return reusedRoot; }
 	bool import(ParseContext &context, const nlohmann::json &currentFunctionInstantiations);
@@ -50,7 +49,7 @@ class IncrementalIRReuse {
 	bool selected(const std::string &name, const IncrementalUnitSelection &selection) const;
 	bool reusableClosure(
 		const llvm::Function &function, llvm::Module &current, std::unordered_set<std::string> &names,
-		const std::function<bool()> &globalInputsUnchanged
+		const GlobalInputCheck &globalInputsUnchanged, bool allowDeferredGlobals
 	) const;
 	std::unique_ptr<llvm::Module> previousModule;
 	llvm::Module *currentModule;
@@ -60,6 +59,7 @@ class IncrementalIRReuse {
 	std::map<const Section *, std::string> sectionPaths;
 	std::shared_ptr<IncrementalUnitSelection> eligible;
 	std::shared_ptr<IncrementalUnitSelection> replacements;
+	GlobalInputCheck globalInputCheck;
 	std::map<std::string, const Section *> sectionsByPath;
 	std::unordered_map<std::string, std::unordered_map<std::string, std::vector<std::string>>> previousNamesByPathAndKey;
 	std::unordered_set<std::string> reusedNames;

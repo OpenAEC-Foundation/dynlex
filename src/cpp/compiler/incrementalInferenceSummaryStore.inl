@@ -133,7 +133,7 @@ class InferenceSummaryStore {
 			{"body", std::move(body)},
 			{"classes", std::move(classes)},
 			{"payload", std::move(key)},
-			{"needs_global_types", summary.at("needs_global_types")},
+			{"global_inputs", summary.at("global_inputs")},
 			{"symbolic_dependencies", dependencies},
 			{"failed", !summary.at("failure").is_null()}
 		};

@@ -179,8 +179,8 @@ content-addressed binary reference tables in the matcher store. A function's ord
 resolved-match identities are another binary unit whose key is its match fingerprint.
 Unchanged functions carry these keys forward without copying or serializing their
 individual reference records. A changed function decodes only its previous tables
-and retains matching references' identities through string views. The matcher payload
-still packages the retained units together. `matcher_projection_ms` reports capture cost.
+and retains matching references' identities through string views. The matcher index
+retains unchanged segments without repackaging their units. `matcher_projection_ms` reports capture cost.
 An unchanged tree and surrounding declarations let unchanged bodies retain their
 matcher declaration digests. `matcher_declarations_reused` counts those retained
 without serializing the declaration again; edits inside scope rules invalidate this proof.
@@ -1655,8 +1655,33 @@ An interface-stable conversion body edit can retain its callers. Existing conver
 body reads participate in the constraint dependency graph. Added conversions also
 invalidate constraint probes whose earlier selection could change.
 Class type identities include the current instantiation's field types; a changed layout
-prevents reuse. A summary that accesses globals requires the same structural global
-types as the previous build. A summary
+prevents reuse. Each concrete unit records portable declaration identities and
+structural type fingerprints for the globals its inference observed. Unrelated
+global type changes do not invalidate that unit. Source fingerprints also retain
+only the global binding names declared by that executable scope and its active
+children, including absent declarations. Adding or removing an unrelated name
+does not invalidate every global reader. Reads are separate query products,
+so trial rollback removes execution effects while retaining dependencies, including
+reads that produced an error or rejected a conversion. Restored facts retain those
+reads for the next snapshot. The unit graph propagates global inputs through callee
+and value dependencies to a fixed point, including recursive and aggregate units.
+An unavailable or conflicting type context cannot validate a cached query.
+Saving an otherwise source-eligible query retains its original input proof even
+when an early error leaves the current globals untyped. Demand validates that proof
+against the current inputs; snapshot retention does not replace it with the failed
+build's incomplete context. Attaching an older executable body to new facts also
+requires the older body's input proof to match.
+Global writes, known constants and taken addresses also use declaration identities,
+so a caller parameter with the same name cannot hide a callee's global effect.
+Native reuse checks each referenced function's inputs against its native dependency
+record, even when a newer failed compilation supplied the semantic facts. These
+checks also cover callbacks and compile-time decisions which leave no mutable
+global reference in the resulting LLVM body.
+`global_input_definitions_indexed` counts the shared global index entries;
+`global_type_input_reads_recorded` counts distinct scope/declaration observations.
+`global_type_inputs_captured`, `global_type_inputs_checked`, and
+`global_type_input_fingerprints_computed` expose the dependency work. Saving a unit
+without global inputs does not scan the program's global types. A summary
 is reused only if its source body, compiled pattern declarations, observed concrete
 dependencies and its cached IR closure are unchanged. Other instantiations still
 run ordinary inference. Each concrete unit also retains a diagnostic product with

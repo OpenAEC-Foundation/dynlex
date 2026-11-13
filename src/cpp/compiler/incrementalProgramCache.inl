@@ -75,7 +75,10 @@ Json encodeSectionGraph(const Json &graph) {
 					)
 				);
 			units.push_back(
-				Json::array({keyId(key), std::move(sources), std::move(callees), unit.at("lookups"), std::move(values)})
+				Json::array(
+					{keyId(key), std::move(sources), std::move(callees), unit.at("lookups"), std::move(values),
+					 unit.at("global_inputs")}
+				)
 			);
 		}
 		encodedUnits.push_back(std::move(units));
@@ -146,7 +149,8 @@ Json decodeSectionGraph(const Json &encoded) {
 				{"sources", std::move(sources)},
 				{"callees", std::move(callees)},
 				{"lookups", unit.at(3)},
-				{"values", std::move(values)}
+				{"values", std::move(values)},
+				{"global_inputs", unit.at(5)}
 			};
 		}
 		graph["inference_units"][path] = std::move(units);

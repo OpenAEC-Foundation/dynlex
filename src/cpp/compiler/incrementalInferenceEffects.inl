@@ -1,31 +1,13 @@
-std::optional<std::string> globalEffectName(const Section *section, const VariableReference *reference) {
-	for (const Section *scope = section; scope; scope = scope->parent) {
-		auto found = scope->variables.find(reference->name);
-		if (found != scope->variables.end())
-			return found->second->definition == reference && found->second->isGlobal
-					   ? std::optional<std::string>{reference->name}
-					   : std::nullopt;
-	}
-	return std::nullopt;
-}
-
-VariableReference *globalEffectReference(Section *section, const std::string &name) {
-	Variable *variable = section->findVariable(name);
-	requireCompilerInvariant(variable && variable->isGlobal && variable->definition, "cached global effect lost its variable");
-	return variable->definition;
-}
-
 #include "incrementalInferenceStorage.inl"
 
-std::optional<Json>
-encodeGlobalEffects(const Section *section, const Instantiation &instantiation, InferenceStorageIdentities &storage) {
+std::optional<Json> encodeGlobalEffects(const Instantiation &instantiation, InferenceStorageIdentities &storage) {
 	std::set<Json> accessed;
 	for (VariableReference *reference : instantiation.accessedGlobalReferences)
 		accessed.insert(storage.encodeDefinition(reference).value());
 	Json writes = Json::object();
 	for (VariableReference *reference : instantiation.writtenGlobalReferences) {
-		auto name = globalEffectName(section, reference);
-		if (!name)
+		auto definition = storage.encodeDefinition(reference);
+		if (!definition)
 			return std::nullopt;
 		auto found = instantiation.finalGlobalAddressProvenance.find(reference);
 		AddressProvenance provenance = found == instantiation.finalGlobalAddressProvenance.end()
@@ -34,7 +16,7 @@ encodeGlobalEffects(const Section *section, const Instantiation &instantiation, 
 		auto encoded = storage.encodeProvenance(provenance);
 		if (!encoded)
 			return std::nullopt;
-		writes[*name] = std::move(*encoded);
+		writes[definition->dump()] = std::move(*encoded);
 	}
 	for (const auto &[reference, _] : instantiation.finalGlobalAddressProvenance) {
 		if (!instantiation.writtenGlobalReferences.contains(reference))
@@ -44,18 +26,18 @@ encodeGlobalEffects(const Section *section, const Instantiation &instantiation, 
 	for (const auto &[reference, value] : instantiation.finalGlobalConstantValues) {
 		if (!instantiation.writtenGlobalReferences.contains(reference))
 			return std::nullopt;
-		auto name = globalEffectName(section, reference);
+		auto definition = storage.encodeDefinition(reference);
 		auto encoded = storage.encodeValue(value);
-		if (!name || !encoded)
+		if (!definition || !encoded)
 			return std::nullopt;
-		constants[*name] = std::move(*encoded);
+		constants[definition->dump()] = std::move(*encoded);
 	}
-	std::set<std::string> taken;
+	std::set<Json> taken;
 	for (VariableReference *reference : instantiation.addressTakenGlobalReferences) {
-		auto name = globalEffectName(section, reference);
-		if (!name)
+		auto definition = storage.encodeDefinition(reference);
+		if (!definition)
 			return std::nullopt;
-		taken.insert(*name);
+		taken.insert(std::move(*definition));
 	}
 	auto escaped = storage.encodeProvenance(instantiation.externallyEscapedGlobalProvenance);
 	if (!escaped)
@@ -78,19 +60,19 @@ bool canDecodeGlobalEffects(const Json &encoded, const InferenceStorageIdentitie
 	});
 }
 
-void decodeGlobalEffects(
-	Section *section, const Json &encoded, Instantiation &instantiation, InferenceStorageIdentities &storage
-) {
+void decodeGlobalEffects(const Json &encoded, Instantiation &instantiation, InferenceStorageIdentities &storage) {
 	for (const Json &definition : encoded.at("accessed"))
 		instantiation.accessedGlobalReferences.insert(storage.decodeDefinition(definition));
 	for (const auto &[name, provenance] : encoded.at("writes").items()) {
-		VariableReference *reference = globalEffectReference(section, name);
+		VariableReference *reference = storage.decodeDefinition(Json::parse(name));
 		instantiation.writtenGlobalReferences.insert(reference);
 		instantiation.finalGlobalAddressProvenance.emplace(reference, storage.decodeProvenance(provenance));
 	}
 	for (const auto &[name, value] : encoded.at("constants").items())
-		instantiation.finalGlobalConstantValues.emplace(globalEffectReference(section, name), storage.decodeValue(value));
-	for (const std::string &name : encoded.at("taken").get<std::set<std::string>>())
-		instantiation.addressTakenGlobalReferences.insert(globalEffectReference(section, name));
+		instantiation.finalGlobalConstantValues.emplace(
+			storage.decodeDefinition(Json::parse(name)), storage.decodeValue(value)
+		);
+	for (const Json &definition : encoded.at("taken"))
+		instantiation.addressTakenGlobalReferences.insert(storage.decodeDefinition(definition));
 	instantiation.externallyEscapedGlobalProvenance = storage.decodeProvenance(encoded.at("escaped"));
 }

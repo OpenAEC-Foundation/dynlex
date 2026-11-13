@@ -809,10 +809,14 @@ struct InferenceContext {
 	}
 
 	void noteAccessedGlobalReference(VariableReference *reference) {
-		if (!currentInstantiation)
-			return;
 		VariableReference *key = normalizeReference(reference);
 		requireCompilerInvariant(key, "global access lost its declaration");
+		if (auto *products = parseContext.inferenceProducts)
+			recordDependencyRead([&](const InferenceReadOwner &owner) {
+				products->globalInput(owner, key);
+			});
+		if (!currentInstantiation)
+			return;
 		if (trial) {
 			requireCompilerInvariant(trialJournal, "trial global-access mutation requires a rollback journal");
 			trialJournal->recordInstantiationWrite(currentInstantiation);

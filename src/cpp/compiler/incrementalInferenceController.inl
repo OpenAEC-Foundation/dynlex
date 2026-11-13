@@ -8,12 +8,12 @@ class IncrementalInferenceController {
 		BuildStatistics &statistics, std::unique_ptr<IncrementalIRReuse> &irReuse,
 		std::unique_ptr<IncrementalInferenceReuse> &inferenceReuse, std::unordered_set<const Section *> &graphStable,
 		std::map<std::string, std::string> &fingerprints, InferenceSummaryStore &summaryStore, const Json *frozen,
-		const InferenceSourceIndex &sourceIndex
+		const InferenceSourceIndex &sourceIndex, InferenceGlobalInputs &globalInputs
 	)
 		: previous(previous), nativePrevious(nativePrevious), observations(observations), projection(projection), paths(paths),
 		  reads(reads), frontendDiagnostics(frontendDiagnostics), statistics(statistics), irReuse(irReuse),
 		  inferenceReuse(inferenceReuse), graphStable(graphStable), fingerprints(fingerprints), summaryStore(summaryStore),
-		  frozen(frozen), sourceIndex(sourceIndex) {}
+		  frozen(frozen), sourceIndex(sourceIndex), globalInputs(globalInputs) {}
 
 	void run(ParseContext &context, const std::function<bool(const ParseContext::IncrementalFunctionRequest &)> &infer) {
 		auto start = Clock::now();
@@ -86,11 +86,17 @@ class IncrementalInferenceController {
 			irReuse = std::make_unique<IncrementalIRReuse>(
 				context, nativePrevious->at("generated_ir").get_ref<const std::string &>(),
 				nativePrevious->at("function_sections"), nativePrevious->at("callable_functions"),
-				nativePrevious->at("function_instantiations"), paths, nativeEligible, nativeReplacements
+				nativePrevious->at("function_instantiations"), paths, nativeEligible, nativeReplacements,
+				[queries = &globalInputs, nativeUnits = &nativePrevious->at("section_dependency_graph").at("inference_units"),
+				 currentPaths = &paths](const Section *section, const std::string &key) {
+				const auto &path = currentPaths->at(section);
+				return nativeUnits->contains(path) && nativeUnits->at(path).contains(key) &&
+					   queries->unchanged(nativeUnits->at(path).at(key).at("global_inputs"));
+			}
 			);
 		inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
-			context, previous.at("inference_summaries"), previous.at("global_types"), irReuse.get(), paths, eligible,
-			summaryStore, sourceIndex, frozen
+			context, previous.at("inference_summaries"), previous.at("section_dependency_graph").at("inference_units"),
+			globalInputs, irReuse.get(), paths, eligible, summaryStore, sourceIndex, frozen
 		);
 		context.reuseInferredInstantiation = [this](
 												 Section *section, const InstantiationKey &key, Instantiation &instantiation,
@@ -123,7 +129,7 @@ class IncrementalInferenceController {
 			statistics.preinferredInstantiations++;
 			InferenceStorageIdentities storage(context, paths, identities, sourceIndex);
 			Json current = captureSectionInferenceSummary(
-				request.section, identities, storage, Json(nullptr), &statistics.preinferSummaryInstantiationsCaptured, nullptr,
+				request.section, identities, storage, globalInputs, &statistics.preinferSummaryInstantiationsCaptured, nullptr,
 				&unit.second
 			);
 			capturedSections.insert(request.section);
@@ -269,7 +275,7 @@ class IncrementalInferenceController {
 					continue;
 				if ((!native.contains({path, key}) && !inferenceSummaryHasValueState(summary) &&
 					 !symbolic.contains({path, key})) ||
-					summary.at("needs_global_types").get<bool>() || eligible.contains(section, key))
+					!summary.at("global_inputs").empty() || eligible.contains(section, key))
 					continue;
 				candidates.emplace(InferenceUnitKey{path, key}, Request{const_cast<Section *>(section), *names, {}, {}, {}});
 			}
@@ -303,4 +309,5 @@ class IncrementalInferenceController {
 	InferenceSummaryStore &summaryStore;
 	const Json *frozen;
 	const InferenceSourceIndex &sourceIndex;
+	InferenceGlobalInputs &globalInputs;
 };

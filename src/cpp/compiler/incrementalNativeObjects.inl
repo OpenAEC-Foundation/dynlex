@@ -143,6 +143,8 @@ struct BuildStatistics {
 	double matcherSnapshotMilliseconds = 0;
 	size_t matcherSnapshotBytes = 0;
 	IncrementalMatcherCache::StorageStatistics matcherStorage;
+	size_t globalInputDefinitionsIndexed = 0, globalTypeInputsCaptured = 0, globalTypeInputsChecked = 0,
+		   globalTypeInputFingerprintsComputed = 0, globalTypeInputReadsRecorded = 0;
 	double matcherSerializeMilliseconds = 0;
 	double matcherSerializeCPUMilliseconds = 0;
 	double matcherDigestMilliseconds = 0;

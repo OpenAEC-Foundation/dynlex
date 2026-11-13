@@ -22,7 +22,7 @@ RetainedGraphVariants retainedGraphVariants(const IncrementalIRReuse *reuse, con
 Json captureSectionDependencyGraph(
 	const ParseContext &context, const Json &program, const std::map<const Section *, std::string> &paths,
 	IncrementalInferenceReads &inferenceReads, const Json &probeLookups, BuildStatistics &statistics,
-	std::map<std::string, std::string> &fingerprints, Json *previous = nullptr,
+	std::map<std::string, std::string> &fingerprints, InferenceGlobalInputs &globalInputs, Json *previous = nullptr,
 	const std::unordered_set<const Section *> &stable = {}, const RetainedGraphVariants &retained = {},
 	const IncrementalInferenceProducts *products = nullptr
 ) {
@@ -252,7 +252,7 @@ Json captureSectionDependencyGraph(
 	graph["inference_units"] =
 		InferenceUnitGraphCapture(
 			context, program.at("all_function_projection"), paths, inferenceReads, graph, priorUnits, lookupOwners, statistics,
-			fingerprints, products
+			fingerprints, products, globalInputs, retained.keysByPath
 		)
 			.capture(program.at("inference_summaries"), program.at("function_sections"), program.at("function_instantiations"));
 	for (const auto &[path, variants] : graph.at("inference_units").items())

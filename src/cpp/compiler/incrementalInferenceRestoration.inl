@@ -35,12 +35,13 @@ class Restoration {
 		const Json &summary = *saved;
 		if (!types(summary, owner.summaries.at(path).at(*identity)))
 			return false;
+		if (!owner.globalInputClosureUnchanged(path, *identity))
+			return false;
 		if (!summary.at("failure").is_null()) {
-			if (summary.at("needs_global_types").get<bool>() && !owner.globalTypesUnchanged())
-				return false;
 			Instantiation &facts = entry.facts;
 			facts.argumentTypes = key.argumentTypes;
 			facts.storageScope = owner.context.storageScopeForInstantiation(section, key);
+			owner.globalInputs.retain(facts.storageScope, summary.at("global_inputs"));
 			if (!owner.bodySources)
 				owner.bodySources = std::make_unique<InferenceBodySources>(owner.context, owner.identities);
 			facts.failure =
@@ -53,9 +54,7 @@ class Restoration {
 		auto returnType = decodeInferenceTypeIdentity(summary.at("return_type"), owner.identities.classes);
 		if (!returnType)
 			return false;
-		bool needsGlobalTypes = summary.at("needs_global_types").get<bool>();
-		if (needsGlobalTypes && !owner.globalTypesUnchanged())
-			return false;
+		bool needsGlobalTypes = !summary.at("global_inputs").empty();
 		// This signature is visible only to the record decoder. valid remains
 		// false until every referenced unit has complete, validated facts.
 		slot.argumentTypes = key.argumentTypes;
@@ -82,17 +81,16 @@ class Restoration {
 		facts.hasReturnIntrinsic = summary.at("return_intrinsic").get<bool>();
 		facts.writesThroughUnknownAddress = summary.at("unknown_write").get<bool>();
 		facts.externallyEscapesUnknownAddress = summary.at("unknown_escape").get<bool>();
-		decodeGlobalEffects(section, summary.at("global_effects"), facts, owner.storage);
+		decodeGlobalEffects(summary.at("global_effects"), facts, owner.storage);
 		facts.pureReturnValuesByArguments = std::move(*values);
 		facts.pureReturnValuesComplete = summary.at("pure_values_complete").get<bool>();
 		facts.body = entry.original.body;
 		facts.storageScope = owner.context.storageScopeForInstantiation(section, key);
+		owner.globalInputs.retain(facts.storageScope, summary.at("global_inputs"));
 		bool pureValue = facts.purity == InstantiationPurity::Pure && facts.returnType.kind != DataType::Kind::Void;
 		bool requiresBody = use != ParseContext::InferenceReuseUse::SymbolicReference &&
 							(use != ParseContext::InferenceReuseUse::ConstantCall || !pureValue || needsGlobalTypes);
-		entry.hasIR = requiresBody && owner.irReuse && owner.irReuse->hasReusableIRForInstantiation(section, *identity, [&]() {
-			return needsGlobalTypes || owner.globalTypesUnchanged();
-		});
+		entry.hasIR = requiresBody && owner.irReuse && owner.irReuse->hasReusableIRForInstantiation(section, *identity);
 		facts.inferenceReusedFromCache = true;
 		facts.needsReinfer = requiresBody && !entry.hasIR;
 		entry.ready = true;
