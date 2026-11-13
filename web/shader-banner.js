@@ -15,7 +15,7 @@ function required(selector, scope) {
 
 function validateManifest(manifest) {
   if (
-    manifest?.schemaVersion !== 14
+    manifest?.schemaVersion !== 15
     || !manifest.semanticLegend
     || !Array.isArray(manifest.scenes)
     || manifest.scenes.length < 3
@@ -30,6 +30,7 @@ function validateManifest(manifest) {
       && Array.isArray(stage.uniforms)
       && Array.isArray(stage.resources)
       && Array.isArray(stage.glslBindings)
+      && Array.isArray(stage.glslUniforms)
     );
     if (
       typeof scene.id !== "string"

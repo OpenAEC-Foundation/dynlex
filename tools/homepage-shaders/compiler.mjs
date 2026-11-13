@@ -136,6 +136,7 @@ export async function createHomepageShaderCompiler(projectDirectory) {
         wgsl,
         glsl,
         glslBindings: glslResult === null ? [] : glslResult.bindings,
+        glslUniforms: glslResult === null ? [] : glslResult.uniforms,
         resources: reflection.resources,
         uniforms: reflection.uniforms,
         semanticTokens,

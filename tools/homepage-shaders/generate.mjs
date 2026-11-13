@@ -213,7 +213,7 @@ function configuredGeometryRecord(geometry) {
 function verifyGeneratedOutputs() {
   const manifest = JSON.parse(requireFile(shaderConfig.manifest));
   if (
-    manifest.schemaVersion !== 14
+    manifest.schemaVersion !== 15
     || manifest.translatorHash !== translatorHash
     || manifest.compilerHash !== compilerHash
     || !Array.isArray(manifest.scenes)
@@ -304,7 +304,8 @@ for (const scene of shaderConfig.scenes) {
       ])),
       uniforms: fragment.uniforms,
       resources: fragment.resources,
-      glslBindings: fragment.glslBindings
+      glslBindings: fragment.glslBindings,
+      glslUniforms: fragment.glslUniforms
     }
   };
 
@@ -329,7 +330,8 @@ for (const scene of shaderConfig.scenes) {
       ])),
       uniforms: vertex.uniforms,
       resources: vertex.resources,
-      glslBindings: vertex.glslBindings
+      glslBindings: vertex.glslBindings,
+      glslUniforms: vertex.glslUniforms
     };
   }
 
@@ -353,7 +355,7 @@ for (const scene of shaderConfig.scenes) {
 await compiler.close();
 
 const manifest = `${JSON.stringify({
-  schemaVersion: 14,
+  schemaVersion: 15,
   translatorHash,
   compilerHash,
   semanticLegend,

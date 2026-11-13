@@ -38,7 +38,7 @@ for (const job of jobs) {
     await writeFile(target + '.wgsl', translated.webgpu);
     await writeFile(target + '.glsl', translated.webgl);
     await writeFile(target + '.json', JSON.stringify({...json('dynlex_web_get_shader_reflection_json'),
-      glslBindings: translated.bindings}) + '\n');
+      glslBindings: translated.bindings, glslUniforms: translated.uniforms}) + '\n');
   } else throw new Error(`Unknown output kind: ${job.kind}`);
   console.log(`Compiled ${job.entry} → ${job.output} (${Math.round(performance.now() - started)} ms)`);
 }

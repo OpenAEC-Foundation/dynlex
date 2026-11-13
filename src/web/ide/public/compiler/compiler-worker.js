@@ -209,6 +209,7 @@ function compileShaderStage(source, version, stage, rendererBackend) {
     uniforms: status === 0 ? reflection.uniforms : [],
     resources: status === 0 ? reflection.resources : [],
     glslBindings: glsl === null ? [] : glsl.bindings,
+    glslUniforms: glsl === null ? [] : glsl.uniforms,
     vertexInputs: status === 0 ? reflection.vertexInputs : []
   };
 }
@@ -228,10 +229,12 @@ function compileShaderSource(source, version, compileVertexStage, rendererBacken
       fragmentUniforms: fragment.uniforms,
       fragmentResources: fragment.resources,
       fragmentBindings: fragment.glslBindings,
+      fragmentBlocks: fragment.glslUniforms,
       vertexSources: { [rendererBackend]: "" },
       vertexUniforms: [],
       vertexResources: [],
-      vertexBindings: []
+      vertexBindings: [],
+      vertexBlocks: []
     };
   }
 
@@ -245,10 +248,12 @@ function compileShaderSource(source, version, compileVertexStage, rendererBacken
     fragmentUniforms: fragment.uniforms,
     fragmentResources: fragment.resources,
     fragmentBindings: fragment.glslBindings,
+    fragmentBlocks: fragment.glslUniforms,
     vertexSources: vertex.status === 0 ? vertex.sources : { [rendererBackend]: "" },
     vertexUniforms: vertex.status === 0 ? vertex.uniforms : [],
     vertexResources: vertex.status === 0 ? vertex.resources : [],
-    vertexBindings: vertex.status === 0 ? vertex.glslBindings : []
+    vertexBindings: vertex.status === 0 ? vertex.glslBindings : [],
+    vertexBlocks: vertex.status === 0 ? vertex.glslUniforms : []
   };
 }
 

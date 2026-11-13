@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 14,
-  "translatorHash": "250d1fa8d019885fdeb2482106e1abb0809f162716706080254aaa3fa5c4ea4c",
-  "compilerHash": "5990c18b74815b6f431e54fbc4d767220fae3074bf9551e05a6f2dfe5a3bbf6f",
+  "schemaVersion": 15,
+  "translatorHash": "06e40d6b92ac28de5979ca7cdb0ce02a576c6b6ebb59d6b7bb303f9945773656",
+  "compilerHash": "6ab6401da99710dd3d7e5ed539f3fab6ac6e7e3b534c17eb80fa301bec764961",
   "semanticLegend": {
     "tokenModifiers": [
       "definition",
@@ -79,7 +79,24 @@
             }
           ],
           "resources": [],
-          "glslBindings": []
+          "glslBindings": [],
+          "glslUniforms": [
+            {
+              "name": "type_11_block_0Fragment",
+              "group": 0,
+              "binding": 0
+            },
+            {
+              "name": "type_11_block_1Fragment",
+              "group": 0,
+              "binding": 2
+            },
+            {
+              "name": "type_11_block_2Fragment",
+              "group": 0,
+              "binding": 3
+            }
+          ]
         }
       },
       "semanticTokens": [
@@ -7502,7 +7519,24 @@
             }
           ],
           "resources": [],
-          "glslBindings": []
+          "glslBindings": [],
+          "glslUniforms": [
+            {
+              "name": "type_7_block_0Fragment",
+              "group": 0,
+              "binding": 0
+            },
+            {
+              "name": "type_7_block_1Fragment",
+              "group": 0,
+              "binding": 2
+            },
+            {
+              "name": "type_7_block_2Fragment",
+              "group": 0,
+              "binding": 3
+            }
+          ]
         },
         "vertex": {
           "sources": {
@@ -7548,7 +7582,24 @@
             }
           ],
           "resources": [],
-          "glslBindings": []
+          "glslBindings": [],
+          "glslUniforms": [
+            {
+              "name": "type_15_block_0Vertex",
+              "group": 0,
+              "binding": 0
+            },
+            {
+              "name": "type_15_block_1Vertex",
+              "group": 0,
+              "binding": 2
+            },
+            {
+              "name": "type_15_block_2Vertex",
+              "group": 0,
+              "binding": 3
+            }
+          ]
         }
       },
       "semanticTokens": [
@@ -23207,7 +23258,29 @@
             }
           ],
           "resources": [],
-          "glslBindings": []
+          "glslBindings": [],
+          "glslUniforms": [
+            {
+              "name": "type_11_block_0Fragment",
+              "group": 0,
+              "binding": 0
+            },
+            {
+              "name": "type_11_block_3Fragment",
+              "group": 0,
+              "binding": 1
+            },
+            {
+              "name": "type_11_block_1Fragment",
+              "group": 0,
+              "binding": 2
+            },
+            {
+              "name": "type_11_block_2Fragment",
+              "group": 0,
+              "binding": 3
+            }
+          ]
         },
         "vertex": {
           "sources": {
@@ -23263,7 +23336,29 @@
             }
           ],
           "resources": [],
-          "glslBindings": []
+          "glslBindings": [],
+          "glslUniforms": [
+            {
+              "name": "type_8_block_0Vertex",
+              "group": 0,
+              "binding": 0
+            },
+            {
+              "name": "type_8_block_3Vertex",
+              "group": 0,
+              "binding": 1
+            },
+            {
+              "name": "type_8_block_1Vertex",
+              "group": 0,
+              "binding": 2
+            },
+            {
+              "name": "type_8_block_2Vertex",
+              "group": 0,
+              "binding": 3
+            }
+          ]
         }
       },
       "semanticTokens": [

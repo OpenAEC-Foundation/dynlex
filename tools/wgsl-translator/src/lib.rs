@@ -18,6 +18,7 @@ thread_local! {
     static RESULT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
     static GLSL_RESULT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
     static GLSL_BINDINGS: RefCell<Vec<u8>> = RefCell::new(b"[]".to_vec());
+    static GLSL_UNIFORMS: RefCell<Vec<u8>> = RefCell::new(b"[]".to_vec());
     static ERROR: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -29,12 +30,14 @@ fn reset_translation() {
     set_bytes(&RESULT, Vec::new());
     set_bytes(&GLSL_RESULT, Vec::new());
     set_bytes(&GLSL_BINDINGS, b"[]".to_vec());
+    set_bytes(&GLSL_UNIFORMS, b"[]".to_vec());
     set_bytes(&ERROR, Vec::new());
 }
 
 struct GlslTranslation {
     source: String,
     bindings: String,
+    uniforms: String,
 }
 
 fn parse_and_validate(bytes: &[u8]) -> Result<(naga::Module, naga::valid::ModuleInfo), String> {
@@ -87,6 +90,7 @@ fn write_glsl(
     Ok(GlslTranslation {
         source,
         bindings: glsl_bindings::texture_bindings(module, &reflection, origins)?,
+        uniforms: glsl_bindings::uniform_bindings(module, &reflection)?,
     })
 }
 
@@ -186,6 +190,7 @@ pub unsafe extern "C" fn dynlex_glsl_translate(
         Ok(source) => {
             set_bytes(&RESULT, source.source.into_bytes());
             set_bytes(&GLSL_BINDINGS, source.bindings.into_bytes());
+            set_bytes(&GLSL_UNIFORMS, source.uniforms.into_bytes());
             1
         }
         Err(error) => {
@@ -228,6 +233,7 @@ pub unsafe extern "C" fn dynlex_shader_translate(
             set_bytes(&RESULT, wgsl.into_bytes());
             set_bytes(&GLSL_RESULT, glsl.source.into_bytes());
             set_bytes(&GLSL_BINDINGS, glsl.bindings.into_bytes());
+            set_bytes(&GLSL_UNIFORMS, glsl.uniforms.into_bytes());
             1
         }
         Err(error) => {
@@ -265,6 +271,16 @@ pub extern "C" fn dynlex_glsl_bindings_pointer() -> *const u8 {
 #[no_mangle]
 pub extern "C" fn dynlex_glsl_bindings_length() -> usize {
     GLSL_BINDINGS.with(|result| result.borrow().len())
+}
+
+#[no_mangle]
+pub extern "C" fn dynlex_glsl_uniforms_pointer() -> *const u8 {
+    GLSL_UNIFORMS.with(|result| result.borrow().as_ptr())
+}
+
+#[no_mangle]
+pub extern "C" fn dynlex_glsl_uniforms_length() -> usize {
+    GLSL_UNIFORMS.with(|result| result.borrow().len())
 }
 
 #[no_mangle]

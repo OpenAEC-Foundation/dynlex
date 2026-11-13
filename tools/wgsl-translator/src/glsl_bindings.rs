@@ -67,6 +67,43 @@ pub(crate) fn texture_bindings(
     ))
 }
 
+pub(crate) fn uniform_bindings(
+    module: &naga::Module,
+    reflection: &ReflectionInfo,
+) -> Result<String, String> {
+    let mut records = Vec::new();
+    for (handle, name) in &reflection.uniforms {
+        let variable = &module.global_variables[*handle];
+        if variable.space != naga::AddressSpace::Uniform {
+            continue;
+        }
+        let slot = variable
+            .binding
+            .as_ref()
+            .ok_or("A GLSL uniform block has no resource binding")?;
+        records.push((
+            slot.group,
+            slot.binding,
+            name,
+            format!(
+                "{{\"name\":{},\"group\":{},\"binding\":{}}}",
+                quoted(name),
+                slot.group,
+                slot.binding
+            ),
+        ));
+    }
+    records.sort_by(|left, right| (left.0, left.1, left.2).cmp(&(right.0, right.1, right.2)));
+    Ok(format!(
+        "[{}]",
+        records
+            .into_iter()
+            .map(|(_, _, _, value)| value)
+            .collect::<Vec<_>>()
+            .join(",")
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::quoted;

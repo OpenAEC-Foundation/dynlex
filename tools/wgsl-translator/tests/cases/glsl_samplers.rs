@@ -147,13 +147,16 @@ fn every_translation_clears_other_results_and_resource_mappings() {
         assert_eq!(dynlex_shader_translate(bytes.as_ptr(), bytes.len(), 1), 1);
         assert!(dynlex_glsl_result_length() > 0);
         assert!(dynlex_glsl_bindings_length() > 2);
+        assert!(dynlex_glsl_uniforms_length() > 2);
         assert_eq!(dynlex_wgsl_translate(bytes.as_ptr(), bytes.len()), 1);
         assert_eq!(dynlex_glsl_result_length(), 0);
         GLSL_BINDINGS.with(|value| assert_eq!(*value.borrow(), b"[]"));
+        GLSL_UNIFORMS.with(|value| assert_eq!(*value.borrow(), b"[]"));
         assert_eq!(dynlex_shader_translate(bytes.as_ptr(), bytes.len(), 99), 0);
         assert_eq!(dynlex_wgsl_result_length(), 0);
         assert_eq!(dynlex_glsl_result_length(), 0);
         GLSL_BINDINGS.with(|value| assert_eq!(*value.borrow(), b"[]"));
+        GLSL_UNIFORMS.with(|value| assert_eq!(*value.borrow(), b"[]"));
     }
 }
 

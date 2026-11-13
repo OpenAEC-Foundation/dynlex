@@ -28,7 +28,7 @@ for(const stage of ['vertex','fragment']) {
   ]);
   const bytes=Buffer.from(call('dynlex_web_get_output_shader_spirv_base64','string'),'base64');
   const webgpu=translator.translate(bytes),glsl=translator.translateGlsl(bytes,stage),webgl=glsl.source;
-  assert.deepEqual(translator.translateBoth(bytes,stage),{webgpu,webgl,bindings:glsl.bindings});
+  assert.deepEqual(translator.translateBoth(bytes,stage),{webgpu,webgl,bindings:glsl.bindings,uniforms:glsl.uniforms});
   assert(Array.isArray(glsl.bindings),'GLSL translation must return its actual texture/sampler associations');
   const associations=glsl.bindings.map(({name,texture,sampler})=>{
     assert(webgl.includes(name),'A texture binding names no generated GLSL uniform');
@@ -42,7 +42,7 @@ for(const stage of ['vertex','fragment']) {
   assert.match(webgpu,/textureSampleCompareLevel/);
   assert.match(webgl,/samplerCube/);
   assert.match(webgl,/sampler2DShadow/);
-  artifacts.push({stage,reflection:{...reflection,glslBindings:glsl.bindings},webgpu,webgl});
+  artifacts.push({stage,reflection:{...reflection,glslBindings:glsl.bindings,glslUniforms:glsl.uniforms},webgpu,webgl});
 }
 const vocabulary=await fs.readFile(new URL('../runtime/graphics_shaders/resource_vocabulary.dl',import.meta.url),'utf8');
 const multiple=await fs.readFile(new URL('../runtime/graphics_shaders/multiple_samplers.dl',import.meta.url),'utf8');
@@ -56,7 +56,7 @@ for(const stage of ['vertex','fragment']) {
   assert.deepEqual(glsl.bindings.map(({texture,sampler})=>[texture.binding,sampler.binding]).sort((a,b)=>a[1]-b[1]),[[0,1],[0,2]],
     'Different samplers for one image must retain independent bindings');
   assert.equal(new Set(glsl.bindings.map(binding=>binding.name)).size,2);
-  assert.deepEqual(translator.translateBoth(bytes,stage),{webgpu,webgl:glsl.source,bindings:glsl.bindings},
+  assert.deepEqual(translator.translateBoth(bytes,stage),{webgpu,webgl:glsl.source,bindings:glsl.bindings,uniforms:glsl.uniforms},
     'Combined translation must preserve the original WGSL image and exact GLSL sampler mappings');
 }
 for(const stage of ['vertex','fragment']) {

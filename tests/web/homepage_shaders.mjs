@@ -381,7 +381,7 @@ for (const sharedThreeDimensionalPrimitive of [
 const manifestPath = path.join(projectDir, shaderConfig.manifest);
 assert.ok(fs.existsSync(manifestPath), "Missing generated shader manifest");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-assert.equal(manifest.schemaVersion, 14);
+assert.equal(manifest.schemaVersion, 15);
 assert.match(manifest.translatorHash, /^[a-f0-9]{64}$/);
 assert.match(manifest.compilerHash, /^[a-f0-9]{64}$/);
 assert.deepEqual(manifest.semanticLegend, JSON.parse(

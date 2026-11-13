@@ -38,15 +38,21 @@ for(const {scalar,rows,columns,kind} of cases) {
   assert.deepEqual(JSON.parse(call('dynlex_web_get_shader_reflection_json','string')),
     {resources:[],uniforms:[{name:'camera 🌽',group:0,binding:3,type:{scalar,rows,columns}}],vertexInputs:[]});
   const bytes=Buffer.from(call('dynlex_web_get_output_shader_spirv_base64','string'),'base64');
-  let webgpu,webgl;
-  try {webgpu=translator.translate(bytes);webgl=translator.translateGlsl(bytes,'fragment').source;}
+  let webgpu,webgl,glslUniforms;
+  try {
+    webgpu=translator.translate(bytes);
+    const glsl=translator.translateGlsl(bytes,'fragment');webgl=glsl.source;glslUniforms=glsl.uniforms;
+  }
   catch(error) {throw new Error(JSON.stringify({scalar,rows,columns,source}),{cause:error});}
   assert.match(webgpu,/@group\(0\) @binding\(3\)/);
   assert.match(webgl,/_group_0_binding_3_/);
+  assert.equal(glslUniforms.length,1);
+  assert.equal(glslUniforms[0].group,0);assert.equal(glslUniforms[0].binding,3);
+  assert(webgl.includes('uniform '+glslUniforms[0].name+' '),'The reflected GLSL uniform block name is not emitted');
   const samples=Array(rows*4).fill(0);
   samples[rows>1?(rows-1)*4:columns-1]={float32:0.25,sint32:-2147483648,uint32:4294967295}[scalar];
   artifacts.push({kind:'uniform',name:`${scalar} ${rows}x${columns}`,type:{scalar,rows,columns},samples,
-    red:{float32:0.25,sint32:0.5,uint32:1}[scalar],uniforms:JSON.parse(call('dynlex_web_get_shader_reflection_json','string')).uniforms,webgpu,webgl});
+    red:{float32:0.25,sint32:0.5,uint32:1}[scalar],uniforms:JSON.parse(call('dynlex_web_get_shader_reflection_json','string')).uniforms,glslUniforms,webgpu,webgl});
 }
 for(const record of shaderArithmeticCases) {
   call('dynlex_web_set_main_source',null,['string'],[record.source]);
@@ -55,7 +61,8 @@ for(const record of shaderArithmeticCases) {
   const reflection=JSON.parse(call('dynlex_web_get_shader_reflection_json','string'));
   assert.deepEqual(reflection,{resources:[],uniforms:[{name:'data',group:0,binding:3,type:record.type}],vertexInputs:[]});
   const bytes=Buffer.from(call('dynlex_web_get_output_shader_spirv_base64','string'),'base64');
-  artifacts.push({kind:'arithmetic',...record,uniforms:reflection.uniforms,webgpu:translator.translate(bytes),webgl:translator.translateGlsl(bytes,'fragment').source});
+  const glsl=translator.translateGlsl(bytes,'fragment');
+  artifacts.push({kind:'arithmetic',...record,uniforms:reflection.uniforms,glslUniforms:glsl.uniforms,webgpu:translator.translate(bytes),webgl:glsl.source});
 }
 if(process.argv[3]) await fs.writeFile(process.argv[3],JSON.stringify(artifacts));
 console.log('Browser uniform reflection and WGSL/GLSL translations preserve every supported scalar, vector and matrix shape.');
