@@ -30,7 +30,8 @@ failed=0
     for suite in ("required", "integration"):
         for name, expected_suite in (("numeric_literals", "integration"),
                                      ("class_layout", "integration"),
-                                     ("compiler_stack", "required")):
+                                     ("compiler_stack", "required"),
+                                     ("timeout_output", "required")):
             result = subprocess.run(
                 [shell, "-c", stubs + routing + '\nsuite=$1\nrun_auxiliary_test "$2" 10 true\n',
                  "suite-policy", suite, name],

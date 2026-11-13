@@ -257,7 +257,9 @@ if environment_file:
 
 popen_options = {
     "stdout": subprocess.PIPE,
-    "stderr": subprocess.PIPE,
+    # The suite compares combined output. Capture one pipe rather than replaying
+    # two streams in an order determined by this Python process's buffering.
+    "stderr": subprocess.STDOUT,
 }
 if standard_input is not None:
     popen_options["stdin"] = subprocess.PIPE
@@ -317,7 +319,7 @@ def kill_posix_tree(pid):
             pass
 
 try:
-    stdout, stderr = process.communicate(input=standard_input, timeout=timeout_seconds)
+    output, _ = process.communicate(input=standard_input, timeout=timeout_seconds)
 except subprocess.TimeoutExpired:
     termination_error = b""
     if os.name == "nt":
@@ -335,32 +337,26 @@ except subprocess.TimeoutExpired:
         kill_posix_tree(process.pid)
 
     try:
-        stdout, stderr = process.communicate(timeout=5)
+        output, _ = process.communicate(timeout=5)
     except subprocess.TimeoutExpired as cleanup_timeout:
         if process.poll() is None:
             process.kill()
-        if process.stdout is not None:
-            process.stdout.close()
-        if process.stderr is not None:
-            process.stderr.close()
+        process.stdout.close()
         process.wait(timeout=5)
-        stdout = cleanup_timeout.output or b""
-        stderr = cleanup_timeout.stderr or b""
+        output = cleanup_timeout.output or b""
         termination_error += b"Timed-out process tree did not release its output pipes\n"
 
-    if stdout:
-        sys.stdout.buffer.write(stdout)
-    if stderr:
-        sys.stderr.buffer.write(stderr)
+    if output:
+        sys.stdout.buffer.write(output)
+        sys.stdout.buffer.flush()
     if termination_error:
         sys.stderr.buffer.write(termination_error)
         sys.exit(125)
     sys.exit(124)
 
-if stdout:
-    sys.stdout.buffer.write(stdout)
-if stderr:
-    sys.stderr.buffer.write(stderr)
+if output:
+    sys.stdout.buffer.write(output)
+    sys.stdout.buffer.flush()
 if process.returncode < 0:
     signal_number = -process.returncode
     if signal_number <= 127:
@@ -729,7 +725,7 @@ run_auxiliary_test() {
     local test_name="$1"
     local required_test=false
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|build_arguments|entrypoint_checker|incremental_compilation|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout)
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|build_arguments|entrypoint_checker|incremental_compilation|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
         required_test=true ;;
     esac
     if [[ "$suite" == required && "$required_test" != true ]] ||
@@ -810,6 +806,7 @@ run_auxiliary_test "pattern_precedence" 60 python3 -B "$SCRIPT_DIR/test_pattern_
 run_auxiliary_test "associative_grouping" 30 python3 -B "$SCRIPT_DIR/test_associative_grouping.py" "$COMPILER"
 run_auxiliary_test "compiler_stack" 45 python3 -B "$SCRIPT_DIR/test_compiler_stack.py" "$COMPILER"
 run_auxiliary_test "nested_timeout" 10 python3 -B "$SCRIPT_DIR/test_nested_timeout.py"
+run_auxiliary_test "timeout_output" 10 python3 -B "$SCRIPT_DIR/test_timeout_output.py"
 run_auxiliary_test "completion_visibility" 15 python3 -B "$SCRIPT_DIR/test_completion_visibility.py" "$COMPILER"
 run_auxiliary_test \
     "lifecycle_codegen" 15 python3 -B "$SCRIPT_DIR/test_lifecycle_codegen.py" "$COMPILER" \
