@@ -75,6 +75,9 @@ appearance columns appearance:
     stack below 840
     gap is 32
 
+appearance stack appearance:
+    gap is 24
+
 appearance cards appearance:
     columns are 3
     stack below 900

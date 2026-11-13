@@ -8,9 +8,6 @@ appearance inline code appearance:
     font size is 15
     text is UI ink 146 64 14
 
-appearance document stack appearance:
-    gap is 24
-
 appearance subheading appearance:
     use heading appearance
     font size is 25
@@ -20,4 +17,4 @@ appearance code block appearance:
     height is 0
 
 # The source is data on the example's container. Both actions read that source.
-code example {C string:name} containing {C string:source} means: ((a UI component 41 labeled name styled "" at 0 0 sized 0 by 0 containing [paragraph source using code block appearance, link "Copy code" to "action:copy-example" using link appearance, link "Open in IDE ↗" to "action:open-example" using link appearance]) with initial text source) wearing document stack appearance
+code example {C string:name} containing {C string:source} means: ((a UI component 41 labeled name styled "" at 0 0 sized 0 by 0 containing [paragraph source using code block appearance, link "Copy code" to "action:copy-example" using link appearance, link "Open in IDE ↗" to "action:open-example" using link appearance]) with initial text source) wearing stack appearance

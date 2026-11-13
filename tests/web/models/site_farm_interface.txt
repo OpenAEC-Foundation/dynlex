@@ -1,0 +1,1 @@
+Farm declarations compose a shared scene, source editor, live collection fields, worker/manual views and every management action.

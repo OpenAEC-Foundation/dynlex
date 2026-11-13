@@ -1,0 +1,15 @@
+import appearance.dl
+
+document farm guide using farm card appearance:
+    paragraph "How your farm grows" using farm heading appearance
+    paragraph "Fields: hoe → plow, seeds → plant, full bucket → water. Harvest ripe crops and save their scraps. Rain and pond-connected channels keep beds wet." using farm body appearance
+    paragraph "Animals: start with two chickens. Feed them wheat and collect their eggs. The second village order brings a cow; feed it hay to get milk." using farm body appearance
+    paragraph "Compost: scraps mature into fertilizer after 20 turns. Fertilized crops grow twice as fast." using farm body appearance
+    paragraph "Teamwork: give items to adjacent workers, or leave piles for a porter. Fill village orders to welcome more workers and open the east field." using farm body appearance
+
+document farm language guide using farm card appearance:
+    paragraph "Words your workers understand" using farm heading appearance
+    paragraph "Farm vocabulary" containing "" using farm signal appearance
+    paragraph "Name reusable instructions with to tend a bed:. Use if …:, else:, loop 3 times: or loop forever:. Each action takes a turn; conditions read the farm as it is now." using farm body appearance
+    paragraph "Grab, take, collect and pick up mean the same thing. Grab nearby items, or name their source. A named item takes up to one bag's worth; a number chooses the amount; everything fills the available hands." using farm body appearance
+    paragraph "Flags are movable destinations. Walk to the red flag stops beside it and faces its square. Drag that flag to give workers a new work site. Named work areas let workers search for jobs within a field." using farm body appearance

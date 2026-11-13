@@ -28,7 +28,9 @@ the shared execution source reader and river event/scene model. The Farm world,
 routes, inventory, areas, environment, actions, worker roles and simulation live
 in `games/farm/`. Its saved-world codec validates external data before reading
 typed state, keeps unapplied drafts and active routines, and omits transient
-pointer capture and request generations. The renderer and interface are still
+pointer capture and request generations. Its visual declaration is in
+`games/farm/interface.dl`, with shared model-backed fields for roles, workers,
+areas, flags and supplies. Gameplay controllers and the 3D renderer are still
 being connected to the application. `application.dl`
 connects the interface, controllers and platform event stream.
 
@@ -68,6 +70,7 @@ Controller tests run without windows:
 ```bash
 python3 tests/web/site_runtime.py
 python3 tests/web/site_runtime.py --case site_entry
+python3 tests/web/site_runtime.py --case site_farm_interface
 node tests/web/project_sources.mjs
 python3 tests/web/source_package.py
 node tests/web/farm_models.mjs build/dynlex --native-wasm --shipped
@@ -124,6 +127,6 @@ Migration is in progress. The current build contains the homepage, eleven
 documentation pages, downloads, an explicit missing page and the initial IDE,
 including live diagnostics, semantic colors and editable shader previews.
 River playback and saves, account/profile isolation, cloud progress and recovery
-are implemented in DynLex. The Farm interface and renderer, further editor
+are implemented in DynLex. Farm application and renderer wiring, further editor
 features, accessibility and deployment migration remain.
 The existing deployment has not been replaced.

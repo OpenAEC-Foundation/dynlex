@@ -17,7 +17,7 @@ def main():
     parser.add_argument('--compiler', type=Path, default=ROOT / 'build/dynlex')
     cases = ['site_controllers', 'site_language', 'site_entry', 'site_shader', 'site_shader_buffers', 'site_program_events', 'site_river_controller', 'site_river_audio', 'site_progress_controller', 'site_account_profiles', 'site_account_controller', 'site_account_recovery', 'site_reply_ownership']
     cases.append('site_program_commands')
-    models = ['site_shader_program']
+    models = ['site_shader_program', 'site_farm_interface']
     parser.add_argument('--case', action='append', choices=cases + models)
     args = parser.parse_args()
     package = SourcePackage(ROOT / 'site/dependencies/dynlex-ui.zip')

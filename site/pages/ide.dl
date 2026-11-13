@@ -29,11 +29,11 @@ website page IDE page at "/ide/index.html" titled "DynLex Studio" described "Wri
                 tab "Shader":
                     source pane "Shader source" containing the default website shader source using IDE code appearance
             region "Studio result" using card appearance:
-                view group "IDE result" using document stack appearance:
-                    region "Program result" using document stack appearance:
+                view group "IDE result" using stack appearance:
+                    region "Program result" using stack appearance:
                         paragraph "Output" using subheading appearance
                         paragraph "IDE output" containing "Run the program to see its output." using output appearance
-                    region "Shader result" using document stack appearance:
+                    region "Shader result" using stack appearance:
                         paragraph "Last successful build" using subheading appearance
                         surface "IDE shader preview" using IDE preview appearance
                         region "Preview playback" using cards appearance:
