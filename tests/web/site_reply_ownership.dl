@@ -23,7 +23,7 @@ set state to a new website state
 set state's services to the browser UI service provider
 set state's view to the address of view
 set instance's state to (the address of state) as a pointer
-set jobs to [0, 12, 13, 14, 15, 18, 19, 20]
+set jobs to [0, 12, 13, 14, 15, 18, 19, 20, 21, 23]
 set index to 0
 loop while index < the length of jobs:
     deliver cancelled input fixture for (the item at index in jobs) returning (a new JSON value of kind the JSON null kind) in (the address of state)
@@ -34,6 +34,7 @@ deliver cancelled input fixture for 6 returning (a JSON object containing [JSON 
 deliver cancelled input fixture for 6 returning (a JSON object containing [JSON number "status" is 1]) in (the address of state)
 deliver cancelled input fixture for 4 returning (a JSON object containing [JSON number "resource" is 41]) in (the address of state)
 deliver cancelled input fixture for 10 returning (a JSON object containing [JSON number "resource" is 42]) in (the address of state)
+deliver cancelled input fixture for 22 returning (a JSON object containing [JSON number "resource" is 43]) in (the address of state)
 deliver cancelled input fixture for 11 returning (a JSON object containing [JSON child "buffers" is (a JSON array containing [
     a JSON object containing [JSON number "id" is 71, JSON number "duration" is 1],
     a JSON object containing [JSON number "id" is 72, JSON number "duration" is 2]

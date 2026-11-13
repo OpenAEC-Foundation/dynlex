@@ -1,0 +1,82 @@
+import ../../state.dl
+import preparation.dl
+import examples.dl
+import interface.dl
+import ../../packages/dynlex-ui/ui/option_models.dl
+
+to get [the retained Farm choice] {string:current} [among] {UI option values:options}:
+    for each option in options:
+        if option's id = current:
+            return current
+    if (the length of options) > 0:
+        return (the item at 0 in options)'s id
+    return the string form of ""
+
+to [supply website Farm choices] {C string:label} [from] {a pointer to a list:items} [choosing] {string:chosen} [in] {a pointer to website state:state}:
+    set options to a sequence copying items
+    set UI choices of (the control labeled label in (state's view's instance)) in (state's view's instance) to options choosing chosen
+
+to get [the website Farm choice in] {C string:label} [in] {a pointer to website state:state}:
+    return the selected UI option identity of (the control labeled label in (state's view's instance)) in (state's view's instance)
+
+to get [the website Farm viewed role in] {a pointer to website state:state}:
+    set document to state's farm's document
+    for each role in (document's roles):
+        if role's id = document's role id:
+            return role
+    return 0 as a pointer to website farm role
+
+to get [the website Farm instruction named] {a value:key}:
+    set descriptions to the website farm actions
+    loop index from 0 to (the length of descriptions):
+        set description to the item at index in descriptions
+        if description's key = key:
+            set result to a new website farm instruction
+            set result's operation to the website farm action operation
+            set result's identifier to index
+            set result's argument to description's argument
+            set result's amount to description's amount
+            set result's target to description's target
+            return result
+    require condition false reporting "A Farm control refers to an unknown command"
+    return a new website farm instruction
+
+to get [the website Farm instruction for tool] {website farm tool description:tool}:
+    set result to the website Farm instruction named (tool's command)
+    if tool's selects:
+        set result's argument to tool's argument
+    if tool's targets:
+        set result's target to tool's target
+    return result
+
+to get [the website Farm hands of] {a pointer to website farm actor:actor}:
+    set result to the string form of ""
+    for each item in (actor's inventory):
+        set description to the item at (item's kind) in (the website farm items)
+        set text to the string form of (description's label)
+        if item's kind = 2:
+            set text to text + (formatted " ({item's water}/4 water)")
+        else if item's count > 1:
+            set text to text + (formatted " ×{item's count}")
+        if result is not empty:
+            set result to result + " · "
+        set result to result + text
+    return the string form of "Two free hands" if result is empty, else result
+
+to get [an unused website Farm role identity in] {a pointer to website farm document:document}:
+    set searching to true
+    set result to the string form of ""
+    loop while searching:
+        set result to formatted "role-{the next website farm entity in (document's world)}"
+        set searching to false
+        for each role in (document's roles):
+            if role's id = result:
+                set searching to true
+    return result
+
+to get [the website Farm goal descriptions]:
+    return [
+        ["watering", "A watering helper", "Take a bucket from the barn and fill it beside the pond.\nWalk to the nearest thirsty crop, then water the crops. Check whether your bucket is empty inside your loop."],
+        ["planting", "A field of your own", "A hoe plows grass. Seeds go into empty, plowed beds.\nDraw a work area to keep this role in one field. Use a loop to plant more than one bed."],
+        ["eggs", "Breakfast helper", "Chickens need wheat before they lay eggs.\nWalk to the nearest egg and collect eggs. Return to the barn when your hands are full."]
+    ]

@@ -1,0 +1,74 @@
+import scene_area_models.dl
+
+to get [website Farm areas in] {a pointer to website Farm landscape:landscape}:
+    set result to storage for one slot initialized with (a new website Farm areas)
+    set result's landscape to landscape
+    set result's saved to an empty list of a pointer to website Farm area scenery
+    return result
+
+to get [update website Farm areas] {a pointer to website Farm areas:areas} [from] {a pointer to website farm world:world}:
+    set changed to false
+    for each entry in (areas's saved):
+        set entry's seen to false
+    set layer to 0
+    for each area in world's areas:
+        set found to 0 as a pointer to website Farm area scenery
+        for each entry in (areas's saved):
+            if entry's area's id = area's id:
+                set found to entry
+        set rebuild to false
+        if found = (0 as a pointer to website Farm area scenery):
+            set found to storage for one slot initialized with (a new website Farm area scenery)
+            set found's cells to an empty list of website Farm area cell
+            append found to (areas's saved)
+            set rebuild to true
+        else:
+            set rebuild to (found's area has the same Farm area shape as area) = false
+        set found's area to area
+        set found's seen to true
+        if rebuild:
+            rebuild website Farm area found in areas
+        set placed to place website Farm area found on world at layer layer
+        set changed to changed or (rebuild or placed)
+        increment layer
+    set index to (the length of areas's saved) - 1
+    loop while index >= 0:
+        set entry to the item at index in (areas's saved)
+        if entry's seen = false:
+            close website Farm area entry in areas
+            remove item index from (areas's saved)
+            set changed to true
+        decrement index
+    return changed
+
+to [hide website Farm area preview in] {a pointer to website Farm areas:areas}:
+    if areas's preview != (0 as a pointer to website Farm area scenery):
+        close website Farm area (areas's preview) in areas
+        set areas's preview to 0 as a pointer to website Farm area scenery
+
+to [show website Farm area preview] {website farm area:bounds} [valid] {boolean:valid} [in] {a pointer to website Farm areas:areas} [from] {a pointer to website farm world:world}:
+    set area to bounds
+    set area's id to "preview"
+    set area's color to "#739442" if valid, else "#ca594c"
+    set entry to areas's preview
+    set rebuild to false
+    if entry = (0 as a pointer to website Farm area scenery):
+        set entry to storage for one slot initialized with (a new website Farm area scenery)
+        set entry's cells to an empty list of website Farm area cell
+        set entry's temporary to true
+        set areas's preview to entry
+        set rebuild to true
+    else:
+        set rebuild to (entry's area has the same Farm area shape as area) = false
+    set entry's area to area
+    if rebuild:
+        rebuild website Farm area entry in areas
+    ignore (place website Farm area entry on world at layer 0)
+
+to [close website Farm areas] {a pointer to website Farm areas:areas}:
+    hide website Farm area preview in areas
+    for each entry in (areas's saved):
+        close website Farm area entry in areas
+    free areas's saved
+    destroy the value at areas
+    deallocate areas

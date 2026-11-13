@@ -1,0 +1,66 @@
+import ../../site/games/farm/scene_queries.dl
+import ../../site/games/farm/scene_focus.dl
+import ../../site/games/farm/scene_landscape.dl
+import ../../site/games/farm/scene_characters.dl
+
+set world to the initial website farm world
+set landscape to a website Farm landscape for world
+set characters to website Farm characters for world in landscape
+set flags to website Farm flags for world in landscape
+set point to the website Farm scene point at 6 14 in world
+set ray to @intrinsic("construct", UI scene ray, point + (a UI scene vector from [0.0,10.0,0.0]), a UI scene vector from [0.0,-1.0,0.0])
+set square to the website Farm square from ray in landscape
+require condition ((square's hit's hit) and ((square's point's x = 6) and (square's point's y = 14))) reporting "Terrain picking must use the rendered tile instances"
+require condition ((the absolute value of (square's hit's distance - 10.0)) < 0.00001) reporting "Terrain picking used the wrong tile elevation"
+set tile to the website farm square at 6 14 in world
+set tile's terrain to 2
+update website Farm landscape landscape from world
+set square to the website Farm square from ray in landscape
+require condition ((the absolute value of (square's hit's distance - 10.16)) < 0.00001) reporting "Terrain picking must follow a newly lowered channel"
+set ray's origin to a UI scene vector from [30.0,10.0,30.0]
+set square to the website Farm square from ray in landscape
+require condition (square's hit's hit = false) reporting "Ground outside the board must not produce a Farm square"
+set ada to the website Farm character named "worker-1" in characters
+place website Farm object (ada's object) at (a UI scene vector from [30.0,0.0,30.0]) sized [1.0,1.0,1.0]
+set ray's origin to a UI scene vector from [30.0,0.8,35.0]
+set ray's direction to a UI scene vector from [0.0,0.0,-1.0]
+set selected to the website Farm entity from ray in landscape with characters and flags
+require condition ((selected's hit's hit) and (selected's entity = "worker-1")) reporting "Entity picking did not find the visible worker model"
+set ada's object's visible to false
+set selected to the website Farm entity from ray in landscape with characters and flags
+require condition (selected's hit's hit = false) reporting "A hidden worker must not intercept scene input"
+set object to the item at 0 in (flags's objects)
+place website Farm object object at (a UI scene vector from [40.0,0.0,40.0]) sized [1.0,1.0,1.0]
+set ray's origin to a UI scene vector from [40.22,1.16,45.0]
+set selected to the website Farm entity from ray in landscape with characters and flags
+require condition ((selected's hit's hit) and (selected's entity = "flag-red")) reporting "Flag cloth must retain the flag's interaction identity"
+set tree to (landscape's tiles + 161)'s tree
+set UI scene model in tree to (landscape's ground model)
+place website Farm object tree at (a UI scene vector from [50.0,0.0,50.0]) sized [1.0,1.0,1.0]
+set ray's origin to a UI scene vector from [50.0,0.0,55.0]
+set selected to the website Farm entity from ray in landscape with characters and flags
+require condition ((selected's hit's hit) and (selected's entity = "tile-161")) reporting "Tree picking must identify its world square for adjacent walking"
+set tree's visible to false
+set selected to the website Farm entity from ray in landscape with characters and flags
+require condition (selected's hit's hit = false) reporting "A hidden felled tree must not intercept scene input"
+set actor to world's player
+set actor's direction to 2
+set target to (the website Farm scene point at (actor's x) (actor's y) in world) + (a UI scene vector from [0.0,0.45,0.0])
+set initial to target + ((a UI scene vector from [0.0,0.9,1.0]) normalized) * 7.0
+set model to a website Farm scene model using (the Farm shape named "box" in (the address of (landscape's library))) colored (a Farm art material colored [255,255,255]) casting shadow true
+set UI scene model in (landscape's barn) to model
+place website Farm object (landscape's barn) at ((initial + target) / 2.0) sized [2.0,3.0,2.0]
+set camera to a website Farm camera in (UI box at 100.0 50.0 sized 640.0 480.0)
+focus website Farm camera (the address of camera) on actor in world around landscape over 0.0 seconds
+set eye to camera's orbit's camera's position
+require condition ((the length of (eye - initial)) > 0.5) reporting "Camera focus must choose a different angle when the first view is obstructed"
+require condition ((the absolute value of ((the length of (eye - target)) - 7.0)) < 0.00001) reporting "Close-up camera focus changed its intended distance"
+set ray's origin to eye
+set ray's direction to (target - eye) normalized
+set blocked to the UI scene selection from ray in (landscape's barn's instance) including backfaces false
+require condition ((blocked's hit's hit = false) or (blocked's hit's distance >= (the length of (target - eye)) - 0.1)) reporting "The selected camera view still looks through the obstruction"
+close website Farm flags flags
+close website Farm characters characters
+close website Farm landscape landscape
+free website farm world world
+print line "Farm picking follows rendered terrain, ignores hidden entities, selects flag cloth and focuses actors around obstacles."

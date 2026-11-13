@@ -3,6 +3,7 @@ import ../editor/language.dl
 import ../editor/shader.dl
 import rendering.dl
 import ../games/river/controller.dl
+import ../games/farm/controller.dl
 
 to advance to the next website shader in {a pointer to website state:state}:
     set descriptions to the site's shaders
@@ -34,6 +35,7 @@ to advance the website frame {a pointer to UI view:view}:
     advance website language analysis in state
     advance the website shader preview in state
     advance the website river in state
+    advance the website Farm in state
     set visible to false
     if state's route = "/index.html":
         set canvas to the UI layout labeled "Live shader" in (view's layout)

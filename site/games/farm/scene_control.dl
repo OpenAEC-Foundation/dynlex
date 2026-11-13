@@ -1,0 +1,147 @@
+import clock.dl
+import land_controls.dl
+
+to [hold website Farm entity] {string:id} [held] {boolean:held} [in] {a pointer to website farm world:world}:
+    for each worker in (world's workers):
+        if worker's id = id:
+            set worker's held to held
+    loop index from 0 to (the length of world's chickens):
+        set chicken to world's chickens' data + index
+        if chicken's id = id:
+            set chicken's held to held
+
+to [click website Farm selection] {website Farm entity selection:selected} [above] {website Farm square selection:square} [in] {a pointer to website state:state}:
+    set world to state's farm's document's world
+    set id to selected's entity
+    if selected's hit's hit:
+        set actor to the website farm actor identified by id in world
+        if actor != (0 as a pointer to website farm actor):
+            choose website Farm person id in state
+            return nothing
+        set point to square's point
+        set animal to the string form of ""
+        if id = "barn":
+            set point to world's barn
+        else if id = "compost":
+            set point to the website farm position of (world's compost)
+        else if id starts with "flag-":
+            for each flag in (world's flags):
+                set description to the item at (flag's color) in (the website farm flags)
+                if id = ("flag-" + (the string form of description's key)):
+                    set point to website farm point (flag's x) (flag's y)
+        else if id starts with "tile-":
+            set position to selected's object's instance's root pose's position
+            set point to website farm point ((position's x + 9.5) as an integer) ((position's z + 9.5) as an integer)
+        else:
+            loop index from 0 to (the website farm animal count in world):
+                set candidate to the website farm animal at index in world
+                if candidate's id = id:
+                    set animal to id
+                    set point to website farm point (candidate's x) (candidate's y)
+        walk website Farm player to point adjacently true following animal animal in state
+    else if square's hit's hit:
+        set point to square's point
+        set tile to the website farm square at (point's x) (point's y) in world
+        set adjacent to (tile's plot or tile's tree's present) or ((website farm land at (point's x) (point's y) is walkable in world except actor (world's player)) = false)
+        walk website Farm player to point adjacently adjacent following animal (the string form of "") in state
+    update website Farm world view in state instantly false
+    start website Farm clock in state
+
+to get [website Farm entity] {string:id} [can be dropped at] {website farm point:point} [in] {a pointer to website farm world:world}:
+    if id starts with "flag-":
+        set color to the website farm flag number named (the substring of id from 5 spanning (id's length - 5) bytes)
+        return website farm flag color can stand at point in world
+    set actor to the website farm actor identified by id in world
+    return website farm land at (point's x) (point's y) is walkable in world except actor actor except animal id
+
+to [release website Farm gesture in] {a pointer to website state:state} [cancelled] {boolean:cancelled}:
+    set session to the address of (state's farm)
+    set mode to session's pointer mode
+    set session's pointer mode to 0
+    if mode = 0:
+        return nothing
+    set renderer to session's renderer
+    set world to session's document's world
+    hide website Farm area preview in (renderer's areas)
+    if session's pointer entity is not empty:
+        hold website Farm entity (session's pointer entity) held false in world
+    if cancelled = false:
+        if mode = 4:
+            if session's pointer origin's hit's hit and session's pointer square's hit's hit:
+                finish website Farm area from (session's pointer origin's point) to (session's pointer square's point) in state
+        else if mode = 1:
+            if session's pointer moved and (session's pointer entity is not empty):
+                set moved to false
+                if session's pointer square's hit's hit:
+                    set point to session's pointer square's point
+                    if session's pointer entity starts with "flag-":
+                        set key to the substring of (session's pointer entity) from 5 spanning ((the length of session's pointer entity) - 5) bytes
+                        set moved to move website farm flag (the website farm flag number named key) to point in world
+                    else:
+                        set moved to relocate website farm entity (session's pointer entity) to point in world
+                notify website farm world saying ("Placed here. The farm can continue." if moved, else "Choose a free square on available land.")
+                if moved and (session's pointer entity starts with "worker-"):
+                    choose website Farm person (session's pointer entity) in state
+            else if session's pointer moved = false:
+                click website Farm selection (session's pointer selection) above (session's pointer square) in state
+    set dropped to session's pointer entity
+    set session's pointer entity and renderer's dragged to ""
+    if cancelled:
+        present website Farm world in state instantly false
+    else:
+        update website Farm world view in state instantly false
+    if session's pointer moved and (dropped is not empty):
+        set character to the website Farm character named dropped in (renderer's characters)
+        if character != (0 as a pointer to website Farm character):
+            place UI scene motion (character's motion) at (character's motion's target) facing (character's motion's heading)
+            place website Farm character character with weight 0.0
+
+to [move website Farm gesture to] {UI point:cursor} [in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    set renderer to session's renderer
+    set delta to a UI point at (cursor's x - session's pointer previous's x) and (cursor's y - session's pointer previous's y)
+    set session's pointer previous to cursor
+    if session's pointer mode = 2:
+        turn website Farm camera (the address of (renderer's camera)) by pixels delta
+        set renderer's dirty to true
+        return nothing
+    if session's pointer mode = 3:
+        pan website Farm camera (the address of (renderer's camera)) by pixels delta
+        set renderer's dirty to true
+        return nothing
+    set ray to the UI scene ray at cursor through (renderer's camera's orbit's camera) in (session's viewport)
+    set session's pointer square to the website Farm square from ray in (renderer's landscape)
+    set square to session's pointer square
+    if session's pointer mode = 4:
+        if session's pointer origin's hit's hit and square's hit's hit:
+            set bounds to the website farm area bounds from (session's pointer origin's point) to (square's point) in (session's document's world)
+            set area to bounds's area
+            show website Farm area preview area valid (bounds's error is empty) in (renderer's areas) from (session's document's world)
+        else:
+            hide website Farm area preview in (renderer's areas)
+    else:
+        set dx to cursor's x - session's pointer start's x
+        set dy to cursor's y - session's pointer start's y
+        if ((dx * dx + dy * dy) < 36.0) and (session's pointer moved = false):
+            return nothing
+        set session's pointer moved to true
+        if session's pointer entity is empty:
+            return nothing
+        set renderer's dragged to session's pointer entity
+        hold website Farm entity (session's pointer entity) held true in (session's document's world)
+        if square's hit's hit:
+            set point to the website Farm scene point at (square's point's x) (square's point's y) in (session's document's world)
+            set point's y to point's y + 0.28
+            set object to session's pointer selection's object
+            set pose to object's instance's root pose
+            set pose's position to point
+            set UI scene root pose in (object's instance) to pose
+            set area to a new website farm area
+            set area's left and area's right to square's point's x
+            set area's top to square's point's y
+            set area's bottom to square's point's y
+            set valid to website Farm entity (session's pointer entity) can be dropped at (square's point) in (session's document's world)
+            show website Farm area preview area valid valid in (renderer's areas) from (session's document's world)
+        else:
+            hide website Farm area preview in (renderer's areas)
+    set renderer's dirty and renderer's shadow dirty to true

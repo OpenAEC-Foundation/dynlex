@@ -79,7 +79,8 @@ def main():
         compile_jobs(root, sources, [
             {'entry': 'site/shaders/export.dl', 'kind': 'wasm', 'output': 'shader-catalog.wasm'},
             {'entry': 'site/pages/export.dl', 'kind': 'wasm', 'output': 'page-catalog.wasm'},
-            {'entry': 'site/shaders/link.dl', 'kind': 'wasm', 'output': 'shader-linker.wasm'}
+            {'entry': 'site/shaders/link.dl', 'kind': 'wasm', 'output': 'shader-linker.wasm'},
+            {'entry': 'site/games/farm/export_renderer.dl', 'kind': 'wasm', 'output': 'farm-linker.wasm'}
         ], stage)
         scenes = run_json(root, stage / 'shader-catalog.wasm')
         pages = run_json(root, stage / 'page-catalog.wasm')
@@ -90,7 +91,29 @@ def main():
             for shader_stage in scene['stages']:
                 jobs.append({'entry': scene['source'], 'kind': 'shader', 'stage': shader_stage,
                              'output': f"assets/shaders/{scene['id']}.{shader_stage}"})
+        farm_stages = [
+            ('environment', 'site/games/farm/shaders/environment.dl', 'fragment'),
+            ('surface-vertex', 'site/games/farm/shaders/vertex.dl', 'vertex'),
+            ('surface-fragment', 'site/games/farm/shaders/surface.dl', 'fragment'),
+            ('shadow', 'site/games/farm/shaders/shadow.dl', 'vertex'),
+            ('post', 'site/games/farm/shaders/post.dl', 'fragment'),
+            ('scattering', 'site/packages/dynlex-ui/ui/shaders/environment_dfg.dl', 'fragment')
+        ]
+        for name, entry, shader_stage in farm_stages:
+            jobs.append({'entry': entry, 'kind': 'shader', 'stage': shader_stage,
+                         'output': f'assets/games/farm/{name}'})
         compile_jobs(root, sources, jobs, stage)
+        farm = {}
+        for name, _, _ in farm_stages:
+            prefix = stage / f'assets/games/farm/{name}'
+            farm[name] = {**json.loads(prefix.with_suffix('.json').read_text()),
+                          'webgpu': prefix.with_suffix('.wgsl').read_text(),
+                          'webgl': prefix.with_suffix('.glsl').read_text()}
+            for suffix in ['.json', '.wgsl', '.glsl']:
+                prefix.with_suffix(suffix).unlink()
+        program = run_json(root, stage / 'farm-linker.wasm', farm)
+        (stage / 'assets/games/farm/program.json').write_text(json.dumps(program) + '\n')
+        (stage / 'farm-linker.wasm').unlink()
         linked = []
         for scene in scenes:
             stages = {}

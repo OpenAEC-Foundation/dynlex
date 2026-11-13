@@ -1,5 +1,6 @@
 import ../appearance.dl
 import ../games/river/interface.dl
+import ../games/farm/interface.dl
 
 website page home page at "/index.html" titled "DynLex — Make the language part of the work" described "Explore working sketches, invent project vocabulary, and run DynLex in the browser.":
     region "motion" using hero appearance:
@@ -68,6 +69,7 @@ website page home page at "/index.html" titled "DynLex — Make the language par
                             paragraph "Turn a plan into a working farm. Write instructions, watch the world respond, and build your vocabulary as you go." using body appearance
                             link "Open the farm challenge →" to "action:farm" using primary link appearance
                     river challenge
+                    farm challenge
             paragraph "Loading your saved progress…" using body appearance
             region "Game account unavailable" using card appearance:
                 paragraph "An error occurred. Check the log." using body appearance

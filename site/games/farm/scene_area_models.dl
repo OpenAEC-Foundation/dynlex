@@ -1,0 +1,46 @@
+import scene_area_types.dl
+
+to [rebuild website Farm area] {a pointer to website Farm area scenery:entry} [in] {a pointer to website Farm areas:areas}:
+    clear entry's cells
+    set area to entry's area
+    set parts to an empty list of UI scene part
+    set library to the address of (areas's landscape's library)
+    set edge to a UI scene material with color (UI ink from hexadecimal (area's color)) roughness 0.82 metalness 0.0
+    set edge's unlit to true
+    set fill to edge
+    set fill's opacity to 0.3 if entry's temporary, else 0.12
+    set fill's depth write to false
+    loop y from (area's top) to (area's bottom + 1):
+        loop x from (area's left) to (area's right + 1):
+            set root to a Farm art group named "" at [(x - 9.5),0.0,(y - 9.5)] under -1 in parts
+            append (@intrinsic("construct", website Farm area cell, x, y, root)) to (entry's cells)
+            add website Farm area box at [0.0,0.018,0.0] sized [0.98,0.004,0.98] colored fill under root to parts with library
+            if x = area's left:
+                add website Farm area box at [-0.47,0.033,0.0] sized [0.045,0.025,1.0] colored edge under root to parts with library
+            if x = area's right:
+                add website Farm area box at [0.47,0.033,0.0] sized [0.045,0.025,1.0] colored edge under root to parts with library
+            if y = area's top:
+                add website Farm area box at [0.0,0.033,-0.47] sized [1.0,0.025,0.045] colored edge under root to parts with library
+            if y = area's bottom:
+                add website Farm area box at [0.0,0.033,0.47] sized [1.0,0.025,0.045] colored edge under root to parts with library
+    set model to a completed Farm model from parts
+    if entry's object = (0 as a pointer to UI scene object):
+        set entry's object to a website Farm object named (formatted "area-{area's id}") using model in (areas's landscape)
+        set entry's object's pickable to false
+    else:
+        set UI scene model in (entry's object) to model
+
+to get [place website Farm area] {a pointer to website Farm area scenery:entry} [on] {a pointer to website farm world:world} [at layer] {integer:layer}:
+    set instance to entry's object's instance
+    for each cell in (entry's cells):
+        set tile to the website farm square at (cell's x) (cell's y) in world
+        set height to tile's height
+        if tile's terrain = 1:
+            set height to 0.32
+        else if tile's terrain = 2:
+            set height to height - 0.16
+        set height to height + layer * 0.001 + (0.008 if entry's temporary, else 0.0)
+        set pose to the item at (cell's part) in (instance's poses)
+        set pose's position's y to height
+        set UI scene pose of part (cell's part) in instance to pose
+    return instance's pending

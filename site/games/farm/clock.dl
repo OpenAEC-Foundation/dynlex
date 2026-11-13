@@ -1,0 +1,45 @@
+import manual_control.dl
+
+to [start website Farm clock in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    set moving to session's document's world's player's target's present
+    if (session's clock request = 0) and ((session's playing or moving) or (session's held key != 0)):
+        request "timer" containing (a JSON object containing [JSON number "milliseconds" is (500 / session's document's speed)]) for purpose 23 indexed (session's generation) in state
+        set session's clock request to state's requests' id
+
+to [stop website Farm clock in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    increment session's generation
+    if session's clock request != 0:
+        ignore cancel website request (session's clock request) in state
+        set session's clock request to 0
+
+to [receive website Farm deadline] {integer:generation} [in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    if generation != session's generation:
+        return nothing
+    set session's clock request to 0
+    if session's playing:
+        advance the website farm world (session's document's world) using roles (session's document's roles) with workers running true
+    else if session's document's world's player's target's present:
+        advance the website farm player in (session's document's world)
+    if session's held key != 0:
+        step website Farm player toward (the website Farm direction for key (session's held key)) in state
+    update website Farm world view in state instantly (session's active = false)
+    start website Farm clock in state
+
+to [advance the website Farm in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    if session's document = (0 as a pointer to website farm document):
+        return nothing
+    set visible to false
+    if (state's route = "/index.html") and ((the value of "Challenge views" in (state's view's instance)) = 2):
+        set canvas to the UI layout labeled "Farm scene" in (state's view's layout)
+        if canvas != (0 as a pointer to UI layout):
+            set visible to ((canvas's painted bounds' y + canvas's painted bounds' height) > 0.0) and (canvas's painted bounds' y < state's view's height)
+    set session's active to visible
+    if visible and (session's renderer != (0 as a pointer to website Farm renderer)):
+        set elapsed to the maximum of 0.0 and (state's view's seconds - session's last frame)
+        ignore (advance website Farm renderer (session's renderer) over elapsed seconds dragging (session's pointer entity if session's pointer moved, else (the string form of "")))
+        animate UI view (state's view)
+    set session's last frame to state's view's seconds

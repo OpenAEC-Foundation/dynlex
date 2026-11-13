@@ -1,0 +1,38 @@
+import session.dl
+
+to [perform website Farm manual instruction] {website farm instruction:instruction} [in] {a pointer to website state:state}:
+    set document to state's farm's document
+    set actor to document's world's player
+    set actor's target to a new website farm movement target
+    set result to perform website farm instruction instruction for actor in (document's world)
+    set actor's status to result's message
+    set document's selected to "player"
+
+to get [the website Farm direction for key] {integer:key}:
+    if (key = 265) or (key = 87):
+        return 0
+    if (key = 262) or (key = 68):
+        return 1
+    if (key = 264) or (key = 83):
+        return 2
+    if (key = 263) or (key = 65):
+        return 3
+    return -1
+
+to [step website Farm player toward] {integer:direction} [in] {a pointer to website state:state}:
+    set state's farm's document's world's player's direction to direction
+    perform website Farm manual instruction (the website Farm instruction named "step") in state
+
+to [walk website Farm player to] {website farm point:point} [adjacently] {boolean:adjacent} [following animal] {string:animal} [in] {a pointer to website state:state}:
+    set document to state's farm's document
+    if (website farm land at (point's x) (point's y) is unlocked in (document's world)) = false:
+        notify website farm (document's world) saying "The east field opens after the second village order."
+    else:
+        set player to document's world's player
+        set player's target's present to true
+        set player's target's x to point's x
+        set player's target's y to point's y
+        set player's target's adjacent to adjacent
+        set player's target's animal to animal
+        set player's status to "Walking to the chosen square."
+        set document's selected to "player"

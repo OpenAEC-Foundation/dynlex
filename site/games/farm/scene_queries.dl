@@ -1,0 +1,57 @@
+# Scene queries use the same instances and triangle picking as scene drawing.
+import scene_flags.dl
+
+class:
+    patterns:
+        website Farm square selection
+    members:
+        point as website farm point
+        hit as UI scene hit
+
+class:
+    patterns:
+        website Farm entity selection
+    members:
+        entity as a string
+        object as a pointer to UI scene object
+        hit as UI scene hit
+
+to get [the website Farm square from] {UI scene ray:ray} [in] {a pointer to website Farm landscape:landscape}:
+    set result to a new website Farm square selection
+    loop index from 0 to 400:
+        set object to (landscape's tiles + index)'s ground
+        set selected to the UI scene selection from ray in (object's instance) including backfaces false
+        if (selected's hit's hit) and ((result's hit's hit = false) or (selected's hit's distance < result's hit's distance)):
+            set result's point to website farm point (index % 20) (index / 20)
+            set result's hit to selected's hit
+    return result
+
+to get [the website Farm occluders in] {a pointer to website Farm landscape:landscape}:
+    set result to an empty list of a pointer to UI scene object
+    append (landscape's barn) to result
+    append (landscape's compost) to result
+    loop index from 0 to 400:
+        set tree to (landscape's tiles + index)'s tree
+        if tree != (0 as a pointer to UI scene object):
+            append tree to result
+    return result
+
+to get [the website Farm entity from] {UI scene ray:ray} [in] {a pointer to website Farm landscape:landscape} [with] {a pointer to website Farm characters:characters} [and] {a pointer to website Farm flags:flags}:
+    set candidates to the website Farm occluders in landscape
+    for each character in (characters's entries):
+        append (character's object) to candidates
+    loop index from 0 to 9:
+        set object to the item at index in (flags's objects)
+        if object != (0 as a pointer to UI scene object):
+            append object to candidates
+    set selected to the UI scene object selection from ray among candidates including backfaces false
+    free candidates
+    set result to a new website Farm entity selection
+    set result's hit to selected's selection's hit
+    if result's hit's hit:
+        set result's object to selected's object
+        set result's entity to selected's object's name
+        if result's entity starts with "tree-":
+            set suffix to the substring of (result's entity) from 5 spanning ((the length of result's entity) - 5) bytes
+            set result's entity to "tile-" + suffix
+    return result

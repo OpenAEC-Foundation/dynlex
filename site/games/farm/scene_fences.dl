@@ -1,0 +1,115 @@
+import scene_fence_models.dl
+import scene_characters.dl
+import boundaries.dl
+
+class:
+    patterns:
+        website Farm fence scenery
+    members:
+        boundary as website farm fence
+        object as a pointer to UI scene object
+
+class:
+    patterns:
+        website Farm fences
+    members:
+        landscape as a pointer to website Farm landscape
+        sections as the type of (an empty list of website Farm fence scenery)
+        posts as (a pointer to UI scene object) array of 441 items
+        permanent posts as a boolean array of 441 items
+        rail model as UI scene model
+        gate model as UI scene model
+        post model as UI scene model
+
+to [add website Farm fence post at] {floating-point number:x} {floating-point number:y} [permanent] {boolean:permanent} [in] {a pointer to website Farm fences:fences}:
+    set index to ((x + 0.5) as an integer) + ((y + 0.5) as an integer) * 21
+    set post to the item at index in (fences's posts)
+    if post = (0 as a pointer to UI scene object):
+        set post to a website Farm object named (formatted "fence-post-{index}") using (fences's post model) in (fences's landscape)
+        set post's pickable to false
+        place website Farm object post at (a UI scene vector from [(x - 9.5),0.43,(y - 9.5)]) sized [1.0,1.0,1.0]
+        store post into fences's posts at index
+    if permanent:
+        store true into fences's permanent posts at index
+
+to [add website Farm fence from] {website farm point:from} [to] {website farm point:to} [in] {a pointer to website Farm fences:fences}:
+    set boundary to the potential website farm fence from from to to
+    if boundary's present = false:
+        return nothing
+    set index to the length of fences's sections
+    set model to fences's gate model if boundary's gate, else fences's rail model
+    set object to a website Farm object named (formatted "fence-{index}") using model in (fences's landscape)
+    set object's pickable to false
+    set pose to an identity UI scene pose
+    set pose's position to a UI scene vector from [(boundary's start x - 9.5),0.43,(boundary's start y - 9.5)]
+    set pose's rotation's y to 0.0 - @intrinsic("atan2", boundary's end y - boundary's start y, boundary's end x - boundary's start x)
+    set UI scene root pose in (object's instance) to pose
+    set section to a new website Farm fence scenery
+    set section's boundary to boundary
+    set section's object to object
+    append section to (fences's sections)
+    add website Farm fence post at (boundary's start x) (boundary's start y) permanent (boundary's locked = false) in fences
+    add website Farm fence post at (boundary's end x) (boundary's end y) permanent (boundary's locked = false) in fences
+
+to [update website Farm fences] {a pointer to website Farm fences:fences} [from] {a pointer to website farm world:world}:
+    for each section in (fences's sections):
+        set section's object's visible to (section's boundary's locked = false) or (world's expanded = false)
+    loop index from 0 to 441:
+        set post to the item at index in (fences's posts)
+        if post != (0 as a pointer to UI scene object):
+            set post's visible to (the item at index in (fences's permanent posts)) or (world's expanded = false)
+
+to get [website Farm fences for] {a pointer to website farm world:world} [in] {a pointer to website Farm landscape:landscape}:
+    set result to storage for one slot initialized with (a new website Farm fences)
+    set result's landscape to landscape
+    set result's sections to an empty list of website Farm fence scenery
+    set library to the address of (landscape's library)
+    set result's rail model to a website Farm fence model with gate false using library
+    set result's gate model to a website Farm fence model with gate true using library
+    set result's post model to a website Farm fence post model using library
+    loop y from 0 to 20:
+        loop x from -1 to 20:
+            add website Farm fence from (website farm point x y) to (website farm point (x + 1) y) in result
+    loop y from -1 to 20:
+        loop x from 0 to 20:
+            add website Farm fence from (website farm point x y) to (website farm point x (y + 1)) in result
+    update website Farm fences result from world
+    return result
+
+to get [advance website Farm fences] {a pointer to website Farm fences:fences} [near] {a pointer to website Farm characters:characters} [over] {floating-point number:seconds} [seconds]:
+    set blend to the UI scene blend at rate 8.0 over (the minimum of seconds and 0.08) seconds
+    if seconds = 0.0:
+        return false
+    set moving to false
+    for each section in (fences's sections):
+        if section's boundary's gate:
+            set boundary to section's boundary
+            set x to (boundary's start x + boundary's end x) / 2.0 - 9.5
+            set z to (boundary's start y + boundary's end y) / 2.0 - 9.5
+            set open to false
+            for each character in (characters's entries):
+                if character's kind = 0:
+                    set position to character's motion's position
+                    set dx to position's x - x
+                    set dz to position's z - z
+                    set open to open or (dx * dx + dz * dz < 1.5625)
+            set instance to section's object's instance
+            set pose to the item at 0 in (instance's poses)
+            set target to (-1.5707963267948966) if open, else 0.0
+            set difference to target - pose's rotation's y
+            if difference != 0.0:
+                set pose's rotation's y to target if (the absolute value of difference) < 0.001, else (pose's rotation's y + difference * blend)
+                set UI scene pose of part 0 in instance to pose
+                set moving to true
+    return moving
+
+to [close website Farm fences] {a pointer to website Farm fences:fences}:
+    for each section in (fences's sections):
+        remove website Farm scene object (section's object) from (fences's landscape)
+    loop index from 0 to 441:
+        set post to the item at index in (fences's posts)
+        if post != (0 as a pointer to UI scene object):
+            remove website Farm scene object post from (fences's landscape)
+    free fences's sections
+    destroy the value at fences
+    deallocate fences

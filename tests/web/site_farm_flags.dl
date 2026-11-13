@@ -1,0 +1,40 @@
+import ../../site/games/farm/scene_flags.dl
+import ../../site/games/farm/scene_landscape.dl
+
+set world to the initial website farm world
+clear world's flags
+set landscape to a website Farm landscape for world
+set count to the length of landscape's objects
+set flags to website Farm flags for world in landscape
+require condition ((the length of landscape's objects) = count) reporting "Unplaced flags must not create visible scene objects"
+set flag to a new website farm flag
+set flag's color to 0
+set flag's x to 6
+set flag's y to 8
+append flag to world's flags
+update website Farm flags flags from world dragging ""
+set object to the item at 0 in (flags's objects)
+require condition (((the length of landscape's objects) = count + 1) and (object's name = "flag-red")) reporting "A placed flag must retain its stable interaction identity"
+set cloth to the index of UI scene part named "cloth 0" under 0 in (object's instance's model)
+set color to (the item at cloth in (object's instance's materials))'s color
+require condition ((color's red = 205) and ((color's green = 99) and (color's blue = 80))) reporting "Flag material must use the authoritative vocabulary palette"
+set position to object's instance's root pose's position
+set expected to the website Farm scene point at 6 8 in world
+require condition ((the length of (position - expected)) < 0.000001) reporting "A flag must sit on its square's actual ground elevation"
+ignore (advance website Farm flags flags at 0.25)
+set pose to the item at cloth in (object's instance's poses)
+require condition ((the absolute value of (pose's rotation's y - (the sine of 6.5) * 0.10)) < 0.000001) reporting "Flag cloth must follow the original wind phase"
+set flag's x to 7
+replace item at index 0 in world's flags with flag
+update website Farm flags flags from world dragging "flag-red"
+require condition ((the length of (object's instance's root pose's position - position)) < 0.000001) reporting "A world refresh must preserve an actively dragged flag's position"
+update website Farm flags flags from world dragging ""
+set expected to the website Farm scene point at 7 8 in world
+require condition ((the length of (object's instance's root pose's position - expected)) < 0.000001) reporting "A completed flag move must use the updated world square"
+clear world's flags
+update website Farm flags flags from world dragging ""
+require condition ((the length of landscape's objects) = count) reporting "Removing a flag left an owned scene object behind"
+close website Farm flags flags
+close website Farm landscape landscape
+free website farm world world
+print line "Farm flags use the shared text palette, retain drag positions, animate cloth and release removed objects."

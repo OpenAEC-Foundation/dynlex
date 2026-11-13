@@ -1,14 +1,16 @@
 // Test-only browser capabilities for DynLex controller programs. No UI host or window.
 import { readFile } from 'node:fs/promises';
 import { buildRuntimeImports, createRuntimeFilesystem, inspectRuntimeWasmLayout } from '../../src/web/ide/public/compiler/runtimeImports.js';
+import {observeAllocations} from './allocation_probe.mjs';
 
-export async function recordWebsiteProgram(file, { synchronousService=()=>{throw new Error('Unexpected immediate platform call');}, hooks={}, shaderQuery = () => {throw new Error('Unexpected shader range query');}, renderShader = () => { throw new Error('Unexpected shader rendering'); }, cancelRequest = () => {
+export async function recordWebsiteProgram(file, { allocationLimit, synchronousService=()=>{throw new Error('Unexpected immediate platform call');}, hooks={}, shaderQuery = () => {throw new Error('Unexpected shader range query');}, renderShader = () => { throw new Error('Unexpected shader rendering'); }, cancelRequest = () => {
   throw new Error('The controller unexpectedly cancelled a platform request');
 } } = {}) {
   const bytes = await readFile(file);
   const output = [], requests = [], cancelled = [], calls=[],shaderCalls=[],uniformCalls=[];
   const shaderInputs=new Map();
   const runtime = buildRuntimeImports(output, createRuntimeFilesystem(), inspectRuntimeWasmLayout(bytes));
+  const allocations=allocationLimit===undefined?undefined:observeAllocations(runtime,allocationLimit);
   const decoder = new TextDecoder(), memory = runtime.env.__linear_memory;
   const text = (pointer, count) => decoder.decode(new Uint8Array(memory.buffer, pointer, count));
   runtime.env.ui_call=(surface,name,pointer,count,address,length)=>{
@@ -53,5 +55,5 @@ export async function recordWebsiteProgram(file, { synchronousService=()=>{throw
   const { instance } = await WebAssembly.instantiate(bytes, runtime);
   try { instance.exports.main(); }
   catch (error) { throw new Error(output.join(''), { cause: error }); }
-  return { output: output.join(''), requests, cancelled, calls, shaderCalls, uniformCalls };
+  return { output: output.join(''), requests, cancelled, calls, shaderCalls, uniformCalls, allocations };
 }

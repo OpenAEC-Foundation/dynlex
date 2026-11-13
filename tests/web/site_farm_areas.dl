@@ -1,0 +1,47 @@
+import ../../site/games/farm/scene_areas.dl
+import ../../site/games/farm/scene_landscape.dl
+
+set world to the initial website farm world
+set landscape to a website Farm landscape for world
+set count to the length of landscape's objects
+set areas to website Farm areas in landscape
+set area to a new website farm area
+set area's id to "orchard"
+set area's name to "Orchard"
+set area's color to "#609eaf"
+set area's left to 6
+set area's top to 7
+set area's right to 7
+set area's bottom to 8
+append area to world's areas
+ignore (update website Farm areas areas from world)
+set entry to the item at 0 in (areas's saved)
+require condition (((the length of entry's cells) = 4) and ((the length of entry's object's instance's model's parts) = 16)) reporting "A two-by-two Farm area needs one fill per tile and only its eight outside edges"
+set model to entry's object's instance's model's parts' data
+refresh UI scene instance (entry's object's instance)
+require condition ((update website Farm areas areas from world) = false) reporting "Unchanged Farm areas must retain their models and poses"
+require condition (entry's object's instance's model's parts' data = model) reporting "An unchanged area rebuilt its geometry"
+set cell to the item at 0 in (entry's cells)
+set tile to the website farm square at (cell's x) (cell's y) in world
+set tile's terrain to 2
+set pose to the item at (cell's part) in (entry's object's instance's poses)
+set height to pose's position's y
+require condition (update website Farm areas areas from world) reporting "Digging a channel must update the area's ground-following overlay"
+set pose to the item at (cell's part) in (entry's object's instance's poses)
+require condition ((the absolute value of ((height - pose's position's y) - 0.16)) < 0.000001) reporting "Area overlays must follow the lowered channel elevation"
+show website Farm area preview area valid true in areas from world
+set preview to areas's preview
+set fill to the item at 1 in (preview's object's instance's materials)
+require condition ((fill's unlit) and ((fill's opacity = 0.3) and (fill's depth write = false))) reporting "Area previews require translucent unlit fills without depth writes"
+require condition ((fill's color's red = 115) and (fill's color's green = 148)) reporting "Valid area previews have the wrong confirmation color"
+show website Farm area preview area valid false in areas from world
+set fill to the item at 1 in (preview's object's instance's materials)
+require condition ((fill's color's red = 202) and (fill's color's green = 89)) reporting "Invalid area previews have the wrong rejection color"
+hide website Farm area preview in areas
+clear world's areas
+ignore (update website Farm areas areas from world)
+require condition (((the length of areas's saved) = 0) and ((the length of landscape's objects) = count)) reporting "Removed area overlays left scene objects behind"
+close website Farm areas areas
+close website Farm landscape landscape
+free website farm world world
+print line "Farm area overlays retain unchanged geometry, follow terrain, draw only outside edges and own their previews."

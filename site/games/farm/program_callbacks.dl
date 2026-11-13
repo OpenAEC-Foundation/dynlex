@@ -1,0 +1,43 @@
+import session.dl
+import ../../programs/controller.dl
+import clock.dl
+
+to [notice website Farm start] {integer:index} [in] {a pointer to website state:state}:
+    set document to state's farm's document
+    set state's farm's pending actor to document's selected
+    set state's farm's pending role to document's role id
+    set the text of "Farm execution" in (state's view's instance) to "Reading the role…"
+    refresh website Farm controls in state
+
+to [notice website Farm finish] {integer:index} [in] {a pointer to website state:state}:
+    set program to state's programs + index
+    if program's result = 1:
+        set description to the item at index in (the website program descriptions)
+        set plan to the website farm plan from (program's output) dropping (the website prefix line count of description) source lines
+        if plan's error is empty:
+            set document to state's farm's document
+            set role to the website farm role identified by (state's farm's pending role) in (document's roles)
+            set actor to the website farm actor identified by (state's farm's pending actor) in (document's world)
+            apply website farm plan plan from (program's source) to role for actor in (document's world)
+            set state's farm's playing to true
+            set the text of "Farm execution" in (state's view's instance) to "Role applied. Workers with this role now share these instructions."
+            update website Farm world view in state instantly false
+            start website Farm clock in state
+        else:
+            set the text of "Farm diagnostics" in (state's view's instance) to (plan's error)
+        free website farm plan the address of plan
+    refresh website Farm controls in state
+
+to [notice website Farm source edit] {a pointer to UI instance:instance}:
+    set state to the website state in instance
+    stop website program (the website program for source "Farm source") in state
+    set role to the website Farm viewed role in state
+    require condition (role != (0 as a pointer to website farm role)) reporting "An editable Farm source must belong to a role"
+    set editor to the UI source editor labeled "Farm source" in (state's language)
+    set role's source to the UI main source of editor in (state's language) at (state's view's seconds) seconds
+    increment role's generation
+    set the text of "Farm diagnostics" in instance to ""
+    synchronize UI source workspace (state's language) at (state's view's seconds) seconds
+    refresh website Farm controls in state
+    save website Farm progress in state
+    animate UI view (state's view)

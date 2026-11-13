@@ -1,0 +1,1 @@
+Farm fences share permanent boundaries and posts, animate gates for people, preserve expansion and release every scene object.

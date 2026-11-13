@@ -1,0 +1,1 @@
+Farm area overlays retain unchanged geometry, follow terrain, draw only outside edges and own their previews.

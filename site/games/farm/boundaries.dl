@@ -57,7 +57,7 @@ to get [a website farm fence from] {website farm point:from} [to] {website farm 
     set result's locked to locked
     return result
 
-to get [the website farm fence from] {website farm point:from} [to] {website farm point:to} [in] {a pointer to website farm world:world}:
+to get [the potential website farm fence from] {website farm point:from} [to] {website farm point:to}:
     set vertical to (from's x = to's x) and ((the absolute value of (from's y - to's y)) = 1)
     set horizontal to (from's y = to's y) and ((the absolute value of (from's x - to's x)) = 1)
     set {low x} to the minimum of (from's x) and (to's x)
@@ -79,9 +79,15 @@ to get [the website farm fence from] {website farm point:from} [to] {website far
     if horizontal and (0 <= from's y < the website farm height):
         if (low x = -1) or (low x = the website farm width - 1):
             return a website farm fence from from to to with gate false locked false
-        if (low x = 14) and (world's expanded = false):
+        if low x = 14:
             return a website farm fence from from to to with gate false locked true
     return a new website farm fence
+
+to get [the website farm fence from] {website farm point:from} [to] {website farm point:to} [in] {a pointer to website farm world:world}:
+    set fence to the potential website farm fence from from to to
+    if (fence's locked) and (world's expanded):
+        return a new website farm fence
+    return fence
 
 to get [website farm travel from] {website farm point:from} [to] {website farm point:to} [is allowed in] {a pointer to website farm world:world} [for an animal] {boolean:animal}:
     set fence to the website farm fence from from to to in world

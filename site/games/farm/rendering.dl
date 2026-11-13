@@ -1,0 +1,146 @@
+# A Farm renderer owns its scene and shader; the UI view and world are borrowed.
+import scene_landscape.dl
+import scene_characters.dl
+import scene_fences.dl
+import scene_flags.dl
+import scene_areas.dl
+import render_inputs.dl
+
+class:
+    patterns:
+        website Farm renderer
+    members:
+        view as a pointer to UI view
+        resource as a pointer
+        landscape as a pointer to website Farm landscape
+        characters as a pointer to website Farm characters
+        fences as a pointer to website Farm fences
+        flags as a pointer to website Farm flags
+        areas as a pointer to website Farm areas
+        dragged as a string
+        bank as a pointer to UI scene mesh bank
+        frame as a pointer to UI scene frame
+        color binding as UI scene geometry binding
+        shadow binding as UI scene geometry binding
+        camera as website Farm camera
+        inputs as website Farm shader inputs
+        texture as UI texture
+        seconds as a floating-point number
+        rendered seconds as a floating-point number
+        rain as a floating-point number
+        rendered rain as a floating-point number
+        raining as a boolean
+        dirty as a boolean
+        shadow dirty as a boolean
+        baked as a boolean
+
+to [supply website Farm inputs in] {a pointer to website Farm renderer:renderer}:
+    for each input in renderer's inputs:
+        set UI shader (renderer's resource) pass (input's pass) in (renderer's view) uniform group 0 binding (input's binding) to (input's value)
+
+to get [a website Farm renderer for] {a pointer to website farm world:world} [in] {UI bounds:viewport} [using shader] {a pointer:resource} [in] {a pointer to UI view:view}:
+    set result to storage for one slot initialized with (a new website Farm renderer)
+    set result's view to view
+    set result's resource to resource
+    set result's landscape to a website Farm landscape for world
+    set result's characters to website Farm characters for world in (result's landscape)
+    set result's fences to website Farm fences for world in (result's landscape)
+    set result's flags to website Farm flags for world in (result's landscape)
+    set result's areas to website Farm areas in (result's landscape)
+    ignore (update website Farm areas (result's areas) from world)
+    set result's bank to a UI scene mesh bank
+    set result's frame to a UI scene frame using (result's bank)
+    set result's color binding to a UI scene geometry binding to (result's bank) in view shader resource pass (the website Farm surface pass)
+    set result's shadow binding to a UI scene geometry binding to (result's bank) in view shader resource pass (the website Farm shadow pass)
+    set result's camera to a website Farm camera in viewport
+    set result's inputs to an empty list of website Farm shader input
+    set result's raining to world's raining
+    set result's dirty and result's shadow dirty to true
+    return result
+
+to [update website Farm renderer] {a pointer to website Farm renderer:renderer} [from] {a pointer to website farm world:world} [over] {floating-point number:duration} [seconds instantly] {boolean:instant}:
+    update website Farm landscape (renderer's landscape) from world
+    update website Farm characters (renderer's characters) from world over duration seconds instantly instant
+    update website Farm fences (renderer's fences) from world
+    update website Farm flags (renderer's flags) from world dragging (renderer's dragged)
+    ignore (update website Farm areas (renderer's areas) from world)
+    set renderer's raining to world's raining
+    set renderer's dirty and renderer's shadow dirty to true
+
+to get [advance website Farm renderer] {a pointer to website Farm renderer:renderer} [over] {floating-point number:seconds} [seconds dragging] {a value:dragged}:
+    set renderer's seconds to renderer's seconds + seconds
+    set renderer's dragged to the string form of dragged
+    set camera to advance UI scene orbit (the address of (renderer's camera's orbit)) by seconds seconds
+    set poses to advance website Farm characters (renderer's characters) at (renderer's seconds) over seconds seconds dragging dragged
+    set gates to advance website Farm fences (renderer's fences) near (renderer's characters) over seconds seconds
+    set cloth to advance website Farm flags (renderer's flags) at (renderer's seconds)
+    set target to 1.0 if renderer's raining, else 0.0
+    set renderer's rain to renderer's rain + (target - renderer's rain) * (the UI scene blend at rate 0.5 over seconds seconds)
+    set geometry to poses or (gates or cloth)
+    set renderer's dirty to renderer's dirty or (camera or geometry)
+    set renderer's shadow dirty to renderer's shadow dirty or geometry
+    return renderer's dirty or (seconds > 0.0)
+
+to [upload website Farm frame in] {a pointer to website Farm renderer:renderer}:
+    set frame to renderer's frame
+    prepare UI scene frame frame from (renderer's landscape's objects) through (renderer's camera's orbit's camera)
+    ignore (refresh UI scene geometry binding (the address of (renderer's color binding)))
+    ignore (refresh UI scene geometry binding (the address of (renderer's shadow binding)))
+    upload UI scene instances (frame's records) through (renderer's color binding)
+    set UI shader (renderer's resource) pass (the website Farm surface pass) in (renderer's view) to draws (frame's draws' data) counting (the length of frame's draws)
+    if renderer's shadow dirty:
+        upload UI scene instances (frame's shadow records) through (renderer's shadow binding)
+        set UI shader (renderer's resource) pass (the website Farm shadow pass) in (renderer's view) to draws (frame's shadow draws' data) counting (the length of frame's shadow draws)
+
+to get [the rendered website Farm] {a pointer to website Farm renderer:renderer} [sized] {integer:width} [by] {integer:height} [in] {UI bounds:viewport}:
+    set previous to renderer's camera's viewport
+    if (previous's width != viewport's width) or (previous's height != viewport's height):
+        resize website Farm camera (the address of (renderer's camera)) to viewport
+        set renderer's dirty to true
+    else:
+        set renderer's camera's viewport to viewport
+    if ((renderer's texture's width = width) and (renderer's texture's height = height)) and ((renderer's dirty = false) and ((renderer's rendered seconds = renderer's seconds) and (renderer's rendered rain = renderer's rain))):
+        return renderer's texture
+    if renderer's baked = false:
+        prepare website Farm bake inputs in (renderer's inputs)
+        supply website Farm inputs in renderer
+    if renderer's dirty:
+        upload website Farm frame in renderer
+    prepare website Farm frame inputs in (renderer's inputs) through (renderer's camera's orbit's camera) at (renderer's seconds) with rain (renderer's rain) sized width by height
+    supply website Farm inputs in renderer
+    set UI shader (renderer's resource) pass (the website Farm shadow pass) in (renderer's view) enabled (renderer's shadow dirty)
+    set renderer's texture to a UI texture from shader (renderer's resource) sized width by height in (renderer's view)
+    if renderer's baked = false:
+        loop pass from 0 to ((the website Farm scattering pass) + 1):
+            set UI shader (renderer's resource) pass pass in (renderer's view) enabled false
+        set renderer's baked to true
+    if renderer's shadow dirty:
+        set UI shader (renderer's resource) pass (the website Farm shadow pass) in (renderer's view) enabled false
+    set renderer's shadow dirty and renderer's dirty to false
+    set renderer's rendered seconds to renderer's seconds
+    set renderer's rendered rain to renderer's rain
+    return renderer's texture
+
+to [reset website Farm renderer] {a pointer to website Farm renderer:renderer}:
+    set renderer's camera to a website Farm camera in (renderer's camera's viewport)
+    set renderer's seconds and renderer's rain to 0.0
+    for each section in (renderer's fences's sections):
+        if section's boundary's gate:
+            set instance to section's object's instance
+            set pose to the item at 0 in (instance's poses)
+            set pose's rotation's y to 0.0
+            set UI scene pose of part 0 in instance to pose
+    set renderer's dirty and renderer's shadow dirty to true
+
+to [close website Farm renderer] {a pointer to website Farm renderer:renderer}:
+    close UI shader (renderer's resource) in (renderer's view)
+    free renderer's inputs
+    close UI scene frame (renderer's frame)
+    close UI scene mesh bank (renderer's bank)
+    close website Farm areas (renderer's areas)
+    close website Farm flags (renderer's flags)
+    close website Farm fences (renderer's fences)
+    close website Farm characters (renderer's characters)
+    close website Farm landscape (renderer's landscape)
+    destroy the value at renderer
+    deallocate renderer

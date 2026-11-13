@@ -1,0 +1,71 @@
+import ../../site/games/farm/scene_fences.dl
+import ../../site/games/farm/scene_landscape.dl
+
+set world to the initial website farm world
+set landscape to a website Farm landscape for world
+set characters to website Farm characters for world in landscape
+set count to the length of landscape's objects
+set fences to website Farm fences for world in landscape
+require condition ((the length of fences's sections) = 121) reporting "Farm fences must preserve all unique pen, perimeter and divider edges"
+set posts to 0
+set gates to 0
+set locked to 0
+set gate to a new website Farm fence scenery
+loop index from 0 to 441:
+    if (the item at index in (fences's posts)) != (0 as a pointer to UI scene object):
+        increment posts
+for each section in (fences's sections):
+    if section's boundary's gate:
+        increment gates
+        set gate to section
+    if section's boundary's locked:
+        increment locked
+require condition ((posts = 119) and ((gates = 2) and (locked = 17))) reporting "Shared posts, gate count or permanent pen overlap changed"
+require condition ((the length of landscape's objects) = count + 240) reporting "Fence geometry must share posts rather than duplicate them per edge"
+set pose to gate's object's instance's root pose
+require condition ((pose's position's y = 0.43) and (gate's object's pickable = false)) reporting "Fence placement must preserve the original raised fence and terrain picking"
+for each character in (characters's entries):
+    set character's motion's position to a UI scene vector from [100.0,0.0,100.0]
+set person to the website Farm character named "player" in characters
+set midpoint to a UI scene vector from [((gate's boundary's start x + gate's boundary's end x) / 2.0 - 9.5),0.0,((gate's boundary's start y + gate's boundary's end y) / 2.0 - 9.5)]
+set person's motion's position to midpoint
+require condition (advance website Farm fences fences near characters over 0.05 seconds) reporting "A nearby person did not open the pen gate"
+set pose to the item at 0 in (gate's object's instance's poses)
+set expected to -1.5707963267948966 * (1.0 - @intrinsic("exp", -0.4))
+require condition ((the absolute value of (pose's rotation's y - expected)) < 0.000001) reporting "Gate rotation must ease around its hinge at the original rate"
+set previous to pose's rotation's y
+set person's motion's position to a UI scene vector from [100.0,0.0,100.0]
+set chicken to the website Farm character named "chicken-1" in characters
+set chicken's motion's position to midpoint
+ignore (advance website Farm fences fences near characters over 0.05 seconds)
+set pose to the item at 0 in (gate's object's instance's poses)
+require condition (pose's rotation's y > previous) reporting "Animals must not open gates"
+loop step from 0 to 100:
+    ignore (advance website Farm fences fences near characters over 0.08 seconds)
+require condition ((advance website Farm fences fences near characters over 0.08 seconds) = false) reporting "An idle gate must finish its animation"
+set world's expanded to true
+update website Farm fences fences from world
+set {visible sections} to 0
+set {visible posts} to 0
+for each section in (fences's sections):
+    if section's object's visible:
+        increment visible sections
+loop index from 0 to 441:
+    set post to the item at index in (fences's posts)
+    if post != (0 as a pointer to UI scene object):
+        if post's visible:
+            increment visible posts
+require condition ((visible sections = 104) and (visible posts = 104)) reporting "Opening the east field must preserve permanent pen and perimeter fences"
+close website Farm fences fences
+require condition ((the length of landscape's objects) = count) reporting "Fence ownership left scene objects behind"
+set fences to website Farm fences for world in landscape
+require condition ((the length of fences's sections) = 121) reporting "Loading an expanded farm must retain the complete boundary topology"
+set world's expanded to false
+update website Farm fences fences from world
+for each section in (fences's sections):
+    require condition (section's object's visible) reporting "An initially expanded farm lost its divider geometry"
+close website Farm fences fences
+close website Farm characters characters
+close website Farm landscape landscape
+free website farm world world
+print line "Farm fences share permanent boundaries and posts, animate gates for people, preserve expansion and release every scene object."

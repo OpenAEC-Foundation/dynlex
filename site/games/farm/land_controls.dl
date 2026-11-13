@@ -1,0 +1,78 @@
+import session.dl
+
+to [cancel website Farm area drawing in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    set session's drawing to 0
+    set session's drawing area and session's drawing name to ""
+    if session's renderer != (0 as a pointer to website Farm renderer):
+        hide website Farm area preview in (session's renderer's areas)
+        set session's renderer's dirty to true
+    set the text of "Farm area status" in (state's view's instance) to ""
+    refresh website Farm controls in state
+    request a UI redraw in (state's view)
+
+to [finish website Farm area from] {website farm point:start} [to] {website farm point:end} [in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    set world to session's document's world
+    set result to a new website farm area result
+    if session's drawing = 1:
+        set id to formatted "area-{the next website farm entity in world}"
+        set result to add website farm area named (session's drawing name) identified by id from start to end in world
+    else:
+        require condition (session's drawing = 2) reporting "Finishing an area requires a drawing mode"
+        set result to reshape website farm area (session's drawing area) from start to end in world
+    if result's error is not empty:
+        set the text of "Farm area status" in (state's view's instance) to (result's error)
+    else:
+        set session's selected area to result's area's id
+        cancel website Farm area drawing in state
+        set the text of "Farm area name" in (state's view's instance) to ""
+        update website Farm world view in state instantly false
+
+to get [follow website Farm land action] {string:destination} [in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    set world to session's document's world
+    set instance to state's view's instance
+    if destination = "action:farm-add-flag":
+        set color to the website farm flag number named (session's flag color)
+        set added to add website farm flag color in world
+        notify website farm world saying ((formatted "Added the {session's flag color} flag near you. Drag it to its destination.") if added, else (the string form of "There is no free square for another flag."))
+        update website Farm world view in state instantly false
+        return true
+    if destination = "action:farm-remove-flag":
+        remove website farm flag (the website farm flag number named (session's selected flag)) from world
+        notify website farm world saying (formatted "Removed the {session's selected flag} flag.")
+        update website Farm world view in state instantly false
+        return true
+    if destination = "action:farm-cancel-area":
+        cancel website Farm area drawing in state
+        return true
+    if (destination = "action:farm-draw-area") or (destination = "action:farm-reshape-area"):
+        set id to (the string form of "") if destination = "action:farm-draw-area", else (session's selected area)
+        set name to (the UI value for (the control labeled "Farm area name" in instance) in instance)'s text
+        if id is not empty:
+            set area to the website farm area identified by id in world
+            set name to area's name
+        set validation to the website farm area name name for id in world
+        if validation's error is not empty:
+            set the text of "Farm area status" in instance to (validation's error)
+            return true
+        set session's drawing to 1 if id is empty, else 2
+        set session's drawing area to id
+        set session's drawing name to validation's area's name
+        set the text of "Farm area status" in instance to (formatted "Drag a rectangle for “{session's drawing name}” on the farm.")
+        refresh website Farm controls in state
+        return true
+    if destination = "action:farm-rename-area":
+        set name to (the UI value for (the control labeled "Farm area name" in instance) in instance)'s text
+        set error to rename website farm area (session's selected area) to name in world
+        set the text of "Farm area status" in instance to error
+        update website Farm world view in state instantly false
+        return true
+    if destination = "action:farm-delete-area":
+        if session's drawing area = session's selected area:
+            cancel website Farm area drawing in state
+        remove website farm area (session's selected area) from world
+        update website Farm world view in state instantly false
+        return true
+    return false

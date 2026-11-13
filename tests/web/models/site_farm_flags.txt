@@ -1,0 +1,1 @@
+Farm flags use the shared text palette, retain drag positions, animate cloth and release removed objects.

@@ -8,6 +8,7 @@ import { setTimeout as pause } from 'node:timers/promises';
 import { verifySourceCompletion, verifySourcePaste, verifySourceDefinition, verifySourceHover, verifySourceInspection, verifySourceFixes, verifySourceCallColor, verifySourceCallColors, verifySourceNavigationAppearance } from './editor_feature_checks.mjs';
 import {canvasControls} from './canvas_controls.mjs';
 import {verifySourceSearch} from './source_search_checks.mjs';
+import {verifyFarmPage} from './site_farm_page_checks.mjs';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
 const graphicsMode = process.argv[3] || 'system';
@@ -129,13 +130,38 @@ try {
   });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: await fs.readFile(new URL('./fixtures/ui-color-probe.js', import.meta.url), 'utf8') });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], completions: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [] };
+    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], completions: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], farmDraws: [], farmFrames: [] };
     const instantiate = WebAssembly.instantiate.bind(WebAssembly);
     WebAssembly.instantiate = function(bytes, imports, ...args) {
       const env = imports?.env;
       if (env?.ui_text_mask) {
         const begin = env.ui_begin, mask = env.ui_text_mask;
         const decoder = new TextDecoder();
+        const farm = new Set(), textures = new Set(), draws = env.ui_shader_draws, frame = env.ui_shader_frame;
+        const triangles = env.ui_triangles;
+        env.ui_shader_draws = (surface, shader, pass, data, count) => {
+          if (pass === 50) { farm.add(shader); window.siteProbe.farmDraws.push({shader,count}); }
+          return draws(surface,shader,pass,data,count);
+        };
+        env.ui_shader_frame = (surface,shader,width,height) => {
+          const texture = frame(surface,shader,width,height);
+          if (farm.has(shader)) { textures.add(texture); window.siteProbe.farmFrames.push({shader,width,height}); }
+          return texture;
+        };
+        env.ui_triangles = (surface,pointer,count,texture,x,y,width,height) => {
+          if (textures.has(texture) && count > 0) {
+            const vertices = new Float32Array(env.__linear_memory.buffer,pointer,count * 8);
+            let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
+            for(let index=0;index<vertices.length;index+=8) {
+              left=Math.min(left,vertices[index]);right=Math.max(right,vertices[index]);
+              top=Math.min(top,vertices[index+1]);bottom=Math.max(bottom,vertices[index+1]);
+            }
+            left=Math.max(left,x,0);right=Math.min(right,x+width,innerWidth);
+            top=Math.max(top,y,0);bottom=Math.min(bottom,y+height,innerHeight);
+            if(right>left && bottom>top) window.siteProbe.farmBounds={x:left,y:top,width:right-left,height:bottom-top};
+          }
+          return triangles(surface,pointer,count,texture,x,y,width,height);
+        };
         const picture = env.ui_open_picture;
         env.ui_open_picture = (surface,view,image,done,pointer,count) => {
           window.siteProbe.pictures.push(decoder.decode(new Uint8Array(env.__linear_memory.buffer,pointer,count)));
@@ -220,6 +246,9 @@ try {
   await capture('desktop');
   console.log(JSON.stringify(await evaluate('({title:document.title,api:window.siteProbe.api,paints:window.siteProbe.paints})')));
   const {click,clickText,clickVisibleText}=canvasControls({command,evaluate,capture});
+  if (process.env.DYNLEX_SITE_SCENARIO === 'farm') {
+    await verifyFarmPage({command,evaluate,waitFor,controls:canvasControls({command,evaluate,capture}),capture});
+  } else {
   await click(335,627); await pause(1500); await capture('terrain');
   await click(335,627); await pause(1500); await capture('nano');
   await click(800,22); await pause(700); await capture('challenges');
@@ -395,6 +424,8 @@ try {
     assert.deepEqual(await evaluate('window.siteProbe.builds.at(-1).stages'),
       scene === 'event-horizon' ? ['fragment'] : ['fragment', 'vertex']);
     await pause(500); await capture('shader-' + scene);
+  }
+  assert.equal(errors.length,0,JSON.stringify(errors));
   }
   assert.equal(errors.length,0,JSON.stringify(errors));
   console.log('Site background preview passed.');

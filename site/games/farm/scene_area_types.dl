@@ -1,0 +1,42 @@
+import scene_character_types.dl
+import ../../packages/dynlex-ui/ui/color_text.dl
+
+class:
+    patterns:
+        website Farm area cell
+    members:
+        x as an integer
+        y as an integer
+        part as an integer
+
+class:
+    patterns:
+        website Farm area scenery
+    members:
+        area as website farm area
+        object as a pointer to UI scene object
+        cells as the type of (an empty list of website Farm area cell)
+        temporary as a boolean
+        seen as a boolean
+
+class:
+    patterns:
+        website Farm areas
+    members:
+        landscape as a pointer to website Farm landscape
+        saved as the type of (an empty list of a pointer to website Farm area scenery)
+        preview as a pointer to website Farm area scenery
+
+to get {website farm area:first} [has the same Farm area shape as] {website farm area:second}:
+    return ((first's left = second's left) and (first's right = second's right)) and (((first's top = second's top) and (first's bottom = second's bottom)) and (first's color = second's color))
+
+to [add website Farm area box at] {an array:point} [sized] {an array:size} [colored] {UI scene material:material} [under] {integer:parent} [to] {a pointer to a list:parts} [with] {a pointer to website farm art library:library}:
+    set part to a UI scene mesh part named "" under parent using (the Farm shape named "box" in library) with material material at (a Farm art pose at point sized size turned [0.0,0.0,0.0])
+    set part's casts shadow, part's receives shadow and part's pickable to false
+    append part to parts
+
+to [close website Farm area] {a pointer to website Farm area scenery:entry} [in] {a pointer to website Farm areas:areas}:
+    remove website Farm scene object (entry's object) from (areas's landscape)
+    free entry's cells
+    destroy the value at entry
+    deallocate entry

@@ -6,5 +6,5 @@ assert.deepEqual(result.requests.filter(request=>request.service!=='fixture'),[
   {service:'compiler',payload:{operation:'release',artifact:99}},
   {service:'audio',payload:{operation:'unload',buffers:[71,72]}}
 ]);
-assert.deepEqual(result.shaderCalls.filter(call=>call.operation==='close').map(call=>call.resource),[41,42]);
+assert.deepEqual(result.shaderCalls.filter(call=>call.operation==='close').map(call=>call.resource),[41,42,43]);
 console.log('Production input-loop cancellation regression passed: null, array and object replies; exact artifact, graphics and decoded-audio cleanup.');

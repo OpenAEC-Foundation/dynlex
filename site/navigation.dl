@@ -1,5 +1,6 @@
 import downloads/controller.dl
 import editor/entry.dl
+import games/farm/controller.dl
 
 # Resolve anchors from retained layout coordinates, including their parent regions.
 to get the top of {a pointer to UI layout:target} inside {a pointer to UI layout:layout} below {floating-point number:origin}:
@@ -17,6 +18,8 @@ to apply location {a pointer to JSON value:location} to {a pointer to website st
     set path to the JSON text named "path" in location
     if path has "/" at offset (path's length - 1):
         set path to path + "index.html"
+    if path != "/index.html":
+        pause website Farm in state
     set pages to the site's pages
     set index to 0
     set found to false

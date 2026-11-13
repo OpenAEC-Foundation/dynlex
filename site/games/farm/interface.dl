@@ -15,6 +15,8 @@ document farm challenge using farm panel appearance:
             region "Farm world" using farm card appearance:
                 paragraph "MEADOW FARM / 20 × 20" using farm signal appearance
                 surface "Farm scene" using farm stage appearance
+                paragraph "Farm view status" containing "Preparing the Farm…" using farm signal appearance
+                link "Retry Farm view" to "action:farm-retry-view" using farm action appearance
                 region "Farm camera" using farm controls appearance:
                     link "Whole farm" to "action:farm-overview" using farm action appearance
                     link "View selection" to "action:farm-focus" using farm action appearance
@@ -95,6 +97,7 @@ document farm challenge using farm panel appearance:
                         link "Delete role" to "action:farm-delete-role" using farm action appearance
                     paragraph "Farm code title" containing "LUMBERJACK.DL" using farm signal appearance
                     paragraph "Farm code state" containing "READY TO ASSIGN" using farm signal appearance
+                    paragraph "Farm status" containing "Ready to assign." using farm signal appearance
                     source pane "Farm source" containing "" using farm code appearance
                     paragraph "Farm analysis" containing "" using farm signal appearance
                     paragraph "Farm analysis diagnostics" containing "" using farm diagnostics appearance

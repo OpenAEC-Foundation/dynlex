@@ -40,7 +40,15 @@ export function canvasControls({command,evaluate,capture}) {
       if(point) {
         await pause(settle);
         point=await evaluate(location(text));
-        if(point) {await click(point.x,point.y);return;}
+        let stable=0;
+        for(let sample=0;point && sample<40;sample++) {
+          await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:point.x,y:point.y});
+          await pause(100);
+          const next=await evaluate(location(text));
+          stable=next && Math.abs(next.x-point.x)<0.5 && Math.abs(next.y-point.y)<0.5?stable+1:0;
+          point=next;
+          if(stable>=2) {await click(point.x,point.y);return point;}
+        }
       }
       if(!reveal) {await pause(50);continue;}
       const before=await evaluate(positions);

@@ -1,0 +1,60 @@
+import control_presentation.dl
+import ../progress/controller.dl
+
+to get [the saved website Farm document in] {a pointer to website state:state}:
+    if state's progress's status = 1:
+        set games to the JSON member named "games" in (state's progress's document)
+        if games has JSON member named "farm":
+            set result to the website farm document from (the JSON member named "data" in (the JSON member named "farm" in games))
+            require condition (result's error is empty) reporting "Validated Farm progress could not be decoded"
+            return result's document
+    return the initial website farm document
+
+to [save website Farm progress in] {a pointer to website state:state}:
+    if state's progress's status = 1:
+        save website game "farm" containing (the website farm snapshot of (state's farm's document)) in state
+
+to [show website Farm role] {string:id} [in] {a pointer to website state:state}:
+    set state's farm's document's role id to id
+    set role to the website Farm viewed role in state
+    set source to the string form of ""
+    if role != (0 as a pointer to website farm role):
+        set source to role's source
+    load website source "Farm source" from source in state
+    set the text of "Farm diagnostics" in (state's view's instance) to ""
+    set the text of "Farm status" in (state's view's instance) to "Ready to assign."
+    set the text of "Farm execution" in (state's view's instance) to "Apply a role, then pause its worker to step through the instructions."
+    refresh website Farm controls in state
+
+to [present website Farm world in] {a pointer to website state:state} [instantly] {boolean:instant}:
+    set session to the address of (state's farm)
+    if session's renderer != (0 as a pointer to website Farm renderer):
+        set duration to 0.5 / session's document's speed
+        update website Farm renderer (session's renderer) from (session's document's world) over duration seconds instantly instant
+    refresh website Farm controls in state
+    request a UI redraw in (state's view)
+
+to [update website Farm world view in] {a pointer to website state:state} [instantly] {boolean:instant}:
+    present website Farm world in state instantly instant
+    save website Farm progress in state
+
+to [choose website Farm person] {string:id} [in] {a pointer to website state:state}:
+    set document to state's farm's document
+    set actor to the website farm actor identified by id in (document's world)
+    require condition (actor != (0 as a pointer to website farm actor)) reporting "A Farm person selection must identify an existing actor"
+    set document's selected to id
+    set the text of "Farm worker name" in (state's view's instance) to (actor's name)
+    if actor's role is not empty:
+        show website Farm role (actor's role) in state
+    else:
+        refresh website Farm controls in state
+    save website Farm progress in state
+
+to [open website Farm document in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    if session's document = (0 as a pointer to website farm document):
+        set session's document to the saved website Farm document in state
+        show website Farm role (session's document's role id) in state
+        set actor to the website farm actor identified by (session's document's selected) in (session's document's world)
+        set the text of "Farm worker name" in (state's view's instance) to (actor's name)
+    refresh website Farm controls in state

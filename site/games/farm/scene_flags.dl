@@ -1,0 +1,66 @@
+import scene_character_types.dl
+import ../../packages/dynlex-ui/ui/color_text.dl
+
+class:
+    patterns:
+        website Farm flags
+    members:
+        landscape as a pointer to website Farm landscape
+        objects as (a pointer to UI scene object) array of 9 items
+        models as UI scene model array of 9 items
+        phases as a floating-point number array of 9 items
+
+to [update website Farm flags] {a pointer to website Farm flags:flags} [from] {a pointer to website farm world:world} [dragging] {a value:dragged}:
+    set seen to [false,false,false,false,false,false,false,false,false]
+    for each flag in world's flags:
+        set index to flag's color
+        store true into seen at index
+        set object to the item at index in (flags's objects)
+        set description to the item at index in (the website farm flags)
+        set id to formatted "flag-{description's key}"
+        if object = (0 as a pointer to UI scene object):
+            set object to a website Farm object named id using (the item at index in (flags's models)) in (flags's landscape)
+            store object into flags's objects at index
+        if id != dragged:
+            place website Farm object object at (the website Farm scene point at (flag's x) (flag's y) in world) sized [1.0,1.0,1.0]
+        store (flag's x as a floating-point number) into flags's phases at index
+    loop index from 0 to 9:
+        set object to the item at index in (flags's objects)
+        if (the item at index in seen) = false:
+            if object != (0 as a pointer to UI scene object):
+                remove website Farm scene object object from (flags's landscape)
+                store (0 as a pointer to UI scene object) into flags's objects at index
+
+to get [website Farm flags for] {a pointer to website farm world:world} [in] {a pointer to website Farm landscape:landscape}:
+    set result to storage for one slot initialized with (a new website Farm flags)
+    set result's landscape to landscape
+    loop index from 0 to 9:
+        set description to the item at index in (the website farm flags)
+        set color to UI ink from hexadecimal (description's color)
+        store (a Farm flag colored color with (the address of (landscape's library))) into result's models at index
+    update website Farm flags result from world dragging ""
+    return result
+
+to get [advance website Farm flags] {a pointer to website Farm flags:flags} [at] {floating-point number:seconds}:
+    set moving to false
+    loop index from 0 to 9:
+        set object to the item at index in (flags's objects)
+        if object != (0 as a pointer to UI scene object):
+            set instance to object's instance
+            set angle to (the sine of (seconds * 2.0 + (the item at index in (flags's phases)))) * 0.10
+            loop cloth from 0 to 2:
+                set part to the index of UI scene part named (formatted "cloth {cloth}") under 0 in (instance's model)
+                set pose to the item at part in (instance's poses)
+                if pose's rotation's y != angle:
+                    set pose's rotation's y to angle
+                    set UI scene pose of part part in instance to pose
+                    set moving to true
+    return moving
+
+to [close website Farm flags] {a pointer to website Farm flags:flags}:
+    loop index from 0 to 9:
+        set object to the item at index in (flags's objects)
+        if object != (0 as a pointer to UI scene object):
+            remove website Farm scene object object from (flags's landscape)
+    destroy the value at flags
+    deallocate flags

@@ -46,6 +46,9 @@ to [apply website progress to the games in] {a pointer to website state:state}:
         set state's river's coding to a copy of JSON node (the JSON member named "coding" in data)
     refresh website progress controls in state
 
+    if state's progress's loaded != (0 as a pointer):
+        @intrinsic("call pointer", state's progress's loaded, nothing, state)
+
 # Enumerate every guest, account and backup file before opening the active profile.
 to [open website progress in] {a pointer to website state:state}:
     set store to the address of (state's progress)

@@ -626,7 +626,7 @@ reuse skips runtime expressions only. The import-free edit regression is
 `scripts/test_incremental_scope_rules.py`; it runs through the required incremental
 suite. All 351 required tests and all 518 integration tests pass after the
 correction. The browser compiler rebuild and official Web smoke tests pass too.
-The remaining Farm UI/controller migration is still pending.
+Farm controller integration continued after these compiler checks.
 
 Farm composition also exposed a result-schema inference defect. Forward references
 inferred a data section's shared `result` expression in place. A signature probe
@@ -636,3 +636,14 @@ inference. Result schemas now receive context-owned instances, matching body-fie
 and receiver schemas. The import-free `data_section_result_probes` fixture covers
 independent signature probes of the same declared value. The native required suite
 passes all 352 cases after this correction.
+The rebuilt browser compiler and its official smoke tests pass as well.
+
+The Farm page now uses its declared controls, the shared source workspace and
+program callbacks, and the DynLex scene renderer. Dispatcher tests cover opening,
+flags, work areas, playback, reset and gallery navigation. A captured-pointer
+profile-switch regression exposed a controller error: cancelling the gesture
+saved the old world after the new store had been selected. Presentation and
+persistence are now separate; cancellation cannot write progress. Reset and
+profile changes clear unfinished drawing and capture state. Both native-emitted
+Wasm and the shipped browser compiler pass these controller tests with no retained
+allocations. Final page/browser and deployment checks are still pending.

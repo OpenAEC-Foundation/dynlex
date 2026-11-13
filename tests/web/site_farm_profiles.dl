@@ -1,0 +1,44 @@
+import ../../site/games/farm/controller.dl
+import site_fixture.dl
+
+set instance to an instance of website fixture
+set driver to a website shader test driver
+set view to a new UI view
+set view's driver to the address of driver
+set view's instance to the address of instance
+set state to a new website state
+set state's view to the address of view
+set state's services to the browser UI service provider
+set instance's state to (the address of state) as a pointer
+prepare website fixture editors in (the address of state)
+initialize the website Farm in (the address of state)
+open website Farm document in (the address of state)
+set session to the address of (state's farm)
+set session's document's world's tick to 37
+set role to the website Farm viewed role in (the address of state)
+set role's source to "A private draft from the previous profile."
+show website Farm role (role's id) in (the address of state)
+# A ready scene and a captured pointer are valid immediately before auth changes.
+set session's renderer to a website Farm renderer for (session's document's world) in (UI box at 0.0 0.0 sized 640.0 480.0) using shader (77 as a pointer) in (the address of view)
+set session's graphics phase to 3
+set session's pointer mode to 1
+set session's focused to true
+set the value of "Challenge views" in (the address of instance) to 2
+
+# The account controller has already selected the new store before notifying games.
+set state's progress's document to empty website progress
+set state's progress's status to 1
+set state's progress's profile to "user:second"
+apply website progress to the games in (the address of state)
+require condition (state's progress's status = 1) reporting "Cancelling a Farm gesture wrote the previous world into the new profile"
+require condition (session's document's world's tick = 0) reporting "The new profile retained the previous Farm world"
+require condition ((the website Farm viewed role in (the address of state))'s source = (the string form of (the website farm lumberjack source))) reporting "The new profile retained the previous Farm draft"
+require condition ((session's pointer mode = 0) and (session's focused = false)) reporting "A profile switch retained pointer or keyboard capture"
+require condition (((the JSON member named "games" in (state's progress's document)) has JSON member named "farm") = false) reporting "Opening another profile invented a saved Farm"
+
+close website Farm in (the address of state)
+free state's progress's document
+free state's river's coding
+release website fixture editors in (the address of state)
+close the address of instance
+print line "Switching profiles during a captured Farm gesture clears the old world and draft without writing either store."

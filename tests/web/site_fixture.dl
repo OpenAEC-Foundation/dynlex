@@ -12,9 +12,13 @@ document website fixture:
 import ../../site/packages/dynlex-ui/platform/browser/shaders.dl
 import ../../site/packages/dynlex-ui/platform/browser/requests.dl
 
+to [wake a website fixture view] {a pointer to UI view:view}:
+    ignore view
+
 to get [a website shader test driver]:
     set driver to a new UI driver
     set driver's shader operations to the browser UI shader operations
+    set driver's wake to (the function named "wake a website fixture view $") as a pointer
     return driver
 
 # Controllers use real document geometry without creating a native window.

@@ -9,3 +9,4 @@ class:
         profile as a string
         document as a pointer to JSON value
         saved as a pointer
+        loaded as a pointer

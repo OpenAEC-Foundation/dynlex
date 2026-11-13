@@ -1,0 +1,12 @@
+# Build-time linking produces the static scene program consumed by both hosts.
+import program.dl
+import lib/filesystem.dl
+
+read the file at "/input.json" and set input to it
+require condition (input succeeded) reporting "The Farm shader linker requires its compiled stages"
+parse (input's contents) as JSON and set parsed to it
+require condition (parsed succeeded) reporting "The Farm shader linker received invalid stage data"
+set program to the website Farm render graph using (parsed's value)
+print line the compact JSON form of program
+free program
+free parsed's value

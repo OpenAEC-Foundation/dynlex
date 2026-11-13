@@ -1,0 +1,39 @@
+import document.dl
+import rendering.dl
+import scene_queries.dl
+import scene_focus.dl
+
+# A session is lazy: opening the challenge loads its saved document and graphics.
+class:
+    patterns:
+        website Farm session
+    members:
+        document as a pointer to website farm document
+        renderer as a pointer to website Farm renderer
+        graphics resource as a pointer
+        graphics phase as an integer
+        graphics request as an integer
+        clock request as an integer
+        generation as an integer
+        active as a boolean
+        playing as a boolean
+        last frame as a floating-point number
+        held key as an integer
+        pending actor as a string
+        pending role as a string
+        selected flag as a string
+        flag color as a string
+        selected area as a string
+        drawing as an integer
+        drawing area as a string
+        drawing name as a string
+        focused as a boolean
+        viewport as UI bounds
+        pointer mode as an integer
+        pointer start as UI point
+        pointer previous as UI point
+        pointer entity as a string
+        pointer selection as website Farm entity selection
+        pointer moved as a boolean
+        pointer square as website Farm square selection
+        pointer origin as website Farm square selection

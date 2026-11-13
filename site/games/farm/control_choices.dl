@@ -1,0 +1,59 @@
+import control_models.dl
+
+to [refresh website Farm choices in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    set document to session's document
+    set world to document's world
+    set options to an empty list of UI option
+    loop index from 0 to (the website farm actor count in world):
+        set actor to the website farm actor at index in world
+        set caption to actor's name + (" · farmer" if index = 0, else (" · paused" if actor's paused, else ""))
+        append (a UI option named (actor's id) displaying caption enabled true) to options
+    supply website Farm choices "Farm people" from options choosing (document's selected) in state
+    clear options
+    for each role in (document's roles):
+        append (a UI option named (role's id) displaying (role's name) enabled true) to options
+    supply website Farm choices "Farm role" from options choosing (document's role id) in state
+    clear options
+    for each flag in (world's flags):
+        set description to the item at (flag's color) in (the website farm flags)
+        append (a UI option named (description's key) displaying (description's key) enabled true) to options
+    set session's selected flag to the retained Farm choice (session's selected flag) among (a sequence copying options)
+    supply website Farm choices "Farm flags" from options choosing (session's selected flag) in state
+    clear options
+    loop index from 0 to (the length of (the website farm flags)):
+        set placed to false
+        for each flag in (world's flags):
+            set placed to placed or (flag's color = index)
+        if placed = false:
+            set description to the item at index in (the website farm flags)
+            append (a UI option named (description's key) displaying (description's key) enabled true) to options
+    set session's flag color to the retained Farm choice (session's flag color) among (a sequence copying options)
+    supply website Farm choices "Farm flag color" from options choosing (session's flag color) in state
+    clear options
+    for each area in (world's areas):
+        append (a UI option named (area's id) displaying (area's name) enabled true) to options
+    set session's selected area to the retained Farm choice (session's selected area) among (a sequence copying options)
+    supply website Farm choices "Farm areas" from options choosing (session's selected area) in state
+    clear options
+    for each tool in (the website farm tools):
+        set command to the website farm action named (tool's command)
+        set instruction to the website Farm instruction for tool tool
+        set label to the website farm example of command selecting (instruction's argument) amount (instruction's amount) at (instruction's target) explicitly targeted (tool's targets)
+        set enabled to world's cow present if (tool's key = "feedCow") or (tool's key = "milk"), else true
+        append (a UI option named (tool's key) displaying label enabled enabled) to options
+    set chosen to the retained Farm choice (the website Farm choice in "Farm action" in state) among (a sequence copying options)
+    supply website Farm choices "Farm action" from options choosing chosen in state
+    clear options
+    loop index from 0 to (the length of (the website farm items)):
+        set description to the item at index in (the website farm items)
+        set count to the item at index in (world's stock)
+        append (a UI option named (description's key) displaying (formatted "{description's label} · {count}") enabled (count > 0)) to options
+    set chosen to the retained Farm choice (the website Farm choice in "Farm supply" in state) among (a sequence copying options)
+    supply website Farm choices "Farm supply" from options choosing chosen in state
+    clear options
+    for each goal in (the website Farm goal descriptions):
+        append (a UI option named (the item at 0 in goal) displaying (the item at 1 in goal) enabled true) to options
+    set chosen to the retained Farm choice (the website Farm choice in "Farm goal" in state) among (a sequence copying options)
+    supply website Farm choices "Farm goal" from options choosing chosen in state
+    free options

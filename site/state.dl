@@ -5,6 +5,7 @@ import downloads/release.dl
 import programs/types.dl
 import editor/types.dl
 import games/river/playback.dl
+import games/farm/controller_types.dl
 import games/progress/types.dl
 import account/types.dl
 
@@ -40,6 +41,7 @@ class:
         editor entry as a string
         shader editor as website shader editor
         river as website river playback
+        farm as website Farm session
         progress as website progress store
         account as website account state
 

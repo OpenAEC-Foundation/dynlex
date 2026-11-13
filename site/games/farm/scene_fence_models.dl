@@ -1,0 +1,19 @@
+import scene_landscape_types.dl
+
+to get [a website Farm fence model with gate] {boolean:gate} [using] {a pointer to website farm art library:library}:
+    set parts to an empty list of UI scene part
+    set hinge to a Farm art group named "rails" at [0.0,0.0,0.0] under -1 in parts
+    for each height in [0.22,0.43]:
+        add Farm "box" colored [216,193,138] at [0.5,height,0.0] sized [0.96,0.065,0.055] under hinge to parts with library
+    if gate:
+        add Farm "box" colored [177,154,101] at [0.5,0.325,0.0] sized [0.97,0.045,0.055] turned [0.0,0.0,0.22] under hinge to parts with library
+        add Farm "box" colored [83,76,54] at [0.90,0.40,0.04] sized [0.07,0.03,0.03] under hinge to parts with library
+    return a completed Farm model from parts
+
+to get [a website Farm fence post model using] {a pointer to website farm art library:library}:
+    set parts to an empty list of UI scene part
+    add Farm "box" colored [196,174,120] at [0.0,0.29,0.0] sized [0.07,0.58,0.07] under -1 to parts with library
+    set cap to a UI cylinder mesh with top 0.0 bottom 1.0 height 1.0 around 4 sides capped true
+    set pose to a Farm art pose at [0.0,0.605,0.0] sized [0.052,0.05,0.052] turned [0.0,0.7853981633974483,0.0]
+    append (a UI scene mesh part named "cap" under -1 using cap with material (a Farm art material colored [226,204,160]) at pose) to parts
+    return a completed Farm model from parts

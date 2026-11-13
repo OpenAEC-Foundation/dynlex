@@ -20,7 +20,8 @@ the website program descriptions means: [
     @intrinsic("construct", website program description, "Vocabulary", "Vocabulary output", "Vocabulary status", "", "main.dl", false, true, "Run vocabulary ▶", "action:run-vocabulary", "action:stop-vocabulary"),
     @intrinsic("construct", website program description, "IDE modes", "IDE output", "IDE status", "", "main.dl", false, true, "Run program ▶", "action:run-ide", "action:stop-ide"),
     @intrinsic("construct", website program description, "Studio source", "Studio output", "Studio status", "", "main.dl", false, true, "Run studio sketch ▶", "action:run-studio", "action:stop-studio"),
-    @intrinsic("construct", website program description, "River source", "River diagnostics", "River status", "import lib/river_challenge.dl\n\n", "river.dl", true, false, "Run plan ▶", "action:run-river", "action:stop-river")
+    @intrinsic("construct", website program description, "River source", "River diagnostics", "River status", "import lib/river_challenge.dl\n\n", "river.dl", true, false, "Run plan ▶", "action:run-river", "action:stop-river"),
+    @intrinsic("construct", website program description, "Farm source", "Farm diagnostics", "Farm status", "import lib/farm_challenge.dl\n\n", "farm.dl", true, false, "Give this role to Ada", "action:farm-apply", "action:farm-stop")
 ]
 
 class:

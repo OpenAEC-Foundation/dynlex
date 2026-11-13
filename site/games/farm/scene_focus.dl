@@ -1,0 +1,27 @@
+import scene_queries.dl
+import camera.dl
+
+to get [the website Farm view from] {vector:eye} [toward] {vector:target} [is blocked by] {UI scene objects:objects}:
+    for each height in [-0.15,0.35]:
+        set subject to target + (a UI scene vector from [0.0,height,0.0])
+        set distance to the length of (subject - eye)
+        set ray to @intrinsic("construct", UI scene ray, the UI scene vector form of eye, (subject - eye) normalized)
+        set selected to the UI scene object selection from ray among objects including backfaces false
+        if (selected's selection's hit's hit) and (selected's selection's hit's distance < distance - 0.1):
+            return true
+    return false
+
+to [focus website Farm camera] {a pointer to website Farm camera:camera} [on] {a pointer to website farm actor:actor} [in] {a pointer to website farm world:world} [around] {a pointer to website Farm landscape:landscape} [over] {floating-point number:seconds} [seconds]:
+    set target to (the website Farm scene point at (actor's x) (actor's y) in world) + (a UI scene vector from [0.0,0.45,0.0])
+    set objects to the website Farm occluders in landscape
+    set eye to target
+    set index to 0
+    set blocked to true
+    loop while (index < 12) and blocked:
+        set angle to (the website Farm heading for (actor's direction)) + index * 0.5235987755982988
+        set direction to a UI scene vector from [(the sine of angle),0.9,(the cosine of angle)]
+        set eye to target + (direction normalized) * 7.0
+        set blocked to the website Farm view from eye toward target is blocked by objects
+        increment index
+    free objects
+    focus website Farm camera camera on target viewed from eye over seconds seconds

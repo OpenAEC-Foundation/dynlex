@@ -56,9 +56,14 @@ to get receive website reply {a pointer to JSON value:response} for {integer:job
         receive website river voice index in state
     if (job >= 14) and (job <= 20):
         receive website account reply response for purpose job indexed index in state
+    if (job = 21) or (job = 22):
+        receive website Farm graphics response for purpose job in state
+    if job = 23:
+        receive website Farm deadline index in state
     return false
 
 to read website input {a pointer to UI view:view}:
+    read website Farm input view
     if view's input kind = 7:
         set state to the website state in (view's instance)
         set index to 0
@@ -67,6 +72,7 @@ to read website input {a pointer to UI view:view}:
             increment index
         set state's shader editor's preview's active to false
         set state's river's active to false
+        pause website Farm in state
         flush website account save in state
     if (view's input kind != 11) and (view's input kind != 12):
         return nothing
@@ -118,6 +124,11 @@ to read website input {a pointer to UI view:view}:
                 if (pending's purpose >= 14) and (pending's purpose <= 20):
                     if ((pending's purpose = 14) or ((pending's purpose = 15) or (pending's purpose = 20))) or (pending's index = state's account's generation):
                         fail website account purpose (pending's purpose) in state
+                if (pending's purpose = 21) or (pending's purpose = 22):
+                    fail website Farm graphics (the string form of "The Farm graphics service failed") in state
+                if pending's purpose = 23:
+                    set state's farm's clock request to 0
+                    pause website Farm in state
             deallocate pending
             if retained = false:
                 free document
@@ -129,6 +140,7 @@ to read website input {a pointer to UI view:view}:
 to close the website {a pointer to UI view:view}:
     set instance to view's instance
     set state to the website state in instance
+    close website Farm in state
     free website river trace the address of (state's river's trace)
     free state's river's coding
     free state's progress's document
@@ -179,9 +191,11 @@ function open the DynLex website using {a pointer to UI driver:driver} with {a p
         set view's close action to (the function named "close the website $") as a pointer
         open website source editors in state
         initialize the website river in state
+        initialize the website Farm in state
         open website progress in state
         open website account with (the website account configuration) in state
         bind (the control labeled "River scene" in instance) in instance to (the function named "paint the website river $") for event 1
+        bind (the control labeled "Farm scene" in instance) in instance to (the function named "paint the website Farm $") for event 1
         bind website links in (instance's description) for instance
         bind website program commands in state
         bind (the control labeled "IDE source" in instance) in instance to (the function named "notice website source edit $") for event 0
