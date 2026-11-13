@@ -296,7 +296,11 @@ type or constraint operands accept. `integer` leaves the sign unspecified and ac
 `signed` and `unsigned` restrict the sign. The result keeps an exact type view whenever its properties determine a
 number kind, completing an unspecified sign and width with the built-in defaults.
 
-Number rules (`numbers are ...`) are inferred in the declared type-constraint worklist. Constraints written in a scope
+Number rules (`numbers are ...`) are inferred in the declared type-constraint worklist.
+Their expressions carry static type-constraint references, including nested expressions.
+Inactive-function reuse skips only runtime expression references, so an unused
+function's scope rules still resolve and participate in that worklist after edits.
+Constraints written in a scope
 whose number rule is still pending wait for it. Number type phrases and numeric literals written in a scope with a
 number rule receive the rule's properties where they leave them unspecified; flex replacements keep the rules of the
 file that defines them. A literal whose type came from a rule yields to an explicitly typed parameter that rejects it,

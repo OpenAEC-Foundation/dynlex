@@ -8,6 +8,9 @@ static void skipInactiveBodyReferences(
 	std::vector<Section *> selected = context.selectInactiveBodiesForResolutionReuse();
 	std::unordered_set<Section *> owners(selected.begin(), selected.end());
 	std::erase_if(bodyReferences, [&](PatternReference *reference) {
+		// Static declarations remain active even inside an unused runtime body.
+		if (reference->purpose != PatternReference::Purpose::Expression)
+			return false;
 		for (Section *section = reference->range().section(); section; section = section->parent) {
 			if (!owners.contains(section))
 				continue;

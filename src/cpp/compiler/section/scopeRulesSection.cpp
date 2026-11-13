@@ -1,6 +1,7 @@
 #include "scopeRulesSection.h"
 #include "definitionSection.h"
 #include "parseContext.h"
+#include "patternReference.h"
 #include "syntaxConfig.h"
 #include <utility>
 #include <vector>
@@ -134,7 +135,14 @@ bool ScopeRulesSection::processLine(ParseContext &context, CodeLine *line) {
 	if (kinds.empty()) {
 		// Every other rule is an ordinary pattern, such as `numbers are 64 bit floating-point`.
 		line->expression = detectPatterns(context, Range(line, text), SectionType::Function);
-		return line->expression != nullptr;
+		if (!line->expression)
+			return false;
+		visitExpressionTree(line->expression, [](Expression *expression) {
+			if (expression->patternReference)
+				expression->patternReference->purpose = PatternReference::Purpose::TypeConstraint;
+			return false;
+		});
+		return true;
 	}
 
 	Range ruleRange(line, text);
