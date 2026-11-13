@@ -104,13 +104,25 @@ export async function verifySourceDefinition({command,evaluate,waitFor,key,captu
 
 export async function verifySourceHover({command,evaluate,waitFor,key,capture,source,name}) {
   const inspected='@intrinsic("store", answer, 7)\n@intrinsic("discard", answer)';
+  // Typing under the previous mouse position can open a declaration tooltip
+  // over the next token before semantic coloring finishes. Start outside the
+  // source so the intended mouse move reaches the inspected token itself.
+  await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1});
   await key('KeyA','a',65,2);
   await command('Input.insertText',{text:inspected});
   await waitFor(`document.querySelector('textarea').value===${JSON.stringify(inspected)}`);
   await waitFor('window.colorProbe.some(item=>item.text.trim()==="answer")');
   const point=await evaluate('window.colorProbe.filter(item=>item.text.trim()==="answer").at(-1)');
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:point.x,y:point.y});
-  await waitFor('window.siteProbe.visible.includes("a 32-bit integer") && window.siteProbe.visible.includes("value: 7")');
+  try {
+    await waitFor('window.siteProbe.visible.includes("a 32-bit integer") && window.siteProbe.visible.includes("value: 7")');
+  } catch(error) {
+    console.error('Source hover evidence:',await evaluate(`JSON.stringify({point:${JSON.stringify(point)},
+      source:document.querySelector('textarea').value,visible:window.siteProbe.visible,
+      tokens:window.colorProbe.filter(item=>item.text.trim()==='answer').slice(-6),
+      requests:window.siteProbe.hoverRequests,replies:window.siteProbe.hoverReplies})`));
+    await capture(name+'-hover-failure');throw error;
+  }
   assert(await evaluate('document.activeElement===document.querySelector("textarea")'),
     'Hover inspection took keyboard focus away from the source.');
   await capture(name+'-hover');

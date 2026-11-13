@@ -7,6 +7,7 @@ to get test shader stage {C string:name} with {integer:binding}:
     return a JSON object containing [
         JSON text "webgpu" is (the string form of name), JSON text "webgl" is (the string form of name),
         JSON child "vertexInputs" is inputs,
+        JSON child "resources" is (a new JSON-RPC array), JSON child "glslBindings" is (a new JSON-RPC array), JSON child "glslUniforms" is (a new JSON-RPC array),
         JSON child "uniforms" is (a JSON array containing [
             a JSON object containing [JSON text "name" is "time", JSON number "group" is 0, JSON number "binding" is 0, JSON child "type" is (a JSON object containing [JSON text "scalar" is "float32", JSON number "rows" is 1, JSON number "columns" is 1])],
             a JSON object containing [JSON text "name" is "width", JSON number "group" is 0, JSON number "binding" is binding, JSON child "type" is (a JSON object containing [JSON text "scalar" is "float32", JSON number "rows" is 1, JSON number "columns" is 1])]
@@ -32,7 +33,8 @@ set linked to the linkage of endless terrain using stages stored as "url"
 require condition (linked succeeded) reporting "The terrain shader did not link"
 set program to linked's program
 set first to the JSON value at index 0 in (the JSON member named "passes" in program)
-require condition (the JSON boolean named "depth" in first) reporting "Terrain lost depth testing"
+require condition ((the JSON member named "depth" in first) is not JSON null) reporting "Terrain lost depth testing"
+require condition (the JSON boolean named "depthWrite" in (the JSON member named "state" in first)) reporting "Terrain stopped writing depth"
 require condition ((the JSON member named "uniforms" in first)'s length = 2) reporting "Shared vertex/fragment uniform bindings were duplicated"
 require condition ((the JSON text named "kind" in (the JSON member named "webgl" in (the JSON member named "vertex" in first))) = "url") reporting "A packaged shader lost its URL source"
 set buffers to the JSON member named "vertexBuffers" in first
@@ -46,7 +48,9 @@ set program to linked's program
 set passes to the JSON member named "passes" in program
 require condition (passes's length = 2) reporting "The point-cloud shader lost its background pass"
 set second to the JSON value at index 1 in passes
-require condition ((the JSON text named "blend" in second) = "additive") reporting "The point cloud lost its additive blend"
+set blend to the JSON member named "blend" in (the JSON member named "state" in second)
+require condition ((the JSON text named "dstFactor" in (the JSON member named "color" in blend)) = "one") reporting "The point cloud lost its additive blend"
+require condition ((the JSON text named "load" in (the JSON member named "color" in second)) = "load") reporting "The point cloud stopped preserving its background"
 require condition ((the JSON number named "renderPass" in second) = 1.0) reporting "The point-cloud pass lost its shader layer"
 set buffer to the JSON value at index 0 in (the JSON member named "vertexBuffers" in second)
 require condition ((the JSON text named "source" in buffer) = "assets/shaders/geometry/vitruvian-points.f32") reporting "A static vertex source was not preserved."

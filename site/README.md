@@ -50,6 +50,11 @@ history. Shader edits compile to both WGSL and GLSL, then use the same DynLex
 linker and renderer as the homepage. A failed edit keeps the last successful
 preview. Stop, pause/resume and reset control its clock; offscreen previews and
 reduced-motion pages do not advance it. Unchanged frames reuse their texture.
+Shader descriptions use the shared UI pass graph: named assets and output,
+reflected numeric/image/sampler bindings, explicit color/depth attachments and
+raster state. The DynLex linker checks resource types and attachment compatibility
+before allocation. The same browser renderer supports depth-only passes, HDR,
+multisample resolves, independent samplers and preserved/blended passes on both APIs.
 
 Use `/ide/?mode=shader` for a new shader, or
 `/ide/?mode=shader&scene=endless-terrain` to edit a packaged scene. Scene links

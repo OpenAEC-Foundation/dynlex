@@ -38,6 +38,8 @@ export async function recordWebsiteProgram(file, { synchronousService=()=>{throw
     renderShader({surface,resource,width,height,inputs:[...shaderInputs.values()].filter(input=>input.surface===surface&&input.resource===resource)});
   runtime.env.ui_shader_vertex_buffer = (surface,resource,pass,slot,pointer,count) =>
     shaderCalls.push({operation:'vertex',surface,resource,pass,slot,data:[...new Uint8Array(memory.buffer,pointer,count)]});
+  runtime.env.ui_shader_image = (surface,resource,name,length,level,layer,pointer,count) =>
+    shaderCalls.push({operation:'image',surface,resource,name:text(name,length),level,layer,data:[...new Uint8Array(memory.buffer,pointer,count)]});
   runtime.env.ui_shader_index_buffer = (surface,resource,pass,pointer,count) =>
     shaderCalls.push({operation:'index',surface,resource,pass,data:[...new Uint32Array(memory.buffer,pointer,count)]});
   runtime.env.ui_shader_draws = (surface,resource,pass,pointer,count) =>

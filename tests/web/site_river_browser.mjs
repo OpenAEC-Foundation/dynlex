@@ -127,7 +127,7 @@ try {
   });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: await fs.readFile(new URL('./fixtures/ui-color-probe.js', import.meta.url), 'utf8') });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], completions: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], marks: [], requests: [], contexts: [], sources: [], decoded: 0, frames: new Set() };
+    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], completions: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], marks: [], requests: [], contexts: [], sources: [], decoded: 0, frames: new Set(), hoverRequests: [], hoverReplies: [] };
     const scheduleFrame = requestAnimationFrame.bind(window), cancelFrame = cancelAnimationFrame.bind(window);
     window.requestAnimationFrame = callback => {
       let id = scheduleFrame(time => { window.siteProbe.frames.delete(id); callback(time); });
@@ -204,6 +204,8 @@ try {
     window.Worker = class extends BrowserWorker {
       postMessage(message, ...args) {
         if (message.type === 'compile') window.siteProbe.compilations.push(message.payload.entry);
+        if (message.type === 'language' && message.payload.message.method === 'textDocument/hover')
+          window.siteProbe.hoverRequests.push(message.payload.message);
         return super.postMessage(message, ...args);
       }
       constructor(...args) {
@@ -214,6 +216,8 @@ try {
             status: data.result.status, stages: Object.keys(data.result.stages || {})
           });
           if (!Array.isArray(data.result)) return;
+          for (const message of data.result) if (message.result?.contents)
+            window.siteProbe.hoverReplies.push(message);
           for (const message of data.result) if (Array.isArray(message.result?.items))
             window.siteProbe.completions.push(message.result.items);
           for (const message of data.result) if (message.method === 'textDocument/publishDiagnostics')

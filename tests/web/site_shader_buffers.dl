@@ -5,7 +5,7 @@ to get [a buffer test uniform named] {C string:name} [at] {integer:binding}:
     return a JSON object containing [JSON text "name" is name, JSON number "group" is 0, JSON number "binding" is binding, JSON child "type" is (a JSON object containing [JSON text "scalar" is "float32", JSON number "rows" is 1, JSON number "columns" is 1])]
 
 to get a buffer test program for {live shader:shader}:
-    set stage to a JSON object containing [JSON text "webgpu" is "code", JSON text "webgl" is "code", JSON child "uniforms" is (a JSON array containing [a buffer test uniform named "time" at 0, a buffer test uniform named "render_pass" at 1, a buffer test uniform named "width" at 2, a buffer test uniform named "height" at 3]), JSON child "vertexInputs" is (a new JSON-RPC array)]
+    set stage to a JSON object containing [JSON text "webgpu" is "code", JSON text "webgl" is "code", JSON child "uniforms" is (a JSON array containing [a buffer test uniform named "time" at 0, a buffer test uniform named "render_pass" at 1, a buffer test uniform named "width" at 2, a buffer test uniform named "height" at 3]), JSON child "resources" is (a new JSON-RPC array), JSON child "glslBindings" is (a new JSON-RPC array), JSON child "glslUniforms" is (a new JSON-RPC array), JSON child "vertexInputs" is (a new JSON-RPC array)]
     set stages to a JSON object containing [JSON child "fragment" is stage, JSON child "vertex" is (a copy of JSON-RPC node stage)]
     set linked to the linkage of shader using stages stored as "source"
     free stages
