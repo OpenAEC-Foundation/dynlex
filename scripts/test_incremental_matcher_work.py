@@ -4,6 +4,33 @@ import json
 from pathlib import Path
 
 
+def matcher_result_keys(segment):
+    """Inspect result records separately from reference/classification metadata."""
+    packed = segment.read_bytes().split(b"\n", 2)[2]
+    header = b"DynLex matcher results v6\n"
+    assert packed.startswith(header)
+    position = len(header)
+    result = set()
+    while position < len(packed):
+        key = packed[position:position + 64]
+        position += 64
+        length = shift = 0
+        while True:
+            byte = packed[position]
+            position += 1
+            length |= (byte & 127) << shift
+            shift += 7
+            if not byte & 128:
+                break
+        value = packed[position:position + length]
+        position += length
+        assert value
+        if value[0] in (0, 1):
+            result.add(key)
+    assert position == len(packed)
+    return result
+
+
 def check_matcher_fingerprint_work(root, build):
     for name, spelling, limit in (("single", "announce", 1), ("sorted", "zulu alpha middle", 10)):
         main = root / f"matcher_fingerprint_{name}.dl"
@@ -64,7 +91,12 @@ def check_matcher_segment_reuse(root, build):
             "body edit rewrote a retained matcher segment"
     assert edited[1:] == build(False, entry=main)[1:]
 
-    for path in sorted(after)[::2]:
+    # Segment filenames are content hashes. Arbitrarily deleting half can
+    # remove every lookup while retaining only metadata, depending on paths.
+    lookup_segments = {path for path in after if matcher_result_keys(path)}
+    assert lookup_segments, "the fixture must contain cached matcher results"
+    retained_lookup = min(lookup_segments)
+    for path in after - {retained_lookup}:
         path.unlink()
     main.write_text(source.replace('"discard", 1', '"discard", 5'))
     evicted = build(entry=main)

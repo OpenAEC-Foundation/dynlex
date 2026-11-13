@@ -11,7 +11,8 @@ from test_incremental_partial_constraints import (check_partial_constraint_produ
                                                  check_partial_constraint_cycle,
                                                  check_partial_constraint_import,
                                                  check_failed_constraint_frontend,
-                                                 check_constraint_diagnostic_publication)
+                                                 check_constraint_diagnostic_publication,
+                                                 check_blocked_constraint_storage)
 
 
 def check_constraint_lookup_dependencies(root, build):
@@ -26,6 +27,7 @@ def check_constraint_lookup_dependencies(root, build):
     check_partial_constraint_context(root, build)
     check_partial_constraint_class(root, build)
     check_partial_constraint_cycle(root, build)
+    check_blocked_constraint_storage(root, build)
     check_partial_constraint_import(root, build)
     check_failed_constraint_frontend(root, build)
     check_constraint_diagnostic_publication(root, build)

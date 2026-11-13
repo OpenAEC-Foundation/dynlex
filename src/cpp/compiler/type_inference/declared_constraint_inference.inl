@@ -534,22 +534,17 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 			parseContext, Diagnostic::Level::Error, "cyclic type constraint", unresolved->diagnosticRange, "type_constraint",
 			unresolved->typeConstraintName
 		));
-		// Each blocked query consumes the fixed-point frontier. A change to
-		// any pending signature can unblock another query in that frontier.
-		std::unordered_set<const Section *> blockers;
-		for (const DeclaredTypeConstraintWorkItem &item : items)
-			if (item.expression || item.expressionOmittedForReuse) {
-				Section *owner = item.sourceSection;
-				while (owner->parent && owner->patternDefinitions.empty())
-					owner = owner->parent;
-				blockers.insert(owner);
-			}
+		// Blocked owners form one fixed-point frontier. Store each owner
+		// once per query; cache invalidation expands the shared frontier.
 		for (size_t index = 0; index < items.size(); index++)
 			if (items[index].expression || items[index].expressionOmittedForReuse) {
+				Section *owner = items[index].sourceSection;
+				while (owner->parent && owner->patternDefinitions.empty())
+					owner = owner->parent;
 				Query &query = parseContext.constraintQueries[index];
 				query.state = Query::State::Blocked;
 				query.pass = pass;
-				query.dependencies.insert(blockers.begin(), blockers.end());
+				query.dependencies.insert(owner);
 			}
 		destroyExpressions();
 		return false;

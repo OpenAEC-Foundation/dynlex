@@ -1,5 +1,36 @@
 """A failed constraint keeps completed, failed and unvisited query products distinct."""
 
+import json
+from pathlib import Path
+
+
+def check_blocked_constraint_storage(root, build):
+    main = root / "blocked_constraint_storage.dl"
+    count = 4
+    names = ["cycle " + chr(97 + index // 26) + chr(97 + index % 26) for index in range(count)]
+    source = ''.join(name + ' {' + name + ' 1:value} means: @intrinsic("type", "int", 32)\n'
+                     for name in names)
+    source += 'to unused: @intrinsic("discard", 0)\n'
+    main.write_text(source)
+    failed = build(entry=main, success=False)
+    assert failed[1:] == build(False, entry=main, success=False)[1:]
+    path = Path(failed[0]["cache_entry"])
+    manifest = json.loads(path.with_name(path.name.replace("program-", "errors-", 1))
+                          .read_bytes().split(b"\n", 2)[2])
+    key = manifest["constraint_state"]["payload_keys"]["all_function_projection"]
+    projection = json.loads((path.parent / f"payload-{key}.entry").read_bytes().split(b"\n", 2)[2])
+    schedule = projection["constraint_probe_schedule"]
+    assert len(schedule["items"]) == count
+    assert sum(len(roots) for roots in schedule["roots"]) <= 3 * count, \
+        "independent blocked queries stored a quadratic number of dependency roots"
+    main.write_text(source.replace('"discard", 0', '"discard", 1'))
+    repeated = build(entry=main, success=False)
+    assert repeated[1:] == build(False, entry=main, success=False)[1:]
+    assert repeated[0]["constraint_probes_run"] == 0
+    main.write_text(source.replace(names[0] + ' {' + names[0] + ' 1:value}', names[0] + ' {value}'))
+    repaired = build(entry=main, success=False)
+    assert repaired[1:] == build(False, entry=main, success=False)[1:]
+
 
 def check_partial_constraint_products(root, build):
     for broken_first in (False, True):

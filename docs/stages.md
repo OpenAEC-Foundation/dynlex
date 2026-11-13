@@ -1012,8 +1012,10 @@ Query diagnostic products retain selected warnings before display duplicate
 suppression. Their emission discriminators and shared publication identities
 survive replay through normal diagnostic publication. Removing an earlier query
 therefore neither loses a later query's suppressed warning nor emits it twice.
-A cyclic fixed point retains each pending query as blocked, depending on every
-signature in that frontier. Replaying a blocked query preserves deferral; the
+A cyclic fixed point retains each pending query as blocked, with a shared
+dependency on the signatures in that frontier. Each query records its own owner
+and actual reads; invalidation expands the blocked-owner set once, without
+storing all pairs of owners in every query. Replaying a blocked query preserves deferral; the
 cycle diagnostic still follows a complete pass without progress. Adding an
 independent invalid constraint therefore reports the same first error as a clean
 build, and an independent successful constraint can add a pass without exposing

@@ -98,7 +98,8 @@ std::vector<bool> reusableConstraintProbes(
 	const Json &lookupReads = schedule.at("callable_lookups");
 	requireCompilerInvariant(
 		items.size() == texts.size() && items.size() == schedule.at("passes").size() && items.size() == roots.size() &&
-			items.size() == lookupReads.size() && items.size() == owners.size() && items.size() == sources.size(),
+			items.size() == lookupReads.size() && items.size() == owners.size() && items.size() == sources.size() &&
+			items.size() == schedule.at("states").size(),
 		"saved type-constraint probe schedule has mismatched item records"
 	);
 	bool topLevelExecutionChanged = !sourceProjectionsEqual(prior.at("ambient_sources"), current.at("ambient_sources"));
@@ -113,9 +114,13 @@ std::vector<bool> reusableConstraintProbes(
 	// recorded read through that declaration before following ordinary callers,
 	// including candidates observed by deferred or rejected trials.
 	std::map<std::string, std::vector<size_t>> readers;
+	std::unordered_set<std::string> blockedOwners;
 	std::vector<bool> dirty(items.size(), false);
 	for (size_t index = 0; index < items.size(); index++) {
 		const std::string &owner = owners.at(index).get_ref<const std::string &>();
+		if (schedule.at("states").at(index).get<int>() ==
+			static_cast<int>(ParseContext::IncrementalConstraintQuery::State::Blocked))
+			blockedOwners.insert(owner);
 		for (const Json &root : roots.at(index))
 			readers[root.get<std::string>()].push_back(index);
 		auto source = currentSources.find(sources.at(index).get_ref<const std::string &>());
@@ -136,11 +141,17 @@ std::vector<bool> reusableConstraintProbes(
 		for (const Json &owner : graph.at("callable_lookups").at(key).at("owners"))
 			pending.push_back(owner.get<std::string>());
 	std::unordered_set<std::string> dirtyClosure;
+	bool blockedFrontierInvalidated = false;
 	while (!pending.empty()) {
 		std::string path = std::move(pending.back());
 		pending.pop_back();
 		if (!dirtyClosure.insert(path).second)
 			continue;
+		if (!blockedFrontierInvalidated && blockedOwners.contains(path)) {
+			blockedFrontierInvalidated = true;
+			for (const std::string &owner : blockedOwners)
+				pending.push_back(owner);
+		}
 		if (reverse.contains(path))
 			for (const Json &caller : reverse.at(path))
 				pending.push_back(caller.get<std::string>());
