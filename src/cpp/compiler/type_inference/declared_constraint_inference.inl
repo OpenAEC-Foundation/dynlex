@@ -140,7 +140,18 @@ static void recordDeclaredConstraintDependencies(
 ) {
 	auto addVariableOwner = [&](VariableReference *reference) {
 		requireCompilerInvariant(reference, "type-constraint expression has a null variable reference");
-		auto owner = variableOwners.find(normalizeBindingReference(reference));
+		const VariableReference *definition = normalizeBindingReference(reference);
+		if (auto lookup = context.unboundConstraintVariableScopes.find(definition);
+			lookup != context.unboundConstraintVariableScopes.end()) {
+			// This read searched the lexical scopes without finding a binding.
+			// A later declaration can change that result, even if this candidate
+			// loses overload selection and never emits a diagnostic.
+			for (Section *scope = lookup->second; scope; scope = scope->parent)
+				if (scope == context.mainSection || !scope->patternDefinitions.empty())
+					dependencies.insert(scope);
+			return;
+		}
+		auto owner = variableOwners.find(definition);
 		requireCompilerInvariant(owner != variableOwners.end(), "type-constraint variable has no owning section");
 		for (const Section *section = owner->second; section; section = section->parent)
 			if (section == context.mainSection ||

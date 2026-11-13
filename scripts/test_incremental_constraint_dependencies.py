@@ -3,7 +3,7 @@
 
 from test_incremental_constraint_units import (check_constraint_query_units, check_constraint_signature_dependencies,
                                               check_constraint_declaration_edits, check_constraint_provider_membership,
-                                              check_constraint_provider_visibility)
+                                              check_constraint_provider_visibility, check_unbound_constraint_argument)
 
 
 def check_constraint_lookup_dependencies(root, build):
@@ -12,6 +12,7 @@ def check_constraint_lookup_dependencies(root, build):
     check_constraint_declaration_edits(root, build)
     check_constraint_provider_membership(root, build)
     check_constraint_provider_visibility(root, build)
+    check_unbound_constraint_argument(root, build)
     check_constraint_body_dependencies(root, build)
     main = root / "constraint_lookup_dependencies.dl"
     for spelling, call in (

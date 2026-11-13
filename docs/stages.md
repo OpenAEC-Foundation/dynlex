@@ -989,7 +989,10 @@ a flex definition therefore invalidates its readers instead of the whole stage.
 The saved dependency graph also invalidates a probe when an edited
 body reaches a definition or binding read by its expression. Every probe attempt
 records syntactic candidates and bindings, including deferred attempts and
-rejected grouping trials. Body edits use those recorded edges instead of a
+rejected grouping trials. Temporary unbound names retain the lexical scopes
+searched by their lookup. They remain ordinary inference inputs: selecting an
+unbound reference reports the configured source error, while rejected candidates
+retain their negative dependency without producing an error. Body edits use those recorded edges instead of a
 textual approximation: editing subtraction cannot invalidate a literal type name
 merely because the name contains a hyphen. Each probe also links its reads to
 the declaration whose signature it determines. Invalidation follows those edges

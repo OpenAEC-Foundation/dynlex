@@ -556,8 +556,11 @@ Expression *createTypeConstraintExpression(ParseContext &context, Section *secti
 				if (parameter)
 					variable = scope->findVariable(parameter);
 			}
-			if (variable && variable->definition)
+			if (variable) {
+				requireCompilerInvariant(variable->definition, "type-constraint binding has no source definition");
 				varMatch.variableReference->definition = normalizeBindingReference(variable->definition);
+			} else
+				context.unboundConstraintVariableScopes.emplace(varMatch.variableReference, section);
 		}
 		for (PatternMatch &subMatch : match.subMatches)
 			self(reference, subMatch, self);
@@ -580,6 +583,15 @@ Expression *createTypeConstraintExpression(ParseContext &context, Section *secti
 
 	prepareMatches(typeExpr);
 	expandExpression(typeExpr, section);
+	visitExpressionTree(typeExpr, [&](Expression *expression) {
+		if (expression->kind != Expression::Kind::Variable)
+			return false;
+		VariableReference *reference = expression->variable;
+		requireCompilerInvariant(reference, "type-constraint variable expression has no reference");
+		if (!reference->definition && !section->findVariable(reference))
+			context.unboundConstraintVariableScopes.try_emplace(reference, section);
+		return false;
+	});
 	return typeExpr;
 }
 

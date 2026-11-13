@@ -140,3 +140,34 @@ def check_constraint_provider_visibility(root, build):
     assert edited[0]["constraint_probes_run"] == 0
     assert edited[0]["constraint_values_reused"] == 1, \
         "a hidden file-local provider invalidated a query in another file"
+
+
+def check_unbound_constraint_argument(root, build):
+    main = root / "unbound_constraint_argument.dl"
+    source = ('type for amount means: @intrinsic("type", "int", amount)\n'
+              'to consume {type for missing:value}: @intrinsic("discard", value)\n'
+              'consume 1\n')
+    main.write_text(source)
+    failed = build(entry=main, success=False)
+    assert "Unknown variable: missing" in failed[1]
+    assert failed[1:] == build(False, entry=main, success=False)[1:]
+    repeated = build(entry=main, success=False)
+    assert repeated[0]["frontend_reused"]
+    assert repeated[1:] == failed[1:]
+    main.write_text(source + 'missing means: 32\n')
+    fixed = build(entry=main)
+    assert fixed[1:] == build(False, entry=main)[1:]
+
+    for label, expression in (("intrinsic", '@intrinsic("type of", {missing})'),
+                              ("helper", 'type for {missing}')):
+        main = root / f"unbound_explicit_constraint_{label}.dl"
+        source = ('type for amount means: @intrinsic("type", "int", amount)\n'
+                  f'to consume {{{expression}:value}}: @intrinsic("discard", value)\n')
+        for name in ("missing", "absent"):
+            main.write_text(source.replace("missing", name))
+            failed = build(entry=main, success=False)
+            assert f"Unknown variable: {name}" in failed[1]
+            assert failed[1:] == build(False, entry=main, success=False)[1:]
+            repeated = build(entry=main, success=False)
+            assert repeated[0]["frontend_reused"]
+            assert repeated[1:] == failed[1:]

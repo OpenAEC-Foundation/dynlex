@@ -1,0 +1,1 @@
+to consume {@intrinsic("type of", {missing}):value}: @intrinsic("discard", value)

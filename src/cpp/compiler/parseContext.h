@@ -382,6 +382,9 @@ struct ParseContext {
 	// Owns all VariableReference instances for this compilation.
 	// Other structures keep non-owning raw pointers into this arena.
 	std::vector<std::unique_ptr<VariableReference>> ownedVariableReferences;
+	// Temporary constraint matches retain absent-name lookups separately from
+	// source declarations. Selected unbound references are diagnosed by inference.
+	std::unordered_map<const VariableReference *, Section *> unboundConstraintVariableScopes;
 	std::vector<std::shared_ptr<ExpressionStorage>> restoredBodyExpressionArenas;
 	std::vector<std::unique_ptr<PatternReference>> restoredBodyPatternReferences;
 	// Explicit source captures are parsed before pattern definitions. Register
