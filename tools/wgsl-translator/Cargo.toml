@@ -11,6 +11,9 @@ crate-type = ["cdylib"]
 [dependencies]
 naga = { version = "=30.0.1", default-features = false, features = ["spv-in", "wgsl-out", "glsl-out"] }
 
+[patch.crates-io]
+naga = { path = "../../.cache/shader-translator/naga" }
+
 [profile.release]
 codegen-units = 1
 lto = true

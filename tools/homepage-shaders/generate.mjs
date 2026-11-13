@@ -37,7 +37,14 @@ function requireBuffer(relativePath) {
 const translatorHash = sha256(Buffer.concat([
   Buffer.from(requireFile("tools/wgsl-translator/Cargo.toml")),
   Buffer.from(requireFile("tools/wgsl-translator/Cargo.lock")),
-  Buffer.from(requireFile("tools/wgsl-translator/src/lib.rs")),
+  ...["src"].flatMap(directory =>
+    fs.readdirSync(absolute(`tools/wgsl-translator/${directory}`), { recursive: true })
+      .filter(name => name.endsWith(".rs")).sort()
+      .map(name => Buffer.concat([Buffer.from(`${directory}/${name}\0`),
+        requireBuffer(`tools/wgsl-translator/${directory}/${name}`)]))),
+  requireBuffer("metadata/SHADER_TRANSLATOR"),
+  requireBuffer("tools/wgsl-translator/patches/naga-early-merges.patch"),
+  requireBuffer("scripts/prepare_shader_translator.py"),
   requireBuffer("src/web/ide/public/compiler/dynlex_wgsl_translator.wasm")
 ]));
 const compilerHash = sha256(Buffer.concat([
@@ -206,7 +213,7 @@ function configuredGeometryRecord(geometry) {
 function verifyGeneratedOutputs() {
   const manifest = JSON.parse(requireFile(shaderConfig.manifest));
   if (
-    manifest.schemaVersion !== 13
+    manifest.schemaVersion !== 14
     || manifest.translatorHash !== translatorHash
     || manifest.compilerHash !== compilerHash
     || !Array.isArray(manifest.scenes)
@@ -295,7 +302,9 @@ for (const scene of shaderConfig.scenes) {
           hash: sha256(fragmentSources[backend])
         }
       ])),
-      uniforms: fragment.uniforms
+      uniforms: fragment.uniforms,
+      resources: fragment.resources,
+      glslBindings: fragment.glslBindings
     }
   };
 
@@ -318,7 +327,9 @@ for (const scene of shaderConfig.scenes) {
           hash: sha256(vertexSources[backend])
         }
       ])),
-      uniforms: vertex.uniforms
+      uniforms: vertex.uniforms,
+      resources: vertex.resources,
+      glslBindings: vertex.glslBindings
     };
   }
 
@@ -342,7 +353,7 @@ for (const scene of shaderConfig.scenes) {
 await compiler.close();
 
 const manifest = `${JSON.stringify({
-  schemaVersion: 13,
+  schemaVersion: 14,
   translatorHash,
   compilerHash,
   semanticLegend,

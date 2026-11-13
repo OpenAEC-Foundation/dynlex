@@ -564,3 +564,29 @@ tests, vocabulary and WGSL/GLSL translations. All 516 integration checks pass wi
 no failures or skips. Shared host texture/sampler allocation, render targets, resource bindings
 and the actual Farm material/world/interface integration remain unfinished; this
 phase has not changed the live preview or its pinned SDK.
+
+## Shader translation and physical resources
+
+GLSL translation now returns the writer's exact combined-image/sampler mappings,
+including additional samplers for one image. Its virtual bindings map back to the
+original image, allowing independent sampler objects without duplicating pixel
+storage. All workers, compiler tools and stored homepage metadata use that
+contract; the homepage manifest is schema 14.
+
+Resource pixel tests exposed two additional translation defects. The WGSL writer
+cannot emit nonempty switch fall-through, so portable IR lowering moves each case
+body once into conditional execution within one switch. A separate Naga SPIR-V
+frontend defect assigned a shared block before the declared merge to its first
+incoming branch. Complete-function postdominator analysis now assigns that shared
+continuation to the header. An import-free four-way if-chain and reordered-block
+regression cover the missing-output case. The dependency archive digest and full
+source correction are pinned in `metadata/SHADER_TRANSLATOR` and the translator's
+`patches/` directory. Web builds prepare the corrected source in the local cache;
+the shared Cargo registry remains unchanged.
+
+The shared UI library has ordinary DynLex image/sampler descriptions and browser
+storage drivers. Real pixel tests pass on WebGPU and WebGL for independent
+samplers, uploaded 2D orientation, all six cube faces and mip levels, sRGB decoding,
+negative/HDR half-float values and filtered depth comparisons. These drivers are
+not yet connected to the main shader-pass graph or Farm application. The live
+preview and pinned UI SDK remain unchanged during that integration.

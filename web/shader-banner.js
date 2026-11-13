@@ -15,7 +15,7 @@ function required(selector, scope) {
 
 function validateManifest(manifest) {
   if (
-    manifest?.schemaVersion !== 13
+    manifest?.schemaVersion !== 14
     || !manifest.semanticLegend
     || !Array.isArray(manifest.scenes)
     || manifest.scenes.length < 3
@@ -28,6 +28,8 @@ function validateManifest(manifest) {
       typeof stage?.sources?.webgpu?.path === "string"
       && typeof stage?.sources?.webgl?.path === "string"
       && Array.isArray(stage.uniforms)
+      && Array.isArray(stage.resources)
+      && Array.isArray(stage.glslBindings)
     );
     if (
       typeof scene.id !== "string"

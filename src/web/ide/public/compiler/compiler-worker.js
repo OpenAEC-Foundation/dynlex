@@ -192,11 +192,12 @@ function compileShaderStage(source, version, stage, rendererBackend) {
   }
 
   const spirvBytes = status === 0 ? decodeBase64ToBytes(spirvBase64) : null;
+  const glsl = status === 0 && rendererBackend === "webgl" ? state.wgslTranslator.translateGlsl(spirvBytes, stage) : null;
   const translatedSource = status === 0
     ? (
         rendererBackend === "webgpu"
           ? state.wgslTranslator.translate(spirvBytes)
-          : state.wgslTranslator.translateGlsl(spirvBytes, stage)
+          : glsl.source
       )
     : "";
   const sources = { [rendererBackend]: translatedSource };
@@ -207,6 +208,7 @@ function compileShaderStage(source, version, stage, rendererBackend) {
     sources,
     uniforms: status === 0 ? reflection.uniforms : [],
     resources: status === 0 ? reflection.resources : [],
+    glslBindings: glsl === null ? [] : glsl.bindings,
     vertexInputs: status === 0 ? reflection.vertexInputs : []
   };
 }
@@ -225,9 +227,11 @@ function compileShaderSource(source, version, compileVertexStage, rendererBacken
       fragmentSources: fragment.sources,
       fragmentUniforms: fragment.uniforms,
       fragmentResources: fragment.resources,
+      fragmentBindings: fragment.glslBindings,
       vertexSources: { [rendererBackend]: "" },
       vertexUniforms: [],
-      vertexResources: []
+      vertexResources: [],
+      vertexBindings: []
     };
   }
 
@@ -240,9 +244,11 @@ function compileShaderSource(source, version, compileVertexStage, rendererBacken
     fragmentSources: fragment.sources,
     fragmentUniforms: fragment.uniforms,
     fragmentResources: fragment.resources,
+    fragmentBindings: fragment.glslBindings,
     vertexSources: vertex.status === 0 ? vertex.sources : { [rendererBackend]: "" },
     vertexUniforms: vertex.status === 0 ? vertex.uniforms : [],
-    vertexResources: vertex.status === 0 ? vertex.resources : []
+    vertexResources: vertex.status === 0 ? vertex.resources : [],
+    vertexBindings: vertex.status === 0 ? vertex.glslBindings : []
   };
 }
 

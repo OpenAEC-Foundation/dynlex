@@ -1,0 +1,7 @@
+@intrinsic("store", {paint}, @intrinsic("shader image", "paint", 0, "2d", @intrinsic("equal", 0, 1)))
+@intrinsic("store", {pixel}, @intrinsic("shader sampler", "pixel", 1, @intrinsic("equal", 0, 1)))
+@intrinsic("store", {smooth}, @intrinsic("shader sampler", "smooth", 2, @intrinsic("equal", 0, 1)))
+@intrinsic("store", {uv}, @intrinsic("shader uniform", "uv", 3, @intrinsic("vector", 2)))
+@intrinsic("store", {first}, @intrinsic("shader sample level", paint, pixel, uv, 0.0))
+@intrinsic("store", {second}, @intrinsic("shader sample level", paint, smooth, uv, 0.0))
+@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), @intrinsic("extract element", first, 0), @intrinsic("extract element", second, 0), 0.0, 1.0))

@@ -911,6 +911,27 @@ parameters preserve their identities through inference and specialization. Brows
 reflection reads the emitted separate image/sampler resources and verifies their
 bindings and image shapes against the declared interface. See `docs/shader_resources.md`.
 
+Browser translation exposes the GLSL writer's exact combined-image/sampler
+associations. Additional samplers for one image receive virtual SPIR-V image
+bindings only during GLSL translation; reflected bindings project those aliases
+back to the original image. WGSL consumes the original separate resource interface.
+Before shader-source emission, nonempty switch fall-through is lowered to
+conditional case bodies within one default case. Each body is moved once; runtime
+flags preserve fall-through and completion, while the surrounding switch preserves
+break and enclosing-loop continue targets. The normalized module is validated
+again. This permits optimized if chains which contain valid SPIR-V fall-through
+without changing authored code or disabling optimization.
+
+The pinned Naga frontend also analyzes complete function control-flow graphs
+before assigning SPIR-V blocks to lexical bodies. An immediate postdominator
+before a declared selection merge is a shared continuation, even when the binary
+places it before one of its predecessors. Registering that join at the header
+prevents shared output stores from being captured by the first parsed arm.
+The dependency archive digest and source patch are pinned in
+`metadata/SHADER_TRANSLATOR` and `tools/wgsl-translator/patches/`. Web builds
+prepare that source under `.cache/shader-translator/`; they never modify Cargo's
+shared registry. Direct Cargo builds first run `scripts/prepare_shader_translator.py`.
+
 LLVM expands wide arithmetic according to the selected target. The browser runtime
 provides LLVM's i128 compiler-runtime arithmetic and numeric conversion imports
 using exact BigInt limbs. Floating-point conversions round directly to the target

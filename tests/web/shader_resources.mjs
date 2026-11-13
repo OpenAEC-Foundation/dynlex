@@ -27,16 +27,38 @@ for(const stage of ['vertex','fragment']) {
     {name:'detail 🌽',group:0,binding:6,kind:'texture',dimension:'2d',sampleType:'float'},
   ]);
   const bytes=Buffer.from(call('dynlex_web_get_output_shader_spirv_base64','string'),'base64');
-  const webgpu=translator.translate(bytes),webgl=translator.translateGlsl(bytes,stage);
+  const webgpu=translator.translate(bytes),glsl=translator.translateGlsl(bytes,stage),webgl=glsl.source;
+  assert.deepEqual(translator.translateBoth(bytes,stage),{webgpu,webgl,bindings:glsl.bindings});
+  assert(Array.isArray(glsl.bindings),'GLSL translation must return its actual texture/sampler associations');
+  const associations=glsl.bindings.map(({name,texture,sampler})=>{
+    assert(webgl.includes(name),'A texture binding names no generated GLSL uniform');
+    assert.equal(texture.group,0);assert.equal(sampler.group,0);
+    return [texture.binding,sampler.binding];
+  }).sort((a,b)=>a[0]-b[0]);
+  assert.deepEqual(associations,[[1,4],[2,4],[3,5],[6,4]]);
   assert.match(webgpu,/texture_cube<f32>/);
   assert.match(webgpu,/texture_depth_2d/);
   assert.match(webgpu,/sampler_comparison/);
   assert.match(webgpu,/textureSampleCompareLevel/);
   assert.match(webgl,/samplerCube/);
   assert.match(webgl,/sampler2DShadow/);
-  artifacts.push({stage,reflection,webgpu,webgl});
+  artifacts.push({stage,reflection:{...reflection,glslBindings:glsl.bindings},webgpu,webgl});
 }
 const vocabulary=await fs.readFile(new URL('../runtime/graphics_shaders/resource_vocabulary.dl',import.meta.url),'utf8');
+const multiple=await fs.readFile(new URL('../runtime/graphics_shaders/multiple_samplers.dl',import.meta.url),'utf8');
+for(const stage of ['vertex','fragment']) {
+  call('dynlex_web_set_main_source',null,['string'],[multiple]);
+  assert.equal(call('dynlex_web_compile_and_emit_shader_spirv','number',['string'],[stage]),0,
+    call('dynlex_web_get_diagnostics_json','string'));
+  const bytes=Buffer.from(call('dynlex_web_get_output_shader_spirv_base64','string'),'base64');
+  const webgpu=translator.translate(bytes);
+  const glsl=translator.translateGlsl(bytes,stage);
+  assert.deepEqual(glsl.bindings.map(({texture,sampler})=>[texture.binding,sampler.binding]).sort((a,b)=>a[1]-b[1]),[[0,1],[0,2]],
+    'Different samplers for one image must retain independent bindings');
+  assert.equal(new Set(glsl.bindings.map(binding=>binding.name)).size,2);
+  assert.deepEqual(translator.translateBoth(bytes,stage),{webgpu,webgl:glsl.source,bindings:glsl.bindings},
+    'Combined translation must preserve the original WGSL image and exact GLSL sampler mappings');
+}
 for(const stage of ['vertex','fragment']) {
   call('dynlex_web_set_main_source',null,['string'],[vocabulary]);
   assert.equal(call('dynlex_web_compile_and_emit_shader_spirv','number',['string'],[stage]),0,
@@ -47,6 +69,17 @@ for(const stage of ['vertex','fragment']) {
   translator.translate(bytes);translator.translateGlsl(bytes,stage);
 }
 const indexOrder=await fs.readFile(new URL('../runtime/graphics_shaders/uniform_index_order.dl',import.meta.url),'utf8');
+const switchFallthrough=await fs.readFile(new URL('../runtime/graphics_shaders/switch_fallthrough.dl',import.meta.url),'utf8');
+for(const stage of ['vertex','fragment']) {
+  call('dynlex_web_set_main_source',null,['string'],[switchFallthrough]);
+  assert.equal(call('dynlex_web_compile_and_emit_shader_spirv','number',['string'],[stage]),0,
+    call('dynlex_web_get_diagnostics_json','string'));
+  const bytes=Buffer.from(call('dynlex_web_get_output_shader_spirv_base64','string'),'base64');
+  const translated=translator.translateBoth(bytes,stage);
+  assert.match(translated.webgpu,new RegExp('@'+stage));
+  assert.match(translated.webgl,/void main/);
+  assert.deepEqual(translated.bindings,[],'A resource-free if chain retained sampler metadata');
+}
 call('dynlex_web_set_main_source',null,['string'],[indexOrder]);
 assert.equal(call('dynlex_web_compile_and_emit_shader_spirv','number',['string'],['fragment']),0,
   call('dynlex_web_get_diagnostics_json','string'));

@@ -120,7 +120,8 @@ export async function createHomepageShaderCompiler(projectDirectory) {
       const semanticTokens = await semanticTokensFor(source);
       const spirvBytes = Uint8Array.from(Buffer.from(spirvBase64, "base64"));
       const wgsl = translator.translate(spirvBytes);
-      const glsl = includeGlsl ? translator.translateGlsl(spirvBytes, stage) : null;
+      const glslResult = includeGlsl ? translator.translateGlsl(spirvBytes, stage) : null;
+      const glsl = glslResult === null ? null : glslResult.source;
       if (!wgsl.includes(`@${stage}`) || !wgsl.includes("fn main")) {
         throw new Error(`${sourceName} produced invalid WebGPU ${stage} source`);
       }
@@ -134,6 +135,8 @@ export async function createHomepageShaderCompiler(projectDirectory) {
       return Object.freeze({
         wgsl,
         glsl,
+        glslBindings: glslResult === null ? [] : glslResult.bindings,
+        resources: reflection.resources,
         uniforms: reflection.uniforms,
         semanticTokens,
         semanticLegend

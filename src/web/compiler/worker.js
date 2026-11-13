@@ -72,7 +72,8 @@ async function handle(type, payload) {
     if (status === 3 || status === 4) throw new Error(JSON.stringify(result));
     if (status !== 0) return result;
     const bytes = decode(module.ccall('dynlex_web_get_output_shader_spirv_base64', 'string'));
-    stages[stage] = { webgpu: translate.translate(bytes), webgl: translate.translateGlsl(bytes, stage),
+    const translated = translate.translateBoth(bytes, stage);
+    stages[stage] = { webgpu: translated.webgpu, webgl: translated.webgl, glslBindings: translated.bindings,
       ...JSON.parse(module.ccall('dynlex_web_get_shader_reflection_json', 'string')) };
   }
   return { status: 0, milliseconds, ...feedback(module), stages };

@@ -14,7 +14,7 @@ def main():
     validator, disassembler = shutil.which('spirv-val'), shutil.which('spirv-dis')
     assert validator and disassembler, 'spirv-tools is required'
     sources = [(root / 'tests/runtime/graphics_shaders' / name, bindings)
-               for name, bindings in [('resources.dl', 7), ('resource_vocabulary.dl', 6)]]
+               for name, bindings in [('resources.dl', 7), ('resource_vocabulary.dl', 6), ('multiple_samplers.dl', 4)]]
     with tempfile.TemporaryDirectory(prefix='dynlex-shader-resources-') as directory:
         work = Path(directory)
         binary = work / 'resources.spv'
@@ -32,9 +32,10 @@ def main():
                     assert 'OpCapability Int8' not in assembly, 'Binding-name metadata acquired runtime byte storage'
                     assert 'dynlex_sample_' not in assembly, 'An internal sample call survived backend lowering'
                     assert 'OpImageSampleExplicitLod' in assembly, assembly
-                    assert 'OpImageSampleDrefExplicitLod' in assembly, assembly
-                    assert re.search(r'OpTypeImage %\w+ Cube 0 0 0 1 Unknown', assembly), assembly
-                    assert re.search(r'OpTypeImage %\w+ 2D 1 0 0 1 Unknown', assembly), assembly
+                    if source.name != 'multiple_samplers.dl':
+                        assert 'OpImageSampleDrefExplicitLod' in assembly, assembly
+                        assert re.search(r'OpTypeImage %\w+ Cube 0 0 0 1 Unknown', assembly), assembly
+                        assert re.search(r'OpTypeImage %\w+ 2D 1 0 0 1 Unknown', assembly), assembly
                     assert set(map(int, re.findall(r'OpDecorate %\w+ Binding (\d+)', assembly))) == set(range(bindings)), assembly
         cases = [
             ('empty name', '@intrinsic("shader image", "", 0, "2d", false)', 'nonempty string'),

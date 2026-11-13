@@ -39,7 +39,7 @@ for(const {scalar,rows,columns,kind} of cases) {
     {resources:[],uniforms:[{name:'camera 🌽',group:0,binding:3,type:{scalar,rows,columns}}],vertexInputs:[]});
   const bytes=Buffer.from(call('dynlex_web_get_output_shader_spirv_base64','string'),'base64');
   let webgpu,webgl;
-  try {webgpu=translator.translate(bytes);webgl=translator.translateGlsl(bytes,'fragment');}
+  try {webgpu=translator.translate(bytes);webgl=translator.translateGlsl(bytes,'fragment').source;}
   catch(error) {throw new Error(JSON.stringify({scalar,rows,columns,source}),{cause:error});}
   assert.match(webgpu,/@group\(0\) @binding\(3\)/);
   assert.match(webgl,/_group_0_binding_3_/);
@@ -55,7 +55,7 @@ for(const record of shaderArithmeticCases) {
   const reflection=JSON.parse(call('dynlex_web_get_shader_reflection_json','string'));
   assert.deepEqual(reflection,{resources:[],uniforms:[{name:'data',group:0,binding:3,type:record.type}],vertexInputs:[]});
   const bytes=Buffer.from(call('dynlex_web_get_output_shader_spirv_base64','string'),'base64');
-  artifacts.push({kind:'arithmetic',...record,uniforms:reflection.uniforms,webgpu:translator.translate(bytes),webgl:translator.translateGlsl(bytes,'fragment')});
+  artifacts.push({kind:'arithmetic',...record,uniforms:reflection.uniforms,webgpu:translator.translate(bytes),webgl:translator.translateGlsl(bytes,'fragment').source});
 }
 if(process.argv[3]) await fs.writeFile(process.argv[3],JSON.stringify(artifacts));
 console.log('Browser uniform reflection and WGSL/GLSL translations preserve every supported scalar, vector and matrix shape.');
