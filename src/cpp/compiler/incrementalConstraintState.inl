@@ -80,8 +80,8 @@ Json captureConstraintGraph(
 
 Json captureCurrentConstraintState(
 	ParseContext &context, RecordingFileSystem &files, Json &projection, const std::map<const Section *, std::string> &paths,
-	const IncrementalInferenceReads &reads, const std::set<std::string> &frontendDiagnosticSources,
-	const ConstraintReuseState &prior, bool compiled, bool reusedInference, const Json *native
+	const IncrementalInferenceReads &reads, const Json &frontendDiagnosticUnits, const ConstraintReuseState &prior,
+	bool compiled, bool reusedInference, const Json *native
 ) {
 	if (reusedInference) {
 		for (const char *field : {"constraint_probe_schedule", "class_instantiations"})
@@ -100,7 +100,7 @@ Json captureCurrentConstraintState(
 	Json state{
 		{"files", files.observations},
 		{"all_function_projection", projection},
-		{"frontend_diagnostic_sources", frontendDiagnosticSources},
+		{"frontend_diagnostic_units", frontendDiagnosticUnits},
 		{"graph", captureConstraintGraph(paths, reads, projection.at("constraint_probe_schedule"), prior.graph)}
 	};
 	recordSemanticSources(state, files, context);

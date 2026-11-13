@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 
-def matcher_result_keys(segment):
-    """Inspect result records separately from reference/classification metadata."""
+def matcher_record_keys(segment, kinds=None):
+    """Inspect selected matcher records without reconstructing compiler objects."""
     packed = segment.read_bytes().split(b"\n", 2)[2]
     header = b"DynLex matcher results v6\n"
     assert packed.startswith(header)
@@ -25,10 +25,14 @@ def matcher_result_keys(segment):
         value = packed[position:position + length]
         position += length
         assert value
-        if value[0] in (0, 1):
+        if kinds is None or value[0] in kinds:
             result.add(key)
     assert position == len(packed)
     return result
+
+
+def matcher_result_keys(segment):
+    return matcher_record_keys(segment, {0, 1})
 
 
 def check_matcher_fingerprint_work(root, build):

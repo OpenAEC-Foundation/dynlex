@@ -2,9 +2,9 @@ bool IncrementalClassification::canReuse(Unit &unit) {
 	if (!prior || unit.environment || !unit.old || context.options.emitDebugInfo || context.options.traceExecution ||
 		unit.section->parent != context.mainSection || !reusableResolutionSection(*unit.section) || unit.references.empty())
 		return false;
-	for (const Json &source : previous->at("frontend_diagnostic_sources"))
-		if (source == resolutionSourceFile(*unit.section).uri)
-			return false;
+	const Json &diagnosticUnits = previous->at("frontend_diagnostic_units");
+	if (!diagnosticUnits.empty() && diagnosticUnits.contains(digest(sectionIdentity(*unit.section).dump())))
+		return false;
 	if (!sameBody(unit.path)) {
 		// Header-only reuse cannot be provisional: its live body is resolved by
 		// the ordinary worklist rather than the skipped-body retraction path.

@@ -52,7 +52,7 @@ void prepareDeferredMatchReplay(
 			if (!bodies.contains(path) || !prior.at("bodies").contains(path) || bodies.at(path) != prior.at("bodies").at(path))
 				return;
 	}
-	std::set<std::string> diagnosticSources = previous.at("frontend_diagnostic_sources").get<std::set<std::string>>();
+	const Json &diagnosticUnits = previous.at("frontend_diagnostic_units");
 	for (const auto &owner : currentProjection.owners) {
 		const std::string &path = owner.path;
 		const Section *section = owner.section;
@@ -82,7 +82,7 @@ void prepareDeferredMatchReplay(
 			continue;
 		BodyResolutionUnit unit;
 		bool restoreUnit = section->parent == context.mainSection &&
-						   !diagnosticSources.contains(resolutionSourceFile(*section).uri) &&
+						   (diagnosticUnits.empty() || !diagnosticUnits.contains(digest(sectionIdentity(*section).dump()))) &&
 						   prior.at("body_units").contains(path);
 		size_t deferredIndex = 0;
 		for (size_t index = 0; index < references.size(); index++) {

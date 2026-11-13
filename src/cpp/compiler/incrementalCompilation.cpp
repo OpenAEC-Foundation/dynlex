@@ -515,7 +515,7 @@ bool compileIncrementally(
 			});
 #include "incrementalFrontendSetup.inl"
 			statistics.cacheRestoreMilliseconds = elapsedMilliseconds(restoreStart);
-			auto saveMatcher = [&]() {
+			auto saveMatcher = [&](IncrementalMatcherCache::SnapshotScope scope) {
 				auto saveStart = Clock::now();
 				auto phaseStart = saveStart;
 				double phaseCPU = processCPUMilliseconds();
@@ -525,7 +525,7 @@ bool compileIncrementally(
 					phaseStart = Clock::now();
 					phaseCPU = processCPUMilliseconds();
 				};
-				auto snapshot = matcherCache.snapshot();
+				auto snapshot = matcherCache.snapshot(scope);
 				const std::string &payload = snapshot.index;
 				statistics.matcherSnapshotBytes += payload.size();
 				for (const auto &[key, bytes] : snapshot.segments)
@@ -583,6 +583,7 @@ bool compileIncrementally(
 			std::set<std::string> frontendDiagnosticSources;
 			Json frontendDiagnosticRecords =
 				compiled ? captureCachedDiagnostics(context, frontendDiagnosticText, frontendDiagnosticSources) : Json::array();
+			Json frontendDiagnosticUnits = captureFrontendDiagnosticUnits(context);
 			Json inactiveProjection;
 			stageStart = Clock::now();
 			bool reuseTypeInference = compiled && previous &&
@@ -666,7 +667,7 @@ bool compileIncrementally(
 			statistics.reusedRootExecution = context.reuseRootExecution;
 			auto constraintSnapshotStart = Clock::now();
 			Json constraintState = captureCurrentConstraintState(
-				context, *recording, resolvedFunctionProjection, sectionPaths, inferenceReads, frontendDiagnosticSources,
+				context, *recording, resolvedFunctionProjection, sectionPaths, inferenceReads, frontendDiagnosticUnits,
 				priorConstraints, compiled, reuseTypeInference, previous ? &*previous : nullptr
 			);
 			statistics.constraintSnapshotMilliseconds += elapsedMilliseconds(constraintSnapshotStart);
@@ -734,8 +735,8 @@ bool compileIncrementally(
 					result["inactive_projection"] = std::move(inactiveProjection);
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
-					result["frontend_diagnostic_sources"] = std::move(frontendDiagnosticSources);
-					result["matcher_key"] = saveMatcher();
+					result["frontend_diagnostic_units"] = std::move(frontendDiagnosticUnits);
+					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
 					result["parser_key"] = saveParser();
 					recordNativeOutput(result, statistics, &*previous);
 					recordSemanticSources(result, *recording, context);
@@ -789,12 +790,12 @@ bool compileIncrementally(
 						{"diagnostic_records", diagnosticRecords},
 						{"diagnostic_sources", diagnosticSources}
 					};
-					result["matcher_key"] = saveMatcher();
+					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
 					result["parser_key"] = saveParser();
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
 					result["validation_units"] = validation.snapshot();
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
-					result["frontend_diagnostic_sources"] = std::move(frontendDiagnosticSources);
+					result["frontend_diagnostic_units"] = std::move(frontendDiagnosticUnits);
 					if (functionReuse) {
 						for (const std::string &name : functionReuse->reusedFunctionNames()) {
 							functionSections.emplace(name, previous->at("function_sections").at(name).get<std::string>());
@@ -892,7 +893,7 @@ bool compileIncrementally(
 					{"diagnostic_records", std::move(records)},
 					{"diagnostic_sources", std::move(diagnosticSources)},
 					{"binding_units", std::move(savedBindings)},
-					{"matcher_key", saveMatcher()},
+					{"matcher_key", saveMatcher(IncrementalMatcherCache::SnapshotScope::Partial)},
 					{"parser_key", saveParser()}
 				};
 				recordSemanticSources(result, *recording, context);

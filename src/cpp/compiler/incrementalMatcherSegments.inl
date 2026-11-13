@@ -1,6 +1,6 @@
 // A digest prefix partitions matcher metadata independently of source locations.
-// Only live entries enter the next index; retaining a segment requires exactly
-// its former keys and values, so removed bodies do not accumulate old records.
+// Completed builds retain only live entries. A partial build cannot conclude
+// that unvisited products are dead, so it retains its prior product closure.
 namespace {
 size_t matcherSegmentIndex(std::string_view prefix) {
 	if (prefix.size() < 2 || !std::all_of(prefix.begin(), prefix.end(), [](char character) {
@@ -33,10 +33,7 @@ IncrementalMatcherCache::IncrementalMatcherCache(ParseContext &context, std::str
 	}
 }
 
-decltype(IncrementalMatcherCache::previousEntries)::iterator IncrementalMatcherCache::findPrevious(std::string_view key) {
-	if (key.size() != 64)
-		throw std::runtime_error("invalid incremental matcher cache key length");
-	size_t index = matcherSegmentIndex(key);
+void IncrementalMatcherCache::loadPreviousSegment(size_t index) {
 	Segment &segment = segments[index];
 	if (!segment.loaded) {
 		segment.loaded = true;
@@ -67,6 +64,12 @@ decltype(IncrementalMatcherCache::previousEntries)::iterator IncrementalMatcherC
 				storage.missing++;
 		}
 	}
+}
+
+decltype(IncrementalMatcherCache::previousEntries)::iterator IncrementalMatcherCache::findPrevious(std::string_view key) {
+	if (key.size() != 64)
+		throw std::runtime_error("invalid incremental matcher cache key length");
+	loadPreviousSegment(matcherSegmentIndex(key));
 	return previousEntries.find(key);
 }
 
@@ -77,7 +80,13 @@ void IncrementalMatcherCache::recordValue(const std::string &key, std::string va
 		recorded[key] = std::move(value);
 }
 
-IncrementalMatcherCache::Snapshot IncrementalMatcherCache::snapshot() {
+IncrementalMatcherCache::Snapshot IncrementalMatcherCache::snapshot(SnapshotScope scope) {
+	if (scope == SnapshotScope::Partial) {
+		for (size_t index = 0; index < segments.size(); index++)
+			loadPreviousSegment(index);
+		for (const auto &[key, value] : previousEntries)
+			recorded.try_emplace(std::string(key), value);
+	}
 	Snapshot result;
 	Json index = Json::object();
 	for (auto begin = recorded.begin(); begin != recorded.end();) {

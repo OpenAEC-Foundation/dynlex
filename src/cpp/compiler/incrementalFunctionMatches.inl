@@ -139,14 +139,6 @@ bool reusableResolutionSection(const Section &section) {
 		   !containsNestedDefinition(section);
 }
 
-const lsp::SourceFile &resolutionSourceFile(const Section &section) {
-	const CodeLine *line = section.openingLine;
-	if (!line && !section.patternDefinitions.empty())
-		line = section.patternDefinitions.front()->range.line;
-	requireCompilerInvariant(line && line->sourceFile, "resolution unit has no source identity");
-	return *line->sourceFile;
-}
-
 const std::vector<IncrementalMatcherCache::ReferenceMatchKeys> *
 savedReferenceKeys(const Json &projection, IncrementalMatcherCache &matcherCache, const std::string &path) {
 	const Json &overrides = projection.at("matcher_projection").at("match_overrides");

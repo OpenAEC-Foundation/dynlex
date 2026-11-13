@@ -34,7 +34,8 @@ class IncrementalMatcherCache {
 	struct StorageStatistics {
 		size_t loaded = 0, missing = 0, built = 0, reused = 0, loadedBytes = 0;
 	};
-	Snapshot snapshot();
+	enum class SnapshotScope { Complete, Partial };
+	Snapshot snapshot(SnapshotScope scope);
 	const StorageStatistics &storageStatistics() const { return storage; }
 	bool contains(std::string_view key);
 	void retain(std::string_view key);
@@ -85,6 +86,7 @@ class IncrementalMatcherCache {
 	std::array<Segment, 256> segments;
 	LoadSegment loadSegment;
 	StorageStatistics storage;
+	void loadPreviousSegment(size_t index);
 	decltype(previousEntries)::iterator findPrevious(std::string_view key);
 	void recordValue(const std::string &key, std::string value);
 	std::unordered_map<std::string_view, std::vector<ReferenceMatchKeys>> decodedReferenceKeys;

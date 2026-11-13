@@ -126,6 +126,27 @@ Json captureCachedDiagnostics(const ParseContext &context, std::string &rendered
 	return records;
 }
 
+// Resolution reuse can suppress diagnostics from the skipped body, not from
+// unrelated definitions which happen to share its source file. Include enclosing
+// definitions and note locations so a nested diagnostic cannot escape its unit.
+Json captureFrontendDiagnosticUnits(const ParseContext &context) {
+	Json units = Json::object();
+	auto capture = [&](const Range &range) {
+		if (!range.line)
+			return; // Diagnostics without source positions belong to outer stages.
+		Section *scope = range.line->sectionOpening ? range.line->sectionOpening : range.section();
+		for (; scope; scope = scope->parent)
+			if (!scope->patternDefinitions.empty())
+				units[digest(sectionIdentity(*scope).dump())] = true;
+	};
+	for (const Diagnostic &diagnostic : context.diagnostics) {
+		capture(diagnostic.range);
+		for (const RelatedInfo &note : diagnostic.relatedInfo)
+			capture(note.range);
+	}
+	return units;
+}
+
 std::optional<std::string> renderCachedRange(
 	const Json &record, RecordingFileSystem &files, const Json &prefixes, const std::set<std::string> &changedSources,
 	std::unordered_map<std::string, std::vector<int>> &lineNumbers

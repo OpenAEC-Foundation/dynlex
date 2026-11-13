@@ -161,6 +161,9 @@ remaining measured costs, not by table order alone.
 | I001 | P01: one filesystem metadata query per cache artifact | Complete: keep | 15:02–15:54 CET; one extension used, finished before its 16:32 deadline. Corrected baseline `b9f173e1...`, candidate `5c311f81...`. Metadata calls fell from 516 to 258 for 258 cached objects. Fifteen paired samples per fast path clear the 10% median CPU threshold with intervals excluding no improvement. All executable/diagnostic comparisons passed; 328 required checks passed uncached in 118.1 seconds and 464 integration checks in 928.1 seconds. Code-edit/cold timing gains remain unproven. |
 | I002 | P02a: reuse file-preparation products at the importer | Parked; not accepted | 15:56–17:26 CET, one extension exhausted. One edited file is prepared and 44 reused; real unused-body import time fell 16.94→12.23 ms. Native/diagnostic parity and focused source/config/error-order checks pass. No repeatable whole-build code-edit improvement was established. Required suite timed out at 120.17 s; current integration validation is missing. Preserve the experiment isolated from master. |
 | I003 | P01/P22: reduce cache-finalization work | Parked; measured candidate, not accepted | 17:26–18:49 CET, one extension. Isolated compiler `ef722bb9...` based on `14fa0b78` reduces fast-path paired CPU by 15.6–19.6%; all eight executable/diagnostic comparisons pass and 464 integration checks pass in 971.2 s. Required gate still returns 124 at 120.12 s. Preserve `codex/incremental-cache-finalization`; no merge or complete-goal claim. Stop cache micro-iterations and return to frontend units. |
+| I004 | P03/P06: retain unchanged body syntax and materialize only on relevant demand | Parked; not accepted | 18:52–20:04 CET, one extension used. The minimal work test proves unchanged bodies are still assembled despite matcher reuse. Added a demand-capable source slot and ownership tests; its isolated contract probe passes and the full compiler rebuild is finishing. No persisted body provider is installed, no syntax units are skipped, and no performance benefit is claimed. Correct deferral also requires classification query metadata, resolved-match/binding products, and avoiding eager expansion/source-index consumers. Keep this experiment isolated; do not merge scaffolding as an optimization. |
+| I005 | P06/P10: exclude only diagnostic-owning units from matcher reuse | Complete: keep, with a limited performance claim | 20:04–20:46 CET, no extension. Candidate `37e3681b` / compiler `b6774332...`. Seven independent first-unused-edit pairs improve CPU 1.3090→0.9451 s, paired ratio 0.7213 [0.6650, 0.7544]. Repeated edits improve only 1–2%, below the initial steady-state expectation. All eight executable/diagnostic comparisons pass; 328 required checks pass uncached in 99.254 s and 464 integration checks in 821.954 s. Three-line recovery repro verifies retained body products; successful snapshots still prune removed units. Accept this optimization for the verified first-edit workload, without claiming a 28% steady-state gain. |
+| I006 | P00: prepare and validate the accepted snapshot without the parked body-syntax prototype | Active | Started 20:46 CET; first deadline 21:31 CET. Keep I004's commits on their isolated branch. Apply I005 to the I003 snapshot, rebuild, verify the unchanged 120-second gate, integration behavior, artifact parity and first-edit/steady-state performance on that exact source tree. Merge/push only the accepted snapshot; preserve usable benchmark artifacts before disposing a merged worktree. The full all-stage incremental objective remains active. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -370,3 +373,84 @@ The required budget gate is still unfulfilled. This candidate stays isolated and
 unaccepted; the full incremental objective remains active. The one extension is
 finished and no further cache micro-optimization is added to I003.
 Evidence: `i003-isolated-integration.json`, `i003-close-validation.json`.
+
+I004 preflight on clean compiler `ef722bb9...`: the two uncalled parameterized
+functions compile; adding their first call compiles; adding a global `value`
+provider changes implicit classification and makes that call invalid. A bare
+unbound name in an uncalled body does not diagnose until inference is demanded,
+so syntax-recovery tests must not assume an eager type diagnostic there.
+
+I004 red test and instrumentation: `test_incremental_body_syntax.py` exercises
+unchanged local-module bodies, lexical failure/recovery, first activation, a new
+provider retracting implicit parameters, and an inference diagnostic delayed until
+activation. Its baseline semantic preflight matches clean builds. Instrumentation
+now counts unique function bodies whose syntax is assembled during section analysis,
+including reconstruction from individual expression-cache entries. This is not a
+claim that their text was tokenized again. A cold two-body build reports parsed=2.
+An unrelated main-file edit still reports parsed=2, restored=0, skipped=0, while
+the existing matcher reports two body units reused. The work test correctly fails
+on that edit. No body-syntax persistence or lazy-materialization implementation
+has landed yet, and the new test is not wired into the required driver until that
+implementation exists. Evidence: `i004-body-syntax-work-red.log` and
+`i004-semantic-preflight.log`. The first I004 deadline remains 19:37 CET.
+
+### I004 closure and I005 reproducer
+
+The demand-slot compiler rebuilt successfully, and the expression-ownership C++
+executable passed, including actual `cloneSectionBody` demand, independent clone
+ownership, and teardown of an unrequested source slot. This is prerequisite work
+on isolated commit `3b7ef529`, not an installed lazy syntax cache. I004 is parked
+before its final deadline because the remaining consumers require a coupled unit
+product; no body-syntax speedup has been established.
+
+I005 baseline compiler SHA is
+`abbfb3b57c8a605a8ff649fd58f4bf1770e85f8a69db0c32e78b16e8ee9678a6`.
+The minimal same-file warning test is red: its unrelated edit visits both body
+references and reuses zero classification/body units. With diagnostic owner
+identities it visits one reference and reuses one unit, preserving diagnostics.
+Its recovery case then exposed a separate verified cause: a failed build's
+matcher index omits the prior successful body's resolution packet, although the
+successful program's index still contains it. Partial snapshots must retain their
+prior product closure; complete snapshots must still prune removed units.
+Evidence: `i005-warning-red.log`, `i005-recovery-root-cause.json`.
+
+I005 candidate `37e3681b` / compiler `b6774332...`: 328 required checks passed
+uncached in 99.254 s; the gate driver confirms the compiler and tested source tree
+did not change. The eight-case paired comparison completed with all diagnostic
+and executable-artifact parity checks. Repeated unused/body edits have paired
+CPU ratios 0.9833 [0.9462, 0.9866] and 0.9880 [0.9639, 0.9991], below the planned
+5% gain. Their median frontend times fell 451.2→422.7 ms and 483.6→448.4 ms.
+Body-reference visits fell 1,684→38 and 1,759→81. Cold-build improvement is not
+established. Integration validation is still running.
+
+The first measured edit after cold population had a much larger difference:
+unused 1.2314→0.8777 CPU seconds and body 2.0909→1.7680, but each is only one
+pair and is not an acceptance result. Before deciding whether to keep this
+candidate, separately repeat the identical unused edit across seven independently
+populated caches, alternating compiler order. Report it as the first-edit workload;
+do not combine it with or replace the steady-state edit medians above. Evidence:
+`i005-comparison.json`, `i005-required.json`, planned
+`i005-first-edit-summary.json`. No merge or full-goal completion is recorded.
+
+### I005 closure
+
+The seven independently populated first-edit pairs completed with CPU medians
+1.3090→0.9451 s and paired ratio 0.7213 [0.6650, 0.7544]. Elapsed medians are
+1.3654→0.9624 s. All original source hashes, executable artifacts and clean
+diagnostics match; each compiler stays unchanged within its run. Baseline computes
+1,254 body matches on those first edits; the candidate computes four. The repeated
+edit results remain the separate, much smaller gains above.
+
+Integration completed: 464 passed, zero failed/skipped, 821.954 s. Both gate
+drivers confirm compiler and tested source-tree identity. The minimized recovery
+case has only one parameterized function, its call, and one discarded literal;
+after breaking and repairing it, body reuse changes 0→1 and reference visits 1→0.
+No warning is needed to reproduce that separate partial-snapshot bug. Evidence:
+`i005-integration.json`, `i005-first-edit-summary.json`, and
+`i005-minimal-recovery.json`.
+
+The candidate is accepted for this measured first-edit benefit and the recovery
+fix, but its current branch also contains I004 prerequisites that have no syntax
+cache consumer. I006 will exclude those prototype commits from the mergeable
+snapshot and validate the exact resulting tree. No merge or full-goal completion
+is recorded yet.
