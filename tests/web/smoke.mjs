@@ -404,6 +404,17 @@ if (
   throw new Error(`Unexpected reflected shader uniform: ${shaderReflectionJson}`);
 }
 
+const bitReverseSource = await readFile(new URL('../runtime/graphics_shaders/bit_reverse.dl', import.meta.url), 'utf8');
+moduleInstance.ccall('dynlex_web_set_main_source', null, ['string'], [bitReverseSource]);
+assert.equal(moduleInstance.ccall('dynlex_web_compile_and_emit_shader_spirv', 'number', ['string'], ['fragment']), 0,
+  moduleInstance.ccall('dynlex_web_get_diagnostics_json', 'string'));
+const bitReverseBytes = Uint8Array.from(Buffer.from(moduleInstance.ccall('dynlex_web_get_output_shader_spirv_base64', 'string'), 'base64'));
+const bitReverseStages = translator.translateBoth(bitReverseBytes, 'fragment');
+assert(bitReverseStages.webgpu.includes('reverseBits('), 'WebGPU retains its supported bit reversal');
+assert(!bitReverseStages.webgl.includes('bitfieldReverse'), 'WebGL 2 must receive ES 3.00 operations');
+assert.deepEqual(bitReverseStages.bindings, []);
+assert.equal(bitReverseStages.uniforms[0].binding, 0);
+
 moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
   `import lib/shader.dl
 

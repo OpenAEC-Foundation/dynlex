@@ -281,3 +281,123 @@ fn switch_lowering_leaves_unaffected_modules_and_validation_types_unchanged() {
     assert!(!switches::lower(&mut module));
     assert_eq!(format!("{module:?}"), before);
 }
+
+#[test]
+fn optimized_bit_reversal_uses_webgl_compatible_operations() {
+    let work = Workspace::new();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    for level in ["-O0", "-O2"] {
+        let bytes = compile(
+            &root.join("tests/runtime/graphics_shaders/bit_reverse.dl"),
+            &work.0.join(format!("reverse-{level}.spv")),
+            "fragment",
+            level,
+        );
+        translate(&bytes).unwrap();
+        let glsl = translate_glsl(&bytes, ShaderStage::Fragment).unwrap();
+        assert!(
+            !glsl.source.contains("bitfieldReverse"),
+            "GLSL ES 3.00 has no bitfieldReverse builtin: {}",
+            glsl.source
+        );
+    }
+}
+
+#[test]
+fn bit_reversal_preserves_signed_and_vector_shapes() {
+    let work = Workspace::new();
+    for signed in [false, true] {
+        for lanes in 1..=4 {
+            let scalar = if signed { "%signed" } else { "%uint" };
+            let kind = if lanes == 1 { scalar } else { "%input" };
+            let integer = if signed {
+                "%signed = OpTypeInt 32 1"
+            } else {
+                ""
+            };
+            let vector = if lanes == 1 {
+                String::new()
+            } else {
+                format!("%input = OpTypeVector {scalar} {lanes}")
+            };
+            let component = if lanes == 1 {
+                "%reversed"
+            } else {
+                "%component"
+            };
+            let extract = if lanes == 1 {
+                String::new()
+            } else {
+                format!("%component = OpCompositeExtract {scalar} %reversed 0")
+            };
+            let assembly = format!(
+                r#"
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %main "main" %out %settings
+OpExecutionMode %main OriginUpperLeft
+OpDecorate %out Location 0
+OpDecorate %block Block
+OpMemberDecorate %block 0 Offset 0
+OpDecorate %settings DescriptorSet 0
+OpDecorate %settings Binding 0
+%void = OpTypeVoid
+%function = OpTypeFunction %void
+%uint = OpTypeInt 32 0
+{integer}
+{vector}
+%float = OpTypeFloat 32
+%color = OpTypeVector %float 4
+%output = OpTypePointer Output %color
+%out = OpVariable %output Output
+%block = OpTypeStruct {kind}
+%uniform = OpTypePointer Uniform %block
+%member = OpTypePointer Uniform {kind}
+%settings = OpVariable %uniform Uniform
+%zero = OpConstant %uint 0
+%black = OpConstant %float 0
+%opaque = OpConstant %float 1
+%main = OpFunction %void None %function
+%entry = OpLabel
+%pointer = OpAccessChain %member %settings %zero
+%value = OpLoad {kind} %pointer
+%reversed = OpBitReverse {kind} %value
+{extract}
+%bits = OpBitcast %float {component}
+%result = OpCompositeConstruct %color %bits %black %black %opaque
+OpStore %out %result
+OpReturn
+OpFunctionEnd
+"#
+            );
+            let source = work.0.join(format!("reverse-{signed}-{lanes}.spvasm"));
+            let binary = source.with_extension("spv");
+            fs::write(&source, assembly).unwrap();
+            run(Command::new("spirv-as")
+                .args(["--target-env", "vulkan1.3"])
+                .arg(&source)
+                .arg("-o")
+                .arg(&binary));
+            run(Command::new("spirv-val")
+                .args(["--target-env", "vulkan1.3"])
+                .arg(&binary));
+            let bytes = fs::read(&binary).unwrap();
+            assert!(translate(&bytes).unwrap().contains("reverseBits"));
+            let lowered = glsl_bits::lower(&bytes).unwrap().unwrap();
+            fs::write(&binary, &lowered).unwrap();
+            run(Command::new("spirv-val")
+                .args(["--target-env", "vulkan1.3"])
+                .arg(&binary));
+            parse_and_validate(&lowered).unwrap();
+            assert!(glsl_bits::lower(&lowered).unwrap().is_none());
+            assert!(!translate_glsl(&bytes, ShaderStage::Fragment)
+                .unwrap()
+                .source
+                .contains("bitfieldReverse"));
+        }
+    }
+}

@@ -7,6 +7,7 @@ use naga::valid::{Capabilities, ValidationFlags, Validator};
 use naga::ShaderStage;
 
 mod glsl_bindings;
+mod glsl_bits;
 mod glsl_samplers;
 mod switches;
 
@@ -105,12 +106,19 @@ fn write_glsl_input(
     info: &naga::valid::ModuleInfo,
     stage: ShaderStage,
 ) -> Result<GlslTranslation, String> {
-    match glsl_samplers::lower(bytes)? {
-        Some(lowered) => {
-            let (module, info) = parse_and_validate(&lowered.bytes)?;
-            write_glsl(&module, &info, stage, &lowered.origins)
-        }
-        None => write_glsl(module, info, stage, &glsl_samplers::BindingOrigins::new()),
+    let samplers = glsl_samplers::lower(bytes)?;
+    let sampled = samplers
+        .as_ref()
+        .map_or(bytes, |lowered| lowered.bytes.as_slice());
+    let bits = glsl_bits::lower(sampled)?;
+    let input = bits.as_deref().unwrap_or(sampled);
+    let empty = glsl_samplers::BindingOrigins::new();
+    let origins = samplers.as_ref().map_or(&empty, |lowered| &lowered.origins);
+    if samplers.is_some() || bits.is_some() {
+        let (module, info) = parse_and_validate(input)?;
+        write_glsl(&module, &info, stage, origins)
+    } else {
+        write_glsl(module, info, stage, origins)
     }
 }
 

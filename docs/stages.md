@@ -918,6 +918,12 @@ Browser translation exposes the GLSL writer's exact combined-image/sampler
 associations. Additional samplers for one image receive virtual SPIR-V image
 bindings only during GLSL translation; reflected bindings project those aliases
 back to the original image. WGSL consumes the original separate resource interface.
+GLSL ES 3.00 translation also legalizes SPIR-V bit reversal into unsigned shifts
+and masks before parsing the target module. LLVM may recognize authored arithmetic
+as `OpBitReverse`, while WebGL 2 has no `bitfieldReverse` builtin. Scalar and vector
+operands retain all 32 bits, including signed inputs through bitcasts. Constants
+are shared by type, and the legalized module is validated again. WGSL and native
+SPIR-V retain their supported bit-reversal operation.
 Before shader-source emission, nonempty switch fall-through is lowered to
 conditional case bodies within one default case. Each body is moved once; runtime
 flags preserve fall-through and completion, while the surrounding switch preserves
