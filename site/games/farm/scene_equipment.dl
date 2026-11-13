@@ -1,0 +1,81 @@
+import scene_character_types.dl
+
+to get [the website Farm wrist for item] {integer:kind} [in hand] {integer:slot} [chopping] {boolean:chopping}:
+    if kind = 0:
+        if chopping:
+            return a UI scene vector from [1.2,-1.5707963267948966,0.0]
+        return a UI scene vector from [0.4,(3.141592653589793 if slot = 0, else 0.0),0.0]
+    if kind = 1:
+        return a UI scene vector from [0.4,1.5707963267948966,0.0]
+    if kind = 2:
+        return a UI scene vector from [0.18,0.0,0.0]
+    return a UI scene vector from [0.0,0.0,0.0]
+
+to [equip website Farm character] {a pointer to website Farm character:character} [from] {a pointer to website farm actor:actor} [in] {a pointer to website Farm characters:characters}:
+    set kinds to [-1,-1]
+    set changed to false
+    loop slot from 0 to 2:
+        if slot < (the length of actor's inventory):
+            store ((the item at slot in (actor's inventory))'s kind) into kinds at slot
+        if (the item at slot in kinds) != (the item at slot in (character's inventory)):
+            set changed to true
+    if changed = false:
+        return nothing
+    set parts to an empty list of UI scene part
+    append UI scene model (character's base) under -1 to parts
+    loop slot from 0 to 2:
+        set kind to the item at slot in kinds
+        if kind >= 0:
+            set item to the item at kind in (characters's landscape's item models)
+            set grip to the index of UI scene part named "grip" under 0 in item
+            set pose to an identity UI scene pose
+            set pose's position to (the item at grip in (item's parts))'s pose's position * -1.0
+            set socket to the length of parts
+            append (a UI scene group named (formatted "held item {slot}") under (the item at slot in (character's hands)) at pose) to parts
+            append UI scene model item under socket to parts
+    # Equipment changes preserve the current body articulation.
+    set previous to a sequence copying (character's object's instance's poses)
+    set model to a UI scene model taking parts parts
+    free parts
+    set UI scene model in (character's object) to model
+    set instance to character's object's instance
+    loop index from 0 to (the length of character's base's parts):
+        set UI scene pose of part index in instance to (the item at index in previous)
+    loop slot from 0 to 2:
+        set hand to the item at slot in (character's hands)
+        set pose to the item at hand in (instance's poses)
+        set pose's rotation to the website Farm wrist for item (the item at slot in kinds) in hand slot chopping false
+        set UI scene pose of part hand in instance to pose
+    set character's inventory to kinds
+
+to get [pose website Farm arms of] {a pointer to website Farm character:character} [at] {floating-point number:time} [with weight] {floating-point number:weight} [over] {floating-point number:seconds} [seconds]:
+    set moving to false
+    set instance to character's object's instance
+    set phase to character's motion's phase
+    loop slot from 0 to 2:
+        set kind to the item at slot in (character's inventory)
+        set chopping to (character's chopping) and (kind = 0)
+        set swing to (0.0 - (the sine of (phase + slot * 3.141592653589793))) * (0.12 if kind >= 0, else 0.30) * weight
+        set desired to ((-1.0 + (the sine of (time * 12.566370614359172)) * 0.8) if chopping, else swing)
+        set tilt to ((0.0 - 1.0) if slot = 0, else 1.0) * ((0.22 if kind <= 2, else 0.30) if kind >= 0, else 0.16)
+        set arm to the item at slot in (character's arms)
+        set pose to the item at arm in (instance's poses)
+        set current to pose's rotation
+        if ((the absolute value of (the UI scene angle of (desired - current's x))) > 0.001) or ((the absolute value of (the UI scene angle of (tilt - current's z))) > 0.001):
+            set moving to true
+        set pose's rotation's x to the UI scene angle from (current's x) toward desired at rate 20.0 over seconds seconds
+        set pose's rotation's z to the UI scene angle from (current's z) toward tilt at rate 20.0 over seconds seconds
+        set UI scene pose of part arm in instance to pose
+        set hand to the item at slot in (character's hands)
+        set pose to the item at hand in (instance's poses)
+        set current to pose's rotation
+        set wrist to the website Farm wrist for item kind in hand slot chopping chopping
+        if ((the length of (wrist - current)) > 0.001):
+            set moving to true
+        set pose's rotation to a UI scene vector from [
+            the UI scene angle from (current's x) toward (wrist's x) at rate 20.0 over seconds seconds,
+            the UI scene angle from (current's y) toward (wrist's y) at rate 20.0 over seconds seconds,
+            the UI scene angle from (current's z) toward (wrist's z) at rate 20.0 over seconds seconds
+        ]
+        set UI scene pose of part hand in instance to pose
+    return moving

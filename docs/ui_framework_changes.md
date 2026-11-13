@@ -588,5 +588,41 @@ The shared UI library has ordinary DynLex image/sampler descriptions and browser
 storage drivers. Real pixel tests pass on WebGPU and WebGL for independent
 samplers, uploaded 2D orientation, all six cube faces and mip levels, sRGB decoding,
 negative/HDR half-float values and filtered depth comparisons. These drivers are
-not yet connected to the main shader-pass graph or Farm application. The live
-preview and pinned UI SDK remain unchanged during that integration.
+used by the shared shader-pass graph for retained render targets, cube baking,
+depth-only shadows, HDR/MSAA resolve and postprocessing. The Farm application
+controller is still being connected; its rendered scene has isolated pixel tests.
+
+## Scene materials, motion and static scope rules
+
+Physical scene lighting, environment sampling, filmic tone mapping, geometry
+roughness and instance normal transforms live in the shared DynLex UI library.
+Fragment derivatives are general float32 scalar/vector intrinsics with explicit
+axis, type and stage checks; LLVM calls retain convergent execution semantics.
+Actual derivative and lighting pixels pass WebGPU and WebGL checks.
+
+The browser runtime supplies `exp2` and `exp2f` when LLVM optimizes a power of two
+into those calls. The GLSL ES 3.0 path legalizes unsupported bit reversal to
+unsigned shifts and masks before Naga emits GLSL. Native SPIR-V and WGSL retain
+their supported operation. Import-free regressions cover both fixes.
+
+The Farm's procedural sky, physical material passes, filtered reflections, depth
+shadows, antialiasing and tone mapping are DynLex source. The GPU hosts execute
+the application's render graph and uploads. Explicit pass activation retains
+cached depth maps without another clear. Sky readers preserve their by-reference
+inputs, and water wave positions include the instance transform.
+
+Queued scene motion and immutable model attachments are shared library features.
+Motion tests compare 53 transitions with an independently recorded original model;
+native O0/O2 and both WebAssembly compiler paths pass. Farm character tests cover
+equipment changes without resetting poses, locomotion, chopping, arrivals,
+departures and ownership. Their scene objects join the same render and picking
+data as the landscape.
+
+Character development exposed an incremental compiler defect: skipping the body
+of an unused function also skipped its static numeric scope rule. A subsequent
+body edit could reject valid source or crash when a cached probe was committed.
+Scope-rule expressions now carry static type-constraint purpose, and inactive-body
+reuse skips runtime expressions only. The import-free edit regression is
+`scripts/test_incremental_scope_rules.py`; it runs through the required incremental
+suite. All 351 required tests pass after the correction. Full integration
+verification and the remaining Farm UI/controller migration are still pending.

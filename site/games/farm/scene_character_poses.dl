@@ -1,0 +1,42 @@
+import scene_equipment.dl
+
+to [place website Farm character] {a pointer to website Farm character:character} [with weight] {floating-point number:weight}:
+    set motion to character's motion
+    set instance to character's object's instance
+    set pose to instance's root pose
+    set pose's position to motion's position
+    set height to 0.022 if character's kind = 0, else 0.012
+    set pose's position's y to pose's position's y + (the absolute value of (the sine of motion's phase)) * height * weight
+    set pose's rotation's y to motion's yaw
+    set pose's scale to a UI scene vector from [0.75,0.75,0.75] if character's kind = 2, else (a UI scene vector from [1.0,1.0,1.0])
+    set UI scene root pose in instance to pose
+
+to get [pose website Farm character] {a pointer to website Farm character:character} [at] {floating-point number:time} [over] {floating-point number:seconds} [seconds dragging] {boolean:dragging}:
+    if dragging and (character's kind != 0):
+        return false
+    set motion to character's motion
+    set moving to false
+    if dragging = false:
+        set moving to advance UI scene motion motion by seconds seconds
+        place website Farm character character with weight (motion's weight)
+    set weight to 0.0 if dragging, else motion's weight
+    set instance to character's object's instance
+    set count to 4 if character's kind = 1, else 2
+    set gain to 0.48 if character's kind = 0, else 0.35
+    loop slot from 0 to count:
+        set leg to the item at slot in (character's legs)
+        set pose to the item at leg in (instance's poses)
+        set pose's rotation's x to (the sine of (motion's phase + slot * 3.141592653589793)) * gain * weight
+        set UI scene pose of part leg in instance to pose
+    if character's kind = 0:
+        set arms to pose website Farm arms of character at time with weight weight over (the minimum of 0.08 and seconds) seconds
+        set moving to moving or arms
+    else if character's kind = 1:
+        set pose to the item at (character's tail) in (instance's poses)
+        set pose's rotation's z to (the sine of (time * 2.0)) * 0.18
+        set UI scene pose of part (character's tail) in instance to pose
+    else:
+        set pose to the item at (character's head) in (instance's poses)
+        set pose's rotation's x to (the maximum of 0.0 and (the sine of (time * 3.0 + character's phase offset))) * 0.45 * (1.0 - weight)
+        set UI scene pose of part (character's head) in instance to pose
+    return moving or instance's pending

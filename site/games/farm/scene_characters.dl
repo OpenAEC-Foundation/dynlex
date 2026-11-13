@@ -1,0 +1,76 @@
+import scene_character_poses.dl
+
+to [move website Farm character] {a pointer to website Farm character:character} [toward] {vector:position} [facing] {integer:direction} [over] {floating-point number:duration} [seconds instantly] {boolean:instant}:
+    if instant:
+        place UI scene motion (character's motion) at position facing (the website Farm heading for direction)
+    else:
+        aim UI scene motion (character's motion) at position facing (the website Farm heading for direction) over duration seconds
+    set character's seen to true
+    place website Farm character character with weight (character's motion's weight)
+
+to [update website Farm person] {a pointer to website farm actor:actor} [wearing] {integer:outfit} [from] {a pointer to website farm world:world} [in] {a pointer to website Farm characters:characters} [over] {floating-point number:duration} [seconds instantly] {boolean:instant}:
+    set position to the website Farm scene point at (actor's x) (actor's y) in world
+    set entry to the website Farm character named (actor's id) in characters
+    if entry = (0 as a pointer to website Farm character):
+        set entry to a website Farm character named (actor's id) of kind 0 using (the item at outfit in (characters's people)) at position facing (actor's direction) in characters
+    set entry's chopping to actor's status starts with "Chopping"
+    equip website Farm character entry from actor in characters
+    move website Farm character entry toward position facing (actor's direction) over duration seconds instantly instant
+
+to [update website Farm animal] {website farm animal:animal} [of kind] {integer:kind} [using] {UI scene model:model} [from] {a pointer to website farm world:world} [in] {a pointer to website Farm characters:characters} [over] {floating-point number:duration} [seconds instantly] {boolean:instant}:
+    set position to the website Farm scene point at (animal's x) (animal's y) in world
+    set entry to the website Farm character named (animal's id) in characters
+    if entry = (0 as a pointer to website Farm character):
+        set entry to a website Farm character named (animal's id) of kind kind using model at position facing (animal's direction) in characters
+    move website Farm character entry toward position facing (animal's direction) over (duration * 1.8) seconds instantly instant
+
+to [update website Farm characters] {a pointer to website Farm characters:characters} [from] {a pointer to website farm world:world} [over] {floating-point number:duration} [seconds instantly] {boolean:instant}:
+    for each entry in characters's entries:
+        set entry's seen to false
+    update website Farm person (world's player) wearing 0 from world in characters over duration seconds instantly instant
+    set index to 0
+    for each worker in world's workers:
+        update website Farm person worker wearing ((index % 6) + 1) from world in characters over duration seconds instantly instant
+        increment index
+    if world's cow present:
+        update website Farm animal (world's cow) of kind 1 using (characters's cow) from world in characters over duration seconds instantly instant
+    set index to 1
+    for each chicken in world's chickens:
+        update website Farm animal chicken of kind 2 using (characters's chicken) from world in characters over duration seconds instantly instant
+        set entry to the website Farm character named (chicken's id) in characters
+        set entry's phase offset to index * 2.0
+        increment index
+    set index to (the length of characters's entries) - 1
+    loop while index >= 0:
+        set entry to the item at index in (characters's entries)
+        if entry's seen = false:
+            close website Farm character entry in characters
+            remove item index from characters's entries
+        decrement index
+
+to get [website Farm characters for] {a pointer to website farm world:world} [in] {a pointer to website Farm landscape:landscape}:
+    set result to storage for one slot initialized with (a new website Farm characters)
+    set result's landscape to landscape
+    set result's entries to an empty list of a pointer to website Farm character
+    set library to the address of (landscape's library)
+    set colors to [15655869,13470537,6197913,11631760,9147488,11834194,7834542]
+    loop index from 0 to 7:
+        store (a Farm farmer wearing (UI ink from RGB (the item at index in colors)) with library) into result's people at index
+    set result's cow to a Farm cow with library
+    set result's chicken to a Farm chicken turned 0.0 with library
+    update website Farm characters result from world over 0.5 seconds instantly true
+    return result
+
+to get [advance website Farm characters] {a pointer to website Farm characters:characters} [at] {floating-point number:time} [over] {floating-point number:seconds} [seconds dragging] {a value:dragged}:
+    set moving to false
+    for each entry in characters's entries:
+        set changed to pose website Farm character entry at time over seconds seconds dragging (entry's id = dragged)
+        set moving to changed or moving
+    return moving
+
+to [close website Farm characters] {a pointer to website Farm characters:characters}:
+    for each entry in characters's entries:
+        close website Farm character entry in characters
+    free characters's entries
+    destroy the value at characters
+    deallocate characters

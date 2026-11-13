@@ -1,0 +1,81 @@
+import scene_landscape_types.dl
+import ../../packages/dynlex-ui/ui/scene_motion.dl
+import ../../packages/dynlex-ui/ui/scene_attachments.dl
+import lib/text.dl
+
+class:
+    patterns:
+        website Farm character
+    members:
+        id as a string
+        kind as an integer
+        object as a pointer to UI scene object
+        base as UI scene model
+        motion as a pointer to UI scene motion
+        seen as a boolean
+        chopping as a boolean
+        phase offset as a floating-point number
+        legs as an integer array of 4 items
+        arms as an integer array of 2 items
+        hands as an integer array of 2 items
+        inventory as an integer array of 2 items
+        head as an integer
+        tail as an integer
+
+website Farm character list means: the type of (an empty list of a pointer to website Farm character)
+
+class:
+    patterns:
+        website Farm characters
+    members:
+        landscape as a pointer to website Farm landscape
+        entries as website Farm character list
+        people as UI scene model array of 7 items
+        cow as UI scene model
+        chicken as UI scene model
+
+to get [the website Farm heading for] {integer:direction}:
+    return the item at direction in [3.141592653589793,1.5707963267948966,0.0,-1.5707963267948966]
+
+to get [the website Farm character named] {a value:id} [in] {a pointer to website Farm characters:characters}:
+    for each entry in (characters's entries):
+        if entry's id = id:
+            return entry
+    return 0 as a pointer to website Farm character
+
+to [remove website Farm scene object] {a pointer to UI scene object:object} [from] {a pointer to website Farm landscape:landscape}:
+    loop index from 0 to (the length of landscape's objects):
+        if (the item at index in (landscape's objects)) = object:
+            remove item index from (landscape's objects)
+            close UI scene object object
+            return nothing
+    require condition false reporting "The Farm scene does not own the removed object"
+
+to get [a website Farm character named] {a value:id} [of kind] {integer:kind} [using] {UI scene model:model} [at] {vector:position} [facing] {integer:direction} [in] {a pointer to website Farm characters:characters}:
+    set result to storage for one slot initialized with (a new website Farm character)
+    set result's id to the string form of id
+    set result's kind to kind
+    set result's base to model
+    set result's object to a website Farm object named id using model in (characters's landscape)
+    set result's motion to a UI scene motion at position facing (the website Farm heading for direction) with stride 0.85
+    set result's inventory to [-1,-1]
+    set root to 0
+    loop slot from 0 to (4 if kind = 1, else 2):
+        store (the index of UI scene part named (formatted "leg {slot}") under root in model) into result's legs at slot
+    if kind = 0:
+        loop slot from 0 to 2:
+            set arm to the index of UI scene part named (formatted "arm {slot}") under root in model
+            store arm into result's arms at slot
+            store (the index of UI scene part named (formatted "hand {slot}") under arm in model) into result's hands at slot
+    else if kind = 1:
+        set result's tail to the index of UI scene part named "tail" under root in model
+    else:
+        set result's head to the index of UI scene part named "head" under root in model
+    append result to (characters's entries)
+    return result
+
+to [close website Farm character] {a pointer to website Farm character:character} [in] {a pointer to website Farm characters:characters}:
+    remove website Farm scene object (character's object) from (characters's landscape)
+    close UI scene motion (character's motion)
+    destroy the value at character
+    deallocate character

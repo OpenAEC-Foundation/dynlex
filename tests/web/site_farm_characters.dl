@@ -1,0 +1,68 @@
+import ../../site/games/farm/scene_characters.dl
+import ../../site/games/farm/scene_landscape.dl
+
+set world to the initial website farm world
+set landscape to a website Farm landscape for world
+set characters to website Farm characters for world in landscape
+require condition ((the length of characters's entries) = 4) reporting "The initial player, worker and two chickens must appear"
+set ada to the website Farm character named "worker-1" in characters
+set player to the website Farm character named "player" in characters
+set chicken to the website Farm character named "chicken-1" in characters
+require condition ((ada's kind = 0) and (chicken's kind = 2)) reporting "A Farm entity has the wrong character model"
+require condition (ada's base's parts' data != player's base's parts' data) reporting "Player and workers must keep their distinct clothing"
+set actor to the item at 0 in (world's workers)
+set arm to the item at 0 in (ada's arms)
+set pose to the item at arm in (ada's object's instance's poses)
+set pose's rotation's x to 0.43
+set UI scene pose of part arm in (ada's object's instance) to pose
+set item to a new website farm item
+set item's kind to 0
+set item's count to 1
+append item to actor's inventory
+set item to a new website farm item
+set item's kind to 3
+set item's count to 1
+append item to actor's inventory
+update website Farm characters characters from world over 0.5 seconds instantly false
+require condition ((the length of ada's object's instance's model's parts) > (the length of ada's base's parts)) reporting "Held equipment is missing"
+set pose to the item at arm in (ada's object's instance's poses)
+require condition ((the absolute value of (pose's rotation's x - 0.43)) < 0.000001) reporting "Changing equipment reset the worker's current arm pose"
+set hand to the item at 0 in (ada's hands)
+set wrist to the item at hand in (ada's object's instance's poses)
+require condition ((the absolute value of (wrist's rotation's y - 3.141592653589793)) < 0.000001) reporting "The left hand holds its axe in the wrong orientation"
+set previous to ada's object's instance's model's parts' data
+update website Farm characters characters from world over 0.5 seconds instantly false
+require condition (ada's object's instance's model's parts' data = previous) reporting "Unchanged inventory rebuilt an equipped model"
+set actor's x to actor's x + 1
+set actor's direction to 1
+update website Farm characters characters from world over 0.5 seconds instantly false
+set before to ada's motion's position
+set moving to advance website Farm characters characters at 0.3 over 0.3 seconds dragging ""
+require condition ((moving) and ((the length of (ada's motion's position - before)) > 0.0)) reporting "A worker's rendered motion did not follow its simulation target"
+set actor's status to "Chopping…"
+update website Farm characters characters from world over 0.5 seconds instantly false
+ignore (advance website Farm characters characters at 0.5 over 0.1 seconds dragging "")
+set pose to the item at arm in (ada's object's instance's poses)
+require condition (pose's rotation's x < 0.0) reporting "The equipped chopping arm was not animated"
+clear actor's inventory
+update website Farm characters characters from world over 0.5 seconds instantly false
+require condition ((the length of ada's object's instance's model's parts) = (the length of ada's base's parts)) reporting "An empty hand retained its equipment"
+set world's cow present to true
+set world's cow's id to "cow"
+set world's cow's x to 13
+set world's cow's y to 3
+set world's cow's direction to 2
+append (a website farm worker named "Ben" identified by "worker-2" at 5 12) to world's workers
+update website Farm characters characters from world over 0.5 seconds instantly true
+require condition ((the length of characters's entries) = 6) reporting "New workers or the cow did not appear"
+set cow to the website Farm character named "cow" in characters
+require condition (cow's kind = 1) reporting "The cow was replaced by another character type"
+set count to the length of landscape's objects
+set world's cow present to false
+clear world's chickens
+update website Farm characters characters from world over 0.5 seconds instantly false
+require condition (((the length of characters's entries) = 3) and ((the length of landscape's objects) = count - 3)) reporting "Removed animals retained their scene objects"
+close website Farm characters characters
+close website Farm landscape landscape
+free website farm world world
+print line "Farm characters share articulated models, preserve equipped poses, follow simulation motion, animate tools and remove departed entities."

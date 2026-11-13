@@ -6,8 +6,10 @@ world renderer and controller are completed. The separate rendering probes use
 their own build directory.
 
 The landscape now renders through `site/games/farm/program.dl`, a DynLex render
-graph using the shared scene ABI. Its 617 initial mesh instances form 14 draw
-batches. The graph bakes a 128-pixel, eight-level HDR reflection cube and a DFG
+graph using the shared scene ABI. The landscape alone groups 617 initial mesh
+instances into 14 draw batches. Characters share that geometry bank and submission
+path; the initial player, worker and chickens bring the scene to 693 instances in
+15 batches. The graph bakes a 128-pixel, eight-level HDR reflection cube and a DFG
 lookup, renders directional shadows into a 2048-pixel depth map, draws the scene
 with four-sample antialiasing, and applies the shared filmic tone mapping. All
 stages are DynLex source under `site/games/farm/shaders/`. Browser hosts only
@@ -18,6 +20,18 @@ uses the same shared view basis as perspective cameras, with the core
 orthographic projection. Disable baked passes after their first render and
 disable the shadow pass between world changes; this preserves the stored images
 without executing another clear or draw.
+
+`scene_characters.dl` synchronizes player, workers, cow and chickens with the
+simulation. The shared motion library queues visual waypoints, accelerates,
+brakes and turns using elapsed time. Local character poses supply walking legs,
+body lift, chopping arms, animal tails and pecking heads. Their named pivots and
+world bounds remain the same ones used for rendering and picking.
+
+Equipment composes the shared item models beneath each hand, offset by the item's
+named grip. Inventory changes preserve the existing body poses and unchanged
+inventories retain their model storage. Departed entities release their scene
+objects and pending motion. The character fixture tests native O0/O2 and both
+WebAssembly frontends, including zero retained allocations.
 
 `site/games/farm/lighting.dl` owns the procedural sky: its hemisphere gradient,
 warm horizon and HDR sun preserve the original shader. Reflections use GGX
