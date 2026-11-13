@@ -165,6 +165,7 @@ remaining measured costs, not by table order alone.
 | I005 | P06/P10: exclude only diagnostic-owning units from matcher reuse | Complete: keep, with a limited performance claim | 20:04–20:46 CET, no extension. Candidate `37e3681b` / compiler `b6774332...`. Seven independent first-unused-edit pairs improve CPU 1.3090→0.9451 s, paired ratio 0.7213 [0.6650, 0.7544]. Repeated edits improve only 1–2%, below the initial steady-state expectation. All eight executable/diagnostic comparisons pass; 328 required checks pass uncached in 99.254 s and 464 integration checks in 821.954 s. Three-line recovery repro verifies retained body products; successful snapshots still prune removed units. Accept this optimization for the verified first-edit workload, without claiming a 28% steady-state gain. |
 | I006 | P00: prepare and validate the accepted snapshot without the parked body-syntax prototype | Complete: merged and verified | 20:46–22:07 CET, one extension used, before the 22:16 deadline. Exact source `13a3f819`, compiler `4a9cde56...`, excludes I004's unconsumed source-slot prototype and dormant work test. It passes 328 required checks uncached in 112.912 s, 464 integration checks in 890.112 s, eight-case artifact/diagnostic parity, and seven independent first-edit pairs (CPU 1.3007→0.9536 s; paired ratio 0.7306 [0.7091, 0.7885]). Root master `74f703ea`, rebuilt compiler `dcb16906...`, passes all 328 required checks in 98.030 s (99.283 s including the recording driver). The merged worktree is removed; an actual archived-compiler benchmark replay passes after removal and cleans its temporary data path. No further optimization is added to I006. |
 | I007 | P02/P03/P06: retain source syntax without rebuilding unchanged body expression trees | Complete: keep, merged and verified | 22:07–23:31 CET, one extension used, before the 23:37 deadline. Baseline source `ecf05b81`, root compiler `dcb16906...`; candidate source `b85a8d6c`, compiler `adfab87b...`. Seven paired samples per code-edit case meet the predeclared 3% target: unused-body CPU ratio 0.9578 [0.9489, 0.9901], active-body 0.9577 [0.9383, 0.9776]. All eight-case artifact/diagnostic comparisons pass; 328 required checks pass uncached in 102.949 s and 464 integration checks in 825.352 s. An unused edit skips 678 body units, indexing 4,267 source expressions instead of 27,561. Partial parser snapshots retain unvisited products; complete snapshots prune removed products. Root `75d8c407`, rebuilt compiler `a3c07989...`, passes all 328 required checks uncached in 109.636 s. The merged worktree is removed and archived-compiler replay passes afterward, with its temporary data path cleaned. Source preprocessing and section-fragment reuse remain unfinished. |
+| I008 | P02/P03: retain complete source-preprocessing products and lexical section inputs | Parked; not accepted | Closed before the 01:04 CET deadline on 14 November, after one extension. Prototype `e33d85ff`, compact compiler `d99e0d2c...`; baseline `4d4768c2` / `a3c07989...`. Correctly reuses 44 files and 79 transformation chunks on the real unused-body edit; import/preprocessing falls roughly 17 to 8 ms. All eight executable/diagnostic comparisons and seven focused groups pass. Compact snapshot size falls from 1.69 to 1.18 MB by encoding span-relative file identities. The decisive 31-pair result fails the predeclared 1% whole-build gain: unused CPU 0.873329 to 0.891347 s, paired ratio 1.02068 [1.00629, 1.03973]; active-body 1.880257 to 1.906683 s, ratio 1.01284 [0.99215, 1.02139]. All 328 required checks pass uncached in 106.824 s. Full integration was not rerun for this rejected candidate. Preserve the branch separately; do not merge the source-cache implementation. Semantic section fragments and efficient source-product persistence remain unfinished. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -539,3 +540,34 @@ section construction still run broadly, and non-function syntax contexts and
 other compilation modes need further incremental consumers. The full objective
 remains active; the next iteration returns to retained per-source frontend
 products and their downstream consumers.
+
+### I008 decision: preprocessing reuse alone does not meet the performance gate
+
+The initial compiler `a89e0b45...` passes required checks in 106.388 s and
+all eight paired artifact/diagnostic cases, but its unused-body CPU ratio is
+1.02625 [1.00575, 1.03013]. Its parser snapshot includes 762,741 bytes of
+transformation products and repeats absolute source paths 3,558 times. Compact
+input-span file identities remove about 509 KB from the complete snapshot.
+The compact candidate still misses the end-to-end target in 31 ordinary pairs.
+This is a rejected optimization hypothesis, not a completed source-stage milestone.
+
+The measured preprocessing saving is real. The added parser products and their
+restoration/persistence are also real costs. These measurements do not establish
+a complete attribution for the remaining whole-build regression; do not describe
+the repeated paths as its sole root cause. No experimental compiler code is
+merged into master. Full integration is deliberately not claimed for this branch.
+
+Evidence is in `.cache/incremental-evidence/structured-20261113/`: immutable
+`i008-compilers` and `i008-compact-compilers`, `i008-first-source`, the two
+eight-case comparisons, `i008-compact-31-comparison.json`, both focused logs,
+`i008-first-required.json`, `i008-required.json`, and
+`i008-source-payload-analysis.json`. Required runs record unchanged compiler
+and source hashes. The parked source commit is `e33d85ff`.
+
+The next independent P06 candidate is reusable function-body input queries.
+`definitionBodyDigests` currently walks all logical lines and constructs normalized
+body strings at multiple projection boundaries. First verify its input lifetime
+and consumers, then retain unchanged unit results and share them within one
+compilation. Membership, cross-file continuations, syntax/config changes and
+partial failures must remain explicit dependencies. Benchmark the complete
+build, including any new query index; do not repeat I008's storage-only gain.
