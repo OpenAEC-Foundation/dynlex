@@ -27,7 +27,7 @@ if os.name == "posix":
 
 REPOSITORY = Path(__file__).resolve().parent.parent
 SOURCE_REVISION = "d913a7db39d7705b738aeab0db6204ecc801f352"
-CASES = ("unchanged", "comment", "wording", "body", "lives", "shared-type", "cold")
+CASES = ("unchanged", "comment", "wording", "unused", "body", "lives", "shared-type", "cold")
 FAST_CASES = {"unchanged", "comment", "wording"}
 
 
@@ -93,6 +93,11 @@ def prepare_case(root, originals, case, sample=None):
     elif case == "body":
         main.write_bytes(replace_once(originals[main], b"98.0 * brightness",
                                      f"{97-sample}.0 * brightness".encode()))
+    elif case == "unused":
+        strings = root / "lib/string.dl"
+        strings.write_bytes(replace_once(originals[strings],
+            b'set separator to the string form of ", "',
+            f'set separator to the string form of "; {sample} "'.encode()))
     elif case == "lives":
         breakout.write_bytes(replace_once(originals[breakout],
             b"load value 3 into register registers's lives",
@@ -197,7 +202,7 @@ def main():
         game = root / "tests/games/lexi8"
         entry = game / "main.dl"
         originals = {path: path.read_bytes()
-                     for path in (entry, game / "chip8.dl", game / "breakout.dl")}
+                     for path in (entry, game / "chip8.dl", game / "breakout.dl", root / "lib/string.dl")}
         report["original_source_sha256"] = source_hashes(root)
 
         def compile_one(label, case, sample, phase, incremental):
@@ -250,6 +255,9 @@ def main():
                     row["source_sha256"] = hashes
                 if pair["baseline"]["diagnostics"] != pair["candidate"]["diagnostics"]:
                     raise RuntimeError(f"baseline/candidate diagnostics differ: {case}")
+                if case == "unused" and any(row["stats"]["objects_built"] or row["stats"]["link_ms"]
+                                            for row in pair.values()):
+                    raise RuntimeError("the inactive-function edit rebuilt executable code")
                 if args.require_identical_executable and \
                         pair["baseline"]["executable_sha256"] != pair["candidate"]["executable_sha256"]:
                     raise RuntimeError(f"baseline/candidate executable artifacts differ: {case}")

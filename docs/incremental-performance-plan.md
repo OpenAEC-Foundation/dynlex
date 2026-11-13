@@ -159,7 +159,8 @@ remaining measured costs, not by table order alone.
 | --- | --- | --- | --- |
 | I000 | P00: establish the plan and a validated comparison baseline | Complete | 14:18–15:01 CET, no extension. Compiler `4ab4d5c106251641513c7c345d85a69ded27daee02477cc282c9dc6306148ac0`: 328 required checks passed uncached in 104.8 seconds. Fixed a verified eviction-fixture assumption without weakening hit/parity assertions. Added and calibrated the paired real-application harness. |
 | I001 | P01: one filesystem metadata query per cache artifact | Complete: keep | 15:02–15:54 CET; one extension used, finished before its 16:32 deadline. Corrected baseline `b9f173e1...`, candidate `5c311f81...`. Metadata calls fell from 516 to 258 for 258 cached objects. Fifteen paired samples per fast path clear the 10% median CPU threshold with intervals excluding no improvement. All executable/diagnostic comparisons passed; 328 required checks passed uncached in 118.1 seconds and 464 integration checks in 928.1 seconds. Code-edit/cold timing gains remain unproven. |
-| I002 | P02/P03: select a complete file/section reuse experiment | Queued | Record current source-stage work and choose a bounded producer/consumer change with a measurable end-to-end benefit. |
+| I002 | P02a: reuse file-preparation products at the importer | Parked; not accepted | 15:56–17:26 CET, one extension exhausted. One edited file is prepared and 44 reused; real unused-body import time fell 16.94→12.23 ms. Native/diagnostic parity and focused source/config/error-order checks pass. No repeatable whole-build code-edit improvement was established. Required suite timed out at 120.17 s; current integration validation is missing. Preserve the experiment isolated from master. |
+| I003 | P01/P22: reduce cache-finalization work | Parked; measured candidate, not accepted | 17:26–18:49 CET, one extension. Isolated compiler `ef722bb9...` based on `14fa0b78` reduces fast-path paired CPU by 15.6–19.6%; all eight executable/diagnostic comparisons pass and 464 integration checks pass in 971.2 s. Required gate still returns 124 at 120.12 s. Preserve `codex/incremental-cache-finalization`; no merge or complete-goal claim. Stop cache micro-iterations and return to frontend units. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -245,3 +246,127 @@ Evidence: `i001-comparison-deterministic.json`, `i001-lives-repeat.json`,
 `i001-integration.json` in the structured evidence directory. The required run
 has little budget headroom; its 118.1-second result is not a claim that the suite
 became faster than I000's 104.8-second run.
+
+### I002 closure and I003 evidence
+
+I002 remains an unaccepted source-preparation experiment. The three-way fast-path
+control did not reproduce the initial pre-layout regression, so moving fields is
+not a verified root cause. This does not establish a net active-edit gain.
+The required timeout is real; CPU accounting for the killed process tree is
+incomplete and must not be used to attribute the failure to host contention.
+
+The standalone incremental checks pass, with 1,980 build calls and no duplicate
+check names. Their summed build wall time is 101.48 s (99.38 s child CPU). Of the
+1,184 builds supplying native statistics, finalization sums to 34.20 s, linking
+16.46 s, frontend 2.25 s, and inference 1.54 s. The 22.47 s
+`check_leaf_dependency_cascade` measurement includes nested groups; it is not the
+exclusive cost of one leaf-edit case. Evidence: `i002-incremental-check-timings.jsonl`.
+
+I003 screening: skipping only the below-limit sort reduced median finalization
+20.62→20.27 ms but did not establish a whole-build gain (31 paired CPU samples);
+the required suite again timed out at 120.12 s. Keep that failed screening separate.
+The actual finalizer allocation probe counted 69,539 allocations for 3,160 entries.
+Using LLVM directory iteration, filename views and filename-only retained records
+reduced this to 6,336; seven alternating probe batches measured median scan time
+16.09→11.94 ms. This synthetic result identifies avoidable representation work;
+real-application acceptance and suite validation are still pending. Evidence:
+`i003-sort-only-fast-control.json`, `i003-sort-only-required.json`,
+`i003-trim-allocation-comparison.json`.
+
+I003 validation isolation: the source-preparation candidate remains parked on
+`codex/incremental-query-identity`. The independent cache/finalizer and timeout
+cleanup patch is validated on `14fa0b78` in `codex/incremental-cache-finalization`.
+This preserves the parked experiment without incorporating it into an acceptance
+claim. The one extension closes rebuilding, paired benchmarks and validation; no
+new optimization is added. A concurrent-suite profile completed 1,937 of 1,980
+builds before timeout. Its first 1,261 builds took 66.11 s versus 53.98 s standalone
+with scan-entry counts differing by 0.03%; this is not evidence of broader semantic
+invalidation. Cache finalization improved in the standalone profiles, 34.20→24.75 s,
+but total build time improved only 101.48→98.89 s. Host state and source-path
+length differ between those profiles, so this is diagnostic screening evidence.
+
+A related watchdog ownership bug left 909.2 MiB of verified private-worktree cache
+files in RAM-backed `/tmp` after killed tests bypassed Python cleanup. The surviving
+outer watchdog now owns an isolated temporary root and removes it after child
+termination. Nested child/process cleanup and exact output ordering checks pass.
+The next full required run still timed out; cleanup alone is not a verified fix
+for the suite budget. Evidence: `i003-owned-timeout-cleanup.json`,
+`i003-live-suite-temp.json`, and `i003-profile-required.json`.
+
+### Next frontend investigation after I003
+
+`analyzeSections` currently calls `Section::processLine` / `detectPatterns` for body
+lines before `resolvePatterns` asks `selectCachedBodiesForResolutionReuse`. This
+constructs body syntax before the existing classification proof can skip it.
+Investigate moving that materialization behind per-declaration syntax validity and
+classification demand, with unchanged-source, syntax-config and diagnostic products.
+Changed implicit-parameter exports must materialize every newly affected consumer;
+unchanged cached bodies must retain source anchors without rebuilding their pending
+expressions. Check whether current classification input/parameter-count construction
+can consume persisted read sets instead of requiring every body AST first. Do not
+implement this as a whole-program cache or suppress syntax errors in edited unused
+bodies. Establish the minimal reproducer, skipped-body counters and real-program
+materialization cost before selecting the next iteration. This is a candidate, not
+a claim that its eligibility boundary or speedup has already been established.
+
+I003 isolated screen: compiler `ef722bb9...`, based on `14fa0b78` without the
+parked source-preparation experiment, passes focused capacity, eviction tie-order,
+metadata-error and default-cache checks. Thirty-one alternating real-program pairs
+without statistics measured median CPU 43.873→34.505 ms; median paired ratio 0.8118
+(95% interval 0.7857–0.8187). With statistics: 43.264→34.916 ms, ratio 0.7942
+(interval 0.7814–0.8259). Executable hashes, diagnostics and frozen source hashes
+match. Median finalization is 21.413→14.308 ms, with 3,160 entries inspected and
+zero sorted below the cap. Full required, edit/cold comparisons and integration
+validation remain pending. Evidence: `i003-isolated-fast-control.json`.
+
+### I003 completed comparison; required gate still fails
+
+The isolated comparison completed all eight cases with matching diagnostic and
+executable artifacts, clean-build parity and unchanged compiler/source identities.
+The 188 rows include population and clean-reference work; these are not all timing
+samples. CPU measurements below compare `5c311f81...` with `ef722bb9...`.
+
+| Case | Baseline median CPU | Candidate median CPU | Paired ratio; 95% interval |
+| --- | ---: | ---: | --- |
+| unchanged | 0.041334 s | 0.033055 s | 0.8035; 0.7901–0.8127 |
+| comment | 0.038944 s | 0.031905 s | 0.8176; 0.7836–0.8400 |
+| wording | 0.046303 s | 0.038544 s | 0.8444; 0.8042–0.8559 |
+| unused | 1.068453 s | 1.060486 s | 0.9950; 0.9925–1.0823 |
+| body | 2.112049 s | 2.205058 s | 0.9878; 0.9536–0.9926 |
+| lives | 2.780573 s | 2.834215 s | 1.0324; 0.8813–1.0740 |
+| shared-type | 2.866443 s | 3.062584 s | 1.0457; 0.9464–1.1029 |
+| cold | 6.008830 s | 6.224733 s | 1.0226; 0.9542–1.0775 |
+
+Fast-path paired improvements are 15.6–19.6%. The active-body paired ratio shows
+a small improvement despite the higher unpaired median; comparisons must retain
+the sample pairing. Other code-edit and cold intervals include 1 and do not prove
+equal speed, a gain, or a repeatable regression. Empty-default-cache ratio is
+1.0000 (0.9477–1.0767), also inconclusive.
+
+The isolated required run returned 124 after 120.120 s, completing the incremental
+checks and reaching pattern precedence before timeout. It is a failure, not a full
+test pass. Separate unchanged precedence and associativity groups pass in 4.008 s
+and 0.995 s. Integration is still running. No acceptance or merge is recorded.
+Evidence: `i003-isolated-comparison.json`, `i003-isolated-required.json`, and
+`i003-required-tail-timings.json`.
+
+Verified frontend constraints for the next iteration: classification already
+reuses `BodyInput` and query records when `sameBody(path)` holds; do not add a
+duplicate unchanged-body fingerprint cache. `InitialParameterCounts::prepare`
+still collects current sections and computes body digests after section parsing.
+`IncrementalClassification::prepare` collects current body references before
+selecting reusable units. Its `contains`/`retain` checks load digest-prefix matcher
+buckets that mix result and metadata record kinds. `restoreBodyResolutionUnits`
+subsequently restores each deferred reference and reuses its matcher record.
+Splitting buckets alone can therefore move work to that later consumer. Couple
+a storage change to avoided body materialization, or reject it if whole-build
+measurements do not improve.
+
+### I003 closure
+
+Integration completed: 464 passed, zero failed/skipped, 971.162 s inside the runner.
+Compiler SHA is `ef722bb9ddb8efff20fcdf4b3e793cd643581701fde933b4d6bfe266d264c44d`.
+The required budget gate is still unfulfilled. This candidate stays isolated and
+unaccepted; the full incremental objective remains active. The one extension is
+finished and no further cache micro-optimization is added to I003.
+Evidence: `i003-isolated-integration.json`, `i003-close-validation.json`.

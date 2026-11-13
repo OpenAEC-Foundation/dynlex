@@ -42,6 +42,23 @@ def main():
     shell = os.environ.get("DYNLEX_TEST_BASH", "bash")
     with tempfile.TemporaryDirectory(prefix="dynlex-nested-timeout-") as temporary:
         root = Path(temporary)
+        direct = ('PROJECT_DIR=$1\n' + wrapper +
+                  '\nrun_with_timeout 5 --isolate-temporaries true "$2" -c "$3" "$4" "$5"\n')
+        create_artifact = ("import sys,tempfile\nfrom pathlib import Path\n"
+                           "root=Path(tempfile.mkdtemp())\n"
+                           "(root/'artifact').write_bytes(b'child artifact')\n"
+                           "Path(sys.argv[1]).write_text(str(root))\n"
+                           "raise SystemExit(int(sys.argv[2]))\n")
+        for exit_code in (0, 7):
+            record = root / f"normal-{exit_code}.temporary"
+            result = subprocess.run(
+                [shell, "-c", direct, "temporary-cleanup", project.as_posix(), sys.executable,
+                 create_artifact, record.as_posix(), str(exit_code)],
+                capture_output=True, text=True, timeout=10,
+            )
+            assert result.returncode == exit_code, (result.returncode, result.stdout, result.stderr)
+            assert not result.stderr, result.stderr
+            assert not Path(record.read_text()).exists(), "completed child left temporary files behind"
         child = root / "child.py"
         pid_file = root / "child.pid"
         parallel_pid_file = root / "parallel.pid"
