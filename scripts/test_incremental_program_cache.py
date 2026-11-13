@@ -37,6 +37,38 @@ def check_recent_cache_entries(root, build):
         repeated = build(entry=main, flags=("-O2",))
         assert repeated[0]["frontend_reused"], f"eviction removed retained dependencies after {case} edit"
         assert repeated[1:] == edited[1:] and not filler.exists()
+    check_cache_metadata(root, build)
+
+
+def check_cache_metadata(root, build):
+    main = root / "cache_metadata.dl"
+    main.write_text('@intrinsic("discard", 0)\n')
+    first = build(entry=main)
+    directory = root / "cache" / "native-v1"
+    older = directory / ("object-" + "0" * 63 + "1.entry")
+    newer = directory / ("object-" + "0" * 63 + "2.entry")
+    invalid = directory / ("object-" + "f" * 64 + ".entry")
+    assert not any(path.exists() for path in (older, newer, invalid))
+    try:
+        for path in (older, newer):
+            with path.open("wb") as sparse:
+                sparse.truncate(256 * 1024 * 1024)
+            os.utime(path, (1, 1))
+        repeated = build(entry=main)
+        assert repeated[1:] == first[1:]
+        assert not older.exists() and newer.exists(), \
+            "equal-age cache entries were not evicted in path order"
+        invalid.mkdir()
+        failure = build(entry=main, success=False)
+        assert "cannot inspect cache" in failure[1], \
+            "a directory masquerading as a cache entry did not report its filesystem error"
+    finally:
+        for path in (older, newer):
+            if path.exists():
+                path.unlink()
+        if invalid.exists():
+            invalid.rmdir()
+    assert build(entry=main)[1:] == first[1:]
 
 
 def check_cache_eviction(root, build):

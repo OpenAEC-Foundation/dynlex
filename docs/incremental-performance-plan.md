@@ -158,7 +158,7 @@ remaining measured costs, not by table order alone.
 | Iteration | Goal | State | Evidence / next action |
 | --- | --- | --- | --- |
 | I000 | P00: establish the plan and a validated comparison baseline | Complete | 14:18–15:01 CET, no extension. Compiler `4ab4d5c106251641513c7c345d85a69ded27daee02477cc282c9dc6306148ac0`: 328 required checks passed uncached in 104.8 seconds. Fixed a verified eviction-fixture assumption without weakening hit/parity assertions. Added and calibrated the paired real-application harness. |
-| I001 | P01: measure and evaluate cache-maintenance overhead | Queued | First new optimization after a usable baseline. Compare fast paths and cache-size scaling; keep only a measured gain. |
+| I001 | P01: one filesystem metadata query per cache artifact | Complete: keep | 15:02–15:54 CET; one extension used, finished before its 16:32 deadline. Corrected baseline `b9f173e1...`, candidate `5c311f81...`. Metadata calls fell from 516 to 258 for 258 cached objects. Fifteen paired samples per fast path clear the 10% median CPU threshold with intervals excluding no improvement. All executable/diagnostic comparisons passed; 328 required checks passed uncached in 118.1 seconds and 464 integration checks in 928.1 seconds. Code-edit/cold timing gains remain unproven. |
 | I002 | P02/P03: select a complete file/section reuse experiment | Queued | Record current source-stage work and choose a bounded producer/consumer change with a measurable end-to-end benefit. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
@@ -198,3 +198,50 @@ and records elapsed and POSIX process-tree CPU time. Other platforms explicitly
 report CPU accounting as unavailable. Staged compiler executables must have their
 runtime dependencies available from configured locations. Private application
 sources, caches and executables are removed afterward; reports are retained.
+
+I001's first comparison stopped on a differing executable hash. Inspection found
+identical generated LLVM IR and all 258 native object artifacts byte-identical;
+the dynamic-library lists differed only in the order of `freetype` and `m`.
+An unordered set leaked discovery order into native linking. Both native paths
+now collect library names in a shared deterministic order, with an isolated C++
+regression check. The corrected baseline is compiler
+`b9f173e10a73cba0e89b2fa7bf505b256989e68caec8707be2fd95fc6223ab72`.
+The acceptance comparison applies this correction to both sides and still
+requires identical executables. Earlier interrupted comparisons are screening
+evidence, not a completed performance result.
+
+That screening measured approximately 20 ms importing/transforming sources,
+25 ms constructing sections, and 530 ms resolving patterns for the small active
+body edit. P02/P03 address a missing incremental boundary, while P05–P08 target
+the larger remaining frontend cost. Source transformations currently operate on
+the merged stream: bracket continuation and indentation can cross import
+boundaries. Cached fragments must retain those context inputs rather than assume
+every source file parses independently.
+
+### I001 decision and limits
+
+Keep the single-query metadata implementation. The corrected comparison uses the
+same deterministic library-order fix in both executables, so the measured change
+is cache maintenance. The final trace verifies two metadata syscalls per cached
+object before and one after, with identical native output. Traced timings are
+excluded from the performance samples.
+
+| Warm case | Baseline median CPU | Candidate median CPU | Median paired ratio; 95% interval |
+| --- | ---: | ---: | --- |
+| Unchanged | 47.08 ms | 39.13 ms | 0.847; 0.771–0.885 |
+| Imported comment | 46.57 ms | 39.82 ms | 0.851; 0.823–0.910 |
+| Warning wording | 54.50 ms | 47.57 ms | 0.858; 0.851–0.879 |
+
+There is no established speedup for active code edits or cache-disabled builds.
+The game-state edit's first seven pairs showed a small increase; fifteen further
+pairs also contained both faster and slower outcomes. Across 22 pairs its median
+ratio is 1.026, with an interval of 0.983–1.082. All integer semantic work counters
+match within each repeated pair. Ten cold-build pairs give a ratio of 0.986,
+with an interval of 0.965–1.033. These noisy results do not establish a repeatable
+regression or prove equal speed. Keep this uncertainty visible in later comparisons.
+
+Evidence: `i001-comparison-deterministic.json`, `i001-lives-repeat.json`,
+`i001-final-metadata-trace.json`, `i001-required.json`, and
+`i001-integration.json` in the structured evidence directory. The required run
+has little budget headroom; its 118.1-second result is not a claim that the suite
+became faster than I000's 104.8-second run.

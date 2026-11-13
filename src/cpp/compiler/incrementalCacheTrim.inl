@@ -2,7 +2,7 @@ void trimCache(const fs::path &directory) {
 	struct Entry {
 		fs::path path;
 		uintmax_t size;
-		fs::file_time_type time;
+		llvm::sys::TimePoint<> time;
 	};
 	std::vector<Entry> entries;
 	uintmax_t size = 0;
@@ -23,19 +23,25 @@ void trimCache(const fs::path &directory) {
 			return (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f');
 		}))
 			continue;
-		std::error_code error;
-		uintmax_t entrySize = file.file_size(error);
+#ifdef _WIN32
+		const std::u8string utf8Path = file.path().u8string();
+		const llvm::StringRef pathBytes(reinterpret_cast<const char *>(utf8Path.data()), utf8Path.size());
+#else
+		const llvm::StringRef pathBytes(file.path().native());
+#endif
+		llvm::sys::fs::file_status metadata;
+		std::error_code error = llvm::sys::fs::status(pathBytes, metadata);
 		if (error == std::errc::no_such_file_or_directory)
 			continue;
 		if (error)
-			throw fs::filesystem_error("cannot inspect cache size", file.path(), error);
-		auto time = file.last_write_time(error);
-		if (error == std::errc::no_such_file_or_directory)
-			continue;
-		if (error)
-			throw fs::filesystem_error("cannot inspect cache age", file.path(), error);
-		entries.push_back({file.path(), entrySize, time});
-		size += entrySize;
+			throw fs::filesystem_error("cannot inspect cache metadata", file.path(), error);
+		if (!llvm::sys::fs::is_regular_file(metadata)) {
+			auto reason =
+				llvm::sys::fs::is_directory(metadata) ? std::errc::is_a_directory : std::errc::operation_not_supported;
+			throw fs::filesystem_error("cannot inspect cache size", file.path(), std::make_error_code(reason));
+		}
+		entries.push_back({file.path(), metadata.getSize(), metadata.getLastModificationTime()});
+		size += metadata.getSize();
 	}
 	std::sort(entries.begin(), entries.end(), [](const Entry &left, const Entry &right) {
 		return left.time == right.time ? left.path < right.path : left.time < right.time;

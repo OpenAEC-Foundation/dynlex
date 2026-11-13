@@ -960,6 +960,9 @@ so page-aligned compiler executables are mapped instead of copied in full.
 The cache's size limit evicts entries by successful access time. Reading a
 verified entry refreshes its cache-file timestamp, so repeated reuse keeps hot
 optimization units ahead of older results that no longer participate in builds.
+Trimming reads each artifact's size and timestamp together in one filesystem
+metadata query. Equal timestamps are ordered by path. Missing entries remain
+independently evictable, while non-file artifacts and other I/O errors are reported.
 Validating a program manifest also records access to its payload references,
 without loading their contents. Comment and unused-body edits can therefore
 retain lazy payloads under cache pressure without evicting their current result.
@@ -1891,7 +1894,9 @@ inlined callees, globals and debug metadata are reflected in that identity. Unch
 objects are reused. The linker receives multiple object paths through a response file.
 If the ordered object keys and required libraries are unchanged,
 and the existing executable still matches the recorded output digest, an edited build
-skips linking. An unchanged, comment-only, or message-only configuration build also
+skips linking. Native library names use a shared sorted order for ordinary linking
+and incremental capture, so discovery and restoration order do not alter linker
+inputs. An unchanged, comment-only, or message-only configuration build also
 skips linking while that output identity matches. This is native partition reuse, matcher query reuse, the unused-body
 fast path, function IR reuse, and inference-summary reuse. The last two paths skip
 inference and code generation for eligible unchanged functions during active edits.
