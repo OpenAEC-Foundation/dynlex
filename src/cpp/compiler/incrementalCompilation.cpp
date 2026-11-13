@@ -3,6 +3,7 @@
 #include "classInstantiationRequest.h"
 #include "codegen/codegen.h"
 #include "codegen/native.h"
+#include "codegen/nativeLibraries.h"
 #include "codegen/targetOptions.h"
 #include "compileTimeValue.h"
 #include "compiler.h"
@@ -774,7 +775,7 @@ bool compileIncrementally(
 					std::string generatedIR = serializeCachedModule(*compiled.llvmModule);
 					statistics.generatedIRSnapshotMilliseconds = elapsedMilliseconds(irStart);
 					auto snapshotStart = Clock::now();
-					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
+					std::vector<std::string> libraries = orderedNativeLibraries(compiled.requiredLibraries);
 					std::string diagnostics;
 					std::set<std::string> diagnosticSources;
 					Json diagnosticRecords = captureCachedDiagnostics(compiled, diagnostics, diagnosticSources);

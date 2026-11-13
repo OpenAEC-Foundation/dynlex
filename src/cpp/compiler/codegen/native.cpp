@@ -451,7 +451,7 @@ bool emitNativeObject(ParseContext &context) {
 }
 
 bool emitNativeExecutable(ParseContext &context) {
-	return emitNativeExecutableWithObjects(context, {}, {context.requiredLibraries.begin(), context.requiredLibraries.end()});
+	return emitNativeExecutableWithObjects(context, {}, orderedNativeLibraries(context.requiredLibraries));
 }
 
 std::string nativeExecutablePath(const ParseContext::Options &options) {

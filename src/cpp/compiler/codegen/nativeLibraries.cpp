@@ -1,4 +1,11 @@
 #include "nativeLibraries.h"
+#include <algorithm>
+
+std::vector<std::string> orderedNativeLibraries(const std::unordered_set<std::string> &libraries) {
+	std::vector<std::string> ordered(libraries.begin(), libraries.end());
+	std::ranges::sort(ordered);
+	return ordered;
+}
 
 std::vector<std::string>
 nativeLibraryArguments(const llvm::Triple &targetTriple, llvm::StringRef library, llvm::StringRef runtimeLibraryPath) {
