@@ -335,6 +335,7 @@ static bool generateIntrinsicRuntimeValue(ParseContext &context, Expression *exp
 #include "codegenIntrinsicMemory.inl"
 #include "codegenIntrinsicNumeric.inl"
 #include "codegenIntrinsicTypes.inl"
+#include "codegenShaderResources.inl"
 
 CodegenResult generateIntrinsicCode(
 	ParseContext &context, Expression *callExpr, const std::string &name, const std::vector<Expression *> &allArguments,
@@ -445,6 +446,10 @@ CodegenResult generateIntrinsicCode(
 		return generateShaderInputIntrinsic(context, callExpr, args, kind);
 	if (kind == IntrinsicKind::ShaderUniform)
 		return generateShaderUniformIntrinsic(context, callExpr, args);
+	if (kind == IntrinsicKind::ShaderImage || kind == IntrinsicKind::ShaderSampler)
+		return nullptr;
+	if (kind == IntrinsicKind::ShaderSampleLevel || kind == IntrinsicKind::ShaderSampleCompare)
+		return generateShaderSampleIntrinsic(context, callExpr);
 	if (kind == IntrinsicKind::ShaderOutput || kind == IntrinsicKind::ShaderInterpolantOutput)
 		return generateShaderOutputIntrinsic(context, args, kind);
 	if (kind == IntrinsicKind::ExtractElement)

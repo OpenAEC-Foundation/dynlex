@@ -90,6 +90,8 @@ static std::optional<std::string> returnTypeReferenceSource(const DataType &type
 	case DataType::Kind::ArgumentPack:
 	case DataType::Kind::ArgumentReference:
 	case DataType::Kind::Constraint:
+	case DataType::Kind::ShaderImage:
+	case DataType::Kind::ShaderSampler:
 		break;
 	}
 	if (!source)

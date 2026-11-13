@@ -98,6 +98,15 @@ def main():
             result = subprocess.run([str(compiler), str(entry), *options, '-o', str(binary)],
                                     capture_output=True, text=True, timeout=15)
             return result, binary
+        index_order = (Path(__file__).resolve().parents[1] /
+                       'tests/runtime/graphics_shaders/uniform_index_order.dl').read_text()
+        for stage in ['vertex', 'fragment']:
+            for level in ['-O0', '-O2']:
+                result, binary = compile(index_order, ('--emit-spirv', '--shader-stage=' + stage, level))
+                assert result.returncode == 0 and not result.stderr, result.stderr
+                validation = subprocess.run([validator, '--target-env', 'vulkan1.3', str(binary)],
+                                            capture_output=True, text=True)
+                assert validation.returncode == 0, (stage, level, validation.stderr)
         cases = []
         for kind, expected in [(F32, (22, (32,))), (I32, (21, (32, 1))), (U32, (21, (32, 0)))]:
             cases.append((kind, *expected, 1, 1))

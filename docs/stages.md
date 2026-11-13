@@ -896,6 +896,21 @@ Each uniform occupies one block member at offset zero. Repeated declarations mus
 agree on name, binding and type. Browser reflection reports the scalar kind, row
 count and column count from the emitted block layout.
 
+Sampled shader resources use compile-time image and sampler binding values. The
+`shader image` and `shader sampler` intrinsics produce immutable identities;
+`shader sample level` and `shader sample compare` consume fixed binding references
+and runtime float32 coordinates. Image dimensions, depth/comparison compatibility
+and scalar/vector operand shapes are checked during inference. Code generation
+registers the used interface, rejects collisions with other resources or numeric
+uniforms, and emits numeric sampling operations. SPIR-V interface lowering replaces
+those operations with image/sampler loads and native sampling instructions, removing
+the internal callable declarations. Binding names remain debug metadata, without
+runtime string arrays or extra numeric capabilities. Resource
+declarations produce no runtime objects. Ordinary pure functions and fixed
+parameters preserve their identities through inference and specialization. Browser
+reflection reads the emitted separate image/sampler resources and verifies their
+bindings and image shapes against the declared interface. See `docs/shader_resources.md`.
+
 LLVM expands wide arithmetic according to the selected target. The browser runtime
 provides LLVM's i128 compiler-runtime arithmetic and numeric conversion imports
 using exact BigInt limbs. Floating-point conversions round directly to the target

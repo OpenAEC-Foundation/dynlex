@@ -44,6 +44,8 @@ AddressProvenance decodeAddressProvenance(Section *section, const Json &encoded)
 }
 
 std::optional<Json> encodeGlobalConstant(const CompileTimeValue &value) {
+	if (const auto *resource = std::get_if<ShaderResourceValue>(&value))
+		return Json::array({"shader resource", resource->name, resource->binding, static_cast<int>(resource->kind)});
 	if (const auto *integer = std::get_if<WideInteger>(&value))
 		return Json::array({"wide", integer->bits.getBitWidth(), integer->isUnsigned, integer->toString(16)});
 	if (const auto *integer = std::get_if<std::int64_t>(&value))
@@ -63,6 +65,11 @@ std::optional<Json> encodeGlobalConstant(const CompileTimeValue &value) {
 
 CompileTimeValue decodeGlobalConstant(const Json &encoded) {
 	const std::string kind = encoded.at(0).get<std::string>();
+	if (kind == "shader resource")
+		return ShaderResourceValue{
+			encoded.at(1).get<std::string>(), encoded.at(2).get<std::uint32_t>(),
+			static_cast<ShaderResourceKind>(encoded.at(3).get<int>())
+		};
 	if (kind == "wide")
 		return WideInteger{
 			llvm::APInt(encoded.at(1).get<unsigned>(), encoded.at(3).get<std::string>(), 16), encoded.at(2).get<bool>()

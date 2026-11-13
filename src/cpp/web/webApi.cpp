@@ -152,7 +152,7 @@ struct WebCompilerState {
 	std::string outputWasmBase64;
 	std::vector<uint8_t> outputShaderSpirv;
 	std::string outputShaderSpirvBase64;
-	std::string shaderReflectionJson = R"({"uniforms":[],"vertexInputs":[]})";
+	std::string shaderReflectionJson = R"({"uniforms":[],"vertexInputs":[],"resources":[]})";
 	std::vector<CompilerLogEntry> compilerLog;
 	std::string diagnosticsJson = R"({"diagnostics":[]})";
 	std::string compilerLogJson = R"({"messages":[]})";
@@ -322,6 +322,8 @@ std::string encodeBase64(const std::vector<uint8_t> &bytes) {
 	return encoded;
 }
 
+#include "webShaderResources.inl"
+
 bool reflectShaderSpirv(
 	const std::vector<uint8_t> &spirvBytes, const ParseContext &context, std::string &reflectionJson, std::string &errorMessage
 ) {
@@ -448,6 +450,7 @@ bool reflectShaderSpirv(
 			});
 		}
 		reflection["vertexInputs"] = std::move(inputs);
+		reflection["resources"] = reflectedShaderResources(compiler, resources, context);
 		reflectionJson = reflection.dump();
 		return true;
 	} catch (const std::exception &error) {
@@ -468,7 +471,7 @@ int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderSta
 	state.outputWasmBase64.clear();
 	state.outputShaderSpirv.clear();
 	state.outputShaderSpirvBase64.clear();
-	state.shaderReflectionJson = R"({"uniforms":[],"vertexInputs":[]})";
+	state.shaderReflectionJson = R"({"uniforms":[],"vertexInputs":[],"resources":[]})";
 	state.compilerLog.clear();
 	appendCompilerLog("info", "compile request started");
 

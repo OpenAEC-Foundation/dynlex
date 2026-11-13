@@ -1,0 +1,13 @@
+import lib/shader.dl
+
+set paint to the shader image named "paint" at binding 1
+set sky to the shader cube image named "sky" at binding 2
+set shadow to the shader depth image named "shadow" at binding 3
+set smooth to the shader sampler named "smooth" at binding 4
+set comparison to the shader comparison sampler named "comparison" at binding 5
+set uv to the shader uniform named "uv" at binding 0 as an aggregate of 2 floating-point number values
+set direction to @intrinsic("construct", @intrinsic("vector", 3), 1.0, 0.0, 0.0)
+set color to the sample from paint using smooth at uv with level 0.0
+set reflection to the sample from sky using smooth at direction with level 1.0
+set visibility to the visibility from shadow using comparison at uv with depth 0.5
+@intrinsic("shader output", (color + reflection) * visibility)

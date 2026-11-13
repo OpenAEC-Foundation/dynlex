@@ -16,6 +16,8 @@ struct ParseContext;
 inline constexpr char shaderOutputMetadataName[] = "dynlex.shader.output";
 
 std::string shaderInterpolantGlobalName(std::string_view interpolantName);
+std::string shaderResourceGlobalName(std::string_view name);
+std::string shaderSampleFunctionName(const ShaderResourceValue &image, const ShaderResourceValue &sampler);
 std::string shaderVertexInputGlobalName(std::string_view name, std::uint32_t location, const DataType &type);
 std::unique_ptr<llvm::TargetMachine> createSPIRVTargetMachine(ParseContext &context, std::string &errorMessage);
 bool emitSPIRVModule(ParseContext &context);

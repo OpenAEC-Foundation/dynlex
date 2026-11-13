@@ -46,3 +46,19 @@ function set [the|] shader interpolant named {a value:name} with an x coordinate
 
 the shader time means: @intrinsic("shader uniform", "time", 0, @intrinsic("type", "float", 32))
 the shader render pass means: @intrinsic("shader uniform", "render_pass", 1, @intrinsic("type", "float", 32))
+
+# Sampled resources are static bindings, separate from runtime texture storage.
+[a|] shader image means: @intrinsic("type", "shader image")
+[a|] shader sampler means: @intrinsic("type", "shader sampler")
+
+[the|] shader image named {fixed C string:name} at binding {fixed integer:slot} means: @intrinsic("shader image", name, slot, "2d", false)
+[the|] shader cube image named {fixed C string:name} at binding {fixed integer:slot} means: @intrinsic("shader image", name, slot, "cube", false)
+[the|] shader depth image named {fixed C string:name} at binding {fixed integer:slot} means: @intrinsic("shader image", name, slot, "2d", true)
+[the|] shader sampler named {fixed C string:name} at binding {fixed integer:slot} means: @intrinsic("shader sampler", name, slot, false)
+[the|] shader comparison sampler named {fixed C string:name} at binding {fixed integer:slot} means: @intrinsic("shader sampler", name, slot, true)
+
+to get the sample from {fixed shader image:image} using {fixed shader sampler:sampler} at {a value:coordinates} with level {a 32 bit floating-point number:level}:
+    return @intrinsic("shader sample level", image, sampler, coordinates, level)
+
+to get the visibility from {fixed shader image:image} using {fixed shader sampler:sampler} at {a value:coordinates} with depth {a 32 bit floating-point number:depth}:
+    return @intrinsic("shader sample compare", image, sampler, coordinates, depth)

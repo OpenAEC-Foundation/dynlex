@@ -36,7 +36,7 @@ for(const {scalar,rows,columns,kind} of cases) {
   assert.equal(call('dynlex_web_compile_and_emit_shader_spirv','number',['string'],['fragment']),0,
     JSON.stringify({scalar,rows,columns,source,diagnostics:JSON.parse(call('dynlex_web_get_diagnostics_json','string'))}));
   assert.deepEqual(JSON.parse(call('dynlex_web_get_shader_reflection_json','string')),
-    {uniforms:[{name:'camera 🌽',group:0,binding:3,type:{scalar,rows,columns}}],vertexInputs:[]});
+    {resources:[],uniforms:[{name:'camera 🌽',group:0,binding:3,type:{scalar,rows,columns}}],vertexInputs:[]});
   const bytes=Buffer.from(call('dynlex_web_get_output_shader_spirv_base64','string'),'base64');
   let webgpu,webgl;
   try {webgpu=translator.translate(bytes);webgl=translator.translateGlsl(bytes,'fragment');}
@@ -53,7 +53,7 @@ for(const record of shaderArithmeticCases) {
   assert.equal(call('dynlex_web_compile_and_emit_shader_spirv','number',['string'],['fragment']),0,
     JSON.stringify({name:record.name,diagnostics:JSON.parse(call('dynlex_web_get_diagnostics_json','string'))}));
   const reflection=JSON.parse(call('dynlex_web_get_shader_reflection_json','string'));
-  assert.deepEqual(reflection,{uniforms:[{name:'data',group:0,binding:3,type:record.type}],vertexInputs:[]});
+  assert.deepEqual(reflection,{resources:[],uniforms:[{name:'data',group:0,binding:3,type:record.type}],vertexInputs:[]});
   const bytes=Buffer.from(call('dynlex_web_get_output_shader_spirv_base64','string'),'base64');
   artifacts.push({kind:'arithmetic',...record,uniforms:reflection.uniforms,webgpu:translator.translate(bytes),webgl:translator.translateGlsl(bytes,'fragment')});
 }

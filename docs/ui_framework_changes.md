@@ -533,3 +533,34 @@ committed UI/runtime sources. All four Studio/River WebGPU/WebGL browser runs
 pass, including versioned asset URLs; the rebuilt application binary is unchanged.
 The final camera constraint affects only an unimported source helper and the SDK
 source catalog, verified against the complete application dependency graph.
+
+## Sampled shader resources
+
+The core shader vocabulary now describes static 2D color images, cube images,
+2D depth images, ordinary samplers and comparison samplers. These are immutable
+compile-time binding values, with typed aliases and fixed parameters. Ordinary
+pure functions can return them; sampled bindings are registered only when used.
+Names and bindings share a namespace with numeric uniforms, and incompatible
+resource types, coordinate shapes or duplicate bindings produce source diagnostics.
+`lib/shader.dl` exposes explicit-level color sampling and level-zero depth
+comparison through plain-English patterns; see `docs/shader_resources.md`.
+
+SPIR-V interface lowering emits the actual image/sampler globals and sampling
+instructions, keeping opaque values inside their sampling block. Binding names
+remain metadata and require no runtime byte arrays or Int8 capability. Browser
+reflection includes sorted resource descriptions, and compiler-worker results
+preserve both stages' resource lists. Every empty/reset reflection object and
+existing exact reflection test uses the same new contract.
+
+This work also exposed an existing uniform index-order bug. When a helper first
+introduced the unsigned index type, uniform lowering could insert its new zero
+constant before that type. The constant now follows its type declaration. An
+eight-line, import-free regression validates both stages at O0/O2.
+
+Native shader validation, declaration/operand/binding diagnostics, the plain-English
+vocabulary and all 350 required compiler tests pass. The rebuilt browser compiler
+passes its smoke suite, numeric input reflection tests, resource reflection/reset
+tests, vocabulary and WGSL/GLSL translations. All 516 integration checks pass with
+no failures or skips. Shared host texture/sampler allocation, render targets, resource bindings
+and the actual Farm material/world/interface integration remain unfinished; this
+phase has not changed the live preview or its pinned SDK.

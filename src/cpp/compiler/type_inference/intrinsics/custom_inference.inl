@@ -1,4 +1,14 @@
 void ExpressionInferenceSupport::inferCustomIntrinsic(IntrinsicKind kind) {
+	if (kind == IntrinsicKind::ShaderImage || kind == IntrinsicKind::ShaderSampler) {
+		expr->type = {kind == IntrinsicKind::ShaderImage ? DataType::Kind::ShaderImage : DataType::Kind::ShaderSampler};
+		return;
+	}
+	if (kind == IntrinsicKind::ShaderSampleLevel) {
+		expr->type = {DataType::Kind::Vector};
+		expr->type.arraySize = 4;
+		expr->type.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
+		return;
+	}
 	if (kind == IntrinsicKind::ShaderVertexInput || kind == IntrinsicKind::ShaderUniform) {
 		auto reference = getCompileTimeTypeReferenceValue(context.lookupExpressionValue(expr->arguments[3]));
 		requireCompilerInvariant(reference.has_value(), "validated shader input is missing its type reference");

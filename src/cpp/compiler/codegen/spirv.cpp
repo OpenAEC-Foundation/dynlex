@@ -69,6 +69,10 @@ static std::string namedShaderGlobal(std::string_view prefix, std::string_view n
 }
 
 std::string shaderInterpolantGlobalName(std::string_view name) { return namedShaderGlobal("dynlex_interpolant_", name); }
+std::string shaderResourceGlobalName(std::string_view name) { return namedShaderGlobal("dynlex_resource_", name); }
+std::string shaderSampleFunctionName(const ShaderResourceValue &image, const ShaderResourceValue &sampler) {
+	return "dynlex_sample_" + std::to_string(image.binding) + "_" + std::to_string(sampler.binding);
+}
 
 std::string shaderVertexInputGlobalName(std::string_view name, std::uint32_t location, const DataType &type) {
 	const DataType &scalar = type.kind == DataType::Kind::Vector ? type.aggregateElementType() : type;
@@ -162,11 +166,13 @@ static size_t findFirstSpvVariable(const std::vector<uint32_t> &binary) {
 
 static uint32_t getOrCreateSpvUnsignedZero(std::vector<uint32_t> &binary) {
 	uint32_t unsignedTypeId = 0;
+	size_t unsignedTypeEnd = 0;
 	for (size_t position = 5; position < binary.size(); position = nextSpvInstruction(binary, position)) {
 		uint32_t wordCount = spvWordCount(binary[position]);
 		if (spvOpcode(binary[position]) == spvOpTypeInt && wordCount == 4 && binary[position + 2] == 32 &&
 			binary[position + 3] == 0) {
 			unsignedTypeId = binary[position + 1];
+			unsignedTypeEnd = position + wordCount;
 			break;
 		}
 	}
@@ -193,7 +199,10 @@ static uint32_t getOrCreateSpvUnsignedZero(std::vector<uint32_t> &binary) {
 	}
 	zeroId = allocateSpvId(binary);
 	declarations.insert(declarations.end(), {spvInstWord(4, spvOpConstant), unsignedTypeId, zeroId, 0});
-	binary.insert(binary.begin() + findFirstSpvVariable(binary), declarations.begin(), declarations.end());
+	// A type used only inside a helper may follow the first global variable.
+	// The new constant must follow that type rather than forward-reference it.
+	size_t insertion = unsignedTypeEnd ? unsignedTypeEnd : findFirstSpvVariable(binary);
+	binary.insert(binary.begin() + insertion, declarations.begin(), declarations.end());
 	return zeroId;
 }
 
@@ -221,13 +230,14 @@ static std::vector<uint32_t> encodeSpvString(const std::string &str) {
 
 // Decoration info for a shader I/O variable
 struct ShaderIoVar {
-	std::string name;			   // LLVM global name (e.g. "gl_FragCoord", "in_Position", "ubo_time")
-	uint32_t id = 0;			   // SPIR-V result ID (found by scanning OpName)
-	uint32_t structTypeId = 0;	   // struct type ID (for UBO vars, found via OpTypePointer → OpTypeStruct)
-	uint32_t storageClass;		   // target storage class (Input, Output, or Uniform)
-	bool isBuiltIn;				   // true = BuiltIn decoration, false = Location decoration
-	uint32_t decorationValue;	   // BuiltIn ID or Location number
-	bool isUBO = false;			   // true = Uniform block (needs Block/Binding/DescriptorSet/Offset decorations)
+	std::string name;		   // LLVM global name (e.g. "gl_FragCoord", "in_Position", "ubo_time")
+	uint32_t id = 0;		   // SPIR-V result ID (found by scanning OpName)
+	uint32_t structTypeId = 0; // struct type ID (for UBO vars, found via OpTypePointer → OpTypeStruct)
+	uint32_t storageClass;	   // target storage class (Input, Output, or Uniform)
+	bool isBuiltIn;			   // true = BuiltIn decoration, false = Location decoration
+	uint32_t decorationValue;  // BuiltIn ID or Location number
+	bool isUBO = false;		   // true = Uniform block (needs Block/Binding/DescriptorSet/Offset decorations)
+	bool isResource = false;
 	uint32_t binding = 0;		   // UBO binding point
 	uint32_t signedComponents = 0; // Signed interface scalar (1) or vector width (2..4).
 	uint32_t uniformRows = 0;
@@ -238,12 +248,14 @@ struct ShaderIoVar {
 #include "spirvIndexWidths.inl"
 #include "spirvIntegerSemantics.inl"
 #include "spirvPointerStorage.inl"
+#include "spirvShaderResources.inl"
 #include "spirvVertexInputs.inl"
 
 // Post-process SPIR-V binary to convert exported functions to shader entry points.
 // The LLVM SPIR-V backend emits functions with Export linkage instead of entry points.
 static bool patchShaderBinary(
-	const std::string &path, uint32_t executionModel, const std::vector<ShaderIoVar> &ioVars, std::string &errorMsg
+	const std::string &path, uint32_t executionModel, const std::vector<ShaderIoVar> &ioVars, const ParseContext &context,
+	std::string &errorMsg
 ) {
 	std::ifstream in(path, std::ios::binary | std::ios::ate);
 	if (!in) {
@@ -264,6 +276,7 @@ static bool patchShaderBinary(
 		errorMsg = "Invalid SPIR-V magic number";
 		return false;
 	}
+	lowerShaderResources(binary, context);
 
 	// Global declarations form the complete SPIR-V 1.4+ entry-point interface.
 	// Function-local variables must never appear in that interface.
@@ -558,6 +571,13 @@ static bool patchShaderBinary(
 	std::vector<uint32_t> newDecors;
 	std::unordered_set<uint32_t> decoratedUniformStorage;
 	for (const auto &v : vars) {
+		if (v.isResource) {
+			newDecors.insert(
+				newDecors.end(), {spvInstWord(4, spvOpDecorate), v.id, spvDecorationBinding, v.binding,
+								  spvInstWord(4, spvOpDecorate), v.id, spvDecorationDescriptorSet, 0}
+			);
+			continue;
+		}
 		if (v.isUBO) {
 			if (v.uniformStorageType && decoratedUniformStorage.insert(v.uniformStorageType).second) {
 				const uint32_t step = v.uniformColumns < 4 ? 2 : 1;
@@ -766,7 +786,13 @@ bool emitSPIRVModule(ParseContext &context) {
 	}
 
 	std::string patchError;
-	if (!patchShaderBinary(outputPath, executionModel, ioVars, patchError)) {
+	for (const auto &resource : context.shaderResources) {
+		auto variable = makeIoVar(shaderResourceGlobalName(resource.name), 0, false, 0);
+		variable.isResource = true;
+		variable.binding = resource.binding;
+		ioVars.push_back(std::move(variable));
+	}
+	if (!patchShaderBinary(outputPath, executionModel, ioVars, context, patchError)) {
 		context.diagnostics.push_back(
 			Diagnostic(context, Diagnostic::Level::Error, "spirv patch failed", Range(), "error", patchError)
 		);

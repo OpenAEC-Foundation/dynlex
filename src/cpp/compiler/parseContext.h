@@ -313,6 +313,7 @@ struct ParseContext {
 
 	// Shader uniforms used by the selected stage, with explicit descriptor-set-zero bindings.
 	std::vector<ShaderUniform> shaderUniforms;
+	std::vector<ShaderResourceValue> shaderResources;
 	std::vector<ShaderVertexInput> shaderVertexInputs;
 	std::vector<std::string> shaderInterpolantNames;
 
@@ -382,6 +383,7 @@ struct ParseContext {
 		bool countBodyResolution = false
 	);
 	bool registerShaderUniform(std::string uniformName, std::uint32_t binding, DataType type, Range range);
+	bool registerShaderResource(ShaderResourceValue resource, Range range);
 	void registerShaderVertexInput(std::string name, std::uint32_t location, DataType type, Range range);
 	void registerShaderInterpolantName(const std::string &interpolantName);
 	VariableReference *createVariableReference(Range range, const std::string &name);

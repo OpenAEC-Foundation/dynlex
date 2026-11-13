@@ -1,4 +1,10 @@
+#include "shader_resources_inference.inl"
+
 static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind, InferenceContext &context) {
+	if ((kind == IntrinsicKind::ShaderImage || kind == IntrinsicKind::ShaderSampler ||
+		 kind == IntrinsicKind::ShaderSampleLevel || kind == IntrinsicKind::ShaderSampleCompare) &&
+		!validateShaderResourceIntrinsic(expr, kind, context))
+		return false;
 	const bool hasNamedShaderResource = kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderVertexInput ||
 										kind == IntrinsicKind::ShaderInterpolantInput ||
 										kind == IntrinsicKind::ShaderInterpolantOutput || kind == IntrinsicKind::ShaderUniform;

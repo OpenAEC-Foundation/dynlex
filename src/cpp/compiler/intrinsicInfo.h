@@ -84,6 +84,10 @@ enum class IntrinsicTargets { All, Native, NativeOrWasm };
 	X(ShaderInterpolantOutput, "shader interpolant output", 6, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)   \
 	X(ShaderInterpolantInput, "shader interpolant input", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)   \
 	X(ShaderUniform, "shader uniform", 4, IntrinsicReturnKind::Custom, 1, 3, IntrinsicPurityKind::Impure)                      \
+	X(ShaderImage, "shader image", 5, IntrinsicReturnKind::Custom, 1, 4, IntrinsicPurityKind::Pure)                            \
+	X(ShaderSampler, "shader sampler", 4, IntrinsicReturnKind::Custom, 1, 3, IntrinsicPurityKind::Pure)                        \
+	X(ShaderSampleLevel, "shader sample level", 5, IntrinsicReturnKind::Custom, 1, 2, IntrinsicPurityKind::Impure)             \
+	X(ShaderSampleCompare, "shader sample compare", 5, IntrinsicReturnKind::Float, 1, 2, IntrinsicPurityKind::Impure)          \
 	X(ExtractElement, "extract element", 3, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                      \
 	X(InsertElement, "insert element", 4, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                        \
 	X(Function, "function", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                   \
@@ -334,7 +338,9 @@ constexpr bool isAlwaysPureIntrinsicKind(IntrinsicKind kind) { return intrinsicP
 constexpr bool isShaderRuntimeIntrinsicKind(IntrinsicKind kind) {
 	return kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderVertexInput ||
 		   kind == IntrinsicKind::ShaderInterpolantInput || kind == IntrinsicKind::ShaderInterpolantOutput ||
-		   kind == IntrinsicKind::ShaderUniform || kind == IntrinsicKind::ShaderOutput;
+		   kind == IntrinsicKind::ShaderUniform || kind == IntrinsicKind::ShaderOutput || kind == IntrinsicKind::ShaderImage ||
+		   kind == IntrinsicKind::ShaderSampler || kind == IntrinsicKind::ShaderSampleLevel ||
+		   kind == IntrinsicKind::ShaderSampleCompare;
 }
 
 static_assert(isAlwaysPureIntrinsicKind(IntrinsicKind::Multiply));

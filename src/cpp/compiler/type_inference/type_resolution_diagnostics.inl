@@ -182,6 +182,8 @@ static std::string encodeTypeConstraintForCacheKey(const TypeConstraint &constra
 }
 
 static std::string encodeCompileTimeValueForCacheKey(const CompileTimeValue &value) {
+	if (const auto *resource = std::get_if<ShaderResourceValue>(&value))
+		return "shader resource:" + resource->identity();
 	if (std::holds_alternative<std::monostate>(value))
 		return "?";
 	if (const auto *integer = std::get_if<std::int64_t>(&value))

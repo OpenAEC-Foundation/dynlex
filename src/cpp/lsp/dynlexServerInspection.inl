@@ -94,6 +94,8 @@ static VariableReference *findVariableReferenceInDocument(
 }
 
 static std::string formatCompileTimeValue(const CompileTimeValue &value) {
+	if (const auto *resource = std::get_if<ShaderResourceValue>(&value))
+		return "shader binding(" + resource->identity() + ")";
 	if (const auto *integer = std::get_if<WideInteger>(&value))
 		return integer->toString();
 	if (const auto *integer = std::get_if<std::uint64_t>(&value))

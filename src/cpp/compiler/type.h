@@ -49,7 +49,9 @@ struct DataType {
 		// a compile-time value describing which argument types and values a pattern accepts.
 		Constraint,
 		ArgumentPack,
-		ArgumentReference
+		ArgumentReference,
+		ShaderImage,
+		ShaderSampler
 	};
 
 	Kind kind = Kind::Unresolved;
@@ -191,7 +193,8 @@ struct DataType {
 	bool isFunction() const { return kind == Kind::Function && pointerDepth == 0; }
 	bool isAddress() const { return isPointer() || isFunction(); }
 	bool isMetaType() const {
-		return kind == Kind::Type || kind == Kind::Constraint || kind == Kind::ArgumentPack || kind == Kind::ArgumentReference;
+		return kind == Kind::Type || kind == Kind::Constraint || kind == Kind::ArgumentPack ||
+			   kind == Kind::ArgumentReference || kind == Kind::ShaderImage || kind == Kind::ShaderSampler;
 	}
 
 	bool isRuntimeValueType() const { return isDeduced() && kind != Kind::Void && !isMetaType(); }
@@ -531,6 +534,10 @@ makeBuiltinTypeReference(std::string_view kindName, bool emitSPIRV, std::optiona
 		if (numericByteSize)
 			return std::nullopt;
 		result.referencedKind = DataType::Kind::ArgumentPack;
+	} else if (kindName == "shader image" || kindName == "shader sampler") {
+		if (numericByteSize)
+			return std::nullopt;
+		result.referencedKind = kindName == "shader image" ? DataType::Kind::ShaderImage : DataType::Kind::ShaderSampler;
 	} else if (kindName == "any") {
 		result.referencedKind = DataType::Kind::Any;
 		result.numericSize = numericByteSize.value_or(0);

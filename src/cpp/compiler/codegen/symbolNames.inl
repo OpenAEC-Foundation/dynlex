@@ -19,7 +19,7 @@ static std::string encodeLLVMTypeName(ParseContext &context, const DataType &typ
 	if (known != context.codegenTypeIdentities.end())
 		return known->second;
 	std::string name = encodeLLVMNameComponent(type.toString());
-	if (type.kind != DataType::Kind::Type && type.kind != DataType::Kind::Constraint) {
+	if (!type.isMetaType()) {
 		auto identity = typeIdentity(type, context.codegenClassIdentities, TypeIdentityMode::Descriptor);
 		requireCompilerInvariant(identity.has_value(), "function symbol has no type identity");
 		name += "_type_" + stableIdentityDigest(identity->dump());
@@ -50,6 +50,8 @@ static std::string encodeInstantiationKeyForFunctionName(ParseContext &context, 
 			suffix += encodeLLVMNameComponent(constraint->toInternalString());
 		else if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
 			suffix += "ptr" + std::to_string(pointer->address);
+		else if (const auto *resource = std::get_if<ShaderResourceValue>(&value))
+			suffix += "resource" + encodeLLVMNameComponent(resource->identity());
 		else if (const auto *function = std::get_if<CompileTimeFunction>(&value)) {
 			suffix += "fn" + getPatternFunctionName(context, function->definition->section) + "_" +
 					  std::to_string(function->pathIndex);

@@ -187,7 +187,7 @@ function compileShaderStage(source, version, stage, rendererBackend) {
   if (status === 0 && (typeof spirvBase64 !== "string" || spirvBase64.length === 0)) {
     throw new Error("Successful shader compilation returned no SPIR-V artifact");
   }
-  if (!Array.isArray(reflection.uniforms) || !Array.isArray(reflection.vertexInputs)) {
+  if (!Array.isArray(reflection.uniforms) || !Array.isArray(reflection.vertexInputs) || !Array.isArray(reflection.resources)) {
     throw new Error("Successful shader compilation returned invalid reflection");
   }
 
@@ -206,6 +206,7 @@ function compileShaderStage(source, version, stage, rendererBackend) {
     compilationMilliseconds,
     sources,
     uniforms: status === 0 ? reflection.uniforms : [],
+    resources: status === 0 ? reflection.resources : [],
     vertexInputs: status === 0 ? reflection.vertexInputs : []
   };
 }
@@ -223,8 +224,10 @@ function compileShaderSource(source, version, compileVertexStage, rendererBacken
       compilationMilliseconds: fragment.compilationMilliseconds,
       fragmentSources: fragment.sources,
       fragmentUniforms: fragment.uniforms,
+      fragmentResources: fragment.resources,
       vertexSources: { [rendererBackend]: "" },
-      vertexUniforms: []
+      vertexUniforms: [],
+      vertexResources: []
     };
   }
 
@@ -236,8 +239,10 @@ function compileShaderSource(source, version, compileVertexStage, rendererBacken
     compilationMilliseconds: fragment.compilationMilliseconds + vertex.compilationMilliseconds,
     fragmentSources: fragment.sources,
     fragmentUniforms: fragment.uniforms,
+    fragmentResources: fragment.resources,
     vertexSources: vertex.status === 0 ? vertex.sources : { [rendererBackend]: "" },
-    vertexUniforms: vertex.status === 0 ? vertex.uniforms : []
+    vertexUniforms: vertex.status === 0 ? vertex.uniforms : [],
+    vertexResources: vertex.status === 0 ? vertex.resources : []
   };
 }
 

@@ -18,15 +18,15 @@ function compile(source,stage){
  return JSON.parse(call('dynlex_web_get_shader_reflection_json','string'));
 }
 const source=input('normal 🌽',3,vector(3))+input('color',2,vector(4))+input('object',4,u32)+input('offset',5,'@intrinsic("vector", 2, @intrinsic("type", "int", 32))')+'@intrinsic("shader output", @intrinsic("shader input", "Position"))\n';
-assert.deepEqual(compile(source,'vertex'),{uniforms:[],vertexInputs:[
+assert.deepEqual(compile(source,'vertex'),{resources:[],uniforms:[],vertexInputs:[
  {name:'Position',location:0,format:'float32x4'},
  {name:'color',location:2,format:'float32x4'},
  {name:'normal 🌽',location:3,format:'float32x3'},
  {name:'object',location:4,format:'uint32'},
  {name:'offset',location:5,format:'sint32x2'},
 ]});
-assert.deepEqual(compile(input('point',0,vector(2))+output,'vertex'),{uniforms:[],vertexInputs:[{name:'point',location:0,format:'float32x2'}]});
+assert.deepEqual(compile(input('point',0,vector(2))+output,'vertex'),{resources:[],uniforms:[],vertexInputs:[{name:'point',location:0,format:'float32x2'}]});
 // Reusing a compiler must remove reflection left by its preceding stage.
-assert.deepEqual(compile('@intrinsic("discard", @intrinsic("shader uniform", "time", 1, @intrinsic("type", "float", 32)))\n'+output,'fragment'),{uniforms:[{name:'time',group:0,binding:1,type:{scalar:'float32',rows:1,columns:1}}],vertexInputs:[]});
-assert.deepEqual(compile(output,'vertex'),{uniforms:[],vertexInputs:[]});
+assert.deepEqual(compile('@intrinsic("discard", @intrinsic("shader uniform", "time", 1, @intrinsic("type", "float", 32)))\n'+output,'fragment'),{resources:[],uniforms:[{name:'time',group:0,binding:1,type:{scalar:'float32',rows:1,columns:1}}],vertexInputs:[]});
+assert.deepEqual(compile(output,'vertex'),{resources:[],uniforms:[],vertexInputs:[]});
 console.log('Browser compiler reflects typed vertex inputs, Unicode names and locations without stale stage metadata.');

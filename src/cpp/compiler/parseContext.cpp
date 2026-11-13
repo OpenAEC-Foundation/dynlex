@@ -158,6 +158,15 @@ PatternMatch *ParseContext::match(
 }
 
 bool ParseContext::registerShaderUniform(std::string uniformName, std::uint32_t binding, DataType type, Range range) {
+	for (const auto &resource : shaderResources) {
+		if (resource.binding == binding || resource.name == uniformName) {
+			addDiagnostic(Diagnostic(
+				*this, Diagnostic::Level::Error, "shader resource binding conflict", range, "binding", std::to_string(binding),
+				"first", resource.name, "second", uniformName
+			));
+			return false;
+		}
+	}
 	for (const ShaderUniform &previous : shaderUniforms) {
 		if (previous.name == uniformName) {
 			if (previous.binding != binding) {
@@ -184,6 +193,37 @@ bool ParseContext::registerShaderUniform(std::string uniformName, std::uint32_t 
 		}
 	}
 	shaderUniforms.push_back({std::move(uniformName), binding, std::move(type), std::move(range)});
+	return true;
+}
+
+bool ParseContext::registerShaderResource(ShaderResourceValue resource, Range range) {
+	for (const auto &previous : shaderResources) {
+		if (previous == resource)
+			return true;
+		if (previous.name == resource.name) {
+			addDiagnostic(
+				Diagnostic(*this, Diagnostic::Level::Error, "shader resource name inconsistent", range, "name", resource.name)
+			);
+			return false;
+		}
+		if (previous.binding == resource.binding) {
+			addDiagnostic(Diagnostic(
+				*this, Diagnostic::Level::Error, "shader resource binding conflict", range, "binding",
+				std::to_string(resource.binding), "first", previous.name, "second", resource.name
+			));
+			return false;
+		}
+	}
+	for (const auto &uniform : shaderUniforms) {
+		if (uniform.binding == resource.binding || uniform.name == resource.name) {
+			addDiagnostic(Diagnostic(
+				*this, Diagnostic::Level::Error, "shader resource binding conflict", range, "binding",
+				std::to_string(resource.binding), "first", uniform.name, "second", resource.name
+			));
+			return false;
+		}
+	}
+	shaderResources.push_back(std::move(resource));
 	return true;
 }
 
