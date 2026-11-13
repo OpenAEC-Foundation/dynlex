@@ -40,10 +40,15 @@ function floatingRemainder(left, right) {
   return left % right;
 }
 
+function powerOfTwo(value) {
+  return Math.pow(2, value);
+}
+
 const mathImports = {
   sin: Math.sin, sinf: Math.sin,
   cos: Math.cos, cosf: Math.cos,
   exp: Math.exp, expf: Math.exp,
+  exp2: powerOfTwo, exp2f: powerOfTwo,
   log: Math.log, logf: Math.log,
   pow: Math.pow, powf: Math.pow,
   atan2: Math.atan2, atan2f: Math.atan2,
