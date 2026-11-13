@@ -1,0 +1,84 @@
+import art.dl
+import navigation.dl
+import ../../packages/dynlex-ui/ui/scene_draws.dl
+
+class:
+    patterns:
+        website Farm tile scenery
+    members:
+        ground as a pointer to UI scene object
+        water as a pointer to UI scene object
+        tree as a pointer to UI scene object
+        stump as a pointer to UI scene object
+        crop as a pointer to UI scene object
+        crop key as an integer
+        rocks as a pointer to UI scene object
+        rock mask as an integer
+        piles as (a pointer to UI scene object) array of 4 items
+        pile keys as a string array of 4 items
+
+class:
+    patterns:
+        website Farm landscape
+    members:
+        library as website farm art library
+        objects as UI scene objects
+        tiles as a pointer to website Farm tile scenery
+        ground model as UI scene model
+        water model as UI scene model
+        stump model as UI scene model
+        crop models as UI scene model array of 6 items
+        item models as UI scene model array of 13 items
+        egg models as UI scene model array of 6 items
+        rock models as UI scene model array of 16 items
+        barn as a pointer to UI scene object
+        compost as a pointer to UI scene object
+
+to get [the website Farm scene point at] {integer:x} {integer:y} [in] {a pointer to website farm world:world}:
+    set tile to the website farm square at x y in world
+    set height to tile's height
+    if tile's terrain = 2:
+        set height to height - 0.16
+    return a UI scene vector from [(x - 9.5),height,(y - 9.5)]
+
+to get [a website Farm scene model using] {UI scene mesh:mesh} [colored] {UI scene material:material} [casting shadow] {boolean:casts}:
+    set part to a UI scene mesh part named "" under -1 using mesh with material material at (an identity UI scene pose)
+    set part's casts shadow to casts
+    return a UI scene model from [part]
+
+to get [a website Farm object named] {a value:name} [using] {UI scene model:model} [in] {a pointer to website Farm landscape:landscape}:
+    set object to a UI scene object named name with model model
+    append object to (landscape's objects)
+    return object
+
+to [place website Farm object] {a pointer to UI scene object:object} [at] {vector:point} [sized] {an array:size}:
+    set pose to an identity UI scene pose
+    set pose's position to the UI scene vector form of point
+    set pose's scale to a UI scene vector from size
+    set UI scene root pose in (object's instance) to pose
+
+to get [the website Farm ground paint for] {a pointer to website farm tile:tile}:
+    if tile's terrain = 3:
+        return UI ink from RGB (7495228 if tile's moisture > 3.0, else 10255437)
+    if (tile's terrain = 1) or (tile's terrain = 2):
+        return UI ink from RGB 9340769
+    if tile's terrain = 4:
+        return UI ink from RGB 12362358
+    return UI ink from RGB 8428377
+
+to get [the website Farm pond edge mask at] {integer:x} {integer:y} [in] {a pointer to website farm world:world}:
+    set tile to the website farm square at x y in world
+    if tile's terrain != 1:
+        return 0
+    set mask to 0
+    set bit to 1
+    for each step in [website farm point 0 -1,website farm point 1 0,website farm point 0 1,website farm point -1 0]:
+        set xx to x + step's x
+        set yy to y + step's y
+        set edge to true
+        if (0 <= xx < 20) and (0 <= yy < 20):
+            set edge to (the website farm square at xx yy in world)'s terrain != 1
+        if edge:
+            set mask to mask | bit
+        set bit to bit * 2
+    return mask

@@ -1,0 +1,38 @@
+import scene_landscape_update.dl
+
+to get [a website Farm landscape for] {a pointer to website farm world:world}:
+    set result to storage for one slot initialized with (a new website Farm landscape)
+    set result's library to a website farm art library
+    set result's objects to an empty list of a pointer to UI scene object
+    set result's tiles to storage for 400 slots initialized with (a new website Farm tile scenery)
+    prepare website Farm landscape templates result
+    loop index from 0 to 400:
+        set scenery to result's tiles + index
+        set scenery's ground to a website Farm object named (formatted "ground-{index}") using (result's ground model) in result
+        set scenery's crop key to -1
+    set library to the address of (result's library)
+    set result's barn to a website Farm object named "barn" using (a Farm house with library) in result
+    set result's compost to a website Farm object named "compost" using (a Farm compost bin with library) in result
+    set material to a Farm art material colored [184,200,166]
+    set model to a website Farm scene model using (the Farm shape named "plane" in library) colored material casting shadow false
+    set floor to a website Farm object named "floor" using model in result
+    set floor's pickable to false
+    set pose to a Farm art pose at [0.0,-0.72,0.0] sized [250.0,250.0,1.0] turned [-1.5707963267948966,0.0,0.0]
+    set UI scene root pose in (floor's instance) to pose
+    set material to a Farm art material colored [102,93,66]
+    set model to a website Farm scene model using (the Farm shape named "box" in library) colored material casting shadow true
+    set base to a website Farm object named "base" using model in result
+    set base's pickable to false
+    place website Farm object base at (a UI scene vector from [0.0,-0.54,0.0]) sized [20.08,0.25,20.08]
+    update website Farm landscape result from world
+    return result
+
+to [close website Farm landscape] {a pointer to website Farm landscape:landscape}:
+    for each object in (landscape's objects):
+        close UI scene object object
+    free landscape's objects
+    loop index from 0 to 400:
+        destroy the value at (landscape's tiles + index)
+    deallocate landscape's tiles
+    destroy the value at landscape
+    deallocate landscape

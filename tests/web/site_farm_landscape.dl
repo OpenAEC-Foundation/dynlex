@@ -1,0 +1,68 @@
+import ../../site/games/farm/scene_landscape.dl
+
+set world to the initial website farm world
+set landscape to a website Farm landscape for world
+set bank to a UI scene mesh bank
+set frame to a UI scene frame using bank
+set camera to a UI scene camera at (a UI scene vector from [12.0,18.0,15.0]) aimed at (a UI scene vector from [0.0,0.4,0.0]) with angle 35.0 aspect 1.0 near 0.1 far 150.0
+prepare UI scene frame frame from (landscape's objects) through camera
+require condition ((the length of frame's records) > 550) reporting "The Farm landscape omitted its tiles or detailed models"
+require condition ((the length of bank's spans) < 40) reporting "Farm objects duplicated reusable mesh geometry"
+set tile to the website farm square at 7 6 in world
+set scenery to landscape's tiles + (6 * 20 + 7)
+set placement to the UI scene placement of part 0 in (scenery's ground's instance)
+set top to placement's bounds' maximum's y
+require condition ((the absolute value of (top - (tile's height - 0.16))) < 0.00001) reporting "Channel terrain was not lowered with its picking bounds"
+set pond to landscape's tiles + (3 * 20 + 3)
+set placement to the UI scene placement of part 0 in (pond's water's instance)
+require condition ((the absolute value of (placement's bounds' maximum's y - 0.3)) < 0.00001) reporting "Farm water did not retain the original lake level"
+require condition (((the item at 0 in pond's water's instance's model's parts)'s casts shadow) = false) reporting "Water incorrectly casts a solid shadow"
+set tree to landscape's tiles + (8 * 20 + 1)
+require condition ((tree's tree's visible) and ((tree's stump's visible) = false)) reporting "A growing tree was replaced by its stump"
+set (the website farm square at 1 8 in world)'s tree's regrow to 4
+set tile to the website farm square at 8 9 in world
+set tile's crop's growth to 0.1
+set tile's moisture to 0.0
+set crop to landscape's tiles + (9 * 20 + 8)
+set count to the length of landscape's objects
+update website Farm landscape landscape from world
+require condition (((tree's tree's visible) = false) and (tree's stump's visible)) reporting "Harvested trees did not switch to stumps"
+require condition (crop's crop key = 0) reporting "Changing growth did not replace the crop's stage model"
+set tile's crop's growth to 0.8
+update website Farm landscape landscape from world
+require condition ((crop's crop key = 2) and ((the length of landscape's objects) = count)) reporting "Crop stages recreated objects instead of sharing their cached models"
+set world's expanded to true
+update website Farm landscape landscape from world
+set selected to landscape's tiles + 19
+set tint to selected's ground's color multiplier
+require condition (tint's red > 0.9) reporting "Opening the east field retained its locked-land tint"
+set tile to the website farm square at 9 14 in world
+set pile to a new website farm item
+set pile's kind to 9
+set pile's count to 3
+append pile to (tile's items)
+update website Farm landscape landscape from world
+set scenery to landscape's tiles + (14 * 20 + 9)
+set eggs to the item at 0 in (scenery's piles)
+require condition ((eggs's visible) and ((the length of eggs's instance's model's parts) = 4)) reporting "A three-egg pile lost its articulated model"
+set (tile's items' data)'s count to 6
+set world's compost's input to 20
+update website Farm landscape landscape from world
+require condition (((the item at 0 in scenery's piles) = eggs) and ((the length of eggs's instance's model's parts) = 7)) reporting "Changing egg quantity recreated the scene object or retained the old model"
+clear tile's items
+update website Farm landscape landscape from world
+require condition ((eggs's visible) = false) reporting "An emptied ground pile remained visible"
+set instance to landscape's compost's instance
+set heap to the index of UI scene part named "heap" under 0 in (instance's model)
+require condition ((the absolute value of ((the item at heap in (instance's poses))'s scale's y - 0.48)) < 0.00001) reporting "Compost heap growth was not reflected in the instance pose"
+set revision to bank's revision
+prepare UI scene frame frame from (landscape's objects) through camera
+require condition (bank's revision = revision + 1) reporting "The newly visible stump did not add exactly its own mesh to the retained geometry"
+set revision to bank's revision
+prepare UI scene frame frame from (landscape's objects) through camera
+require condition (bank's revision = revision) reporting "Repeated Farm frames uploaded unchanged immutable geometry"
+close UI scene frame frame
+close UI scene mesh bank bank
+close website Farm landscape landscape
+free website farm world world
+print line "Farm landscapes share terrain, water and art geometry, update crops and tree states, and retain world-space picking bounds."

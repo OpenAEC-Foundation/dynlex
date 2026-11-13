@@ -1,0 +1,1 @@
+Farm landscapes share terrain, water and art geometry, update crops and tree states, and retain world-space picking bounds.

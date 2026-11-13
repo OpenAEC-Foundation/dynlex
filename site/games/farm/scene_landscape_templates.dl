@@ -1,0 +1,36 @@
+import scene_landscape_types.dl
+
+to [prepare website Farm landscape templates] {a pointer to website Farm landscape:landscape}:
+    set library to the address of (landscape's library)
+    set box to the Farm shape named "box" in library
+    set landscape's ground model to a website Farm scene model using box colored (a Farm art material colored [255,255,255]) casting shadow true
+    set landscape's water model to a website Farm scene model using (the Farm shape named "water tile" in library) colored (the Farm water material) casting shadow false
+    set stump to a UI cylinder mesh with top 0.10 bottom 0.16 height 0.19 around 9 sides capped true
+    set pose to an identity UI scene pose
+    set pose's position's y to 0.095
+    set part to a UI scene mesh part named "stump" under -1 using stump with material (a Farm art material colored [132,98,65]) at pose
+    set landscape's stump model to a UI scene model from [part]
+    loop kind from 0 to 2:
+        loop stage from 0 to 3:
+            set name to "carrots" if kind = 0, else "wheat"
+            store (a Farm crop named name at stage stage with library) into landscape's crop models at (kind * 3 + stage)
+    loop index from 0 to 13:
+        set name to (the item at index in (the website farm items))'s key
+        store (a Farm item named name with library) into landscape's item models at index
+    loop index from 0 to 6:
+        store (a Farm egg pile counting (index + 1) with library) into landscape's egg models at index
+    loop mask from 0 to 16:
+        set parts to an empty list of UI scene part
+        set bit to 1
+        for each step in [website farm point 0 -1,website farm point 1 0,website farm point 0 1,website farm point -1 0]:
+            if (mask & bit) != 0:
+                add Farm "rock" colored [170,168,145] at [(step's x * 0.51),0.26,(step's y * 0.51)] sized [0.169,0.091,0.13] under -1 to parts with library
+            set bit to bit * 2
+        store (a completed Farm model from parts) into landscape's rock models at mask
+
+to get [the website Farm pile model for] {website farm item:item} [in] {a pointer to website Farm landscape:landscape}:
+    if item's kind = 9:
+        set count to (the minimum of (item's count) and 6) as an integer
+        require condition (count > 0) reporting "A Farm egg pile must contain eggs"
+        return the item at (count - 1) in (landscape's egg models)
+    return the item at (item's kind) in (landscape's item models)

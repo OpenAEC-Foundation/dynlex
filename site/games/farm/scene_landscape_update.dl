@@ -1,0 +1,85 @@
+import scene_landscape_templates.dl
+
+to [update website Farm scenery] {a pointer to website Farm tile scenery:scenery} [at] {integer:index} [from] {a pointer to website farm world:world} [in] {a pointer to website Farm landscape:landscape}:
+    set tile to world's tiles + index
+    set point to the website Farm scene point at (tile's x) (tile's y) in world
+    set ground to a UI scene vector from [point's x,((point's y - 0.42) / 2.0),point's z]
+    place website Farm object (scenery's ground) at ground sized [1.0,(point's y + 0.42),1.0]
+    set material to a UI scene material with color (the website Farm ground paint for tile) roughness 0.82 metalness 0.0
+    set UI scene material of part 0 in (scenery's ground's instance) to material
+    set gain to 0.96 + 0.06 * (the sine of (index * 37.2))
+    if (website farm land at (tile's x) (tile's y) is unlocked in world) = false:
+        set gain to gain * 0.87
+    set UI scene color multiplier in (scenery's ground) to (linear UI ink red gain green gain blue gain)
+    if tile's water:
+        if scenery's water = (0 as a pointer to UI scene object):
+            set scenery's water to a website Farm object named "water" using (landscape's water model) in landscape
+            set scenery's water's pickable to false
+            place website Farm object (scenery's water) at (a UI scene vector from [point's x,0.2825,point's z]) sized [0.998,0.035,0.998]
+        set scenery's water's visible to true
+    else if scenery's water != (0 as a pointer to UI scene object):
+        set scenery's water's visible to false
+    if tile's tree's present:
+        if scenery's tree = (0 as a pointer to UI scene object):
+            set scenery's tree to a website Farm object named (formatted "tree-{index}") using (a Farm tree seeded index with (the address of (landscape's library))) in landscape
+            set scenery's stump to a website Farm object named (formatted "tree-{index}") using (landscape's stump model) in landscape
+        place website Farm object (scenery's tree) at point sized [1.0,1.0,1.0]
+        place website Farm object (scenery's stump) at point sized [1.0,1.0,1.0]
+        set scenery's tree's visible to tile's tree's regrow = 0
+        set scenery's stump's visible to tile's tree's regrow != 0
+    else if scenery's tree != (0 as a pointer to UI scene object):
+        set scenery's tree's visible to false
+        set scenery's stump's visible to false
+    if tile's crop's present:
+        set key to (tile's crop's kind - 6) * 3 + (the Farm crop stage for tile's crop's growth)
+        set model to the item at key in (landscape's crop models)
+        if scenery's crop = (0 as a pointer to UI scene object):
+            set scenery's crop to a website Farm object named (formatted "crop-{index}") using model in landscape
+        else if scenery's crop key != key:
+            set UI scene model in (scenery's crop) to model
+        set scenery's crop key to key
+        set scenery's crop's visible to true
+        place website Farm object (scenery's crop) at point sized [1.0,(0.30 + tile's crop's growth * 0.70),1.0]
+    else if scenery's crop != (0 as a pointer to UI scene object):
+        set scenery's crop's visible to false
+    set mask to the website Farm pond edge mask at (tile's x) (tile's y) in world
+    if mask != 0:
+        set model to the item at mask in (landscape's rock models)
+        if scenery's rocks = (0 as a pointer to UI scene object):
+            set scenery's rocks to a website Farm object named (formatted "pond-{index}") using model in landscape
+            set scenery's rocks's pickable to false
+        else if scenery's rock mask != mask:
+            set UI scene model in (scenery's rocks) to model
+        set scenery's rock mask to mask
+        set scenery's rocks's visible to true
+        place website Farm object (scenery's rocks) at point sized [1.0,1.0,1.0]
+    else if scenery's rocks != (0 as a pointer to UI scene object):
+        set scenery's rocks's visible to false
+    loop slot from 0 to 4:
+        set object to the item at slot in (scenery's piles)
+        if slot < the length of tile's items:
+            set item to the item at slot in (tile's items)
+            set key to formatted "{item's kind}:{item's count}"
+            set model to the website Farm pile model for item in landscape
+            if object = (0 as a pointer to UI scene object):
+                set object to a website Farm object named (formatted "pile-{index}") using model in landscape
+                store object into scenery's piles at slot
+            else if (the item at slot in (scenery's pile keys)) != key:
+                set UI scene model in object to model
+            store key into scenery's pile keys at slot
+            set object's visible to true
+            set placed to point + (a UI scene vector from [((slot % 2 - 0.5) * 0.23),0.0,((slot / 2) * 0.24)])
+            place website Farm object object at placed sized [1.0,1.0,1.0]
+        else if object != (0 as a pointer to UI scene object):
+            set object's visible to false
+
+to [update website Farm landscape] {a pointer to website Farm landscape:landscape} [from] {a pointer to website farm world:world}:
+    loop index from 0 to 400:
+        update website Farm scenery (landscape's tiles + index) at index from world in landscape
+    place website Farm object (landscape's barn) at (the website Farm scene point at (world's barn's x) (world's barn's y) in world) sized [1.45,1.45,1.45]
+    place website Farm object (landscape's compost) at (the website Farm scene point at (world's compost's x) (world's compost's y) in world) sized [1.0,1.0,1.0]
+    set instance to landscape's compost's instance
+    set heap to the index of UI scene part named "heap" under 0 in (instance's model)
+    set pose to the item at heap in (instance's poses)
+    set pose's scale's y to 0.10 + (the minimum of 0.38 and ((world's compost's input + world's compost's ready) * 0.045))
+    set UI scene pose of part heap in instance to pose
