@@ -44,6 +44,8 @@ export async function recordWebsiteProgram(file, { synchronousService=()=>{throw
     shaderCalls.push({operation:'index',surface,resource,pass,data:[...new Uint32Array(memory.buffer,pointer,count)]});
   runtime.env.ui_shader_draws = (surface,resource,pass,pointer,count) =>
     shaderCalls.push({operation:'draws',surface,resource,pass,data:[...new Uint32Array(memory.buffer,pointer,count*7)]});
+  runtime.env.ui_shader_pass_enabled = (surface,resource,pass,enabled) =>
+    shaderCalls.push({operation:'pass enabled',surface,resource,pass,enabled:enabled!==0});
   runtime.env.ui_shader_buffer_bytes = (surface,resource,pass,slot) => shaderQuery({operation:'bytes',surface,resource,pass,slot});
   runtime.env.ui_shader_buffer_records = (surface,resource,pass,slot) => shaderQuery({operation:'records',surface,resource,pass,slot});
   runtime.env.ui_shader_index_count = (surface,resource,pass) => shaderQuery({operation:'indices',surface,resource,pass});
