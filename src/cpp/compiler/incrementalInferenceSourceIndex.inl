@@ -26,6 +26,10 @@ class InferenceSourceIndex {
 		statistics.inferenceSourceExpressionsIndexed += nodes.size();
 		statistics.inferenceSourceIndexMilliseconds += elapsedMilliseconds(start);
 	}
+	void recordStorageIndex(size_t count) const {
+		statistics.inferenceStorageIndicesBuilt++;
+		statistics.inferenceStorageOriginsIndexed += count;
+	}
 	const Json &definition(const VariableReference *reference) const {
 		auto found = definitions.find(reference);
 		requireCompilerInvariant(found != definitions.end(), "storage origin has no lexical declaration");

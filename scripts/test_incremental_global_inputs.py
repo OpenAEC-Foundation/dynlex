@@ -2,6 +2,7 @@
 
 import json
 from test_incremental_program_cache import read_program
+from test_incremental_global_callers import check_global_caller_interfaces
 
 
 def check_global_type_inputs(root, build):
@@ -57,6 +58,7 @@ def check_global_type_inputs(root, build):
     check_global_failure_inputs(root, build, source)
     check_global_layout_inputs(root, build)
     check_rejected_global_inputs(root, build)
+    check_global_caller_interfaces(root, build)
 
 
 def check_global_effect_inputs(root, build):

@@ -4,7 +4,36 @@ class InferenceSummaryStore {
   public:
 	InferenceSummaryStore(const fs::path &directory, BuildStatistics &statistics)
 		: directory(directory), statistics(statistics) {}
+	struct BodyTransferWindow {
+		InferenceSummaryStore &store;
+		BodyTransferWindow *previous;
+		std::map<std::string, Json> bodies;
+		explicit BodyTransferWindow(InferenceSummaryStore &store) : store(store), previous(store.bodyTransfers) {
+			store.bodyTransfers = this;
+		}
+		BodyTransferWindow(const BodyTransferWindow &) = delete;
+		BodyTransferWindow &operator=(const BodyTransferWindow &) = delete;
+		~BodyTransferWindow() {
+			requireCompilerInvariant(store.bodyTransfers == this, "inferred body transfer scopes closed out of order");
+			store.bodyTransfers = previous;
+		}
+	};
 
+	void retainReplacementBody(const Json &reference) {
+		if (reference.is_null())
+			return;
+		const auto &key = reference.at("payload").get_ref<const std::string &>();
+		if (replacementBodies.contains(key))
+			return;
+		for (auto *window = bodyTransfers; window; window = window->previous) {
+			auto product = window->bodies.extract(key);
+			if (!product.empty()) {
+				replacementBodies.insert(std::move(product));
+				return;
+			}
+		}
+	}
+	void releaseReplacementBodies() { replacementBodies.clear(); }
 	void observe(const Json &keys, const Json &bodies, const Json &classes) {
 		for (const Json &key : keys) {
 			const std::string &identity = key.get_ref<const std::string &>();
@@ -19,30 +48,30 @@ class InferenceSummaryStore {
 			availableClasses[identity] = recordCacheAccess(classPath(identity));
 		}
 	}
-	Json saveBody(Json body) {
+	Json saveBody(Json body, size_t valueReferences, size_t instantiationReferences, double captureMilliseconds) {
 		auto start = Clock::now();
-		Json classes = saveClasses(body.at("classes"));
-		body["classes"] = classes;
+		Json classes = body.at("classes");
 		std::string payload = body.dump(), key = digest(payload);
 		statistics.inferenceBodiesEncoded++;
+		statistics.inferenceBodyValuesEncoded += body.at("values").size();
+		statistics.inferenceBodyValueReferences += valueReferences;
+		statistics.inferenceBodyInstantiationsEncoded += body.at("instances").size();
+		statistics.inferenceBodyInstantiationReferences += instantiationReferences;
 		if (!recordCacheAccess(bodyPath(key))) {
 			writeEntry(bodyPath(key), payload);
 			statistics.inferenceBodiesWritten++;
 		}
 		availableBodies[key] = true;
-		statistics.inferenceBodyEncodeMilliseconds += elapsedMilliseconds(start);
-		return Json{
-			{"payload", std::move(key)},
-			{"dependencies", body.at("dependencies")},
-			{"classes", std::move(classes)},
-			{"for_values", body.at("for_values")}
-		};
-	}
-	Json saveClasses(const Json &records) {
-		Json result = Json::object();
-		for (const auto &[path, state] : records.items())
-			result[path] = saveClass(state);
-		return result;
+		statistics.inferenceBodyCaptureMilliseconds += captureMilliseconds;
+		statistics.inferenceBodyEncodeMilliseconds += captureMilliseconds + elapsedMilliseconds(start);
+		Json reference = Json::object();
+		reference["payload"] = key;
+		reference["dependencies"] = body.at("dependencies");
+		reference["classes"] = std::move(classes);
+		reference["for_values"] = body.at("for_values");
+		if (bodyTransfers)
+			bodyTransfers->bodies.try_emplace(key, std::move(body));
+		return reference;
 	}
 	std::optional<Json> loadClasses(const Json &references, const std::set<std::string> &required) {
 		Json result = Json::object();
@@ -76,12 +105,25 @@ class InferenceSummaryStore {
 		return result;
 	}
 	void recordClassRestored() { statistics.inferenceClassesRestored++; }
+	void recordClassSnapshotCapture() { statistics.inferenceClassStatesCaptured++; }
 	std::optional<Json> loadBody(const Json &reference) {
 		if (reference.is_null())
 			return std::nullopt;
 		const auto &key = reference.at("payload").get_ref<const std::string &>();
 		if (!availableBodies.at(key))
 			return std::nullopt;
+		auto replacement = replacementBodies.extract(key);
+		if (!replacement.empty()) {
+			statistics.inferenceBodyTransfers++;
+			return std::move(replacement.mapped());
+		}
+		for (auto *window = bodyTransfers; window; window = window->previous) {
+			auto product = window->bodies.extract(key);
+			if (!product.empty()) {
+				statistics.inferenceBodyTransfers++;
+				return std::move(product.mapped());
+			}
+		}
 		auto payload = readEntry(bodyPath(key));
 		if (!payload)
 			throw std::runtime_error("inferred body disappeared: " + key);
@@ -148,10 +190,13 @@ class InferenceSummaryStore {
 		return result;
 	}
 
-  private:
 	Json saveClass(const Json &state) {
-		if (auto found = classReferences.find(state); found != classReferences.end())
+		auto started = Clock::now();
+		statistics.inferenceClassRecordRequests++;
+		if (auto found = classReferences.find(state); found != classReferences.end()) {
+			statistics.inferenceClassRecordMilliseconds += elapsedMilliseconds(started);
 			return found->second;
+		}
 		std::string payload = state.dump(), key = digest(payload);
 		auto dependencies = classInstantiationDependencies(state);
 		SymbolicInferenceUnits symbolic;
@@ -166,12 +211,17 @@ class InferenceSummaryStore {
 		availableClasses[key] = true;
 		Json reference{{"payload", key}, {"dependencies", dependencies}, {"symbolic_dependencies", symbolic}};
 		classReferences.emplace(state, reference);
+		statistics.inferenceClassRecordMilliseconds += elapsedMilliseconds(started);
 		return reference;
 	}
+
+  private:
 	fs::path classPath(const std::string &key) const { return directory / ("inference-class-" + key + ".entry"); }
 	fs::path bodyPath(const std::string &key) const { return directory / ("inference-body-" + key + ".entry"); }
 	const fs::path &directory;
 	BuildStatistics &statistics;
+	BodyTransferWindow *bodyTransfers = nullptr;
+	std::map<std::string, Json> replacementBodies;
 	std::map<std::string, Json> loaded;
 	std::map<std::string, bool> available;
 	std::map<std::string, bool> availableBodies;

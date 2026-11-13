@@ -6,8 +6,8 @@ class InferenceUnitInputs {
 		const ParseContext &context, const Json &projection, const std::map<const Section *, std::string> &paths,
 		BuildStatistics &statistics, std::map<std::string, std::string> &fingerprints
 	)
-		: context(context), projection(projection), classes(classIdentityPaths(paths)), statistics(statistics),
-		  fingerprints(fingerprints) {
+		: context(context), projection(projection), classes(classIdentityPaths(paths)), declarations(classes),
+		  statistics(statistics), fingerprints(fingerprints) {
 		for (const auto &[section, path] : paths)
 			sections.emplace(path, section);
 	}
@@ -36,7 +36,7 @@ class InferenceUnitInputs {
 		input.push_back(context.projectSyntax.nonMessageIdentity);
 		input.push_back(projection.at("precedence_signature"));
 		input.push_back(projection.at("precedence_rules"));
-		input.push_back(signatures(section));
+		input.push_back(declarations.signatures(section));
 		Json numbers = nullptr;
 		if (section.openingLine) {
 			bool pending = false;
@@ -66,7 +66,7 @@ class InferenceUnitInputs {
 		auto [found, inserted] = declarationFingerprints.try_emplace(path);
 		if (inserted) {
 			const Section &section = *sections.at(path);
-			found->second = digest(Json::array({sectionDeclaration(section), signatures(section)}).dump());
+			found->second = declarations.fingerprint(section);
 		}
 		return found->second;
 	}
@@ -97,26 +97,6 @@ class InferenceUnitInputs {
 		}
 		return bindings;
 	}
-	Json signatures(const Section &section) const {
-		Json result = Json::array();
-		for (const PatternDefinition *definition : section.patternDefinitions) {
-			Json paths = Json::array();
-			for (const PatternPathSignature &signature : definition->signaturePaths) {
-				Json parameters = Json::array();
-				for (const PatternParameterSignature &parameter : signature.parameters)
-					parameters.push_back(
-						Json::array(
-							{parameter.elementStartPos, constraintTemplate(parameter.constraint),
-							 parameter.requiresCompileTimeValue, parameter.acceptsUnresolvedType,
-							 parameter.hasExplicitTypeConstraint}
-						)
-					);
-				paths.push_back(std::move(parameters));
-			}
-			result.push_back(std::move(paths));
-		}
-		return result;
-	}
 	static bool containsSeparateBody(const Section &section) {
 		return std::ranges::any_of(section.children, [](const Section *child) {
 			return hasCodegenSectionIdentity(*child) || containsSeparateBody(*child);
@@ -134,32 +114,11 @@ class InferenceUnitInputs {
 		return Json::array({static_cast<int>(section.type), std::move(lines), std::move(children)});
 	}
 	template <typename T> static Json optional(const std::optional<T> &value) { return value ? Json(*value) : Json(nullptr); }
-	Json constraint(const TypeConstraint &value) const {
-		auto encoded = encodePortableConstraint(value, classes);
-		requireCompilerInvariant(encoded.has_value(), "compiled signature has no portable constraint identity");
-		return std::move(*encoded);
-	}
-	static Json integerTerm(const ConstraintIntegerTerm &term) {
-		return Json::array(
-			{static_cast<int>(term.kind), term.constant, term.sourceArgumentIndex, term.dimension,
-			 term.left ? integerTerm(*term.left) : Json(nullptr), term.right ? integerTerm(*term.right) : Json(nullptr)}
-		);
-	}
-	Json constraintTemplate(const TypeConstraintTemplate &value) const {
-		Json result = Json::array({constraint(value.constantPart)});
-		result.push_back(
-			value.rootProjection ? Json::array({value.rootProjection->sourceArgumentIndex, value.rootProjection->elementDepth})
-								 : Json(nullptr)
-		);
-		for (const auto *term :
-			 {&value.numericSize, &value.pointerDepth, &value.arraySize, &value.matrixRows, &value.matrixColumns})
-			result.push_back(*term ? integerTerm(**term) : Json(nullptr));
-		result.push_back(value.elementConstraint ? constraintTemplate(*value.elementConstraint) : Json(nullptr));
-		return result;
-	}
+	Json constraint(const TypeConstraint &value) const { return declarations.constraint(value); }
 	const ParseContext &context;
 	const Json &projection;
 	ClassIdentityPaths classes;
+	InferenceDeclarationInputs declarations;
 	BuildStatistics &statistics;
 	std::map<std::string, const Section *> sections;
 	std::map<std::string, std::string> declarationFingerprints;

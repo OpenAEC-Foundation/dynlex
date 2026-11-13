@@ -59,6 +59,7 @@ struct ParseContext {
 		InstantiationKey key;
 		std::unordered_set<std::string> requiredCompileTimeParameters;
 		std::vector<std::vector<CompileTimeValue>> observedArguments;
+		PatternDefinition *definition = nullptr;
 	};
 	struct IncrementalConstraintValue {
 		TypeConstraint constraint;
@@ -167,6 +168,7 @@ struct ParseContext {
 	double inferenceBodyLoadMilliseconds = 0;
 	std::function<void(ParseContext &, const std::function<bool(const IncrementalFunctionRequest &)> &)>
 		runIncrementalPreinference;
+	std::function<void()> activateIncrementalReplacements;
 	std::vector<IncrementalFunctionRequest> incrementalReplacementFunctions;
 	bool reuseRootExecution = false;
 	std::function<void(Section *, const InstantiationKey &, llvm::Function *, bool)> recordGeneratedFunction;

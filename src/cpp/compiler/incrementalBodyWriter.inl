@@ -7,6 +7,7 @@ class InferenceBodyWriter {
 		: identities(identities), sources(sources), storage(storage), classSnapshot(classSnapshot),
 		  readValue(std::move(readValue)) {}
 	Json capture(const Instantiation &instance) {
+		auto started = Clock::now();
 		for (const auto &argument : instance.argumentTypes)
 			addTypeClasses(argument);
 		addTypeClasses(instance.returnType);
@@ -37,21 +38,25 @@ class InferenceBodyWriter {
 			if (variableIndex < variables.size())
 				variableRecords.push_back(variableRecord(*variables[variableIndex++]));
 		}
-		result.update(
-			Json{
-				{"expressions", std::move(expressionRecords)},
-				{"bodies", std::move(bodyRecords)},
-				{"variables", std::move(variableRecords)},
-				{"types", std::move(types)},
-				{"scopes", std::move(scopes)},
-				{"sources", sources.take()},
-				{"minimum_identities", minima.size()},
-				{"dependencies", dependencies},
-				{"classes", std::move(classRecords)}
-			}
-		);
+		result["expressions"] = std::move(expressionRecords);
+		result["expression_fields"] = inferenceBodyExpressionFields;
+		result["values"] = std::move(valueRecords);
+		result["instances"] = std::move(instantiationRecords);
+		result["bodies"] = std::move(bodyRecords);
+		result["variables"] = std::move(variableRecords);
+		result["types"] = std::move(types);
+		result["scopes"] = std::move(scopes);
+		result["sources"] = sources.take();
+		result["minimum_identities"] = minima.size();
+		result["dependencies"] = dependencies;
+		result["classes"] = std::move(classRecords);
+		captureElapsed = elapsedMilliseconds(started);
 		return result;
 	}
+
+	size_t valueReferenceCount() const { return valueReferences; }
+	size_t instantiationReferenceCount() const { return instantiationReferences; }
+	double captureMilliseconds() const { return captureElapsed; }
 
   private:
 	template <class T>
@@ -66,9 +71,16 @@ class InferenceBodyWriter {
 	Json expression(const Expression *value) {
 		if (!value)
 			return nullptr;
+		if (auto found = expressionReferences.find(value); found != expressionReferences.end())
+			return found->second;
+		Json reference;
 		if (auto source = storage.encodeExpression(value))
-			return Json::array({"source", sources.expressionSource(std::move(*source))});
-		return Json::array({"local", intern(value, expressionIndices, expressions)});
+			reference = Json::array({"source", sources.expressionSource(std::move(*source))});
+		else {
+			reference = Json::array({"local", expressions.size()});
+			expressions.push_back(value);
+		}
+		return expressionReferences.emplace(value, std::move(reference)).first->second;
 	}
 	Json body(const InstantiatedSectionBody *value) { return intern(value, bodyIndices, bodies); }
 	Json scope(const std::shared_ptr<const VariableStorageScope> &value) {
@@ -105,9 +117,9 @@ class InferenceBodyWriter {
 								: Json::array({"source", std::move(source)});
 	}
 	Json type(const DataType &value) {
-		addTypeClasses(value);
 		if (auto found = typeIndices.find(value); found != typeIndices.end())
 			return found->second;
+		addTypeClasses(value);
 		size_t index = types.size();
 		types.push_back(nullptr);
 		typeIndices.emplace(value, index);
@@ -115,14 +127,6 @@ class InferenceBodyWriter {
 		if (value.functionSignature)
 			for (const auto &argument : value.functionSignature->parameters)
 				arguments.push_back(type(argument));
-		Json layout = nullptr;
-		if (value.classDefinition && value.classInstIndex >= 0) {
-			DataType concrete{DataType::Kind::Class, 0, 1, value.classDefinition, value.classInstIndex};
-			std::set<std::pair<const ClassDefinition *, int>> visiting;
-			auto identity = inferenceTypeIdentity(concrete, identities.classes, visiting);
-			requireCompilerInvariant(identity.has_value(), "inferred body class has no committed layout");
-			layout = std::move(*identity);
-		}
 		Json record = Json::array(
 			{static_cast<int>(value.kind), value.numericSize, value.pointerDepth, static_cast<int>(value.referencedKind),
 			 value.arraySize, value.matrixRowCount, value.arrayElementType ? type(*value.arrayElementType) : Json(nullptr),
@@ -131,7 +135,7 @@ class InferenceBodyWriter {
 			 value.classInstIndex,
 			 value.functionSignature ? Json::array({type(value.functionSignature->result), std::move(arguments)})
 									 : Json(nullptr),
-			 expression(value.typeExpression), std::move(layout)}
+			 expression(value.typeExpression)}
 		);
 		types[index] = std::move(record);
 		return index;
@@ -201,15 +205,72 @@ class InferenceBodyWriter {
 		requireCompilerInvariant(value.data != nullptr, "inferred argument capture has no expression data");
 		return Json::array({expression(value.data->pack), value.data->index, bindings(value.data->bindings)});
 	}
+	static std::optional<std::pair<size_t, std::uint64_t>> scalarValueKey(const CompileTimeValue &item) {
+		if (const auto *value = std::get_if<std::int64_t>(&item))
+			return std::pair{item.index(), std::bit_cast<std::uint64_t>(*value)};
+		if (const auto *value = std::get_if<std::uint64_t>(&item))
+			return std::pair{item.index(), *value};
+		if (const auto *value = std::get_if<double>(&item))
+			return std::pair{item.index(), std::bit_cast<std::uint64_t>(*value)};
+		if (const auto *value = std::get_if<bool>(&item))
+			return std::pair{item.index(), static_cast<std::uint64_t>(*value)};
+		if (const auto *value = std::get_if<CompileTimePointer>(&item))
+			return std::pair{item.index(), value->address};
+		return {};
+	}
 	Json value(const CompileTimeValue &item) {
+		if (std::holds_alternative<std::monostate>(item))
+			return nullptr;
+		valueReferences++;
+		auto lookup = [](const auto &cache, const auto &key) -> std::optional<size_t> {
+			auto found = cache.find(key);
+			return found == cache.end() ? std::nullopt : std::optional<size_t>{found->second};
+		};
+		auto scalar = scalarValueKey(item);
+		const auto *text = std::get_if<std::string>(&item);
+		const auto *reference = std::get_if<TypeReferenceValue>(&item);
+		const auto *constraint = std::get_if<TypeConstraint>(&item);
+		const auto *capture = std::get_if<ExpressionCapture>(&item);
+		std::optional<size_t> previous;
+		if (scalar)
+			previous = lookup(scalarValues, *scalar);
+		else if (text)
+			previous = lookup(stringValues, *text);
+		else if (reference)
+			previous = lookup(typeValues, *reference);
+		else if (constraint)
+			previous = lookup(constraintValues, *constraint);
+		else if (capture)
+			previous = lookup(captureValues, capture->identity);
+		if (previous) {
+			if (capture)
+				requireCompilerInvariant(capture->data != nullptr, "inferred argument capture has no expression data");
+			return *previous;
+		}
+		Json encoded = valueRecord(item);
+		auto [found, inserted] = valueIndices.try_emplace(encoded, valueRecords.size());
+		size_t index = found->second;
+		if (inserted)
+			valueRecords.push_back(std::move(encoded));
+		if (scalar)
+			scalarValues.emplace(*scalar, index);
+		else if (text)
+			stringValues.emplace(*text, index);
+		else if (reference)
+			typeValues.emplace(*reference, index);
+		else if (constraint)
+			constraintValues.emplace(*constraint, index);
+		else if (capture)
+			captureValues.emplace(capture->identity, index);
+		return index;
+	}
+	Json valueRecord(const CompileTimeValue &item) {
 		if (const auto *reference = std::get_if<TypeReferenceValue>(&item)) {
 			addTypeClasses(reference->type);
 			addConstraintClasses(reference->constraint);
 		}
 		if (const auto *constraint = std::get_if<TypeConstraint>(&item))
 			addConstraintClasses(*constraint);
-		if (std::holds_alternative<std::monostate>(item))
-			return nullptr;
 		if (const auto *minimum = std::get_if<MinimumSignedIntegerMagnitude>(&item)) {
 			auto [found, _] = minima.try_emplace(minimum->identity.get(), minima.size());
 			return Json::array({"minimum", found->second});
@@ -219,7 +280,7 @@ class InferenceBodyWriter {
 		if (const auto *pack = std::get_if<ArgumentPackValue>(&item)) {
 			Json values = Json::array();
 			for (const auto &capture : pack->elements)
-				values.push_back(captureValue(capture));
+				values.push_back(value(CompileTimeValue{capture}));
 			return Json::array({"pack", std::move(values)});
 		}
 		if (const auto *function = std::get_if<CompileTimeFunction>(&item))
@@ -257,12 +318,13 @@ class InferenceBodyWriter {
 		const auto &path = identities.classes.at(definition);
 		if (classRecords.contains(path))
 			return;
-		classRecords[path] = classSnapshot.instances(definition);
+		const Json &state = classSnapshot.instances(definition);
+		classRecords[path] = classSnapshot.reference(definition);
 		dependencies.emplace(path, "*");
 		for (const auto &instance : definition->instantiations)
 			for (const auto &field : instance.fieldTypes)
 				addTypeClasses(field);
-		if (!classRecords.at(path).at("requests").is_null())
+		if (!state.at("requests").is_null())
 			for (const auto &[key, request] : definition->instantiationRequests) {
 				for (const auto &[name, type, constant] : request->parameters) {
 					addTypeClasses(type);
@@ -276,6 +338,12 @@ class InferenceBodyWriter {
 	Json instance(const Instantiation *value) {
 		if (!value)
 			return nullptr;
+		instantiationReferences++;
+		auto [found, inserted] = instantiationIndices.try_emplace(value, instantiationRecords.size());
+		size_t index = found->second;
+		if (!inserted)
+			return index;
+		instantiationRecords.push_back(nullptr);
 		const auto *origin = storage.instantiationOrigin(value->storageScope.get());
 		requireCompilerInvariant(origin, "inferred body instance has no logical storage origin");
 		const auto &[section, key] = *origin;
@@ -286,7 +354,8 @@ class InferenceBodyWriter {
 			constants.push_back(Json::array({name, this->value(constant)}));
 		auto identity = inferenceSummaryKey(key, identities);
 		dependencies.emplace(identities.paths.at(section), identity.value_or("*"));
-		return Json::array({sources.section(section), std::move(arguments), std::move(constants)});
+		instantiationRecords[index] = Json::array({sources.section(section), std::move(arguments), std::move(constants)});
+		return index;
 	}
 	Json diagnostic(const std::shared_ptr<const Diagnostic> &value) {
 		if (!value)
@@ -372,55 +441,66 @@ class InferenceBodyWriter {
 					 : Json(nullptr)}
 			);
 		}
-		return Json{
-			{"reference", std::move(reference)},
-			{"kind", static_cast<int>(item.kind)},
-			{"type", type(item.type)},
-			{"value", value(readValue ? readValue(&item) : item.compileTimeValue)},
-			{"memory", Json::array(
-						   {diagnostic(item.memoryFacts.value), diagnostic(item.memoryFacts.address),
-							diagnostic(item.memoryFacts.effects)}
-					   )},
-			{"range", sources.range(item.range)},
-			{"literal", std::move(literal)},
-			{"variable", variable(item.variable)},
-			{"declaration", expression(item.dataDeclaration)},
-			{"data", std::move(data)},
-			{"data_value", expression(item.inferredDataValue)},
-			{"deferred", sources.section(item.deferredFunction)},
-			{"owner", body(item.owningSectionBody)},
-			{"match", match(item.patternMatch)},
-			{"definition", sources.definition(item.selectedPatternDefinition)},
-			{"path", optional(item.selectedPatternPathIndex)},
-			{"callable", sources.definition(item.selectedCallableDefinition)},
-			{"callable_path", optional(item.selectedCallablePathIndex)},
-			{"subject", expression(item.subjectSetter)},
-			{"capture", item.inferredArgumentReference ? captureValue(*item.inferredArgumentReference) : Json(nullptr)},
-			{"instance", instance(item.selectedInstantiation)},
-			{"expansion", expression(item.inferredFlexExpansion)},
-			{"pointer", expression(item.inferredPointerStorage)},
-			{"flex", body(item.inferredFlexBody.get())},
-			{"caller", body(item.inferredCallerBody.get())},
-			{"loops", std::move(loops)},
-			{"outcome",
-			 Json::array({static_cast<int>(outcome.kind), value(outcome.conditionValue), type(outcome.conditionType)})},
-			{"falls_through", optional(item.executionFallsThrough)},
-			{"reachable", item.sectionBodyReachable},
-			{"execution", static_cast<int>(item.sectionBodyExecution)},
-			{"body_falls_through", item.sectionBodyFallsThrough},
-			{"branch", item.branchSelection
-						   ? Json::array({item.branchSelection->known, item.branchSelection->selectedBranchIndex})
-						   : Json(nullptr)},
-			{"template", expression(item.reusableTemplateExpression)},
-			{"intrinsic", item.intrinsicName},
-			{"arguments", std::move(arguments)},
-			{"submatch", item.isSubMatch},
-			{"grouped", item.isExplicitGroup},
-			{"group_indices", item.groupingArgumentIndices},
-			{"adjacent", item.groupingArgumentHasAdjacentSiblingSlot},
-			{"starts_argument", item.groupingStartsWithArgument},
-			{"ends_argument", item.groupingEndsWithArgument}
+		using Field = InferenceBodyExpressionField;
+		Json record = Json::array();
+		record.get_ref<Json::array_t &>().resize(static_cast<size_t>(Field::Count));
+		auto field = [&](Field name, Json value) {
+			record.at(static_cast<size_t>(name)) = std::move(value);
 		};
+		field(Field::Reference, std::move(reference));
+		field(Field::Kind, static_cast<int>(item.kind));
+		field(Field::Type, type(item.type));
+		field(Field::Value, value(readValue ? readValue(&item) : item.compileTimeValue));
+		field(
+			Field::Memory,
+			Json::array(
+				{diagnostic(item.memoryFacts.value), diagnostic(item.memoryFacts.address), diagnostic(item.memoryFacts.effects)}
+			)
+		);
+		field(Field::Range, sources.range(item.range));
+		field(Field::Literal, std::move(literal));
+		field(Field::Variable, variable(item.variable));
+		field(Field::Declaration, expression(item.dataDeclaration));
+		field(Field::Data, std::move(data));
+		field(Field::DataValue, expression(item.inferredDataValue));
+		field(Field::Deferred, sources.section(item.deferredFunction));
+		field(Field::Owner, body(item.owningSectionBody));
+		field(Field::Match, match(item.patternMatch));
+		field(Field::Definition, sources.definition(item.selectedPatternDefinition));
+		field(Field::Path, optional(item.selectedPatternPathIndex));
+		field(Field::Callable, sources.definition(item.selectedCallableDefinition));
+		field(Field::CallablePath, optional(item.selectedCallablePathIndex));
+		field(Field::Subject, expression(item.subjectSetter));
+		field(Field::Capture, item.inferredArgumentReference ? captureValue(*item.inferredArgumentReference) : Json(nullptr));
+		field(Field::Instance, instance(item.selectedInstantiation));
+		field(Field::Expansion, expression(item.inferredFlexExpansion));
+		field(Field::Pointer, expression(item.inferredPointerStorage));
+		field(Field::Flex, body(item.inferredFlexBody.get()));
+		field(Field::Caller, body(item.inferredCallerBody.get()));
+		field(Field::Loops, std::move(loops));
+		field(
+			Field::Outcome,
+			Json::array({static_cast<int>(outcome.kind), value(outcome.conditionValue), type(outcome.conditionType)})
+		);
+		field(Field::FallsThrough, optional(item.executionFallsThrough));
+		field(Field::Reachable, item.sectionBodyReachable);
+		field(Field::Execution, static_cast<int>(item.sectionBodyExecution));
+		field(Field::BodyFallsThrough, item.sectionBodyFallsThrough);
+		field(
+			Field::Branch, item.branchSelection
+							   ? Json::array({item.branchSelection->known, item.branchSelection->selectedBranchIndex})
+							   : Json(nullptr)
+		);
+		field(Field::Template, expression(item.reusableTemplateExpression));
+		field(Field::Intrinsic, item.intrinsicName);
+		field(Field::Arguments, std::move(arguments));
+		field(Field::Submatch, item.isSubMatch);
+		field(Field::Grouped, item.isExplicitGroup);
+		field(Field::GroupIndices, item.groupingArgumentIndices);
+		field(Field::Adjacent, item.groupingArgumentHasAdjacentSiblingSlot);
+		field(Field::StartsArgument, item.groupingStartsWithArgument);
+		field(Field::EndsArgument, item.groupingEndsWithArgument);
+		return record;
 	}
 	template <class T> static Json optional(const std::optional<T> &value) { return value ? Json(*value) : Json(nullptr); }
 	const InferenceValueIdentities &identities;
@@ -428,7 +508,18 @@ class InferenceBodyWriter {
 	InferenceStorageIdentities &storage;
 	InferenceClassSnapshot &classSnapshot;
 	std::function<CompileTimeValue(const Expression *)> readValue;
-	std::unordered_map<const Expression *, size_t> expressionIndices;
+	size_t valueReferences = 0;
+	size_t instantiationReferences = 0;
+	double captureElapsed = 0;
+	Json valueRecords = Json::array();
+	Json instantiationRecords = Json::array();
+	std::unordered_map<const Instantiation *, size_t> instantiationIndices;
+	std::map<Json, size_t> valueIndices;
+	std::map<std::pair<size_t, std::uint64_t>, size_t> scalarValues;
+	std::unordered_map<std::string, size_t> stringValues, captureValues;
+	std::map<TypeReferenceValue, size_t> typeValues;
+	std::map<TypeConstraint, size_t> constraintValues;
+	std::unordered_map<const Expression *, Json> expressionReferences;
 	std::unordered_map<const InstantiatedSectionBody *, size_t> bodyIndices;
 	std::unordered_map<const VariableReference *, size_t> variableIndices;
 	std::unordered_map<const VariableStorageScope *, size_t> scopeIndices;

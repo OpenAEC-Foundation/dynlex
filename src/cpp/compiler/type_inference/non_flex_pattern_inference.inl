@@ -47,6 +47,7 @@
 	if (context.trial && context.trialJournal)
 		context.trialJournal->recordSectionInstantiationWrite(matchedSection, instantiationKey);
 	Instantiation &inst = matchedSection->instantiations[instantiationKey];
+	inst.invokedDefinition = def;
 	auto storageScope = context.parseContext.storageScopeForInstantiation(matchedSection, instantiationKey);
 	inst.storageScope = storageScope;
 	context.recordBodyRead(*matchedSection, storageScope);

@@ -644,8 +644,10 @@ class GroupingInferenceTransaction {
 	void rollback() {
 		requireCompilerInvariant(active, "grouping inference transaction was resolved twice");
 		recursiveInferenceObservation.discard();
-		groupingJournal.rollback();
+		// Freeze completed bodies while their inferred values still belong to
+		// this transaction; undoing the grouping maps first loses those values.
 		rollbackTrialJournal(context, journal);
+		groupingJournal.rollback();
 		restoreSavedState();
 		active = false;
 	}

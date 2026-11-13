@@ -23,6 +23,7 @@ struct InferenceProductHooks {
 	virtual ~InferenceProductHooks() = default;
 	virtual std::optional<std::string> storageIdentity(Section *, const InstantiationKey &) const = 0;
 	virtual void completed(const Instantiation &, std::vector<Diagnostic>) = 0;
+	virtual void discardedBatch(const std::function<void()> &) = 0;
 	virtual void globalInput(const InferenceReadOwner &, VariableReference *) = 0;
 	virtual void
 	conversionLookup(const InferenceReadOwner &, const lsp::SourceFile &, bool, const std::vector<PatternDefinition *> &) = 0;

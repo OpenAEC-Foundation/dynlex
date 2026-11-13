@@ -10,11 +10,9 @@ bool hasNoGlobalAccess(const Section *section) {
 	return true;
 }
 
-Json encodePureReturnValues(
-	const Instantiation &instantiation, const InferenceValueIdentities &identities, bool hasGlobalInputs
-) {
+Json encodePureReturnValues(const Instantiation &instantiation, const InferenceValueIdentities &identities) {
 	Json results = Json::array();
-	if (instantiation.purity != InstantiationPurity::Pure || hasGlobalInputs)
+	if (instantiation.purity != InstantiationPurity::Pure)
 		return results;
 	for (const auto &[arguments, value] : instantiation.pureReturnValuesByArguments) {
 		auto encodedValue = encodeInferenceValue(value, identities);
@@ -81,7 +79,6 @@ bool canPersistInferenceSummary(
 bool inferenceSummaryHasValueState(const Json &summary) {
 	return !summary.at("failed").get<bool>() &&
 		   summary.at("purity").get<int>() == static_cast<int>(InstantiationPurity::Pure) &&
-		   summary.at("global_inputs").empty() &&
 		   (summary.at("observed_values").get<bool>() || !summary.at("pure_values_complete").get<bool>());
 }
 
@@ -105,6 +102,7 @@ Json captureSectionInferenceSummary(
 			continue;
 		if (instantiation.failure) {
 			Json record = std::move(*encodedKey);
+			record["invocation"] = encodeInferenceInvocation(*section, instantiation, globals.declaration(*section));
 			record["global_inputs"] = std::move(*globalInputs);
 			summaries[identity] = std::move(record);
 			if (capturedInstances)
@@ -121,10 +119,15 @@ Json captureSectionInferenceSummary(
 		if (!returnProvenance)
 			continue;
 		std::set<std::pair<const ClassDefinition *, int>> visiting;
-		Json pureValues = encodePureReturnValues(instantiation, identities, !globalInputs->empty());
+		Json pureValues = encodePureReturnValues(instantiation, identities);
+		Json valueInputs =
+			instantiation.purity == InstantiationPurity::Pure && instantiation.returnType.kind != DataType::Kind::Void
+				? globals.captureQuery(instantiation.storageScope)
+				: Json(nullptr);
 		bool pureValuesComplete =
 			instantiation.pureReturnValuesComplete && pureValues.size() == instantiation.pureReturnValuesByArguments.size();
 		Json record = std::move(*encodedKey);
+		record["invocation"] = encodeInferenceInvocation(*section, instantiation, globals.declaration(*section));
 		record.update(
 			Json{
 				{"failure", nullptr},
@@ -143,6 +146,7 @@ Json captureSectionInferenceSummary(
 				{"unknown_escape", instantiation.externallyEscapesUnknownAddress},
 				{"global_inputs", std::move(*globalInputs)},
 				{"pure_values", std::move(pureValues)},
+				{"pure_value_inputs", std::move(valueInputs)},
 				{"pure_values_complete", pureValuesComplete},
 				{"global_effects", std::move(*globalEffects)}
 			}
@@ -175,7 +179,7 @@ Json captureInferenceFactClasses(
 			continue;
 		auto *definition = static_cast<ClassSection *>(identities.sections.at(path))->classDefinition;
 		const Json &state = classSnapshot.instances(definition);
-		records[path] = state;
+		records[path] = classSnapshot.reference(definition);
 		for (const auto &dependency : classInstantiationDependencies(state))
 			pending.push(dependency);
 	}
@@ -187,7 +191,7 @@ Json captureInferenceFactClasses(
 void mergeInferenceObservedValues(Json &current, const Json &prior) {
 	if (!current.at("failure").is_null() || !prior.at("failure").is_null() ||
 		current.at("purity") != static_cast<int>(InstantiationPurity::Pure) || current.at("purity") != prior.at("purity") ||
-		!current.at("global_inputs").empty() || !prior.at("global_inputs").empty() ||
+		current.at("pure_value_inputs").is_null() || current.at("pure_value_inputs") != prior.at("pure_value_inputs") ||
 		current.at("return_type") != prior.at("return_type"))
 		return;
 	std::map<Json, Json> observations;
@@ -219,7 +223,10 @@ Json captureInferenceSummaries(
 	Json summaries = frozen ? *frozen : Json::object();
 	InferenceValueIdentities identities(sectionPaths);
 	InferenceStorageIdentities storage(context, sectionPaths, identities, sourceIndex);
-	InferenceClassSnapshot classSnapshot(identities);
+	InferenceClassSnapshot classSnapshot(identities, [&](const Json &state) {
+		summaryStore.recordClassSnapshotCapture();
+		return summaryStore.saveClass(state);
+	});
 	std::unique_ptr<InferenceBodySources> sources;
 	auto sourceRecords = [&]() -> InferenceBodySources & {
 		if (!sources)
@@ -247,14 +254,20 @@ Json captureInferenceSummaries(
 				!instance.failure &&
 				((instance.purity == InstantiationPurity::Pure && instance.returnType.kind != DataType::Kind::Void) ||
 				 keepBodies || !native.contains({path, key}));
-			if (needsBody && instance.inferenceReusedFromCache && prior && prior->contains(path) &&
-				prior->at(path).contains(key))
+			if (needsBody && instance.inferenceReusedFromCache && summaries.contains(path) && summaries.at(path).contains(key))
+				body = summaries.at(path).at(key).at("body");
+			else if (needsBody && instance.inferenceReusedFromCache && prior && prior->contains(path) &&
+					 prior->at(path).contains(key))
 				body = prior->at(path).at(key).at("body");
 			else if (needsBody && instance.bodyInferred) {
 				InferenceBodyWriter writer(identities, sourceRecords(), storage, classSnapshot);
-				body = summaryStore.saveBody(writer.capture(instance));
+				Json encodedBody = writer.capture(instance);
+				body = summaryStore.saveBody(
+					std::move(encodedBody), writer.valueReferenceCount(), writer.instantiationReferenceCount(),
+					writer.captureMilliseconds()
+				);
 			}
-			Json classes = summaryStore.saveClasses(captureInferenceFactClasses(summary, identities, classSnapshot));
+			Json classes = captureInferenceFactClasses(summary, identities, classSnapshot);
 			summaries[path][key] = summaryStore.save(summary, std::move(body), std::move(classes), std::move(*diagnostics));
 		}
 	}
@@ -262,18 +275,20 @@ Json captureInferenceSummaries(
 }
 
 class IncrementalInferenceReuse {
+#include "incrementalInferenceQueryInputs.inl"
 #include "incrementalInferenceRestoration.inl"
   public:
 	IncrementalInferenceReuse(
-		ParseContext &context, const Json &summaries, const Json &units, InferenceGlobalInputs &globalInputs,
-		const IncrementalIRReuse *irReuse, const std::map<const Section *, std::string> &sectionPaths,
-		std::shared_ptr<IncrementalUnitSelection> eligible, InferenceSummaryStore &summaryStore,
-		const InferenceSourceIndex &sourceIndex, const Json *frozen = nullptr
+		ParseContext &context, const Json &summaries, const Json &units, const Json &selections,
+		InferenceGlobalInputs &globalInputs, const IncrementalIRReuse *irReuse,
+		const std::map<const Section *, std::string> &sectionPaths, std::shared_ptr<IncrementalUnitSelection> eligible,
+		InferenceSummaryStore &summaryStore, const InferenceSourceIndex &sourceIndex, const Json *frozen = nullptr,
+		const Json *native = nullptr
 	)
-		: context(context), summaries(summaries), units(units), globalInputs(globalInputs), irReuse(irReuse),
-		  eligible(std::move(eligible)), sectionPaths(sectionPaths), identities(sectionPaths),
+		: context(context), summaries(summaries), units(units), selections(selections), globalInputs(globalInputs),
+		  irReuse(irReuse), eligible(std::move(eligible)), sectionPaths(sectionPaths), identities(sectionPaths),
 		  storage(context, sectionPaths, identities, sourceIndex), sourceIndex(sourceIndex), summaryStore(summaryStore),
-		  frozen(frozen) {
+		  frozen(frozen), native(native) {
 		identities.restoreFunction = [this](const Json &encoded) {
 			requireCompilerInvariant(restoration, "function value decoded outside a restoration transaction");
 			return restoration->function(encoded);
@@ -288,9 +303,13 @@ class IncrementalInferenceReuse {
 		InferenceContext *caller
 	) {
 		auto keyText = inferenceSummaryKey(key, identities);
-		if (!keyText || !eligible->contains(section, *keyText))
+		if (!keyText || (!eligible->contains(section, *keyText) && !refreshed(sectionPaths.at(section), *keyText)))
 			return false;
-		if (instantiation.inferenceReusedFromCache) {
+		auto unit = std::pair{sectionPaths.at(section), *keyText};
+		const Json *current = reference(unit);
+		if (!current)
+			return false;
+		if (instantiation.inferenceReusedFromCache && instantiation.inferenceProductIdentity == productIdentity(unit)) {
 			if (instantiation.failure)
 				return true;
 			auto unit = std::pair{static_cast<const Section *>(section), *keyText};
@@ -325,9 +344,9 @@ class IncrementalInferenceReuse {
 		if (instance.bodyInferred)
 			return true;
 		auto identity = inferenceSummaryKey(key, identities);
-		if (!identity || !eligible->contains(section, *identity))
+		if (!identity || (!eligible->contains(section, *identity) && !refreshed(sectionPaths.at(section), *identity)))
 			return false;
-		const auto &reference = summaries.at(sectionPaths.at(section)).at(*identity);
+		const auto &reference = *this->reference({sectionPaths.at(section), *identity});
 		auto start = Clock::now();
 		auto record = summaryStore.loadBody(reference.at("body"));
 		if (!record)
@@ -372,16 +391,19 @@ class IncrementalInferenceReuse {
 	}
 
 	size_t reusedCount() const { return count; }
+	size_t currentRestoredCount() const { return currentCount; }
 	Json snapshot(
 		const std::map<const Section *, std::string> &paths, const Json &functions, const Json &functionKeys,
 		size_t *reusedSections = nullptr, bool keepBodies = false
 	) const {
 		auto native = nativeInferenceUnits(functions, functionKeys);
 		IncrementalUnitSelection skipped;
-		for (const auto &[section, keys] : eligible->sections())
+		for (const auto &[section, path] : paths)
 			for (const auto &[key, instantiation] : section->instantiations)
 				if (instantiation.inferenceReusedFromCache && !instantiation.valueSummaryChanged)
-					if (auto identity = inferenceSummaryKey(key, identities); identity && keys.contains(*identity))
+					if (auto identity = inferenceSummaryKey(key, identities);
+						identity && (eligible->contains(section, *identity) || refreshed(path, *identity)) &&
+						instantiation.inferenceProductIdentity == productIdentity({path, *identity}))
 						skipped.insert(section, *identity);
 		Json result = captureInferenceSummaries(
 			context, sourceIndex, paths, globalInputs, summaryStore, native, &skipped, &summaries, keepBodies, frozen
@@ -416,7 +438,8 @@ class IncrementalInferenceReuse {
 			for (auto &[key, reference] : variants.items())
 				if (!reference.at("failed").get<bool>() && reference.at("body").is_null() &&
 					eligible->contains(sections.at(path), key) && summaries.contains(path) &&
-					summaries.at(path).contains(key) && globalInputClosureUnchanged(path, key))
+					summaries.at(path).contains(key) && reference.at("payload") == summaries.at(path).at(key).at("payload") &&
+					globalInputClosureUnchanged(path, key))
 					reference["body"] = summaries.at(path).at(key).at("body");
 		auto retireBody = [&](const std::string &path, const std::string &key, Json &reference) {
 			if (!keepBodies && native.contains({path, key}) && !reference.at("body").is_null() &&
@@ -463,12 +486,13 @@ class IncrementalInferenceReuse {
 
   private:
 	bool globalInputClosureUnchanged(const std::string &path, const std::string &key) const {
-		return units.contains(path) && units.at(path).contains(key) &&
-			   globalInputs.unchanged(units.at(path).at(key).at("global_inputs"));
+		auto proof = inputProof({path, key});
+		return proof && globalInputs.unchanged(*proof);
 	}
 	ParseContext &context;
 	const Json &summaries;
 	const Json &units;
+	const Json &selections;
 	InferenceGlobalInputs &globalInputs;
 	const IncrementalIRReuse *irReuse;
 	std::shared_ptr<IncrementalUnitSelection> eligible;
@@ -478,8 +502,9 @@ class IncrementalInferenceReuse {
 	const InferenceSourceIndex &sourceIndex;
 	InferenceSummaryStore &summaryStore;
 	const Json *frozen;
+	const Json *native;
 	std::unique_ptr<InferenceBodySources> bodySources;
 	Restoration *restoration = nullptr;
 	std::set<std::pair<const Section *, std::string>> runtimeValidated;
-	size_t count = 0;
+	size_t count = 0, currentCount = 0;
 };

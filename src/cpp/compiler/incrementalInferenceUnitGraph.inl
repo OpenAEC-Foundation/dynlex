@@ -6,6 +6,7 @@ Json emptyInferenceUnit() {
 		{"callees", Json::array()},
 		{"lookups", Json::object()},
 		{"values", Json::array()},
+		{"direct_global_inputs", Json::object()},
 		{"global_inputs", Json::object()}
 	};
 }
@@ -47,10 +48,11 @@ class InferenceUnitGraphCapture {
 		if (products)
 			for (const auto &[scope, key] : products->scopes()) {
 				Json &node = units[key.first][key.second];
+				const Json *retained = products->retainedUnit(key);
 				if (node.is_null())
-					node = emptyInferenceUnit();
-				mergeScope(node, scope, inputs.section(key.first), false);
-				node["global_inputs"] = products->references().at(key.first).at(key.second).at("global_inputs");
+					node = retained ? *retained : emptyInferenceUnit();
+				mergeScope(node, scope, inputs.section(key.first), retained != nullptr);
+				mergeInferenceGlobalInputs(node["direct_global_inputs"], products->reference(key).at("global_inputs"));
 				statistics.inferenceUnitsCaptured++;
 			}
 		for (const auto &[section, path] : paths)
@@ -66,20 +68,22 @@ class InferenceUnitGraphCapture {
 							: reused						? std::move(priorUnit(path, *identity))
 															: emptyInferenceUnit();
 				mergeScope(node, instantiation.storageScope, section, reused);
-				node["global_inputs"] = globalInputs.capture(instantiation).value_or(Json(nullptr));
+				mergeInferenceGlobalInputs(
+					node["direct_global_inputs"], globalInputs.capture(instantiation).value_or(Json(nullptr))
+				);
 				(reused ? statistics.inferenceUnitsReused : statistics.inferenceUnitsCaptured)++;
 				units[path][*identity] = std::move(node);
 			}
 		Json root = context.reuseRootExecution ? std::move(priorUnit("root", aggregateGraphVariant)) : emptyInferenceUnit();
 		mergeScope(root, {}, context.mainSection, context.reuseRootExecution);
 		if (!context.reuseRootExecution)
-			root["global_inputs"] = globalInputs.captureScope({}).value_or(Json(nullptr));
+			root["direct_global_inputs"] = globalInputs.captureScope({}).value_or(Json(nullptr));
 		(context.reuseRootExecution ? statistics.inferenceUnitsReused : statistics.inferenceUnitsCaptured)++;
 		units["root"][aggregateGraphVariant] = std::move(root);
 		for (const auto &[path, variants] : summaries.items())
 			for (const auto &[key, reference] : variants.items()) {
 				retain(path, key);
-				units[path][key]["global_inputs"] = reference.at("global_inputs");
+				mergeInferenceGlobalInputs(units[path][key]["direct_global_inputs"], reference.at("global_inputs"));
 				for (const Json &target : reference.at("symbolic_dependencies"))
 					units[path][key]["callees"].push_back(target);
 				if (!reference.at("body").is_null())
@@ -113,8 +117,9 @@ class InferenceUnitGraphCapture {
 		std::map<InferenceUnitKey, std::set<InferenceUnitKey>> callers;
 		std::queue<InferenceUnitKey> pending;
 		std::set<InferenceUnitKey> queued;
-		for (const auto &[path, variants] : units.items())
-			for (const auto &[key, unit] : variants.items()) {
+		for (auto &[path, variants] : units.items())
+			for (auto &[key, unit] : variants.items()) {
+				unit["global_inputs"] = unit.at("direct_global_inputs");
 				InferenceUnitKey owner{path, key};
 				for (const auto &callee : unit.at("callees"))
 					callers[{callee.at(0).get<std::string>(), callee.at(1).get<std::string>()}].insert(owner);
@@ -155,6 +160,9 @@ class InferenceUnitGraphCapture {
 			pending.pop();
 			if (!visited.insert(current).second)
 				continue;
+			mergeInferenceGlobalInputs(
+				unit["direct_global_inputs"], globalInputs.captureScope(current).value_or(Json(nullptr))
+			);
 			auto found = reads.scopes().find(current);
 			if (found == reads.scopes().end())
 				continue; // A body containing no pattern calls or lookups has no extra reads.
@@ -192,16 +200,16 @@ class InferenceUnitGraphCapture {
 		if (key == aggregateGraphVariant) {
 			Json aggregate = emptyInferenceUnit();
 			if (retained.contains(path) && retained.at(path).contains(key))
-				aggregate["global_inputs"] = priorUnit(path, key).at("global_inputs");
+				aggregate["direct_global_inputs"] = priorUnit(path, key).at("direct_global_inputs");
 			for (const auto &[arguments, instance] : inputs.section(path)->instantiations) {
 				if ((!instance.valid && !instance.failure) || instance.needsReinfer || instance.inferring)
 					continue;
 				auto captured = globalInputs.capture(instance);
-				mergeInferenceGlobalInputs(aggregate["global_inputs"], captured.value_or(Json(nullptr)));
+				mergeInferenceGlobalInputs(aggregate["direct_global_inputs"], captured.value_or(Json(nullptr)));
 			}
 			if (products && products->references().contains(path))
 				for (const auto &[variant, reference] : products->references().at(path).items())
-					mergeInferenceGlobalInputs(aggregate["global_inputs"], reference.at("global_inputs"));
+					mergeInferenceGlobalInputs(aggregate["direct_global_inputs"], reference.at("global_inputs"));
 			aggregate["sources"][path] = inputs.fingerprint(path);
 			for (const Json &dependency : graph.at("forward").at(path))
 				aggregate["callees"].push_back(Json::array({dependency, aggregateGraphVariant}));

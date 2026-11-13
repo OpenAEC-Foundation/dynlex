@@ -24,12 +24,14 @@ bool mergeInferenceGlobalInputs(Json &current, const Json &inputs) {
 class InferenceGlobalInputs {
   public:
 	InferenceGlobalInputs(
-		const std::map<const Section *, std::string> &paths, const InferenceSourceIndex &sources, BuildStatistics &statistics
+		const std::map<const Section *, std::string> &paths, const InferenceSourceIndex &sources, BuildStatistics &statistics,
+		const IncrementalInferenceReads &reads
 	)
-		: paths(paths), sources(sources), statistics(statistics), classes(classIdentityPaths(paths)) {}
+		: paths(paths), sources(sources), statistics(statistics), classes(classIdentityPaths(paths)), reads(reads),
+		  declarations(classes) {}
 	using Scope = std::shared_ptr<const VariableStorageScope>;
 	void observe(const InferenceReadOwner &owner, VariableReference *reference) {
-		if (owner.section && observations[owner.scope].insert(normalizeBindingReference(reference)).second)
+		if (owner.section && owner.direct && observations[owner.scope].insert(normalizeBindingReference(reference)).second)
 			statistics.globalTypeInputReadsRecorded++;
 	}
 	void retain(const Scope &scope, const Json &inputs) {
@@ -43,26 +45,36 @@ class InferenceGlobalInputs {
 		return captureReferences(found == observations.end() ? std::unordered_set<VariableReference *>{} : found->second);
 	}
 
-	std::optional<Json> capture(const Instantiation &instance) {
-		std::unordered_set<VariableReference *> required = instance.accessedGlobalReferences;
-		if (auto found = observations.find(instance.storageScope); found != observations.end())
-			required.insert(found->second.begin(), found->second.end());
-		required.insert(instance.writtenGlobalReferences.begin(), instance.writtenGlobalReferences.end());
-		required.insert(instance.addressTakenGlobalReferences.begin(), instance.addressTakenGlobalReferences.end());
-		auto provenance = [&](const AddressProvenance &value) {
-			for (const auto &target : value.mayTargets) {
-				prepare();
-				if (globals.contains(normalizeBindingReference(target.definition)))
-					required.insert(normalizeBindingReference(target.definition));
+	std::optional<Json> capture(const Instantiation &instance) { return captureScope(instance.storageScope); }
+	void retainQuery(const Scope &scope, const Json &proof) { retainedQueries[scope] = proof; }
+	void forgetQuery(const Scope &scope) { retainedQueries.erase(scope); }
+	const std::string &declaration(const Section &section) {
+		auto [found, inserted] = declarationInputs.try_emplace(&section);
+		if (inserted)
+			found->second = declarations.fingerprint(section);
+		return found->second;
+	}
+	Json captureQuery(const Scope &root) {
+		Json inputs = Json::object();
+		std::set<Scope, std::owner_less<Scope>> visited;
+		std::stack<Scope> pending;
+		pending.push(root);
+		while (!pending.empty()) {
+			auto scope = pending.top();
+			pending.pop();
+			if (!visited.insert(scope).second)
+				continue;
+			if (auto prior = retainedQueries.find(scope); prior != retainedQueries.end())
+				mergeInferenceGlobalInputs(inputs, prior->second);
+			mergeInferenceGlobalInputs(inputs, captureScope(scope).value_or(Json(nullptr)));
+			if (auto node = reads.scopes().find(scope); node != reads.scopes().end()) {
+				for (const auto &callee : node->second.callees)
+					pending.push(callee);
+				for (const auto &[callee, queries] : node->second.values)
+					pending.push(callee);
 			}
-		};
-		provenance(instance.returnAddressProvenance);
-		provenance(instance.externallyEscapedGlobalProvenance);
-		for (const auto &[reference, value] : instance.finalGlobalAddressProvenance) {
-			required.insert(reference);
-			provenance(value);
 		}
-		return captureReferences(required);
+		return inputs;
 	}
 
 	bool unchanged(const Json &inputs) {
@@ -127,8 +139,12 @@ class InferenceGlobalInputs {
 	const InferenceSourceIndex &sources;
 	BuildStatistics &statistics;
 	ClassIdentityPaths classes;
+	const IncrementalInferenceReads &reads;
+	InferenceDeclarationInputs declarations;
+	std::map<const Section *, std::string> declarationInputs;
 	bool prepared = false;
 	std::unordered_map<const VariableReference *, Variable *> globals;
 	std::map<std::string, Variable *> variables;
 	std::map<Scope, std::unordered_set<VariableReference *>, std::owner_less<Scope>> observations;
+	std::map<Scope, Json, std::owner_less<Scope>> retainedQueries;
 };

@@ -121,9 +121,12 @@ static void seedInstantiationParameterTypes(
 	const std::vector<DataType> &argTypes
 ) {
 	instantiation.parameterTypesByName.clear();
+	instantiation.argumentNames.clear();
 	size_t bindingCount = std::min(paramBindings.size(), argTypes.size());
-	for (size_t i = 0; i < bindingCount; i++)
+	for (size_t i = 0; i < bindingCount; i++) {
+		instantiation.argumentNames.push_back(paramBindings[i].first);
 		instantiation.parameterTypesByName[paramBindings[i].first] = argTypes[i];
+	}
 }
 
 template <typename ReadCompileTimeValueFn>

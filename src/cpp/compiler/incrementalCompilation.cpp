@@ -330,6 +330,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalInferenceValues.inl"
 #include "incrementalInferenceKeys.inl"
 #include "incrementalInferenceEffects.inl"
+#include "incrementalInferenceDeclarations.inl"
 #include "incrementalInferenceGlobalInputs.inl"
 #include "incrementalInferenceParameterState.inl"
 #include "incrementalClassRequests.inl"
@@ -339,6 +340,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalInferenceDiagnostics.inl"
 #include "incrementalInferenceFailure.inl"
 #include "incrementalValidation.inl"
+#include "incrementalBodySchema.inl"
 #include "incrementalBodyReferences.inl"
 #include "incrementalBodyWriter.inl"
 #include "incrementalBodyReader.inl"
@@ -731,6 +733,7 @@ bool compileIncrementally(
 			context.reuseParsedDefinition = {};
 			context.recordParsedDefinition = {};
 			statistics.reusedInferenceInstantiations = inferenceReuse ? inferenceReuse->reusedCount() : 0;
+			statistics.restoredCurrentInferenceProducts = inferenceReuse ? inferenceReuse->currentRestoredCount() : 0;
 			context.reuseInferredInstantiation = {};
 			context.restoreInferredBody = {};
 			context.runIncrementalPreinference = {};

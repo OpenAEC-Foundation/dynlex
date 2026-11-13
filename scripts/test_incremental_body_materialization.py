@@ -98,7 +98,8 @@ def check_nested_body_reactivation(root, build):
         operation = 'add' if name == 'ordinary' else 'cast'
         for path in bodies:
             record = json.loads(path.read_bytes().split(b'\n', 2)[2])
-            if any(expression['intrinsic'] == operation for expression in record['expressions']):
+            intrinsic = record['expression_fields'].index('intrinsic')
+            if any(expression[intrinsic] == operation for expression in record['expressions']):
                 path.unlink()
                 removed.append(path)
         assert len(removed) == 1

@@ -1514,6 +1514,8 @@ records. Restoration validates the current declaration and existing layout prefi
 reserves the complete dependency closure, and fills recursive fields before
 committing. Unrelated classes are not loaded. Fact and body restoration use one
 transaction, including referenced function values and trial journals.
+Body type records refer to those validated layouts by class and instantiation index;
+they do not repeat a recursive layout proof for every pointer or type reference.
 Class records retain the inputs of completed instantiation requests, including
 bound types, constant values, and constructor argument types. Restoration rebuilds
 the request memo with current-process identities after restoring layouts. This
@@ -1530,6 +1532,9 @@ from actual body inference. `inference_classes_loaded`, `inference_classes_resto
 and `inference_classes_written` expose layout work. Updating observed values retains
 the existing body record; editing a body does not rewrite its unchanged interface
 record.
+`inference_body_encode_ms` includes constructing the graph records as well as
+serializing and saving them. `inference_body_capture_ms` measures graph construction
+within that total; it is not an additional stage cost.
 Typed body persistence follows its consumers. A pure function producing a value
 keeps its body for future argument evaluations. Any inferred function without
 native IR keeps a body for its first runtime materialization. Other functions
@@ -1633,11 +1638,13 @@ leaves its class's layout-source input unchanged; adding or removing a lifecycle
 declaration still changes that input.
 A pure function returning a value reuses its summary when its call arguments are not all
 known at compile time. A call with known arguments uses a saved return value when
-available; otherwise it infers the body for compile-time evaluation.
-For a pure function without global access, the
-cache also stores scalar return values by scalar argument values. A repeated
+available; otherwise it restores the typed body for compile-time evaluation.
+An unavailable body is inferred normally.
+For a pure function, the cache also stores scalar return values by scalar argument
+values together with the query's complete global input proof. Observations from
+different input contexts are not merged. A repeated
 known-argument call can use that value without reinferring the body; a new
-argument still infers the body and evaluates the call normally. Nested callee
+argument evaluates the retained typed body normally. Nested callee
 body reads remain dependencies of the observed value.
 Summaries record return address provenance and storage-parameter relationships, plus
 writes, known constants, address provenance, and address escapes for global variables.
@@ -1663,7 +1670,11 @@ children, including absent declarations. Adding or removing an unrelated name
 does not invalidate every global reader. Reads are separate query products,
 so trial rollback removes execution effects while retaining dependencies, including
 reads that produced an error or rejected a conversion. Restored facts retain those
-reads for the next snapshot. The unit graph propagates global inputs through callee
+reads for the next snapshot. Global access effects inherited from a callee do not
+become direct query reads by its caller. Each unit stores `direct_global_inputs`
+separately from its transitive `global_inputs` proof. Discarded scopes without an
+independent portable unit contribute their direct reads to the enclosing query.
+The unit graph propagates global inputs through callee
 and value dependencies to a fixed point, including recursive and aggregate units.
 An unavailable or conflicting type context cannot validate a cached query.
 Saving an otherwise source-eligible query retains its original input proof even
@@ -1704,8 +1715,12 @@ when those functions and their dependencies are unchanged. Replay compares the
 current inferred global types; IR import separately compares the emitted global
 types and initializers. The changed top-level body is inferred and generated.
 
-For ordinary functions with one pattern path and for lifecycle bodies, given
-restorable concrete argument types and execution effects, the compiler can infer
+Every concrete summary retains the invoked definition and ordered argument names,
+rather than recovering them from one authored pattern path. Its invocation proof
+also includes the compiled declaration, including inferred parameter constraints.
+A changed declaration requires ordinary call selection before old argument bindings
+can be used again. Given restorable
+concrete argument types and execution effects, the compiler can infer
 affected instantiations in dependency order.
 It compares every instantiation's return type and execution effects with the prior
 summary. An equivalent interface stops invalidation at that instantiation: higher callers
@@ -1713,6 +1728,65 @@ retain their inference summaries and LLVM bodies, while the function is generate
 anew and linked to them. A changed interface continues through callers until an
 equivalent interface is found or the entry point is reached. This path compares
 inferred results rather than guessing from edited source text.
+Speculative requests from the previous executable are needed only when the entry's
+own inputs permit replay. When those inputs changed, ordinary entry inference
+demands its current concrete calls and refreshes their dependencies. It does not
+pre-infer obsolete variants or functions whose last call was removed.
+Completed ordinary trials also publish concrete queries for subsequent demands,
+including queries which existed in the previous executable.
+Their body snapshots are captured before grouping rollback removes trial values,
+preserving finalized literal values and other inferred expression constants.
+When their input proof still matches, another grouping trial restores those facts
+instead of inferring the variant again. Existing native variants use the same
+interface comparisons as explicit probes to invalidate or preserve their callers.
+Queries inside an active probe can refresh completed dependencies without starting
+another speculative probe. Native replacement bodies are activated after entry and
+exposed-function inference, outside grouping rollback. Lifecycle discovery consumes
+new replacements as its worklist grows. New pure argument observations retain the
+original typed-body artifact rather than serializing that unchanged body again.
+When no body artifact has been published, the first retained query captures its
+available typed body even if that body existed before the rejected trial.
+Only bodies queued for native replacement retain a one-shot transfer beyond their
+probe. Activation consumes those records and releases the remaining transfers.
+Requests decoded before entry inference retain their argument identities for native
+activation. Those identities precede the entry's rollback scopes; requests decoded
+inside entry trials are materialized again after those scopes have finished.
+
+Restored instantiations identify the immutable product supplying their facts and
+selected dependencies. That product can come from an earlier process or from a
+query computed during the current build. Trial rollback restores the product
+identity with the instantiation; dependency capture consumes the selected edges
+of that exact producer instead of assuming they exist in the previous snapshot.
+`inference_instantiations_reused` counts restoration from previous-build facts;
+`inference_products_restored_current_build` counts restoration of freshly computed
+products. The latter does not claim that their original inference was skipped.
+All products frozen by one trial rollback share a class snapshot and storage-origin
+index because those tables remain unchanged until that capture finishes. Separate
+rollback batches have separate snapshots. `inference_storage_indices_built` and
+`inference_storage_origins_indexed` expose index construction and visited origins.
+`inference_class_states_captured` counts class table
+captures within these immutable query snapshots, including the final build snapshot.
+Each captured class retains its artifact reference alongside its raw state. Bodies
+and facts share that reference without copying the class tables or repeating a deep
+artifact lookup. `inference_class_record_requests` counts artifact lookups, and
+`inference_class_record_ms` measures their lookup, encoding and storage work; those
+timings can overlap body capture and are not an additional stage cost.
+Typed expression snapshots use positional records and store their field names once
+per body for inspection tools. Source and pattern references are memoized within
+each body. Completed record arrays move into the snapshot without copying the
+whole expression graph. A probe can transfer a freshly encoded body directly to
+its reader while also retaining the disk artifact. `inference_body_transfers`
+counts those transfers, which skip a file read and JSON parse. Unconsumed body
+records are released when the probe finishes.
+Each body also interns its compile-time values. Scalar keys retain the value's
+variant and exact bits, including floating-point signed zero and NaN payloads.
+Repeated type, constraint and capture values share their encoded record; readers
+still materialize independent mutable value objects. `inference_body_values_encoded`
+counts distinct records and `inference_body_value_references` counts their uses.
+Concrete callees are interned per body as well, so repeated calls do not rebuild
+the callee's argument identities and dependency key. Their references use the
+body's shared instantiation table. `inference_body_instantiations_encoded` and
+`inference_body_instantiation_references` count distinct records and their uses.
 
 Preinference holds diagnostics relative to the concrete unit's logical storage
 scope. Its publication and duplicate-suppression state stays speculative. A

@@ -131,7 +131,7 @@ bool IncrementalIRReuse::reusableClosure(
 }
 
 bool IncrementalIRReuse::hasReusableIRForInstantiation(const Section *section, const std::string &key) const {
-	if (!eligible->contains(section, key))
+	if (!eligible->contains(section, key) || replacements->contains(section, key))
 		return false;
 	const std::string &path = sectionPaths.at(section);
 	auto owner = previousNamesByPathAndKey.find(path);
@@ -174,6 +174,8 @@ bool IncrementalIRReuse::reuse(
 	const auto &currentKey = currentFunctionInstantiations.at(name);
 	bool stableWrapper =
 		previousCallableFunctions.contains(name) && replacements->contains(section, currentKey.get<std::string>());
+	if (replacements->contains(section, currentKey.get<std::string>()) && !stableWrapper)
+		return false;
 	if ((!eligible->contains(section, currentKey.get<std::string>()) && !stableWrapper) ||
 		previousFunctionInstantiations.at(name) != currentKey)
 		return false;

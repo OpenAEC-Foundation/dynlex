@@ -27,9 +27,13 @@ def check_typed_body_reuse(root, build):
     check_nested_typed_bodies(root, build)
     check_flex_typed_body(root, build)
     check_class_typed_body(root, build)
+    check_typed_body_class_order(root, build)
+    check_typed_body_shared_class_records(root, build)
     check_pack_typed_body(root, build)
     check_typed_body_eviction(root, build)
     check_typed_body_scope_scaling(root, build)
+    check_typed_body_value_pool(root, build)
+    check_typed_body_instantiation_pool(root, build)
     check_recursive_class_requests(root, build)
     check_impure_callback_reuses_ir(root, build)
     check_impure_signature_promotion(root, build)
@@ -104,6 +108,52 @@ def check_class_typed_body(root, build):
         assert changed[0]["inference_bodies_loaded"] > 0
         assert changed[0]["inference_classes_loaded"] == 1
         assert changed[0]["inference_classes_restored"] == 1
+
+
+def check_typed_body_class_order(root, build):
+    main = root / "typed_body_class_order.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'class:\n    patterns: row\n    members: value\n'
+              'function [calculate] {integer:input}:\n    execute:\n'
+              '        @intrinsic("store", result, @intrinsic("construct", row, input))\n'
+              '        @intrinsic("return", result\'s value)\n'
+              '@intrinsic("discard", @intrinsic("type of", @intrinsic("construct", row, 0.5)))\n'
+              '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", '
+              'calculate 1))\n')
+    main.write_text(source)
+    cold = build(entry=main)
+    assert cold[2] == b"1\n" and cold[1:] == build(False, entry=main)[1:]
+    main.write_text(source.replace('row, 0.5)', 'row, 0)').replace('calculate 1)', 'calculate 2)'))
+    edited = build(entry=main)
+    assert edited[2] == b"2\n" and edited[1:] == build(False, entry=main)[1:]
+    assert edited[0]["inference_classes_loaded"] > 0
+    # Restoration can preserve its earlier class indices even when a clean build
+    # constructs the same layouts in a different order.
+    assert edited[0]["function_body_inference_passes"] == 0
+    assert edited[0]["inference_bodies_loaded"] > 0
+
+
+def check_typed_body_shared_class_records(root, build):
+    main = root / "typed_body_shared_class_records.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'class:\n    patterns: row\n    members: value\n'
+              'function [make row] {integer:item}:\n    execute:\n'
+              '        @intrinsic("return", @intrinsic("construct", row, item))\n'
+              'function [inspect] {integer:item}:\n    execute:\n'
+              '        @intrinsic("store", data, make row item)\n'
+              '        @intrinsic("return", data\'s value)\n'
+              '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", '
+              'inspect @intrinsic("command line argument count")))\n')
+    main.write_text(source)
+    cold = build(entry=main)
+    assert cold[2] == b"0\n" and cold[1:] == build(False, entry=main)[1:]
+    assert cold[0]["inference_class_record_requests"] == cold[0]["inference_class_states_captured"] > 0, \
+        "bodies and facts repeated a class artifact lookup within one immutable snapshot"
+    main.write_text(source.replace('inspect @intrinsic("command line argument count")', 'inspect 1'))
+    edited = build(entry=main)
+    assert edited[2] == b"1\n" and edited[1:] == build(False, entry=main)[1:]
+    assert edited[0]["function_body_inference_passes"] == 0
+    assert edited[0]["inference_bodies_loaded"] > 0
 
 
 def check_pack_typed_body(root, build):
@@ -307,3 +357,46 @@ def check_impure_signature_promotion(root, build):
     assert promoted[0]['function_body_inference_passes'] == 0
     assert promoted[0]['inference_bodies_loaded'] > 0
     assert all(reference['body'] is None for reference in summary_manifest(root, main)[owner].values())
+
+
+def check_typed_body_value_pool(root, build):
+    main = root / "typed_body_value_pool.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'class:\n    patterns: row\n    members: amount as integer\n'
+              'function [inspect] {integer:item}:\n    execute:\n'
+              '        @intrinsic("discard", @intrinsic("type of", @intrinsic("construct", row, item)))\n'
+              '        @intrinsic("discard", @intrinsic("type of", @intrinsic("construct", row, item)))\n'
+              '        @intrinsic("return", @intrinsic("add", item, 1))\n'
+              '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", '
+              'inspect @intrinsic("command line argument count")))\n')
+    main.write_text(source)
+    cold = build(entry=main)
+    assert cold[2] == b"1\n" and cold[1:] == build(False, entry=main)[1:]
+    assert cold[0]["inference_body_values_encoded"] < cold[0]["inference_body_value_references"], \
+        "body snapshots repeatedly encoded the same scalar and type values"
+    main.write_text(source.replace('inspect @intrinsic("command line argument count")', 'inspect 1'))
+    edited = build(entry=main)
+    assert edited[2] == b"2\n" and edited[1:] == build(False, entry=main)[1:]
+    assert edited[0]["function_body_inference_passes"] == 0
+    assert edited[0]["inference_bodies_loaded"] > 0
+
+
+def check_typed_body_instantiation_pool(root, build):
+    main = root / "typed_body_instantiation_pool.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'function [advance] {integer:item}:\n    execute:\n'
+              '        @intrinsic("return", @intrinsic("add", item, 1))\n'
+              'function [twice] {integer:item}:\n    execute:\n'
+              '        @intrinsic("return", @intrinsic("add", advance item, advance item))\n'
+              '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", '
+              'twice @intrinsic("command line argument count")))\n')
+    main.write_text(source)
+    cold = build(entry=main)
+    assert cold[2] == b"2\n" and cold[1:] == build(False, entry=main)[1:]
+    assert cold[0]["inference_body_instantiations_encoded"] < cold[0]["inference_body_instantiation_references"], \
+        "body snapshots repeatedly encoded the same concrete callee"
+    main.write_text(source.replace('twice @intrinsic("command line argument count")', 'twice 1'))
+    edited = build(entry=main)
+    assert edited[2] == b"4\n" and edited[1:] == build(False, entry=main)[1:]
+    assert edited[0]["function_body_inference_passes"] == 0
+    assert edited[0]["inference_bodies_loaded"] > 0

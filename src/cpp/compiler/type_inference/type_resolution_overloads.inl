@@ -815,12 +815,18 @@ struct InferenceContext {
 			recordDependencyRead([&](const InferenceReadOwner &owner) {
 				products->globalInput(owner, key);
 			});
+		noteGlobalEffectAccess(key);
+	}
+
+	void noteGlobalEffectAccess(VariableReference *reference) {
 		if (!currentInstantiation)
 			return;
 		if (trial) {
 			requireCompilerInvariant(trialJournal, "trial global-access mutation requires a rollback journal");
 			trialJournal->recordInstantiationWrite(currentInstantiation);
 		}
+		VariableReference *key = normalizeReference(reference);
+		requireCompilerInvariant(key, "global effect lost its declaration");
 		currentInstantiation->accessedGlobalReferences.insert(key);
 	}
 

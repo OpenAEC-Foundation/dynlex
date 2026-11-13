@@ -100,7 +100,9 @@ Json captureSectionDependencyGraph(
 		if (reuseEntry)
 			for (const auto &[key, instantiation] : section->instantiations) {
 				const auto &identity = currentIdentities.at(&instantiation);
-				if (!instantiation.inferenceReusedFromCache || !identity || !instantiations.at(path).contains(*identity)) {
+				if (!instantiation.inferenceReusedFromCache || !products ||
+					!products->previousProducer(instantiation.inferenceProductIdentity) || !identity ||
+					!instantiations.at(path).contains(*identity)) {
 					reuseEntry = false;
 					break;
 				}
@@ -140,12 +142,9 @@ Json captureSectionDependencyGraph(
 			const auto &keyText = currentIdentities.at(&instantiation);
 			Json selected = Json::array();
 			if (instantiation.inferenceReusedFromCache) {
-				retainPriorLookups = true;
-				requireCompilerInvariant(
-					keyText && hadPrevious && instantiations.contains(path) && instantiations.at(path).contains(*keyText),
-					"reused inference has no saved dependency variant"
-				);
-				selected = instantiations.at(path).at(*keyText);
+				requireCompilerInvariant(products && keyText, "reused inference has no dependency product");
+				retainPriorLookups |= products->previousProducer(instantiation.inferenceProductIdentity);
+				selected = products->selection(instantiation.inferenceProductIdentity);
 			} else {
 				std::vector<Section *> inferred;
 				collectInferredSectionDependencies(instantiation.body.get(), inferred);

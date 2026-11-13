@@ -31,15 +31,18 @@ class IncrementalInferenceReads {
 
 	void recordConversions(
 		const InferenceReadOwner &owner, const lsp::SourceFile &source, bool implicit,
-		const std::vector<PatternDefinition *> &definitions
+		const std::vector<PatternDefinition *> &definitions, Json interfaces
 	) {
-		recordQuery(owner, source, Json{{"kind", "conversion"}, {"implicit", implicit}}, [&]() {
+		Json &query = recordQuery(owner, source, Json{{"kind", "conversion"}, {"implicit", implicit}}, [&]() {
 			return encodeConversions(definitions);
 		});
+		if (!interfaces.is_null())
+			query["interfaces"] = std::move(interfaces);
 	}
 
 	template <class Candidates>
-	void recordQuery(const InferenceReadOwner &owner, const lsp::SourceFile &source, Json query, const Candidates &candidates) {
+	Json &
+	recordQuery(const InferenceReadOwner &owner, const lsp::SourceFile &source, Json query, const Candidates &candidates) {
 		query["source"] = source.uri;
 		std::string key = digest(query.dump());
 		auto [entry, inserted] = observations.try_emplace(key);
@@ -54,6 +57,7 @@ class IncrementalInferenceReads {
 		}
 		if (owner.constraintProbe)
 			byProbe[*owner.constraintProbe].insert(std::move(key));
+		return entry->second;
 	}
 
 	void recordDependency(const InferenceReadOwner &owner, const Section &dependency, const Scope &calleeScope) {

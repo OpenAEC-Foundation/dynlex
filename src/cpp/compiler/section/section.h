@@ -147,6 +147,8 @@ struct Instantiation : InstantiationExecutionEffects {
 	Range returnTypeOriginRange;
 	bool hasReturnIntrinsic = false;
 	std::vector<DataType> argumentTypes;
+	PatternDefinition *invokedDefinition = nullptr;
+	std::vector<std::string> argumentNames;
 	std::unordered_map<std::string, DataType> parameterTypesByName;
 	std::unordered_map<std::string, DataType> parameterSeedTypesByName;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
@@ -168,6 +170,7 @@ struct Instantiation : InstantiationExecutionEffects {
 	bool needsReinfer = false;
 	bool valid = true;
 	bool inferenceReusedFromCache = false;
+	std::string inferenceProductIdentity;
 };
 
 struct Section {

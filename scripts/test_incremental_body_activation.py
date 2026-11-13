@@ -23,6 +23,10 @@ def check_inactive_body_activation(root, build):
     assert activated[2] == b"spare\n"
     assert activated[0]["cached_body_resolution_references_skipped"] > 0
     assert activated[0]["body_resolution_references_restored"] > 0
+    main.write_text(changed.replace('integer, "spare"', 'integer, "updated spare"'))
+    updated = build(entry=main)
+    assert updated[1:] == build(False, entry=main)[1:]
+    assert updated[2] == b"updated spare\n", "a newly retained callback lost its invalidation dependencies"
     for text in (source, changed):
         main.write_text(text)
         edited = build(entry=main)

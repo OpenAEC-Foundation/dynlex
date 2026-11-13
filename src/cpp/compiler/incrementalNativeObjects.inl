@@ -28,6 +28,7 @@ struct BuildStatistics {
 	bool reusedTypeInference = false;
 	bool linkedCachedObjects = false;
 	size_t reusedInferenceInstantiations = 0;
+	size_t restoredCurrentInferenceProducts = 0;
 	size_t reusedInferenceSummarySections = 0;
 	size_t preinferredInstantiations = 0;
 	size_t preinferArgumentVariantsDecoded = 0;
@@ -42,15 +43,23 @@ struct BuildStatistics {
 	size_t inferenceSummaryUnitsEncoded = 0;
 	size_t inferenceSummaryUnitsWritten = 0;
 	size_t inferenceBodiesEncoded = 0;
+	size_t inferenceBodyTransfers = 0;
+	size_t inferenceBodyValuesEncoded = 0, inferenceBodyValueReferences = 0;
+	size_t inferenceBodyInstantiationsEncoded = 0, inferenceBodyInstantiationReferences = 0;
+	size_t inferenceStorageIndicesBuilt = 0, inferenceStorageOriginsIndexed = 0;
 	size_t inferenceBodiesWritten = 0;
 	size_t inferenceClassesLoaded = 0;
 	size_t inferenceClassesRestored = 0;
 	size_t inferenceClassesWritten = 0;
+	size_t inferenceClassRecordRequests = 0;
+	double inferenceClassRecordMilliseconds = 0;
+	size_t inferenceClassStatesCaptured = 0;
 	size_t inferenceSourceExpressionLookups = 0;
 	size_t inferenceSourceIndexBuilds = 0, inferenceSourceExpressionsIndexed = 0;
 	size_t inferenceSourceExpressionsEncoded = 0;
 	double inferenceSourceIndexMilliseconds = 0;
 	double inferenceBodyEncodeMilliseconds = 0;
+	double inferenceBodyCaptureMilliseconds = 0;
 	double inferenceSummaryLoadMilliseconds = 0;
 	double inferenceSummaryEncodeMilliseconds = 0;
 	size_t aggregateInferenceUnitsCaptured = 0;
@@ -145,6 +154,8 @@ struct BuildStatistics {
 	IncrementalMatcherCache::StorageStatistics matcherStorage;
 	size_t globalInputDefinitionsIndexed = 0, globalTypeInputsCaptured = 0, globalTypeInputsChecked = 0,
 		   globalTypeInputFingerprintsComputed = 0, globalTypeInputReadsRecorded = 0;
+	size_t deferredQueryProbes = 0, deferredQueryInterfacesPreserved = 0;
+	double deferredQueryMilliseconds = 0;
 	double matcherSerializeMilliseconds = 0;
 	double matcherSerializeCPUMilliseconds = 0;
 	double matcherDigestMilliseconds = 0;

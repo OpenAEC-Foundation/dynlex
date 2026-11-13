@@ -43,10 +43,11 @@ class InferenceBodyReader {
 				result.childBodies.push_back(body(child));
 		}
 		for (size_t index = 0; index < expressions.size(); index++) {
+			using Field = InferenceBodyExpressionField;
 			const Json &item = record.at("expressions").at(index);
-			expressions[index]->owningSectionBody = body(item.at("owner")).get();
-			expressions[index]->reusableTemplateExpression = expression(item.at("template"));
-			for (const Json &argument : item.at("arguments"))
+			expressions[index]->owningSectionBody = body(item.at(static_cast<size_t>(Field::Owner))).get();
+			expressions[index]->reusableTemplateExpression = expression(item.at(static_cast<size_t>(Field::Template)));
+			for (const Json &argument : item.at(static_cast<size_t>(Field::Arguments)))
 				expressions[index]->arguments.push_back(expression(argument));
 		}
 		for (size_t index = 0; index < variables.size(); index++)
@@ -132,8 +133,6 @@ class InferenceBodyReader {
 			result.functionSignature = std::make_shared<FunctionSignature>(type(item.at(9).at(0)), std::move(parameters));
 		}
 		result.typeExpression = expression(item.at(10));
-		if (!item.at(11).is_null() && !decodeInferenceTypeIdentity(item.at(11), identities.classes))
-			throw UnavailableInferenceBody{};
 		types[index] = result;
 		return result;
 	}
@@ -216,9 +215,10 @@ class InferenceBodyReader {
 			std::make_shared<ExpressionCaptureData>(ExpressionCaptureData{pack, index, std::move(frames)})
 		};
 	}
-	CompileTimeValue value(const Json &item) {
-		if (item.is_null())
+	CompileTimeValue value(const Json &index) {
+		if (index.is_null())
 			return {};
+		const Json &item = record->at("values").at(index.get<size_t>());
 		if (item.at(0) == "minimum")
 			return MinimumSignedIntegerMagnitude{minima.at(item.at(1).get<size_t>())};
 		if (item.at(0) == "capture")
@@ -226,7 +226,7 @@ class InferenceBodyReader {
 		if (item.at(0) == "pack") {
 			ArgumentPackValue result;
 			for (const Json &capture : item.at(1))
-				result.elements.push_back(captureValue(capture));
+				result.elements.push_back(std::get<ExpressionCapture>(value(capture)));
 			return result;
 		}
 		if (item.at(0) == "body_function")
@@ -236,7 +236,8 @@ class InferenceBodyReader {
 			throw UnavailableInferenceBody{};
 		return std::move(*decoded);
 	}
-	Instantiation *instance(const Json &item) {
+	Instantiation *instance(const Json &index) {
+		const Json &item = record->at("instances").at(index.get<size_t>());
 		InstantiationKey key;
 		for (const Json &argument : item.at(1))
 			key.argumentTypes.push_back(type(argument));
@@ -296,70 +297,75 @@ class InferenceBodyReader {
 		return result;
 	}
 	void restoreExpression(Expression &result, const Json &item) {
-		result.kind = static_cast<Expression::Kind>(item.at("kind").get<int>());
-		result.type = type(item.at("type"));
-		result.compileTimeValue = value(item.at("value"));
-		result.memoryFacts = {
-			diagnostic(item.at("memory").at(0)), diagnostic(item.at("memory").at(1)), diagnostic(item.at("memory").at(2))
+		using Field = InferenceBodyExpressionField;
+		auto field = [&](Field name) -> const Json & {
+			return item.at(static_cast<size_t>(name));
 		};
-		result.range = sources.range(item.at("range"));
+		result.kind = static_cast<Expression::Kind>(field(Field::Kind).get<int>());
+		result.type = type(field(Field::Type));
+		result.compileTimeValue = value(field(Field::Value));
+		result.memoryFacts = {
+			diagnostic(field(Field::Memory).at(0)), diagnostic(field(Field::Memory).at(1)),
+			diagnostic(field(Field::Memory).at(2))
+		};
+		result.range = sources.range(field(Field::Range));
 		std::visit([&](const auto &literal) {
 			using T = std::decay_t<decltype(literal)>;
 			if constexpr (std::is_assignable_v<decltype(result.literalValue) &, T>)
 				result.literalValue = literal;
 			else
 				crashCompilerBug("inferred body literal has a nonliteral value");
-		}, value(item.at("literal")));
-		result.variable = variable(item.at("variable"));
-		result.dataDeclaration = expression(item.at("declaration"));
-		if (!item.at("data").is_null()) {
+		}, value(field(Field::Literal)));
+		result.variable = variable(field(Field::Variable));
+		result.dataDeclaration = expression(field(Field::Declaration));
+		if (!field(Field::Data).is_null()) {
 			result.dataSectionValues = std::make_shared<DataSectionValues>();
 			result.dataSectionValues->storage = context.createExpressionStorage();
-			for (const auto &[name, field] : item.at("data").at(0).items())
+			for (const auto &[name, field] : field(Field::Data).at(0).items())
 				result.dataSectionValues->fields.emplace(name, expression(field));
-			result.dataSectionValues->record = expression(item.at("data").at(1));
+			result.dataSectionValues->record = expression(field(Field::Data).at(1));
 		}
-		result.inferredDataValue = expression(item.at("data_value"));
-		result.deferredFunction = sources.section(item.at("deferred"));
-		result.owningSectionBody = body(item.at("owner")).get();
-		if (!item.at("match").is_null()) {
-			result.syntheticPatternMatch = std::make_shared<PatternMatch>(match(item.at("match")));
+		result.inferredDataValue = expression(field(Field::DataValue));
+		result.deferredFunction = sources.section(field(Field::Deferred));
+		result.owningSectionBody = body(field(Field::Owner)).get();
+		if (!field(Field::Match).is_null()) {
+			result.syntheticPatternMatch = std::make_shared<PatternMatch>(match(field(Field::Match)));
 			result.patternMatch = result.syntheticPatternMatch.get();
 		}
-		result.selectedPatternDefinition = sources.definition(item.at("definition"));
-		result.selectedPatternPathIndex = optional<size_t>(item.at("path"));
-		result.selectedCallableDefinition = sources.definition(item.at("callable"));
-		result.selectedCallablePathIndex = optional<size_t>(item.at("callable_path"));
-		result.subjectSetter = expression(item.at("subject"));
-		if (!item.at("capture").is_null())
-			result.inferredArgumentReference = captureValue(item.at("capture"));
-		if (!item.at("instance").is_null()) {
-			result.selectedInstantiation = instance(item.at("instance"));
+		result.selectedPatternDefinition = sources.definition(field(Field::Definition));
+		result.selectedPatternPathIndex = optional<size_t>(field(Field::Path));
+		result.selectedCallableDefinition = sources.definition(field(Field::Callable));
+		result.selectedCallablePathIndex = optional<size_t>(field(Field::CallablePath));
+		result.subjectSetter = expression(field(Field::Subject));
+		if (!field(Field::Capture).is_null())
+			result.inferredArgumentReference = captureValue(field(Field::Capture));
+		if (!field(Field::Instance).is_null()) {
+			result.selectedInstantiation = instance(field(Field::Instance));
 		}
-		result.inferredFlexExpansion = expression(item.at("expansion"));
-		result.inferredPointerStorage = expression(item.at("pointer"));
-		result.inferredFlexBody = body(item.at("flex"));
-		result.inferredCallerBody = body(item.at("caller"));
-		if (!item.at("loops").is_null()) {
+		result.inferredFlexExpansion = expression(field(Field::Expansion));
+		result.inferredPointerStorage = expression(field(Field::Pointer));
+		result.inferredFlexBody = body(field(Field::Flex));
+		result.inferredCallerBody = body(field(Field::Caller));
+		if (!field(Field::Loops).is_null()) {
 			result.staticLoopBodies.emplace();
-			for (const Json &loop : item.at("loops"))
+			for (const Json &loop : field(Field::Loops))
 				result.staticLoopBodies->push_back(body(loop));
 		}
 		result.sectionOutcome = CopyOnWrite<Expression::SectionOutcome>(Expression::SectionOutcome{
-			static_cast<Expression::SectionOutcome::Kind>(item.at("outcome").at(0).get<int>()), value(item.at("outcome").at(1)),
-			type(item.at("outcome").at(2))
+			static_cast<Expression::SectionOutcome::Kind>(field(Field::Outcome).at(0).get<int>()),
+			value(field(Field::Outcome).at(1)), type(field(Field::Outcome).at(2))
 		});
-		result.executionFallsThrough = optional<bool>(item.at("falls_through"));
-		result.sectionBodyReachable = item.at("reachable").get<bool>();
-		result.sectionBodyExecution = static_cast<Expression::SectionBodyExecution>(item.at("execution").get<int>());
-		result.sectionBodyFallsThrough = item.at("body_falls_through").get<bool>();
-		if (!item.at("branch").is_null())
+		result.executionFallsThrough = optional<bool>(field(Field::FallsThrough));
+		result.sectionBodyReachable = field(Field::Reachable).get<bool>();
+		result.sectionBodyExecution = static_cast<Expression::SectionBodyExecution>(field(Field::Execution).get<int>());
+		result.sectionBodyFallsThrough = field(Field::BodyFallsThrough).get<bool>();
+		if (!field(Field::Branch).is_null())
 			result.branchSelection =
-				Expression::BranchSelection{item.at("branch").at(0).get<bool>(), item.at("branch").at(1).get<int>()};
-		result.reusableTemplateExpression = expression(item.at("template"));
-		result.intrinsicName = item.at("intrinsic").get<std::string>();
-		if (!item.at("reference").is_null()) {
-			const Json &reference = item.at("reference");
+				Expression::BranchSelection{field(Field::Branch).at(0).get<bool>(), field(Field::Branch).at(1).get<int>()};
+		result.reusableTemplateExpression = expression(field(Field::Template));
+		result.intrinsicName = field(Field::Intrinsic).get<std::string>();
+		if (!field(Field::Reference).is_null()) {
+			const Json &reference = field(Field::Reference);
 			auto restored = std::make_unique<PatternReference>(&result, static_cast<SectionType>(reference.at(0).get<int>()));
 			restored->purpose = static_cast<PatternReference::Purpose>(reference.at(1).get<int>());
 			restored->sourceRange = sources.range(reference.at(2));
@@ -386,12 +392,12 @@ class InferenceBodyReader {
 			result.patternReference = restored.get();
 			patternReferences.push_back(std::move(restored));
 		}
-		result.isSubMatch = item.at("submatch").get<bool>();
-		result.isExplicitGroup = item.at("grouped").get<bool>();
-		result.groupingArgumentIndices = item.at("group_indices").get<std::vector<int>>();
-		result.groupingArgumentHasAdjacentSiblingSlot = item.at("adjacent").get<std::vector<bool>>();
-		result.groupingStartsWithArgument = item.at("starts_argument").get<bool>();
-		result.groupingEndsWithArgument = item.at("ends_argument").get<bool>();
+		result.isSubMatch = field(Field::Submatch).get<bool>();
+		result.isExplicitGroup = field(Field::Grouped).get<bool>();
+		result.groupingArgumentIndices = field(Field::GroupIndices).get<std::vector<int>>();
+		result.groupingArgumentHasAdjacentSiblingSlot = field(Field::Adjacent).get<std::vector<bool>>();
+		result.groupingStartsWithArgument = field(Field::StartsArgument).get<bool>();
+		result.groupingEndsWithArgument = field(Field::EndsArgument).get<bool>();
 	}
 	template <class T> static std::optional<T> optional(const Json &value) {
 		return value.is_null() ? std::nullopt : std::optional<T>{value.get<T>()};

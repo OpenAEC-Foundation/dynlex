@@ -1,11 +1,14 @@
-static bool inferIncrementalFunction(ParseContext &parseContext, const ParseContext::IncrementalFunctionRequest &request) {
+static bool inferIncrementalFunctionBody(
+	ParseContext &parseContext, const ParseContext::IncrementalFunctionRequest &request, InferenceContext &trial
+) {
 	Section *section = request.section;
 	bool ordinaryFunction = section->type == SectionType::Function && !section->patternDefinitions.empty();
 	requireCompilerInvariant(
 		ordinaryFunction || section->type == SectionType::Retain || section->type == SectionType::Release,
 		"incremental preinference requires a callable definition"
 	);
-	PatternDefinition *definition = ordinaryFunction ? section->patternDefinitions.front() : nullptr;
+	PatternDefinition *definition = request.definition;
+	requireCompilerInvariant(ordinaryFunction == (definition != nullptr), "incremental request lost its definition");
 	Range sourceRange = definition ? definition->range : Range(section->openingLine, section->openingLine->patternText);
 	requireCompilerInvariant(
 		request.parameterNames.size() == request.key.argumentTypes.size(), "incremental preinference lost a parameter type"
@@ -25,12 +28,9 @@ static bool inferIncrementalFunction(ParseContext &parseContext, const ParseCont
 			argument.compileTimeValue = constant->second;
 		bindings.emplace_back(name, &argument);
 	}
-	ScopedPreinferenceDiagnostics diagnosticScope(
-		parseContext, parseContext.storageScopeForInstantiation(section, request.key)
-	);
 	bool inferred = ensureSectionInstantiationInferred(
 		parseContext, section, definition, bindings, request.key.argumentTypes, request.requiredCompileTimeParameters, nullptr,
-		nullptr
+		&trial
 	);
 	if (inferred) {
 		auto found = section->instantiations.find(request.key);
@@ -40,10 +40,10 @@ static bool inferIncrementalFunction(ParseContext &parseContext, const ParseCont
 			return false;
 		Instantiation &instantiation = found->second;
 		if (instantiation.purity == InstantiationPurity::Pure && instantiation.returnType.kind != DataType::Kind::Void) {
-			InferenceContext context(parseContext);
+			InferenceContext context(parseContext, true);
+			context.trialJournal = trial.trialJournal;
+			context.inheritedTrialExpressionValues = &trial.trialExpressionValues;
 			context.currentInstantiation = &instantiation;
-			InferenceContext::DependencyOwner owner{section, nullptr, instantiation.storageScope};
-			context.dependencyReads.owner = &owner;
 			context.currentInstantiatedSectionBody = instantiation.body.get();
 			PureExecutionState execution(parseContext, context);
 			try {
@@ -60,7 +60,25 @@ static bool inferIncrementalFunction(ParseContext &parseContext, const ParseCont
 			} catch (const PureExecutionStopped &) {
 				inferred = false;
 			}
+			trial.absorbTrialResultsFrom(context);
 		}
 	}
+	return inferred;
+}
+
+static bool inferIncrementalFunction(ParseContext &parseContext, const ParseContext::IncrementalFunctionRequest &request) {
+	ScopedPreinferenceDiagnostics diagnosticScope(
+		parseContext, parseContext.storageScopeForInstantiation(request.section, request.key)
+	);
+	InferenceContext trial(parseContext, true);
+	InferenceContext::TrialJournal journal;
+	std::vector<Diagnostic> diagnostics;
+	trial.trialJournal = &journal;
+	trial.pendingDiagnostics = &diagnostics;
+	trial.detectGroupingAmbiguity = true;
+	bool inferred = inferIncrementalFunctionBody(parseContext, request, trial);
+	for (const Diagnostic &diagnostic : diagnostics)
+		parseContext.retainInferenceDiagnostic(diagnostic);
+	rollbackTrialJournal(trial, journal);
 	return inferred;
 }

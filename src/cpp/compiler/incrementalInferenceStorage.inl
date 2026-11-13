@@ -64,6 +64,7 @@ class InferenceStorageIdentities {
 	}
 
 	void indexScopeOrigins() {
+		sourceIndex.recordStorageIndex(context.instantiationStorageScopes.size() + context.invocationStorageScopes.size());
 		for (const auto &[key, scope] : context.instantiationStorageScopes)
 			instantiations.emplace(scope.get(), &key);
 		for (const auto &[key, scope] : context.invocationStorageScopes)

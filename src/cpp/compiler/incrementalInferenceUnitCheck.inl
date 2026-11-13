@@ -27,22 +27,7 @@ class InferenceUnitCheck {
 			if (unavailableValues.contains(key))
 				return false;
 			const Json &unit = graph.at("inference_units").at(key.first).at(key.second);
-			auto [direct, inserted] = directUnchanged.try_emplace(key, true);
-			if (inserted) {
-				for (const auto &[source, fingerprint] : unit.at("sources").items())
-					if (!inputs.contains(source) || inputs.fingerprint(source) != fingerprint.get_ref<const std::string &>())
-						direct->second = false;
-				for (const auto &[lookup, fingerprint] : unit.at("lookups").items()) {
-					if (reads.changedKeys().contains(lookup)) {
-						direct->second = false;
-						continue;
-					}
-					if (IncrementalInferenceReads::fingerprint(reads.observation(lookup, &graph.at("callable_lookups"))) !=
-						fingerprint.get_ref<const std::string &>())
-						direct->second = false;
-				}
-			}
-			if (!direct->second)
+			if (!directInputsUnchanged(key))
 				return false;
 			for (const Json &callee : unit.at("callees"))
 				pending.emplace(InferenceUnitKey{callee.at(0).get<std::string>(), callee.at(1).get<std::string>()}, true);
@@ -64,6 +49,24 @@ class InferenceUnitCheck {
 		clean.insert(visited.begin(), visited.end());
 		return true;
 	}
+
+	bool directInputsUnchanged(const InferenceUnitKey &key) {
+		const Json &unit = graph.at("inference_units").at(key.first).at(key.second);
+		auto [direct, inserted] = directUnchanged.try_emplace(key, true);
+		if (inserted) {
+			for (const auto &[source, fingerprint] : unit.at("sources").items())
+				if (!inputs.contains(source) || inputs.fingerprint(source) != fingerprint.get_ref<const std::string &>())
+					direct->second = false;
+			for (const auto &[lookup, fingerprint] : unit.at("lookups").items())
+				if (reads.changedKeys().contains(lookup) ||
+					IncrementalInferenceReads::fingerprint(reads.observation(lookup, &graph.at("callable_lookups"))) !=
+						fingerprint.get_ref<const std::string &>())
+					direct->second = false;
+		}
+		return direct->second;
+	}
+
+	void interfacesChanged() { clean.clear(); }
 
   private:
 	InferenceUnitInputs inputs;

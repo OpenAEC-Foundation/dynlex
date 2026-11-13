@@ -17,7 +17,8 @@ if (priorInference) {
 	auto controller = std::make_shared<IncrementalInferenceController>(
 		*priorInference, previous ? &*previous : nullptr, recording->observations, resolvedFunctionProjection, sectionPaths,
 		inferenceReads, frontendDiagnosticRecords, statistics, functionReuse, inferenceReuse, graphStable,
-		inferenceInputFingerprints, summaryStore, &products.references(), products.sourceIndex(), products.globalInputs()
+		inferenceInputFingerprints, summaryStore, &products.references(), products.sourceIndex(), products.globalInputs(),
+		products
 	);
 	context.runIncrementalPreinference = [controller](
 											 ParseContext &inferred,

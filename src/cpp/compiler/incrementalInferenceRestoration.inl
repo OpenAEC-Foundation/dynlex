@@ -20,12 +20,14 @@ class Restoration {
 
 	bool prepare(Section *section, const InstantiationKey &key, Instantiation &slot, ParseContext::InferenceReuseUse use) {
 		auto identity = inferenceSummaryKey(key, owner.identities);
-		if (!identity || !owner.eligible->contains(section, *identity))
+		if (!identity ||
+			(!owner.eligible->contains(section, *identity) && !owner.refreshed(owner.sectionPaths.at(section), *identity)))
 			return false;
 		const std::string &path = owner.sectionPaths.at(section);
-		if (!owner.summaries.contains(path) || !owner.summaries.at(path).contains(*identity))
+		const Json *reference = owner.reference({path, *identity});
+		if (!reference)
 			return false;
-		const Json *saved = owner.summaryStore.load(owner.summaries.at(path).at(*identity));
+		const Json *saved = owner.summaryStore.load(*reference);
 		if (!saved)
 			return false;
 		Entry &entry = stage(section, key, slot);
@@ -33,10 +35,14 @@ class Restoration {
 			return true;
 		entry.identity = *identity;
 		const Json &summary = *saved;
-		if (!types(summary, owner.summaries.at(path).at(*identity)))
+		if (!types(summary, *reference))
 			return false;
 		if (!owner.globalInputClosureUnchanged(path, *identity))
 			return false;
+		auto invocation = decodeInferenceInvocation(*section, summary.at("invocation"));
+		entry.facts.invokedDefinition = invocation.definition;
+		entry.facts.argumentNames = std::move(invocation.names);
+		entry.facts.requiredCompileTimeParameters = std::move(invocation.requiredCompileTime);
 		if (!summary.at("failure").is_null()) {
 			Instantiation &facts = entry.facts;
 			facts.argumentTypes = key.argumentTypes;
@@ -54,7 +60,6 @@ class Restoration {
 		auto returnType = decodeInferenceTypeIdentity(summary.at("return_type"), owner.identities.classes);
 		if (!returnType)
 			return false;
-		bool needsGlobalTypes = !summary.at("global_inputs").empty();
 		// This signature is visible only to the record decoder. valid remains
 		// false until every referenced unit has complete, validated facts.
 		slot.argumentTypes = key.argumentTypes;
@@ -89,7 +94,7 @@ class Restoration {
 		owner.globalInputs.retain(facts.storageScope, summary.at("global_inputs"));
 		bool pureValue = facts.purity == InstantiationPurity::Pure && facts.returnType.kind != DataType::Kind::Void;
 		bool requiresBody = use != ParseContext::InferenceReuseUse::SymbolicReference &&
-							(use != ParseContext::InferenceReuseUse::ConstantCall || !pureValue || needsGlobalTypes);
+							(use != ParseContext::InferenceReuseUse::ConstantCall || !pureValue);
 		entry.hasIR = requiresBody && owner.irReuse && owner.irReuse->hasReusableIRForInstantiation(section, *identity);
 		facts.inferenceReusedFromCache = true;
 		facts.needsReinfer = requiresBody && !entry.hasIR;
@@ -177,7 +182,7 @@ class Restoration {
 			*slot = std::move(entry.facts);
 			restoreInferenceDiagnostics(
 				owner.context, slot->storageScope,
-				owner.summaries.at(owner.sectionPaths.at(entry.section)).at(entry.identity).at("diagnostics"), [&]() -> auto & {
+				owner.reference({owner.sectionPaths.at(entry.section), entry.identity})->at("diagnostics"), [&]() -> auto & {
 				if (!owner.bodySources)
 					owner.bodySources = std::make_unique<InferenceBodySources>(owner.context, owner.identities);
 				return *owner.bodySources;
@@ -185,9 +190,17 @@ class Restoration {
 			);
 			if (entry.hasIR)
 				owner.runtimeValidated.emplace(entry.section, entry.identity);
-			if (slot->failure)
+			auto key = std::pair{owner.sectionPaths.at(entry.section), entry.identity};
+			bool current = owner.refreshed(key.first, key.second);
+			if (slot->failure && !current)
 				owner.context.inferenceFailuresReused++;
-			owner.count++;
+			(current ? owner.currentCount : owner.count)++;
+			slot->inferenceProductIdentity = owner.productIdentity(key);
+			const Json *prior = current ? nullptr : &owner.units.at(key.first).at(key.second);
+			owner.retainRestored(
+				key, slot->storageScope, *owner.reference(key), *owner.inputProof(key), prior, slot->inferenceProductIdentity,
+				owner.selection(key)
+			);
 		}
 		committed = true;
 		return true;

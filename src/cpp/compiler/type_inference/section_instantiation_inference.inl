@@ -31,6 +31,7 @@ bool ensureSectionInstantiationInferred(
 	if (instIt == section->instantiations.end())
 		instIt = section->instantiations.emplace(instantiationKey, Instantiation{}).first;
 	Instantiation &inst = instIt->second;
+	inst.invokedDefinition = definition;
 	auto storageScope = parseContext.storageScopeForInstantiation(section, instantiationKey);
 	inst.storageScope = storageScope;
 	if (callerContext)

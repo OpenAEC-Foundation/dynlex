@@ -3,29 +3,50 @@
 class InferenceBodyReferenceWriter {
   public:
 	explicit InferenceBodyReferenceWriter(InferenceBodySources &sources) : sources(sources) {}
-	Json section(const Section *value) { return intern("sections", sources.section(value)); }
+	Json section(const Section *value) {
+		return cached(value, sections, [&]() {
+			return intern("sections", sources.section(value));
+		});
+	}
 	Json definition(const PatternDefinition *value) {
-		Json record = sources.definition(value);
-		if (!record.is_null())
-			record.at(0) = intern("sections", record.at(0));
-		return intern("definitions", std::move(record));
+		return cached(value, definitions, [&]() {
+			Json record = sources.definition(value);
+			if (!record.is_null())
+				record.at(0) = section(value->section);
+			return intern("definitions", std::move(record));
+		});
 	}
 	Json declaration(const VariableReference *value) {
-		Json record = sources.declaration(value);
-		if (!record.is_null())
-			record.at(0) = intern("sections", record.at(0));
-		return intern("declarations", std::move(record));
+		return cached(value, declarations, [&]() {
+			Json record = sources.declaration(value);
+			if (!record.is_null())
+				record.at(0) = intern("sections", record.at(0));
+			return intern("declarations", std::move(record));
+		});
 	}
 	Json range(const Range &value) {
 		if (!value.line)
 			return nullptr;
 		return Json::array({line(value.line), value.start(), value.end()});
 	}
-	Json node(const PatternTreeNode *value) { return intern("nodes", sources.node(value)); }
+	Json node(const PatternTreeNode *value) {
+		return cached(value, nodes, [&]() {
+			return intern("nodes", sources.node(value));
+		});
+	}
 	Json expressionSource(Json value) { return intern("expression_sources", anchor(std::move(value))); }
 	Json take() { return std::move(records); }
 
   private:
+	template <class T, class Encode>
+	Json cached(const T *value, std::unordered_map<const T *, Json> &cache, const Encode &encode) {
+		if (!value)
+			return nullptr;
+		auto found = cache.find(value);
+		if (found != cache.end())
+			return found->second;
+		return cache.emplace(value, encode()).first->second;
+	}
 	Json anchor(Json value) {
 		value.at(0) = intern("sections", value.at(0));
 		return value;
@@ -60,6 +81,10 @@ class InferenceBodyReferenceWriter {
 		return found->second;
 	}
 	InferenceBodySources &sources;
+	std::unordered_map<const Section *, Json> sections;
+	std::unordered_map<const PatternDefinition *, Json> definitions;
+	std::unordered_map<const VariableReference *, Json> declarations;
+	std::unordered_map<const PatternTreeNode *, Json> nodes;
 	std::map<std::string, std::map<Json, size_t>> tables;
 	std::map<const CodeLine *, Json> lines;
 	Json records = Json::object();

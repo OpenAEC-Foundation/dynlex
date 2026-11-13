@@ -1,3 +1,35 @@
+struct InferenceInvocation {
+	PatternDefinition *definition;
+	std::vector<std::string> names;
+	std::unordered_set<std::string> requiredCompileTime;
+	std::string declaration;
+};
+
+Json encodeInferenceInvocation(const Section &section, const Instantiation &instance, const std::string &declaration) {
+	requireCompilerInvariant(
+		instance.argumentNames.size() == instance.argumentTypes.size(), "inference invocation lost its argument names"
+	);
+	Json definition = nullptr;
+	if (instance.invokedDefinition) {
+		auto found = std::ranges::find(section.patternDefinitions, instance.invokedDefinition);
+		requireCompilerInvariant(found != section.patternDefinitions.end(), "inference invocation has a foreign definition");
+		definition = std::distance(section.patternDefinitions.begin(), found);
+	}
+	return Json::array(
+		{std::move(definition), instance.argumentNames,
+		 std::set<std::string>(instance.requiredCompileTimeParameters.begin(), instance.requiredCompileTimeParameters.end()),
+		 declaration}
+	);
+}
+
+InferenceInvocation decodeInferenceInvocation(Section &section, const Json &encoded) {
+	return {
+		encoded.at(0).is_null() ? nullptr : section.patternDefinitions.at(encoded.at(0).get<size_t>()),
+		encoded.at(1).get<std::vector<std::string>>(), encoded.at(2).get<std::unordered_set<std::string>>(),
+		encoded.at(3).get<std::string>()
+	};
+}
+
 struct InferenceParameterState {
 	std::unordered_map<std::string, DataType> types, outputs;
 	std::unordered_map<std::string, CompileTimeValue> constants;

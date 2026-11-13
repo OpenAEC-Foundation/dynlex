@@ -548,14 +548,21 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 	RuntimeLifecycleUses uses(callerContext);
 	uses.collectSection(parseContext.mainSection);
 	uses.collectExposedFunctions(parseContext.mainSection);
-	for (const auto &request : parseContext.incrementalReplacementFunctions) {
-		auto instantiation = request.section->instantiations.find(request.key);
-		requireCompilerInvariant(
-			instantiation != request.section->instantiations.end() && instantiation->second.valid,
-			"incremental replacement lost its inferred lifecycle root"
-		);
-		uses.collectInstantiation(instantiation->second);
-	}
+	size_t replacementIndex = 0;
+	auto collectReplacements = [&]() {
+		if (parseContext.activateIncrementalReplacements)
+			parseContext.activateIncrementalReplacements();
+		for (; replacementIndex < parseContext.incrementalReplacementFunctions.size(); replacementIndex++) {
+			const auto &request = parseContext.incrementalReplacementFunctions[replacementIndex];
+			auto instantiation = request.section->instantiations.find(request.key);
+			requireCompilerInvariant(
+				instantiation != request.section->instantiations.end() && instantiation->second.valid,
+				"incremental replacement lost its inferred lifecycle root"
+			);
+			uses.collectInstantiation(instantiation->second);
+		}
+	};
+	collectReplacements();
 	if (!uses.valid)
 		return false;
 	for (size_t index = 0; index < uses.customTypes.size(); index++) {
@@ -592,6 +599,7 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 			}
 			uses.collectInstantiation(instantiation->second);
 		}
+		collectReplacements();
 	}
 	return uses.valid;
 }

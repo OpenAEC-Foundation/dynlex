@@ -100,6 +100,7 @@ def decode_graph(encoded):
                 "callees": [[paths[index], unit_keys[variant]] for index, variant in unit[2]],
                 "lookups": unit[3],
                 "global_inputs": unit[5],
+                "direct_global_inputs": unit[6],
                 "values": [[paths[index], unit_keys[variant], arguments, result]
                            for index, variant, arguments, result in unit[4]],
             } for unit in variants}
