@@ -182,14 +182,14 @@ float the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194
 }
 
 void main_1() {
-    float tmp410_ = 0.0;
-    type_10 tmp409_ = type_10(vec2(0.0));
-    float tmp389_ = 0.0;
-    type_10 tmp388_ = type_10(vec2(0.0));
-    type_8 tmp351_ = type_8(vec3(0.0));
-    type_8 tmp338_ = type_8(vec3(0.0));
-    type_8 tmp325_ = type_8(vec3(0.0));
-    type_8 tmp312_ = type_8(vec3(0.0));
+    float tmp416_ = 0.0;
+    type_10 tmp415_ = type_10(vec2(0.0));
+    float tmp395_ = 0.0;
+    type_10 tmp394_ = type_10(vec2(0.0));
+    type_8 tmp357_ = type_8(vec3(0.0));
+    type_8 tmp344_ = type_8(vec3(0.0));
+    type_8 tmp331_ = type_8(vec3(0.0));
+    type_8 tmp318_ = type_8(vec3(0.0));
     type_8 world = type_8(vec3(0.0));
     uint phi_304_ = 0u;
     float phi_306_ = 0.0;
@@ -265,24 +265,24 @@ void main_1() {
             phi_344_ = ((((_e286 * 0.018) + ((_e284 * 0.045) + (_e285 * 0.028))) * _e303) + -0.62);
         } else {
             vec3 _e203 = vec3((_e183 + -0.34), vec3(0.0, 0.0, 0.0).y, vec3(0.0, 0.0, 0.0).z);
-            tmp312_.member = vec3(_e203.x, _e203.y, _e191);
-            float _e209 = the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_(tmp312_);
+            tmp318_.member = vec3(_e203.x, _e203.y, _e191);
+            float _e209 = the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_(tmp318_);
             vec3 _e214 = vec3((_e183 + 0.34), vec3(0.0, 0.0, 0.0).y, vec3(0.0, 0.0, 0.0).z);
-            tmp325_.member = vec3(_e214.x, _e214.y, _e191);
-            float _e220 = the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_(tmp325_);
-            tmp338_.member = vec3(_e187.x, _e187.y, (_e191 + -0.34));
-            float _e227 = the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_(tmp338_);
-            tmp351_.member = vec3(_e187.x, _e187.y, (_e191 + 0.34));
-            float _e234 = the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_(tmp351_);
+            tmp331_.member = vec3(_e214.x, _e214.y, _e191);
+            float _e220 = the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_(tmp331_);
+            tmp344_.member = vec3(_e187.x, _e187.y, (_e191 + -0.34));
+            float _e227 = the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_(tmp344_);
+            tmp357_.member = vec3(_e187.x, _e187.y, (_e191 + 0.34));
+            float _e234 = the_terrain_height_at_3terrain_coordinate8position5_definition_639ad5d0194d1bc7dd52debb7607c0b010b85e5153abf4f756c57e66871a1ab7_a_20_point_type_b0089e5f41b1d10807c0e489b7fcbaac18702385abdec1ea99534a1b4507d459_(tmp357_);
             vec3 _e239 = vec3((_e209 - _e220), vec3(0.0, 0.68, 0.0).y, vec3(0.0, 0.68, 0.0).z);
             vec2 _e248 = vec2((_e183 * 0.065), vec2(0.0).y);
-            tmp388_.member = vec2(_e248.x, (_e191 * 0.065));
-            tmp389_ = 13.7;
-            float _e254 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_definition_9ec9c146ebc7a85119d4bcf0b82ba2832980bf28047655187412e8f0c4cb8803_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp388_, tmp389_);
+            tmp394_.member = vec2(_e248.x, (_e191 * 0.065));
+            tmp395_ = 13.7;
+            float _e254 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_definition_9ec9c146ebc7a85119d4bcf0b82ba2832980bf28047655187412e8f0c4cb8803_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp394_, tmp395_);
             vec2 _e259 = vec2((_e183 * 0.14), vec2(0.0).y);
-            tmp409_.member = vec2(_e259.x, (_e191 * 0.14));
-            tmp410_ = 16.2;
-            float _e265 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_definition_9ec9c146ebc7a85119d4bcf0b82ba2832980bf28047655187412e8f0c4cb8803_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp409_, tmp410_);
+            tmp415_.member = vec2(_e259.x, (_e191 * 0.14));
+            tmp416_ = 16.2;
+            float _e265 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_definition_9ec9c146ebc7a85119d4bcf0b82ba2832980bf28047655187412e8f0c4cb8803_a_20_point_type_1d8b216223ff18c472b0a2a0c03d1688982774185e099e56f13e23e4f69c432b_f32_type_cd22af9c08ef5d85283977725d4c0dec87301f16dc20d5b89458bde4455db56b(tmp415_, tmp416_);
             phi_340_ = 0.0;
             phi_341_ = (_e265 * 0.5);
             phi_342_ = (_e254 * 0.5);

@@ -944,10 +944,16 @@ constant. Static callback tables therefore remain constant data when their entri
 use ordinary library patterns. Host addresses and WebAssembly table indices are
 assigned by linking rather than guessed during inference.
 
-SPIR-V vertex-to-fragment interpolants are identified by arbitrary non-empty semantic names. Each independently compiled shader
-stage encodes those names into valid interface identifiers and assigns locations in lexical semantic-name order, so matching
-vertex outputs and fragment inputs receive identical locations regardless of source order. The standard shader library exposes
-the four floating-point components while the intrinsic layer owns the stage restrictions and interface storage classes.
+Vertex-to-fragment interpolants declare a nonempty name, an explicit unsigned 32-bit location,
+interpolation mode and 32-bit numeric scalar or vector of two through four components. Each stage
+uses those locations directly, including when a fragment consumes only a subset of vertex outputs.
+`shader interpolant output` takes `(name, location, interpolation, value)` and
+`shader interpolant input` takes `(name, location, interpolation, type)`. Integer values require
+flat interpolation. Repeated declarations within a stage must agree on name, location, type and
+interpolation; different names cannot occupy one location. Signed interface values preserve their
+SPIR-V signedness, with bitcasts at LLVM's signless load and store boundaries. `FrontFacing` is a
+Boolean fragment-only `shader input`. The standard shader library supplies natural-language
+wrappers; no application-specific syntax is involved.
 The SPIR-V 1.4+ entry-point interface contains all emitted module globals, including private variables, while excluding
 function-local storage. The entry-point checker validates emitted shader modules with `spirv-val --target-env vulkan1.3`.
 

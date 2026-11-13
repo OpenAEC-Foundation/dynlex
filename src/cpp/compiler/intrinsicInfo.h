@@ -81,8 +81,8 @@ enum class IntrinsicTargets { All, Native, NativeOrWasm };
 	X(ShaderOutput, "shader output", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                          \
 	X(ShaderInput, "shader input", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                          \
 	X(ShaderVertexInput, "shader vertex input", 4, IntrinsicReturnKind::Custom, 1, 3, IntrinsicPurityKind::Impure)             \
-	X(ShaderInterpolantOutput, "shader interpolant output", 6, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)   \
-	X(ShaderInterpolantInput, "shader interpolant input", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)   \
+	X(ShaderInterpolantOutput, "shader interpolant output", 5, IntrinsicReturnKind::Void, 1, 3, IntrinsicPurityKind::Impure)   \
+	X(ShaderInterpolantInput, "shader interpolant input", 5, IntrinsicReturnKind::Custom, 1, 4, IntrinsicPurityKind::Impure)   \
 	X(ShaderUniform, "shader uniform", 4, IntrinsicReturnKind::Custom, 1, 3, IntrinsicPurityKind::Impure)                      \
 	X(ShaderImage, "shader image", 5, IntrinsicReturnKind::Custom, 1, 4, IntrinsicPurityKind::Pure)                            \
 	X(ShaderSampler, "shader sampler", 4, IntrinsicReturnKind::Custom, 1, 3, IntrinsicPurityKind::Pure)                        \

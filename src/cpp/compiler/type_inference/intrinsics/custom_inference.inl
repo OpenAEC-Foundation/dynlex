@@ -15,7 +15,13 @@ void ExpressionInferenceSupport::inferCustomIntrinsic(IntrinsicKind kind) {
 		expr->type = reference->type.toReferencedType();
 		return;
 	}
-	if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpolantInput) {
+	if (kind == IntrinsicKind::ShaderInterpolantInput) {
+		auto reference = getCompileTimeTypeReferenceValue(context.lookupExpressionValue(expr->arguments[4]));
+		requireCompilerInvariant(reference.has_value(), "validated shader interpolant is missing its type reference");
+		expr->type = reference->type.toReferencedType();
+		return;
+	}
+	if (kind == IntrinsicKind::ShaderInput) {
 		inferShaderInputIntrinsic();
 		return;
 	}

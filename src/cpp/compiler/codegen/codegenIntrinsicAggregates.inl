@@ -203,6 +203,32 @@ generateShaderVertexInput(ParseContext &context, Expression *callExpr, const std
 	return input;
 }
 
+static llvm::GlobalVariable *
+generateShaderInterpolantGlobal(ParseContext &context, const std::vector<Expression *> &args, DataType type, bool output) {
+	std::string name = getCompileTimeString(context, args[1]);
+	auto location = getCompileTimeIntegerValue(resolveStoredCompileTimeValue(args[2], context.flexBindingFrames));
+	requireCompilerInvariant(
+		location && *location >= 0 && static_cast<std::uint64_t>(*location) <= UINT32_MAX,
+		"shader interpolant reached codegen without a validated location"
+	);
+	if (!context.registerShaderInterpolant(
+			{name, static_cast<std::uint32_t>(*location), type, getCompileTimeString(context, args[3]),
+			 intrinsicDiagnosticRange(context, args[1])}
+		))
+		return nullptr;
+	std::string globalName = shaderInterpolantGlobalName(name);
+	llvm::Type *valueType = getLLVMType(context, type);
+	auto *global = context.llvmModule->getGlobalVariable(globalName);
+	if (!global) {
+		global = new llvm::GlobalVariable(
+			*context.llvmModule, valueType, false, llvm::GlobalValue::ExternalLinkage, llvm::Constant::getNullValue(valueType),
+			globalName, nullptr, llvm::GlobalValue::NotThreadLocal, output ? 8 : 7
+		);
+	}
+	requireCompilerInvariant(global->getValueType() == valueType, "shader interpolant global has a conflicting LLVM type");
+	return global;
+}
+
 [[gnu::noinline]] static CodegenResult generateShaderInputIntrinsic(
 	ParseContext &context, Expression *callExpr, const std::vector<Expression *> &args, IntrinsicKind kind
 ) {
@@ -218,28 +244,27 @@ generateShaderVertexInput(ParseContext &context, Expression *callExpr, const std
 	}
 	if (kind == IntrinsicKind::ShaderInput && inputName == "Position")
 		return generateShaderVertexInput(context, callExpr, inputName, 0);
-	std::string globalName;
+	DataType type = finalizedExpressionType(context, callExpr);
+	llvm::Type *valueType = getLLVMType(context, type);
+	llvm::GlobalVariable *global = nullptr;
 	if (kind == IntrinsicKind::ShaderInterpolantInput) {
-		globalName = shaderInterpolantGlobalName(inputName);
-		context.registerShaderInterpolantName(inputName);
-	} else if (inputName == "FragCoord") {
-		globalName = "gl_FragCoord";
+		global = generateShaderInterpolantGlobal(context, args, type, false);
+		if (!global)
+			return CodegenResult::failure();
 	} else {
-		crashCompilerBug("unknown shader input reached codegen after type inference");
-	}
-	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
-	if (!global && kind == IntrinsicKind::ShaderInterpolantInput) {
-		constexpr unsigned spirvInputAddressSpace = 7;
-		llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
-		global = new llvm::GlobalVariable(
-			*context.llvmModule, vec4Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, globalName, nullptr,
-			llvm::GlobalValue::NotThreadLocal, spirvInputAddressSpace
+		requireCompilerInvariant(
+			inputName == "FragCoord" || inputName == "FrontFacing", "unknown shader input reached codegen after type inference"
 		);
-		global->setInitializer(llvm::Constant::getNullValue(vec4Ty));
+		std::string globalName = "gl_" + inputName;
+		global = context.llvmModule->getGlobalVariable(globalName);
+		if (!global) {
+			global = new llvm::GlobalVariable(
+				*context.llvmModule, valueType, false, llvm::GlobalValue::ExternalLinkage,
+				llvm::Constant::getNullValue(valueType), globalName, nullptr, llvm::GlobalValue::NotThreadLocal, 7
+			);
+		}
 	}
-	requireCompilerInvariant(global != nullptr, "validated shader input is missing its codegen global");
-	llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
-	llvm::LoadInst *input = builder.CreateLoad(vec4Ty, global, inputName);
+	llvm::LoadInst *input = builder.CreateLoad(valueType, global, inputName);
 	input->setVolatile(true);
 	return input;
 }
@@ -302,59 +327,26 @@ generateShaderUniformIntrinsic(ParseContext &context, Expression *callExpr, cons
 [[gnu::noinline]] static CodegenResult
 generateShaderOutputIntrinsic(ParseContext &context, const std::vector<Expression *> &args, IntrinsicKind kind) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
-	llvm::Value *color = nullptr;
-	if (kind == IntrinsicKind::ShaderOutput) {
-		if (!generateIntrinsicRuntimeValue(context, args[1], color))
+	const bool interpolant = kind == IntrinsicKind::ShaderInterpolantOutput;
+	Expression *operand = args[interpolant ? 4 : 1];
+	llvm::Value *value = nullptr;
+	if (!generateIntrinsicRuntimeValue(context, operand, value))
+		return CodegenResult::failure();
+	llvm::GlobalVariable *global = nullptr;
+	if (interpolant) {
+		global = generateShaderInterpolantGlobal(context, args, finalizedExpressionType(context, operand), true);
+		if (!global)
 			return CodegenResult::failure();
-		DataType shaderVector{DataType::Kind::Vector};
-		shaderVector.arraySize = 4;
-		shaderVector.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
-		color = ensureType(context, color, finalizedExpressionType(context, args[1]), shaderVector);
 	} else {
-		constexpr size_t firstValueIndex = 2;
-		llvm::Value *red = nullptr;
-		llvm::Value *green = nullptr;
-		llvm::Value *blue = nullptr;
-		llvm::Value *alpha = nullptr;
-		if (!generateIntrinsicRuntimeValue(context, args[firstValueIndex], red) ||
-			!generateIntrinsicRuntimeValue(context, args[firstValueIndex + 1], green) ||
-			!generateIntrinsicRuntimeValue(context, args[firstValueIndex + 2], blue) ||
-			!generateIntrinsicRuntimeValue(context, args[firstValueIndex + 3], alpha))
-			return CodegenResult::failure();
-
-		DataType floatType = {DataType::Kind::Float, 4};
-		red = ensureType(context, red, finalizedExpressionType(context, args[firstValueIndex]), floatType);
-		green = ensureType(context, green, finalizedExpressionType(context, args[firstValueIndex + 1]), floatType);
-		blue = ensureType(context, blue, finalizedExpressionType(context, args[firstValueIndex + 2]), floatType);
-		alpha = ensureType(context, alpha, finalizedExpressionType(context, args[firstValueIndex + 3]), floatType);
-
-		color = llvm::Constant::getNullValue(vec4Ty);
-		color = builder.CreateInsertElement(color, alpha, getVectorLaneIndexValue(context, 3), "color_a");
-		color = builder.CreateInsertElement(color, blue, getVectorLaneIndexValue(context, 2), "color_b");
-		color = builder.CreateInsertElement(color, green, getVectorLaneIndexValue(context, 1), "color_g");
-		color = builder.CreateInsertElement(color, red, getVectorLaneIndexValue(context, 0), "color_r");
+		DataType vector{DataType::Kind::Vector};
+		vector.arraySize = 4;
+		vector.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
+		value = ensureType(context, value, finalizedExpressionType(context, operand), vector);
+		std::string name = context.options.shaderStage == ParseContext::ShaderStage::Vertex ? "gl_Position" : "gl_FragColor";
+		global = context.llvmModule->getGlobalVariable(name);
+		requireCompilerInvariant(global != nullptr, "validated shader output is missing its codegen global");
 	}
-
-	std::string outName;
-	if (kind == IntrinsicKind::ShaderInterpolantOutput) {
-		std::string interpolantName = getCompileTimeString(context, args[1]);
-		outName = shaderInterpolantGlobalName(interpolantName);
-		context.registerShaderInterpolantName(interpolantName);
-	} else {
-		outName = (context.options.shaderStage == ParseContext::ShaderStage::Vertex) ? "gl_Position" : "gl_FragColor";
-	}
-	llvm::GlobalVariable *outGlobal = context.llvmModule->getGlobalVariable(outName);
-	if (!outGlobal && kind == IntrinsicKind::ShaderInterpolantOutput) {
-		constexpr unsigned spirvOutputAddressSpace = 8;
-		outGlobal = new llvm::GlobalVariable(
-			*context.llvmModule, vec4Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, outName, nullptr,
-			llvm::GlobalValue::NotThreadLocal, spirvOutputAddressSpace
-		);
-		outGlobal->setInitializer(llvm::Constant::getNullValue(vec4Ty));
-	}
-	requireCompilerInvariant(outGlobal != nullptr, "validated shader output is missing its codegen global");
-	llvm::StoreInst *store = builder.CreateStore(color, outGlobal);
+	llvm::StoreInst *store = builder.CreateStore(value, global);
 	store->setMetadata(shaderOutputMetadataName, llvm::MDNode::get(*context.llvmContext, {}));
 	return nullptr;
 }

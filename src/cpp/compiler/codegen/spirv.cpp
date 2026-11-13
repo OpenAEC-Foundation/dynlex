@@ -127,6 +127,8 @@ static void defineShaderOutputVectorSeeds(llvm::Module &module) {
 					continue;
 
 				llvm::Type *vectorType = store->getValueOperand()->getType();
+				if (!llvm::isa<llvm::FixedVectorType>(vectorType))
+					continue;
 				defineShaderOutputVectorSeeds(store->getOperandUse(0), vectorType, visitedInstructions);
 			}
 		}
@@ -243,6 +245,7 @@ struct ShaderIoVar {
 	uint32_t uniformRows = 0;
 	uint32_t uniformColumns = 0;
 	uint32_t uniformStorageType = 0;
+	std::string interpolation;
 };
 
 #include "spirvIndexWidths.inl"
@@ -623,6 +626,8 @@ static bool patchShaderBinary(
 			newDecors.push_back(v.id);
 			newDecors.push_back(spvDecorationLocation);
 			newDecors.push_back(v.decorationValue);
+			if (v.interpolation == "flat")
+				newDecors.insert(newDecors.end(), {spvInstWord(3, spvOpDecorate), v.id, 14u});
 		}
 	}
 	if (!newDecors.empty())
@@ -754,16 +759,22 @@ bool emitSPIRVModule(ParseContext &context) {
 		ioVars.push_back(makeIoVar("gl_Position", spvStorageClassOutput, true, 0));
 	} else if (!isCompute) {
 		ioVars.push_back(makeIoVar("gl_FragCoord", spvStorageClassInput, true, 15));
+		if (context.llvmModule->getGlobalVariable("gl_FrontFacing"))
+			ioVars.push_back(makeIoVar("gl_FrontFacing", spvStorageClassInput, true, 17));
 		ioVars.push_back(makeIoVar("gl_FragColor", spvStorageClassOutput, false, 0));
 	}
 
-	std::vector<std::string> orderedInterpolantNames = context.shaderInterpolantNames;
-	std::sort(orderedInterpolantNames.begin(), orderedInterpolantNames.end());
-	for (size_t location = 0; location < orderedInterpolantNames.size(); location++) {
-		ioVars.push_back(makeIoVar(
-			shaderInterpolantGlobalName(orderedInterpolantNames[location]),
-			isVertex ? spvStorageClassOutput : spvStorageClassInput, false, static_cast<uint32_t>(location)
-		));
+	for (const auto &interpolant : context.shaderInterpolants) {
+		auto variable = makeIoVar(
+			shaderInterpolantGlobalName(interpolant.name), isVertex ? spvStorageClassOutput : spvStorageClassInput, false,
+			interpolant.location
+		);
+		variable.interpolation = interpolant.interpolation;
+		const DataType &scalar =
+			interpolant.type.kind == DataType::Kind::Vector ? interpolant.type.aggregateElementType() : interpolant.type;
+		if (scalar.kind == DataType::Kind::Int)
+			variable.signedComponents = interpolant.type.kind == DataType::Kind::Vector ? interpolant.type.arraySize : 1;
+		ioVars.push_back(std::move(variable));
 	}
 
 	// Store shader parameters in descriptor-set-zero uniform buffers shared by Vulkan and WebGPU.

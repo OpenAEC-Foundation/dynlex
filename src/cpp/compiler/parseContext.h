@@ -66,6 +66,13 @@ struct ParseContext {
 		DataType type;
 		Range range;
 	};
+	struct ShaderInterpolant {
+		std::string name;
+		std::uint32_t location;
+		DataType type;
+		std::string interpolation;
+		Range range;
+	};
 
 	struct SectionFlexBodyFrame {
 		Section *definitionSection = nullptr;
@@ -315,7 +322,7 @@ struct ParseContext {
 	std::vector<ShaderUniform> shaderUniforms;
 	std::vector<ShaderResourceValue> shaderResources;
 	std::vector<ShaderVertexInput> shaderVertexInputs;
-	std::vector<std::string> shaderInterpolantNames;
+	std::vector<ShaderInterpolant> shaderInterpolants;
 
 	// imported source files by path (also prevents circular imports)
 	std::unordered_map<std::string, lsp::SourceFile *> importedFiles;
@@ -385,7 +392,7 @@ struct ParseContext {
 	bool registerShaderUniform(std::string uniformName, std::uint32_t binding, DataType type, Range range);
 	bool registerShaderResource(ShaderResourceValue resource, Range range);
 	void registerShaderVertexInput(std::string name, std::uint32_t location, DataType type, Range range);
-	void registerShaderInterpolantName(const std::string &interpolantName);
+	bool registerShaderInterpolant(ShaderInterpolant interpolant);
 	VariableReference *createVariableReference(Range range, const std::string &name);
 	std::shared_ptr<ExpressionAllocationStats> expressionAllocationStats = std::make_shared<ExpressionAllocationStats>();
 	std::uint64_t expressionInferenceRevision = 0;

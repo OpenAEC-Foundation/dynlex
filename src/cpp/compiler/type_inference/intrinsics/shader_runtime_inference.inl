@@ -1,6 +1,20 @@
 #include "shader_resources_inference.inl"
 
+static bool validShaderLocationType(const DataType &type) {
+	auto layout = shaderUniformLayout(type);
+	return layout && type.kind != DataType::Kind::Matrix;
+}
+
 static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind, InferenceContext &context) {
+	auto failUnavailableTarget = [&] {
+		std::string detail = renderConfiguredMessage(
+			syntaxConfigForRange(context.parseContext, expr->range), "shader operation unavailable", "message",
+			{{"operation", expr->intrinsicName}}
+		);
+		context.setTypeFailure(detail);
+		context.fail(buildFailureDetailDiagnostic(expr->range, detail), 0);
+		return false;
+	};
 	if ((kind == IntrinsicKind::ShaderImage || kind == IntrinsicKind::ShaderSampler ||
 		 kind == IntrinsicKind::ShaderSampleLevel || kind == IntrinsicKind::ShaderSampleCompare) &&
 		!validateShaderResourceIntrinsic(expr, kind, context))
@@ -33,7 +47,7 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 			context.fail(buildFailureDetailDiagnostic(expr->arguments[1]->range, detail), 0);
 		};
 		if (kind == IntrinsicKind::ShaderInput) {
-			bool knownInput = *name == "FragCoord" || *name == "Position";
+			bool knownInput = *name == "FragCoord" || *name == "Position" || *name == "FrontFacing";
 			if (!knownInput) {
 				failWithDetail("unknown shader input");
 				return false;
@@ -74,21 +88,42 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 			}
 			auto reference = getCompileTimeTypeReferenceValue(context.lookupExpressionValue(expr->arguments[3]));
 			DataType valueType = reference ? reference->type.toReferencedType() : DataType{};
-			DataType scalar = valueType;
-			bool shape = !valueType.isPointer();
-			if (valueType.kind == DataType::Kind::Vector) {
-				shape = shape && valueType.arraySize >= 2 && valueType.arraySize <= 4;
-				scalar = valueType.aggregateElementType();
-			}
-			bool numeric = scalar.kind == DataType::Kind::Float || scalar.kind == DataType::Kind::Int ||
-						   scalar.kind == DataType::Kind::UInt;
-			if (!reference || !shape || !numeric || scalar.isPointer() || scalar.numericSize != 4) {
+			if (!reference || !validShaderLocationType(valueType)) {
 				failWithDetail("shader vertex input type invalid");
 				return false;
 			}
 			if (context.parseContext.options.emitSPIRV &&
 				context.parseContext.options.shaderStage != ParseContext::ShaderStage::Vertex) {
 				failWithDetail("shader vertex input unavailable");
+				return false;
+			}
+		}
+		if (kind == IntrinsicKind::ShaderInterpolantInput || kind == IntrinsicKind::ShaderInterpolantOutput) {
+			if (!context.parseContext.options.emitSPIRV)
+				return failUnavailableTarget();
+			auto location = getCompileTimeIntegerValue(context.lookupExpressionValue(expr->arguments[2]));
+			if (!location || *location < 0 || static_cast<std::uint64_t>(*location) > UINT32_MAX) {
+				failWithDetail("shader interpolant location invalid");
+				return false;
+			}
+			CompileTimeValue modeValue = context.lookupExpressionValue(expr->arguments[3]);
+			const auto *mode = std::get_if<std::string>(&modeValue);
+			if (!mode || (*mode != "perspective" && *mode != "flat")) {
+				failWithDetail("shader interpolant interpolation invalid");
+				return false;
+			}
+			DataType type = expr->arguments[4]->type;
+			if (kind == IntrinsicKind::ShaderInterpolantInput) {
+				auto reference = getCompileTimeTypeReferenceValue(context.lookupExpressionValue(expr->arguments[4]));
+				type = reference ? reference->type.toReferencedType() : DataType{};
+			}
+			if (!validShaderLocationType(type)) {
+				failWithDetail("shader interpolant type invalid");
+				return false;
+			}
+			const DataType &scalar = type.kind == DataType::Kind::Vector ? type.aggregateElementType() : type;
+			if (scalar.kind != DataType::Kind::Float && *mode != "flat") {
+				failWithDetail("shader interpolant integer interpolation");
 				return false;
 			}
 		}
@@ -117,14 +152,7 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 		context.fail(buildFailureDetailDiagnostic(expr->range, detail), 0);
 		return false;
 	}
-	if (!context.parseContext.options.emitSPIRV) {
-		std::string detail = renderConfiguredMessage(
-			syntaxConfigForRange(context.parseContext, expr->range), "shader operation unavailable", "message",
-			{{"operation", expr->intrinsicName}}
-		);
-		context.setTypeFailure(detail);
-		context.fail(buildFailureDetailDiagnostic(expr->range, detail), 0);
-		return false;
-	}
+	if (!context.parseContext.options.emitSPIRV)
+		return failUnavailableTarget();
 	return true;
 }

@@ -68,9 +68,9 @@ if this is a vertex shader:
     set surface to the vertex w
 
     if surface < 0.5:
-        set the shader interpolant named "terrain position" with an x coordinate of (the vertex x), a y coordinate of (the vertex y), a z coordinate of 0.0 and a w coordinate of 0.0
-        set the shader interpolant named "terrain normal" with an x coordinate of 0.0, a y coordinate of 1.0, a z coordinate of 0.0 and a w coordinate of 0.0
-        set the shader interpolant named "terrain material" with an x coordinate of 0.5, a y coordinate of 0.0, a z coordinate of 0.0 and a w coordinate of 0.0
+        set the smooth shader interpolant named "terrain position" at location 2 to ([(the vertex x), (the vertex y), 0.0, 0.0] as an aggregate of 4 floating-point number values)
+        set the smooth shader interpolant named "terrain normal" at location 1 to ([0.0, 1.0, 0.0, 0.0] as an aggregate of 4 floating-point number values)
+        set the smooth shader interpolant named "terrain material" at location 0 to ([0.5, 0.0, 0.0, 0.0] as an aggregate of 4 floating-point number values)
         set the output position with x the vertex x, y the vertex y, z 0.9999 and w 1.0
     else:
         set distance to the vertex y
@@ -129,24 +129,27 @@ if this is a vertex shader:
         set view to a point with x (vertical * cosine + forward * sine) and y (forward * cosine - vertical * sine)
         set clip to a spatial coordinate with x (lateral / (aspect * 0.72)), y (view's x / 0.72) and z (view's y * 1.00078 - 0.40016)
 
-        set the shader interpolant named "terrain position" with an x coordinate of world's x, a y coordinate of elevation, a z coordinate of world's z and a w coordinate of surface
-        set the shader interpolant named "terrain normal" with an x coordinate of normal's x, a y coordinate of normal's y, a z coordinate of normal's z and a w coordinate of distance
-        set the shader interpolant named "terrain material" with an x coordinate of variation, a y coordinate of detail, a z coordinate of submersion and a w coordinate of 0.0
+        set the smooth shader interpolant named "terrain position" at location 2 to ([world's x, elevation, world's z, surface] as an aggregate of 4 floating-point number values)
+        set the smooth shader interpolant named "terrain normal" at location 1 to ([normal's x, normal's y, normal's z, distance] as an aggregate of 4 floating-point number values)
+        set the smooth shader interpolant named "terrain material" at location 0 to ([variation, detail, submersion, 0.0] as an aggregate of 4 floating-point number values)
         # DynLex clip-space Y points down; the world and camera use Y up.
         set the output position with x clip's x, y -clip's y, z clip's z and w view's y
 
 if this is a fragment shader:
+    set {terrain position} to the smooth shader interpolant named "terrain position" at location 2 of type an aggregate of 4 floating-point number values
+    set {terrain normal} to the smooth shader interpolant named "terrain normal" at location 1 of type an aggregate of 4 floating-point number values
+    set {terrain material} to the smooth shader interpolant named "terrain material" at location 0 of type an aggregate of 4 floating-point number values
     set pixel to a point with x the fragment x coordinate and y the fragment y coordinate
     set time to the shader time
     set frame to a point with x (the maximum of the shader width and 1.0) and y (the maximum of the shader height and 1.0)
     set aspect to frame's x / frame's y
     set screen to a point with x ((((pixel's x / frame's x) * 2.0) - 1.0) * aspect) and y (1.0 - ((pixel's y / frame's y) * 2.0))
 
-    set world to a spatial coordinate with x (the shader interpolant x named "terrain position"), y (the shader interpolant y named "terrain position") and z (the shader interpolant z named "terrain position")
-    set surface to the shader interpolant w named "terrain position"
-    set normal to a spatial coordinate with x (the shader interpolant x named "terrain normal"), y (the shader interpolant y named "terrain normal") and z (the shader interpolant z named "terrain normal")
-    set distance to the shader interpolant w named "terrain normal"
-    set material to a spatial coordinate with x (the shader interpolant x named "terrain material"), y (the shader interpolant y named "terrain material") and z (the shader interpolant z named "terrain material")
+    set world to a spatial coordinate with x (the element at 0 in terrain position), y (the element at 1 in terrain position) and z (the element at 2 in terrain position)
+    set surface to the element at 3 in terrain position
+    set normal to a spatial coordinate with x (the element at 0 in terrain normal), y (the element at 1 in terrain normal) and z (the element at 2 in terrain normal)
+    set distance to the element at 3 in terrain normal
+    set material to a spatial coordinate with x (the element at 0 in terrain material), y (the element at 1 in terrain material) and z (the element at 2 in terrain material)
 
     set sun to a point with x (screen's x - 0.52) and y (screen's y - 0.36)
     set separation to the square root of (sun's x * sun's x + sun's y * sun's y)

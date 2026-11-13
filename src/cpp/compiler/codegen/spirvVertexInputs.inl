@@ -29,7 +29,7 @@ static void patchSignedShaderInputs(std::vector<uint32_t> &binary, const std::ve
 			if (spvOpcode(binary[position]) == spvOpTypePointer && binary[position + 1] == pointer)
 				originalType = binary[position + 3];
 		}
-		requireCompilerInvariant(originalType != 0, "signed vertex input has no SPIR-V value type");
+		requireCompilerInvariant(originalType != 0, "signed shader interface has no SPIR-V value type");
 		uint32_t interfaceType = getOrCreateVertexInputType(binary, spvOpTypeInt, {32, 1});
 		if (variable.signedComponents > 1)
 			interfaceType = getOrCreateVertexInputType(binary, spvOpTypeVector, {interfaceType, variable.signedComponents});
@@ -44,7 +44,7 @@ static void patchSignedShaderInputs(std::vector<uint32_t> &binary, const std::ve
 				binary[position + 1] = interfacePointer;
 			if (opcode == spvOpLoad && binary[position + 3] == variable.id) {
 				requireCompilerInvariant(
-					binary[position + 1] == originalType, "vertex input load has a conflicting SPIR-V type"
+					binary[position + 1] == originalType, "shader interface load has a conflicting SPIR-V type"
 				);
 				uint32_t originalResult = binary[position + 2];
 				uint32_t loaded = allocateSpvId(binary);
@@ -53,6 +53,12 @@ static void patchSignedShaderInputs(std::vector<uint32_t> &binary, const std::ve
 				std::vector<uint32_t> cast = {spvInstWord(4, spvOpBitcast), originalType, originalResult, loaded};
 				binary.insert(binary.begin() + position + length, cast.begin(), cast.end());
 				position += length + cast.size();
+			} else if (opcode == spvOpStore && binary[position + 1] == variable.id) {
+				uint32_t stored = allocateSpvId(binary);
+				std::vector<uint32_t> cast = {spvInstWord(4, spvOpBitcast), interfaceType, stored, binary[position + 2]};
+				binary[position + 2] = stored;
+				binary.insert(binary.begin() + position, cast.begin(), cast.end());
+				position += cast.size() + length;
 			} else {
 				position += length;
 			}

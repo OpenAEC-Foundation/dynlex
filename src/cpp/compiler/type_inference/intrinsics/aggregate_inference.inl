@@ -1,4 +1,8 @@
 void ExpressionInferenceSupport::inferShaderInputIntrinsic() {
+	if (std::get<std::string>(context.lookupExpressionValue(expr->arguments[1])) == "FrontFacing") {
+		expr->type = {DataType::Kind::Bool};
+		return;
+	}
 	expr->type = {DataType::Kind::Vector};
 	expr->type.arraySize = 4;
 	expr->type.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);

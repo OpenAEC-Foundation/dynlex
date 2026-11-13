@@ -43,12 +43,12 @@ set the fragment color with a red channel of 0.1, a green channel of 0.2, a blue
         "fragment",
     ),
     "shader interpolant input": (
-        '@intrinsic("discard", @intrinsic("shader interpolant input", "surface"))\n'
+        '@intrinsic("discard", @intrinsic("shader interpolant input", "surface", 0, "perspective", @intrinsic("vector", 4)))\n'
         '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n',
         "fragment",
     ),
     "shader interpolant output": (
-        '@intrinsic("shader interpolant output", "surface", 0.1, 0.2, 0.3, 1.0)\n'
+        '@intrinsic("shader interpolant output", "surface", 0, "perspective", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n'
         '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n',
         "vertex",
     ),
@@ -96,25 +96,25 @@ ignore the invalid shader input
     ),
     (
         "non-literal-interpolant",
-        '@intrinsic("discard", @intrinsic("shader interpolant input", 1))\n',
+        '@intrinsic("discard", @intrinsic("shader interpolant input", 1, 0, "perspective", @intrinsic("vector", 4)))\n',
         ("--emit-spirv", "--shader-stage=fragment"),
         "shader interpolant requires a non-empty string literal name",
     ),
     (
         "empty-interpolant-name",
-        '@intrinsic("discard", @intrinsic("shader interpolant input", ""))\n',
+        '@intrinsic("discard", @intrinsic("shader interpolant input", "", 0, "perspective", @intrinsic("vector", 4)))\n',
         ("--emit-spirv", "--shader-stage=fragment"),
         "shader interpolant requires a non-empty string literal name",
     ),
     (
         "interpolant-input-in-vertex",
-        '@intrinsic("discard", @intrinsic("shader interpolant input", "surface"))\n',
+        '@intrinsic("discard", @intrinsic("shader interpolant input", "surface", 0, "perspective", @intrinsic("vector", 4)))\n',
         ("--emit-spirv", "--shader-stage=vertex"),
         "Shader interpolant input 'surface' is only available in fragment shaders",
     ),
     (
         "interpolant-output-in-fragment",
-        '@intrinsic("shader interpolant output", "surface", 0.1, 0.2, 0.3, 1.0)\n',
+        '@intrinsic("shader interpolant output", "surface", 0, "perspective", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n',
         ("--emit-spirv", "--shader-stage=fragment"),
         "Shader interpolant output 'surface' is only available in vertex shaders",
     ),
@@ -324,13 +324,13 @@ WRAPPED_INTERPOLANT_SHADERS = {
     "vertex": """\
 import lib/shader.dl
 
-set the shader interpolant named "surface" with an x coordinate of 0.1, a y coordinate of 0.2, a z coordinate of 0.3 and a w coordinate of 1.0
+set the smooth shader interpolant named "surface" at location 0 to ([0.1, 0.2, 0.3, 1.0] as an aggregate of 4 floating-point number values)
 set the output position with x 0.0, y 0.0, z 0.0 and w 1.0
 """,
     "fragment": """\
 import lib/shader.dl
 
-set shade to the shader interpolant x named "surface"
+set shade to the element at 0 in (the smooth shader interpolant named "surface" at location 0 of type an aggregate of 4 floating-point number values)
 set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 """,
 }
@@ -514,13 +514,13 @@ def main() -> int:
 
         interpolant_sources = {
             "vertex": (
-                '@intrinsic("shader interpolant output", "terrain_position", 0.1, 0.2, 0.3, 1.0)\n'
-                '@intrinsic("shader interpolant output", "terrain_normal", 0.4, 0.5, 0.6, 0.0)\n'
+                '@intrinsic("shader interpolant output", "terrain_position", 1, "perspective", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n'
+                '@intrinsic("shader interpolant output", "terrain_normal", 0, "perspective", @intrinsic("construct", @intrinsic("vector", 4), 0.4, 0.5, 0.6, 0.0))\n'
                 '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.0, 0.0, 0.0, 1.0))\n'
             ),
             "fragment": (
-                '@intrinsic("discard", @intrinsic("shader interpolant input", "terrain_normal"))\n'
-                '@intrinsic("discard", @intrinsic("shader interpolant input", "terrain_position"))\n'
+                '@intrinsic("discard", @intrinsic("shader interpolant input", "terrain_normal", 0, "perspective", @intrinsic("vector", 4)))\n'
+                '@intrinsic("discard", @intrinsic("shader interpolant input", "terrain_position", 1, "perspective", @intrinsic("vector", 4)))\n'
                 '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n'
             ),
         }

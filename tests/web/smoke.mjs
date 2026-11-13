@@ -444,11 +444,11 @@ moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
   `import lib/shader.dl
 
 if this is a vertex shader:
-    set the shader interpolant named "surface" with an x coordinate of (the vertex x), a y coordinate of (the vertex y), a z coordinate of (the vertex z) and a w coordinate of 1.0
+    set the smooth shader interpolant named "surface" at location 0 to ([(the vertex x), (the vertex y), (the vertex z), 1.0] as an aggregate of 4 floating-point number values)
     set the output position with x (the vertex x), y (the vertex y), z (the vertex z) and w (the vertex w)
 
 if this is a fragment shader:
-    set shade to the shader interpolant x named "surface"
+    set shade to the element at 0 in (the smooth shader interpolant named "surface" at location 0 of type an aggregate of 4 floating-point number values)
     set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 `
 ]);

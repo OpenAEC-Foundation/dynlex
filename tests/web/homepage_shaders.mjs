@@ -97,12 +97,12 @@ assert.match(terrainSource, /set crest /);
 assert.match(terrainSource, /set ridge /);
 assert.match(terrainSource, /set erosion /);
 assert.match(terrainSource, /if this is a vertex shader/);
-assert.match(terrainSource, /set the shader interpolant named "terrain position"/);
-assert.match(terrainSource, /set the shader interpolant named "terrain normal"/);
-assert.match(terrainSource, /set the shader interpolant named "terrain material"/);
-assert.match(terrainSource, /the shader interpolant [xyzw] named "terrain position"/);
-assert.match(terrainSource, /the shader interpolant [xyzw] named "terrain normal"/);
-assert.match(terrainSource, /the shader interpolant [xyz] named "terrain material"/);
+assert.match(terrainSource, /set the smooth shader interpolant named "terrain position"/);
+assert.match(terrainSource, /set the smooth shader interpolant named "terrain normal"/);
+assert.match(terrainSource, /set the smooth shader interpolant named "terrain material"/);
+assert.match(terrainSource, /the smooth shader interpolant named "terrain position" at location 2 of type an aggregate of 4 floating-point number values/);
+assert.match(terrainSource, /the smooth shader interpolant named "terrain normal" at location 1 of type an aggregate of 4 floating-point number values/);
+assert.match(terrainSource, /the smooth shader interpolant named "terrain material" at location 0 of type an aggregate of 4 floating-point number values/);
 assert.match(
   terrainSource,
   /to get the maximum possible terrain height:\s+return 12\.10/
@@ -128,7 +128,7 @@ assert.match(terrainSource, /set depth to forward \* cosine - vertical \* sine/)
 assert.match(terrainSource, /set lateral to slope \* depth/);
 assert.match(
   terrainSource,
-  /set the shader interpolant named "terrain normal" with an x coordinate of normal's x, a y coordinate of normal's y, a z coordinate of normal's z and a w coordinate of distance/
+  /set the smooth shader interpolant named "terrain normal" at location 1 to \[normal's x, normal's y, normal's z, distance\] as an aggregate of 4 floating-point number values/
 );
 assert.match(
   terrainSource,

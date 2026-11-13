@@ -72,6 +72,8 @@ caches a WebAssembly version of the same pinned LLVM fork with the WebAssembly
 and SPIR-V targets.
 The build uses SPIRV-Cross for shader reflection and a pinned Naga WebAssembly
 module to validate and translate emitted SPIR-V into WebGPU's WGSL.
+See [stage interfaces](docs/shader_interfaces.md) for typed vertex/fragment values
+and [resource bindings](docs/shader_resources.md) for textures, samplers and uniforms.
 
 Build compiler WASM artifacts and copy them into the web app:
 

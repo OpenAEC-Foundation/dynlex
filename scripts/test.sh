@@ -789,6 +789,7 @@ run_auxiliary_test "process_windows_quoting" 10 python3 -B "$SCRIPT_DIR/test_pro
 run_auxiliary_test "command_line_argument_targets" 10 python3 -B "$SCRIPT_DIR/test_command_line_argument_targets.py" "$COMPILER"
 run_auxiliary_test "shader_intrinsic_targets" 20 python3 -B "$SCRIPT_DIR/test_shader_intrinsic_targets.py" "$COMPILER"
 run_auxiliary_test "shader_vertex_inputs" 30 python3 -B "$SCRIPT_DIR/test_shader_vertex_inputs.py" "$COMPILER"
+run_auxiliary_test "shader_interpolants" 30 python3 -B "$SCRIPT_DIR/test_shader_interpolants.py" "$COMPILER"
 run_auxiliary_test "shader_uniforms" 30 python3 -B "$SCRIPT_DIR/test_shader_uniforms.py" "$COMPILER"
 run_auxiliary_test "shader_resources" 30 python3 -B "$SCRIPT_DIR/test_shader_resources.py" "$COMPILER"
 run_auxiliary_test "shader_integer_semantics" 30 python3 -B "$SCRIPT_DIR/test_shader_integer_semantics.py" "$COMPILER"

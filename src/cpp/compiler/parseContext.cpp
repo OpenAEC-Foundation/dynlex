@@ -231,12 +231,27 @@ void ParseContext::registerShaderVertexInput(std::string name, std::uint32_t loc
 	shaderVertexInputs.push_back({std::move(name), location, std::move(type), std::move(range)});
 }
 
-void ParseContext::registerShaderInterpolantName(const std::string &interpolantName) {
-	if (interpolantName.empty())
-		return;
-	if (std::find(shaderInterpolantNames.begin(), shaderInterpolantNames.end(), interpolantName) ==
-		shaderInterpolantNames.end())
-		shaderInterpolantNames.push_back(interpolantName);
+bool ParseContext::registerShaderInterpolant(ShaderInterpolant interpolant) {
+	for (const auto &previous : shaderInterpolants) {
+		if (previous.name == interpolant.name) {
+			if (previous.location == interpolant.location && previous.type == interpolant.type &&
+				previous.interpolation == interpolant.interpolation)
+				return true;
+			addDiagnostic(Diagnostic(
+				*this, Diagnostic::Level::Error, "shader interpolant inconsistent", interpolant.range, "name", interpolant.name
+			));
+			return false;
+		}
+		if (previous.location == interpolant.location) {
+			addDiagnostic(Diagnostic(
+				*this, Diagnostic::Level::Error, "shader interpolant duplicate", interpolant.range, "location",
+				std::to_string(interpolant.location), "first", previous.name, "second", interpolant.name
+			));
+			return false;
+		}
+	}
+	shaderInterpolants.push_back(std::move(interpolant));
+	return true;
 }
 
 VariableReference *ParseContext::createVariableReference(Range range, const std::string &name) {

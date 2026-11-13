@@ -31,15 +31,20 @@ function set the output position with x {a value:horizontal}, y {a value:vertica
             @intrinsic("construct", an aggregate of 4 floating-point number values, horizontal, vertical, depth, magnitude)
         )
 
-# Vertex-to-fragment interpolants
+# Typed vertex-to-fragment values use shared explicit locations.
 
-function set [the|] shader interpolant named {a value:name} with an x coordinate of {a value:horizontal}, a y coordinate of {a value:vertical}, a z coordinate of {a value:depth} and a w coordinate of {a value:magnitude}:
+[the|] fragment is front facing means: @intrinsic("shader input", "FrontFacing")
+
+[the|] [smooth|perspective] shader interpolant named {fixed C string:name} at location {fixed integer:location} of type {type:kind} means: @intrinsic("shader interpolant input", name, location, "perspective", kind)
+function set [the|] [smooth|perspective] shader interpolant named {fixed C string:name} at location {fixed integer:location} to {a value:value}:
     replacement:
-        @intrinsic("shader interpolant output", name, horizontal, vertical, depth, magnitude)
-[the|] shader interpolant x named name means: the element at 0 in @intrinsic("shader interpolant input", name)
-[the|] shader interpolant y named name means: the element at 1 in @intrinsic("shader interpolant input", name)
-[the|] shader interpolant z named name means: the element at 2 in @intrinsic("shader interpolant input", name)
-[the|] shader interpolant w named name means: the element at 3 in @intrinsic("shader interpolant input", name)
+        @intrinsic("shader interpolant output", name, location, "perspective", value)
+
+[the|] flat shader interpolant named {fixed C string:name} at location {fixed integer:location} of type {type:kind} means: @intrinsic("shader interpolant input", name, location, "flat", kind)
+function set [the|] flat shader interpolant named {fixed C string:name} at location {fixed integer:location} to {a value:value}:
+    replacement:
+        @intrinsic("shader interpolant output", name, location, "flat", value)
+
 # Shader uniforms (values passed from host each frame)
 
 [the|] shader uniform named {a value:name} at binding {a value:slot} as {type:kind} means: @intrinsic("shader uniform", name, slot, kind)
