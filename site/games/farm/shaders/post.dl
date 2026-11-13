@@ -1,0 +1,11 @@
+import ../../../packages/dynlex-ui/ui/scene_tone.dl
+import lib/shader.dl
+
+set size to the shader uniform named "viewport" at binding 0 as @intrinsic("vector", 4)
+set image to the shader image named "scene" at binding 1
+set filter to the shader sampler named "scene_filter" at binding 2
+set coordinates to @intrinsic("construct", @intrinsic("vector", 2), (the fragment x coordinate) / (the element at 0 in size), (the fragment y coordinate) / (the element at 1 in size))
+set sample to the sample from image using filter at coordinates with level 0.0
+set radiance to a new vector with x (the element at 0 in sample), y (the element at 1 in sample) and z (the element at 2 in sample)
+set color to the UI scene filmic color from radiance at exposure 1.14
+set the fragment color with a red channel of (the x of color), a green channel of (the y of color), a blue channel of (the z of color) and an alpha channel of (the element at 3 in sample)

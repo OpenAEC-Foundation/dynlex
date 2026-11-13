@@ -1,0 +1,5 @@
+import ../../../packages/dynlex-ui/ui/scene_shader.dl
+
+set light to the shader uniform named "light" at binding 1 as (@intrinsic("matrix", 4, 4, @intrinsic("type", "float", 32)))
+set clip to the UI scene shader clip position of (the UI scene shader world position) through light
+set the output position with x (the element at 0 in clip), y (the element at 1 in clip), z (the element at 2 in clip) and w (the element at 3 in clip)

@@ -1,0 +1,61 @@
+import ../../site/games/farm/scene_landscape.dl
+import ../../site/games/farm/render_inputs.dl
+import lib/filesystem.dl
+
+to get [Farm renderer words from] {a pointer:data} [counting] {integer:count}:
+    set result to a new JSON value of kind the JSON array kind
+    loop index from 0 to count:
+        add (a new JSON number from (the item at index in (data as a pointer to a 32 bit unsigned integer))) to the JSON array result
+    return result
+
+to get [the Farm renderer input JSON from] {website Farm shader inputs:inputs}:
+    set result to a new JSON-RPC array
+    for each input in inputs:
+        set value to input's value
+        add (a JSON object containing [
+            JSON number "pass" is (input's pass), JSON number "binding" is (input's binding),
+            JSON number "scalar" is (value's scalar), JSON number "rows" is (value's rows), JSON number "columns" is (value's columns),
+            JSON child "data" is (Farm renderer words from ((value's data + 0) as a pointer) counting 16)
+        ]) to the JSON array result
+    return result
+
+read the file at "stages.json" and set source to it
+require condition (source succeeded) reporting "The Farm renderer fixture requires its compiled stages"
+parse (source's contents) as JSON and set parsed to it
+require condition (parsed succeeded) reporting "The Farm renderer stages are invalid"
+set stages to the value of parsed
+set program to the website Farm render graph using stages
+set world to the initial website farm world
+set landscape to a website Farm landscape for world
+set bank to a UI scene mesh bank
+set frame to a UI scene frame using bank
+set controller to a website Farm camera in (UI box at 0.0 0.0 sized 960.0 720.0)
+set camera to controller's orbit's camera
+prepare UI scene frame frame from (landscape's objects) through camera
+set inputs to an empty list of website Farm shader input
+prepare website Farm bake inputs in inputs
+set bakes to the Farm renderer input JSON from inputs
+prepare website Farm frame inputs in inputs through camera at 0.0 with rain 0.0 sized 960 by 720
+set result to a JSON object containing [
+    JSON child "program" is program,
+    JSON child "bakes" is bakes,
+    JSON child "inputs" is (the Farm renderer input JSON from inputs),
+    JSON child "vertices" is (Farm renderer words from ((bank's vertices' data) as a pointer) counting ((the length of bank's vertices) * 8)),
+    JSON child "colors" is (Farm renderer words from ((bank's colors' data) as a pointer) counting ((the length of bank's colors) * 3)),
+    JSON child "indices" is (Farm renderer words from ((bank's indices' data) as a pointer) counting (the length of bank's indices)),
+    JSON child "instances" is (Farm renderer words from ((frame's records' data) as a pointer) counting ((the length of frame's records) * 44)),
+    JSON child "draws" is (Farm renderer words from ((frame's draws' data) as a pointer) counting ((the length of frame's draws) * 7)),
+    JSON child "shadowInstances" is (Farm renderer words from ((frame's shadow records' data) as a pointer) counting ((the length of frame's shadow records) * 44)),
+    JSON child "shadowDraws" is (Farm renderer words from ((frame's shadow draws' data) as a pointer) counting ((the length of frame's shadow draws) * 7)),
+    JSON number "scatteringPass" is (the website Farm scattering pass),
+    JSON number "shadowPass" is (the website Farm shadow pass),
+    JSON number "surfacePass" is (the website Farm surface pass)
+]
+print line the compact JSON form of result
+free result
+free inputs
+close UI scene frame frame
+close UI scene mesh bank bank
+close website Farm landscape landscape
+free website farm world world
+free stages

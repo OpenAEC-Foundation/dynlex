@@ -5,8 +5,8 @@ to get [the website Farm smooth blend from] {floating-point number:low} [to] {fl
     return (blend * blend) * (3.0 - 2.0 * blend)
 
 to get [the website Farm sky radiance along] {vector:direction}:
-    set direction to direction normalized
-    set height to the y of direction
+    set axis to direction normalized
+    set height to the y of axis
     set blend to the website Farm smooth blend from -0.1 to 0.7 at height
     set bottom to a new vector with x 0.28, y 0.38 and z 0.25
     set top to a new vector with x 0.56, y 0.76 and z 0.90
@@ -15,22 +15,22 @@ to get [the website Farm sky radiance along] {vector:direction}:
     set horizon to a new vector with x 0.95, y 0.90 and z 0.72
     set color to color * (1.0 - blend) + horizon * blend
     set sun to (a new vector with x -0.5, y 0.9 and z 0.2) normalized
-    set blend to the website Farm smooth blend from 0.985 to 0.999 at (the dot product of direction and sun)
+    set blend to the website Farm smooth blend from 0.985 to 0.999 at (the dot product of axis and sun)
     return color + (a new vector with x 5.0, y 4.3 and z 2.9) * blend
 
 to get [the website Farm sky reflection along] {vector:direction} [at roughness] {floating-point number:roughness} [using] {integer:count} [samples]:
-    set direction to direction normalized
+    set axis to direction normalized
     if roughness = 0.0:
-        return the website Farm sky radiance along direction
+        return the website Farm sky radiance along axis
     set color to a new vector with x 0.0, y 0.0 and z 0.0
     set weight to 0.0
     loop index from 0 to count:
         set u to (index as a 32 bit floating-point number) / (count as a 32 bit floating-point number)
         set v to the UI scene radical inverse of index
         set local to the UI scene GGX half vector at u v with roughness roughness
-        set half to the UI scene tangent vector local around direction
-        set light to half * (2.0 * (the dot product of direction and half)) - direction
-        set cosine to the maximum of 0.0 and (the dot product of direction and light)
+        set half to the UI scene tangent vector local around axis
+        set light to half * (2.0 * (the dot product of axis and half)) - axis
+        set cosine to the maximum of 0.0 and (the dot product of axis and light)
         if cosine > 0.0:
             set color to color + (the website Farm sky radiance along light) * cosine
             set weight to weight + cosine

@@ -5,6 +5,20 @@ the pinned shared UI SDK. Connection to the website remains pending while the
 world renderer and controller are completed. The separate rendering probes use
 their own build directory.
 
+The landscape now renders through `site/games/farm/program.dl`, a DynLex render
+graph using the shared scene ABI. Its 617 initial mesh instances form 14 draw
+batches. The graph bakes a 128-pixel, eight-level HDR reflection cube and a DFG
+lookup, renders directional shadows into a 2048-pixel depth map, draws the scene
+with four-sample antialiasing, and applies the shared filmic tone mapping. All
+stages are DynLex source under `site/games/farm/shaders/`. Browser hosts only
+execute the graph and uploads; they contain no Farm scene or lighting logic.
+
+`render_inputs.dl` supplies the camera, light, weather and clock values. Sunlight
+uses the same shared view basis as perspective cameras, with the core
+orthographic projection. Disable baked passes after their first render and
+disable the shadow pass between world changes; this preserves the stored images
+without executing another clear or draw.
+
 `site/games/farm/lighting.dl` owns the procedural sky: its hemisphere gradient,
 warm horizon and HDR sun preserve the original shader. Reflections use GGX
 importance sampling and the shared unsigned Hammersley sequence. The zero
@@ -42,3 +56,14 @@ generates 480 reflection samples using the portable DynLex functions, and tests
 the GPU pixels on WebGPU and WebGL. It uses an isolated browser profile on a
 private Xvfb display with audio muted. The probe covers generated cube faces,
 multiple roughness levels, HDR storage and original sky reference pixels.
+It also compares 62 independently recorded coat, water-normal and fog cases,
+renders the complete landscape through the public graphics service, checks that
+cached passes retain exactly the same image, and compares both backends' pixels.
+The scene data generator releases its scene, graph and serialization allocations.
+
+The sky readers preserve their inputs. DynLex parameters refer to caller storage;
+normalizing a parameter in place would also change a later material's position.
+The water vertex stage uses each instance's full world position for a continuous
+wave phase, then transforms its perturbed object-space normal through the shared
+inverse transpose. This corrects the old InstancedMesh shader patch's omission of
+the instance transformation.

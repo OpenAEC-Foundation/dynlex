@@ -3,9 +3,12 @@ import ../../site/games/farm/lighting.dl
 import lib/check.dl
 
 to [check Farm sky along] {vector:direction} [against] {vector:expected}:
+    set original to direction
     set actual to the website Farm sky radiance along direction
+    require condition ((the length of (direction - original)) = 0.0) reporting "Reading sky radiance must preserve the caller's direction"
     require condition ((the length of (actual - expected)) < 0.0001) reporting "Farm sky differs from the original floating-point GLSL reference"
     set mirror to the website Farm sky reflection along direction at roughness 0.0 using 128 samples
+    require condition ((the length of (direction - original)) = 0.0) reporting "Reading mirror radiance must preserve the caller's direction"
     require condition ((the length of (actual - mirror)) < 0.00001) reporting "A mirror environment level must retain the original sky"
 
 check Farm sky along (a new vector with x 1.0, y 0.0 and z 0.0) against (a new vector with x 0.6210156679153442, y 0.6481640338897705 and z 0.4989648461341858)
@@ -27,4 +30,7 @@ set up to a new vector with x 0.0, y 1.0 and z 0.0
 set filtered to the website Farm sky reflection along up at roughness 0.65 using 128 samples
 require condition (((the x of filtered) > 0.0) and (((the y of filtered) > 0.0) and ((the z of filtered) > 0.0))) reporting "Filtered sky must retain positive radiance"
 require condition ((the length of (filtered - (the website Farm sky radiance along up))) > 0.01) reporting "A rough reflection must convolve the environment"
+set direction to a new vector with x 2.0, y 3.0 and z 4.0
+set filtered to the website Farm sky reflection along direction at roughness 0.65 using 128 samples
+require condition (((the x of direction) = 2.0) and (((the y of direction) = 3.0) and ((the z of direction) = 4.0))) reporting "Reading filtered radiance must preserve the caller's direction"
 print line "Farm sky preserves the original horizon, hemisphere and HDR sun; mirror and rough reflection levels share the DynLex sampler."

@@ -1,0 +1,57 @@
+import program.dl
+import camera.dl
+import ../../packages/dynlex-ui/ui/shader_values.dl
+
+class:
+    patterns:
+        website Farm shader input
+    members:
+        pass as an integer
+        binding as an integer
+        value as UI shader value
+
+website Farm shader inputs means: the type of (an empty list of website Farm shader input)
+
+to [add website Farm input] {UI shader value:value} [at binding] {integer:binding} [in pass] {integer:pass} [to] {website Farm shader inputs:inputs}:
+    append (@intrinsic("construct", website Farm shader input, pass, binding, value)) to inputs
+
+to [prepare website Farm bake inputs in] {website Farm shader inputs:inputs}:
+    clear inputs
+    set size to the website Farm reflection size
+    loop level from 0 to (the website Farm reflection levels):
+        set roughness to (level as a floating-point number) / ((the website Farm reflection levels) - 1)
+        loop face from 0 to 6:
+            set pass to level * 6 + face
+            add website Farm input (a UI float shader vector from [size,size,face,roughness]) at binding 0 in pass pass to inputs
+            add website Farm input (a UI signed shader value from 128) at binding 1 in pass pass to inputs
+        set size to the maximum of 1 and (size / 2)
+    add website Farm input (a UI float shader vector from [128,128,256,0]) at binding 0 in pass (the website Farm scattering pass) to inputs
+
+to get [the website Farm sunlight matrix]:
+    set eye to a UI scene vector from [-12.0,21.0,9.0]
+    set view to the UI scene view matrix from eye toward (a UI scene vector from [0.0,0.0,0.0]) with up (a UI scene vector from [0.0,1.0,0.0])
+    set projection to a graphics orthographic projection from left -16.0 right 16.0 top 16.0 bottom -16.0 near 0.5 far 60.0
+    return the graphics product of projection and view
+
+to get [a website Farm light from RGB] {integer:encoded} [with strength] {floating-point number:strength}:
+    set color to linear UI ink from (UI ink from RGB encoded)
+    return a UI float shader vector from [color's red * strength,color's green * strength,color's blue * strength,0.0]
+
+to [prepare website Farm frame inputs in] {website Farm shader inputs:inputs} [through] {UI scene camera:camera} [at] {floating-point number:seconds} [with rain] {floating-point number:rain} [sized] {integer:width} [by] {integer:height}:
+    clear inputs
+    set pass to the website Farm surface pass
+    set light to a UI shader value from graphics matrix (the website Farm sunlight matrix)
+    add website Farm input light at binding 1 in pass (the website Farm shadow pass) to inputs
+    add website Farm input light at binding 1 in pass pass to inputs
+    add website Farm input (a UI shader value from graphics matrix (the UI scene view projection for camera)) at binding 0 in pass pass to inputs
+    set eye to camera's position
+    add website Farm input (a UI float shader vector from [eye's x,eye's y,eye's z,seconds]) at binding 2 in pass pass to inputs
+    set sun to (a UI scene vector from [-12.0,21.0,9.0]) normalized
+    add website Farm input (a UI float shader vector from [sun's x,sun's y,sun's z,3.0 - 1.5 * rain]) at binding 3 in pass pass to inputs
+    add website Farm input (a website Farm light from RGB 16770230 with strength 1.0) at binding 4 in pass pass to inputs
+    add website Farm input (a website Farm light from RGB 14479354 with strength 2.1) at binding 5 in pass pass to inputs
+    add website Farm input (a website Farm light from RGB 7959119 with strength 2.1) at binding 6 in pass pass to inputs
+    add website Farm input (a website Farm light from RGB 13950403 with strength 1.0) at binding 7 in pass pass to inputs
+    add website Farm input (a UI float shader vector from [0.0,2048.0,-0.0002,0.02]) at binding 8 in pass pass to inputs
+    add website Farm input (a UI float shader vector from [0.75,((the website Farm reflection levels) - 1),0.0,0.0]) at binding 15 in pass pass to inputs
+    add website Farm input (a UI float shader vector from [width,height,0,0]) at binding 0 in pass (the website Farm post pass) to inputs

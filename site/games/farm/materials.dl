@@ -1,0 +1,38 @@
+import lighting.dl
+
+to get [the website Farm cow coat on] {vector:color} [at] {vector:position}:
+    set point to position normalized
+    set x to the x of point
+    set y to the y of point
+    set z to the z of point
+    set left to 0.0
+    set right to 0.0
+    set back to 0.0
+    if x <= -0.45:
+        set first to (y - 0.13) / 0.56
+        set second to (z + 0.28) / 0.58
+        set amount to (first * first + second * second) + 0.13 * (the sine of (y * 18.0 + z * 8.0))
+        set left to 1.0 - (the website Farm smooth blend from 0.90 to 1.02 at amount)
+    if x >= 0.50:
+        set first to (y + 0.04) / 0.49
+        set second to (z - 0.19) / 0.52
+        set amount to (first * first + second * second) + 0.12 * (the sine of (z * 19.0))
+        set right to 1.0 - (the website Farm smooth blend from 0.90 to 1.02 at amount)
+    if y >= 0.45:
+        set first to (x + 0.3) / 0.54
+        set second to (z + 0.47) / 0.55
+        set amount to first * first + second * second
+        set back to 1.0 - (the website Farm smooth blend from 0.90 to 1.02 at amount)
+    set amount to the maximum of left and (the maximum of right and back)
+    set ink to a new vector with x 0.021, y 0.020 and z 0.016
+    return color * (1.0 - amount) + ink * amount
+
+to get [the website Farm water normal from] {vector:normal} [at] {vector:position} [at time] {floating-point number:time}:
+    # World positions include each tile instance, keeping the wave phase continuous.
+    set x to (the x of normal) + 0.10 * (the sine of ((the x of position) * 21.0 + time))
+    set z to (the z of normal) + 0.07 * (the cosine of ((the z of position) * 18.0 - time))
+    return a new vector with x x, y (the y of normal) and z z
+
+to get [the website Farm fogged color from] {vector:color} [toward] {vector:fog} [at distance] {floating-point number:distance}:
+    set amount to the website Farm smooth blend from 55.0 to 100.0 at distance
+    return color * (1.0 - amount) + fog * amount

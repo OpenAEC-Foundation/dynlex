@@ -1,0 +1,1 @@
+Farm materials preserve coat boundaries, wave normals and fog across the original GLSL reference cases.

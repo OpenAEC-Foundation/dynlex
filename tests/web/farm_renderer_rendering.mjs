@@ -1,4 +1,5 @@
 import {createGpu} from '/packages/dynlex-ui/platform/browser/gpu.js';
+import {renderFarmScene,compareFarmScenes} from './scene-rendering.mjs';
 
 const image=(name,format,size,dimension='2d',levels=1)=>({kind:'texture',name,format,dimension,layers:dimension==='cube'?6:1,levels,samples:1,size});
 const attachment=(name,level=0,layer=0,load='load')=>({view:{image:name,level,layer},resolve:null,load,store:'store',clear:[0,0,0,1]});
@@ -6,17 +7,19 @@ const draw={count:3,instances:1,first:0,vertexOffset:0,instanceOffset:0,indexed:
 const encode=value=>Math.round(255*(value<=0.0031308?12.92*value:1.055*Math.pow(value,1/2.4)-0.055));
 
 export async function verifyFarmRenderer() {
-  const [stages,reference,queries]=await Promise.all(['stages','sky-reference','lighting-data'].map(name=>fetch(`/${name}.json`).then(response=>response.json())));
+  const [stages,reference,queries,materials]=await Promise.all(['stages','sky-reference','lighting-data','material-reference'].map(name=>fetch(`/${name}.json`).then(response=>response.json())));
   const original=Object.getOwnPropertyDescriptor(Navigator.prototype,'gpu');
   try {
-    await verify('webgpu',stages,reference.cases,queries);
+    await verify('webgpu',stages,reference.cases,queries,materials.cases);
+    const first=await renderFarmScene('webgpu');
     Object.defineProperty(Navigator.prototype,'gpu',{configurable:true,get:()=>undefined});
-    await verify('webgl',stages,reference.cases,queries);
-    return ['webgpu','webgl'];
+    await verify('webgl',stages,reference.cases,queries,materials.cases);
+    const second=await renderFarmScene('webgl');
+    return {backends:['webgpu','webgl'],scene:compareFarmScenes(first,second)};
   } finally {Object.defineProperty(Navigator.prototype,'gpu',original);}
 }
 
-async function verify(backend,stages,reference,queries) {
+async function verify(backend,stages,reference,queries,materials) {
   const errors=[],gpu=await createGpu(error=>errors.push(error));
   if(gpu.backend!==backend) throw new Error(`Expected ${backend}; selected ${gpu.backend}`);
   const canvas=document.createElement('canvas');canvas.width=4;canvas.height=4;
@@ -44,6 +47,7 @@ async function verify(backend,stages,reference,queries) {
     if(actual.some((value,channel)=>Math.abs(value-expected[channel])>4)) throw new Error(`${backend} Farm ${label}: ${actual}; expected ${expected}`);
   };
   try {
+    uniform(12,4,[0,1,0,0]);uniform(12,5,[1,1,1,0]);
     for(let level=0;level<2;level++) for(let face=0;face<6;face++) {
       uniform(level*6+face,0,[level===0?8:4,level===0?8:4,face,level===0?0:0.65]);
       uniform(level*6+face,1,[128],true);
@@ -52,6 +56,10 @@ async function verify(backend,stages,reference,queries) {
     for(let pass=0;pass<12;pass++) shader.draws(pass,new Uint32Array());
     for(const [index,sample] of reference.entries()) query(sample.direction,sample.color,-1,`original sky ${index}`);
     for(const [index,sample] of queries.entries()) query(sample.direction,sample.color,sample.level,`reflection ${index}`);
+    for(const [index,sample] of materials.entries()) {
+      uniform(12,4,[...sample.normal,sample.time]);uniform(12,5,[...sample.base,0]);
+      query(sample.point,sample.color.map(value=>value*0.5+0.5),-2-sample.mode,`material ${index}`);
+    }
     if(errors.length) throw errors[0];
     if(surface.gl&&surface.gl.getError()!==surface.gl.NO_ERROR) throw new Error('Farm reflection produced a WebGL error');
   } finally {shader.close();gpu.releaseSurface(surface);gpu.close();}

@@ -29,16 +29,22 @@ def main():
     jobs = [
         {'entry': 'site/games/farm/shaders/environment.dl', 'kind': 'shader', 'stage': 'fragment', 'output': 'environment'},
         {'entry': 'tests/web/farm_lighting_query.dl', 'kind': 'shader', 'stage': 'fragment', 'output': 'query'},
-        {'entry': 'tests/web/site_farm_lighting_data.dl', 'kind': 'wasm', 'output': 'lighting-data.wasm'}
+        {'entry': 'site/games/farm/shaders/vertex.dl', 'kind': 'shader', 'stage': 'vertex', 'output': 'surface-vertex'},
+        {'entry': 'site/games/farm/shaders/surface.dl', 'kind': 'shader', 'stage': 'fragment', 'output': 'surface-fragment'},
+        {'entry': 'site/games/farm/shaders/shadow.dl', 'kind': 'shader', 'stage': 'vertex', 'output': 'shadow'},
+        {'entry': 'site/games/farm/shaders/post.dl', 'kind': 'shader', 'stage': 'fragment', 'output': 'post'},
+        {'entry': 'site/packages/dynlex-ui/ui/shaders/environment_dfg.dl', 'kind': 'shader', 'stage': 'fragment', 'output': 'scattering'},
+        {'entry': 'tests/web/site_farm_lighting_data.dl', 'kind': 'wasm', 'output': 'lighting-data.wasm'},
+        {'entry': 'tests/web/site_farm_renderer_data.dl', 'kind': 'wasm', 'output': 'scene-data.wasm'}
     ]
-    for entry in ['tests/web/farm_lighting_query.dl', 'tests/web/site_farm_lighting_data.dl']:
+    for entry in ['tests/web/farm_lighting_query.dl', 'tests/web/site_farm_lighting_data.dl', 'tests/web/site_farm_renderer_data.dl']:
         sources[entry] = (ROOT / entry).read_text()
     request = output / 'request.json'
     request.write_text(json.dumps({'sources': sources, 'jobs': jobs}))
     subprocess.run(['node', str(ROOT / 'scripts/compile_project.mjs'), str(request), str(output)],
                    cwd=ROOT, check=True, timeout=180)
     stages = {}
-    for name in ['environment', 'query']:
+    for name in [job['output'] for job in jobs if job['kind'] == 'shader']:
         stages[name] = {
             'webgpu': (output / f'{name}.wgsl').read_text(),
             'webgl': (output / f'{name}.glsl').read_text(),
@@ -46,7 +52,9 @@ def main():
         }
     (output / 'stages.json').write_text(json.dumps(stages))
     shutil.copyfile(ROOT / 'tests/web/models/site_farm_lighting.json', output / 'sky-reference.json')
+    shutil.copyfile(ROOT / 'tests/web/models/site_farm_materials.json', output / 'material-reference.json')
     shutil.copyfile(ROOT / 'tests/web/farm_renderer_rendering.mjs', output / 'rendering.mjs')
+    shutil.copyfile(ROOT / 'tests/web/farm_scene_rendering.mjs', output / 'scene-rendering.mjs')
     (output / 'index.html').write_text('<!doctype html><meta charset="utf-8"><title>Farm renderer test</title><link rel="icon" href="data:,">')
     subprocess.run(['node', str(ROOT / 'tests/web/farm_renderer_data.mjs'), str(output)], cwd=ROOT, check=True, timeout=60)
     print(f'Prepared actual Farm shaders and reference data: {output}')

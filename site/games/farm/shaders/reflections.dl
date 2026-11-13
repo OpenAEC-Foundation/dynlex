@@ -1,0 +1,16 @@
+# Shader resources stay in the application; physical lighting stays in dynlex-ui.
+import ../../../packages/dynlex-ui/ui/scene_lighting_shader.dl
+
+the website Farm reflection image means: the shader cube image named "reflection" at binding 11
+the website Farm reflection sampler means: the shader sampler named "reflection_filter" at binding 12
+the website Farm scattering image means: the shader image named "scattering" at binding 13
+the website Farm scattering sampler means: the shader sampler named "scattering_filter" at binding 14
+
+to get [the website Farm scattering at roughness] {floating-point number:roughness} [cosine] {floating-point number:cosine}:
+    set coordinates to @intrinsic("construct", @intrinsic("vector", 2), roughness, cosine)
+    set sample to the sample from (the website Farm scattering image) using (the website Farm scattering sampler) at coordinates with level 0.0
+    return a new vector with x (the element at 0 in sample), y (the element at 1 in sample) and z 0.0
+
+to get [the website Farm reflection along] {vector:direction} [at level] {floating-point number:level}:
+    set sample to the sample from (the website Farm reflection image) using (the website Farm reflection sampler) at direction with level level
+    return a new vector with x (the element at 0 in sample), y (the element at 1 in sample) and z (the element at 2 in sample)

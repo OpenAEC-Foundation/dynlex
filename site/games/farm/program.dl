@@ -1,0 +1,85 @@
+# The Farm's render graph is application data, shared by every platform host.
+import ../../packages/dynlex-ui/ui/shader_graph.dl
+import ../../packages/dynlex-ui/ui/scene_draw_types.dl
+import ../../packages/dynlex-ui/ui/scene_buffer_layouts.dl
+
+the website Farm reflection size means: 128
+the website Farm reflection levels means: 8
+the website Farm scattering pass means: (the website Farm reflection levels) * 6
+the website Farm shadow pass means: (the website Farm scattering pass) + 1
+the website Farm surface pass means: (the website Farm shadow pass) + 1
+the website Farm post pass means: (the website Farm surface pass) + 1
+
+to get [a website Farm pass with vertex] {a pointer to JSON value:vertex} [fragment] {a pointer to JSON value:fragment} [drawing meshes] {boolean:mesh}:
+    set pass to a JSON object containing [
+        JSON child "vertex" is (a new JSON-RPC null), JSON child "fragment" is (a new JSON-RPC null),
+        JSON child "uniforms" is (a new JSON-RPC array), JSON child "resources" is (a new JSON-RPC array),
+        JSON child "glslBindings" is (a new JSON-RPC array), JSON child "glslUniforms" is (a new JSON-RPC array),
+        JSON child "vertexBuffers" is ((the UI scene shader vertex layouts) if mesh, else (a new JSON-RPC array)),
+        JSON child "indices" is (a new JSON-RPC null), JSON child "draws" is (a new JSON-RPC array),
+        JSON child "color" is (a new JSON-RPC null), JSON child "depth" is (a new JSON-RPC null),
+        JSON child "pipelines" is (a new JSON-RPC array), JSON text "topology" is "triangle-list"
+    ]
+    if vertex is not JSON null:
+        set error to the error from linking UI shader stage vertex into pass pass
+        require condition (error = "") reporting error
+        set JSON member (JSON child "vertex" is (the linked UI shader stage vertex stored as "source")) in pass
+    if fragment is not JSON null:
+        set error to the error from linking UI shader stage fragment into pass pass
+        require condition (error = "") reporting error
+        set JSON member (JSON child "fragment" is (the linked UI shader stage fragment stored as "source")) in pass
+    if mesh = false:
+        set draw to a UI shader draw counting 3 instanced 1 starting at 0 with vertex offset 0 and instance offset 0 indexed false
+        add (the JSON form of UI shader draw draw) to the JSON array (the JSON member named "draws" in pass)
+    return pass
+
+to get [a website Farm color attachment named] {C string:name} [at level] {integer:level} [layer] {integer:layer} [loading] {C string:load}:
+    return a UI shader color attachment using (a UI shader image view of name at level level layer layer) resolving into (a new JSON-RPC null) loading load storing "store" cleared to [0.0,0.0,0.0,0.0]
+
+to get [the website Farm render graph using] {a pointer to JSON value:stages}:
+    set none to a new JSON-RPC null
+    set fullscreen to a JSON array containing [a UI shader raster state culling "none" facing "ccw" writing depth false comparing "always" blending "opaque"]
+    set passes to a new JSON-RPC array
+    loop level from 0 to (the website Farm reflection levels):
+        loop face from 0 to 6:
+            set pass to a website Farm pass with vertex none fragment (the JSON member named "environment" in stages) drawing meshes false
+            set JSON member (JSON child "color" is (a website Farm color attachment named "reflection" at level level layer face loading "load")) in pass
+            set JSON member (JSON child "pipelines" is (a copy of JSON-RPC node fullscreen)) in pass
+            add pass to the JSON array passes
+    set pass to a website Farm pass with vertex none fragment (the JSON member named "scattering" in stages) drawing meshes false
+    set JSON member (JSON child "color" is (a website Farm color attachment named "scattering" at level 0 layer 0 loading "load")) in pass
+    set JSON member (JSON child "pipelines" is (a copy of JSON-RPC node fullscreen)) in pass
+    add pass to the JSON array passes
+    set pass to a website Farm pass with vertex (the JSON member named "shadow" in stages) fragment none drawing meshes true
+    set JSON member (JSON child "depth" is (a UI shader depth attachment using (a UI shader image view of "shadow" at level 0 layer 0) loading "clear" storing "store" cleared to 1.0)) in pass
+    set JSON member (JSON child "pipelines" is (the UI scene shadow pipelines)) in pass
+    add pass to the JSON array passes
+    set pass to a website Farm pass with vertex (the JSON member named "surface-vertex" in stages) fragment (the JSON member named "surface-fragment" in stages) drawing meshes true
+    set color to a UI shader color attachment using (a UI shader image view of "scene_multisample" at level 0 layer 0) resolving into (a UI shader image view of "scene" at level 0 layer 0) loading "clear" storing "discard" cleared to [0.0,0.0,0.0,0.0]
+    set JSON member (JSON child "color" is color) in pass
+    set JSON member (JSON child "depth" is (a UI shader depth attachment using (a UI shader image view of "depth" at level 0 layer 0) loading "clear" storing "discard" cleared to 1.0)) in pass
+    set JSON member (JSON child "pipelines" is (the UI scene color pipelines)) in pass
+    add pass to the JSON array passes
+    set pass to a website Farm pass with vertex none fragment (the JSON member named "post" in stages) drawing meshes false
+    set JSON member (JSON child "color" is (a website Farm color attachment named "output" at level 0 layer 0 loading "clear")) in pass
+    set JSON member (JSON child "pipelines" is (a copy of JSON-RPC node fullscreen)) in pass
+    add pass to the JSON array passes
+    set assets to a JSON array containing [
+        a UI shader image named "shadow" storing "depth32float" sized 2048 by 2048 with 1 level,
+        a UI shader cube image named "reflection" storing "rgba16float" sized (the website Farm reflection size) with (the website Farm reflection levels) levels,
+        a UI shader image named "scattering" storing "rgba16float" sized 128 by 128 with 1 level,
+        a UI shader frame image named "scene_multisample" storing "rgba16float" with 4 samples,
+        a UI shader frame image named "depth" storing "depth24plus" with 4 samples,
+        a UI shader frame image named "scene" storing "rgba16float",
+        a UI shader frame image named "output" storing "rgba8unorm-srgb",
+        a UI shader smooth sampler named "reflection_filter",
+        a UI shader smooth sampler named "scattering_filter",
+        a UI shader smooth sampler named "scene_filter",
+        a UI shader shadow sampler named "shadow_filter"
+    ]
+    set result to a JSON object containing [JSON text "operation" is "shader", JSON text "output" is "output", JSON child "assets" is assets, JSON child "passes" is passes]
+    set error to the error in UI shader graph result
+    require condition (error = "") reporting error
+    free none
+    free fullscreen
+    return result
