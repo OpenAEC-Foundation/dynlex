@@ -44,6 +44,10 @@ def check_cache_metadata(root, build):
     main = root / "cache_metadata.dl"
     main.write_text('@intrinsic("discard", 0)\n')
     first = build(entry=main)
+    assert first[0]["cache_entries_scanned"] > 0
+    assert first[0]["cache_entries_sorted"] == 0, \
+        "cache entries were ordered when no eviction was necessary"
+    assert first[0]["cache_entries_removed"] == 0
     directory = root / "cache" / "native-v1"
     older = directory / ("object-" + "0" * 63 + "1.entry")
     newer = directory / ("object-" + "0" * 63 + "2.entry")
@@ -56,6 +60,8 @@ def check_cache_metadata(root, build):
             os.utime(path, (1, 1))
         repeated = build(entry=main)
         assert repeated[1:] == first[1:]
+        assert repeated[0]["cache_entries_sorted"] == repeated[0]["cache_entries_scanned"]
+        assert repeated[0]["cache_entries_removed"] > 0
         assert not older.exists() and newer.exists(), \
             "equal-age cache entries were not evicted in path order"
         invalid.mkdir()

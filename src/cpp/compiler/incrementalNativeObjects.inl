@@ -133,6 +133,7 @@ struct BuildStatistics {
 	size_t cachePayloadsLoaded = 0;
 	double cacheRestoreMilliseconds = 0;
 	double cacheFinalizeMilliseconds = 0;
+	CacheTrimWork cacheTrimWork;
 	double totalMilliseconds = 0;
 	double frontendMilliseconds = 0;
 	double cachedBodySelectionMilliseconds = 0;

@@ -5,6 +5,7 @@ import ctypes
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -45,8 +46,11 @@ def main():
         pid_file = root / "child.pid"
         parallel_pid_file = root / "parallel.pid"
         child.write_text(
-            "import os,sys,time\n"
+            "import os,sys,tempfile,time\n"
             "from pathlib import Path\n"
+            "temporary = Path(tempfile.mkdtemp(prefix='dynlex-timeout-child-'))\n"
+            "(temporary / 'artifact').write_bytes(b'child artifact')\n"
+            "Path(sys.argv[1] + '.temporary').write_text(str(temporary))\n"
             "Path(sys.argv[1]).write_text(str(os.getpid()))\n"
             "time.sleep(60)\n", encoding="utf-8",
         )
@@ -57,7 +61,7 @@ if [[ "$1" == inner ]]; then
     run_with_timeout 30 "$3" "$4/child.py" "$4/parallel.pid" &
     wait
 else
-    run_with_timeout "$6" "$5" "$0" inner "$2" "$3" "$4" "$5"
+    run_with_timeout "$6" --isolate-temporaries true "$5" "$0" inner "$2" "$3" "$4" "$5"
 fi
 ''', encoding="utf-8", newline="\n")
         pids = []
@@ -73,6 +77,8 @@ fi
             assert result.returncode == 124, (result.returncode, result.stdout, result.stderr)
             assert time.monotonic() - started < 10, "watchdog did not return promptly"
             assert all(not running(pid) for pid in pids), "outer timeout left a nested timed process running"
+            assert all(not Path(path.read_text()).exists() for path in root.glob('*.temporary')), \
+                "outer timeout left child temporary files behind"
         finally:
             for path in (pid_file, parallel_pid_file):
                 if path.exists():
@@ -83,6 +89,10 @@ fi
                                            stdout=subprocess.DEVNULL)
                         else:
                             os.kill(pid, signal.SIGKILL)
+            for path in root.glob('*.temporary'):
+                temporary_path = Path(path.read_text())
+                if temporary_path.exists():
+                    shutil.rmtree(temporary_path)
 
 
 if __name__ == "__main__":

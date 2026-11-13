@@ -139,6 +139,7 @@ run_with_timeout() {
     local standard_input_bytes_file=""
     local working_directory_file=""
     local environment_file=""
+    local isolate_temporaries=false
     while [[ "${1:-}" == --* ]]; do
         if [[ $# -lt 2 ]]; then
             echo "run_with_timeout: ${1:-option} requires a path" >&2
@@ -150,6 +151,7 @@ run_with_timeout() {
         --standard-input-file) standard_input_file="$2" ;;
         --working-directory-file) working_directory_file="$2" ;;
         --environment-file) environment_file="$2" ;;
+        --isolate-temporaries) isolate_temporaries="$2" ;;
         *)
             echo "run_with_timeout: unknown option $1" >&2
             return 125
@@ -157,13 +159,15 @@ run_with_timeout() {
         esac
         shift 2
     done
-    python3 - "$seconds" "$arguments_file" "$standard_input_file" "$standard_input_bytes_file" "$working_directory_file" "$environment_file" "$PROJECT_DIR" "$@" <<'PY'
+    python3 - "$seconds" "$arguments_file" "$standard_input_file" "$standard_input_bytes_file" "$working_directory_file" "$environment_file" "$PROJECT_DIR" "$isolate_temporaries" "$@" <<'PY'
+import atexit
 import os
 from pathlib import Path
 import re
 import signal
 import subprocess
 import sys
+import tempfile
 
 timeout_seconds = int(sys.argv[1])
 arguments_file = sys.argv[2]
@@ -172,7 +176,8 @@ standard_input_bytes_file = sys.argv[4]
 working_directory_file = sys.argv[5]
 environment_file = sys.argv[6]
 project_directory = Path(sys.argv[7])
-cmd = sys.argv[8:]
+isolate_temporaries = sys.argv[8] == "true"
+cmd = sys.argv[9:]
 if arguments_file:
     data = Path(arguments_file).read_bytes()
     argument_lines = [] if not data else data.split(b"\n")
@@ -254,6 +259,14 @@ if environment_file:
             sys.exit(125)
         configured_names.add(name)
         process_environment[name] = value
+
+if isolate_temporaries:
+    temporary_root = tempfile.TemporaryDirectory(prefix="dynlex-test-suite-")
+    atexit.register(temporary_root.cleanup)
+    if process_environment is None:
+        process_environment = os.environ.copy()
+    temporary_path = Path(temporary_root.name).as_posix()
+    process_environment.update({name: temporary_path for name in ("TMPDIR", "TMP", "TEMP")})
 
 popen_options = {
     "stdout": subprocess.PIPE,
@@ -385,7 +398,7 @@ if [[ "$run_only" != "true" ]]; then
 fi
 
 if [[ "$suite" == required && "$suite_worker" != true ]]; then
-    run_with_timeout 120 "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --suite-worker
+    run_with_timeout 120 --isolate-temporaries true "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --suite-worker
     suite_exit=$?
     if [[ $suite_exit -eq 124 ]]; then
         printf '%s\n' "${RED}Required tests exceeded the 120-second budget.${NC}"

@@ -56,6 +56,7 @@
 #include "llvm/Support/Caching.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/SHA256.h"
 #include "llvm/Support/Threading.h"
@@ -921,7 +922,7 @@ bool compileIncrementally(
 		auto finalizeStart = Clock::now();
 		if (success)
 			fs::remove(failedEntry);
-		trimCache(directory);
+		statistics.cacheTrimWork = trimCache(directory);
 		statistics.cacheFinalizeMilliseconds = elapsedMilliseconds(finalizeStart);
 		statistics.fileObservationRequests = recording->observationRequests();
 		statistics.fileObservationsComputed = recording->observationsComputed();
