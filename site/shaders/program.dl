@@ -80,7 +80,7 @@ to get [a linked render pass for] {live shader:shader} [drawing geometry] {boole
         JSON child "fragment" is (the linked UI shader stage fragment stored as kind), JSON child "vertex" is vertex,
         JSON child "vertexBuffers" is buffers, JSON child "indices" is indices, JSON child "draws" is draws,
         JSON child "depth" is depth,
-        JSON child "state" is (a UI shader raster state culling "none" facing "ccw" writing depth (depth is not JSON null) comparing ("less" if (depth is not JSON null), else "always") blending blend),
+        JSON child "pipelines" is (a JSON array containing [a UI shader raster state culling "none" facing "ccw" writing depth (depth is not JSON null) comparing ("less" if (depth is not JSON null), else "always") blending blend]),
         JSON child "color" is (a UI shader color attachment using (a UI shader image view of "output" at level 0 layer 0) resolving into (a new JSON-RPC null) loading ("load" if (layer = 1), else "clear") storing "store" cleared to [0.0,0.0,0.0,1.0]),
         JSON text "topology" is "triangle-list", JSON number "renderPass" is layer
     ]

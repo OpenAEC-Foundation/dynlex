@@ -34,7 +34,7 @@ require condition (linked succeeded) reporting "The terrain shader did not link"
 set program to linked's program
 set first to the JSON value at index 0 in (the JSON member named "passes" in program)
 require condition ((the JSON member named "depth" in first) is not JSON null) reporting "Terrain lost depth testing"
-require condition (the JSON boolean named "depthWrite" in (the JSON member named "state" in first)) reporting "Terrain stopped writing depth"
+require condition (the JSON boolean named "depthWrite" in (the JSON value at index 0 in (the JSON member named "pipelines" in first))) reporting "Terrain stopped writing depth"
 require condition ((the JSON member named "uniforms" in first)'s length = 2) reporting "Shared vertex/fragment uniform bindings were duplicated"
 require condition ((the JSON text named "kind" in (the JSON member named "webgl" in (the JSON member named "vertex" in first))) = "url") reporting "A packaged shader lost its URL source"
 set buffers to the JSON member named "vertexBuffers" in first
@@ -48,7 +48,7 @@ set program to linked's program
 set passes to the JSON member named "passes" in program
 require condition (passes's length = 2) reporting "The point-cloud shader lost its background pass"
 set second to the JSON value at index 1 in passes
-set blend to the JSON member named "blend" in (the JSON member named "state" in second)
+set blend to the JSON member named "blend" in (the JSON value at index 0 in (the JSON member named "pipelines" in second))
 require condition ((the JSON text named "dstFactor" in (the JSON member named "color" in blend)) = "one") reporting "The point cloud lost its additive blend"
 require condition ((the JSON text named "load" in (the JSON member named "color" in second)) = "load") reporting "The point cloud stopped preserving its background"
 require condition ((the JSON number named "renderPass" in second) = 1.0) reporting "The point-cloud pass lost its shader layer"
