@@ -65,6 +65,18 @@ struct ParseContext {
 		TypeConstraint constraint;
 		DataType parameterType;
 	};
+	struct IncrementalConstraintQuery {
+		enum class State { Pending, Ready, Failed, Blocked };
+		std::string identity;
+		std::string text;
+		State state = State::Pending;
+		int pass = 0;
+		std::optional<IncrementalConstraintValue> value;
+		std::unordered_set<const Section *> dependencies;
+		std::vector<Diagnostic> diagnostics;
+		bool reusable = false;
+		bool readsReused = false;
+	};
 	struct RestoredBodyReference {
 		PatternReference *reference;
 		std::unique_ptr<PatternMatch> match;
@@ -116,20 +128,13 @@ struct ParseContext {
 	std::function<bool(Section &)> reuseInitialVariableLikeCounts;
 	std::function<void(const std::list<Section *> &)> recordInitialVariableLikeCounts;
 	size_t variableLikeCountUnitsReused = 0;
-	// A native build may reuse the successful ordering of type-constraint probes
-	// when its saved dependency closure and matching environment are unchanged.
-	bool reuseDeclaredConstraintProbes = false;
-	std::vector<std::string> priorConstraintProbeItems;
-	std::vector<int> priorConstraintProbePasses;
-	std::vector<bool> priorConstraintProbeReusable;
-	std::vector<std::optional<IncrementalConstraintValue>> priorConstraintProbeValues;
-	std::vector<std::unordered_set<const Section *>> priorConstraintProbeDependencies;
-	std::vector<std::string> constraintProbeItems;
-	std::vector<std::string> constraintProbeTexts;
-	std::vector<int> constraintProbePasses;
-	std::vector<std::optional<IncrementalConstraintValue>> constraintProbeValues;
-	std::vector<std::unordered_set<const Section *>> constraintProbeDependencies;
-	std::vector<bool> constraintProbeReadsReused;
+	// Query products survive an incomplete constraint stage. Unvisited queries
+	// remain pending; completed values and terminal errors retain their reads.
+	bool collectedConstraintQueries = false;
+	std::vector<IncrementalConstraintQuery> priorConstraintQueries;
+	std::vector<IncrementalConstraintQuery> constraintQueries;
+	// A stage query retains every selected diagnostic before display suppression.
+	std::vector<Diagnostic> *activeDiagnosticProduct = nullptr;
 	size_t constraintProbesReused = 0;
 	size_t constraintProbesRun = 0;
 	size_t constraintValuesReused = 0;

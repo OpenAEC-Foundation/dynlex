@@ -91,9 +91,10 @@ class IncrementalInferenceReads {
 		}
 	}
 
-	void validate(ParseContext &context, const Json &prior) {
+	Keys validate(ParseContext &context, const Json &prior) {
+		Keys changedNow;
 		if (prior.empty())
-			return;
+			return changedNow;
 		std::unordered_map<std::string_view, const lsp::SourceFile *> sources;
 		for (const auto &[_, file] : context.importedFiles)
 			sources.emplace(file->uri, file);
@@ -101,6 +102,7 @@ class IncrementalInferenceReads {
 			auto source = sources.find(lookup.at("source").get_ref<const std::string &>());
 			if (source == sources.end()) {
 				changed.insert(key);
+				changedNow.insert(key);
 				continue;
 			}
 			Json candidates;
@@ -113,12 +115,15 @@ class IncrementalInferenceReads {
 				candidates =
 					encodeConversions(visibleUserConversions(context, *source->second, lookup.at("implicit").get<bool>()));
 			}
-			if (lookup.at("candidates") != candidates)
+			if (lookup.at("candidates") != candidates) {
 				changed.insert(key);
+				changedNow.insert(key);
+			}
 			validatedObservations[key] = lookup;
 			validatedObservations[key]["candidates"] = std::move(candidates);
 		}
-		checked = prior.size();
+		checked += prior.size();
+		return changedNow;
 	}
 
 	// Registry membership is available before constraints. Typed lookup inputs

@@ -58,7 +58,7 @@ static bool commitNumberRule(DeclaredTypeConstraintWorkItem &item, ParseContext 
 	line->expression = item.expression;
 	auto *rulesSection = static_cast<ScopeRulesSection *>(line->section);
 	if (!expressionEvaluatesIntrinsic(item.expression, IntrinsicKind::NumberRule)) {
-		parseContext.diagnostics.push_back(
+		parseContext.addDiagnostic(
 			Diagnostic(parseContext, Diagnostic::Level::Error, "number rule not a rule", item.diagnosticRange)
 		);
 		return false;
@@ -66,7 +66,7 @@ static bool commitNumberRule(DeclaredTypeConstraintWorkItem &item, ParseContext 
 	TypeConstraint number = TypeConstraint::any();
 	number.requiresNumeric = true;
 	if (rule.equivalentTo(number)) {
-		parseContext.diagnostics.push_back(Diagnostic(
+		parseContext.addDiagnostic(Diagnostic(
 			parseContext, Diagnostic::Level::Warning, "number rule adds nothing", item.diagnosticRange, "rule",
 			item.diagnosticRange.subString
 		));
@@ -336,53 +336,24 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 	if (!collectDeclaredTypeConstraintWorkItems(parseContext, parseContext.mainSection, items, identities))
 		return false;
 	const auto variableOwners = variableDefinitionOwners(parseContext.mainSection);
-	parseContext.constraintProbeItems.clear();
-	parseContext.constraintProbeTexts.clear();
-	parseContext.constraintProbePasses.assign(items.size(), 0);
-	parseContext.constraintProbeValues.resize(items.size());
-	parseContext.constraintProbeDependencies.clear();
-	parseContext.constraintProbeDependencies.resize(items.size());
-	parseContext.constraintProbeReadsReused.assign(items.size(), false);
+	using Query = ParseContext::IncrementalConstraintQuery;
+	parseContext.constraintQueries.clear();
 	for (const DeclaredTypeConstraintWorkItem &item : items) {
-		parseContext.constraintProbeItems.push_back(identities.identity(item));
-		parseContext.constraintProbeTexts.push_back(item.typeConstraintName);
+		Query query;
+		query.identity = identities.identity(item);
+		query.text = item.typeConstraintName;
+		parseContext.constraintQueries.push_back(std::move(query));
 	}
 	alignDeclaredConstraintQueries(parseContext, identities);
-	bool reuseProbes = parseContext.reuseDeclaredConstraintProbes &&
-					   parseContext.priorConstraintProbeItems == parseContext.constraintProbeItems &&
-					   parseContext.priorConstraintProbePasses.size() == items.size() &&
-					   parseContext.priorConstraintProbeReusable.size() == items.size() &&
-					   parseContext.priorConstraintProbeValues.size() == items.size() &&
-					   parseContext.priorConstraintProbeDependencies.size() == items.size();
+	parseContext.collectedConstraintQueries = true;
 	for (DeclaredTypeConstraintWorkItem &item : items) {
 		if (!item.expressionOmittedForReuse)
 			continue;
-		if (reuseProbes) {
-			parseContext.constraintExpressionsReused++;
-			if (parseContext.retainParsedTemporaryExpression) {
-				Range sourceRange = item.element ? patternElementTypeConstraintRange(*item.definition, *item.element)
-												 : item.variableReference->declaredTypeConstraintRange;
-				parseContext.retainParsedTemporaryExpression(sourceRange, SectionType::Function);
-			}
-			continue;
-		}
-		requireCompilerInvariant(item.sourceSection, "omitted type-constraint expression has no source section");
-		Range sourceRange = item.element ? patternElementTypeConstraintRange(*item.definition, *item.element)
-										 : item.variableReference->declaredTypeConstraintRange;
-		item.expression = createTypeConstraintExpression(parseContext, item.sourceSection, sourceRange);
-		item.expressionOmittedForReuse = false;
-		if (item.element && item.expression)
-			requireCompilerInvariant(
-				classifyPatternTypeConstraintDependencies(parseContext, *item.definition, *item.element, item.expression) &&
-					!item.element->hasDependentTypeConstraint,
-				"reparsed reusable pattern constraint became dependent"
-			);
-		if (item.variableReference && item.expression) {
-			Section *definitionSection = enclosingPatternDefinitionSection(item.sourceSection);
-			requireCompilerInvariant(
-				!definitionSection || !expressionReferencesSectionPatternParameter(definitionSection, item.expression),
-				"reparsed reusable variable constraint became dependent"
-			);
+		parseContext.constraintExpressionsReused++;
+		if (parseContext.retainParsedTemporaryExpression) {
+			Range sourceRange = item.element ? patternElementTypeConstraintRange(*item.definition, *item.element)
+											 : item.variableReference->declaredTypeConstraintRange;
+			parseContext.retainParsedTemporaryExpression(sourceRange, SectionType::Function);
 		}
 	}
 	auto destroyExpressions = [&]() {
@@ -407,6 +378,13 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 	}
 
 	size_t unresolvedCount = items.size();
+	struct DiagnosticProductScope {
+		ParseContext &context;
+		std::vector<Diagnostic> *previous;
+		DiagnosticProductScope(ParseContext &context, std::vector<Diagnostic> &product)
+			: context(context), previous(std::exchange(context.activeDiagnosticProduct, &product)) {}
+		~DiagnosticProductScope() { context.activeDiagnosticProduct = previous; }
+	};
 	int pass = 0;
 	while (unresolvedCount > 0) {
 		pass++;
@@ -419,13 +397,29 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 			DeclaredTypeConstraintWorkItem &item = items[itemIndex];
 			if (!item.expression && !item.expressionOmittedForReuse)
 				continue;
-			bool reuseItem = reuseProbes && parseContext.priorConstraintProbeReusable[itemIndex];
+			Query &query = parseContext.constraintQueries[itemIndex];
+			const Query *prior =
+				parseContext.priorConstraintQueries.empty() ? nullptr : &parseContext.priorConstraintQueries.at(itemIndex);
+			bool reuseItem = prior && prior->reusable;
+			if (reuseItem && prior->state == Query::State::Blocked) {
+				// A fixed-point product proves deferral, not a per-query error.
+				// Independent queries must still run before a cycle is diagnosed.
+				DiagnosticProductScope diagnosticScope(parseContext, query.diagnostics);
+				query.state = prior->state;
+				query.pass = pass;
+				query.dependencies = prior->dependencies;
+				query.readsReused = true;
+				for (const Diagnostic &diagnostic : prior->diagnostics)
+					parseContext.addDiagnostic(diagnostic);
+				parseContext.constraintProbesReused++;
+				continue;
+			}
 			if (reuseItem) {
 				requireCompilerInvariant(
-					parseContext.priorConstraintProbePasses[itemIndex] >= pass,
+					prior->pass >= pass && prior->state != Query::State::Pending,
 					"reused type-constraint probe passed before its pending item"
 				);
-				if (parseContext.priorConstraintProbePasses[itemIndex] > pass)
+				if (prior->pass > pass)
 					continue;
 			}
 			if ((!item.definition || !item.element) && (!item.variable || !item.variableReference) && !item.numberRuleLine) {
@@ -442,15 +436,25 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 					continue;
 				}
 			}
+			DiagnosticProductScope diagnosticScope(parseContext, query.diagnostics);
+			if (reuseItem && prior->state == Query::State::Failed) {
+				query.state = prior->state;
+				query.pass = pass;
+				query.dependencies = prior->dependencies;
+				query.readsReused = true;
+				for (const Diagnostic &diagnostic : prior->diagnostics)
+					parseContext.addDiagnostic(diagnostic);
+				parseContext.constraintProbesReused++;
+				destroyExpressions();
+				return false;
+			}
 			PatternTypeConstraintProbe probe = PatternTypeConstraintProbe::Ready;
 			if (reuseItem)
 				parseContext.constraintProbesReused++;
 			else {
 				// Keep every syntactic candidate and binding read, including
 				// attempts that defer or later lose a grouping trial.
-				recordDeclaredConstraintDependencies(
-					item, parseContext, variableOwners, parseContext.constraintProbeDependencies[itemIndex]
-				);
+				recordDeclaredConstraintDependencies(item, parseContext, variableOwners, query.dependencies);
 				probe = probeDeclaredTypeConstraint(item, parseContext, nullptr, {.constraintProbe = itemIndex});
 				parseContext.constraintProbesRun++;
 			}
@@ -458,23 +462,25 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 				continue;
 			if (probe == PatternTypeConstraintProbe::Invalid || probe == PatternTypeConstraintProbe::Impure) {
 				if (probe == PatternTypeConstraintProbe::Invalid && item.failureDiagnostic) {
-					parseContext.diagnostics.push_back(std::move(*item.failureDiagnostic));
+					parseContext.addDiagnostic(std::move(*item.failureDiagnostic));
 				} else if (probe == PatternTypeConstraintProbe::Invalid) {
-					parseContext.diagnostics.push_back(
+					parseContext.addDiagnostic(
 						unknownTypeConstraintDiagnostic(parseContext, item.diagnosticRange, item.typeConstraintName)
 					);
 				} else {
-					parseContext.diagnostics.push_back(Diagnostic(
+					parseContext.addDiagnostic(Diagnostic(
 						parseContext, Diagnostic::Level::Error, "impure type constraint", item.diagnosticRange,
 						"type_constraint", item.typeConstraintName
 					));
 				}
+				query.state = Query::State::Failed;
+				query.pass = pass;
 				destroyExpressions();
 				return false;
 			}
-			bool reuseValue = reuseItem && !item.numberRuleLine && parseContext.priorConstraintProbeValues[itemIndex];
+			bool reuseValue = reuseItem && !item.numberRuleLine && prior->value;
 			if (reuseValue) {
-				const auto &value = *parseContext.priorConstraintProbeValues[itemIndex];
+				const auto &value = *prior->value;
 				if (item.element) {
 					item.element->resolvedTypeConstraint = value.constraint;
 					item.element->resolvedParameterType = value.parameterType;
@@ -483,29 +489,29 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 					item.variableReference->declaredTypeConstraint = value.constraint;
 					item.variableReference->declaredType = value.parameterType;
 				}
-				parseContext.constraintProbeValues[itemIndex] = value;
-				parseContext.constraintProbeDependencies[itemIndex] = parseContext.priorConstraintProbeDependencies[itemIndex];
+				query.value = value;
+				query.dependencies = prior->dependencies;
+				for (const Diagnostic &diagnostic : prior->diagnostics)
+					parseContext.addDiagnostic(diagnostic);
 				parseContext.constraintValuesReused++;
 			} else {
-				size_t diagnosticsBeforeCommit = parseContext.diagnostics.size();
 				commitDeclaredTypeConstraint(item, parseContext, itemIndex);
-				bool cacheableResult = parseContext.diagnostics.size() == diagnosticsBeforeCommit;
-				if (cacheableResult && item.element)
-					parseContext.constraintProbeValues[itemIndex] = ParseContext::IncrementalConstraintValue{
+				if (item.element)
+					query.value = ParseContext::IncrementalConstraintValue{
 						item.element->resolvedTypeConstraint, item.element->resolvedParameterType
 					};
-				else if (cacheableResult && item.variableReference)
-					parseContext.constraintProbeValues[itemIndex] = ParseContext::IncrementalConstraintValue{
+				else if (item.variableReference)
+					query.value = ParseContext::IncrementalConstraintValue{
 						item.variableReference->declaredTypeConstraint, item.variableReference->declaredType
 					};
-				recordDeclaredConstraintDependencies(
-					item, parseContext, variableOwners, parseContext.constraintProbeDependencies[itemIndex]
-				);
+				recordDeclaredConstraintDependencies(item, parseContext, variableOwners, query.dependencies);
 			}
-			parseContext.constraintProbePasses[itemIndex] = pass;
-			parseContext.constraintProbeReadsReused[itemIndex] = reuseItem;
+			query.state = Query::State::Ready;
+			query.pass = pass;
+			query.readsReused = reuseItem;
 			if (item.numberRuleLine) {
 				if (!commitNumberRule(item, parseContext, item.numberRuleConstraint)) {
+					query.state = Query::State::Failed;
 					item.expression = nullptr;
 					destroyExpressions();
 					return false;
@@ -524,10 +530,27 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 			return item.expression != nullptr || item.expressionOmittedForReuse;
 		});
 		requireCompilerInvariant(unresolved != items.end(), "type-constraint worklist lost its unresolved item");
-		parseContext.diagnostics.push_back(Diagnostic(
+		parseContext.addDiagnostic(Diagnostic(
 			parseContext, Diagnostic::Level::Error, "cyclic type constraint", unresolved->diagnosticRange, "type_constraint",
 			unresolved->typeConstraintName
 		));
+		// Each blocked query consumes the fixed-point frontier. A change to
+		// any pending signature can unblock another query in that frontier.
+		std::unordered_set<const Section *> blockers;
+		for (const DeclaredTypeConstraintWorkItem &item : items)
+			if (item.expression || item.expressionOmittedForReuse) {
+				Section *owner = item.sourceSection;
+				while (owner->parent && owner->patternDefinitions.empty())
+					owner = owner->parent;
+				blockers.insert(owner);
+			}
+		for (size_t index = 0; index < items.size(); index++)
+			if (items[index].expression || items[index].expressionOmittedForReuse) {
+				Query &query = parseContext.constraintQueries[index];
+				query.state = Query::State::Blocked;
+				query.pass = pass;
+				query.dependencies.insert(blockers.begin(), blockers.end());
+			}
 		destroyExpressions();
 		return false;
 	}

@@ -351,6 +351,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalInferenceUnitGraph.inl"
 #include "incrementalDependencyGraph.inl"
 #include "incrementalConstraintProbeReuse.inl"
+#include "incrementalConstraintState.inl"
 #include "incrementalInferenceUnitCheck.inl"
 #include "incrementalRootExecution.inl"
 #include "incrementalInferenceController.inl"
@@ -467,6 +468,9 @@ bool compileIncrementally(
 				statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "all_function_projection");
 				statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 			}
+			const Json *frontendState = selectFrontendReuseState(
+				previous ? &*previous : nullptr, previousFailure ? &*previousFailure : nullptr, directory, statistics
+			);
 			auto restoreStart = Clock::now();
 			recording->observations = Json::object();
 			if (!previousMatcherKey.empty()) {
@@ -507,61 +511,7 @@ bool compileIncrementally(
 			IncrementalMatcherCache matcherCache(context, previousMatches, [&](std::string_view key) {
 				return readEntry(directory / ("matcher-segment-" + std::string(key) + ".entry"));
 			});
-			InitialParameterCounts initialParameterCounts(
-				context, previous ? &*previous : nullptr, recording->observations, statistics.parameterCountCacheMilliseconds
-			);
-			IncrementalClassification classification(
-				context, matcherCache, previous ? &*previous : nullptr, recording->observations, initialParameterCounts,
-				statistics.classification
-			);
-			context.selectCachedBodiesForResolutionReuse = [&]() {
-				auto selectionStart = Clock::now();
-				std::vector<Section *> selected = classification.select();
-				statistics.cachedBodySelectionMilliseconds += elapsedMilliseconds(selectionStart);
-				return selected;
-			};
-			context.invalidateCachedClassifications = [&]() {
-				return classification.invalidated();
-			};
-			std::string initialMatcherTree;
-			MatcherPathSnapshots matcherPaths(directory, compilerIdentity);
-			InitialMatcherProjection initialMatcherProjection;
-			PriorMatchKeys precedenceKeys;
-			std::vector<BodyResolutionUnit> bodyUnits;
-			context.reuseMatcherResult = std::bind_front(&IncrementalMatcherCache::reuse, &matcherCache);
-			context.recordMatcherResult = std::bind_front(&IncrementalMatcherCache::record, &matcherCache);
-			context.prepareDeferredMatcherReplay = [&](const std::list<PatternReference *> &references) {
-				auto projectionStart = Clock::now();
-				classification.recordOutputs();
-				const Json *prior = previous && compatibleObservations(*previous, recording->observations, context)
-										? &previous->at("all_function_projection")
-										: nullptr;
-				initialMatcherTree = matcherTreeSignature(context);
-				initialMatcherProjection.capture(
-					context, recording->observations, references, prior, initialParameterCounts.bodies(),
-					initialParameterCounts.sections(), initialMatcherTree
-				);
-				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
-				statistics.matcherDeclarationsReused = initialMatcherProjection.declarationsReused;
-				matcherPaths.retain(initialMatcherTree, context);
-				if (previous)
-					prepareDeferredMatchReplay(
-						context, *previous, recording->observations, initialMatcherTree, matcherPaths, matcherCache,
-						initialMatcherProjection, precedenceKeys, bodyUnits
-					);
-			};
-			context.restoreDeferredBodyUnits = [&]() {
-				return restoreBodyResolutionUnits(context, matcherCache, bodyUnits);
-			};
-			context.preparePrecedenceMatcherReplay = [&](const std::vector<PatternReference *> &references) {
-				initialMatcherProjection.captureBodyUnits(matcherCache);
-				if (previous)
-					preparePrecedenceMatchReplay(
-						context, previous->at("all_function_projection"), matcherCache, precedenceKeys, matcherPaths,
-						references, statistics.precedenceTreeSignatureMilliseconds, statistics.precedenceSignatureMilliseconds,
-						statistics.precedenceRuleSignatureMilliseconds, statistics.precedenceSignaturesReused
-					);
-			};
+#include "incrementalFrontendSetup.inl"
 			statistics.cacheRestoreMilliseconds = elapsedMilliseconds(restoreStart);
 			auto saveMatcher = [&]() {
 				auto saveStart = Clock::now();
@@ -650,11 +600,11 @@ bool compileIncrementally(
 						statistics.inactiveProjectionMatchesRechecked, statistics.sourceProjectionWork.matchEntriesReused
 					);
 			}
-			if (compiled && !refreshedProjection && previous &&
-				compatibleObservations(*previous, recording->observations, context))
+			if (compiled && !refreshedProjection && frontendState &&
+				compatibleObservations(*frontendState, recording->observations, context))
 				refreshedProjection = refreshTopLevelExecutionProjection(
 					context, recording->observations, sections, matcherCache, initialMatcherTree,
-					previous->at("all_function_projection"), &statistics.sourceProjectionWork,
+					frontendState->at("all_function_projection"), &statistics.sourceProjectionWork,
 					statistics.topLevelProjectionSectionsReused
 				);
 			Json resolvedFunctionProjection = nullptr;
@@ -663,8 +613,8 @@ bool compileIncrementally(
 			else if (compiled)
 				resolvedFunctionProjection = captureAllFunctionProjection(
 					context, recording->observations, sections, matcherCache, matcherPaths, initialMatcherTree,
-					finalMatcherTree, previous ? &*previous : nullptr, &statistics.sourceProjectionWork,
-					previous && compatibleObservations(*previous, recording->observations, context)
+					finalMatcherTree, frontendState, &statistics.sourceProjectionWork,
+					frontendState && compatibleObservations(*frontendState, recording->observations, context)
 				);
 			if (compiled) {
 				auto projectionStart = Clock::now();
@@ -689,6 +639,7 @@ bool compileIncrementally(
 			std::unique_ptr<IncrementalInferenceReuse> inferenceReuse;
 			std::unordered_set<const Section *> graphStable;
 			Json *priorInference = previous ? &*previous : nullptr;
+			ConstraintReuseState priorConstraints;
 			if (previousFailure && !previousFailure->at("inference_state").is_null())
 				priorInference = &previousFailure->at("inference_state");
 			if (compiled && !reuseTypeInference) {
@@ -711,17 +662,12 @@ bool compileIncrementally(
 				compiled = finishTypeInference(context);
 			statistics.inferenceMilliseconds = elapsedMilliseconds(stageStart);
 			statistics.reusedRootExecution = context.reuseRootExecution;
-			if (compiled || context.hasCompleted(ParseContext::CompilationStage::InferredConstraints)) {
-				if (reuseTypeInference) {
-					const Json &inferred = previous->at("all_function_projection");
-					for (const char *field : {"constraint_probe_schedule", "class_instantiations"})
-						resolvedFunctionProjection[field] = inferred.at(field);
-				} else {
-					resolvedFunctionProjection["constraint_probe_schedule"] =
-						captureConstraintProbeSchedule(context, sectionPaths, inferenceReads, priorInference);
-					resolvedFunctionProjection["class_instantiations"] = captureClassInstantiations(sectionPaths);
-				}
-			}
+			auto constraintSnapshotStart = Clock::now();
+			Json constraintState = captureCurrentConstraintState(
+				context, *recording, resolvedFunctionProjection, sectionPaths, inferenceReads, frontendDiagnosticSources,
+				priorConstraints, compiled, reuseTypeInference, previous ? &*previous : nullptr
+			);
+			statistics.constraintSnapshotMilliseconds += elapsedMilliseconds(constraintSnapshotStart);
 			statistics.expressionParseHits = parserCache.hits();
 			statistics.temporaryExpressionParseHits = parserCache.temporaryHitCount();
 			statistics.expressionParseMisses = parserCache.missCount();
@@ -933,6 +879,7 @@ bool compileIncrementally(
 				context.importReusedFunctions = {};
 			} else if (context.compilationStage >= ParseContext::CompilationStage::ImportedFiles &&
 					   !context.diagnostics.empty()) {
+				auto failureWriteStart = Clock::now();
 				std::string diagnostics;
 				std::set<std::string> diagnosticSources;
 				Json records = captureCachedDiagnostics(context, diagnostics, diagnosticSources);
@@ -948,6 +895,10 @@ bool compileIncrementally(
 				};
 				recordSemanticSources(result, *recording, context);
 				result["validation_units"] = validation.snapshot();
+				if (constraintState.is_null() && previousFailure)
+					constraintState = previousFailure->at("constraint_state");
+				result["constraint_state"] =
+					constraintState.is_null() ? Json(nullptr) : constraintStateManifest(directory, std::move(constraintState));
 				Json state = nullptr;
 				if (context.hasCompleted(ParseContext::CompilationStage::InferredConstraints)) {
 					auto snapshotStart = Clock::now();
@@ -963,6 +914,7 @@ bool compileIncrementally(
 					state = inferenceStateManifest(directory, *priorInference);
 				result["inference_state"] = std::move(state);
 				writeEntry(failedEntry, result.dump());
+				statistics.cacheWriteMilliseconds += elapsedMilliseconds(failureWriteStart);
 			}
 		}
 		auto finalizeStart = Clock::now();

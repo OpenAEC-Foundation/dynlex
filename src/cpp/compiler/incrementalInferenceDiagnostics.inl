@@ -22,7 +22,10 @@ Json captureUnitDiagnostic(const Diagnostic &diagnostic, InferenceBodySources &s
 		{"message", inferenceDiagnosticText(diagnostic.message, diagnostic.configuredMessage)},
 		{"range", sources.range(diagnostic.range)},
 		{"related", std::move(related)},
-		{"fixes", std::move(fixes)}
+		{"fixes", std::move(fixes)},
+		{"discriminator", diagnostic.emission ? diagnostic.emission->discriminator : ""},
+		{"publication",
+		 diagnostic.emission && diagnostic.emission->publication ? diagnostic.emission->publication->identity : ""}
 	};
 }
 
@@ -49,6 +52,18 @@ Diagnostic restoreUnitDiagnostic(
 	}
 	for (const Json &fix : record.at("fixes"))
 		diagnostic.quickFixes.push_back({fix.at(0).get<std::string>(), sources.range(fix.at(1)), fix.at(2).get<std::string>()});
+	const auto &discriminator = record.at("discriminator").get_ref<const std::string &>();
+	const auto &identity = record.at("publication").get_ref<const std::string &>();
+	if (!discriminator.empty() || !identity.empty()) {
+		auto &emission = diagnostic.editEmission();
+		emission.discriminator = discriminator;
+		if (!identity.empty()) {
+			auto [publication, inserted] = context.inferenceDiagnosticPublications.try_emplace(identity);
+			if (inserted)
+				publication->second = std::make_shared<DiagnosticPublication>(DiagnosticPublication{false, identity});
+			emission.publication = publication->second;
+		}
+	}
 	return diagnostic;
 }
 
@@ -71,9 +86,7 @@ std::optional<Json> captureInferenceDiagnosticRecords(
 			);
 		}
 		Json record = captureUnitDiagnostic(diagnostic, sources());
-		record["discriminator"] = emission.discriminator;
 		record["traced"] = emission.traceBase >= 0;
-		record["publication"] = emission.publication->identity;
 		records.push_back(std::move(record));
 	}
 	return records;
@@ -101,14 +114,8 @@ void restoreInferenceDiagnostics(
 	for (const Json &record : records) {
 		Diagnostic diagnostic = restoreUnitDiagnostic(context, record, sources(), scope);
 		auto &emission = diagnostic.editEmission();
-		emission.discriminator = record.at("discriminator").get<std::string>();
 		emission.owner = scope;
 		emission.traceBase = record.at("traced").get<bool>() ? 0 : -1;
-		const auto &identity = record.at("publication").get_ref<const std::string &>();
-		auto [publication, inserted] = context.inferenceDiagnosticPublications.try_emplace(identity);
-		if (inserted)
-			publication->second = std::make_shared<DiagnosticPublication>(DiagnosticPublication{false, identity});
-		emission.publication = publication->second;
 		restored.push_back(std::move(diagnostic));
 	}
 	context.inferenceDiagnosticUnitsRestored++;

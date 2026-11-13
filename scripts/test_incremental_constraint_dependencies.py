@@ -4,6 +4,14 @@
 from test_incremental_constraint_units import (check_constraint_query_units, check_constraint_signature_dependencies,
                                               check_constraint_declaration_edits, check_constraint_provider_membership,
                                               check_constraint_provider_visibility, check_unbound_constraint_argument)
+from test_incremental_partial_constraints import (check_partial_constraint_products,
+                                                 check_partial_constraint_later_pass,
+                                                 check_partial_constraint_context,
+                                                 check_partial_constraint_class,
+                                                 check_partial_constraint_cycle,
+                                                 check_partial_constraint_import,
+                                                 check_failed_constraint_frontend,
+                                                 check_constraint_diagnostic_publication)
 
 
 def check_constraint_lookup_dependencies(root, build):
@@ -13,6 +21,14 @@ def check_constraint_lookup_dependencies(root, build):
     check_constraint_provider_membership(root, build)
     check_constraint_provider_visibility(root, build)
     check_unbound_constraint_argument(root, build)
+    check_partial_constraint_products(root, build)
+    check_partial_constraint_later_pass(root, build)
+    check_partial_constraint_context(root, build)
+    check_partial_constraint_class(root, build)
+    check_partial_constraint_cycle(root, build)
+    check_partial_constraint_import(root, build)
+    check_failed_constraint_frontend(root, build)
+    check_constraint_diagnostic_publication(root, build)
     check_constraint_body_dependencies(root, build)
     main = root / "constraint_lookup_dependencies.dl"
     for spelling, call in (

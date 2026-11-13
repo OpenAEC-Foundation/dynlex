@@ -974,8 +974,9 @@ references unregistered and resolve against the current tree when evaluated. Bot
 restore source tokens. Expressions that emitted parse diagnostics are parsed again.
 `--incremental-stats` counts expression and definition parse hits and misses from
 the preceding compiler invocation, including temporary expression hits separately.
-After resolution, each successful type-constraint probe's pass and the sections
-read by its expression are saved with the function projection. Variable
+After resolution, declared-constraint queries retain an explicit pending, ready,
+failed or blocked state, their readiness pass, results, structured diagnostics and the
+sections read by their expressions. Variable
 definitions are mapped to their owning sections; their source ranges can lie
 on a function's header line, which belongs to its parent section. A later build
 reuses unaffected probes at their recorded readiness pass. Each query retains
@@ -999,6 +1000,35 @@ the declaration whose signature it determines. Invalidation follows those edges
 and ordinary callers to a fixed point, including signature dependencies between
 probes. Independent queries retain their values and parsed-expression products
 even when an earlier probe changed or they originally needed a later pass.
+An incomplete constraint stage saves its own query index and dependency graph,
+independently of completed ordinary-inference state. Correcting one failed query
+therefore preserves independent results from the first failed compilation.
+Unvisited queries have no invented result or readiness pass. A still-valid prior
+product remains retained when an earlier error prevents its current demand;
+its diagnostics are published only if ordinary evaluation reaches that query.
+Failed queries replay their configured diagnostics at that same demand point,
+including current source locations, related notes and quick fixes.
+Query diagnostic products retain selected warnings before display duplicate
+suppression. Their emission discriminators and shared publication identities
+survive replay through normal diagnostic publication. Removing an earlier query
+therefore neither loses a later query's suppressed warning nor emits it twice.
+A cyclic fixed point retains each pending query as blocked, depending on every
+signature in that frontier. Replaying a blocked query preserves deferral; the
+cycle diagnostic still follows a complete pass without progress. Adding an
+independent invalid constraint therefore reports the same first error as a clean
+build, and an independent successful constraint can add a pass without exposing
+a premature cached cycle error. An intervening
+earlier-stage failure preserves the preceding query index. These products do
+not advance the compilation stage or expose unfinished signatures to ordinary
+function inference. Their index payloads use the same integrity checks, atomic
+publication and independent eviction as other semantic payloads.
+The completed frontend projection remains eligible even when no native build has
+succeeded. Initial parameter counts, declaration classification, deferred body
+resolution, precedence replay and per-reference match fingerprints consume that
+validated projection through their ordinary dependency checks. Failed constraint
+inference does not discard those completed earlier-stage products. The saved
+frontend diagnostic-source set still prevents skipping bodies whose resolution
+produced diagnostics.
 An edit confined to top-level execution can retain a probe whose recorded
 dependency roots exclude the top-level section. The nonexecution source
 projection checks that declarations and other ambient code are unchanged;
@@ -1036,7 +1066,11 @@ including class `retain` and `release` bodies. Their runtime dependencies belong
 their own graph units, so editing a lifecycle helper preserves class-layout
 constraints while still regenerating the affected lifecycle code and diagnostics.
 `constraint_probes_reused`, `constraint_probes_run`, `constraint_values_reused`, and
-`constraint_expressions_reused` report these separate decisions. The six entries
+`constraint_expressions_reused` report these separate decisions.
+`constraint_prepare_ms` measures restoring query eligibility, classes and values;
+`constraint_snapshot_ms` measures capturing their current products. `cache_write_ms`
+also measures failed-build snapshot construction and publication.
+The six entries
 of `inference_stage_ms` measure declared constraints, pattern conflicts,
 incremental preinference, root inference, exposed and managed functions, and final
 variable and return validation, in that order.

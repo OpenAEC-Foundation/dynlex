@@ -146,6 +146,7 @@ struct BuildStatistics {
 	size_t callableLookupsChecked = 0;
 	size_t callableLookupsChanged = 0;
 	double inferenceMilliseconds = 0;
+	double constraintPrepareMilliseconds = 0, constraintSnapshotMilliseconds = 0;
 	double projectionMilliseconds = 0;
 	double inactiveProjectionMilliseconds = 0;
 	double parserSnapshotMilliseconds = 0;

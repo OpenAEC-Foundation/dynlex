@@ -44,6 +44,10 @@ void deletePatternTree(PatternTreeNode *node, std::unordered_set<PatternTreeNode
 ParseContext::ParseContext() = default;
 
 void ParseContext::retainInferenceDiagnostic(const Diagnostic &diagnostic) {
+	if (activeDiagnosticProduct && std::ranges::none_of(*activeDiagnosticProduct, [&](const Diagnostic &prior) {
+		return prior.sameEmission(diagnostic);
+	}))
+		activeDiagnosticProduct->push_back(diagnostic);
 	if (diagnostic.level == Diagnostic::Level::Error || !diagnostic.emission || !diagnostic.emission->publication)
 		return;
 	using Scope = std::shared_ptr<const VariableStorageScope>;

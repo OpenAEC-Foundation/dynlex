@@ -1,40 +1,22 @@
-// Match saved queries by identity before restoring their readiness schedule.
-// Added or removed declarations do not shift another query's result or reads.
+// Align immutable prior products with current declarations before evaluating
+// them in ordinary demand order. Pending queries have no reusable result.
 static void alignDeclaredConstraintQueries(ParseContext &context, const DeclaredConstraintIdentities &identities) {
-	if (!context.reuseDeclaredConstraintProbes)
+	if (context.priorConstraintQueries.empty())
 		return;
-	size_t saved = context.priorConstraintProbeItems.size();
-	requireCompilerInvariant(
-		context.priorConstraintProbePasses.size() == saved && context.priorConstraintProbeReusable.size() == saved &&
-			context.priorConstraintProbeValues.size() == saved && context.priorConstraintProbeDependencies.size() == saved,
-		"saved constraint query products have inconsistent sizes"
-	);
-	auto passes = std::move(context.priorConstraintProbePasses);
-	auto reusable = std::move(context.priorConstraintProbeReusable);
-	auto values = std::move(context.priorConstraintProbeValues);
-	auto dependencies = std::move(context.priorConstraintProbeDependencies);
-	size_t count = context.constraintProbeItems.size();
-	context.priorConstraintProbeItems = context.constraintProbeItems;
-	context.priorConstraintProbePasses.assign(count, 0);
-	context.priorConstraintProbeReusable.assign(count, false);
-	context.priorConstraintProbeValues.assign(count, std::nullopt);
-	context.priorConstraintProbeDependencies.assign(count, {});
-	for (size_t index = 0; index < count; index++) {
-		auto prior = identities.priorIndex(context.constraintProbeItems[index]);
-		if (!prior)
-			continue;
-		context.priorConstraintProbePasses[index] = passes[*prior];
-		context.priorConstraintProbeReusable[index] = reusable[*prior];
-		context.priorConstraintProbeValues[index] = std::move(values[*prior]);
-		context.priorConstraintProbeDependencies[index] = std::move(dependencies[*prior]);
-	}
+	auto prior = std::move(context.priorConstraintQueries);
+	context.priorConstraintQueries.resize(context.constraintQueries.size());
+	for (size_t index = 0; index < context.constraintQueries.size(); index++)
+		if (auto saved = identities.priorIndex(context.constraintQueries[index].identity))
+			context.priorConstraintQueries[index] = std::move(prior[*saved]);
 }
 
 static bool canOmitReusableConstraintExpression(
 	const ParseContext &context, const DeclaredTypeConstraintWorkItem &item, DeclaredConstraintIdentities &identities
 ) {
-	if (!context.reuseDeclaredConstraintProbes)
-		return false;
 	auto index = identities.priorIndex(identities.identity(item));
-	return index && context.priorConstraintProbeReusable.at(*index) && context.priorConstraintProbeValues.at(*index);
+	if (!index)
+		return false;
+	const auto &query = context.priorConstraintQueries.at(*index);
+	using State = ParseContext::IncrementalConstraintQuery::State;
+	return query.reusable && (query.value || query.state == State::Failed || query.state == State::Blocked);
 }

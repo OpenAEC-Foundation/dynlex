@@ -200,64 +200,56 @@ void prepareConstraintProbeReuse(
 		return;
 	if (!restoreClassInstantiations(reusableClassInstantiations(prior.at("class_instantiations"), reusableClasses), sections))
 		return;
+	using Query = ParseContext::IncrementalConstraintQuery;
 	const Json &schedule = prior.at("constraint_probe_schedule");
-	context.priorConstraintProbeItems = schedule.at("items").get<std::vector<std::string>>();
-	context.priorConstraintProbePasses = schedule.at("passes").get<std::vector<int>>();
-	const Json &values = schedule.at("values");
-	const Json &roots = schedule.at("roots");
-	requireCompilerInvariant(
-		values.size() == reusable.size() && roots.size() == reusable.size(),
-		"saved type-constraint values and dependencies do not match the probe schedule"
-	);
-	context.priorConstraintProbeValues.resize(reusable.size());
-	context.priorConstraintProbeDependencies.resize(reusable.size());
+	for (const char *field : {"values", "roots", "states", "diagnostics"})
+		requireCompilerInvariant(
+			schedule.at(field).size() == reusable.size(), "saved constraint products have mismatched sizes"
+		);
+	std::map<const Section *, std::string> paths;
+	for (const auto &[path, section] : sections)
+		paths.emplace(section, path);
+	InferenceValueIdentities identities(paths);
+	std::unique_ptr<InferenceBodySources> sources;
+	context.priorConstraintQueries.resize(reusable.size());
 	for (size_t index = 0; index < reusable.size(); index++) {
-		if (!reusable[index])
+		Query &query = context.priorConstraintQueries[index];
+		query.identity = schedule.at("items").at(index).get<std::string>();
+		query.text = schedule.at("texts").at(index).get<std::string>();
+		query.pass = schedule.at("passes").at(index).get<int>();
+		query.state = static_cast<Query::State>(schedule.at("states").at(index).get<int>());
+		query.reusable = reusable[index] && query.state != Query::State::Pending;
+		if (!query.reusable)
 			continue;
-		for (const Json &root : roots.at(index)) {
+		for (const Json &root : schedule.at("roots").at(index)) {
 			auto section = sections.find(root.get<std::string>());
 			if (section == sections.end()) {
-				reusable[index] = false;
-				context.priorConstraintProbeDependencies[index].clear();
+				query.reusable = false;
+				query.dependencies.clear();
 				break;
 			}
-			context.priorConstraintProbeDependencies[index].insert(section->second);
+			query.dependencies.insert(section->second);
 		}
-		if (reusable[index] && !values.at(index).is_null())
-			context.priorConstraintProbeValues[index] = decodePortableConstraintValue(values.at(index), sections);
+		if (!query.reusable)
+			continue;
+		if (!schedule.at("values").at(index).is_null())
+			query.value = decodePortableConstraintValue(schedule.at("values").at(index), sections);
+		for (const Json &record : schedule.at("diagnostics").at(index)) {
+			if (!sources)
+				sources = std::make_unique<InferenceBodySources>(context, identities);
+			query.diagnostics.push_back(restoreUnitDiagnostic(context, record, *sources));
+		}
+		requireCompilerInvariant(
+			query.state != Query::State::Failed || !query.diagnostics.empty(), "failed constraint product has no diagnostic"
+		);
 	}
-	context.priorConstraintProbeReusable = std::move(reusable);
-	context.reuseDeclaredConstraintProbes = true;
 }
 
 Json captureConstraintProbeSchedule(
-	const ParseContext &context, const std::map<const Section *, std::string> &sectionPaths,
-	const IncrementalInferenceReads &inferenceReads, const Json *prior
+	ParseContext &context, const std::map<const Section *, std::string> &sectionPaths,
+	const IncrementalInferenceReads &inferenceReads, const Json *priorSchedule, const Json *priorLookups
 ) {
-	requireCompilerInvariant(
-		context.constraintProbeItems.size() == context.constraintProbePasses.size(),
-		"type-constraint probe schedule has mismatched item and pass counts"
-	);
-	for (int pass : context.constraintProbePasses)
-		requireCompilerInvariant(pass > 0, "successful type-constraint probe has no pass");
-	requireCompilerInvariant(
-		context.constraintProbeItems.size() == context.constraintProbeTexts.size(),
-		"type-constraint probe schedule has mismatched item and text counts"
-	);
-	requireCompilerInvariant(
-		context.constraintProbeItems.size() == context.constraintProbeDependencies.size(),
-		"type-constraint probe schedule has mismatched item and dependency counts"
-	);
-	requireCompilerInvariant(
-		context.constraintProbeItems.size() == context.constraintProbeValues.size(),
-		"type-constraint probe schedule has mismatched item and value counts"
-	);
-	requireCompilerInvariant(
-		context.constraintProbeItems.size() == context.constraintProbeReadsReused.size(),
-		"type-constraint probe schedule has mismatched lookup observations"
-	);
-	const Json *priorSchedule = prior ? &prior->at("all_function_projection").at("constraint_probe_schedule") : nullptr;
-	const Json *priorLookups = prior ? &prior->at("section_dependency_graph").at("callable_lookups") : nullptr;
+	using Query = ParseContext::IncrementalConstraintQuery;
 	std::unordered_map<std::string, size_t> priorIndices;
 	if (priorSchedule)
 		for (size_t index = 0; index < priorSchedule->at("items").size(); index++)
@@ -268,27 +260,44 @@ Json captureConstraintProbeSchedule(
 	std::map<std::string, const Section *> sections;
 	for (const auto &[section, path] : sectionPaths)
 		sections.emplace(path, section);
-	Json owners = Json::array(), sources = Json::array();
-	Json roots = Json::array();
-	Json values = Json::array();
-	Json lookupReads = Json::array();
+	Json result = Json::object();
+	for (const char *field :
+		 {"items", "texts", "owners", "sources", "passes", "states", "roots", "values", "diagnostics", "callable_lookups"})
+		result[field] = Json::array();
 	ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
-	for (size_t index = 0; index < context.constraintProbeDependencies.size(); index++) {
-		const auto &dependencies = context.constraintProbeDependencies[index];
+	std::unique_ptr<InferenceValueIdentities> identities;
+	std::unique_ptr<InferenceBodySources> sources;
+	for (size_t index = 0; index < context.constraintQueries.size(); index++) {
+		const Query &current = context.constraintQueries[index];
+		const Query *product = &current;
+		// A preceding error may prevent a still-valid prior result from being
+		// demanded. Retain that product without publishing its diagnostics.
+		bool retained = current.state == Query::State::Pending && !context.priorConstraintQueries.empty() &&
+						context.priorConstraintQueries.at(index).reusable;
+		if (retained)
+			product = &context.priorConstraintQueries.at(index);
+		const Query &query = *product;
+		requireCompilerInvariant(
+			(query.state == Query::State::Pending) == (query.pass == 0), "constraint product has an inconsistent readiness pass"
+		);
 		std::set<std::string> paths;
-		for (const Section *section : dependencies)
+		for (const Section *section : query.dependencies)
 			paths.insert(sectionPaths.at(section));
 		const auto &direct = inferenceReads.dependenciesOfProbe(index);
 		paths.insert(direct.begin(), direct.end());
-		Json identity = Json::parse(context.constraintProbeItems[index]);
+		Json identity = Json::parse(current.identity);
 		const Section *owner = sections.at(identity.at(2).get<std::string>());
 		while (owner->parent && owner->patternDefinitions.empty())
 			owner = owner->parent;
-		owners.push_back(sectionPaths.at(owner));
-		sources.push_back(identity.back());
+		result["items"].push_back(current.identity);
+		result["texts"].push_back(current.text);
+		result["owners"].push_back(sectionPaths.at(owner));
+		result["sources"].push_back(identity.back());
+		result["passes"].push_back(query.pass);
+		result["states"].push_back(static_cast<int>(query.state));
 		std::optional<size_t> previousIndex;
-		if (context.constraintProbeReadsReused.at(index))
-			previousIndex = priorIndices.at(context.constraintProbeItems[index]);
+		if (retained || query.readsReused)
+			previousIndex = priorIndices.at(current.identity);
 		auto keys = inferenceReads.readsOfProbe(index, priorSchedule, previousIndex);
 		if (previousIndex)
 			for (const Json &path : priorSchedule->at("roots").at(*previousIndex))
@@ -298,19 +307,20 @@ Json captureConstraintProbeSchedule(
 			if (candidates.size() == 1)
 				paths.insert(candidates.at(0).at(0).get<std::string>());
 		}
-		lookupReads.push_back(std::move(keys));
-		roots.push_back(paths);
-		const auto &value = context.constraintProbeValues[index];
-		values.push_back(value ? encodePortableConstraintValue(*value, classPaths).value_or(Json(nullptr)) : Json(nullptr));
+		result["callable_lookups"].push_back(std::move(keys));
+		result["roots"].push_back(paths);
+		result["values"].push_back(
+			query.value ? encodePortableConstraintValue(*query.value, classPaths).value_or(Json(nullptr)) : Json(nullptr)
+		);
+		Json diagnostics = Json::array();
+		for (const Diagnostic &diagnostic : query.diagnostics) {
+			if (!sources) {
+				identities = std::make_unique<InferenceValueIdentities>(sectionPaths);
+				sources = std::make_unique<InferenceBodySources>(context, *identities);
+			}
+			diagnostics.push_back(captureUnitDiagnostic(diagnostic, *sources));
+		}
+		result["diagnostics"].push_back(std::move(diagnostics));
 	}
-	return Json{
-		{"items", context.constraintProbeItems},
-		{"texts", context.constraintProbeTexts},
-		{"owners", std::move(owners)},
-		{"sources", std::move(sources)},
-		{"passes", context.constraintProbePasses},
-		{"roots", roots},
-		{"values", values},
-		{"callable_lookups", std::move(lookupReads)}
-	};
+	return result;
 }

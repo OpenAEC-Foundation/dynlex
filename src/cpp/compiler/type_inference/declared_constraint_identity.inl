@@ -1,9 +1,9 @@
 class DeclaredConstraintIdentities {
   public:
 	explicit DeclaredConstraintIdentities(ParseContext &context) : root(context.mainSection) {
-		for (size_t index = 0; index < context.priorConstraintProbeItems.size(); index++)
+		for (size_t index = 0; index < context.priorConstraintQueries.size(); index++)
 			requireCompilerInvariant(
-				previous.emplace(context.priorConstraintProbeItems[index], index).second,
+				previous.emplace(context.priorConstraintQueries[index].identity, index).second,
 				"saved constraint queries have duplicate identities"
 			);
 	}

@@ -276,6 +276,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"optimization_index_ms", statistics.optimizationIndexMilliseconds},
 					  {"optimization_backend_ms", statistics.optimizationBackendMilliseconds},
 					  {"snapshot_ms", statistics.snapshotMilliseconds},
+					  {"constraint_prepare_ms", statistics.constraintPrepareMilliseconds},
+					  {"constraint_snapshot_ms", statistics.constraintSnapshotMilliseconds},
 					  {"cache_write_ms", statistics.cacheWriteMilliseconds},
 					  {"partition_ms", statistics.partitionMilliseconds},
 					  {"native_dependency_ms", statistics.nativeDependencyMilliseconds},
