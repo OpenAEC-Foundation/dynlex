@@ -627,3 +627,12 @@ reuse skips runtime expressions only. The import-free edit regression is
 suite. All 351 required tests and all 518 integration tests pass after the
 correction. The browser compiler rebuild and official Web smoke tests pass too.
 The remaining Farm UI/controller migration is still pending.
+
+Farm composition also exposed a result-schema inference defect. Forward references
+inferred a data section's shared `result` expression in place. A signature probe
+could retain its inferred type after its trial-local compile-time value had been
+discarded; the next probe rejected valid declarations or disagreed with committed
+inference. Result schemas now receive context-owned instances, matching body-field
+and receiver schemas. The import-free `data_section_result_probes` fixture covers
+independent signature probes of the same declared value. The native required suite
+passes all 352 cases after this correction.

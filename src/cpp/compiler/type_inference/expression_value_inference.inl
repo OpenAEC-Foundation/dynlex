@@ -135,8 +135,14 @@ bool ExpressionInferenceSupport::inferVariable() {
 			Expression *initializer = var->dataInitializer;
 			Section *definition = initializer->patternMatch->matchingDefinitions.front()->section;
 			if (definition->dataSection && definition->dataSection->resultType) {
-				Expression *resultType = definition->dataSection->resultType;
+				// Metadata is a template, just like a body field's constraint. Its
+				// inferred type and value must belong to the same trial context.
+				auto storage = context.createExpressionStorage();
+				Expression *resultType =
+					context.parseContext.cloneExpressionTree(definition->dataSection->resultType, *storage);
 				ensureExpressionType(resultType, context, flexBindingFrameStack);
+				if (!context.typesValid)
+					return false;
 				auto type = getCompileTimeTypeReferenceValue(context.lookupExpressionValue(resultType));
 				if (!type) {
 					context.fail(

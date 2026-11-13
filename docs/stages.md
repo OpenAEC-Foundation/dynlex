@@ -63,6 +63,9 @@ from the syntax configuration) describes a section's body and value. A body sche
 an anonymous record with ordinary generated property accessors. Each field's constraint
 is an ordinary expression. The parser does not recognize domain-specific child syntax.
 See `docs/data_sections.md`.
+Forward-reference inference instantiates the declared result schema in the requesting
+context, like body-field constraints. Independent signature probes must not retain
+inferred expression types on the shared schema after their compile-time values roll back.
 
 Integer literals are parsed exactly rather than through floating-point storage.
 Values fitting the existing scalar ranges use signed 32 or 64 bits or unsigned

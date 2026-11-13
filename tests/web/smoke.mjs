@@ -650,6 +650,8 @@ for (const fixture of ['recursive_inline_pointer_layout', 'recursive_inline_arra
   assert.equal(await compileAndRun(await readFile(new URL('main.dl', directory), 'utf8')),
     await readFile(new URL('expected.txt', directory), 'utf8'), fixture);
 }
+assert.equal(await compileAndRun(await readFile(new URL('../required/data_section_result_probes/main.dl', import.meta.url), 'utf8')), '',
+  'Independent data-section result probes must preserve compile-time type values.');
 for (const fixture of ['recursive_inline_storage_invalid', 'recursive_array_storage_invalid']) {
   const source = await readFile(new URL(`../required/${fixture}/main.dl`, import.meta.url), 'utf8');
   moduleInstance.ccall('dynlex_web_set_main_source', null, ['string'], [source]);
