@@ -615,6 +615,18 @@ const explicitOperandFixture = new URL('../required/explicit_named_operator_oper
 assert.equal(await compileAndRun(await readFile(new URL('main.dl', explicitOperandFixture), 'utf8')),
   await readFile(new URL('expected.txt', explicitOperandFixture), 'utf8'));
 
+assert.equal(await compileAndRun(`function [height is] {value}:
+    replacement:
+        @intrinsic("add", value, 1)
+function {value} [is finite]:
+    replacement:
+        @intrinsic("equal", value, value)
+function [validate] {height}:
+    execute:
+        @intrinsic("return", height is finite)
+@intrinsic("discard", validate 1.0)
+`), '');
+
 assert.equal(await compileAndRun(await readFile(
   new URL('../required/nested_trial_constant_scope/main.dl', import.meta.url), 'utf8')), '');
 

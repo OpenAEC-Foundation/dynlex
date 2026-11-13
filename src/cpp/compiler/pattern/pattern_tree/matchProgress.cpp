@@ -67,6 +67,8 @@ explicitVariableDeclarationPrecedes(const Range &declaration, const PatternRefer
 		   std::pair(reference.range().line->mergedLineIndex, useStart);
 }
 
+static bool namesVisibleSingleWordFunction(const MatchProgress &progress, std::string_view name);
+
 static std::vector<ExplicitVariableCandidate> explicitNamedVariableCandidates(const MatchProgress &progress) {
 	std::vector<ExplicitVariableCandidate> result;
 	if (!progress.patternReference || progress.sourceCharIndex != 0 || !progress.patternReference->range().line)
@@ -80,8 +82,10 @@ static std::vector<ExplicitVariableCandidate> explicitNamedVariableCandidates(co
 			if (!section->dataVariableDeclarations.contains(name) &&
 				!explicitVariableDeclarationPrecedes(declaration, *progress.patternReference, progress.sourceElementIndex))
 				continue;
-			if (!shadowedNames.insert(name).second ||
-				(name.find(' ') == std::string::npos && !section->dataVariableDeclarations.contains(name)))
+			if (!shadowedNames.insert(name).second)
+				continue;
+			if (name.find(' ') == std::string::npos && !section->dataVariableDeclarations.contains(name) &&
+				namesVisibleSingleWordFunction(progress, name))
 				continue;
 			std::vector<PatternElement> nameElements = getPatternElements(name);
 			if (nameElements.empty() || progress.sourceElementIndex + nameElements.size() > sourceElements.size())

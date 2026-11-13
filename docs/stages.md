@@ -194,7 +194,10 @@ We discover what is a variable based on these principles:
 - After a multi-word name has been introduced explicitly, later unbraced occurrences of that full name are matched as one variable in the same lexical scope and its children.
   An exact visible explicit name is resolved before attempting a pattern call, including an operand nested in another call.
   At the start of an operator expression, that operand also precedes a colliding literal prefix function.
-  Data declaration names follow this rule for single-word names as well. Literal continuations keep their normal priority;
+  Explicit single-word parameters and locals follow the same operand priority, so a local `height` in `height is finite`
+  precedes a colliding `height is {value}` prefix pattern. Standalone single-word functions retain their normal priority
+  over parameter and local names. Data declaration names follow explicit operand priority for single-word names as well.
+  Literal continuations keep their normal priority;
   whitespace surrounding an intrinsic argument does not change its variable identity.
 
 A square-bracket group without a top-level `|` is an explicit literal and is flattened into its ordinary literal elements.
