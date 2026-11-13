@@ -1,0 +1,61 @@
+import ../../packages/dynlex-ui/ui/scene_orbit.dl
+
+class:
+    patterns:
+        website Farm camera
+    members:
+        orbit as UI scene orbit
+        viewport as UI bounds
+        overview as a boolean
+
+to [show the whole Farm through] {a pointer to website Farm camera:state} [over] {floating-point number:seconds} [seconds]:
+    set target to a UI scene vector from [0.0,0.4,0.0]
+    set direction to (a UI scene vector from [0.48,0.73,0.60]) normalized
+    set camera to state's orbit's camera
+    set camera's target to target
+    set camera's position to target + direction
+    set bounds to @intrinsic("construct", UI mesh bounds, a UI scene vector from [-10.0,-0.5,-10.0], a UI scene vector from [10.0,2.0,10.0])
+    set distance to the distance framing UI scene bounds bounds through camera within horizontal 0.96 vertical 0.86
+    set state's orbit's maximum distance to the maximum of 64.0 and distance
+    set state's orbit's camera's far to the maximum of 150.0 and (state's orbit's maximum distance + 30.0)
+    focus UI scene orbit (the address of (state's orbit)) on target viewed from (target + direction * distance) over seconds seconds
+    set state's overview to true
+
+to [resize website Farm camera] {a pointer to website Farm camera:state} [to] {UI bounds:viewport}:
+    require condition ((viewport's width > 0.0) and (viewport's height > 0.0)) reporting "Farm cameras require a visible nonempty viewport"
+    set state's viewport to viewport
+    set state's orbit's camera's aspect to viewport's width / viewport's height
+    if state's overview:
+        show the whole Farm through state over 0.0 seconds
+
+to [focus website Farm camera] {a pointer to website Farm camera:state} [on] {vector:target} [viewed from] {vector:eye} [over] {floating-point number:seconds} [seconds]:
+    focus UI scene orbit (the address of (state's orbit)) on target viewed from eye over seconds seconds
+    set state's overview to false
+
+to get [a website Farm camera in] {UI bounds:viewport}:
+    set target to a UI scene vector from [0.0,0.4,0.0]
+    set camera to a UI scene camera at (target + (a UI scene vector from [0.48,0.73,0.60])) aimed at target with angle 35.0 aspect 1.0 near 0.1 far 150.0
+    set result to a new website Farm camera
+    set result's orbit to a UI scene orbit for camera between distances 4.0 and 64.0 and polar angles 0.05 and 1.38
+    set result's overview to true
+    resize website Farm camera (the address of result) to viewport
+    return result
+
+to [turn website Farm camera] {a pointer to website Farm camera:state} [by pixels] {UI point:delta}:
+    set scale to -6.283185307179586 / state's viewport's height
+    turn UI scene orbit (the address of (state's orbit)) by yaw (delta's x * scale) polar (delta's y * scale)
+    set state's overview to false
+
+to [zoom website Farm camera] {a pointer to website Farm camera:state} [by wheel] {floating-point number:delta}:
+    zoom UI scene orbit (the address of (state's orbit)) by factor (0.95 raised to the power of (delta * -0.01))
+    set state's overview to false
+
+to [pan website Farm camera] {a pointer to website Farm camera:state} [by pixels] {UI point:delta}:
+    set camera to state's orbit's camera
+    set view to the UI scene view matrix for camera
+    set projection to the UI scene projection matrix for camera
+    set scale to (2.0 * state's orbit's distance) / ((the absolute value of (the item at 5 in projection)) * state's viewport's height)
+    set right to a UI scene vector from [(the item at 0 in view),(the item at 4 in view),(the item at 8 in view)]
+    set up to a UI scene vector from [(the item at 1 in view),(the item at 5 in view),(the item at 9 in view)]
+    pan UI scene orbit (the address of (state's orbit)) by ((up * delta's y - right * delta's x) * scale)
+    set state's overview to false

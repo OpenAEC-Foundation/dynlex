@@ -1,0 +1,32 @@
+import ../../site/games/farm/camera.dl
+
+set state to a website Farm camera in (UI box at 10.0 20.0 sized 640.0 360.0)
+require condition ((state's overview) and ((UI scene orbit (the address of (state's orbit)) is moving) = false)) reporting "The initial Farm overview animated or was not framed"
+set distance to state's orbit's distance
+resize website Farm camera (the address of state) to (UI box at 100.0 200.0 sized 320.0 640.0)
+require condition ((state's orbit's distance > distance) and (state's orbit's camera's aspect = 0.5)) reporting "A tall Farm viewport retained the old camera distance or aspect"
+require condition (state's orbit's maximum distance >= state's orbit's distance) reporting "Resizing left the overview outside its manual zoom limits"
+require condition (state's orbit's camera's far > state's orbit's distance + 20.0) reporting "The resized Farm view exceeded its far plane"
+set previous to state's orbit's camera's position
+turn website Farm camera (the address of state) by pixels (a UI point at 20.0 and 10.0)
+set changed to advance UI scene orbit (the address of (state's orbit)) by 1.0 seconds
+require condition (((state's overview) = false) and ((the length of (state's orbit's camera's position - previous)) > 0.01)) reporting "Farm right-drag did not move the shared camera"
+set previous to state's orbit's camera's position
+resize website Farm camera (the address of state) to (UI box at 0.0 0.0 sized 960.0 540.0)
+require condition ((the length of (state's orbit's camera's position - previous)) < 0.000001) reporting "Resizing teleported a manually positioned Farm camera"
+set distance to state's orbit's desired distance
+zoom website Farm camera (the address of state) by wheel -120.0
+require condition (state's orbit's desired distance < distance) reporting "Farm wheel input did not zoom toward the scene"
+set previous to state's orbit's desired target
+pan website Farm camera (the address of state) by pixels (a UI point at 20.0 and -10.0)
+require condition ((the length of (state's orbit's desired target - previous)) > 0.01) reporting "Farm pan input did not move its shared focus target"
+show the whole Farm through (the address of state) over 0.65 seconds
+require condition ((state's overview) and (UI scene orbit (the address of (state's orbit)) is moving)) reporting "The whole-farm action did not start a smooth focus transition"
+set changed to advance UI scene orbit (the address of (state's orbit)) by 0.65 seconds
+require condition ((UI scene orbit (the address of (state's orbit)) is moving) = false) reporting "The Farm overview kept drawing after its focus transition finished"
+set target to a UI scene vector from [3.0,1.0,-2.0]
+focus website Farm camera (the address of state) on target viewed from (a UI scene vector from [5.0,6.0,4.0]) over 0.65 seconds
+set changed to advance UI scene orbit (the address of (state's orbit)) by 0.65 seconds
+resize website Farm camera (the address of state) to (UI box at 0.0 0.0 sized 500.0 500.0)
+require condition (((state's overview) = false) and ((the length of (state's orbit's camera's target - target)) < 0.000001)) reporting "Resizing discarded the selected Farm camera target"
+print line "Farm camera input uses shared motion, refits portrait viewports, preserves manual placement on resize and returns smoothly to the full landscape."

@@ -1,0 +1,1 @@
+Farm camera input uses shared motion, refits portrait viewports, preserves manual placement on resize and returns smoothly to the full landscape.
