@@ -156,19 +156,22 @@ std::optional<Section *> createDataSectionMetadata(ParseContext &context, CodeLi
 
 bool prepareDataSectionCalls(ParseContext &context) {
 	for (CodeLine *line : context.codeLines) {
-		if (!line->sectionOpening || !line->expression || line->expression->kind != Expression::Kind::PatternCall)
+		if (!line->sectionOpening || !line->expression.rootReference() || !line->expression.rootReference()->match)
 			continue;
-		Expression *call = line->expression;
+		PatternMatch *match = line->expression.rootReference()->match;
 		DataSectionDefinition *data = nullptr;
-		for (PatternDefinition *definition : call->patternMatch->matchingDefinitions) {
+		for (PatternDefinition *definition : match->matchingDefinitions) {
 			if (definition->section->dataSection) {
 				if (data && data != definition->section->dataSection.get())
-					return dataSectionDiagnostic(context, call->range, "A data section header must identify one body schema");
+					return dataSectionDiagnostic(
+						context, Range(line, line->patternText), "A data section header must identify one body schema"
+					);
 				data = definition->section->dataSection.get();
 			}
 		}
 		if (!data)
 			continue;
+		Expression *call = line->expression;
 		if (!data->hasValue)
 			return dataSectionDiagnostic(context, call->range, "A data section requires a value block");
 		if (data->declarationParameter.empty())

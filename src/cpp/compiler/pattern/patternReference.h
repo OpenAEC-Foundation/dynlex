@@ -3,6 +3,7 @@
 #include "patternMatch.h"
 #include "range.h"
 #include "sectionType.h"
+#include "sourceExpressionSite.h"
 #include "transformedPattern.h"
 #include <memory>
 #include <optional>
@@ -33,13 +34,14 @@ struct PatternReference {
 	std::string prevalidatedMatcherKey;
 	std::unique_ptr<MatcherKeyLiterals> matcherKeyLiterals;
 	// for extracting arguments
-	Expression *expression;
+	SourceExpressionSite expression;
 	// Lexical scope used for matching explicit variable names. Synthetic references,
 	// such as dependent type constraints, can use a source range owned by a parent section.
 	Section *matchingScope{};
 	bool resolved{};
 	Purpose purpose = Purpose::Expression;
 	PatternReference(Expression *expression, SectionType patternType);
+	PatternReference(SourceExpressionSite expression, SectionType patternType);
 	~PatternReference();
 	PatternReference(const PatternReference &) = delete;
 	PatternReference &operator=(const PatternReference &) = delete;

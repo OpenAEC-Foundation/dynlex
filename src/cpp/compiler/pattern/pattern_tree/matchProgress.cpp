@@ -501,12 +501,12 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 			storage.append(acceptedLiteralStep.match.nodesPassed, child);
 			storage.append(acceptedLiteralStep.match.acceptedLiterals, AcceptedLiteralMatch{child});
 			acceptedLiteralStep.sourceElementIndex++;
-			if (!patternReference->expression || sourceArgumentIndex >= patternReference->expression->arguments.size())
+			if (!patternReference->expression || sourceArgumentIndex >= patternReference->expression.argumentCount())
 				continue;
 			storage.append(
 				acceptedLiteralStep.match.orderedArguments,
 				{acceptedLiteralStep.matchedArgumentIndex, MatchedArgument::Kind::Expression,
-				 patternReference->expression->arguments[sourceArgumentIndex], 0}
+				 patternReference->expression.argument(sourceArgumentIndex), 0}
 			);
 			acceptedLiteralStep.sourceArgumentIndex++;
 			acceptedLiteralStep.matchedArgumentIndex++;
@@ -583,7 +583,7 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 				} else {
 					substituteStep.appendArgument(
 						storage, {substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Expression,
-								  patternReference->expression->arguments[sourceArgumentIndex], 0}
+								  patternReference->expression.argument(sourceArgumentIndex), 0}
 					);
 					substituteStep.sourceArgumentIndex++;
 				}

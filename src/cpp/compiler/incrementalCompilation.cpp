@@ -493,6 +493,9 @@ bool compileIncrementally(
 				}
 			}
 			IncrementalParsedExpressionCache parserCache(context, previousParsedExpressions);
+			context.deferParsedLine = [&](Section *section, CodeLine *line, SectionType type) {
+				return parserCache.defer(section, line, type);
+			};
 			context.reuseParsedExpression = [&](Section *section, Range range, SectionType patternType,
 												bool registerReferences) {
 				return parserCache.reuse(section, range, patternType, registerReferences);
@@ -541,9 +544,9 @@ bool compileIncrementally(
 				statistics.matcherSnapshotMilliseconds += elapsedMilliseconds(saveStart);
 				return key;
 			};
-			auto saveParser = [&]() {
+			auto saveParser = [&](IncrementalParsedExpressionCache::SnapshotScope scope) {
 				auto saveStart = Clock::now();
-				std::string payload = parserCache.snapshot();
+				std::string payload = parserCache.snapshot(scope);
 				std::string key = digest(payload);
 				writeEntry(directory / ("parser-" + key + ".entry"), payload);
 				statistics.parserSnapshotMilliseconds += elapsedMilliseconds(saveStart);
@@ -676,6 +679,7 @@ bool compileIncrementally(
 			statistics.expressionParseMisses = parserCache.missCount();
 			statistics.definitionParseHits = parserCache.definitionHitCount();
 			statistics.definitionParseMisses = parserCache.definitionMissCount();
+			context.deferParsedLine = {};
 			context.reuseParsedExpression = {};
 			context.recordParsedExpression = {};
 			context.retainParsedTemporaryExpression = {};
@@ -737,7 +741,7 @@ bool compileIncrementally(
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
 					result["frontend_diagnostic_units"] = std::move(frontendDiagnosticUnits);
 					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
-					result["parser_key"] = saveParser();
+					result["parser_key"] = saveParser(IncrementalParsedExpressionCache::SnapshotScope::Complete);
 					recordNativeOutput(result, statistics, &*previous);
 					recordSemanticSources(result, *recording, context);
 					result["linked_output"] = linkedOutputIdentity(context);
@@ -791,7 +795,7 @@ bool compileIncrementally(
 						{"diagnostic_sources", diagnosticSources}
 					};
 					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
-					result["parser_key"] = saveParser();
+					result["parser_key"] = saveParser(IncrementalParsedExpressionCache::SnapshotScope::Complete);
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
 					result["validation_units"] = validation.snapshot();
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
@@ -894,7 +898,7 @@ bool compileIncrementally(
 					{"diagnostic_sources", std::move(diagnosticSources)},
 					{"binding_units", std::move(savedBindings)},
 					{"matcher_key", saveMatcher(IncrementalMatcherCache::SnapshotScope::Partial)},
-					{"parser_key", saveParser()}
+					{"parser_key", saveParser(IncrementalParsedExpressionCache::SnapshotScope::Partial)}
 				};
 				recordSemanticSources(result, *recording, context);
 				result["validation_units"] = validation.snapshot();
@@ -919,6 +923,9 @@ bool compileIncrementally(
 				writeEntry(failedEntry, result.dump());
 				statistics.cacheWriteMilliseconds += elapsedMilliseconds(failureWriteStart);
 			}
+			statistics.bodySyntaxUnitsParsed = parserCache.bodyAssemblyCount();
+			statistics.bodySyntaxUnitsRestored = parserCache.bodyRestorationCount();
+			statistics.bodySyntaxUnitsSkipped = parserCache.bodySkippedCount();
 		}
 		auto finalizeStart = Clock::now();
 		if (success)

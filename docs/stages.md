@@ -32,6 +32,17 @@ report incomplete; selected configuration paths remain available for diagnosing 
 
 Sections are analyzed. We do basic parsing **WITHOUT hardcoding**.
 
+Native incremental builds retain unresolved expression syntax with a reference
+outline. An unchanged function body registers its current-source pattern and
+variable references from that outline without constructing its expression tree.
+Classification and matcher replay consume source identities and numeric spellings;
+their dependency checks still run when providers or bindings change. A consumer
+which needs the body materializes its syntax, reattaches the existing references,
+and expands it against the current completed resolution. Inference indexes that
+published tree before it can be cloned or regrouped, preserving canonical source
+identities. Partial parser snapshots retain unvisited products after an error;
+complete snapshots prune removed products.
+
 - Which line opens a new section?
 - What patterns does each section have?
 - We parse inline sections and multiline statements (f.e. statements with multi line arrays) too, here.

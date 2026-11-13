@@ -25,11 +25,10 @@ Json resolvedMatchIdentity(const PatternMatch &match, const std::map<const Secti
 	Json arguments = Json::array();
 	for (const MatchedArgument &argument : match.orderedArguments) {
 		Json expression = nullptr;
-		if (argument.expression)
-			expression = Json::array(
-				{argument.expression->range.start(), argument.expression->range.end(),
-				 std::string(argument.expression->range.subString)}
-			);
+		if (argument.expression) {
+			Range range = argument.expression.range();
+			expression = Json::array({range.start(), range.end(), std::string(range.subString)});
+		}
 		arguments.push_back(
 			Json::array(
 				{argument.argumentIndex, static_cast<int>(argument.kind), argument.itemIndex, argument.isPackElement,

@@ -89,7 +89,7 @@ struct MatcherTreeChanges {
 				if (reference->pattern.text.find(literal) != std::string_view::npos)
 					return true;
 				if (reference->expression)
-					for (size_t index = 0; index < reference->expression->arguments.size(); index++) {
+					for (size_t index = 0; index < reference->expression.argumentCount(); index++) {
 						std::optional<std::string> spelling = numericPatternArgumentSpelling(reference, index);
 						if (spelling && spelling->find(literal) != std::string::npos)
 							return true;
@@ -103,11 +103,11 @@ struct MatcherTreeChanges {
 		std::unordered_map<std::string_view, bool> present;
 		for (const auto &path : paths)
 			if (std::ranges::all_of(path, [&](const std::string &literal) {
-					auto [entry, inserted] = present.try_emplace(literal);
-					if (inserted)
-						entry->second = contains(contains, section, literal);
-					return entry->second;
-				}))
+				auto [entry, inserted] = present.try_emplace(literal);
+				if (inserted)
+					entry->second = contains(contains, section, literal);
+				return entry->second;
+			}))
 				return true;
 		return false;
 	}

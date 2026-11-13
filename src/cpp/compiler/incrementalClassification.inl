@@ -257,7 +257,7 @@ class IncrementalClassification {
 				types.insert(static_cast<int>(type));
 			addMatcherStartLiterals(reference->pattern.text, literals);
 			if (reference->expression)
-				for (size_t index = 0; index < reference->expression->arguments.size(); index++)
+				for (size_t index = 0; index < reference->expression.argumentCount(); index++)
 					if (auto spelling = numericPatternArgumentSpelling(reference, index)) {
 						size_t numericTokens = matcherTokenCount(getPatternElements(*spelling));
 						if (numericTokens > 1)

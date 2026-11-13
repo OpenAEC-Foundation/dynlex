@@ -1,4 +1,4 @@
-constexpr std::string_view parsedExpressionCacheHeader = "DynLex parsed expressions v2\n";
+constexpr std::string_view parsedExpressionCacheHeader = "DynLex parsed expressions v3\n";
 
 void appendParseLength(std::string &output, std::uint64_t value) {
 	do {
@@ -137,13 +137,23 @@ void appendParsedExpression(std::string &output, Range root, const Expression &e
 		appendParsedExpression(output, root, *argument);
 }
 
+struct ParsedExpressionReplay {
+	std::vector<PatternReference *> references;
+	std::vector<VariableReference *> variables;
+	std::vector<Expression *> expressions;
+	size_t next = 0;
+};
+
 Expression *restoreParsedExpression(
 	std::string_view input, size_t &position, ParseContext &context, Section *section, Range root,
-	bool registerPatternReferences
+	bool registerPatternReferences, ParsedExpressionReplay *replay = nullptr
 ) {
+	size_t node = replay ? replay->next++ : 0;
 	auto kind = static_cast<Expression::Kind>(readParseByte(input, position));
 	Range range = readParseRange(input, position, root);
 	auto *expression = new Expression();
+	if (replay)
+		replay->expressions.at(node) = expression;
 	expression->kind = kind;
 	expression->range = range;
 	expression->isExplicitGroup = readParseByte(input, position) != 0;
@@ -182,7 +192,8 @@ Expression *restoreParsedExpression(
 		Range nameRange = readParseRange(input, position, root);
 		std::string name(readParseString(input, position));
 		std::string typeName(readParseString(input, position));
-		VariableReference *variable = context.createVariableReference(nameRange, name);
+		VariableReference *variable = replay ? replay->variables.at(node) : context.createVariableReference(nameRange, name);
+		requireCompilerInvariant(variable, "parsed variable metadata lost its binding");
 		variable->declaredTypeConstraintName = std::move(typeName);
 		if (!variable->declaredTypeConstraintName.empty())
 			variable->declaredTypeConstraintRange = readParseRange(input, position, root);
@@ -191,10 +202,11 @@ Expression *restoreParsedExpression(
 				section->registerExplicitVariableName(name, nameRange);
 			context.pendingExplicitVariableReferences.push_back(variable);
 		} else if (auto definition = section->variableDefinitions.find(name);
-				   definition != section->variableDefinitions.end()) {
+				   !replay && definition != section->variableDefinitions.end()) {
 			variable->definition = normalizeBindingReference(definition->second);
 		}
-		context.addSourceToken(nameRange, ParseContext::SourceTokenKind::Variable);
+		if (!replay)
+			context.addSourceToken(nameRange, ParseContext::SourceTokenKind::Variable);
 		expression->variable = variable;
 		break;
 	}
@@ -202,12 +214,14 @@ Expression *restoreParsedExpression(
 		auto patternType = static_cast<SectionType>(readParseByte(input, position));
 		if (patternType >= SectionType::Count)
 			throw std::runtime_error("invalid parsed expression pattern type");
-		auto *reference = new PatternReference(expression, patternType);
+		auto *reference = replay ? replay->references.at(node) : new PatternReference(expression, patternType);
+		requireCompilerInvariant(reference, "parsed expression metadata lost its pattern reference");
 		reference->matchingScope = section;
 		reference->pattern.text = std::string(readParseString(input, position));
 		std::uint64_t frames = readParseLength(input, position);
 		if (frames > input.size() - position)
 			throw std::runtime_error("invalid parsed expression keyframe count");
+		reference->pattern.keyframes.clear();
 		for (std::uint64_t index = 0; index < frames; index++)
 			reference->pattern.keyframes.push_back({readParseLength(input, position), readParseLength(input, position)});
 		expression->patternReference = reference;
@@ -226,7 +240,7 @@ Expression *restoreParsedExpression(
 		throw std::runtime_error("invalid parsed expression argument count");
 	for (std::uint64_t index = 0; index < arguments; index++)
 		expression->arguments.push_back(
-			restoreParsedExpression(input, position, context, section, root, registerPatternReferences)
+			restoreParsedExpression(input, position, context, section, root, registerPatternReferences, replay)
 		);
 	if (registerPatternReferences && expression->patternReference)
 		section->addPatternReference(expression->patternReference);
@@ -234,9 +248,11 @@ Expression *restoreParsedExpression(
 }
 
 #include "incrementalParsedDefinitionCache.inl"
+#include "incrementalSourceSyntax.inl"
 
 class IncrementalParsedExpressionCache {
   public:
+	enum class SnapshotScope { Complete, Partial };
 	IncrementalParsedExpressionCache(ParseContext &context, std::string_view previous) : context(context) {
 		if (previous.empty())
 			return;
@@ -261,6 +277,7 @@ class IncrementalParsedExpressionCache {
 	}
 
 	Expression *reuse(Section *section, Range range, SectionType patternType, bool registerPatternReferences) {
+		recordBodyAssembly(section, registerPatternReferences);
 		std::string key = expressionKey(range, patternType, registerPatternReferences);
 		if (!registerPatternReferences)
 			hasCurrentTemporaryEntries = true;
@@ -280,8 +297,11 @@ class IncrementalParsedExpressionCache {
 			return nullptr;
 		}
 		size_t position = 0;
-		Expression *expression = restoreParsedExpression(payload, position, context, section, range, registerPatternReferences);
-		if (position != payload.size())
+		std::string_view syntax = readParseString(payload, position);
+		size_t syntaxPosition = 0;
+		Expression *expression =
+			restoreParsedExpression(syntax, syntaxPosition, context, section, range, registerPatternReferences);
+		if (syntaxPosition != syntax.size())
 			throw std::runtime_error("trailing parsed expression cache data");
 		return expression;
 	}
@@ -289,9 +309,35 @@ class IncrementalParsedExpressionCache {
 	void record(Range range, SectionType patternType, bool registerPatternReferences, const Expression *expression) {
 		if (!registerPatternReferences)
 			hasCurrentTemporaryEntries = true;
-		std::string payload;
-		appendParsedExpression(payload, range, *expression);
+		std::string syntax, payload;
+		appendParsedExpression(syntax, range, *expression);
+		appendParseString(payload, syntax);
+		appendSourceSyntaxOutline(payload, range, *expression);
 		current.insert_or_assign(expressionKey(range, patternType, registerPatternReferences), std::move(payload));
+	}
+
+	bool defer(Section *section, CodeLine *line, SectionType patternType) {
+		Section *owner = sourceSyntaxOwner(section);
+		if (!owner || context.compilationStage != ParseContext::CompilationStage::ImportedFiles)
+			return false;
+		Range range(line, line->patternText);
+		std::string key = expressionKey(range, patternType, true);
+		std::string_view payload;
+		if (auto found = current.find(key); found != current.end())
+			payload = std::visit([](const auto &entry) -> std::string_view {
+				return entry;
+			}, found->second);
+		else if (auto found = prior.find(key); found != prior.end()) {
+			payload = found->second;
+			current.emplace(key, payload);
+			priorHits++;
+		} else
+			return false;
+		auto product = std::make_unique<CachedSourceSyntax>(context, section, owner, range, payload, bodyWork);
+		line->expression.defer(*product);
+		context.sourceSyntaxProducts.push_back(std::move(product));
+		bodyWork->deferred.insert(owner);
+		return true;
 	}
 
 	void retainTemporary(Range range, SectionType patternType) {
@@ -338,7 +384,7 @@ class IncrementalParsedExpressionCache {
 		current.insert_or_assign(definitionKey(range), std::move(payload));
 	}
 
-	std::string snapshot() const {
+	std::string snapshot(SnapshotScope scope) const {
 		std::string output(parsedExpressionCacheHeader);
 		auto append = [&](std::string_view key, std::string_view payload) {
 			output.append(key);
@@ -351,15 +397,14 @@ class IncrementalParsedExpressionCache {
 			}, value);
 			append(key, payload);
 		}
-		if (!hasCurrentTemporaryEntries) {
-			std::vector<std::string_view> retained;
-			for (const auto &[key, _] : prior)
-				if (key.front() == 'T')
-					retained.push_back(key);
-			std::ranges::sort(retained);
-			for (std::string_view key : retained)
-				append(key, prior.at(key));
-		}
+		std::vector<std::string_view> retained;
+		for (const auto &[key, _] : prior)
+			if (!current.contains(std::string(key)) &&
+				(scope == SnapshotScope::Partial || (key.front() == 'T' && !hasCurrentTemporaryEntries)))
+				retained.push_back(key);
+		std::ranges::sort(retained);
+		for (std::string_view key : retained)
+			append(key, prior.at(key));
 		return output;
 	}
 
@@ -368,8 +413,22 @@ class IncrementalParsedExpressionCache {
 	size_t missCount() const { return misses; }
 	size_t definitionHitCount() const { return definitionHits; }
 	size_t definitionMissCount() const { return definitionMisses; }
+	size_t bodyAssemblyCount() const { return bodyWork->parsed.size(); }
+	size_t bodyRestorationCount() const { return bodyWork->restored.size(); }
+	size_t bodySkippedCount() const {
+		return std::ranges::count_if(bodyWork->deferred, [&](const Section *owner) {
+			return !bodyWork->parsed.contains(owner) && !bodyWork->restored.contains(owner);
+		});
+	}
 
   private:
+	void recordBodyAssembly(Section *scope, bool registerPatternReferences) {
+		if (!registerPatternReferences || context.compilationStage != ParseContext::CompilationStage::ImportedFiles)
+			return;
+		if (Section *owner = sourceSyntaxOwner(scope))
+			bodyWork->parsed.insert(owner);
+	}
+
 	static std::string expressionKey(Range range, SectionType patternType, bool registerPatternReferences) {
 		std::string source;
 		source.reserve(range.subString.size() + 3);
@@ -383,6 +442,7 @@ class IncrementalParsedExpressionCache {
 	ParseContext &context;
 	std::unordered_map<std::string_view, std::string_view> prior;
 	std::map<std::string, std::variant<std::string, std::string_view>> current;
+	std::shared_ptr<SourceSyntaxWork> bodyWork = std::make_shared<SourceSyntaxWork>();
 	size_t priorHits = 0;
 	size_t temporaryHits = 0;
 	bool hasCurrentTemporaryEntries = false;

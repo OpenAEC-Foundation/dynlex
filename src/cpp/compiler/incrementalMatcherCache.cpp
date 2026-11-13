@@ -276,8 +276,8 @@ std::string IncrementalMatcherCache::key(PatternReference &reference, bool track
 		includeStartLiterals(range.line->fullText);
 		includeStartLiterals(reference.pattern.text);
 		if (reference.expression) {
-			literals->numericSpellings.reserve(reference.expression->arguments.size());
-			for (size_t index = 0; index < reference.expression->arguments.size(); index++) {
+			literals->numericSpellings.reserve(reference.expression.argumentCount());
+			for (size_t index = 0; index < reference.expression.argumentCount(); index++) {
 				literals->numericSpellings.push_back(numericPatternArgumentSpelling(&reference, index));
 				if (literals->numericSpellings.back())
 					includeStartLiterals(*literals->numericSpellings.back());
@@ -499,11 +499,12 @@ bool IncrementalMatcherCache::appendMatch(
 		if (argument.expression) {
 			if (!reference.expression)
 				return false;
-			auto found =
-				std::find(reference.expression->arguments.begin(), reference.expression->arguments.end(), argument.expression);
-			if (found == reference.expression->arguments.end())
+			size_t index = 0;
+			while (index < reference.expression.argumentCount() && reference.expression.argument(index) != argument.expression)
+				index++;
+			if (index == reference.expression.argumentCount())
 				return false;
-			appendLength(output, std::distance(reference.expression->arguments.begin(), found));
+			appendLength(output, index);
 		}
 		appendLength(output, argument.itemIndex);
 		appendLength(output, argument.isPackElement);
@@ -540,10 +541,10 @@ IncrementalMatcherCache::restoreMatch(std::string_view input, size_t &position, 
 	for (std::uint64_t index = 0; index < argumentCount; index++) {
 		size_t argumentIndex = readLength(input, position);
 		auto kind = static_cast<MatchedArgument::Kind>(readLength(input, position));
-		Expression *expression = nullptr;
+		SourceExpressionSite expression;
 		if (readLength(input, position) != 0) {
 			requireCompilerInvariant(reference.expression != nullptr, "cached matcher argument has no source expression");
-			expression = reference.expression->arguments.at(readLength(input, position));
+			expression = reference.expression.argument(readLength(input, position));
 		}
 		size_t itemIndex = readLength(input, position);
 		bool isPackElement = readLength(input, position) != 0;

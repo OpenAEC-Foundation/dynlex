@@ -109,6 +109,8 @@ void Section::collectPatternReferencesAndSections(
 }
 
 bool Section::processLine(ParseContext &context, CodeLine *line) {
+	if (context.deferParsedLine && context.deferParsedLine(this, line, SectionType::Function))
+		return true;
 	line->expression = detectPatterns(context, Range(line, line->patternText), SectionType::Function);
 	return line->expression != nullptr;
 }
@@ -205,7 +207,8 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 		// custom section
 		newSection = new Section(SectionType::Custom, this);
 		// detectPatterns already adds the pattern reference via detectPatternsRecursively
-		line->expression = detectPatterns(context, Range(line, line->patternText), SectionType::Section);
+		if (!context.deferParsedLine || !context.deferParsedLine(this, line, SectionType::Section))
+			line->expression = detectPatterns(context, Range(line, line->patternText), SectionType::Section);
 	}
 	return newSection;
 }

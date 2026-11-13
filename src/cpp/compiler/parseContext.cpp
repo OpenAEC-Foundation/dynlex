@@ -385,8 +385,8 @@ std::shared_ptr<const VariableStorageScope> ParseContext::storageScopeForInvocat
 ParseContext::~ParseContext() {
 	std::unordered_set<Expression *> visitedFunctions;
 	for (auto &line : ownedCodeLines) {
-		if (line && line->expression)
-			deleteExpressionTree(line->expression, visitedFunctions);
+		if (line && line->expression.materialized())
+			deleteExpressionTree(line->expression.materialized(), visitedFunctions);
 	}
 	std::unordered_set<Section *> visitedSections;
 	std::unordered_set<PatternDefinition *> visitedDefinitions;
@@ -411,8 +411,7 @@ ParseContext::~ParseContext() {
 		for (PatternReference *reference : section->patternReferences) {
 			if (!reference || !visitedReferences.insert(reference).second)
 				continue;
-			if (reference->expression)
-				deleteExpressionTree(reference->expression, visitedFunctions);
+			deleteExpressionTree(reference->expression.materialized(), visitedFunctions);
 			delete reference;
 		}
 		for (auto &[_, variable] : section->variables) {

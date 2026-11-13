@@ -1,5 +1,6 @@
 #pragma once
 #include "patternTreeNode.h"
+#include "sourceExpressionSite.h"
 #include "variableMatch.h"
 #include <cstddef>
 
@@ -28,7 +29,7 @@ struct MatchedArgument {
 
 	size_t argumentIndex{};
 	Kind kind{};
-	Expression *expression{};
+	SourceExpressionSite expression{};
 	size_t itemIndex{};
 	bool isPackElement = false;
 };

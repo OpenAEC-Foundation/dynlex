@@ -10,8 +10,8 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 		ParseContext &context, const std::map<const Section *, std::string> &paths, InferenceSummaryStore &store,
 		IncrementalInferenceReads &reads, BuildStatistics &statistics
 	)
-		: context(context), paths(paths), identities(paths), store(store), reads(reads), sourceIdentities(paths, statistics),
-		  globalInputQueries(paths, sourceIdentities, statistics, reads) {
+		: context(context), paths(paths), identities(paths), store(store), reads(reads),
+		  sourceIdentities(context, paths, statistics), globalInputQueries(paths, sourceIdentities, statistics, reads) {
 		context.inferenceProducts = this;
 	}
 	~IncrementalInferenceProducts() { context.inferenceProducts = nullptr; }

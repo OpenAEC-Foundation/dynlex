@@ -13,6 +13,53 @@ static void expect(bool condition, const char *message) {
 	}
 }
 
+static void checkSourceExpressionDemand() {
+	struct Product final : BodySyntaxProduct {
+		SourceExpression &first, &second;
+		Expression &firstValue, &secondValue;
+		size_t demands = 0;
+		bool ready = false;
+		Product(SourceExpression &first, SourceExpression &second, Expression &firstValue, Expression &secondValue)
+			: first(first), second(second), firstValue(firstValue), secondValue(secondValue) {}
+		void demand() override {
+			++demands;
+			first.publish(firstValue);
+			second.publish(secondValue);
+			ready = true;
+			first.finish();
+			second.finish();
+		}
+		bool syntaxMaterialized() const override { return ready; }
+		PatternReference *rootReference() const override { return nullptr; }
+	};
+	SourceExpression first, second;
+	Expression left, right;
+	Product product(first, second, left, right);
+	first.defer(product);
+	second.defer(product);
+	expect(static_cast<bool>(first), "a deferred source expression lost its presence");
+	expect(
+		!first.materialized() && !second.materialized() && product.demands == 0,
+		"source presence or storage inspection materialized a body"
+	);
+	Expression *&slot = first;
+	expect(
+		slot == &left && second.materialized() == &right && product.demands == 1,
+		"one source demand did not publish the complete body"
+	);
+	expect(
+		static_cast<Expression *>(second) == &right && product.demands == 1,
+		"another source access materialized the same body again"
+	);
+	slot = &right;
+	expect(first.materialized() == &right, "source regrouping lost its writable expression slot");
+	{
+		SourceExpression unrequested;
+		unrequested.defer(product);
+	}
+	expect(product.demands == 1, "source slot destruction materialized an unrequested body");
+}
+
 static void checkBodyOwnership() {
 	ParseContext context;
 	Section section(SectionType::Function);
@@ -38,6 +85,68 @@ static void checkBodyOwnership() {
 	expect(context.expressionAllocationStats->liveExpressions == 3, "shared body was freed before its last user");
 	instantiation.body.reset();
 	expect(context.expressionAllocationStats->liveExpressions == 0, "last body user did not release its clones");
+}
+
+static void checkDeferredBodyCloning() {
+	ParseContext context;
+	Section section(SectionType::Function);
+	for (size_t index = 0; index < 2; index++) {
+		context.ownedCodeLines.push_back(std::make_unique<CodeLine>("", nullptr));
+		section.codeLines.push_back(context.ownedCodeLines.back().get());
+	}
+	struct Product final : BodySyntaxProduct {
+		Section &section;
+		size_t demands = 0;
+		bool ready = false;
+		explicit Product(Section &section) : section(section) {}
+		void demand() override {
+			++demands;
+			for (size_t index = 0; index < section.codeLines.size(); index++) {
+				auto *expression = new Expression();
+				expression->kind = Expression::Kind::Literal;
+				expression->literalValue = static_cast<std::int64_t>(index + 7);
+				section.codeLines[index]->expression.publish(*expression);
+			}
+			ready = true;
+			for (CodeLine *line : section.codeLines)
+				line->expression.finish();
+		}
+		bool syntaxMaterialized() const override { return ready; }
+		PatternReference *rootReference() const override { return nullptr; }
+	} product(section);
+	for (CodeLine *line : section.codeLines)
+		line->expression.defer(product);
+
+	auto first = context.cloneSectionBody(&section);
+	auto second = context.cloneSectionBody(&section);
+	expect(product.demands == 1, "cloning source bodies demanded the same syntax product twice");
+	expect(first->lineExpressions.size() == 2, "a deferred body clone lost its source lines");
+	expect(
+		std::get<std::int64_t>(first->lineExpressions.at(0)->literalValue) == 7 &&
+			std::get<std::int64_t>(first->lineExpressions.at(1)->literalValue) == 8,
+		"a deferred body clone lost its source expression values"
+	);
+	expect(
+		first->lineExpressions.at(0) != second->lineExpressions.at(0),
+		"two instantiated bodies share their mutable expression clones"
+	);
+	expect(context.expressionAllocationStats->liveExpressions == 4, "deferred body clones lost their expression ownership");
+	first.reset();
+	second.reset();
+	expect(context.expressionAllocationStats->liveExpressions == 0, "deferred body clones retained released expressions");
+}
+
+static void checkUnrequestedBodyTeardown() {
+	struct Unrequested final : BodySyntaxProduct {
+		void demand() override { expect(false, "compiler teardown materialized an unrequested source body"); }
+		bool syntaxMaterialized() const override { return false; }
+		PatternReference *rootReference() const override { return nullptr; }
+	} product;
+	{
+		ParseContext context;
+		context.ownedCodeLines.push_back(std::make_unique<CodeLine>("", nullptr));
+		context.ownedCodeLines.back()->expression.defer(product);
+	}
 }
 
 static void checkSectionResultOwnership() {
@@ -180,7 +289,10 @@ to get the boxed payload of {a number box:container}:
 }
 
 int main() {
+	checkSourceExpressionDemand();
 	checkBodyOwnership();
+	checkDeferredBodyCloning();
+	checkUnrequestedBodyTeardown();
 	checkSectionResultOwnership();
 	checkInferenceOwnership();
 }

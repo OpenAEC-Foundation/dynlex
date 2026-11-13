@@ -174,7 +174,7 @@ static bool definitionCouldMatchReference(const PatternDefinition &definition, c
 				return source.text == required.text;
 			});
 			if (!present && reference.expression) {
-				for (size_t index = 0; index < reference.expression->arguments.size(); index++) {
+				for (size_t index = 0; index < reference.expression.argumentCount(); index++) {
 					if (numericPatternArgumentSpelling(&reference, index) == required.text) {
 						present = true;
 						break;
@@ -219,7 +219,9 @@ static bool isArgumentExpressionReference(const PatternReference *reference) {
 		reference && reference->expression && reference->range().line,
 		"pattern reference argument classification requires a source expression"
 	);
-	return reference->range().line->expression != reference->expression ||
+	return (reference->expression.deferred()
+				? !reference->expression.isRoot()
+				: reference->range().line->expression.materialized() != reference->expression.get()) ||
 		   reference->range().section()->isValueExpressionContext();
 }
 
@@ -966,8 +968,9 @@ bool resolvePatterns(ParseContext &context) {
 
 	emitExplicitDefinitionParameterAmbiguityWarnings(context);
 	// All patterns resolved — expand expressions and resolve variable references
+	context.sourceSyntaxResolutionComplete = true;
 	for (CodeLine *line : context.codeLines) {
-		if (line->expression)
+		if (line->expression.materialized())
 			expandExpression(line->expression, line->section);
 	}
 	materializeVariableGroups(context);

@@ -2,8 +2,10 @@
 // inference borrows or groups expressions. Every fact snapshot shares this view.
 class InferenceSourceIndex {
   public:
-	InferenceSourceIndex(const std::map<const Section *, std::string> &paths, BuildStatistics &statistics)
-		: statistics(statistics) {
+	InferenceSourceIndex(
+		ParseContext &context, const std::map<const Section *, std::string> &paths, BuildStatistics &statistics
+	)
+		: context(context), statistics(statistics) {
 		auto start = Clock::now();
 		std::map<std::string, const Section *> sections;
 		for (const auto &[section, path] : paths)
@@ -12,20 +14,35 @@ class InferenceSourceIndex {
 			for (const auto &[name, definition] : section->variableDefinitions)
 				definitions.emplace(normalizeBindingReference(definition), Json::array({path, name}));
 			std::unordered_map<std::string, size_t> occurrences;
-			for (const CodeLine *line : section->codeLines)
+			for (CodeLine *line : section->codeLines)
 				if (line->expression) {
 					std::string text = digest(line->rightTrimmedText);
 					size_t root = roots.size();
-					roots.push_back({path, text, occurrences[text]++, line->expression});
-					indexExpression(line->expression, root, nullptr, {});
+					roots.push_back({path, text, occurrences[text]++, line, line->expression.materialized()});
+					lineRoots.emplace(line, root);
+					indexExpression(line->expression.materialized(), root, nullptr, {});
 				}
 		}
-		for (const Root &root : roots)
-			rootExpressions.emplace(RootKey{root.path, root.text, root.occurrence}, root.expression);
+		for (size_t index = 0; index < roots.size(); index++) {
+			const Root &root = roots.at(index);
+			rootExpressions.emplace(RootKey{root.path, root.text, root.occurrence}, index);
+		}
+		requireCompilerInvariant(!context.sourceExpressionPublished, "source expression index already has a publisher");
+		context.sourceExpressionPublished = [&](CodeLine *line, Expression *expression) {
+			auto started = Clock::now();
+			size_t prior = nodes.size();
+			size_t root = lineRoots.at(line);
+			requireCompilerInvariant(!roots.at(root).expression, "canonical source root was published twice");
+			roots.at(root).expression = expression;
+			indexExpression(expression, root, nullptr, {});
+			statistics.inferenceSourceExpressionsIndexed += nodes.size() - prior;
+			statistics.inferenceSourceIndexMilliseconds += elapsedMilliseconds(started);
+		};
 		statistics.inferenceSourceIndexBuilds++;
 		statistics.inferenceSourceExpressionsIndexed += nodes.size();
 		statistics.inferenceSourceIndexMilliseconds += elapsedMilliseconds(start);
 	}
+	~InferenceSourceIndex() { context.sourceExpressionPublished = {}; }
 	void recordStorageIndex(size_t count) const {
 		statistics.inferenceStorageIndicesBuilt++;
 		statistics.inferenceStorageOriginsIndexed += count;
@@ -59,7 +76,11 @@ class InferenceSourceIndex {
 			}
 		);
 		requireCompilerInvariant(root != rootExpressions.end(), "cached storage invocation lost its source expression");
-		Expression *expression = root->second;
+		const Root &source = roots.at(root->second);
+		if (!source.expression)
+			(void)static_cast<Expression *>(source.line->expression);
+		requireCompilerInvariant(source.expression, "source syntax demand did not publish its canonical root");
+		Expression *expression = source.expression;
 		for (const Json &component : site.at(3)) {
 			const Node &node = nodes.at(expression);
 			if (component.is_null())
@@ -78,6 +99,7 @@ class InferenceSourceIndex {
 	struct Root {
 		std::string path, text;
 		size_t occurrence;
+		CodeLine *line;
 		Expression *expression;
 	};
 	struct Node {
@@ -101,10 +123,12 @@ class InferenceSourceIndex {
 			indexExpression(expression->arguments[argument], root, expression, argument);
 		indexExpression(expression->dataDeclaration, root, expression, {});
 	}
+	ParseContext &context;
 	BuildStatistics &statistics;
 	std::vector<Root> roots;
 	using RootKey = std::tuple<std::string_view, std::string_view, size_t>;
-	std::map<RootKey, Expression *> rootExpressions;
+	std::map<RootKey, size_t> rootExpressions;
+	std::unordered_map<CodeLine *, size_t> lineRoots;
 	std::vector<Expression *> arguments;
 	std::unordered_map<const Expression *, Node> nodes;
 	std::unordered_map<const VariableReference *, Json> definitions;

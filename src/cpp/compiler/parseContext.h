@@ -153,6 +153,10 @@ struct ParseContext {
 	// Parse cache entries contain only unresolved syntax. Restored executable
 	// expressions register references; temporary type expressions keep them local.
 	std::function<Expression *(Section *, Range, SectionType, bool)> reuseParsedExpression;
+	std::function<bool(Section *, CodeLine *, SectionType)> deferParsedLine;
+	std::vector<std::unique_ptr<BodySyntaxProduct>> sourceSyntaxProducts;
+	bool sourceSyntaxResolutionComplete = false;
+	std::function<void(CodeLine *, Expression *)> sourceExpressionPublished;
 	std::function<void(Range, SectionType, bool, const Expression *)> recordParsedExpression;
 	std::function<void(Range, SectionType)> retainParsedTemporaryExpression;
 	std::function<bool(Range, std::vector<DefinitionPatternElement> &)> reuseParsedDefinition;
