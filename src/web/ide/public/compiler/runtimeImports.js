@@ -36,12 +36,18 @@ function roundAwayFromZero(value) {
   return Math.sign(value) * Math.floor(Math.abs(value) + 0.5);
 }
 
+function floatingRemainder(left, right) {
+  return left % right;
+}
+
 const mathImports = {
   sin: Math.sin, sinf: Math.sin,
   cos: Math.cos, cosf: Math.cos,
   exp: Math.exp, expf: Math.exp,
   log: Math.log, logf: Math.log,
   pow: Math.pow, powf: Math.pow,
+  atan2: Math.atan2, atan2f: Math.atan2,
+  fmod: floatingRemainder, fmodf: floatingRemainder,
   round: roundAwayFromZero, roundf: roundAwayFromZero,
   fmin: minimumNumber, fminf: minimumNumber,
   fmax: maximumNumber, fmaxf: maximumNumber

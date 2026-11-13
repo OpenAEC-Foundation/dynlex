@@ -6,11 +6,13 @@ import path from 'node:path';
 import { buildRuntimeImports, createRuntimeFilesystem, inspectRuntimeWasmLayout, isSupportedRuntimeImport } from '../../src/web/ide/public/compiler/runtimeImports.js';
 const folder = mkdtempSync(path.join(tmpdir(), 'dynlex-wasm-math-'));
 try {
-  const operations = ['sin', 'cos', 'exp', 'log', 'pow', 'sqrt', 'floor', 'ceil', 'round', 'abs'];
+  const operations = ['sin', 'cos', 'exp', 'log', 'pow', 'sqrt', 'floor', 'ceil', 'round', 'abs', 'atan2', 'modulo'];
   const lines = [];
   for (const bits of [32, 64]) for (const operation of operations) {
     const value = `@intrinsic("cast", @intrinsic("call", "host", "sample", @intrinsic("type", "float", 64)), @intrinsic("type", "float", ${bits}))`;
-    const operands = operation === 'pow' ? `${value}, ${value}` : value;
+    const second = `@intrinsic("cast", 0.75, @intrinsic("type", "float", ${bits}))`;
+    const operands = operation === 'pow' ? `${value}, ${value}` :
+      ['atan2','modulo'].includes(operation) ? `${value}, ${second}` : value;
     lines.push(`@intrinsic("call", "host", "result", @intrinsic("type", "nothing"), @intrinsic("cast", @intrinsic("${operation}", ${operands}), @intrinsic("type", "float", 64)))`);
   }
   const source = path.join(folder, 'math.dl'), output = path.join(folder, 'math.wasm');
@@ -26,7 +28,9 @@ try {
     imports.env.result = value => values.push(value);
     const { instance } = await WebAssembly.instantiate(bytes, imports);
     instance.exports.main();
-    const expected = operations.map(operation => operation === 'pow' ? Math.pow(1.25, 1.25) : (operation === 'round' ? Math.sign(1.25) * Math.floor(Math.abs(1.25) + 0.5) : Math[operation](1.25)));
+    const expected = operations.map(operation => operation === 'pow' ? Math.pow(1.25, 1.25) :
+      operation === 'atan2' ? Math.atan2(1.25,0.75) : operation === 'modulo' ? 1.25%0.75 :
+        (operation === 'round' ? Math.sign(1.25) * Math.floor(Math.abs(1.25) + 0.5) : Math[operation](1.25)));
     assert.deepEqual(values, [...expected.map(Math.fround), ...expected]);
     for (const name of ['fmin', 'fmax', 'fminf', 'fmaxf']) {
       assert.equal(imports.env[name](NaN, 3), 3);
@@ -36,6 +40,12 @@ try {
     for (const sample of [-1.5, -0.5, -0, 0.5, 1.5]) {
       assert(Object.is(imports.env.round(sample), Math.sign(sample) * Math.floor(Math.abs(sample) + 0.5)));
       assert(Object.is(imports.env.roundf(sample), imports.env.round(sample)));
+    }
+    for (const left of [-0,0,1.25,-3.5,Infinity,-Infinity,NaN]) {
+      for (const right of [-0,0,1.25,-3.5,Infinity,-Infinity,NaN]) {
+        for (const name of ['atan2','atan2f']) assert(Object.is(imports.env[name](left,right),Math.atan2(left,right)),name);
+        for (const name of ['fmod','fmodf']) assert(Object.is(imports.env[name](left,right),left%right),name);
+      }
     }
   }
   console.log('Browser runtime supports float32 and float64 math intrinsics.');
