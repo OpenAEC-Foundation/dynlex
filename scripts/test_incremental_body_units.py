@@ -16,7 +16,8 @@ def check_body_resolution_units(root, build):
     main.write_text(edited_source)
     edited = build(entry=main)
     assert edited[0]["body_resolution_units_reused"] >= 2, edited[0]
-    assert edited[0]["body_resolution_references_restored"] >= 4, edited[0]
+    # Reused typed bodies need not reconstruct their earlier matcher results.
+    assert edited[0]["cached_body_resolution_references_skipped"] >= 4, edited[0]
     assert edited[0]["body_resolution_reference_visits"] < cold[0]["body_resolution_reference_visits"], edited[0]
     assert edited[1:] == build(False, entry=main)[1:]
     assert edited[2].splitlines() == [b"changed", b"beta", b"gamma"]
@@ -75,7 +76,7 @@ def check_body_resolution_units(root, build):
     main.write_text(source.replace('"discard", 0', '"discard", 2'))
     restored = build(entry=main)
     assert restored[0]["body_resolution_units_reused"] >= 1, restored[0]
-    assert restored[0]["body_resolution_references_restored"] >= 2, restored[0]
+    assert restored[0]["cached_body_resolution_references_skipped"] >= 2, restored[0]
     assert restored[1:] == build(False, entry=main)[1:]
 
     # Explicit names can span several words and contain a parsed number.
@@ -90,6 +91,6 @@ def check_body_resolution_units(root, build):
         main.write_text(source.replace('"discard", 0', '"discard", 2'))
         restored = build(entry=main)
         assert restored[0]["body_resolution_units_reused"] >= 1, restored[0]
-        assert restored[0]["body_resolution_references_restored"] >= 1, restored[0]
+        assert restored[0]["cached_body_resolution_references_skipped"] >= 1, restored[0]
         assert restored[1:] == build(False, entry=main)[1:]
         assert restored[2] == b"7\n"
