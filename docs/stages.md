@@ -1170,11 +1170,15 @@ computed. `variable_like_count_units_reused` reports restored count maps.
 `parameter_count_cache_ms` measures cache input preparation, lookup, and recording.
 With compatible observations and non-message syntax, initial classification
 inputs for authored declarations retain their existing identity when the source
-header, body, enclosing definition bodies, candidate
-state and effective locality are unchanged. The body digests include metadata,
+header, body, enclosing definition bodies, candidate state and effective locality
+are unchanged. The body digests include metadata,
 nested definitions and source-file transitions. Effective locality is recorded
-separately because a rule outside those bodies can change it. Generated prebuilt
-signatures and data-field definitions read their semantic producer inputs instead.
+separately because a rule outside those bodies can change it. Generated declarations
+record the section which produces them, including anonymous body records, property
+accessors, data-field declarations and lowered callbacks. The input proof refers
+to the originating source unit and its body, following producer chains instead of
+interpreting generated pattern text. A changed producer reconsiders its generated
+signatures; unchanged producer bodies retain their inputs.
 This skips declaration-input evaluation, not the dependency checks which can
 reactivate a declaration after a provider changes. `classification_input_units_built`
 and `classification_input_units_reused` count those initial input decisions;
