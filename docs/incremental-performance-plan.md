@@ -170,7 +170,7 @@ remaining measured costs, not by table order alone.
 | I009 | P06: reusable function-body input queries | Parked; not accepted | Closed 01:00 UTC on 14 November, before the extended 01:32 deadline; one extension used. Baseline `4c73c053` / `a3c07989...`; final prototype `15850647` / `ff21b137...`. First candidate `3278ce18` / `e591d597...` still rehashes 51 bodies after a one-line edit because of whole-file input keys. Per-file physical-line products fix the same-file regression: one changed body is hashed, zero bodies are hashed after code is inserted above them, and the real edit hashes one body while reusing 789 results. All nine focused groups pass, all eight artifact/diagnostic comparisons pass, and 328 required checks pass uncached in 100.421 s. Decisive 31-pair CPU ratios fail the predeclared 2% whole-build gain: unused 1.00782 [0.98712, 1.01979], active-body 1.00714 [1.00127, 1.01901]. Full integration was not run for this rejected optimization. Retain the prototype separately; do not merge its extra cache records. |
 
 | I010 | P00/P14/P22: reduce structured-payload codec costs | Complete: keep, merged and verified | 01:03–02:25 UTC on 14 November, one extension used, before the 02:33 deadline. Candidate source `3dcc89a5` / compiler `c3c0252a...` clears the 25% codec gate (ratio 0.3415) and the 2% ordinary-edit gate: unused CPU ratio 0.9322 [0.9183, 0.9487], active body 0.9610 [0.9253, 0.9672]. Eight-case executable/diagnostic parity passes. Candidate: 329 required checks uncached in 111.020 s and 464 integration checks in 822.425 s. Merged source/docs `73eca64c`; root compiler `cfbeec1f...` passes 329 required checks uncached in 101.873 s. Eleven cold pairs establish no change. The merged worktree is removed; an actual archived-compiler benchmark replay passes after removal and cleans its temporary data root. This reduces persistence costs, not source/section reuse coverage. |
-| I011 | P02/P03: source chunks with a compact section-line consumer | Complete: keep; merged-root verification pending | Started 02:31 UTC on 14 November; one extension to 04:01 UTC after measured progress. Source `c4907513`, compiler `111070f3...`: seven paired unused-body edits have CPU ratio 0.97037 [0.96212, 0.98083], active-body 0.96685 [0.95092, 0.99687]. All eight-case 180-row executable/diagnostic comparisons pass; eleven cold pairs establish no change. The unused edit reuses 44 files, 79 chunks and 7,087 section-line products; CodeLine layout is unchanged. All 329 required checks pass uncached in 103.073 s and all 464 integration checks in 899.856 s, with unchanged source/compiler hashes. Keep the source-unit implementation; finish local-master rebuild/gate, archived replay, cleanup and publication. Semantic section reconstruction and early-failure source publication remain incomplete. |
+| I011 | P02/P03: source chunks with a compact section-line consumer | Complete: keep, merged and verified | 02:31–03:36 UTC on 14 November; one extension used, before the 04:01 deadline. Source `c4907513`, compiler `111070f3...`: seven paired unused-body edits have CPU ratio 0.97037 [0.96212, 0.98083], active-body 0.96685 [0.95092, 0.99687]. All eight-case 180-row executable/diagnostic comparisons pass; eleven cold pairs establish no change. The unused edit reuses 44 files, 79 chunks and 7,087 section-line products; CodeLine layout is unchanged. All 329 required checks pass uncached in 103.073 s and all 464 integration checks in 899.856 s, with unchanged source/compiler hashes. Merged source/docs `9bccf692`, rebuilt root compiler `a0d50521...`, passes all 329 required checks uncached in 100.451 s. The merged worktree is removed, archived replay passes after removal, and its temporary data root is cleaned. Semantic section reconstruction and early-failure source publication remain incomplete. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -737,7 +737,7 @@ own iteration, then continue semantic section-unit reuse. The full objective
 remains incomplete while either boundary is missing.
 
 
-### I011 decision: keep; verify the merged compiler next
+### I011 decision: keep, merged and verified
 
 The remaining six-case comparison passes all 144 rows, completing the eight-case
 180-row matrix with the earlier ordinary-edit comparison. Fifteen-pair unchanged,
@@ -750,9 +750,15 @@ The exact source/binary passes all 329 required checks uncached in 103.073 s
 (104.034 s with its recording driver), and all 464 integration checks in
 899.856 s (901.859 s with its driver). Source and compiler hashes are unchanged.
 The implementation clears the declared whole-build and correctness gates.
-Accept it, then rebuild and run the required gate after the merge to local master.
-The prepared data bundle preserves six I008/I011 archived compiler identities;
-verify an actual benchmark replay after removing the merged worktree.
+The merged source/docs revision is `9bccf692`; rebuilt root compiler
+`a0d50521bb178de53fa5b501f2e6417d735c9e32c39860d0b418dea8c6f30bb3`
+passes all 329 required checks uncached in 100.451 s (101.865 s with its driver),
+with unchanged source and binary hashes. Its compiler and test sources match
+`c4907513` exactly. The merged owned worktree is removed after verifying it is
+clean, fully merged and has no live process users. The data bundle preserves six
+I008/I011 archived compiler identities. An actual one-pair archived benchmark
+replay passes after removal and cleans its temporary original data path; this is
+a reproducibility check, not an additional performance claim.
 
 For unused edits, import/preprocessing median elapsed time falls 15.576 to
 7.414 ms, section analysis stays 14.913 to 14.488 ms, and parser snapshot writing
@@ -764,4 +770,5 @@ complete semantic section reuse or eliminate that reconstruction.
 
 Evidence: `i011-first-comparison.json`, `i011-remaining-comparison.json`,
 `i011-cold-11-comparison.json`, `i011-required.json`, `i011-integration.json`,
+`i011-root-required.json`, `i011-post-cleanup-replay.json`,
 and `i011-compiler-data/manifest.json` under the structured evidence directory.
