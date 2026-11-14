@@ -59,6 +59,13 @@ use producer provenance rather than pattern spelling.
 `generated_body_units_materialized` counts generated owners whose executable
 syntax was demanded; `generated_body_units_deferred` counts owners whose syntax
 remained unmaterialized. These counters describe actual work in this process.
+The canonical inference source index shares the existing ordered scope index.
+It indexes materialized syntax before inference, registers deferred scope roots
+when they are demanded, and builds declaration-binding identities on their first
+query. Root identities retain their scope, text and occurrence keys; published
+root views remain stable as other scopes are registered.
+`inference_source_scopes_indexed` and `inference_source_definitions_indexed`
+expose those separate registration costs.
 Parser/source products have a per-program index published independently of semantic
 program and error manifests. Every attempted frontend publishes its actual products;
 import and preprocessing failures retain completed and unvisited prior units without
