@@ -1431,3 +1431,40 @@ and data archive passes after removal and cleans its temporary data root. The
 one-off I019 profiling cache is pruned; frozen sources, probes and reports remain.
 Only this decision/evidence record is published; no experimental compiler code
 from I019 reaches master.
+
+## I020: persistent resolved declaration projections
+
+Started 14 November 2026 at 15:18:00 UTC; first deadline 16:03:00 UTC.
+Baseline `5a213ad7`, compiler `cae4985b...`. The unused-edit inactive
+projection costs about 78 ms; its declaration digest currently reconstructs
+structured values for every resolved declaration. The final projection costs
+about 43 ms and may repeat or copy those outputs. These are hypotheses until
+one-shot debugger probes identify the actual work.
+
+Profile the frozen real application first. Then retain declaration results as
+independent units, validate the source/classification/matcher/scope inputs they
+read, and make the aggregate consumer use those units. Preserve every provider
+and failed-lookup cascade, generated/nested declarations, source identity and
+configuration. Avoid another serialized-only facade. Add minimal unit-work and
+semantic cascade tests before implementation. Expose actual reused/built unit
+counts. Require at least 5% paired real unused-edit CPU improvement (seven pairs,
+31 if uncertain), clean LLVM/runtime/diagnostic parity, no established ordinary
+or cold regression and the uncached required gate below 120 seconds. Keep the
+full source/configuration and target/tooling objective active.
+
+The one-shot profile measures 49.609 ms constructing declaration records,
+30.384 ms serializing/hashing their aggregate, and 2.006 ms checking inactive
+sources. Implement a shared declaration value stream consumed by structured
+JSON and a lightweight fingerprint writer. At the immutable frontend boundary,
+audit each resolved input once and retain the prior structured result when its
+fingerprint matches. Aggregate ordered path/fingerprint pairs, avoiding the
+whole-program JSON tree. Current resolved values include implicit promotions,
+choices, argument packs, locality, conversion, precedence and return metadata;
+provider changes remain visible through their actual settled results.
+
+Migrate the former pattern-only fingerprint table completely to
+`declaration_fingerprints`, including lifecycle codegen records. Existing cached
+programs are isolated by compiler build identity; no old-schema reader is added.
+Minimal work tests were added first and fail on the baseline's missing counter.
+The registry reports changed/reused summaries and actual built/reused structured
+records separately; input auditing remains explicit work, not skipped work.
