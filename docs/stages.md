@@ -1168,6 +1168,17 @@ an edit inside a nested definition invalidates the containing definitions' count
 as well. The walk visits references only for definitions whose counts need to be
 computed. `variable_like_count_units_reused` reports restored count maps.
 `parameter_count_cache_ms` measures cache input preparation, lookup, and recording.
+With compatible observations and non-message syntax, initial classification
+inputs for authored declarations retain their existing identity when the source
+header, body, enclosing definition bodies, candidate
+state and effective locality are unchanged. The body digests include metadata,
+nested definitions and source-file transitions. Effective locality is recorded
+separately because a rule outside those bodies can change it. Generated prebuilt
+signatures and data-field definitions read their semantic producer inputs instead.
+This skips declaration-input evaluation, not the dependency checks which can
+reactivate a declaration after a provider changes. `classification_input_units_built`
+and `classification_input_units_reused` count those initial input decisions;
+lexical-environment units have their own input and dependency processing.
 An ordinary nested function has no implicit closure. Validation reports a
 reference to an outer runtime local and directs the author to pass it as an
 argument; global variables remain accessible.
