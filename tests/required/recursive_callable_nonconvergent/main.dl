@@ -1,0 +1,4 @@
+integer means: @intrinsic("type", "int", 32)
+to get result {integer:value}:
+    @intrinsic("return", @intrinsic("invoke", @intrinsic("function", "result $"), value))
+@intrinsic("discard", result 0)

@@ -485,9 +485,10 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 					return generateExpressionCode(context, initializer);
 				return loadGlobalDataValue(context, dataVariable, finalizedExpressionType(context, expr), true);
 			}
-			// Main uses original inferred expressions. Instantiated field values
-			// retain the caller's lexical body, not the replacement's current body.
-			if (expr->owningSectionBody) {
+			// Resolve the declaration's storage owner, not the reader's body:
+			// replacements can read original main data from a cloned expression.
+			// Instance-local declarations instead require their inferred clone.
+			if (variableStorageKey(expr).scope) {
 				Expression *instantiatedInitializer = nullptr;
 				for (auto *scope = expr->owningSectionBody; scope && !instantiatedInitializer; scope = scope->parentBody)
 					instantiatedInitializer = scope->findCloneOf(initializer);

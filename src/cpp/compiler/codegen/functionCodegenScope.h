@@ -32,10 +32,10 @@ struct FunctionCodegenScope {
 		  parameterDefinitions(std::move(ctx.codegenParameterDefinitions)), variableStorage(ctx.variableStorage),
 		  subjectStorage(std::move(ctx.subjectStorage)), localDataValues(std::move(ctx.localDataLLVMValues)),
 		  lifecycleValue(ctx.managedLifecycleValueBinding), instantiation(ctx.currentCodegenInstantiation),
-		  instantiatedBody(ctx.currentInstantiatedSectionBody), flexBindings(ctx.flexBindingFrames),
-		  callSiteRanges(std::move(ctx.flexCallSiteRangeStack)), localStorage(std::move(ctx.managedLocalStorage)),
-		  functionStorage(std::move(ctx.managedFunctionStorage)), returnBlock(ctx.managedReturnBlock),
-		  returnStorage(ctx.managedReturnStorage) {
+		  staticReferenceDepth(ctx.staticReferenceDepth), instantiatedBody(ctx.currentInstantiatedSectionBody),
+		  flexBindings(ctx.flexBindingFrames), callSiteRanges(std::move(ctx.flexCallSiteRangeStack)),
+		  localStorage(std::move(ctx.managedLocalStorage)), functionStorage(std::move(ctx.managedFunctionStorage)),
+		  returnBlock(ctx.managedReturnBlock), returnStorage(ctx.managedReturnStorage) {
 		ctx.codegenParameterBindings.clear();
 		ctx.codegenParameterDefinitions.clear();
 		ctx.subjectStorage.clear();

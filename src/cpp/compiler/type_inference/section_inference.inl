@@ -111,6 +111,7 @@ static bool inferSectionLineRange(
 	auto inferLineExpression = [&](CodeLine *line, Expression *&lineExpression) {
 		if (!lineExpression)
 			return true;
+		ScopedRecursiveInferenceObservation lineObservation(context, context.currentInstantiation);
 		applyCodeLineGrouping(line, lineExpression, context);
 		bool alreadyOrdered = codeLineCanReuseGrouping(line, context);
 		bool ambiguityChecked = context.detectGroupingAmbiguity;
@@ -120,7 +121,10 @@ static bool inferSectionLineRange(
 			context.typesValid = false;
 			return false;
 		}
-		commitCodeLineGrouping(line, lineExpression, context, ambiguityChecked);
+		// A recursive operand can leave more than one grouping provisional.
+		// Reconsider them once the owning body pass supplies its return type.
+		if (!lineObservation.observed())
+			commitCodeLineGrouping(line, lineExpression, context, ambiguityChecked);
 		bool finalReplacementValue = section->type == SectionType::Replacement && line == section->codeLines.back();
 		if (!finalReplacementValue && !consumeStatementMemoryFacts(lineExpression, context))
 			return false;

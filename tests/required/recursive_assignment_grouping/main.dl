@@ -1,0 +1,12 @@
+function set variable to value:
+    replacement: @intrinsic("store", variable, value)
+function left + right:
+    replacement: @intrinsic("add", left, right)
+section if condition:
+    replacement: @intrinsic("if", condition)
+to get sum depth:
+    set total to 0
+    if @intrinsic("greater than", depth, 0):
+        set total to total + (sum @intrinsic("subtract", depth, 1))
+    @intrinsic("return", @intrinsic("add", total, 1))
+@intrinsic("return", @intrinsic("subtract", sum 3, 4))

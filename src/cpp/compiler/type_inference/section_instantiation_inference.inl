@@ -37,6 +37,15 @@ bool ensureSectionInstantiationInferred(
 		inst.argumentTypes = argTypes;
 	else
 		requireCompilerInvariant(inst.argumentTypes == argTypes, "Instantiation argumentTypes diverged from map key");
+	if (inst.inferring) {
+		requireCompilerInvariant(callerContext, "recursive section inference requires its caller context");
+		// A reference needs the callable's signature, not another traversal
+		// of its active body. Retain its identity while the owning body pass
+		// resolves the result, just as for an unresolved recursive call.
+		if (!inst.returnType.isDeduced())
+			observeUnresolvedRecursiveDependency(*callerContext);
+		return true;
+	}
 	inst.requiredCompileTimeParameters = explicitCompileTimeParameters;
 	seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 	seedInstantiationCompileTimeParameters(
@@ -49,8 +58,6 @@ bool ensureSectionInstantiationInferred(
 		inst.needsReinfer = true;
 	if (inst.returnType.isDeduced() && !inst.needsReinfer)
 		return inst.valid;
-	if (inst.inferring)
-		return inst.returnType.isDeduced() && inst.valid;
 
 	ScopedSectionLocalVariableState calleeVariableState(section);
 	InferenceContext context(parseContext, callerContext && callerContext->trial);

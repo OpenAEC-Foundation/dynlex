@@ -370,6 +370,12 @@ no return. Return observations belong to the active instantiation, reset for eac
 pass, and participate in inference-trial rollback. Returns inferred inside a nested
 function do not determine the caller's result.
 
+Taking a reference to a function whose body is already being inferred retains
+that callable's identity. Its unresolved result records the same recursive
+dependency as a direct call, so the owning body pass can establish its result
+and revisit the reference. A reference does not invoke the function or require
+another traversal of the active body.
+
 An ordinary overload lookup with unresolved recursive operands is deferred until
 the existing body reinference pass deduces those operands. Reads and assignments
 of a pending local retain the dependency observed by their owning function pass.
@@ -695,6 +701,8 @@ A successful candidate keeps its complete inference transaction alive while the 
 
 A candidate whose validity depends on an unresolved recursive call is deferred, rather than counted as a second passing tree. A resolved alternative can establish the return type needed for the normal body reinference pass to check those deferred alternatives. Dependency observations belong to the individual candidate.
 
+A code line that observed an unresolved recursive dependency does not publish its provisional grouping as a reusable ordering. The next body pass enumerates its alternatives again with the newly deduced types. Independent, resolved lines can still commit their groupings during that pass.
+
 Nested trials and cached-grouping inference borrow the caller's fixed roots through parent-linked scopes. They collect only their own resolved roots. Type requests through flex bindings honor all active scopes, so the caller's selected expression tree cannot be regrouped behind its reference. Each scope is restored before its owning transaction or inference call ends.
 
 Replaying a selected snapshot fixes only nodes actually present in that snapshot. Callee body groupings are journaled separately and must not be frozen after their transaction has been rolled back. A committed code line or an already-ordered cloned header fixes every node of its own snapshot, even when an enclosing caller supplies a different fixed-root scope. This keeps independently valid subexpressions from being regrouped into an invalid parent condition during reuse.
@@ -781,10 +789,15 @@ without runtime instructions remains a module constant, including forward and cy
 static descriptions. Runtime initializers execute in the declaration's lexical scope
 and transfer one owning snapshot into storage; readers never reuse instructions from
 another function or rerun the initializer. Function-local data owns scoped storage and captures a fresh
-value whenever its declaration executes. Managed reads retain the snapshot and ordinary
+value whenever its declaration executes. Declaration storage identity selects the
+initializer: main data retains its original inferred expression even when a cloned
+replacement reads it; instance-local data uses its owning lexical clone.
+Managed reads retain the snapshot and ordinary
 scope cleanup releases its owner. `static reference` publishes an immutable global
 before lowering its initializer, allowing cyclic static graphs; the initializer must
-lower to a constant. `deferred body` uses ordinary native
+lower to a constant. Generating a nested function saves, clears and restores the
+static-reference depth along with the other function-local codegen state.
+`deferred body` uses ordinary native
 callable generation, while the body record and receiver intrinsics use their inferred
 expressions. There is no runtime data-section builder pass.
 

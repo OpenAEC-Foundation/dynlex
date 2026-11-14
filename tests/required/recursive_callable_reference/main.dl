@@ -1,0 +1,23 @@
+integer means: @intrinsic("type", "int", 32)
+pointer means: @intrinsic("add pointer depth", @intrinsic("type", "int", 8))
+function ignore value:
+    replacement: @intrinsic("discard", value)
+
+# Taking an address does not invoke the function or recurse at runtime.
+@intrinsic("store", {registered event}, @intrinsic("construct", pointer))
+function [register] {integer:value}:
+    globals:
+        registered event
+    execute:
+        @intrinsic("store", registered event, @intrinsic("cast", @intrinsic("function", "event $"), pointer))
+to event {integer:value}:
+    register value
+    ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", value)
+
+to get next {integer:value}:
+    ignore @intrinsic("function", "next $")
+    @intrinsic("return", @intrinsic("add", value, 1))
+
+event 3
+@intrinsic("call pointer", registered event, @intrinsic("type", "nothing"), 4)
+ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", @intrinsic("invoke", @intrinsic("function", "next $"), 5))
