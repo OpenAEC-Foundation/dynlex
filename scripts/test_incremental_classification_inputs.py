@@ -1,5 +1,7 @@
 """Classification inputs preserve lexical source identity and binding changes."""
 
+from test_incremental_classification_sources import check_local_pattern_source_move
+
 
 def check_classification_inputs(root, build):
     main = root / "classification_source_origin.dl"
@@ -37,6 +39,7 @@ def check_classification_inputs(root, build):
     assert restored[1:] == build(False, entry=main)[1:]
     check_declaration_input_units(root, build)
     check_reference_only_inputs(root, build)
+    check_local_pattern_source_move(root, build)
 
 
 def check_declaration_input_units(root, build):

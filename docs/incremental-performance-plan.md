@@ -1094,3 +1094,24 @@ replay passes six rows after removal and cleans its temporary data path. This
 is reproducibility evidence, not another performance sample. Evidence:
 `i015-worktree-cleanup.json` and `i015-post-cleanup-replay.json`. Only this plan
 changes on master; compiler, library and test sources still match `9cbdc95a`.
+
+## I016: classification lookup edges and local definition origins
+
+Started 14 November 2026 at 10:03:16 UTC; first deadline 10:48:16 UTC.
+Baseline `94890b9c` / compiler `092562a6...`. The lookup-edge experiment
+`07c4d241` / compiler `1dab0ac0...` eliminates 351 candidate checks on a real
+unused-function edit, but independent 31-pair CPU ratio 0.997587
+[0.978889, 1.015006] fails its predeclared 0.5% gain gate. Both the first
+36-row screen and independent 132-row control pass artifact/diagnostic parity.
+Preserve the experiment on unmerged `codex/incremental-lookup-inputs`; its
+provider/query metadata and edge changes are excluded from the proposed fix.
+
+The experiment exposed a correctness defect: an imported pattern block can
+move a local definition between files without changing its text or owning
+section identity. Declaration inputs and exported classification signatures
+omitted that definition's file origin. A cached caller then kept an implicit
+parameter which a fresh build removed. The minimal regression compares the
+published parameter classification through both move directions, alongside
+clean-build diagnostic/runtime parity. The isolated fix records local origins
+for authored and generated declarations. Necessary correctness work is kept
+independently of the rejected optimization; final verification remains pending.

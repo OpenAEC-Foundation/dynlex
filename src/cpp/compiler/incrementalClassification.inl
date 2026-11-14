@@ -222,8 +222,13 @@ class IncrementalClassification {
 		const Section &section = *unit.section;
 		Json definitions = Json::array();
 		for (PatternDefinition *definition : section.patternDefinitions) {
+			// File-local visibility belongs to the declaration's interface, even
+			// when an imported patterns block moves without changing its text.
+			Json source = section.isLocal ? Json(definition->range.line->sourceFile->uri) : Json(nullptr);
 			if (definition->hasPrebuiltPatternElements) {
-				definitions.push_back(resolvedDefinitionElements(definition->patternElements));
+				definitions.push_back(
+					Json::array({std::move(source), resolvedDefinitionElements(definition->patternElements)})
+				);
 				continue;
 			}
 			Json promoted = Json::array();
@@ -235,7 +240,9 @@ class IncrementalClassification {
 			});
 			// The source and configured parser determine every authored element;
 			// only explicit body references may have promoted a word at this point.
-			definitions.push_back(Json::array({std::string(definition->range.subString), std::move(promoted)}));
+			definitions.push_back(
+				Json::array({std::move(source), std::string(definition->range.subString), std::move(promoted)})
+			);
 		}
 		return Json::array({unit.path, std::move(definitions), section.isLocal, section.isFlex, section.isExposed,
 							section.isConversion, section.isImplicitConversion, static_cast<int>(section.returnContract),
