@@ -2,10 +2,17 @@
 // expression acquires captured arguments, so it is not a source snapshot.
 class DataDeclarationNameIndex {
 	struct Header {
-		Expression expression;
+		std::optional<Expression> expression;
 		PatternReference reference;
-		explicit Header(const PatternReference &source)
-			: expression(*source.expression), reference(&expression, source.patternType) {
+		static SourceExpressionSite snapshot(const PatternReference &source, std::optional<Expression> &expression) {
+			// Cached syntax retains its authored outline independently of the
+			// mutable expression tree. Discovery must not demand that tree.
+			if (source.expression.deferred())
+				return source.expression;
+			expression.emplace(*source.expression);
+			return &*expression;
+		}
+		explicit Header(const PatternReference &source) : reference(snapshot(source, expression), source.patternType) {
 			reference.sourceRange = source.sourceRange;
 			reference.pattern = source.pattern;
 			reference.patternElements = source.patternElements;
