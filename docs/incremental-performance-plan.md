@@ -1273,3 +1273,28 @@ product together with its consumer, distinguishing necessary object rehydration
 from repeated source/header decisions. Do not add another serialized-only cache.
 Freeze a named hypothesis, minimal tests and an end-to-end gain gate before the
 next implementation. The full cross-process incremental objective stays active.
+
+
+## I018: section construction work and reusable-product decision
+
+Started 14 November 2026 at 13:13:43 UTC; first deadline 13:58:43 UTC.
+Baseline `a7e0ddb1`, published compiler `e1bead02...`. The current real unused
+edit spends 14.219 ms in section analysis. Cached shorthand and lexical decisions
+already exist, so another header cache has an unproven consumer benefit.
+
+Measure section creation, body-line dispatch, finalization, locality processing
+and cached source-outline restoration separately. These are stage operations,
+not syntax-specific warnings or application-name cases. Keep profiling off the
+ordinary no-statistics path. Add focused minimal work/runtime checks before code.
+Also check partial-stage timings: the existing stage recorder updates only on
+success, so an error currently hides work done in its failing stage.
+
+Implement a construction product only if the profile supports at least a 1%
+real unused-edit paired CPU improvement, with reduced repeated construction
+work, clean runtime/LLVM parity, no established ordinary/cold regression, and
+the uncached required gate within 120 seconds. Minimum seven pairs, 31 when
+uncertain. If constructor decisions cannot plausibly meet that gate, reject that
+cache before implementation and select the actual remaining source consumer.
+Stage observability and accurate failed-stage accounting are separately required
+correctness evidence; do not describe them as a speedup. No serialized-only
+product, duplicated syntax recognition or unconditional profiling overhead.

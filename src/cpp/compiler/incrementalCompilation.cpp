@@ -494,7 +494,7 @@ bool compileIncrementally(
 			std::string previousParsedExpressions = parserIndex.load();
 			IncrementalParsedExpressionCache parserCache(context, previousParsedExpressions);
 			IncrementalSourcePreparation sourcePreparation(context, parserCache, *recording);
-			IncrementalSourceTransforms sourceTransforms(context, parserCache, *recording);
+			IncrementalSourceTransforms sourceTransforms(context, parserCache, *recording, showStatistics);
 			context.deferParsedLine = [&](Section *section, CodeLine *line, SectionType type) {
 				return parserCache.defer(section, line, type);
 			};
@@ -926,6 +926,7 @@ bool compileIncrementally(
 			statistics.bodySyntaxUnitsSkipped = parserCache.bodySkippedCount();
 			statistics.sourcePreparation = sourcePreparation.work;
 			statistics.sourceTransforms = sourceTransforms.work;
+			statistics.sectionAnalysis = sourceTransforms.sectionAnalysis;
 		}
 		auto finalizeStart = Clock::now();
 		if (success)

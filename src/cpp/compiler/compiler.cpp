@@ -23,6 +23,7 @@
 #include "stringFunctions.h"
 #include "syntaxConfig.h"
 #include "type.h"
+#include "llvm/ADT/ScopeExit.h"
 #include <cassert>
 #include <cctype>
 #include <chrono>
@@ -238,6 +239,11 @@ bool compileBeforeTypeInference(const std::string &path, ParseContext &context, 
 			std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - stageStart).count();
 		stageStart = std::chrono::steady_clock::now();
 	};
+	auto unfinishedStage = llvm::make_scope_exit([&]() {
+		if (stageIndex < context.frontendStageMilliseconds.size())
+			context.frontendStageMilliseconds.at(stageIndex) =
+				std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - stageStart).count();
+	});
 	context.compilationStage = ParseContext::CompilationStage::NotStarted;
 	if (!loadSourceFiles(path, context))
 		return false;
@@ -295,12 +301,23 @@ bool analyzeSections(ParseContext &context) {
 		!context.sourceTransformHooks || context.sourceTransformHooks->sectionLines.size() == context.codeLines.size(),
 		"section analysis requires the complete source-product stream"
 	);
+	SectionAnalysisWork *work = context.sourceTransformHooks && context.sourceTransformHooks->sectionAnalysisEnabled
+									? &context.sourceTransformHooks->sectionAnalysis
+									: nullptr;
+	auto measure = [&](size_t SectionAnalysisWork::*calls, double SectionAnalysisWork::*milliseconds, auto action) {
+		if (work)
+			++(work->*calls);
+		SectionAnalysisTimer timer(work ? &(work->*milliseconds) : nullptr);
+		return action();
+	};
 	IndentData data{};
 	Section *currentSection = context.mainSection = new Section(SectionType::Custom);
 	int compiledLineIndex = 0;
 	auto closeSection = [&](Section *section, int endLineIndex) {
 		section->endLineIndex = endLineIndex;
-		return section->finalize(context);
+		return measure(&SectionAnalysisWork::finalizations, &SectionAnalysisWork::finalizeMilliseconds, [&]() {
+			return section->finalize(context);
+		});
 	};
 	// code lines are added in import order, meaning lines get replaced with
 	// code from imported files. we assume that the indent level of the code of
@@ -379,7 +396,9 @@ bool analyzeSections(ParseContext &context) {
 		if (lexical.opensSection) {
 
 			// set the current section to the new section for the next line
-			currentSection = currentSection->createSection(context, line);
+			currentSection = measure(&SectionAnalysisWork::headersEvaluated, &SectionAnalysisWork::headerMilliseconds, [&]() {
+				return currentSection->createSection(context, line);
+			});
 			if (!currentSection)
 				return false;
 			currentSection->startLineIndex = compiledLineIndex + 1;
@@ -392,7 +411,9 @@ bool analyzeSections(ParseContext &context) {
 				// tokenize "import" as a keyword and the path as a string
 				line->resolved = true;
 			} else if (line->patternText.length()) {
-				if (!currentSection->processLine(context, line))
+				if (!measure(&SectionAnalysisWork::bodyLinesDispatched, &SectionAnalysisWork::bodyDispatchMilliseconds, [&]() {
+					return currentSection->processLine(context, line);
+				}))
 					return false;
 			} else {
 				line->resolved = true;
@@ -407,7 +428,9 @@ bool analyzeSections(ParseContext &context) {
 			return false;
 	}
 
-	return applyDefinitionLocalities(context);
+	return measure(&SectionAnalysisWork::localityPasses, &SectionAnalysisWork::localityMilliseconds, [&]() {
+		return applyDefinitionLocalities(context);
+	});
 }
 
 #include "compilerTypeUtilities.inl"
