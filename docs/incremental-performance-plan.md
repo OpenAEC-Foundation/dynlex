@@ -177,6 +177,7 @@ remaining measured costs, not by table order alone.
 
 | I014 | P03/P06: demand-driven generated body products | Complete: keep, merged and verified | Started 06:27 UTC on 14 November; first deadline 07:12 UTC, extended deadline 07:57 UTC; one extension used. Baseline `40b94d06` / compiler `4bff53b6...`, final production code `e9a82d20` / compiler `7b01bbee...`. Unused edits index 551 expressions instead of 4,267, deferring all 929 generated property bodies; active edits index 937 instead of 4,601. The independent 31-pair unused CPU ratio is 0.97355 [0.95838, 0.99494], clearing the predeclared 1% gate. All 292 final comparison rows pass their artifact/diagnostic checks; common and cold controls establish no regression. All 329 required checks pass uncached in 119.241 s. The integration run passes 463 checks and exposes three unmigrated C++ ownership-test doubles; after implementing their new ownership interface, the remaining check rebuilds and passes with the production compiler unchanged. Preserve the original failed full run. Root compiler `092562a6...` passes 329 required uncached in 117.219 s; merged worktree removal and actual archived replay pass. Verification overruns the 07:57 deadline; no additional optimization is added. Full semantic section/reference reuse and clean-IR parity remain incomplete. |
 | I015 | P03/P06: resolved match products with independently reusable effects | Parked; not accepted | 08:08–09:24 UTC on 14 November; one extension used, closed before its 09:38 deadline. Source `54692e8e`, refined compiler `8cb03cbc...`. Match construction falls sharply, but the independent first-candidate 31-pair CPU gain is only 1%, and the refined screen does not demonstrate the original 2% gate. All focused/parity checks pass; 329 required checks pass uncached in 106.732 s. Integration was not rerun for the rejected candidate. Preserve the unmerged branch and three compiler snapshots; owned worktree removed. Published compiler code remains `9cbdc95a`; full goal incomplete. |
+| I016 | P06: independent lookup edges and local definition origins | Correctness fix kept; optimization parked | Started 10:03 UTC on 14 November; one extension used. Lookup-edge candidate `07c4d241` fails its 0.5% gain gate after 31 pairs and remains unmerged. Isolated source-origin fix `df66b881` / compiler `215313d6...` corrects stale implicit parameters after moving a local definition across imported files. Required: 329 uncached in 107.937 s. Integration: 464 in 844.401 s. All 188 matrix and 66 independent control rows pass parity; the control does not reproduce the initial body slowdown. Root verification pending; full goal incomplete. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -1114,4 +1115,27 @@ parameter which a fresh build removed. The minimal regression compares the
 published parameter classification through both move directions, alongside
 clean-build diagnostic/runtime parity. The isolated fix records local origins
 for authored and generated declarations. Necessary correctness work is kept
-independently of the rejected optimization; final verification remains pending.
+independently of the rejected optimization. Exact source `df66b881` / compiler
+`215313d6...` passes 329 required checks uncached in 107.937 s and all 464
+integration checks in 844.401 s, with source/compiler hashes unchanged.
+The complete eight-case 188-row control matrix passes artifact/diagnostic
+parity. Its first active-body CPU result (+2.6%) prompted an independent
+31-pair, 66-row control and stage analysis: resolution, optimization and
+object work counts match; the repeated CPU ratio is 1.00146
+[0.98608, 1.00668], so no repeatable regression is established. No performance
+win is claimed for this necessary correctness fix.
+
+The single extension ends at 11:33:16 UTC and is used only to close validation,
+merge/root verification and cleanup. No extra optimization is added. Root
+rebuild and its required gate remain pending. The full goal remains incomplete.
+
+Next selected boundary: whole-body resolution products. The real unused edit
+visits only 38 resolver references but restores 7,342 cached references across
+705 bodies; matcher restoration takes 25.802 ms and binding 32.818 ms.
+`replayCachedBodies` currently replays every skipped body because later
+inference might request a function value. Audit all consumers before moving
+that restoration to first demand, including precedence, positive/negative
+lookups, capture effects, diagnostics and never-demanded snapshot retention.
+I015 already showed that deferring individual match allocations is insufficient.
+Name/timebox that next implementation before editing it; require real unit
+work reduction and at least 5% paired CPU gain for its larger consumer change.

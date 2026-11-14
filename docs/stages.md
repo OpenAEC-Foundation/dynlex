@@ -1258,6 +1258,11 @@ inference diagnostics have their own retained products and do not exclude those
 files from body-resolution or declaration-classification reuse.
 `body_resolution_units_reused` and `body_resolution_references_restored`
 count this restoration, separately from references evaluated by the resolver.
+File-local declaration inputs and exported classification signatures include each
+pattern definition's source URI. Moving a definition between imported pattern
+blocks therefore reconsiders its callers even when its spelling and owning
+section header stay unchanged.
+
 Declaration classification has its own persistent dependency graph. Its inputs
 include the parsed declaration, reference source spans and lexical bindings
 when implicit candidates remain, lexical ancestors, scope rules, and ambient
