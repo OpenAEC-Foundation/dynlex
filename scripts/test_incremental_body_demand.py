@@ -2,6 +2,7 @@
 
 
 def check_body_resolution_demand(root, build):
+    check_negative_body_dependency(root, build)
     main = root / "body_resolution_demand.dl"
     source = (
         'integer means: @intrinsic("type", "int")\n'
@@ -45,3 +46,20 @@ def check_body_resolution_demand(root, build):
     assert missing[1:] == build(False, entry=main, success=False)[1:]
     main.write_text(activated)
     assert build(entry=main)[1:] == build(False, entry=main)[1:]
+
+
+def check_negative_body_dependency(root, build):
+    main = root / "body_negative_dependency.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'to spare {integer:seed}: @intrinsic("discard", seed)\n'
+              'to runner: @intrinsic("discard", 0)\nrunner\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('"discard", 0', '"discard", 1'))
+    deferred = build(entry=main)
+    assert deferred[0]["body_resolution_units_deferred"] >= 1
+    main.write_text(source.replace('to runner: @intrinsic("discard", 0)',
+        'to runner: @intrinsic("call pointer", @intrinsic("function", "spare $"), '
+        '@intrinsic("type", "nothing"), 5)'))
+    assert build(entry=main)[1:] == build(False, entry=main)[1:], \
+        "a deferred variable reference lost its negative lookup dependency"

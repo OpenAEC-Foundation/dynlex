@@ -41,13 +41,10 @@ class IncrementalBodyDemand {
 		requireCompilerInvariant(
 			entries && entries->size() == unit.references.size(), "deferred body lost its reference metadata"
 		);
-		for (const auto &entry : *entries)
-			for (std::string_view key : {entry.initialKey, entry.finalKey})
-				if (!key.empty()) {
-					if (!cache.contains(key))
-						return false;
-					cache.retain(key);
-				}
+		const std::string &final = saved.at("final_body_units").at(unit.path).get_ref<const std::string &>();
+		if (!cache.retainBodyResolutionDependencies(unit.key) ||
+			(final != unit.key && !cache.retainBodyResolutionDependencies(final)))
+			return false;
 		const auto &scopes = counts.sections();
 		for (size_t stage = 0; stage < 2; stage++) {
 			const char *field = stage ? "header_definitions" : "initial_header_definitions";
