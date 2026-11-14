@@ -1360,3 +1360,74 @@ reproducibility, not a performance improvement. Evidence: `i018-root-build.json`
 `i018-root-required.json`, `i018-archived-replay.json`. Implementation and the
 keep/reject decision were closed within the extended iteration; terminal
 qualification publication completed afterward without extending implementation.
+
+## I019: source-input preparation and body-summary reuse
+
+Started 14 November 2026 at 14:48:00 UTC; first deadline 15:33:00 UTC.
+Baseline `b85d277d`, published compiler `cae4985b...`. The I018 real unused-edit
+median spends 24.278 ms in initial-parameter cache work, 29.407 ms loading
+classification inputs, and repeats body digest construction in several semantic
+projections. These overlapping measurements do not yet identify the costly call.
+
+First split the existing preparation with debugger probes on the frozen real
+application, without changing compiler behavior. Then implement one complete
+source-summary producer/consumer boundary if the measured work supports it.
+Unchanged source units must skip actual repeated summary work, not merely
+serialize another copy. Source transitions, synthetic lines, nested definitions,
+changed import membership and configuration must remain explicit dependencies.
+Require minimal cascade/parity tests before implementation and counters of real
+recomputed/reused work. Keep an optimization only with at least 2% paired real
+unused-edit CPU improvement (seven pairs; 31 if uncertain), no established
+active/cold regression, clean LLVM/runtime/diagnostic parity and the uncached
+required gate below 120 seconds. If the hypothesis fails, preserve the evidence
+and move on; do not ship redundant metadata or extend with unrelated work.
+
+The debugger splits the initial preparation into about 0.9 ms indexing,
+3.7 ms body digests and 1 ms prior-state selection. The broader 24 ms count-cache
+counter also covers 1,534 per-section lookups and recording; it is not all
+body hashing. Narrow the experiment to ordered indexing of existing persisted
+count records: join sorted section/body/count identities once, then look up
+validated records by the current section identity. Preserve candidate-name
+checks and every body/syntax dependency. No new serialized product or schema.
+Existing minimal count-reuse, nested-edit and last-use cascade tests provide
+correctness qualification before the experiment. The 2% real paired gate stays
+unchanged; reject this smaller optimization if it fails that gate.
+
+I019 decision: reject the ordered count-record index. The 50-row seven-pair
+screen passes every executable/diagnostic comparison, but its unused-edit CPU
+ratio 0.980965 [0.973119, 1.006958] is uncertain and near the 2% gate. An
+independent 31-pair, 66-row control gives ratio 0.998958
+[0.990841, 1.016351], failing that gate. CPU medians are 0.694267 s baseline
+and 0.697331 s candidate. A substage reduction did not produce a repeatable
+whole-build benefit. Do not merge the experimental C++ change.
+
+The same screen has active-body ratio 0.997699 [0.972675, 1.022400] and
+cold ratio 1.020644 [0.992727, 1.025488]; neither establishes an improvement
+or regression. These are controls, not a claim that cold performance improved.
+The candidate builds successfully and existing minimal count-reuse, nested-edit
+and last-use signature-cascade checks pass against clean builds. Since the
+optimization is rejected, it has not received a full required/integration gate
+and is not a qualified compiler snapshot. Master retains I018's qualified
+compiler and 329-check uncached 103.850-second required result.
+
+Preserve experiment source `142b11a9`, compiler
+`5e1865496ccbbfcdddc087f3a6fd04f2a9809aa1eaf69640a4153222d0ca09b4`,
+raw reports and frozen input data. Evidence: `i019-build.json`,
+`i019-baseline-focused.log`, `i019-candidate-focused.log`,
+`i019-profile-preparation.json`, `i019-comparison.json` and
+`i019-unused-control.json`. Close this iteration without extending it.
+
+Next selected boundary: P14's broad semantic projections. The I018 unused-edit
+profile spends 78.019 ms on inactive projection and 43.107 ms on final
+projection, while the initial body digest is only about 3.7 ms. First identify
+the actual declaration/match/source consumers inside those larger passes with
+one-shot debugger probes. Then select a persistent unit and its complete
+consumer; do not repeat a small input-index change or add a serialization-only
+facade. Keep the full source/configuration, diagnostic and target/tooling goal.
+
+The rejected source remains on `codex/incremental-source-inputs` (`b784f5ef`);
+its worktree is removed. An actual six-build replay from the preserved compiler
+and data archive passes after removal and cleans its temporary data root. The
+one-off I019 profiling cache is pruned; frozen sources, probes and reports remain.
+Only this decision/evidence record is published; no experimental compiler code
+from I019 reaches master.
