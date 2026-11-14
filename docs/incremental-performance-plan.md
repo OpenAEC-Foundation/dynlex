@@ -1346,3 +1346,17 @@ Accept the scoped observability and independently verified failed-stage timing
 correction. The header-cache hypothesis remains rejected; this is not a claimed
 incremental speedup. Publish only after the merged root build and uncached required
 gate pass. No additional implementation or investigation extends this iteration.
+
+Merged I018 root qualification: `a80605e8`, compiler
+`cae4985b33551323c3f30c6f30b9cd30911fe8a09f2948b9d2af4c5f2f2218f0`.
+The root rebuild passes and all 329 required checks pass uncached in
+103.850 s suite / 104.781 s observer, with compiler and test sources unchanged.
+The owned merged worktree and branch have been removed.
+
+The preserved benchmark replays the baseline and published root compiler after
+worktree removal; all six build rows pass artifact/diagnostic parity and the
+temporary data root is removed afterward. This single replay proves archive
+reproducibility, not a performance improvement. Evidence: `i018-root-build.json`,
+`i018-root-required.json`, `i018-archived-replay.json`. Implementation and the
+keep/reject decision were closed within the extended iteration; terminal
+qualification publication completed afterward without extending implementation.
