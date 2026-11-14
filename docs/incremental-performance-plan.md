@@ -1665,3 +1665,26 @@ Evidence: `i021-comparison.json`, `i021-confirmation.json`,
 `i021-stage-comparison.json`, `i021-ir-parity-final/report.json`,
 `i021-focused.log`, `i021-inspectors-candidate.log`, `i021-required.json`.
 The full incremental compiler objective remains active and incomplete.
+
+I021 qualification: accept the fingerprint-only persistence/consumer change.
+The full integration retry passes all 464 checks in 789.208 s suite /
+790.495 s observer, with compiler and test sources unchanged. The earlier
+integration command ended with external SIGTERM/143 before its observer could
+write a report. It is preserved as incomplete (`i021-integration-interrupted.*`)
+and is not counted as passing. Available logs did not identify that sender.
+The retry observer records signal senders; it received no termination signal.
+No compiler code, test expectation or timeout changed for the retry.
+
+The performance gate is met by the independent 31 pairs; required and full
+integration gates pass on the exact frozen compiler. This closes implementation
+and candidate qualification within the single extension. Merged-root rebuild,
+required verification and archive replay remain publication work. No further
+optimization extends I021. Full-goal gaps remain: semantic section construction,
+broad matching/binding/validation setup, debug/trace reuse and tooling/other
+output modes. Next return to P03's immutable parser products, auditing factory
+effects before caching them: definition header dispatch mutates owner flags,
+and PatternDefinition construction itself does not parse its element syntax.
+
+Final candidate evidence: `i021-integration-retry.json`,
+`i021-integration-retry.log`, `i021-confirmation.json`,
+`i021-required.json`, `i021-ir-parity-final/report.json`.
