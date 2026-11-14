@@ -171,7 +171,7 @@ remaining measured costs, not by table order alone.
 
 | I010 | P00/P14/P22: reduce structured-payload codec costs | Complete: keep, merged and verified | 01:03–02:25 UTC on 14 November, one extension used, before the 02:33 deadline. Candidate source `3dcc89a5` / compiler `c3c0252a...` clears the 25% codec gate (ratio 0.3415) and the 2% ordinary-edit gate: unused CPU ratio 0.9322 [0.9183, 0.9487], active body 0.9610 [0.9253, 0.9672]. Eight-case executable/diagnostic parity passes. Candidate: 329 required checks uncached in 111.020 s and 464 integration checks in 822.425 s. Merged source/docs `73eca64c`; root compiler `cfbeec1f...` passes 329 required checks uncached in 101.873 s. Eleven cold pairs establish no change. The merged worktree is removed; an actual archived-compiler benchmark replay passes after removal and cleans its temporary data root. This reduces persistence costs, not source/section reuse coverage. |
 | I011 | P02/P03: source chunks with a compact section-line consumer | Complete: keep, merged and verified | 02:31–03:36 UTC on 14 November; one extension used, before the 04:01 deadline. Source `c4907513`, compiler `111070f3...`: seven paired unused-body edits have CPU ratio 0.97037 [0.96212, 0.98083], active-body 0.96685 [0.95092, 0.99687]. All eight-case 180-row executable/diagnostic comparisons pass; eleven cold pairs establish no change. The unused edit reuses 44 files, 79 chunks and 7,087 section-line products; CodeLine layout is unchanged. All 329 required checks pass uncached in 103.073 s and all 464 integration checks in 899.856 s, with unchanged source/compiler hashes. Merged source/docs `9bccf692`, rebuilt root compiler `a0d50521...`, passes all 329 required checks uncached in 100.451 s. The merged worktree is removed, archived replay passes after removal, and its temporary data root is cleaned. Semantic section reconstruction and early-failure source publication remain incomplete. |
-| I012 | P13: publish completed parser/source products before import-stage success | Active | Started 03:41 UTC on 14 November; first deadline 04:26 UTC. Baseline source `033646a5`, compiler `a0d50521...`. Give parser/source products an independent per-program index and publish partial snapshots after every attempted frontend, including NotStarted import/preprocessing failures. Remove parser-key ownership from semantic program/error manifests and migrate every reader/test. Mark a physical file product complete at its last lexed line before resolving that line's import. Keep error-demand order and incomplete stages explicit. Tests must show healthy files survive a fresh failure, repeated failure, repair, and an intervening earlier error; removed products must still be pruned after complete success. This is a required incremental boundary, not a 2% optimization claim: require actual reuse/work reduction, clean parity, no established common/cold regression, the uncached required gate <=120 seconds, and relevant integration. |
+| I012 | P13: publish completed parser/source products before import-stage success | Accepted; merged-root verification pending | Started 03:41 UTC on 14 November; first deadline 04:26 UTC, extended deadline 05:11 UTC; one extension used after checkpoint/wording/pruning and cache-budget tests passed. Baseline source `033646a5`, compiler `a0d50521...`. Give parser/source products an independent per-program index and publish partial snapshots after every attempted frontend, including NotStarted import/preprocessing failures. Remove parser-key ownership from semantic program/error manifests and migrate every reader/test. Mark a physical file product complete at its last lexed line before resolving that line's import. Keep error-demand order and incomplete stages explicit. Tests must show healthy files survive a fresh failure, repeated failure, repair, and an intervening earlier error; removed products must still be pruned after complete success. This is a required incremental boundary, not a 2% optimization claim: require actual reuse/work reduction, clean parity, no established common/cold regression, the uncached required gate <=120 seconds, and relevant integration. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -773,3 +773,60 @@ Evidence: `i011-first-comparison.json`, `i011-remaining-comparison.json`,
 `i011-cold-11-comparison.json`, `i011-required.json`, `i011-integration.json`,
 `i011-root-required.json`, `i011-post-cleanup-replay.json`,
 and `i011-compiler-data/manifest.json` under the structured evidence directory.
+
+
+### I012 checkpoint and cache-maintenance evidence
+
+The root baseline fails the minimal repeated-import-failure reuse test. Initial
+source `8af6836b` makes the source/checkpoint/wording/pruning tests pass. Review
+finds its new parser index is ignored by the cache budget: the broad `parser-`
+prefix matches first, then rejects the longer name. A runtime sparse-entry probe
+confirms the file is retained with zero removals. Source `91787c29` registers the
+shared index prefix before the broader prefix; the same probe removes the old
+index while keeping frontend reuse. The existing required eviction check includes
+this artifact kind. All focused checkpoint, source preparation and body-syntax
+checks pass on compiler
+`7836413f84d3586e4b1efaa10f67d6ea0866e9f54c6b8b951132b02718d3b468`.
+
+The initial seven active-body pairs show CPU ratio 1.01804 [1.00583, 1.04122].
+Do not dismiss that result. An independent 31-pair control does not reproduce an
+established regression: CPU medians 1.820397 to 1.824057 s, paired ratio 1.00432
+[0.98819, 1.02324]. Semantic work is unchanged, including one built and 257 reused
+objects. The initial apparent slowdown has no verified external cause; no CPU-hog
+claim is made. The remaining common/cold checks still decide acceptance.
+
+A separate 15-pair benchmark uses the same frozen real LEXI8 application with one
+missing final import. Baseline reprocesses all 45 files; candidate reuses all 45,
+processing zero. CPU medians fall 21.048 to 16.777 ms, paired ratio 0.74177
+[0.71805, 0.88529]. Diagnostics match both clean builds; no inference, object
+creation or linking occurs. Marginal medians and medians of paired ratios are
+different statistics. This proves reuse on an actual failed-program workload,
+without claiming an ordinary successful-build speedup.
+
+Evidence in the structured directory: `i012-red.log`, `i012-first-focused.log`,
+`i012-index-retention-analysis.json`, the eviction red/green probe files,
+`i012-focused.log`, `i012-first-comparison.json`, `i012-body-31-comparison.json`,
+and `i012-source-failure-comparison.json`. The first binary is preserved in
+`i012-first-compiler`; corrected and baseline binaries are in `i012-compilers`.
+One extension to 05:11 UTC is used to complete the matrix, required/integration
+gates and merged-root verification. No further optimization is added during them.
+
+The completed eight-case comparison contains 196 rows. The remaining fifteen-pair
+unchanged, comment and wording checks, seven-pair lives and shared-type edits,
+and eleven-pair cache-disabled cold comparison establish no ordinary-build change.
+Cold CPU medians are 5.738215 to 5.809502 s, paired ratio 0.99835
+[0.96918, 1.03936]. These results do not establish a successful-build speedup.
+All executable and diagnostic parity checks pass. The exact candidate passes all
+329 required checks uncached in 112.431 s (113.799 s including the recording
+driver), with unchanged source and binary hashes. All 464 integration checks pass
+in 870.334 s (871.590 s including the recording driver), again with unchanged
+source and binary hashes. Merged-root verification is still pending.
+
+The next frontend boundary is semantic section/reference preparation. In the
+31-pair active-body control, median resolution setup is 171.640 ms; classification
+is 114.561 ms, including 29.668 ms preparing inputs and 35.634 ms loading products.
+Only one query is built, but 1,748 are reused and their units are still prepared.
+The resolver visits 81 references while restoring 7,299 saved results. Reusing
+lexical products and deferred expression syntax does not yet avoid that work.
+The full goal also remains incomplete for semantic section fragments, tooling,
+other output modes, and broader semantic/backend metadata materialization.
