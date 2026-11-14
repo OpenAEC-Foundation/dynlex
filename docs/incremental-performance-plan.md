@@ -167,6 +167,8 @@ remaining measured costs, not by table order alone.
 | I007 | P02/P03/P06: retain source syntax without rebuilding unchanged body expression trees | Complete: keep, merged and verified | 22:07–23:31 CET, one extension used, before the 23:37 deadline. Baseline source `ecf05b81`, root compiler `dcb16906...`; candidate source `b85a8d6c`, compiler `adfab87b...`. Seven paired samples per code-edit case meet the predeclared 3% target: unused-body CPU ratio 0.9578 [0.9489, 0.9901], active-body 0.9577 [0.9383, 0.9776]. All eight-case artifact/diagnostic comparisons pass; 328 required checks pass uncached in 102.949 s and 464 integration checks in 825.352 s. An unused edit skips 678 body units, indexing 4,267 source expressions instead of 27,561. Partial parser snapshots retain unvisited products; complete snapshots prune removed products. Root `75d8c407`, rebuilt compiler `a3c07989...`, passes all 328 required checks uncached in 109.636 s. The merged worktree is removed and archived-compiler replay passes afterward, with its temporary data path cleaned. Source preprocessing and section-fragment reuse remain unfinished. |
 | I008 | P02/P03: retain complete source-preprocessing products and lexical section inputs | Parked; not accepted | Closed before the 01:04 CET deadline on 14 November, after one extension. Prototype `e33d85ff`, compact compiler `d99e0d2c...`; baseline `4d4768c2` / `a3c07989...`. Correctly reuses 44 files and 79 transformation chunks on the real unused-body edit; import/preprocessing falls roughly 17 to 8 ms. All eight executable/diagnostic comparisons and seven focused groups pass. Compact snapshot size falls from 1.69 to 1.18 MB by encoding span-relative file identities. The decisive 31-pair result fails the predeclared 1% whole-build gain: unused CPU 0.873329 to 0.891347 s, paired ratio 1.02068 [1.00629, 1.03973]; active-body 1.880257 to 1.906683 s, ratio 1.01284 [0.99215, 1.02139]. All 328 required checks pass uncached in 106.824 s. Full integration was not rerun for this rejected candidate. Preserve the branch separately; do not merge the source-cache implementation. Semantic section fragments and efficient source-product persistence remain unfinished. |
 
+| I009 | P06: reusable function-body input queries | Parked; not accepted | Closed 01:00 UTC on 14 November, before the extended 01:32 deadline; one extension used. Baseline `4c73c053` / `a3c07989...`; final prototype `15850647` / `ff21b137...`. First candidate `3278ce18` / `e591d597...` still rehashes 51 bodies after a one-line edit because of whole-file input keys. Per-file physical-line products fix the same-file regression: one changed body is hashed, zero bodies are hashed after code is inserted above them, and the real edit hashes one body while reusing 789 results. All nine focused groups pass, all eight artifact/diagnostic comparisons pass, and 328 required checks pass uncached in 100.421 s. Decisive 31-pair CPU ratios fail the predeclared 2% whole-build gain: unused 1.00782 [0.98712, 1.01979], active-body 1.00714 [1.00127, 1.01901]. Full integration was not run for this rejected optimization. Retain the prototype separately; do not merge its extra cache records. |
+
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
 464 integration checks. The inherited modifications subsequently passed the full
@@ -571,3 +573,37 @@ and consumers, then retain unchanged unit results and share them within one
 compilation. Membership, cross-file continuations, syntax/config changes and
 partial failures must remain explicit dependencies. Benchmark the complete
 build, including any new query index; do not repeat I008's storage-only gain.
+
+### I009 decision: finer input reuse still misses the end-to-end gate
+
+The normalized-input query implementation is correct on the tested edits, including
+source-line insertions, cross-file continuations, deferred-body ownership changes,
+configuration, errors and recovery. Its recorded work falls from 51 normalized
+bodies to one for the real string-library edit. It adds physical-line records and
+body-result records to the segmented matcher cache. The measured complete build
+still does not improve by the required 2%; more retained products are not evidence
+of a faster compiler. Preserve the source on `codex/incremental-body-inputs`.
+
+All 31 active-body pairs complete normally: CPU medians are 1.780111 to 1.795784 s.
+The original two-case 31-pair process exits 143 after all 31 unused pairs but before
+clean parity. No child remains; its source hashes and staged compiler hashes are
+verified intact. `resume-i009-unused-parity.py` completes clean parity at those exact
+paths, compares both clean compiler artifacts, saves a new unused-only report, and
+removes its owned workspace. The original report stays incomplete. The completed
+unused CPU medians are 0.889054 to 0.896429 s. No termination cause is claimed.
+
+Evidence: `i009-comparison.json`, `i009-line-comparison.json`,
+`i009-line-31-unused-resumed.json`, `i009-line-31-body-comparison.json`,
+`i009-same-file-red-counters.json`, `i009-line-focused.log`, `i009-required.json`,
+and both immutable compiler directories under the structured evidence directory.
+The exact final compiler/source hashes remain unchanged during the required run.
+The test driver also moves an existing configuration check into its helper module
+to remain below 1,000 lines; its assertions and invocation order are retained.
+
+Before adding another cache layer, measure retained projection encoding and loading.
+One baseline real-program `all_function_projection` payload is 3,175,927 bytes. Its
+largest serialized fields are constraint scheduling (603,948), matcher projection
+(547,098), inactive definitions (429,310), and declarations (404,152). Compare the
+existing JSON codec with existing-library binary codecs on retained real payloads
+first, then pursue a complete-build candidate only if that measurement supports it.
+This is a separate P00/P22 investigation; source/section-fragment reuse is unfinished.
