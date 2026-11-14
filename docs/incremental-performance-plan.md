@@ -1647,3 +1647,21 @@ uncached required/integration qualification. The ordinary source change is
 closed; no unrelated optimization extends this iteration. UI resource sharing
 and the cold C++ build consumed much of the first timebox. Record any failed
 gate without relabeling it as a pass. The full incremental goal remains active.
+
+The independent 31-pair confirmation (66 rows) clears the 3% target across
+the interval: CPU ratio 0.955410 [0.946650, 0.969349], medians
+0.654363 to 0.623757 s. Wall ratio is 0.958225
+[0.932984, 0.977585]. All executable and diagnostic comparisons pass;
+compiler hashes remain unchanged. No extra performance run is needed.
+
+Full fresh/incremental LLVM text and diagnostics match in all nine builds
+covering unused/body/lives edits; fresh reuse counters are zero. All 329
+required checks pass uncached in 105.395 s suite / 105.870 s observer, with
+compiler and test sources unchanged. The six completed parity caches were
+removed after a live-process audit; .bc/.ll files, application sources and
+reports remain. Integration and merged-root qualification are still pending.
+
+Evidence: `i021-comparison.json`, `i021-confirmation.json`,
+`i021-stage-comparison.json`, `i021-ir-parity-final/report.json`,
+`i021-focused.log`, `i021-inspectors-candidate.log`, `i021-required.json`.
+The full incremental compiler objective remains active and incomplete.
