@@ -41,6 +41,14 @@ section-line offsets and opener/import decisions for the ordinary section analyz
 These descriptors contain no owned strings and do not enlarge mutable code lines.
 Semantic section objects are still constructed against the current program.
 
+With `--incremental-stats`, section analysis reports header evaluations, body-line
+dispatches, finalizations and locality passes with separate scoped timings. Cached
+source-outline restoration reports actual node, pattern-reference and explicit
+variable-reference creation. Its time is nested within section dispatch operations
+and must not be added to those timings. These probes perform no clock reads on
+ordinary builds without statistics. Frontend stage timings also include work done
+before an error; recording time never advances the stage's validity boundary.
+
 Native incremental builds also retain eligible ordinary function bodies as whole
 resolution products. Source, declaration, scope-rule, matcher-tree and precedence
 proofs select reusable units. Initial and final outcomes retain their complete

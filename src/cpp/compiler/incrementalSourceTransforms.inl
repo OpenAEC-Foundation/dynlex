@@ -1,7 +1,10 @@
 class IncrementalSourceTransforms final : public SourceTransformHooks {
   public:
-	IncrementalSourceTransforms(ParseContext &context, IncrementalParsedExpressionCache &cache, RecordingFileSystem &files)
+	IncrementalSourceTransforms(
+		ParseContext &context, IncrementalParsedExpressionCache &cache, RecordingFileSystem &files, bool measureSections
+	)
 		: context(context), cache(cache), files(files) {
+		sectionAnalysisEnabled = measureSections;
 		context.sourceTransformHooks = this;
 	}
 	~IncrementalSourceTransforms() { context.sourceTransformHooks = nullptr; }

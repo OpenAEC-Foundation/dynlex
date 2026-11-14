@@ -333,7 +333,10 @@ class IncrementalParsedExpressionCache {
 			priorHits++;
 		} else
 			return false;
-		auto product = std::make_unique<CachedSourceSyntax>(context, section, owner, range, payload, bodyWork);
+		SectionAnalysisWork *analysis =
+			context.sourceTransformHooks->sectionAnalysisEnabled ? &context.sourceTransformHooks->sectionAnalysis : nullptr;
+		SectionAnalysisTimer timer(analysis ? &analysis->outlineRestoreMilliseconds : nullptr);
+		auto product = std::make_unique<CachedSourceSyntax>(context, section, owner, range, payload, bodyWork, analysis);
 		line->expression.defer(*product);
 		context.sourceSyntaxProducts.push_back(std::move(product));
 		bodyWork->deferred.insert(owner);

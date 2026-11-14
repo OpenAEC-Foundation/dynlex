@@ -1,4 +1,5 @@
 #pragma once
+#include "sectionAnalysisWork.h"
 #include "sourceTransform.h"
 #include <optional>
 #include <span>
@@ -22,6 +23,8 @@ struct SourceTransformWork {
 struct SourceTransformHooks {
 	// Aligned with the final merged stream, consumed by ordinary section analysis.
 	std::vector<SectionLineSyntax> sectionLines;
+	bool sectionAnalysisEnabled = false;
+	SectionAnalysisWork sectionAnalysis;
 	virtual ~SourceTransformHooks() = default;
 	virtual std::optional<size_t>
 	reuse(std::span<CodeLine *const> input, size_t start, SourceTransformState &state, std::vector<CodeLine *> &output) = 0;
