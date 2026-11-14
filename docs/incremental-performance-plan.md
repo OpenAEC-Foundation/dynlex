@@ -173,7 +173,7 @@ remaining measured costs, not by table order alone.
 | I011 | P02/P03: source chunks with a compact section-line consumer | Complete: keep, merged and verified | 02:31–03:36 UTC on 14 November; one extension used, before the 04:01 deadline. Source `c4907513`, compiler `111070f3...`: seven paired unused-body edits have CPU ratio 0.97037 [0.96212, 0.98083], active-body 0.96685 [0.95092, 0.99687]. All eight-case 180-row executable/diagnostic comparisons pass; eleven cold pairs establish no change. The unused edit reuses 44 files, 79 chunks and 7,087 section-line products; CodeLine layout is unchanged. All 329 required checks pass uncached in 103.073 s and all 464 integration checks in 899.856 s, with unchanged source/compiler hashes. Merged source/docs `9bccf692`, rebuilt root compiler `a0d50521...`, passes all 329 required checks uncached in 100.451 s. The merged worktree is removed, archived replay passes after removal, and its temporary data root is cleaned. Semantic section reconstruction and early-failure source publication remain incomplete. |
 | I012 | P13: publish completed parser/source products before import-stage success | Complete: keep, merged and verified | 03:41–04:56 UTC on 14 November; one extension used, before the 05:11 deadline. Source `91787c29`, compiler `7836413f...`, retains completed products after early import/preprocessing failures. The repeated-failure real application reuses all 45 files instead of processing them; fifteen paired samples have CPU ratio 0.74177 [0.71805, 0.88529]. The complete eight-case 196-row parity matrix and independent 31-pair active-body control establish no ordinary/cold change. Candidate: 329 required checks uncached in 112.431 s and 464 integration checks in 870.334 s. Merged source/docs `2858eb6a`; root compiler `ce8d77e1...` passes 329 required checks uncached in 112.520 s. The merged worktree is removed and actual archived replay passes afterward, cleaning its temporary data root. Semantic section/reference preparation is the next selected boundary; the full goal remains incomplete. |
 
-| I013 | P06: reuse source-proven classification declaration inputs | Accepted; merged-root verification pending | Started 04:57 UTC on 14 November; first deadline 05:42 UTC, extended deadline 06:27 UTC; one extension used after focused input/work/parity tests and the first real-program screen. Baseline source `147fc91e`, compiler `ce8d77e1...`. Reuse the existing input, body-input, query and provider identities when current source/header/ancestor-body digests, candidate state and locality prove an authored declaration unchanged. Generated prebuilt signatures still evaluate their semantic inputs. Preserve dependency/negative-lookup propagation, nested scopes, implicit parameter retraction and diagnostics. Add input-unit evaluated/reused counters and a minimal same-file/ancestor/locality regression before implementation. No new cache record or parallel hash layer. Require at least 50% fewer evaluated classification input units on real unused/active edits, at least 1% paired CPU improvement for unused edits, no established active/cold regression, clean parity, required <=120 s uncached and relevant integration. |
+| I013 | P06: reuse source-proven classification declaration inputs | Complete: keep, merged and verified | 04:57–06:26 UTC on 14 November; one extension used, before the 06:27 deadline. Final source `d77c79cd` / compiler `06ecae56...` follows explicit producers for generated declarations. Real unused/active edits evaluate one input and reuse 1,747. Independent 31-pair unused CPU ratio 0.98479 [0.96568, 0.99350] clears the 1% gate; medians 0.811005 to 0.791013 s. Input preparation falls 27.944 to 8.304 ms. Active-body, other common and cold gains remain unproven; their intervals show no established regression. All 196 current eight-case rows plus the 66-row control pass the stated artifact/diagnostic checks. Candidate: 329 required uncached in 111.728 s, 464 integration in 830.955 s. Merged source/docs `f3c07fd6`; root compiler `4bff53b6...` passes 329 required uncached in 110.554 s. The merged worktree is removed and archived replay passes afterward, cleaning its temporary data path. Full goal incomplete. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -885,7 +885,12 @@ unused-body CPU workload. The candidate passes all 329 required checks uncached
 in 111.728 s (112.817 s with its recording driver), with unchanged compiler and
 test source hashes. All 464 integration checks pass in 830.955 s (832.423 s with the recording
 driver), with unchanged compiler and test source hashes. Merged-root checks are
-pending.
+complete: merged source/docs `f3c07fd6`, rebuilt compiler
+`4bff53b639a7a88e3240c452b7e1f29968ea7fb286e9a8f9d7ed8b321e389d2c`,
+passes all 329 required checks uncached in 110.554 s (111.791 s including its
+driver), with unchanged compiler and test sources. The clean merged worktree is
+removed; archived replay passes after removal and cleans its temporary data root.
+Its single pair verifies reproducibility, not additional performance.
 
 The benchmark's clean comparison checks diagnostics. Its native executable hash
 comparison is between baseline and candidate; clean native executables have
@@ -893,3 +898,18 @@ different bytes because their compilation routes differ. Focused runtime fixture
 compare incremental and clean execution output. Do not describe the real graphical
 application benchmark as proof of clean executable equivalence; normalized clean
 IR or rendered-output parity remains a full-goal verification gap.
+
+I013 evidence: `i013-first-comparison.json` preserves the rejected authored-only
+screen. `i013-producer-comparison.json`, `i013-unused-31-comparison.json`,
+`i013-remaining-comparison.json`, `i013-producer-unit-input-parity.json`,
+`i013-required.json`, `i013-integration.json`, `i013-root-required.json`,
+`i013-worktree-cleanup.json` and `i013-post-cleanup-replay.json` record the
+accepted candidate and verification. Three compiler identities and their data are
+preserved in `i013-compiler-data/manifest.json`.
+
+Next selected boundary: P03/P06 body-product materialization. Measure remaining
+generated body construction and reference-outline restoration, then remove actual
+consumer-driven materialization of unaffected units. Existing `SourceExpression`
+body products and generated-declaration provenance are the relevant interfaces.
+Add the work-count regression before changing them; avoid another hash/codec
+layer. Preserve the clean-IR verification gap above until it is directly tested.
