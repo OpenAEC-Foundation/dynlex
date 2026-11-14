@@ -144,7 +144,7 @@ static std::vector<VariableBindingGroup> evaluateBindings(const VariableBindingU
 }
 } // namespace
 
-void materializeVariableGroups(ParseContext &context) {
+void materializeVariableGroups(ParseContext &context, Section *selectedDomain) {
 	auto started = std::chrono::steady_clock::now();
 	auto *hooks = context.variableBindingHooks;
 	std::vector<std::string> names;
@@ -157,7 +157,15 @@ void materializeVariableGroups(ParseContext &context) {
 			Section *function = enclosingVariableFunctionScope(section);
 			return function ? function : context.mainSection;
 		};
-		const auto &references = context.unresolvedVariableReferences.at(name);
+		std::vector<VariableReference *> references;
+		for (VariableReference *reference : context.unresolvedVariableReferences.at(name)) {
+			Section *scope = reference->range.section();
+			if (context.deferredBodyResolution && context.deferredBodyResolution(scope))
+				continue;
+			if (selectedDomain && boundary(scope) != selectedDomain)
+				continue;
+			references.push_back(reference);
+		}
 		for (VariableReference *reference : references) {
 			Section *function = enclosingVariableFunctionScope(reference->range.section());
 			if (!functionDeclaresGlobalName(function, name))
@@ -201,7 +209,7 @@ void materializeVariableGroups(ParseContext &context) {
 		}
 	}
 	if (hooks) {
-		hooks->complete();
+		hooks->complete(selectedDomain);
 		hooks->work.milliseconds +=
 			std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
 	}

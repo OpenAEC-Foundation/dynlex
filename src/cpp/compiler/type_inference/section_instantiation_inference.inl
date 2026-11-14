@@ -68,7 +68,7 @@ bool ensureSectionInstantiationInferred(
 	if (inst.inferring)
 		return inst.returnType.isDeduced() && inst.valid;
 
-	ScopedSectionLocalVariableState calleeVariableState(section);
+	ScopedSectionLocalVariableState calleeVariableState(parseContext, section);
 	InferenceContext context(parseContext, callerContext && callerContext->trial);
 	struct RetainTrialProducts {
 		InferenceContext &child;

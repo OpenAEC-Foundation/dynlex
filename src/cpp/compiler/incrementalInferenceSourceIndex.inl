@@ -30,11 +30,31 @@ class InferenceSourceIndex {
 			this->statistics.inferenceSourceExpressionsIndexed += nodes.size() - prior;
 			this->statistics.inferenceSourceIndexMilliseconds += elapsedMilliseconds(started);
 		};
+		context.bodyBindingObservers[this] = [this](Section &owner) {
+			if (!definitionsReady)
+				return;
+			auto started = Clock::now();
+			auto visit = [&](auto &&self, Section &scope) -> void {
+				for (const auto &[name, definition] : scope.variableDefinitions) {
+					auto [entry, inserted] =
+						definitions.emplace(normalizeBindingReference(definition), Json::array({this->paths.at(&scope), name}));
+					(void)entry;
+					this->statistics.inferenceSourceDefinitionsIndexed += inserted;
+				}
+				for (Section *child : scope.children)
+					self(self, *child);
+			};
+			visit(visit, owner);
+			this->statistics.inferenceSourceIndexMilliseconds += elapsedMilliseconds(started);
+		};
 		statistics.inferenceSourceIndexBuilds++;
 		statistics.inferenceSourceExpressionsIndexed += nodes.size();
 		statistics.inferenceSourceIndexMilliseconds += elapsedMilliseconds(start);
 	}
-	~InferenceSourceIndex() { context.sourceExpressionPublished = {}; }
+	~InferenceSourceIndex() {
+		context.sourceExpressionPublished = {};
+		context.bodyBindingObservers.erase(this);
+	}
 	void recordStorageIndex(size_t count) const {
 		statistics.inferenceStorageIndicesBuilt++;
 		statistics.inferenceStorageOriginsIndexed += count;

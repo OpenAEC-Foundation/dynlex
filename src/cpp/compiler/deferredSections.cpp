@@ -16,12 +16,15 @@ bool prepareDeferredSectionBodies(ParseContext &context) {
 	for (CodeLine *line : candidates) {
 		if (!line->sectionOpening || !line->expression.rootReference())
 			continue;
-		PatternMatch *match = line->expression.rootReference()->match;
-		if (!match || match->matchingDefinitions.size() != 1)
+		PatternReference *reference = line->expression.rootReference();
+		auto definitions = context.sourceDefinitions(reference);
+		if (definitions.size() != 1)
 			continue;
-		Section *definition = match->matchingDefinitions.front()->section;
+		Section *definition = definitions.front()->section;
 		if (!definition->dataSection || !definition->dataSection->receiverType)
 			continue;
+		if (context.demandBodyResolution)
+			context.demandBodyResolution(line->section);
 		Section *source = line->sectionOpening;
 		Section *parent = source->parent;
 		SourceLocation anchor = Range(line, line->patternText).sourceStart();

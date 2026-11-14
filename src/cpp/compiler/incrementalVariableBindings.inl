@@ -6,6 +6,7 @@ class IncrementalVariableBindings {
 	BuildStatistics &statistics;
 	VariableBindingHooks hooks;
 	Json records, current = Json::object();
+	const Json empty = Json::object();
 	IncrementalSourceScopes &sourceScopes;
 	const InitialMatcherProjection &matcher;
 	bool prepared = false;
@@ -16,7 +17,7 @@ class IncrementalVariableBindings {
 
 	Json proof(const VariableBindingUnit &query) {
 		if (!prepared) {
-			const Json &projection = matcher.value;
+			const Json &projection = matcher.projection();
 			Json ambient = Json::object(), semanticBodies = Json::object();
 			for (const auto &[uri, source] : projection.at("ambient_nonexecution_sources").items())
 				ambient[uri] = source.at("digest");
@@ -46,11 +47,11 @@ class IncrementalVariableBindings {
 		return found == proofs.end() ? Json(nullptr) : Json::array({found->second, query.references.size()});
 	}
 
-	void store(const std::string &id, Json record) {
+	void store(const std::string &domain, const std::string &id, Json record) {
 		auto started = Clock::now();
 		std::string key = cache.recordClassificationData(record);
 		recorded.insert(key);
-		current[id] = std::move(key);
+		current[domain][id] = std::move(key);
 		statistics.bindingRecordMilliseconds += elapsedMilliseconds(started);
 	}
 
@@ -88,13 +89,15 @@ class IncrementalVariableBindings {
 	VariableBindingHooks::Groups
 	unit(const VariableBindingUnit &query, const std::function<VariableBindingHooks::Groups()> &evaluate) {
 		auto started = Clock::now();
-		std::string id = digest(Json::array({path(query.domain), query.name}).dump());
+		const std::string &domain = path(query.domain);
+		std::string id = digest(Json::array({domain, query.name}).dump());
 		Json currentProof = proof(query);
 		statistics.bindingInputMilliseconds += elapsedMilliseconds(started);
 		started = Clock::now();
-		auto found = records.find(id);
+		const Json &domainRecords = records.contains(domain) ? records.at(domain) : empty;
+		auto found = domainRecords.find(id);
 		auto record =
-			found == records.end() ? std::optional<Json>{} : cache.restoreClassificationData(found->get<std::string>());
+			found == domainRecords.end() ? std::optional<Json>{} : cache.restoreClassificationData(found->get<std::string>());
 		statistics.bindingLookupMilliseconds += elapsedMilliseconds(started);
 		started = Clock::now();
 		bool sameInputs = record && !currentProof.is_null() && record->at("proof") == currentProof;
@@ -121,9 +124,9 @@ class IncrementalVariableBindings {
 			statistics.bindingLookupMilliseconds += elapsedMilliseconds(started);
 			if (record->at("proof") != currentProof) {
 				(*record)["proof"] = std::move(currentProof);
-				store(id, std::move(*record));
+				store(domain, id, std::move(*record));
 			} else
-				current[id] = *found;
+				current[domain][id] = *found;
 			hooks.work.reused++;
 			return groups;
 		}
@@ -142,7 +145,7 @@ class IncrementalVariableBindings {
 			outputs.push_back(Json::array({path(group.owner), indices.at(group.definition), std::move(references)}));
 		}
 		statistics.bindingRecordMilliseconds += elapsedMilliseconds(started);
-		store(id, Json{{"input", fingerprint}, {"proof", std::move(currentProof)}, {"groups", std::move(outputs)}});
+		store(domain, id, Json{{"input", fingerprint}, {"proof", std::move(currentProof)}, {"groups", std::move(outputs)}});
 		return groups;
 	}
 
@@ -156,26 +159,47 @@ class IncrementalVariableBindings {
 		  records(previous ? previous->at("all_function_projection").at("binding_units") : Json::object()),
 		  sourceScopes(sourceScopes), matcher(matcher) {
 		if (failure)
-			for (const auto &[id, key] : failure->at("binding_units").items())
-				records[id] = key;
+			for (const auto &[domain, entries] : failure->at("binding_units").items())
+				for (const auto &[id, key] : entries.items())
+					records[domain][id] = key;
 		hooks.unit = [&](const VariableBindingUnit &query, const std::function<VariableBindingHooks::Groups()> &evaluate) {
 			return unit(query, evaluate);
 		};
-		hooks.complete = [&]() {
-			records = std::move(current);
+		hooks.complete = [&](Section *domain) {
+			if (domain) {
+				const std::string &id = path(domain);
+				if (current.contains(id)) {
+					records[id] = std::move(current.at(id));
+					current.erase(id);
+				}
+			} else {
+				for (const auto &[id, entries] : records.items())
+					if (auto scope = sourceScopes.compact().find(id); scope != sourceScopes.compact().end() &&
+																	  context.deferredBodyResolution &&
+																	  context.deferredBodyResolution(scope->second)) {
+						current[id] = entries;
+						hooks.work.reused += entries.size();
+						statistics.bindingInputsReused += entries.size();
+					}
+				records = std::move(current);
+				current = Json::object();
+			}
 		};
 		context.variableBindingHooks = &hooks;
 	}
 	~IncrementalVariableBindings() { context.variableBindingHooks = nullptr; }
 	Json snapshot() {
-		for (auto record = records.begin(); record != records.end();)
-			if (recorded.contains(record->get_ref<const std::string &>()))
-				++record;
-			else if (cache.contains(record->get_ref<const std::string &>())) {
-				cache.retain(record->get_ref<const std::string &>());
-				++record;
-			} else
-				record = records.erase(record);
+		for (auto &[domain, entries] : records.items()) {
+			(void)domain;
+			for (auto record = entries.begin(); record != entries.end();)
+				if (recorded.contains(record->get_ref<const std::string &>()))
+					++record;
+				else if (cache.contains(record->get_ref<const std::string &>())) {
+					cache.retain(record->get_ref<const std::string &>());
+					++record;
+				} else
+					record = entries.erase(record);
+		}
 		return records;
 	}
 };

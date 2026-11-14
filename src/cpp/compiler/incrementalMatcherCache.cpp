@@ -576,7 +576,25 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 		reference->incrementalMatcherKey = std::move(cacheKey);
 		return std::nullopt;
 	}
-	std::string_view value = entry->second;
+	return restoreResult(*reference, std::move(cacheKey), entry->second, prevalidated, dependencies);
+}
+
+PatternMatch *IncrementalMatcherCache::restoreBodyMatch(PatternReference &reference, std::string_view key) {
+	// The containing unit already proved its source, providers and binding inputs.
+	// Its result can be demanded after lookup has finished, including during inference.
+	auto entry = findPrevious(key);
+	requireCompilerInvariant(entry != previousEntries.end(), "validated deferred body lost a matcher product");
+	MatchDependencies dependencies;
+	auto result = restoreResult(reference, std::string(key), entry->second, true, &dependencies);
+	requireCompilerInvariant(result && *result, "validated deferred body lost a matching result");
+	return *result;
+}
+
+std::optional<PatternMatch *> IncrementalMatcherCache::restoreResult(
+	PatternReference &source, std::string cacheKey, std::string_view value, bool prevalidated,
+	MatchDependencies *dependencies
+) {
+	PatternReference *reference = &source;
 	if (value.empty())
 		throw std::runtime_error("empty incremental matcher cache value");
 	try {

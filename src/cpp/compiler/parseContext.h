@@ -123,6 +123,14 @@ struct ParseContext {
 	std::function<void(PatternReference *, MatchOptions, const PatternMatch *, const MatchDependencies *)> recordMatcherResult;
 	std::function<void(const std::list<PatternReference *> &)> prepareDeferredMatcherReplay;
 	std::function<std::vector<RestoredBodyReference>()> restoreDeferredBodyUnits;
+	std::function<bool(const Section *)> deferredBodyResolution;
+	std::function<void(Section *)> demandBodyResolution;
+	std::function<std::vector<PatternDefinition *>(PatternReference *)> deferredHeaderDefinitions;
+	std::function<void(PatternReference *)> restoredBodyReference;
+	std::function<void(PatternDefinition &)> demandBodiesForDefinition;
+	std::map<const void *, std::function<void(Section &)>> bodyBindingObservers;
+	void restoreBodyReference(RestoredBodyReference result);
+	std::vector<PatternDefinition *> sourceDefinitions(PatternReference *reference);
 	std::function<void(const std::vector<PatternReference *> &)> preparePrecedenceMatcherReplay;
 	std::function<std::vector<Section *>()> selectCachedBodiesForResolutionReuse;
 	std::function<std::vector<Section *>()> invalidateCachedClassifications;
@@ -197,6 +205,7 @@ struct ParseContext {
 	double resolutionCandidateMatchMilliseconds = 0;
 	size_t bodyResolutionReferenceVisits = 0;
 	size_t bodyResolutionUnitsReused = 0;
+	size_t bodyResolutionUnitsDeferred = 0, bodyResolutionUnitsDemanded = 0;
 	size_t bodyResolutionReferencesRestored = 0;
 	size_t bodyResolutionMatchCacheHits = 0;
 	size_t bodyResolutionMatchComputations = 0;

@@ -1148,3 +1148,107 @@ lookups, capture effects, diagnostics and never-demanded snapshot retention.
 I015 already showed that deferring individual match allocations is insufficient.
 Name/timebox that next implementation before editing it; require real unit
 work reduction and at least 5% paired CPU gain for its larger consumer change.
+
+## I017: demand-driven whole-body resolution products
+
+Started 14 November 2026 at 11:08:12 UTC; first deadline 11:53:12 UTC.
+Baseline `13658706` / compiler `86635023...`. Reuse validated body-resolution
+products without restoring each match and binding until a semantic consumer
+requests that body. Preserve whole-unit dependencies, source/capture effects,
+precedence, diagnostics and snapshots for units that remain undemanded.
+
+Add minimal no-library activation/invalidation tests before implementation.
+Require actual restoration counters to fall and at least 5% real-program paired
+CPU gain for this larger consumer change, minimum seven pairs (31 if uncertain),
+no established ordinary/cold regression, required uncached <=120 seconds and
+relevant integration. I015 allocation-only and I016 lookup-edge experiments
+remain rejected. Audit all consumers before code; park if the full consumer
+boundary cannot be completed within the allowed iteration and one extension.
+
+
+I017 implementation is frozen at C++ source `112c01a5`; compiler
+`cd347e3f5b43e590e107af6ca6b19021c1b2671cedef4ae9b544d040dc0dd5aa`.
+The complete whole-body consumer boundary includes initial/final resolution and
+header products, binding-domain retention, late source binding publication,
+validation inputs, inference/cloning demand, and provider-mutation demand.
+Two focused activation failures identified consumer bugs in the prototype:
+negative lookup keys were omitted from retained body closures, and late
+inference demand incorrectly used the normal matcher lookup-stage guard.
+Both now have minimal regression coverage. Validated body restoration shares
+the result decoder but has its own explicit API; ordinary lookup eligibility
+is unchanged. Existing tests now permit a whole proved unit to remain encoded
+rather than require reconstructing its matches solely for a work counter.
+Stale provider and changed precedence rejection checks remain intact.
+
+The first candidate misses the 5% gain gate. Profiled unused-edit match restore
+saves 19.2 ms, but new projection work costs 18.5 ms and replay setup costs
+13.4 ms. The single refinement reuses the existing initial/final section indexes
+and captures final/header demand products only for statically eligible owners.
+No further compiler refinement is made after that measurement.
+
+Frozen real LEXI8 results, CPU seconds (paired alternating order):
+
+| Edit/control | Pairs | Baseline median | Candidate median | Paired ratio and 95% interval |
+| --- | ---: | ---: | ---: | --- |
+| Unused library body, independent control | 31 | 0.707618 | 0.664129 | 0.93647 [0.92995, 0.94082] |
+| Active application body | 7 | 1.579589 | 1.487194 | 0.94136 [0.92517, 0.94507] |
+| Cold build | 7 | 5.274928 | 5.245519 | 0.99338 [0.97940, 1.00744] |
+
+The independent unused-edit control demonstrates a 6.35% paired CPU reduction;
+active edits demonstrate 5.86%. Cold improvement or regression is not established.
+The refined screen has 50 artifact/diagnostic parity rows and the independent
+control has 66. They compare exact baseline/candidate native artifact bytes and
+incremental/clean diagnostics; they do not prove clean graphical runtime output.
+Minimal noninteractive fixtures compare actual incremental/clean runtime output.
+
+Unused edits restore 1,923 instead of 7,342 references and rebind 808 instead
+of 3,637 references. Binding groups materialized fall 770 to 166; 342 body
+units remain encoded. Median matcher restoration falls 25.451 to 5.566 ms,
+binding work 30.080 to 23.866 ms, and resolution 312.658 to 275.363 ms.
+These are actual work counters, separate from timing acceptance.
+
+All 329 required checks pass uncached in 103.793 s (104.639 s observer), with
+unchanged compiler and test sources and the existing 120-second limit.
+Earlier qualification runs failed only old minimum-replay work assertions;
+all associated runtime/diagnostic and expanded focused tests pass after their
+migration. The full integration qualification is running against the frozen
+candidate. No merge or full-goal completion is claimed before that result.
+
+Evidence: `i017-first-comparison.json`, `i017-refined-comparison.json`,
+`i017-31-comparison.json`, `i017-final-work-comparison.json`,
+`i017-positive-backtrace.log`, `i017-all-replay-focused.log`, and
+`i017-required.json` in the structured evidence directory. Source/tests are
+`1666b1da`; no compiler or test edits occur during qualification. The original
+whole-compiler objective remains active, including persistent section products,
+remaining broad projection/dependency preparation, and non-native/tooling paths.
+
+The single extension ends at 12:38:12 UTC. At that boundary the implementation
+is parked unmerged, with performance and required gates passed but full
+integration qualification still live. Preserve the existing test process and
+frozen candidate; no further implementation refinement is authorized by this
+iteration. A terminal passing integration result is required before acceptance.
+
+
+I017 qualification subsequently completed against the same frozen compiler:
+all 464 integration checks pass in 824.700 s (825.901 s observer), with unchanged
+compiler and test sources. The candidate remains unchanged after the timebox;
+only verification continued. A stronger real-application parity check compares
+unused-library, active-function and game-state edits with separate empty-cache
+native builds of the exact same sources. All fresh-build reuse counters are
+zero. Complete LLVM 23 printed modules match in all three cases after removing
+only the inspector's input-filename ModuleID comment. Raw bitcode already matches
+for the unused edit; active edits differ in binary encoding while their entire
+printed IR agrees. The graphical application is never launched.
+
+Decision: accept I017 after the pending qualification is resolved. Both measured
+edit cases exceed the predeclared 5% gain; correctness, work counters, cold control,
+required budget and integration gates pass. This accepts the bounded optimization,
+not the full incremental-compilation objective. Merge to local master, rebuild
+there with one job, run the uncached required gate, then push and dispose the owned
+worktree after validating the archived compiler replay.
+
+Additional evidence: `i017-integration.json`, `i017-ir-parity-final/report.json`
+and its paired `.bc`/`.ll` files. The small inspection utility links the installed
+pinned LLVM 23 library; no mismatched external LLVM reader is used. The verifier
+uses archived repository cache readers. Its original wrong-checksum inspector
+failure is retained separately and did not affect compiler or test source.

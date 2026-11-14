@@ -150,6 +150,8 @@ class CachedSourceSyntax : public BodySyntaxProduct, public DeferredExpressionSo
 		if (materialized)
 			return;
 		requireCompilerInvariant(!materializing, "recursive source syntax demand before publication");
+		if (context.demandBodyResolution)
+			context.demandBodyResolution(owner);
 		materializing = true;
 		size_t position = 0;
 		Expression *expression = restoreParsedExpression(syntax, position, context, root.section(), root, false, &replay);

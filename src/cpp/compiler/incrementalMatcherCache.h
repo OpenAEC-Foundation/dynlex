@@ -25,6 +25,7 @@ class IncrementalMatcherCache {
 	using LoadSegment = std::function<std::optional<std::string>(std::string_view)>;
 	IncrementalMatcherCache(ParseContext &context, std::string_view previous, LoadSegment loadSegment);
 	std::optional<PatternMatch *> reuse(PatternReference *reference, MatchOptions options, MatchDependencies *dependencies);
+	PatternMatch *restoreBodyMatch(PatternReference &reference, std::string_view key);
 	void
 	record(PatternReference *reference, MatchOptions options, const PatternMatch *match, const MatchDependencies *dependencies);
 	struct Snapshot {
@@ -39,12 +40,14 @@ class IncrementalMatcherCache {
 	const StorageStatistics &storageStatistics() const { return storage; }
 	bool contains(std::string_view key);
 	void retain(std::string_view key);
+	bool retainBodyResolutionDependencies(std::string_view key);
 	struct BodyResolution {
 		size_t referenceIndex;
 		std::string matchKey;
 		std::optional<std::tuple<PatternElement, int, int>> variable;
 	};
-	std::optional<std::string> recordBodyResolution(const std::vector<std::pair<size_t, PatternReference *>> &references);
+	std::optional<std::string>
+	recordBodyResolution(const std::vector<std::pair<size_t, PatternReference *>> &references, bool initial = true);
 	std::optional<std::vector<BodyResolution>> restoreBodyResolution(std::string_view key);
 	struct ReferenceMatchKeys {
 		std::string_view pattern;
@@ -104,9 +107,14 @@ class IncrementalMatcherCache {
 	size_t signatureLookupCount = 0;
 
 	bool available(MatchOptions options);
+	std::optional<PatternMatch *> restoreResult(
+		PatternReference &reference, std::string cacheKey, std::string_view value, bool prevalidated,
+		MatchDependencies *dependencies
+	);
 	std::string key(PatternReference &reference, bool trackDependencies);
 	std::string precedenceDigest();
 	void appendNode(std::string &output, const PatternTreeNode *node) const;
+	bool visitBodyResolution(std::string_view key, const std::function<void(BodyResolution)> &visit);
 	PatternTreeNode *restoreNode(std::string_view input, size_t &position) const;
 	bool appendMatch(std::string &output, const PatternReference &reference, const PatternMatch &match) const;
 	PatternMatch restoreMatch(std::string_view input, size_t &position, const PatternReference &reference) const;

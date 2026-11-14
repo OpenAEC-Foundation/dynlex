@@ -351,6 +351,8 @@ class IncrementalInferenceReuse {
 		auto record = summaryStore.loadBody(reference.at("body"));
 		if (!record)
 			return false;
+		if (context.demandBodyResolution)
+			context.demandBodyResolution(section);
 		if (!bodySources)
 			bodySources = std::make_unique<InferenceBodySources>(context, identities);
 		Restoration transaction(*this, caller);
