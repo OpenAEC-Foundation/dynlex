@@ -67,7 +67,7 @@ Json scopeRuleBodyPaths(const std::map<std::string, Section *> &sections) {
 
 Json captureAllFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
-	IncrementalMatcherCache &matcherCache, MatcherPathSnapshots &matcherPaths, std::string_view initialMatcherTree,
+	ResolvedDeclarationUnits &declarationUnits, IncrementalMatcherCache &matcherCache, std::string_view initialMatcherTree,
 	std::string_view finalMatcherTree, const Json *previous, SourceProjectionWork *projectionWork, bool compatibleSyntax
 ) {
 	auto phaseStart = Clock::now();
@@ -108,83 +108,39 @@ Json captureAllFunctionProjection(
 	Json maskedSources = sourceProjection(
 		context, observations, selectedSections, false, false, false, prior ? &prior->at("sources") : nullptr, projectionWork
 	);
-	bool reuseDeclarations =
-		prior && selected == prior->at("inactive") && sourceProjectionsEqual(maskedSources, prior->at("sources")) &&
-		currentScopeRuleBodies == prior->at("scope_rule_bodies") &&
-		reusable.size() == prior->at("function_declarations").size() && bodyDigests.size() == prior->at("bodies").size();
-	size_t changedDeclarations = 0;
+	Json currentGlobalResolution = globalResolutionIdentity(*context.mainSection);
+	if (prior)
+		declarationUnits.retainSourceUnits(
+			*prior, bodyDigests, currentScopeRuleBodies, currentGlobalResolution,
+			compatibleSyntax && selected == prior->at("inactive") &&
+				sourceProjectionsEqual(maskedSources, prior->at("sources")),
+			initialMatcherTree, finalMatcherTree
+		);
+	std::string resolvedDeclarations = declarationUnits.digest();
+	bool reuseDeclarations = prior && resolvedDeclarations == prior->at("declarations").get_ref<const std::string &>() &&
+							 reusable.size() == prior->at("function_declarations").size();
 	if (reuseDeclarations) {
 		for (const auto &[path, section] : sections) {
 			if (reusable.contains(section) && !prior->at("function_declarations").contains(path)) {
 				reuseDeclarations = false;
 				break;
 			}
-			if (!bodyDigests.contains(path))
-				continue;
-			if (!prior->at("bodies").contains(path)) {
-				reuseDeclarations = false;
-				break;
-			}
-			if (bodyDigests.at(path) == prior->at("bodies").at(path))
-				continue;
-			if (!reusable.contains(section) || currentScopeRuleBodies.contains(path) ||
-				sectionDeclaration(*section) != prior->at("function_declarations").at(path)) {
-				reuseDeclarations = false;
-				break;
-			}
-			changedDeclarations++;
 		}
 	}
 	Json declarations = Json::object();
-	Json patternDeclarations = Json::object();
-	Json allDeclarationEntries = Json::array();
-	Json ambientDeclarationEntries = Json::array();
-	Json currentGlobalResolution = globalResolutionIdentity(*context.mainSection);
 	if (reuseDeclarations) {
 		declarations = prior->at("function_declarations");
-		patternDeclarations = prior->at("pattern_declarations");
 		if (projectionWork)
-			projectionWork->declarationSectionsReused += declarationSections - changedDeclarations;
+			projectionWork->declarationSectionsReused += declarationSections;
 	} else {
-		bool stableDeclarationContext = prior && compatibleSyntax && currentScopeRuleBodies == prior->at("scope_rule_bodies");
-		bool stableRootBindings = stableDeclarationContext && currentGlobalResolution == prior->at("global_resolution");
-		std::optional<MatcherTreeChanges> initialChanges, finalChanges;
-		if (stableDeclarationContext) {
-			initialChanges =
-				matcherPaths.compare(prior->at("initial_matcher_tree").get_ref<const std::string &>(), initialMatcherTree);
-			finalChanges =
-				matcherPaths.compare(prior->at("final_matcher_tree").get_ref<const std::string &>(), finalMatcherTree);
-		}
 		for (const auto &[path, section] : sections) {
 			bool reusableSection = reusable.contains(section);
-			if (!reusableSection && section->patternDefinitions.empty())
+			if (!reusableSection)
 				continue;
-			const Json *priorDeclaration =
-				stableDeclarationContext && reusableSection && section->type == SectionType::Function &&
-						section->parent == context.mainSection && (stableRootBindings || hasNoGlobalAccess(section)) &&
-						prior->at("function_declarations").contains(path) && prior->at("bodies").contains(path) &&
-						bodyDigests.contains(path) && bodyDigests.at(path) == prior->at("bodies").at(path)
-					? &prior->at("function_declarations").at(path)
-					: nullptr;
-			bool reuseSection = priorDeclaration && priorDeclaration->at("identity") == selected.at(path) &&
-								(!initialChanges || !initialChanges->mayAffect(*section)) &&
-								(!finalChanges || !finalChanges->mayAffect(*section));
-			Json entry = reuseSection ? *priorDeclaration : sectionDeclaration(*section);
-			if (reuseSection && projectionWork)
-				projectionWork->declarationSectionsReused++;
-			if (reusableSection)
-				declarations[path] = entry;
-			if (!section->patternDefinitions.empty()) {
-				patternDeclarations[path] = digest(entry.dump());
-				entry["path"] = path;
-				if (reusableSection)
-					allDeclarationEntries.push_back(std::move(entry));
-				else {
-					allDeclarationEntries.push_back(entry);
-					ambientDeclarationEntries.push_back(std::move(entry));
-				}
-			}
+			declarations[path] = declarationUnits.record(*section);
 		}
+		if (projectionWork)
+			projectionWork->declarationSectionsReused += declarationUnits.reusedRecords();
 	}
 	Json projection{
 		{"initial_matcher_tree", initialMatcherTree},
@@ -192,7 +148,7 @@ Json captureAllFunctionProjection(
 		{"precedence_signature", matcherCache.precedenceSignature()},
 		{"precedence_rules", precedenceRulesSignature(*context.mainSection)},
 		{"inactive", std::move(selected)},
-		{"declarations", reuseDeclarations ? prior->at("declarations") : Json(digest(allDeclarationEntries.dump()))},
+		{"declarations", std::move(resolvedDeclarations)},
 		{"global_resolution", std::move(currentGlobalResolution)},
 		{"sources", std::move(maskedSources)},
 		{"scope_rule_bodies", std::move(currentScopeRuleBodies)}
@@ -202,9 +158,8 @@ Json captureAllFunctionProjection(
 	phaseStart = Clock::now();
 	projection["bodies"] = std::move(bodyDigests);
 	projection["function_declarations"] = std::move(declarations);
-	projection["pattern_declarations"] = std::move(patternDeclarations);
-	projection["ambient_declarations"] =
-		reuseDeclarations ? prior->at("ambient_declarations") : Json(digest(ambientDeclarationEntries.dump()));
+	projection["declaration_fingerprints"] = declarationUnits.fingerprints();
+	projection["ambient_declarations"] = declarationUnits.digest(reusable);
 	if (projectionWork)
 		projectionWork->declarationMilliseconds += elapsedMilliseconds(phaseStart);
 	phaseStart = Clock::now();

@@ -86,8 +86,12 @@ def check_implicit_parameter_classification_cascade(root, build):
     main.write_text('to use thing:\n' + literal_body + caller)
     edited = build(entry=main)
     after = read_program(root / "cache", main)["all_function_projection"]
-    assert edited[0]["projection_declaration_sections_reused"] == 0, \
-        "implicit parameter reclassification reused a stale declaration snapshot"
+    assert edited[0]["declaration_projection_units_built"] == 1, \
+        "implicit parameter reclassification did not isolate its changed declaration"
+    assert edited[0]["declaration_records_built"] == 1, \
+        "the reclassified declaration record was not rebuilt alone"
+    assert edited[0]["declaration_records_reused"] >= 1, \
+        "an unchanged caller declaration was rebuilt with its changed matches"
     assert edited[0]["variable_like_count_units_reused"] >= 1, "unchanged wrapper recomputed its parameter counts"
     assert edited[0]["variable_like_count_references_scanned"] == 0, "parameter removal rescanned an unchanged body"
     assert before["declarations"] != after["declarations"], \

@@ -90,8 +90,8 @@ bool sameFrontendDiagnosticRecords(const Json &current, const Json &prior) {
 
 bool canReuseInactiveBodies(
 	const Json &previous, const Json &observations, const ParseContext &context,
-	const std::map<std::string, Section *> &sections, const Json &frontendDiagnostics, Json &currentProjection,
-	SourceProjectionWork *projectionWork
+	const std::map<std::string, Section *> &sections, const ResolvedDeclarationUnits &declarations,
+	const Json &frontendDiagnostics, Json &currentProjection, SourceProjectionWork *projectionWork
 ) {
 	if (!previous.contains("inactive_projection") || context.options.emitDebugInfo || context.options.traceExecution ||
 		!context.scopeRuleWarnings.empty() || !compatibleObservations(previous, observations, context) ||
@@ -105,8 +105,10 @@ bool canReuseInactiveBodies(
 	}
 	const Json &priorProjection = previous.at("inactive_projection");
 	currentProjection = captureInactiveProjection(
-		declarationDigest(sections), context, observations, &priorProjection.at("inactive"), nullptr, &sections,
-		&priorProjection.at("sources"), projectionWork, &priorProjection.at("sources")
+		[&]() {
+		return declarations.digest();
+	}, context, observations, &priorProjection.at("inactive"), nullptr, &sections, &priorProjection.at("sources"),
+		projectionWork, &priorProjection.at("sources")
 	);
 	return currentProjection.is_object() && currentProjection.at("declarations") == priorProjection.at("declarations");
 }

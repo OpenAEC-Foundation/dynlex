@@ -263,10 +263,19 @@ only literals after the current path's last literal. Each matcher request comput
 once and carries it through result recording. `matcher_key_computations` and `matcher_signature_lookups`
 report fingerprint work separately from matcher executions.
 Lexical scope is fingerprinted again for every lookup, so a new declaration can invalidate the previous match.
-Resolved declaration snapshots are reused after a function-body edit when the source outside function bodies is
-unchanged and each edited body retains its resolved declaration. Scope-rule bodies and nested definitions exclude
-this reuse, since their changes can affect declarations outside the edited function. The projection reuse counter
-counts declarations carried forward without serializing them again.
+Resolved declaration projections audit settled signature inputs once at the frontend boundary. A shared value
+stream describes identities, pattern elements, choices, implicit promotions, locality, conversions, return contracts
+and precedence metadata to both a lightweight fingerprint writer and a structured-record writer. The aggregate
+consumes ordered section/fingerprint pairs. An unchanged signature retains its stored declaration record even when
+its executable body changed; a changed implicit parameter or external scope rule changes the settled fingerprint.
+`declaration_fingerprints` covers pattern providers and lifecycle codegen records. Input auditing remains work:
+statistics report its time and checked unit count separately from changed/reused projection units and actual
+structured records built/reused. These products describe resolved declarations, not inferred body behavior; matcher,
+inference, diagnostic and backend dependencies still govern those later results.
+Source, syntax-profile, matcher-tree, scope-rule and global-binding proofs can retain unchanged declaration inputs without
+auditing them again. Changed bodies still audit their settled signatures before this proof may stop propagation.
+Inactive-source eligibility is checked before requesting its declaration aggregate, so an ineligible source edit
+does not force an unused whole-program input audit.
 
 We discover what is a variable based on these principles:
 

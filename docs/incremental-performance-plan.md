@@ -1431,3 +1431,145 @@ and data archive passes after removal and cleans its temporary data root. The
 one-off I019 profiling cache is pruned; frozen sources, probes and reports remain.
 Only this decision/evidence record is published; no experimental compiler code
 from I019 reaches master.
+
+## I020: persistent resolved declaration projections
+
+Started 14 November 2026 at 15:18:00 UTC; first deadline 16:03:00 UTC.
+Baseline `5a213ad7`, compiler `cae4985b...`. The unused-edit inactive
+projection costs about 78 ms; its declaration digest currently reconstructs
+structured values for every resolved declaration. The final projection costs
+about 43 ms and may repeat or copy those outputs. These are hypotheses until
+one-shot debugger probes identify the actual work.
+
+Profile the frozen real application first. Then retain declaration results as
+independent units, validate the source/classification/matcher/scope inputs they
+read, and make the aggregate consumer use those units. Preserve every provider
+and failed-lookup cascade, generated/nested declarations, source identity and
+configuration. Avoid another serialized-only facade. Add minimal unit-work and
+semantic cascade tests before implementation. Expose actual reused/built unit
+counts. Require at least 5% paired real unused-edit CPU improvement (seven pairs,
+31 if uncertain), clean LLVM/runtime/diagnostic parity, no established ordinary
+or cold regression and the uncached required gate below 120 seconds. Keep the
+full source/configuration and target/tooling objective active.
+
+The one-shot profile measures 49.609 ms constructing declaration records,
+30.384 ms serializing/hashing their aggregate, and 2.006 ms checking inactive
+sources. Implement a shared declaration value stream consumed by structured
+JSON and a lightweight fingerprint writer. At the immutable frontend boundary,
+audit each resolved input once and retain the prior structured result when its
+fingerprint matches. Aggregate ordered path/fingerprint pairs, avoiding the
+whole-program JSON tree. Current resolved values include implicit promotions,
+choices, argument packs, locality, conversion, precedence and return metadata;
+provider changes remain visible through their actual settled results.
+
+Migrate the former pattern-only fingerprint table completely to
+`declaration_fingerprints`, including lifecycle codegen records. Existing cached
+programs are isolated by compiler build identity; no old-schema reader is added.
+Minimal work tests were added first and fail on the baseline's missing counter.
+The registry reports changed/reused summaries and actual built/reused structured
+records separately; input auditing remains explicit work, not skipped work.
+
+The lifecycle audit corrected the aggregate to include every indexed declaration
+unit and added an exact settled-interface check to top-level projection reuse.
+The first complete compiler (`eb5d569f`, `2197b42b...`) passes the new ordinary
+body-edit and last-parameter-use checks but fails a minimal failed-build reuse
+check. Root cause: the registry received the last native program, excluding
+healthy declaration results from a newer failed typed build. The existing
+frontend-state selector already preserves and hydrates that state. Connect the
+registry to that selected state; retain the old native snapshot separately for
+IR validation. The new three-line typed-failure regression precedes this fix.
+
+Focused semantic verification finds an obsolete work-counter assertion: the
+older parameter-cascade test required zero reused declaration records whenever
+one provider changed. A private inspection retained every original declaration,
+caller-match, runtime and diagnostic assertion and passed them all: exactly one
+provider record changes, while the caller's declaration record remains equal
+and its match changes. Counters confirm one built and one reused record.
+Migrate that assertion to require exactly the affected declaration to rebuild,
+keeping every semantic assertion. This strengthens unit isolation rather than
+weakening the cascade. The prematurely started timing screen was interrupted
+and excluded; focused validation must pass before a replacement screen starts.
+
+The 50-row identified screen passes artifact/diagnostic parity and meets the
+unused-edit gate: seven paired CPU ratio 0.917397 [0.911704, 0.946414],
+medians 0.680592 to 0.622536 s. Active body ratio 1.004385
+[1.001633, 1.010395] shows a small slowdown; cold 1.008166
+[0.992690, 1.018085] is inconclusive. Stage analysis identifies 13.921 ms of
+eager declaration input auditing even when the ordinary eligibility guard
+rejects inactive reuse in 0.094 ms. The unused path instead replaces 78.848 ms
+with 14.571 ms input work plus 2.859 ms inactive checking.
+
+Use the single additional iteration, ending 16:48:00 UTC, for demand-driven
+input auditing and qualification. Delay the declaration provider until inactive
+source eligibility succeeds. A source-proof path may retain unaudited inputs
+only with identical unit membership, unchanged initial/final matcher trees,
+scope rules and global bindings, unchanged sources outside function bodies,
+and explicit settled-signature checks for each changed ordinary body. Other
+cases audit current resolved inputs normally. Counters distinguish actually
+checked inputs from retained units. Keep the original 5% gate and ordinary/cold
+controls; do not add unrelated optimizations or a second extension.
+
+Demand-driven refinement `4926a9bb` / compiler `fc7d2442...` builds and
+passes the exact focused cascade/failure checks. A minimal body edit now audits
+one declaration input; the preceding eager binary fails that assertion. Retain
+that red evidence and the new check. No performance acceptance is claimed until
+the refined binary repeats the paired screen and qualification gates.
+
+The refined screen has unused CPU ratio 0.920070 [0.903976, 0.923334],
+0.664523 to 0.608756 s medians. Real active-body edits now audit one input,
+retain 1,750 summaries and build no records. The independent 31-pair controls
+(128 total rows) show active-body CPU ratio 0.994811
+[0.989778, 0.997006] and cold 1.003667 [0.996719, 1.016764]; no cold
+regression is established. All artifact/diagnostic comparisons pass.
+
+The configuration audit adds an explicit syntax-profile dependency to the
+source-only proof. A minimal long-form function remains semantically equal
+when an unused action shorthand is renamed in config.dl, but the prior binary
+incorrectly skips checking its declaration input under that changed parser
+profile. The new regression reproduces that omitted input. Reuse the existing
+compatible-observations result for this proof; current resolved fingerprints can
+still preserve the unchanged output record after auditing. Wording-only edits
+remain on the existing no-frontend fast path. This is the final source change
+before full qualification; no further optimization extends this iteration.
+
+I020 qualification: accept the declaration projection producer/consumer change.
+Final frozen source `8edd89d1`, compiler
+`1aed552b4c667a70aa28a0b36d2053c2e580fe5216f59319ebd77bfc346f65ff`.
+The final seven-pair screen (50 build rows) gives unused-edit CPU ratio
+0.899477 [0.892954, 0.931892], medians 0.681789 to 0.611354 s;
+active-body ratio 0.982816 [0.947035, 0.999603], medians 1.495829
+to 1.476218 s; cold ratio 1.005481 [0.998692, 1.017861], medians
+5.246041 to 5.261879 s. No cold regression is established. The independent
+31-pair body/cold controls preceded the final syntax-profile guard; they are
+recorded separately rather than described as measurements of the final binary.
+
+Every final screen row passes executable/diagnostic comparisons. Full fresh
+versus incremental LLVM text and diagnostics also match for all three real
+edits (unused library body, active renderer body and emulator lives constant).
+Only the inspector-input ModuleID comment is removed; all fresh semantic reuse
+counters, including declaration reuse, are zero. Retain the nine build reports
+and complete .bc/.ll intermediates; transient parity caches have been pruned.
+
+All 329 required checks pass uncached in 102.581 s suite / 103.873 s
+observer. All 464 integration checks pass in 811.030 s suite / 811.433 s
+observer. Compiler and test sources remain unchanged across both gates.
+Implementation closed on the frozen source; terminal qualification completed
+after the extended timebox without introducing another optimization. Publish
+only after merged root build and required qualification. The full incremental
+compiler objective remains incomplete.
+
+Evidence: `i020-final-focused.log`, `i020-final-comparison.json`,
+`i020-ordinary-controls.json`, `i020-ir-parity-final/report.json`,
+`i020-required.json`, `i020-integration.json`. Intermediate eager/refined
+compilers, rejected/incomplete timing data and minimal red tests remain named
+separately. Temporary benchmark compiler slots use same-filesystem hardlinks
+to immutable archived binaries, verified by hashes before/after, to avoid
+400 MiB of redundant staging copies; shared runtime inputs remain pinned.
+
+Next inspect the actual consumers and persistence costs of full declaration
+records. The new fingerprints may let equality/membership consumers avoid
+decoding, copying and encoding those structured values at all. Verify every
+reader before choosing that next bounded unit; do not add another storage
+layer without a measured consumer. Source section reconstruction, broad
+validation/setup, debug/trace reuse and tooling/output-mode coverage still
+require work under the full objective.

@@ -235,6 +235,7 @@ Json inactiveFunctionSections(const std::map<std::string, Section *> &sections) 
 	return inactive;
 }
 
+#include "incrementalDeclarationCodec.inl"
 #include "incrementalResolvedDeclaration.inl"
 
 bool reusableCodegenSection(const Section &section) {
@@ -582,11 +583,17 @@ bool compileIncrementally(
 				compiled ? captureCachedDiagnostics(context, frontendDiagnosticText, frontendDiagnosticSources) : Json::array();
 			Json frontendDiagnosticUnits = captureFrontendDiagnosticUnits(context);
 			Json inactiveProjection;
+			const bool compatibleFrontendSyntax =
+				compiled && frontendState && compatibleObservations(*frontendState, recording->observations, context);
+			ResolvedDeclarationUnits declarationUnits(
+				sections, frontendState ? &frontendState->at("all_function_projection") : nullptr,
+				statistics.declarationProjection
+			);
 			stageStart = Clock::now();
 			bool reuseTypeInference = compiled && previous &&
 									  canReuseInactiveBodies(
-										  *previous, recording->observations, context, sections, frontendDiagnosticRecords,
-										  inactiveProjection, &statistics.sourceProjectionWork
+										  *previous, recording->observations, context, sections, declarationUnits,
+										  frontendDiagnosticRecords, inactiveProjection, &statistics.sourceProjectionWork
 									  );
 			statistics.inactiveProjectionMilliseconds = elapsedMilliseconds(stageStart);
 			stageStart = Clock::now();
@@ -600,10 +607,9 @@ bool compileIncrementally(
 						statistics.inactiveProjectionMatchesRechecked, statistics.sourceProjectionWork.matchEntriesReused
 					);
 			}
-			if (compiled && !refreshedProjection && frontendState &&
-				compatibleObservations(*frontendState, recording->observations, context))
+			if (compiled && !refreshedProjection && compatibleFrontendSyntax)
 				refreshedProjection = refreshTopLevelExecutionProjection(
-					context, recording->observations, sections, matcherCache, initialMatcherTree,
+					context, recording->observations, sections, declarationUnits, matcherCache, initialMatcherTree,
 					frontendState->at("all_function_projection"), &statistics.sourceProjectionWork,
 					statistics.topLevelProjectionSectionsReused
 				);
@@ -612,9 +618,8 @@ bool compileIncrementally(
 				resolvedFunctionProjection = std::move(*refreshedProjection);
 			else if (compiled)
 				resolvedFunctionProjection = captureAllFunctionProjection(
-					context, recording->observations, sections, matcherCache, matcherPaths, initialMatcherTree,
-					finalMatcherTree, frontendState, &statistics.sourceProjectionWork,
-					frontendState && compatibleObservations(*frontendState, recording->observations, context)
+					context, recording->observations, sections, declarationUnits, matcherCache, initialMatcherTree,
+					finalMatcherTree, frontendState, &statistics.sourceProjectionWork, compatibleFrontendSyntax
 				);
 			if (compiled) {
 				auto projectionStart = Clock::now();
@@ -843,9 +848,10 @@ bool compileIncrementally(
 						result.at("section_dependency_graph"), retainedActivePaths
 					);
 					result["inactive_projection"] = captureInactiveProjection(
-						result.at("all_function_projection").at("declarations"), compiled, recording->observations, nullptr,
-						&generatedFunctionPaths, &sections, priorInactiveSources, &statistics.sourceProjectionWork, nullptr,
-						&retainedActivePaths
+						[&]() {
+						return result.at("all_function_projection").at("declarations");
+					}, compiled, recording->observations, nullptr, &generatedFunctionPaths, &sections, priorInactiveSources,
+						&statistics.sourceProjectionWork, nullptr, &retainedActivePaths
 					);
 					recordSemanticSources(result, *recording, compiled);
 					statistics.snapshotMilliseconds = elapsedMilliseconds(snapshotStart);
