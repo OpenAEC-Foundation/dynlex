@@ -4,7 +4,7 @@ import { compileIfChainShaders } from "./if_chain_shader.mjs";
 
 try {
   const shaders = await compileIfChainShaders(process.env.DYNLEX_TEST_COMPILER, process.env.DYNLEX_TEST_BROWSER_BUILD);
-  await navigate("/wgsl-translator.js");
+  await navigate("/compiler/wgsl-translator.js");
   for (const shader of shaders) {
     const pixels = await evaluate(`(async () => {
       const adapter = await navigator.gpu.requestAdapter();

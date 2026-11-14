@@ -23,7 +23,7 @@ require condition ((the selected choice of "Farm speed" in context) = "2×") rep
 require condition ((the control labeled "Farm scene" in context)'s kind = 20) reporting "The Farm world is not a programmable shared surface"
 require condition ((the control labeled "Farm source" in context)'s kind = 44) reporting "Farm roles did not use the shared source editor"
 require condition ((the control labeled "Farm person controls" in context)'s kind = 49) reporting "Worker and manual controls were not declared as retained alternatives"
-set actions to ["Draw area", "Cancel drawing", "Reshape area", "Rename area", "Delete area", "Deliver order", "Give this role to Ada", "Remove role", "Do this", "Take supply", "Whole farm", "View selection"]
+set actions to ["Draw area", "Cancel drawing", "Reshape area", "Rename area", "Delete area", "Deliver order", "Give this role to Ada", "Stop reading the role", "Remove role", "Do this", "Take supply", "Whole farm", "View selection"]
 set index to 0
 loop while index < the length of actions:
     set action to the control labeled (the item at index in actions) in context

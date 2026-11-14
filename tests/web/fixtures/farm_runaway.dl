@@ -1,0 +1,10 @@
+# Execution budget test
+import lib/farm_challenge.dl
+
+# Farm's loop forever emits a finite plan. This is a real, noncooperative CPU loop.
+flex section keep the processor busy:
+    replacement:
+        @intrinsic("loop while", @intrinsic("cast", 1, @intrinsic("type", "bool")))
+
+keep the processor busy:
+    @intrinsic("discard", 1)

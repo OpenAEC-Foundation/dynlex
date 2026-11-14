@@ -1,6 +1,6 @@
 # Programmable farm
 
-The second homepage challenge is a 20×20, depth-buffered Three.js farm. It opens
+The second homepage challenge is a 20×20, depth-buffered DynLex 3D farm. It opens
 after solving the river puzzle, or immediately through the challenge skip button.
 The farmer is controlled directly; only workers receive programs. A new farm
 starts with one worker, Ada, two chickens, and an empty cow pasture.
@@ -101,12 +101,11 @@ planting four distinct beds, and collecting six eggs. Only successful worker
 actions advance these goals; manual farmer actions do not. Repeating the same
 bed does not increase the distinct-bed goals. Progress is saved.
 
-All editable code on the site uses `src/web/ide/src/editor.js` and its shared
-language service. Tab accepts a suggestion; Enter inserts a newline and indents
-one level after a section-opening colon. Ordinary statements keep the current
-indentation; colons inside comments and strings do not open a section. Monaco
-preserves existing semantic colors while newer analysis is pending. The build
-produces `web/editor.js` and shared assets for both games, examples, and full IDE.
+All editable code on the site uses the shared DynLex UI source workspace,
+connected by `site/editor/language.dl`. Tab accepts a suggestion; Enter inserts
+a newline and indents one level after a section-opening colon. Ordinary
+statements keep the current indentation; colons inside comments and strings do
+not open a section. Existing semantic colors remain while newer analysis is pending.
 Nested calls use six repeating colors based on their resolved nesting depth.
 The language server emits the depth modifiers; `shared/call-colors.json` supplies
 the palette for the website and VS Code extension. Run
@@ -118,9 +117,9 @@ farm games share the instruction-highlighting and coding-goal interfaces.
 `site/games/farm/vocabulary.dl` defines the command catalog and toolbar choices.
 Examples are rendered by `site/games/farm/examples.dl`. Run
 `python3 scripts/generate_farm_vocabulary.py` to generate
-`lib/farm_challenge.dl` and `web/farm-vocabulary.json`; `--check` verifies both.
+`lib/farm_challenge.dl`; `--check` verifies the generated vocabulary.
 The generator itself is DynLex (`scripts/farm_vocabulary/language.dl`); Python
-only builds the two exporters and replaces their outputs. This domain library
+only builds the exporter and replaces its output. This domain library
 defines DynLex patterns for actions,
 conditions and control flow. It emits a structured cooperative plan through the
 real compiler, including nested branches, loops and reusable `to ...:` functions.
@@ -132,14 +131,17 @@ confirms that its runtime imports and message handler are ready, then receives
 the role artifact. Loading the runtime and instantiating WASM have a separate
 30-second startup deadline;
 the five-second execution limit starts when the worker enters the role's main
-function. Editing, replacing, or resetting an assignment cancels its preparation.
+function. Both budgets are data in `site/programs/types.dl`, with lifecycle and
+timer policy in `site/programs/deadlines.dl`. The browser worker reports when it
+enters `main`; it contains no Farm timing policy. Stop reading the role, editing,
+replacing, or resetting an assignment cancels its preparation.
 Preparing a recursive or excessive role cannot block the farm's main thread or
-its compiler worker. `farm-program.js` reads the emitted instructions, never the
+its compiler worker. `site/games/farm/plan.dl` reads the emitted instructions, never the
 user's source.
 The compiler's `--trace-execution` option emits authored source events, including
 evaluated branch outcomes, in UTF-16 editor coordinates. The browser compiler
-exposes the same tracing option. `web/execution-trace.js` reads these events for
-both games, so loops and helper calls retain their actual source locations.
+exposes the same tracing option. `site/games/execution.dl` and the games' DynLex
+trace readers preserve these events, so loops and helper calls retain their actual source locations.
 During play the simulation evaluates live conditions and advances each worker by
 one action per turn. Movement commands take multiple turns and recalculate routes
 to the same chosen entity, including moving animals and flags. Empty loops have
@@ -154,9 +156,9 @@ the DynLex patterns, so the language server exposes each nested argument to both
 the website editor and VS Code.
 
 The model, actions, plan interpreter, renderer, example role and editor are separate
-modules. No game behavior is added to the C++ compiler. The Three.js modules are
-self-hosted; see `web/vendor/three/README.md`. All art uses native 3D geometry,
-materials, shadows, and a real WebGL depth buffer.
+modules. No game behavior is added to the C++ compiler. The renderer uses the
+shared DynLex UI scene API, with geometry, materials, shadows and depth rendered
+by the selected WebGPU or WebGL backend.
 Walking follows timed waypoints with gradual turns and a distance-driven stride.
 Animals use the same continuous movement. One boundary model drives the visible
 fences and movement checks. The outer fence and locked-field divider join at
@@ -172,54 +174,41 @@ retains the libraries from the build it loaded.
 Use `scripts/view_web.sh 8880` for the local preview. Its server prevents asset
 caching and clears previously cached files on navigation, including modules loaded
 after the page. Game saves and account cookies are retained. The cached-module
-upgrade is covered by `tests/web/preview_cache_browser.mjs`.
+policy is covered by `tests/web/site_preview.py` and the immutable-release checks.
 
 ## Verification
 
 ```sh
-node tests/web/farm.mjs
-node tests/web/farm_programs.mjs
-node tests/web/farm_arguments.mjs
-node tests/web/farm_language_upgrade.mjs
+node tests/web/farm_models.mjs build/dynlex --native-wasm --shipped
 python3 tests/web/site_runtime.py --case site_farm_motion
-node tests/web/farm_equipment.mjs
-node tests/web/farm_livestock.mjs
-node tests/web/farm_management.mjs
-node tests/web/farm_areas_supplies.mjs
-node tests/web/coding_goals.mjs
-node tests/web/execution_trace.mjs
-node tests/web/game_progress.mjs
+python3 tests/web/site_runtime.py --case site_farm_controller --case site_farm_labels
+python3 tests/web/site_runtime.py --case site_farm_profiles --case site_farm_rebuilding
+node tests/web/progress_model.mjs
+python3 tests/web/farm_art.py --compiler build/dynlex
+python3 tests/web/farm_art.py --compiler build/dynlex --case crops
 ```
 
-The second command requires the existing `build/dynlex` native compiler. It checks
-the fixture in `tests/integration/farm_challenge`, compiles the example plus programs
-from `tests/web/farm_team_fixture.mjs`, and runs that team through 900 turns and
-the cow quest. Those test programs are outside the served website.
+The model suite preserves 2,353 independent cases for plans, routines, actions,
+worlds, simulation and saved games. Its recorded simulation includes the
+eight-role team through 900 turns and the cow quest. Native O0/O2 and both
+WebAssembly compiler paths compare against those same immutable snapshots.
+These fixtures are outside the served website.
 
 Browser tests use the existing launcher:
 
 ```sh
-DYNLEX_TEST_GRAPHICS=webgl \
-DYNLEX_BROWSER_TEST_ENTRY="$PWD/tests/web/farm_browser.mjs" \
+DYNLEX_TEST_GRAPHICS=webgl DYNLEX_SITE_SCENARIO=farm \
 ./scripts/test_web_browser.sh
 ```
 
-The other entries are `farm_dragging.mjs` for actual mouse dragging and ground
-clicks, `farm_progression.mjs` for river completion and skipping during loading,
-`farm_visuals.mjs` for roof angles, crop closeups and rendered movement, and
-`farm_preparation.mjs` for delayed worker startup, the example and custom code, execution
-limits, cancellation and recovery.
-`farm_equipment_browser.mjs` checks the carried models, animal enclosures and
-rain transitions. `game_progress_browser.mjs` checks reloads for both games and
-compiles the individual chicken/egg commands through the browser compiler.
-Set `DYNLEX_SCREENSHOT_DIRECTORY` to save review images.
-`execution_trace_browser.mjs` exercises stepping in both games;
-`farm_features_browser.mjs` checks area drawing, scoped commands, stock conditions,
-hints, reloads, and source-map upgrades from old saves.
-`farm_arguments_browser.mjs` checks argument colors, target existence, and
-remembered targets across a reload.
-`farm_collection_browser.mjs` resumes version 6 roles, exercises all collection
-aliases with and without a source, and accepts chained item/source completions.
+The Farm scenario uses real pointer input to open the challenge, select rendered
+names, operate playback, assign compiled roles, move the camera and reload saved
+progress. It also checks weather transitions, unchanged-frame behavior, Unicode
+drafts and role-source rebuilding. The portable controller fixtures cover
+gestures, preparation, cancellation, profiles, annotations, flags and areas.
+The full browser launcher runs Studio, Farm, River and character inspection on
+WebGPU, WebGL without an adapter, and WebGL without the WebGPU API. Screenshots
+are saved under `.cache/` by the scenario drivers; every run uses a private display.
 
 ## Saved games and accounts
 
@@ -227,7 +216,7 @@ The site saves river code/completion and the complete farm (world, roles,
 applied programs, routine positions, inventories, orders, selection and pace) in
 browser storage. Continue Game restores the most recently played challenge;
 the farm resumes paused. Reset replaces the saved farm. Save format versioning
-lives in `web/game-progress.js`; unreadable saves are retained without overwriting.
+lives in `site/games/progress/`; unreadable saves are retained without overwriting.
 
 Google sign-in and account saves use Firebase Authentication and Firestore.
 See [game-accounts.md](game-accounts.md) for project setup and emulator tests.
@@ -244,7 +233,8 @@ routines live in `site/games/farm/routine.dl`: each worker owns its program
 counter, loop counters, continuation and trace. Typed callbacks provide sensing
 and actions. Remembering a subject runs immediately; other actions consume a
 Farm turn. Every turn has a 128-step control-flow budget so an empty loop yields
-to the UI. The existing world, simulation and renderer are still being migrated.
+to the UI. The world, simulation, retained controls and scene renderer also live
+in DynLex under `site/games/farm/`.
 
 `node tests/web/farm_models.mjs build/dynlex --shipped` checks the catalog,
 99 parser cases and 16 routine scenarios against independent snapshots in native

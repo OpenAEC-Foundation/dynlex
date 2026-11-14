@@ -19,11 +19,13 @@ export async function verifyWorkers(base = new URL('/', location.href)) {
     } finally { delayed.close(); }
     const result = await compile('import lib/std.dl\nprint line 42\n');
     require(result.status === 0, JSON.stringify(result));
-    const chunks = [];
+    const chunks = [], events = [];
     phase = 'first execution';
     await provider.services.program({ artifact: result.artifact, invocation: 1, outputLimit: 1024 },
-      { signal, emit: event => chunks.push(event.output) });
+      { signal, emit: event => { events.push(event.type); if(event.type==='program-output') chunks.push(event.output); } });
     require(chunks.join('') === '42\n', 'The isolated program lost its output');
+    require(events[0]==='program-started' && events.filter(type=>type==='program-started').length===1,
+      'A program did not announce its execution boundary before output');
     phase = 'SDK compile';
     const sdk = await compile('import packages/dynlex-ui/ui/declarations.dl\nwindow demo:\n    button "Test"\nprint line demo\'s count\n');
     require(sdk.status === 0, 'The compiler worker could not import the pinned UI SDK');

@@ -1,0 +1,53 @@
+import events.dl
+
+to [start website loading budget for] {integer:index} in {a pointer to website state:state}:
+    set program to state's programs + index
+    set description to the item at index in (the website program descriptions)
+    if description's loading budget > 0:
+        request "timer" containing (a JSON object containing [JSON number "milliseconds" is (description's loading budget)]) for purpose 24 indexed (program's invocation) in state
+        set program's deadline to state's requests' id
+
+# Loading and linking happen before this notification. Budgets cover execution.
+to receive website [execution start] {a pointer to JSON value:message} in {a pointer to website state:state}:
+    set invocation to (the JSON number named "invocation" in message) as an integer
+    require condition ((invocation > 0) and (invocation <= state's invocation)) reporting "Program start has an unknown invocation"
+    set index to 0
+    loop while index < the length of (the website program descriptions):
+        set program to state's programs + index
+        if (program's invocation = invocation) and (program's phase = 2):
+            set description to the item at index in (the website program descriptions)
+            require condition (program's executing = false) reporting "Program execution started twice"
+            set program's executing to true
+            if program's deadline != 0:
+                ignore cancel website request (program's deadline) in state
+                set program's deadline to 0
+            if description's execution budget > 0:
+                request "timer" containing (a JSON object containing [JSON number "milliseconds" is (description's execution budget)]) for purpose 24 indexed invocation in state
+                set program's deadline to state's requests' id
+            return nothing
+        increment index
+    # A start notification can already be queued when Stop terminates its worker.
+
+to [end website execution budget] {integer:invocation} exhausted {boolean:expired} in {a pointer to website state:state}:
+    set index to 0
+    loop while index < the length of (the website program descriptions):
+        set program to state's programs + index
+        if (program's invocation = invocation) and (program's phase = 2):
+            set program's deadline to 0
+            ignore cancel website request (program's request) in state
+            set program's request to 0
+            set program's phase to 0
+            set description to the item at index in (the website program descriptions)
+            set status to "Execution limit reached. Edit the program and try again." if program's executing, else "Loading limit reached. Try again."
+            if expired = false:
+                set status to "An error occurred. Check the log."
+            set the text of (description's status) in (state's view's instance) to status
+            notify website program index with result (5 if expired, else 3) in state
+            return nothing
+        increment index
+
+to receive website [execution deadline] {integer:invocation} in {a pointer to website state:state}:
+    end website execution budget invocation exhausted true in state
+
+to fail website [execution deadline] {integer:invocation} in {a pointer to website state:state}:
+    end website execution budget invocation exhausted false in state

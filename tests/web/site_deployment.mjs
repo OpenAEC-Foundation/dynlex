@@ -4,6 +4,7 @@ import {mkdtemp, readFile, rm, stat} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
+import {assertNanoGeometry} from './homepage_shader_point_cloud.mjs';
 
 const root=path.resolve(import.meta.dirname,'../..');
 const directory=path.resolve(process.argv[2]??path.join(root,'build/site'));
@@ -47,6 +48,8 @@ write_routes(root/'site',output,json.loads((directory/'routes.json').read_text()
     assert(resources>=2,`${filename} did not load its renderer and icon`);
   }
   const application=JSON.parse(await readFile(path.join(directory,'application.json'),'utf8'));
+  const scenes=JSON.parse(await readFile(path.join(directory,'assets/shaders/index.json'),'utf8'));
+  assertNanoGeometry(scenes.find(scene=>scene.id==='nano-choreography'),directory,root);
   for(const file of [application.module,...application.fonts,'compiler/dynlex_web.js',
     'compiler/dynlex_web.wasm','compiler/dynlex_wgsl_translator.wasm',
     'platform/start.js','packages/dynlex-ui/platform/browser/application.js',

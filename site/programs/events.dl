@@ -1,9 +1,14 @@
 import ../state.dl
 
-# Results: 0 started, 1 completed, 2 compile failure, 3 platform failure, 4 stopped.
+# Results: 0 started, 1 completed, 2 compile failure, 3 platform failure,
+# 4 stopped, 5 execution budget exhausted.
 # An owner can keep phase 3 while presenting the completed result.
 to [notify website program] {integer:index} with result {integer:result} in {a pointer to website state:state}:
     set program to state's programs + index
+    if program's deadline != 0:
+        ignore cancel website request (program's deadline) in state
+        set program's deadline to 0
     set program's result to result
+    set program's executing to false
     if program's finished != (0 as a pointer):
         @intrinsic("call pointer", program's finished, nothing, index, state)

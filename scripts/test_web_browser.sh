@@ -3,46 +3,54 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-if [[ -z "${DYNLEX_TEST_WEB_SERVER:-}" && -z "${DYNLEX_BROWSER_TEST_ENTRY:-}" ]]; then
-    DYNLEX_TEST_WEB_SERVER=static DYNLEX_TEST_GRAPHICS=webgl \
-        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/preview_cache_browser.mjs" "$0"
-    DYNLEX_TEST_WEB_SERVER=static DYNLEX_TEST_GRAPHICS=webgl \
-        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/indentation_browser.mjs" "$0"
-    DYNLEX_TEST_WEB_SERVER=static DYNLEX_TEST_GRAPHICS=webgl \
-        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/farm_collection_browser.mjs" "$0"
-    DYNLEX_TEST_WEB_SERVER=deployment \
-        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/homepage_navigation_browser.mjs" "$0"
-    DYNLEX_TEST_WEB_SERVER=static DYNLEX_TEST_GRAPHICS=webgl \
-        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/brand_theme_browser.mjs" "$0"
-    DYNLEX_TEST_WEB_SERVER=static DYNLEX_TEST_GRAPHICS=webgl \
-        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/homepage_responsiveness_browser.mjs" "$0"
-    DYNLEX_TEST_WEB_SERVER=static "$0"
-    DYNLEX_TEST_WEB_SERVER=static \
-        DYNLEX_TEST_GRAPHICS=webgl \
-        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/webgl_fallback_execution.mjs" \
-        "$0"
-    DYNLEX_TEST_WEB_SERVER=vite \
-        DYNLEX_TEST_SERVER_PORT="${DYNLEX_TEST_VITE_PORT:-8766}" \
-        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/vite_dev_browser.mjs" \
-        "$0"
+if [[ -z "${DYNLEX_BROWSER_TEST_ENTRY:-}" ]]; then
+    for dependency in node google-chrome xvfb-run Xvfb; do
+        if ! command -v "$dependency" >/dev/null 2>&1; then
+            echo "Missing required dependency: $dependency"
+            exit 1
+        fi
+    done
+    root="${DYNLEX_TEST_WEB_ROOT:-$PROJECT_DIR/build/site}"
+    if [[ ! -f "$root/index.html" ]]; then
+        echo "Build the DynLex website first: $PROJECT_DIR/scripts/build_web_root.sh"
+        exit 1
+    fi
+    modes=(webgpu webgl-no-adapter webgl-no-api)
+    case "${DYNLEX_TEST_GRAPHICS:-}" in
+        '') ;;
+        webgpu|webgl-no-adapter|webgl-no-api) modes=("$DYNLEX_TEST_GRAPHICS") ;;
+        webgl) modes=(webgl-no-adapter) ;;
+        *) echo "Unknown graphics test mode: $DYNLEX_TEST_GRAPHICS"; exit 1 ;;
+    esac
+    scenarios=(general farm river-inspection river)
+    if [[ -n "${DYNLEX_SITE_SCENARIO:-}" ]]; then
+        case "$DYNLEX_SITE_SCENARIO" in
+            general|farm|river-inspection|river) scenarios=("$DYNLEX_SITE_SCENARIO") ;;
+            *) echo "Unknown website scenario: $DYNLEX_SITE_SCENARIO"; exit 1 ;;
+        esac
+    fi
+    cd "$PROJECT_DIR"
+    for mode in "${modes[@]}"; do
+        for scenario in "${scenarios[@]}"; do
+            entry=site_browser.mjs
+            if [[ "$scenario" == river ]]; then entry=site_river_browser.mjs; fi
+            env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u VK_DRIVER_FILES -u VK_ICD_FILENAMES \
+                DYNLEX_BACKGROUND_BROWSER=1 XDG_SESSION_TYPE=x11 DYNLEX_SITE_SCENARIO="$scenario" \
+                xvfb-run -a -s "-screen 0 1400x1000x24" \
+                node "$PROJECT_DIR/tests/web/$entry" "$root" "$mode" "${DYNLEX_TEST_WEB_BASE:-/}"
+        done
+    done
     exit 0
 fi
 SERVER_PORT="${DYNLEX_TEST_SERVER_PORT:-8765}"
 DEBUG_PORT="${DYNLEX_TEST_DEBUG_PORT:-9222}"
 WEB_SERVER="${DYNLEX_TEST_WEB_SERVER:-static}"
-if [[ "$WEB_SERVER" == "vite" ]]; then
-    BROWSER_TEST_ENTRY="${DYNLEX_BROWSER_TEST_ENTRY:-$PROJECT_DIR/tests/web/vite_dev_browser.mjs}"
-else
-    BROWSER_TEST_ENTRY="${DYNLEX_BROWSER_TEST_ENTRY:-$PROJECT_DIR/tests/web/browser_execution.mjs}"
-fi
+BROWSER_TEST_ENTRY="$DYNLEX_BROWSER_TEST_ENTRY"
 
 GRAPHICS_BACKEND="${DYNLEX_TEST_GRAPHICS:-webgpu}"
 dependencies=(node python3 google-chrome setsid)
 if [[ "$GRAPHICS_BACKEND" = webgpu ]]; then
     dependencies+=(xvfb-run Xvfb)
-fi
-if [[ "$WEB_SERVER" == "vite" ]]; then
-    dependencies+=(npm)
 fi
 for dependency in "${dependencies[@]}"; do
     if ! command -v "$dependency" >/dev/null 2>&1; then
@@ -80,13 +88,12 @@ cleanup() {
 trap cleanup EXIT
 
 if [[ "$WEB_SERVER" == "static" || "$WEB_SERVER" == "deployment" ]]; then
-    server_arguments=("$SERVER_PORT" --directory "${DYNLEX_TEST_WEB_ROOT:-$PROJECT_DIR/web}")
+    server_arguments=("$SERVER_PORT" --directory "${DYNLEX_TEST_WEB_ROOT:-$PROJECT_DIR/build/site}")
     if [[ "$WEB_SERVER" == "deployment" ]]; then
         server_arguments+=(--deployment)
     fi
     python3 "$SCRIPT_DIR/serve_web.py" "${server_arguments[@]}" >"$SERVER_LOG" 2>&1 &
-elif [[ "$WEB_SERVER" == "vite" ]]; then
-    (cd "$PROJECT_DIR/src/web/ide" && npm run dev -- --host 127.0.0.1 --port "$SERVER_PORT") >"$SERVER_LOG" 2>&1 &
+
 else
     echo "Unknown web test server: $WEB_SERVER" >&2
     exit 1

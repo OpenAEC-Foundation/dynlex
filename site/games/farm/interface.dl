@@ -112,6 +112,7 @@ document farm challenge using farm panel appearance:
                     paragraph "Farm execution" containing "" using farm body appearance
                     paragraph "Farm diagnostics" containing "" using farm diagnostics appearance
                     link "Give this role to Ada" to "action:farm-apply" using farm primary appearance
+                    link "Stop reading the role" to "action:farm-stop" using farm action appearance
                     link "Remove role" to "action:farm-idle" using farm action appearance
                 region "Farm manual controls" using farm card appearance:
                     paragraph "Your hands, your decisions." using farm heading appearance

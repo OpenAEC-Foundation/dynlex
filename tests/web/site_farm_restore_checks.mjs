@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {verifySourceCallColor} from './editor_feature_checks.mjs';
 
 // Exercise the public persistence boundary, then use the rendered UI normally.
@@ -46,4 +47,22 @@ export async function verifyFarmRestore({command, evaluate, waitFor, controls, c
     'The restored Farm never submitted its actual scene geometry.');
   await capture('farm-restored-draft');
   console.log('A saved Farm role rebuilds its applied source without replacing a newer Unicode draft or moving workers.');
+
+  const runaway=await readFile(new URL('./fixtures/farm_runaway.dl',import.meta.url),'utf8');
+  await controls.key('KeyA','a',65,2);
+  await command('Input.insertText',{text:runaway});
+  await waitFor(`document.querySelector('textarea').value===${JSON.stringify(runaway)}`);
+  await controls.clickText('Apply to everyone in this role');
+  await waitFor('window.siteProbe.visible.includes("Execution limit reached. Edit the program and try again.")');
+  assert.equal(await evaluate(`JSON.parse(localStorage.getItem('dynlex.games.guest')).games.farm.data.roles.find(role=>role.id===${JSON.stringify(saved.role.id)}).applied`),saved.role.applied,
+    'An unbounded program replaced the previously applied role.');
+  await capture('farm-execution-limit');
+  await controls.clickText('# Execution budget test');
+  await controls.key('KeyA','a',65,2);
+  await command('Input.insertText',{text:saved.role.source});
+  await waitFor(`document.querySelector('textarea').value===${JSON.stringify(saved.role.source)}`);
+  await controls.clickText('Apply to everyone in this role');
+  await waitFor('window.siteProbe.visible.some(text=>text.startsWith("Role applied."))');
+  await controls.clickText('Pause farm Ⅱ');
+  console.log('The Farm terminates an unbounded role and successfully assigns the next edited role.');
 }

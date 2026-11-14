@@ -247,7 +247,7 @@ try {
     }
     if (${JSON.stringify(graphicsMode)}.startsWith('webgl-')) {
       Object.defineProperty(Navigator.prototype, 'gpu', { configurable: true,
-        get: () => ({ requestAdapter: async () => null }) });
+        get: () => ${graphicsMode === 'webgl-no-api' ? 'undefined' : '({ requestAdapter: async () => null })'} });
     }
   ` });
   await command('Emulation.setDeviceMetricsOverride', resumeOnly?{width:390,height:844,deviceScaleFactor:2,mobile:true}:{width:1280,height:900,deviceScaleFactor:1,mobile:false});

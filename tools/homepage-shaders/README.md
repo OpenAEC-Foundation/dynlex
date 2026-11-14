@@ -1,26 +1,23 @@
 # Homepage shaders
 
-The banner renders DynLex shaders directly with WebGPU or WebGL2. `generate.mjs` compiles
-every configured fragment stage and optional vertex stage with the browser
-compiler, translates its SPIR-V artifacts to deterministic WGSL and GLSL ES, caches compiler-produced semantic tokens,
-and creates the runtime manifest.
+The homepage and Studio share the DynLex scene descriptions in
+`site/shaders/catalog.dl`, the pass-graph linker in `site/shaders/program.dl`,
+and the shared UI renderer. Build their WGSL/GLSL and packaged graph together:
 
 ```bash
-./scripts/generate_homepage_shaders.sh
-./scripts/generate_homepage_shaders.sh --check
+./scripts/build_web_root.sh
 ```
 
-Changing a configured shader or any transitive DynLex import changes the
-manifest input hash. The generated GPU sources and semantic-token cache are replaced
-atomically, so the banner never mixes source and artifacts from different
-revisions.
+The builder compiles the descriptions and shaders, links their typed interfaces,
+and publishes one complete output directory. Deployment serves each release's
+assets from its immutable versioned URL.
 
 ## Terrain geometry
 
 `endless-terrain.dl` displaces camera-centered terrain and water surfaces in its
-vertex stage. `web/terrain-geometry.js` creates their deterministic `float32x4`
+vertex stage. `site/shaders/terrain.dl` creates their deterministic `float32x4`
 vertex buffer and fixed `uint32` triangle indices from the sampling rules in
-`config.mjs`. The configured row and column counts describe a reference
+`site/shaders/catalog.dl`. The configured row and column counts describe a reference
 horizontal framebuffer width; the same generator scales both dimensions to the
 viewer's actual horizontal pixel count and caches the current result on its
 complete immutable configuration descriptor. Exponential distance and column
@@ -56,9 +53,9 @@ the hashes recorded in `generate-point-cloud.py`, then run:
 ```bash
 blender --background --python tools/homepage-shaders/generate-point-cloud.py -- \
   --stl .cache/homepage-shaders/source/The_Vitruvian_Man/Vitruvian.stl \
-  --output web/shaders/geometry/vitruvian-points.f32 \
-  --metadata web/shaders/geometry/vitruvian-points.json
-./scripts/generate_homepage_shaders.sh
+  --output site/assets/shaders/geometry/vitruvian-points.f32 \
+  --metadata site/assets/shaders/geometry/vitruvian-points.json
+./scripts/build_web_root.sh
 ```
 
 The geometry file stores one `float32x4` record for each vertex of every point
@@ -70,8 +67,7 @@ pairs neighboring regions of both shapes, so coherent flocks travel together
 instead of dissolving into a random cloud. The fourth coordinate combines the
 micro-triangle corner with a wheel bit, allowing the vertex shader to rotate the
 generated tires, hubs, and spokes without moving nearby frame points. Its
-metadata and the runtime manifest record the encoding, pairing, creator,
+metadata records the encoding, pairing, creator,
 license, source URL, source hashes, modifications, generator seed, and density
-counts. The manifest hashes both compiled shader stages and the generated
-geometry, so editing either input updates the runtime record without maintaining
-a separate cache key.
+counts. The packaged render graph names the compiled stages and geometry assets; rebuilding
+updates them together.

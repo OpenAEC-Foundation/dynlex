@@ -51,8 +51,7 @@ export function createCompilerServices(base, dependencyUrl) {
       const worker = new WorkerConnection(new URL('run-worker.js', base)); runners.add(worker);
       try {
         return await worker.request('run', { wasm, outputLimit: payload.outputLimit }, { signal,
-          transfer: [wasm.buffer], event: event => emit({ type: 'program-output',
-            invocation: payload.invocation, output: event.output }) });
+          transfer: [wasm.buffer], event: event => emit({ ...event, invocation: payload.invocation }) });
       } finally { worker.close(); runners.delete(worker); }
     }
   };

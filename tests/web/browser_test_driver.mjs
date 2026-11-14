@@ -91,10 +91,9 @@ export async function waitFor(expression, description, timeoutMilliseconds = 120
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   const pageState = await evaluate(`(() => ({
-    status: document.querySelector('#status-text')?.textContent ?? '',
-    diagnostics: document.querySelector('#diagnostics-list')?.textContent ?? '',
-    activity: document.querySelector('#compiler-log')?.textContent ?? '',
-    source: document.querySelector('.monaco-editor')?.textContent ?? '',
+    url: location.href,
+    title: document.title,
+    canvasCount: document.querySelectorAll('canvas').length,
     notRestoredReasons: performance.getEntriesByType('navigation')[0]?.notRestoredReasons?.toJSON()
   }))()`);
   throw new Error(
@@ -133,36 +132,6 @@ export async function dispatchKey(key, code, virtualKeyCode, modifiers = 0, text
     }
     await command("Input.dispatchKeyEvent", parameters);
   }
-}
-
-export function sourceEditExpression(sketchIndex, sourceText) {
-  return `(async () => {
-    const {monaco} = await import('/editor.js');
-    const sketch = document.querySelectorAll('[data-runnable-sketch]')[${sketchIndex}];
-    const source = sketch.querySelector('[data-lab-panel]:not([hidden]) [data-snippet-source]')
-      || sketch.querySelector('[data-snippet-source]');
-    const editor = monaco.editor.getEditors().find(editor=>editor.getContainerDomNode()===source);
-    editor.executeEdits('test',[{range:editor.getModel().getFullModelRange(),text:${JSON.stringify(sourceText)}}]);
-    return { state: sketch.dataset.runState, value: editor.getValue() };
-  })()`;
-}
-
-export async function replaceMonacoSource(sourceText) {
-  await command("Page.bringToFront");
-  await evaluate(`(() => {
-    const input = document.querySelector('.monaco-editor .native-edit-context');
-    if (!input) throw new Error('Monaco input is missing');
-    input.focus();
-  })()`);
-  await evaluate(`Promise.race([
-    navigator.clipboard.writeText(${JSON.stringify(sourceText)}),
-    new Promise((_, reject) => setTimeout(
-      () => reject(new Error('Timed out writing the Monaco replacement to the clipboard')),
-      5000
-    ))
-  ])`);
-  await dispatchKey("a", "KeyA", 65, 2);
-  await dispatchKey("v", "KeyV", 86, 2);
 }
 
 export async function clickElement(selector) {
@@ -205,61 +174,6 @@ export async function clickElement(selector) {
     type: "mouseReleased",
     button: "left",
     clickCount: 1,
-    x: point.x,
-    y: point.y
-  });
-}
-
-export async function findMonacoText(text, occurrence = 0) {
-  if (!Number.isInteger(occurrence) || occurrence < 0) {
-    throw new TypeError("Monaco search occurrence must be a non-negative integer");
-  }
-  await evaluate(`(() => {
-    const input = document.querySelector('.monaco-editor .native-edit-context');
-    if (!input) throw new Error('Monaco input is missing');
-    input.focus();
-  })()`);
-  await dispatchKey("f", "KeyF", 70, 2);
-  await dispatchKey("a", "KeyA", 65, 2);
-  await command("Input.insertText", { text });
-  for (let index = 0; index < occurrence; index += 1) {
-    await dispatchKey("Enter", "Enter", 13);
-  }
-  await dispatchKey("Escape", "Escape", 27);
-  await dispatchKey("ArrowLeft", "ArrowLeft", 37);
-}
-
-export async function hoverMonacoText(text, occurrence = 0) {
-  await command("Input.dispatchMouseEvent", { type: "mouseMoved", x: 0, y: 0 });
-  await new Promise((resolve) => setTimeout(resolve, 400));
-  const locateText = `(() => {
-    const walker = document.createTreeWalker(
-      document.querySelector('.view-lines'),
-      NodeFilter.SHOW_TEXT
-    );
-    let remaining = ${occurrence};
-    while (walker.nextNode()) {
-      let offset = 0;
-      while (offset < walker.currentNode.data.length) {
-        const index = walker.currentNode.data.indexOf(${JSON.stringify(text)}, offset);
-        if (index === -1) break;
-        if (remaining === 0) {
-          const range = document.createRange();
-          range.setStart(walker.currentNode, index);
-          range.setEnd(walker.currentNode, index + ${JSON.stringify(text)}.length);
-          const rect = range.getBoundingClientRect();
-          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-        }
-        remaining -= 1;
-        offset = index + ${JSON.stringify(text)}.length;
-      }
-    }
-    return null;
-  })()`;
-  await waitFor(`(${locateText}) !== null`, `Monaco text to become visible: ${text}`, 10000);
-  const point = await evaluate(locateText);
-  await command("Input.dispatchMouseEvent", {
-    type: "mouseMoved",
     x: point.x,
     y: point.y
   });

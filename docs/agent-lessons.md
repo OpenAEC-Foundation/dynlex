@@ -182,7 +182,7 @@ One-line `section: body` syntax should be desugared before `analyzeSections`, no
 
 Avoid defining a parameter with the same plain token as a required literal word in the same pattern (for example `absolute value of value`). In larger imports this can collapse back to a literal-only path (`... of value`) and reject real arguments. Use a distinct parameter token (for example `magnitude`) or an explicit typed capture.
 
-Wiki example actions are injected by `web/wiki/wiki-actions.js` on `.code-block pre code` snippets and target `/ide/` with `code64` (+ optional `autorun=1`) query params. Keep this shared mechanism instead of duplicating per-page button markup.
+Wiki examples use the shared `code example` declaration in `site/documentation.dl`. Their Copy and Open in IDE actions read the container's retained source in `site/actions.dl`; keep this shared mechanism instead of duplicating per-page behavior. External editor links are decoded by `site/editor/entry.dl`.
 
 Native debugger rendering should come from the GDB pretty-printers in `scripts/gdb/dynlex_pretty_printers.py`, loaded by `.vscode/launch.json`. Do not add NatVis files or cached debug-only fields to feed debugger views.
 

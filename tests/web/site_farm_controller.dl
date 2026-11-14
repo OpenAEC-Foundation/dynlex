@@ -80,6 +80,12 @@ set index to the website program for source "Farm source"
 set program to state's programs + index
 set instance's event target to the control labeled "Give this role to Ada" in (the address of instance)
 follow website link (the address of instance)
+require condition (the UI element (the control labeled "Stop reading the role" in (the address of instance)) is enabled in (the address of instance)) reporting "An active role preparation had no enabled Stop control"
+set instance's event target to the control labeled "Stop reading the role" in (the address of instance)
+follow website link (the address of instance)
+require condition ((program's phase = 0) and ((the UI element (the control labeled "Stop reading the role" in (the address of instance)) is enabled in (the address of instance)) = false)) reporting "The Stop control did not cancel role preparation and disable itself"
+set instance's event target to the control labeled "Give this role to Ada" in (the address of instance)
+follow website link (the address of instance)
 require condition (program's phase = 1) reporting "The role button did not start the pending compilation"
 set instance's event target to the UI element labeled "← Choose a challenge" in farm challenge
 follow website link (the address of instance)

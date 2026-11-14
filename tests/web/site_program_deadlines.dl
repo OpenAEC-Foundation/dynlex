@@ -1,0 +1,85 @@
+import ../../site/programs/controller.dl
+import site_fixture.dl
+
+to [start deadline test execution] {integer:index} [in] {a pointer to website state:state}:
+    run website program index in state
+    set reply to a JSON object containing [JSON number "status" is 0, JSON number "artifact" is 42, JSON number "milliseconds" is 0.5]
+    receive website compilation reply for index in state
+    free reply
+
+to [announce deadline test execution in] {a pointer to website state:state}:
+    set reply to a JSON object containing [JSON number "invocation" is (state's invocation)]
+    receive website execution start reply in state
+    free reply
+
+to [complete deadline test execution] {integer:index} [in] {a pointer to website state:state}:
+    set reply to a JSON object containing [JSON number "milliseconds" is 1.0]
+    receive website execution reply for index in state
+    free reply
+
+set instance to an instance of website fixture
+set view to a new UI view
+set view's instance to the address of instance
+set state to a new website state
+set state's services to the browser UI service provider
+set state's view to the address of view
+set instance's state to (the address of state) as a pointer
+prepare website fixture editors in (the address of state)
+set index to the website program for source "Farm source"
+set program to state's programs + index
+
+start deadline test execution index in (the address of state)
+require condition ((program's deadline = 3) and (program's executing = false)) reporting "Worker loading did not receive its separate budget"
+announce deadline test execution in (the address of state)
+require condition ((program's deadline = 4) and (program's executing)) reporting "Starting the worker did not replace the loading budget with its execution budget"
+complete deadline test execution index in (the address of state)
+require condition ((program's deadline = 0) and (program's result = 1)) reporting "Completion retained an execution deadline"
+
+start deadline test execution index in (the address of state)
+announce deadline test execution in (the address of state)
+stop website program index in (the address of state)
+require condition ((program's deadline = 0) and (program's result = 4)) reporting "Stop retained an execution deadline"
+
+start deadline test execution index in (the address of state)
+announce deadline test execution in (the address of state)
+set expired to state's invocation
+receive website execution deadline expired in (the address of state)
+require condition (((program's phase = 0) and (program's deadline = 0)) and (program's result = 5)) reporting "The deadline did not terminate runaway execution"
+require condition ((the UI value for (the control labeled "Farm status" in (the address of instance)) in (the address of instance))'s text contains "Execution limit") reporting "The execution limit was not explained"
+
+start deadline test execution index in (the address of state)
+announce deadline test execution in (the address of state)
+set current to program's deadline
+receive website execution deadline expired in (the address of state)
+require condition ((program's phase = 2) and (program's deadline = current)) reporting "An old deadline terminated a newer invocation"
+fail website execution deadline (program's invocation) in (the address of state)
+require condition ((program's deadline = 0) and (program's result = 3)) reporting "A platform failure retained its deadline"
+
+start deadline test execution index in (the address of state)
+stop website program index in (the address of state)
+announce deadline test execution in (the address of state)
+require condition (program's deadline = 0) reporting "A queued start notification armed a stopped invocation"
+
+start deadline test execution index in (the address of state)
+announce deadline test execution in (the address of state)
+complete deadline test execution index in (the address of state)
+require condition (program's result = 1) reporting "A terminated worker prevented subsequent execution"
+
+start deadline test execution 0 in (the address of state)
+announce deadline test execution in (the address of state)
+require condition ((state's programs + 0)'s deadline = 0) reporting "A program without a budget received a deadline"
+complete deadline test execution 0 in (the address of state)
+
+start deadline test execution index in (the address of state)
+receive website execution deadline (program's invocation) in (the address of state)
+require condition ((program's phase = 0) and (program's result = 5)) reporting "A worker that never loaded escaped its startup budget"
+require condition ((the UI value for (the control labeled "Farm status" in (the address of instance)) in (the address of instance))'s text contains "Loading limit") reporting "The loading limit was reported as an execution failure"
+
+set pending to state's requests
+loop while pending != (0 as a pointer to website request):
+    set next to pending's next
+    deallocate pending
+    set pending to next
+release website fixture editors in (the address of state)
+close the address of instance
+print line "Execution budgets begin after worker loading, terminate runaway programs and preserve cancellation, stale replies and recovery."

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Compile the DynLex Farm catalog into its checked-in language and browser data."""
+"""Compile the DynLex Farm catalog into its checked-in language vocabulary."""
 import argparse
-import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -16,29 +15,23 @@ def main():
     compiler = args.compiler.resolve() if args.compiler else root / 'build/dynlex'
     if not compiler.is_file():
         parser.error('Build the DynLex compiler before generating the Farm vocabulary.')
-    outputs = {}
+    destination = root / 'lib/farm_challenge.dl'
     (root / 'build').mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='farm-vocabulary-', dir=root / 'build') as temporary:
-        for entry, destination in [
-            ('scripts/farm_vocabulary/language.dl', 'lib/farm_challenge.dl'),
-            ('site/games/farm/export_vocabulary.dl', 'web/farm-vocabulary.json'),
-        ]:
-            program = Path(temporary) / (Path(entry).stem + '.out')
-            subprocess.run([str(compiler), entry, '-O2', '-o', str(program)], cwd=root, check=True)
-            text = subprocess.run([str(program)], cwd=root, check=True, capture_output=True, text=True).stdout
-            if destination.endswith('.json'):
-                json.loads(text)
-            outputs[root / destination] = text
-    mismatches = [path for path, text in outputs.items() if not path.exists() or path.read_text() != text]
+        program = Path(temporary) / 'language.out'
+        subprocess.run([str(compiler), 'scripts/farm_vocabulary/language.dl', '-O2', '-o', str(program)],
+                       cwd=root, check=True)
+        text = subprocess.run([str(program)], cwd=root, check=True, capture_output=True, text=True).stdout
+    changed = not destination.exists() or destination.read_text() != text
     if args.check:
-        for path in mismatches:
-            print(f'Out of date: {path.relative_to(root)}')
-        return int(bool(mismatches))
-    for path in mismatches:
-        staged = path.with_suffix(path.suffix + '.new')
-        staged.write_text(outputs[path])
-        staged.replace(path)
-    print('Generated the Farm language and browser catalog from DynLex.')
+        if changed:
+            print(f'Out of date: {destination.relative_to(root)}')
+        return int(changed)
+    if changed:
+        staged = destination.with_suffix('.dl.new')
+        staged.write_text(text)
+        staged.replace(destination)
+    print('Generated the Farm language vocabulary from DynLex.')
     return 0
 
 

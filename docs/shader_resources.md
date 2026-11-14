@@ -87,7 +87,7 @@ own sampler objects; no pixel storage is duplicated. WGSL keeps the original
 separate image and sampler bindings. Every translation clears results and binding
 metadata from the preceding call, including after an error.
 
-The worker, project compiler and generated homepage manifest carry these
-associations as `glslBindings` and `glslUniforms` alongside the logical `resources`. The homepage
-manifest uses schema 15; regenerate it with
-`node tools/homepage-shaders/generate.mjs` after changing compiler inputs.
+The worker, project compiler and DynLex render graphs carry these associations
+as `glslBindings` and `glslUniforms` alongside the logical `resources`.
+Rebuild the website with `./scripts/build_web_root.sh` after changing compiler
+inputs. Its shader descriptions and linker live in `site/shaders/`.

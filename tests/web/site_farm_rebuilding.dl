@@ -80,6 +80,15 @@ require condition ((session's playing = false) and (session's clock request = 0)
 # Failures keep the old plan inert and expose an explicit retry, not stale execution.
 set role's needs rebuilding to true
 ignore follow website Farm action (the string form of "action:farm-retry-roles") in (the address of state)
+set reply to a JSON object containing [JSON number "status" is 0, JSON number "artifact" is 41, JSON number "milliseconds" is 1]
+receive website compilation reply for index in (the address of state)
+free reply
+set reply to a JSON object containing [JSON number "invocation" is (program's invocation)]
+receive website execution start reply in (the address of state)
+free reply
+receive website execution deadline (program's invocation) in (the address of state)
+require condition ((session's rebuild failed) and ((program's phase = 0) and (role's needs rebuilding))) reporting "An unbounded saved role escaped its budget or replaced the saved routine"
+ignore follow website Farm action (the string form of "action:farm-retry-roles") in (the address of state)
 set reply to a JSON object containing [JSON number "status" is 1, JSON number "milliseconds" is 1, JSON child "diagnostics" is (a JSON array containing [a JSON object containing [JSON text "file" is "/workspace/farm.dl", JSON number "line" is 3, JSON number "column" is 1, JSON text "message" is "Fixture compiler failure"]])]
 receive website compilation reply for index in (the address of state)
 free reply

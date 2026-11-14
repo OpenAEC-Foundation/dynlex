@@ -3,93 +3,36 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-if ! command -v node >/dev/null 2>&1; then
-    echo "Missing required dependency: node"
-    exit 1
-fi
-
-node --check "$PROJECT_DIR/web/homepage.js"
-node --check "$PROJECT_DIR/web/download.js"
-node --check "$PROJECT_DIR/web/river-challenge.js"
-for farm_file in "$PROJECT_DIR"/web/farm*.js; do node --check "$farm_file"; done
-node --check "$PROJECT_DIR/tests/web/farm_browser.mjs"
-node --check "$PROJECT_DIR/tests/web/farm_dragging.mjs"
-node --check "$PROJECT_DIR/tests/web/farm_progression.mjs"
-node --check "$PROJECT_DIR/tests/web/farm_visuals.mjs"
-node --check "$PROJECT_DIR/tests/web/farm_preparation.mjs"
-node --check "$PROJECT_DIR/tests/web/farm_equipment_browser.mjs"
-node --check "$PROJECT_DIR/tests/web/game_progress_browser.mjs"
-node --check "$PROJECT_DIR/tests/web/game_cloud_browser.mjs"
-node --check "$PROJECT_DIR/tests/web/game_cloud_rules.mjs"
-for game_file in "$PROJECT_DIR"/web/game-*.js "$PROJECT_DIR/web/firebase-config.js"; do node --check "$game_file"; done
-python3 "$PROJECT_DIR/scripts/generate_farm_vocabulary.py" --check
-node "$PROJECT_DIR/tests/web/farm_vocabulary.mjs"
-node "$PROJECT_DIR/tests/web/farm_models.mjs" "$PROJECT_DIR/build/dynlex" --shipped
-python3 "$PROJECT_DIR/tests/web/farm_art.py" --compiler "$PROJECT_DIR/build/dynlex"
-python3 "$PROJECT_DIR/tests/web/farm_art.py" --compiler "$PROJECT_DIR/build/dynlex" --case crops
-node "$PROJECT_DIR/tests/web/library_values.mjs" "$PROJECT_DIR/build/dynlex" --shipped
-node "$PROJECT_DIR/tests/web/farm.mjs"
-node "$PROJECT_DIR/tests/web/farm_arguments.mjs"
-node "$PROJECT_DIR/tests/web/farm_collection.mjs"
-node "$PROJECT_DIR/tests/web/farm_collection_upgrade.mjs"
-node "$PROJECT_DIR/tests/web/farm_language_upgrade.mjs"
-python3 "$PROJECT_DIR/tests/web/site_runtime.py" --case site_farm_motion
-node "$PROJECT_DIR/tests/web/farm_equipment.mjs"
-node "$PROJECT_DIR/tests/web/farm_livestock.mjs"
-node "$PROJECT_DIR/tests/web/farm_management.mjs"
-node "$PROJECT_DIR/tests/web/farm_areas_supplies.mjs"
-node "$PROJECT_DIR/tests/web/coding_goals.mjs"
-node "$PROJECT_DIR/tests/web/execution_trace.mjs"
-node "$PROJECT_DIR/scripts/generate_call_colors.mjs" --check
-node "$PROJECT_DIR/tests/web/game_progress.mjs"
-node --check "$PROJECT_DIR/web/river-character-art.js"
-node --check "$PROJECT_DIR/web/river-program.js"
-node --check "$PROJECT_DIR/web/river-challenge-audio.js"
-node --check "$PROJECT_DIR/web/river-challenge-model.js"
-node --check "$PROJECT_DIR/web/site-navigation.js"
-node --check "$PROJECT_DIR/web/shader-banner.js"
-node --check "$PROJECT_DIR/web/shader-renderer.js"
-node --check "$PROJECT_DIR/web/shader-renderer-shared.js"
-node --check "$PROJECT_DIR/web/shader-renderer-webgpu.js"
-node --check "$PROJECT_DIR/web/shader-renderer-webgl.js"
-node --check "$PROJECT_DIR/web/shader-transition-compositor.js"
-node --check "$PROJECT_DIR/web/semantic-highlighting.js"
-node --check "$PROJECT_DIR/src/web/ide/src/main.js"
-node --check "$PROJECT_DIR/web/lsp-client.js"
-node --check "$PROJECT_DIR/src/web/ide/src/lspIntegration.js"
-node --check "$PROJECT_DIR/src/web/ide/src/lspProtocol.js"
-node --check "$PROJECT_DIR/src/web/ide/public/compiler/compiler-worker.js"
-node --check "$PROJECT_DIR/web/wiki/wiki-actions.js"
-node --check "$PROJECT_DIR/tests/web/browser_test_driver.mjs"
-node --check "$PROJECT_DIR/tests/web/browser_execution.mjs"
-node --check "$PROJECT_DIR/tests/web/homepage_navigation_browser.mjs"
-node --check "$PROJECT_DIR/tests/web/webgl_fallback_browser.mjs"
-node --check "$PROJECT_DIR/tests/web/webgl_fallback_execution.mjs"
-node --check "$PROJECT_DIR/tests/web/homepage_ultrawide_browser.mjs"
-node --check "$PROJECT_DIR/tests/web/vite_dev_browser.mjs"
-node --check "$PROJECT_DIR/tests/web/lsp_integration.mjs"
-node --check "$PROJECT_DIR/tests/web/ide_diagnostics_browser.mjs"
-node --check "$PROJECT_DIR/tests/web/ide_responsive_panels_browser.mjs"
-node --check "$PROJECT_DIR/tests/web/ide_client_id_browser.mjs"
-node --check "$PROJECT_DIR/tests/web/river_challenge_execution.mjs"
-node --check "$PROJECT_DIR/tests/web/river_challenge_browser.mjs"
-node --check "$PROJECT_DIR/tests/web/river_completion_browser.mjs"
-node --check "$PROJECT_DIR/tests/web/river_highlighting_browser.mjs"
-node --check "$PROJECT_DIR/web/river-character-sheet.js"
-node --check "$PROJECT_DIR/tests/web/river_character_sheet.mjs"
-node --check "$PROJECT_DIR/tests/web/river_character_sheet_execution.mjs"
-node "$PROJECT_DIR/tests/web/lsp_client.mjs"
-node "$PROJECT_DIR/tests/web/lsp_integration.mjs"
-node "$PROJECT_DIR/tests/web/shared_language.mjs"
-node "$PROJECT_DIR/tests/web/lsp_protocol.mjs"
-node "$PROJECT_DIR/tests/web/semantic_highlighting.mjs"
-node "$PROJECT_DIR/tests/web/homepage.mjs"
-node "$PROJECT_DIR/tests/web/site_deployment.mjs"
-node "$PROJECT_DIR/tests/release/distribution.mjs"
-node "$PROJECT_DIR/tests/web/river_challenge.mjs"
-node "$PROJECT_DIR/tests/web/river_character_sheet.mjs"
-node "$PROJECT_DIR/tests/web/documentation.mjs"
-node "$PROJECT_DIR/tests/web/graphics_backend.mjs"
-node "$PROJECT_DIR/tests/web/homepage_shaders.mjs"
-node "$PROJECT_DIR/tests/web/ide_shell.mjs"
+COMPILER="$PROJECT_DIR/build/dynlex"
+WEB_ROOT="${DYNLEX_TEST_WEB_ROOT:-$PROJECT_DIR/build/site}"
+for dependency in node python3; do
+    if ! command -v "$dependency" >/dev/null 2>&1; then
+        echo "Missing required dependency: $dependency"
+        exit 1
+    fi
+done
+cd "$PROJECT_DIR"
+for source in src/web/compiler/*.js site/platform/*.js tests/web/*.mjs; do
+    node --check "$source"
+done
+python3 tests/web/source_package.py
+python3 tests/web/site_routes.py
+python3 tests/web/site_preview.py
+python3 tests/web/site_launchers.py
+node tests/web/graphics_backend.mjs
+node tests/web/firebase_provider.mjs
+node scripts/generate_call_colors.mjs --check
+python3 scripts/generate_farm_vocabulary.py --check
+node tests/web/ui_framework.mjs src/web/ide/public/compiler
+node tests/web/project_sources.mjs src/web/ide/public/compiler
+node tests/web/site_models.mjs
+python3 tests/web/site_runtime.py
+node tests/web/farm_models.mjs "$COMPILER" --native-wasm --shipped
+python3 tests/web/farm_art.py --compiler "$COMPILER"
+python3 tests/web/farm_art.py --compiler "$COMPILER" --case crops
+node tests/web/progress_model.mjs
+node tests/web/library_values.mjs "$COMPILER" --shipped
+node tests/web/site_games.mjs
+node tests/web/site_program_protocol.mjs
+node tests/web/site_deployment.mjs "$WEB_ROOT"
+node tests/release/distribution.mjs

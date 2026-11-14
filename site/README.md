@@ -9,6 +9,10 @@ selects the browser adapters.
 Program requests target `cpu`; the browser compiler service builds Wasm and
 returns an opaque executable artifact. Shader requests retain their explicit
 shader stages.
+Program descriptions also declare loading and execution budgets. Farm role
+preparation allows 30 seconds for worker loading, then five seconds for execution;
+Stop cancels either phase. The worker reports its execution boundary, while
+DynLex owns the timers, status and completion policy.
 
 Build and serve from the compiler checkout:
 
@@ -151,5 +155,6 @@ downloads, missing page, Studio, River and Farm. Shared source tools provide
 editing, language features, execution annotations and themes. Farm's retained
 person labels, routes and rain, and River's character inspection page are also
 implemented in source. Their final packaged browser verification is pending.
-The retired HTML/Monaco source and tests still require cleanup after verification.
+The HTML/Monaco implementation has been retired. Model oracles, generic runtime
+adapters and their portable replacement checks remain in the repository.
 The deployed website has not been replaced by this worktree.

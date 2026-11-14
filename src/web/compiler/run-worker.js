@@ -5,7 +5,7 @@ import { buildRuntimeImports, createRuntimeFilesystem, inspectRuntimeWasmLayout 
 self.onmessage = async ({ data: { id, payload } }) => {
   let buffered = '', length = 0;
   const flush = () => {
-    if (buffered.length) { self.postMessage({ id, event: { output: buffered } }); buffered = ''; }
+    if (buffered.length) { self.postMessage({ id, event: { type: 'program-output', output: buffered } }); buffered = ''; }
   };
   try {
     if (!Number.isSafeInteger(payload.outputLimit) || payload.outputLimit <= 0)
@@ -19,6 +19,7 @@ self.onmessage = async ({ data: { id, payload } }) => {
     const runtime = buildRuntimeImports(output, createRuntimeFilesystem(), inspectRuntimeWasmLayout(payload.wasm));
     const start = performance.now();
     const { instance } = await WebAssembly.instantiate(payload.wasm, runtime);
+    self.postMessage({ id, event: { type: 'program-started' } });
     instance.exports.main();
     flush();
     self.postMessage({ id, result: { milliseconds: performance.now() - start } });

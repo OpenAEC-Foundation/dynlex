@@ -3,6 +3,7 @@ import ../state.dl
 import ../editor/shader.dl
 import ../editor/language.dl
 import events.dl
+import deadlines.dl
 
 to stop website [program] {integer:index} in {a pointer to website state:state}:
     set program to state's programs + index
@@ -69,6 +70,7 @@ to [compile website program] {integer:index} [from source] {string:source} [usin
     set instance to state's view's instance
     set program's source to source
     set program's result to 0
+    set program's executing to false
     set program's output to ""
     increment state's invocation
     set program's invocation to state's invocation
@@ -144,6 +146,7 @@ to receive website compilation {a pointer to JSON value:response} for {integer:i
         JSON number "invocation" is (program's invocation), JSON number "outputLimit" is 1048576
     ]) for purpose 7 indexed index in state
     set program's request to state's requests' id
+    start website loading budget for index in state
 
 to receive website execution {a pointer to JSON value:response} for {integer:index} in {a pointer to website state:state}:
     set program to state's programs + index

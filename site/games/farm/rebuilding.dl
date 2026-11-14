@@ -61,6 +61,8 @@ to [finish website Farm saved role rebuilding] {integer:index} [in] {a pointer t
         fail website Farm saved role rebuilding with (program's output) in state
     else if program's result = 3:
         fail website Farm saved role rebuilding with (the string form of "The compiler or program service failed") in state
+    else if program's result = 5:
+        fail website Farm saved role rebuilding with (the string form of "The saved program exceeded its execution budget") in state
     else:
         require condition (program's result = 4) reporting "A saved-role callback has an unknown result"
         set session's rebuild failed to false

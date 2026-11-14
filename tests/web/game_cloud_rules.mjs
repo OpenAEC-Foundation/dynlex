@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { emptyProgress, SAVE_VERSION } from "../../web/game-progress.js";
+import emptyProgressDocument from './fixtures/empty-progress.json' with {type:'json'};
 const require=createRequire(resolve(process.env.DYNLEX_FIREBASE_TEST_DEPS,'package.json'));
 const {initializeTestEnvironment,assertSucceeds,assertFails}=require('@firebase/rules-unit-testing');
 const {doc,setDoc,getDoc,serverTimestamp}=require('firebase/firestore');
@@ -11,7 +11,7 @@ try {
  const bob=env.authenticatedContext('bob').firestore();
  const guest=env.unauthenticatedContext().firestore();
  const path=['players','alice','games','progress'];
- const save={version:SAVE_VERSION,payload:JSON.stringify(emptyProgress()),updatedAt:serverTimestamp()};
+ const save={version:emptyProgressDocument.version,payload:JSON.stringify(emptyProgressDocument),updatedAt:serverTimestamp()};
  await assertSucceeds(setDoc(doc(alice,...path),save));
  await assertSucceeds(getDoc(doc(alice,...path)));
  await assertFails(getDoc(doc(bob,...path)));

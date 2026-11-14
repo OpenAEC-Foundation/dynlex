@@ -2,29 +2,40 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-export function assertNanoGeometry(nanoConfig, nanoRecord, projectDir) {
-  assert.ok(nanoConfig.geometry, "Nano choreography must configure volumetric geometry");
-  for (const backend of ["webgpu", "webgl"]) {
-    assert.equal(
-      nanoRecord.shaders.vertex.sources[backend].path,
-      nanoConfig.vertex[backend].replace(/^web\//, "")
-    );
-    assert.match(nanoRecord.shaders.vertex.sources[backend].hash, /^[a-f0-9]{64}$/);
-  }
-  assert.equal(nanoRecord.geometry.path, nanoConfig.geometry.path.replace(/^web\//, ""));
-  assert.equal(nanoRecord.geometry.format, "float32x4");
-  assert.equal(nanoRecord.geometry.attributeEncoding, "paired-unorm12-wheel-corner");
-  assert.equal(nanoRecord.geometry.primitive, "triangles");
-  assert.ok(nanoRecord.geometry.pointCount >= 30000);
-  assert.equal(nanoRecord.geometry.vertexCount, nanoRecord.geometry.pointCount * 3);
-  assert.deepEqual(nanoRecord.geometry.render, {
-    backgroundPass: true,
-    blendMode: "additive",
-    depthTest: false
+export function assertNanoGeometry(nano, directory, projectDir) {
+  assert.equal(nano.geometry.kind, 'points');
+  assert.deepEqual(nano.stages, ['fragment', 'vertex']);
+  const [background, cloud] = nano.program.passes;
+  assert.equal(background.draws[0].count, 3);
+  assert.equal(background.color.load, 'clear');
+  assert.equal(cloud.color.load, 'load');
+  assert.equal(cloud.topology, 'triangle-list');
+  assert.equal(cloud.vertexBuffers[0].arrayStride, 16);
+  assert.equal(cloud.vertexBuffers[0].attributes[0].format, 'float32x4');
+  assert.equal(cloud.vertexBuffers[0].source, nano.geometry.path);
+  assert.equal(cloud.depth, null);
+  assert.equal(cloud.pipelines[0].depthWrite, false);
+  assert.equal(cloud.pipelines[0].depthCompare, 'always');
+  assert.deepEqual(cloud.pipelines[0].blend, {
+    color: {srcFactor:'one',dstFactor:'one',operation:'add'},
+    alpha: {srcFactor:'one',dstFactor:'one',operation:'add'}
   });
-  assert.match(nanoRecord.geometry.hash, /^[a-f0-9]{64}$/);
-  const geometryBytes = fs.readFileSync(path.join(projectDir, nanoConfig.geometry.path));
-  assert.equal(geometryBytes.byteLength, nanoRecord.geometry.vertexCount * 4 * Float32Array.BYTES_PER_ELEMENT);
+  for (const backend of ["webgpu", "webgl"]) {
+    for (const stage of ['vertex','fragment']) {
+      const source = cloud[stage][backend];
+      assert.equal(source.kind, 'url');
+      assert.equal(source.value, `assets/shaders/nano-choreography.${stage}.${backend === 'webgpu' ? 'wgsl' : 'glsl'}`);
+      assert(fs.readFileSync(path.join(directory, source.value), 'utf8').length > 0);
+    }
+  }
+  const geometryMetadata = JSON.parse(fs.readFileSync(path.join(directory, nano.geometry.metadata), 'utf8'));
+  assert.equal(geometryMetadata.format, 'float32x4');
+  assert.equal(geometryMetadata.attributeEncoding, 'paired-unorm12-wheel-corner');
+  assert.equal(geometryMetadata.primitive, 'triangles');
+  assert.ok(geometryMetadata.pointCount >= 30000);
+  assert.equal(geometryMetadata.vertexCount, geometryMetadata.pointCount * 3);
+  const geometryBytes = fs.readFileSync(path.join(directory, nano.geometry.path));
+  assert.equal(geometryBytes.byteLength, geometryMetadata.vertexCount * 4 * Float32Array.BYTES_PER_ELEMENT);
   const geometryValues = new Float32Array(
     geometryBytes.buffer,
     geometryBytes.byteOffset,
@@ -33,7 +44,7 @@ export function assertNanoGeometry(nanoConfig, nanoRecord, projectDir) {
   const targetPoints = [];
   const motorcyclePoints = [];
   const motorcycleWheelPoints = [];
-  for (let vertex = 0; vertex < nanoRecord.geometry.vertexCount; vertex += 1) {
+  for (let vertex = 0; vertex < geometryMetadata.vertexCount; vertex += 1) {
     for (let axis = 0; axis < 3; axis += 1) {
       const packedCoordinate = geometryValues[vertex * 4 + axis];
       assert.ok(
@@ -110,9 +121,6 @@ export function assertNanoGeometry(nanoConfig, nanoRecord, projectDir) {
     planarRootMeanSquareTravel < 0.6,
     "Point correspondence must form coherent flights instead of a random dissolving cloud"
   );
-  const geometryMetadata = JSON.parse(
-    fs.readFileSync(path.join(projectDir, nanoConfig.geometry.metadata), "utf8")
-  );
   assert.equal(geometryMetadata.schemaVersion, 5);
   assert.equal(geometryMetadata.attributeEncoding, "paired-unorm12-wheel-corner");
   assert.deepEqual(geometryMetadata.coordinateEncoding, {
@@ -144,7 +152,7 @@ export function assertNanoGeometry(nanoConfig, nanoRecord, projectDir) {
   assert.equal(geometryMetadata.source.modelVertexCount, 241794);
   assert.equal(geometryMetadata.source.modelTriangleCount, 483637);
   assert.ok(Array.isArray(geometryMetadata.modifications));
-  assert.equal(geometryMetadata.pointCount, nanoRecord.geometry.pointCount);
+  assert.equal(geometryMetadata.pointCount, targetPoints.length);
   assert.equal(geometryMetadata.motorcyclePointCount, geometryMetadata.pointCount);
   assert.equal(
     geometryMetadata.motorcycleWheelPointCount,
@@ -155,9 +163,6 @@ export function assertNanoGeometry(nanoConfig, nanoRecord, projectDir) {
   assert.equal("detailPointCount" in geometryMetadata, false);
   assert.equal("alternateArmPointCount" in geometryMetadata, false);
   assert.equal("alternateLegPointCount" in geometryMetadata, false);
-  assert.equal(nanoRecord.geometry.attribution.title, geometryMetadata.source.title);
-  assert.equal(nanoRecord.geometry.attribution.author, geometryMetadata.source.author);
-  assert.equal(nanoRecord.geometry.attribution.license, geometryMetadata.source.license);
 
   const pointCloudGenerator = fs.readFileSync(
     path.join(projectDir, "tools/homepage-shaders/generate-point-cloud.py"),
@@ -193,11 +198,11 @@ export function assertNanoGeometry(nanoConfig, nanoRecord, projectDir) {
   assert.doesNotMatch(shaderReadme, /--blend/);
 
   const attributionPage = fs.readFileSync(
-    path.join(projectDir, "web/wiki/attributions.html"),
+    path.join(projectDir, "site/pages/docs/attributions.dl"),
     "utf8"
   );
   assert.match(attributionPage, /The Vitruvian Man/);
-  assert.match(attributionPage, />Fri</);
+  assert.match(attributionPage, /link "Fri"/);
   assert.match(attributionPage, /CC BY 4\.0/);
   assert.match(attributionPage, /6c0b99ce8463468fbd00f304dbe7e105/);
 }
