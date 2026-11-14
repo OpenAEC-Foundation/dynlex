@@ -1221,3 +1221,9 @@ Evidence: `i017-first-comparison.json`, `i017-refined-comparison.json`,
 `1666b1da`; no compiler or test edits occur during qualification. The original
 whole-compiler objective remains active, including persistent section products,
 remaining broad projection/dependency preparation, and non-native/tooling paths.
+
+The single extension ends at 12:38:12 UTC. At that boundary the implementation
+is parked unmerged, with performance and required gates passed but full
+integration qualification still live. Preserve the existing test process and
+frozen candidate; no further implementation refinement is authorized by this
+iteration. A terminal passing integration result is required before acceptance.
