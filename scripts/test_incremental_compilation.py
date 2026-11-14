@@ -44,6 +44,7 @@ from test_incremental_native_codegen import check_optimized_native_codegen
 from test_incremental_classification import check_recursive_classification_cascade, check_incremental_classification
 from test_incremental_effect_cascade import check_bounded_effect_cascade
 from test_incremental_inferred_dependencies import check_callable_trial_dependencies, check_inferred_section_dependencies
+from test_incremental_data_initializers import check_global_data_initializers
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -527,6 +528,7 @@ function left times right:
     check_reused_ir_dependency_graph_variants(root, build)
     check_inferred_section_dependencies(root, build)
     check_callable_trial_dependencies(root, build)
+    check_global_data_initializers(root, build)
     check_leaf_dependency_cascade(root, build)
     check_resolved_declaration_snapshot_reuse(root, build)
     specific_main = root / "specific_addition.dl"

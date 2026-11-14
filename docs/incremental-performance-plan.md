@@ -21,8 +21,8 @@ cases. I021 removes an unconsumed full declaration table; it does not complete t
 compiler-wide goal. Semantic section construction and broad matching/binding,
 validation and persistence work still need finer reuse. Debug/trace builds disable
 major reuse paths; LSP and other output modes still need the shared frontend.
-Next: P03, immutable parser-boundary products, with explicit factory input/effect
-audits and a minimal work-count regression before implementation.
+Next: repair the verified named-global initializer dependency hole (I024),
+then resume P03 source-owner deferral using the completed factory/consumer audit.
 
 ## Objective and constraints
 
@@ -1876,3 +1876,36 @@ and the temporary 105-file compiler data root is removed. This replay proves
 reproducibility, not a new performance estimate. No runtime code or test changes
 are added after root qualification. Evidence: `i023-archived-replay.{json,log}`.
 The full compiler-wide goal remains active and incomplete.
+
+
+## I024: named global initializer execution dependencies
+
+The first read-only screen began 14 November 2026 at 20:22 UTC during I023's
+integration wait. Count that preflight in this iteration: first deadline 21:07
+UTC, with one extension available only after concrete progress. Implementation
+starts from published master `ec8fab93`, compiler `d7ca3497...`, in a fresh
+project worktree.
+
+One correctness goal: a cached reader of named global data must retain the
+execution that initialized its value, including values known only during pure
+execution. A provider-body edit currently prints 42 incrementally and 43 fresh;
+the reader's stored unit reads itself and a global type, with no producer
+execution/value dependency. Add a minimal no-library required regression before
+the fix, covering repeated provider edits, changed initializer arguments, rename,
+unchanged repetition and reversion at O0/O2. Confirm red on the published root.
+
+Port the relevant producer-read and optional-scope API changes from UI commits
+`10872562` and `b265ca5f`, preserving the distinction between source-only reads,
+function execution and entry execution through pure forwarding. Migrate every
+producer/consumer of that API. Do not include unrelated UI behavior or add a
+compatibility reader. The separately found C++23 shared-ownership API removal
+will be corrected with its standard equivalent and reported explicitly.
+
+Acceptance: every edited result and diagnostic matches clean builds; repeated
+input still bypasses semantic/code generation/link work; existing independent
+unit and configuration tests continue to pass; all required checks remain
+uncached within 120 seconds. Run relevant integration and complete real-program
+LLVM parity, recording any measured cost rather than calling a correctness
+repair a performance gain. Then qualify/publish root and remove the worktree.
+Preflight evidence is in `i024-global-initializer-screen/`; no optimization is
+claimed from its single observations.
