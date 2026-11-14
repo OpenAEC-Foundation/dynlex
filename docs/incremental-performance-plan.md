@@ -173,7 +173,7 @@ remaining measured costs, not by table order alone.
 | I011 | P02/P03: source chunks with a compact section-line consumer | Complete: keep, merged and verified | 02:31–03:36 UTC on 14 November; one extension used, before the 04:01 deadline. Source `c4907513`, compiler `111070f3...`: seven paired unused-body edits have CPU ratio 0.97037 [0.96212, 0.98083], active-body 0.96685 [0.95092, 0.99687]. All eight-case 180-row executable/diagnostic comparisons pass; eleven cold pairs establish no change. The unused edit reuses 44 files, 79 chunks and 7,087 section-line products; CodeLine layout is unchanged. All 329 required checks pass uncached in 103.073 s and all 464 integration checks in 899.856 s, with unchanged source/compiler hashes. Merged source/docs `9bccf692`, rebuilt root compiler `a0d50521...`, passes all 329 required checks uncached in 100.451 s. The merged worktree is removed, archived replay passes after removal, and its temporary data root is cleaned. Semantic section reconstruction and early-failure source publication remain incomplete. |
 | I012 | P13: publish completed parser/source products before import-stage success | Complete: keep, merged and verified | 03:41–04:56 UTC on 14 November; one extension used, before the 05:11 deadline. Source `91787c29`, compiler `7836413f...`, retains completed products after early import/preprocessing failures. The repeated-failure real application reuses all 45 files instead of processing them; fifteen paired samples have CPU ratio 0.74177 [0.71805, 0.88529]. The complete eight-case 196-row parity matrix and independent 31-pair active-body control establish no ordinary/cold change. Candidate: 329 required checks uncached in 112.431 s and 464 integration checks in 870.334 s. Merged source/docs `2858eb6a`; root compiler `ce8d77e1...` passes 329 required checks uncached in 112.520 s. The merged worktree is removed and actual archived replay passes afterward, cleaning its temporary data root. Semantic section/reference preparation is the next selected boundary; the full goal remains incomplete. |
 
-| I013 | P06: reuse source-proven classification declaration inputs | Active | Started 04:57 UTC on 14 November; first deadline 05:42 UTC, extended deadline 06:27 UTC; one extension used after focused input/work/parity tests and the first real-program screen. Baseline source `147fc91e`, compiler `ce8d77e1...`. Reuse the existing input, body-input, query and provider identities when current source/header/ancestor-body digests, candidate state and locality prove an authored declaration unchanged. Generated prebuilt signatures still evaluate their semantic inputs. Preserve dependency/negative-lookup propagation, nested scopes, implicit parameter retraction and diagnostics. Add input-unit evaluated/reused counters and a minimal same-file/ancestor/locality regression before implementation. No new cache record or parallel hash layer. Require at least 50% fewer evaluated classification input units on real unused/active edits, at least 1% paired CPU improvement for unused edits, no established active/cold regression, clean parity, required <=120 s uncached and relevant integration. |
+| I013 | P06: reuse source-proven classification declaration inputs | Accepted; merged-root verification pending | Started 04:57 UTC on 14 November; first deadline 05:42 UTC, extended deadline 06:27 UTC; one extension used after focused input/work/parity tests and the first real-program screen. Baseline source `147fc91e`, compiler `ce8d77e1...`. Reuse the existing input, body-input, query and provider identities when current source/header/ancestor-body digests, candidate state and locality prove an authored declaration unchanged. Generated prebuilt signatures still evaluate their semantic inputs. Preserve dependency/negative-lookup propagation, nested scopes, implicit parameter retraction and diagnostics. Add input-unit evaluated/reused counters and a minimal same-file/ancestor/locality regression before implementation. No new cache record or parallel hash layer. Require at least 50% fewer evaluated classification input units on real unused/active edits, at least 1% paired CPU improvement for unused edits, no established active/cold regression, clean parity, required <=120 s uncached and relevant integration. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -859,3 +859,37 @@ declarations and consumes those producer body dependencies in the same input
 reuse proof. Cover all declaration generators and test generated signatures
 before changing the compiler. Keep the original work, CPU and correctness gates.
 No further extension is available after 06:27 UTC.
+
+### I013 producer-aware screening
+
+Source `d77c79cd` / compiler `06ecae56...` passes the generated-declaration
+work tests and all focused classification, propagation, nested lookup and arity
+checks. Its retained inputs match fresh recomputation, including producer identities.
+On each real unused/active edit it builds one of 1,748 declaration inputs and
+reuses 1,747, clearing the 50% work gate. The first seven-pair CPU screen is
+uncertain: unused ratio 0.97240 [0.90010, 1.00635], active 0.99375
+[0.98152, 1.01630]. An independent 31-pair unused comparison clears the
+predeclared CPU gate: medians 0.811005 to 0.791013 s, paired ratio 0.98479
+[0.96568, 0.99350]. Wall ratio 0.98530 [0.94559, 1.00399] remains uncertain.
+Input preparation falls 27.944 to 8.304 ms; classification 97.386 to 78.018 ms.
+Ordinary-body/cold/common gates and full suites still decide acceptance.
+
+The remaining six-case comparison completes all 160 rows, giving 196 current
+eight-case rows plus the independent 66-row unused control. Baseline/candidate
+native artifact equality and incremental/clean diagnostic parity pass. Unchanged,
+comment and wording CPU intervals include no change, as do seven-pair lives and
+shared-type edits. Eleven cache-disabled cold pairs have CPU medians 5.632530 to
+5.713482 s, paired ratio 0.99448 [0.98349, 1.01702]; no cold improvement or
+regression is established. The speedup claim remains limited to the verified
+unused-body CPU workload. The candidate passes all 329 required checks uncached
+in 111.728 s (112.817 s with its recording driver), with unchanged compiler and
+test source hashes. All 464 integration checks pass in 830.955 s (832.423 s with the recording
+driver), with unchanged compiler and test source hashes. Merged-root checks are
+pending.
+
+The benchmark's clean comparison checks diagnostics. Its native executable hash
+comparison is between baseline and candidate; clean native executables have
+different bytes because their compilation routes differ. Focused runtime fixtures
+compare incremental and clean execution output. Do not describe the real graphical
+application benchmark as proof of clean executable equivalence; normalized clean
+IR or rendered-output parity remains a full-goal verification gap.
