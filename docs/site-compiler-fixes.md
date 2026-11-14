@@ -62,10 +62,16 @@ the compiler behavior rather than special-casing the website's source.
 22. **Reopened resolver phases.** Retry blocked local-variable lookups whenever
     definition resolution completes, including when cached classification has
     reopened that phase.
+23. **C++23 diagnostic ownership.** Use the supported shared-pointer ownership
+    count for diagnostic copy-on-write. The removed `unique()` member compiled
+    with the native standard library but prevented the Emscripten build.
 
 Focused regression coverage includes the import-free required fixtures and the
 incremental body-demand, declaration-cache, validation-flow and compiler-stack
-checks under `scripts/`. The latest fixes pass their focused native checks and
-all 382 required checks within the unchanged two-minute budget. Integration and
-freshly rebuilt browser-compiler verification remain separate; the historical
-suite results do not prove the final website build.
+checks under `scripts/`. Fixes through 22 pass their focused native checks and
+all 382 required checks within the unchanged two-minute budget. The C++23
+ownership correction passes a direct diagnostic copy-on-write check with both
+standard libraries. The full browser compiler rebuild, smoke test, 29 data and
+recursion fixtures, and shader-interface checks pass. The native rebuild and
+current integration checks remain pending; these results do not yet prove the
+final website build.
