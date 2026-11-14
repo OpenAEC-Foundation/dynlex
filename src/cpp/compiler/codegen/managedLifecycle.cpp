@@ -136,6 +136,10 @@ bool releaseInitializedStorage(ParseContext &context, ParseContext::ManagedStora
 bool managedExpressionResultIsOwned(ParseContext &context, Expression *expression) {
 	if (!expression || !typeHasManagedLifecycle(finalizedExpressionType(context, expression)))
 		return false;
+	// A named declaration transfers its owner into storage. Using that
+	// declaration as a surrounding field borrows the captured value.
+	if (expression->dataDeclaration)
+		return false;
 	ResolvedBindingLayers resolved = resolveCodegenBindingLayers(context, expression, context.flexBindingFrames);
 	if (resolved.expression && resolved.expression != expression) {
 		FlexBindingScope scope(context, std::move(resolved.bindingFrameStack));
@@ -169,7 +173,7 @@ registerManagedStorage(ParseContext &context, llvm::Value *address, const DataTy
 	if (global) {
 		initializedAddress = new llvm::GlobalVariable(
 			*context.llvmModule, builder.getInt1Ty(), false, llvm::GlobalValue::InternalLinkage, builder.getFalse(),
-			"managed_global_initialized"
+			address->getName() + ".initialized"
 		);
 	} else {
 		llvm::Function *function = builder.GetInsertBlock() ? builder.GetInsertBlock()->getParent() : nullptr;

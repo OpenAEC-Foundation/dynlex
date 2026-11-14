@@ -8,6 +8,11 @@ generateStaticReferenceIntrinsic(ParseContext &context, Expression *callExpr, co
 	);
 	global->setAlignment(getLLVMABIAlignment(context, valueType));
 	context.staticLLVMValues[callExpr] = global;
+	struct StaticReferenceScope {
+		ParseContext &context;
+		StaticReferenceScope(ParseContext &ctx) : context(ctx) { ++context.staticReferenceDepth; }
+		~StaticReferenceScope() { --context.staticReferenceDepth; }
+	} staticScope(context);
 	CodegenResult value = generateExpressionCode(context, args[1]);
 	if (!value)
 		return value;

@@ -31,6 +31,7 @@ class LLVMContext;
 class Module;
 class IRBuilderBase;
 class Value;
+class Constant;
 class GlobalVariable;
 class Function;
 class SwitchInst;
@@ -297,7 +298,11 @@ struct ParseContext {
 	std::unordered_map<llvm::BasicBlock *, llvm::BasicBlock *> ifChainFalseTargets;
 	// Global variables (module-level, accessible across all DynLex files in the program)
 	std::unordered_map<std::string, llvm::GlobalVariable *> globalLLVMVariables;
-	std::unordered_map<const Expression *, llvm::Value *> dataLLVMValues;
+	// Only module constants can be shared between generated functions.
+	std::unordered_map<const Expression *, llvm::Constant *> dataLLVMValues;
+	// Constants or owning stack slots, scoped to the generated function.
+	std::unordered_map<const Expression *, llvm::Value *> localDataLLVMValues;
+	unsigned staticReferenceDepth = 0;
 	std::unordered_map<const Expression *, llvm::GlobalVariable *> staticLLVMValues;
 	// Subject values are call-site-local temporaries keyed by their inferred assignment expression.
 	std::unordered_map<const Expression *, llvm::Value *> subjectStorage;

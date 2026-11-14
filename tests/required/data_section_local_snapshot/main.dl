@@ -1,0 +1,13 @@
+integer means: @intrinsic("type", "int", 32)
+section snapshot {name} of {integer:value}:
+    declares: name
+    result: integer
+    value: value
+
+function inspect {integer:seed}:
+    execute:
+        snapshot captured value of seed:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d %d\n", captured value, captured value))
+
+inspect 11
+inspect 22

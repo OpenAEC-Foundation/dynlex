@@ -776,10 +776,15 @@ SPIR-V and its WGSL/GLSL translators. Terminating alternatives remove unreachabl
 forwarding blocks before the section exit is finalized.
 
 Array literals and class construction compose SSA aggregate values directly, allowing
-LLVM to fold static operands into constant aggregates. Named data declarations refer
-to their inferred initializer instead of mutable variable storage. `static reference`
-publishes an immutable global before lowering its initializer, allowing cyclic static
-graphs; the initializer must lower to a constant. `deferred body` uses ordinary native
+LLVM to fold static operands into constant aggregates. Named global data that lowers
+without runtime instructions remains a module constant, including forward and cyclic
+static descriptions. Runtime initializers execute in the declaration's lexical scope
+and transfer one owning snapshot into storage; readers never reuse instructions from
+another function or rerun the initializer. Function-local data owns scoped storage and captures a fresh
+value whenever its declaration executes. Managed reads retain the snapshot and ordinary
+scope cleanup releases its owner. `static reference` publishes an immutable global
+before lowering its initializer, allowing cyclic static graphs; the initializer must
+lower to a constant. `deferred body` uses ordinary native
 callable generation, while the body record and receiver intrinsics use their inferred
 expressions. There is no runtime data-section builder pass.
 

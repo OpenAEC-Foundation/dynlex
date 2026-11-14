@@ -1,0 +1,24 @@
+integer means: @intrinsic("type", "int", 32)
+text means: @intrinsic("add pointer depth", @intrinsic("type", "int", 8))
+class:
+    patterns:
+        node
+    members:
+        label as text
+        next as reference
+reference means: @intrinsic("add pointer depth", node)
+section item {name}:
+    declares: name
+    result: reference
+    body:
+        next: reference
+    value: @intrinsic("static reference", @intrinsic("construct", node, name, @intrinsic("section field", "next")))
+function inspect:
+    execute:
+        item first:
+            next: second
+        item second:
+            next: first
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%s %s %s\n", first's label, first's next's label, second's next's label))
+inspect
+inspect

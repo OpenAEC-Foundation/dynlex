@@ -1,0 +1,22 @@
+integer means: @intrinsic("type", "int", 32)
+class:
+    patterns:
+        owned
+    members:
+        stamp as integer
+    retain:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "retain %d\n", @intrinsic("lifecycle value")'s stamp))
+    release:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "release %d\n", @intrinsic("lifecycle value")'s stamp))
+section snapshot {name} of {integer:value}:
+    declares: name
+    result: owned
+    value: @intrinsic("construct", owned, value)
+section group {name}:
+    declares: name
+    body:
+        items: @intrinsic("array", owned)
+    value: @intrinsic("section field", "items")
+group collection:
+    snapshot child of 7:
+@intrinsic("discard", collection)

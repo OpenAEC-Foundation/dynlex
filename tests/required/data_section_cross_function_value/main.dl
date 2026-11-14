@@ -1,0 +1,24 @@
+integer means: @intrinsic("type", "int", 32)
+type means: @intrinsic("type", "type")
+address means: @intrinsic("add pointer depth", integer)
+
+to get value as {type:target}:
+    @intrinsic("return", @intrinsic("cast", value, target))
+
+section numbers {name}:
+    declares: name
+    result: address
+    body:
+        items: @intrinsic("array", integer)
+    value:
+        (@intrinsic("static reference", @intrinsic("section field", "items"))) as address
+
+numbers first palette:
+    1
+function read palette:
+    globals:
+        first palette
+    execute:
+        @intrinsic("return", first palette)
+
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", @intrinsic("dereference", read palette)))

@@ -1,0 +1,19 @@
+integer means: @intrinsic("type", "int", 32)
+@intrinsic("store", counter, 0)
+function count access:
+    globals:
+        counter
+    execute:
+        @intrinsic("store", counter, @intrinsic("add", counter, 1))
+        @intrinsic("return", 17)
+section snapshot {name}:
+    declares: name
+    result: integer
+    value: count access
+snapshot captured value:
+function read snapshot:
+    globals:
+        captured value
+    execute:
+        @intrinsic("return", captured value)
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d %d %d\n", read snapshot, read snapshot, counter))

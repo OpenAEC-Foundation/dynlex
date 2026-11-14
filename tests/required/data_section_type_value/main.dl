@@ -1,0 +1,9 @@
+integer means: @intrinsic("type", "int", 32)
+type means: @intrinsic("type", "type")
+section kind {name}:
+    declares: name
+    result: type
+    value: integer
+kind chosen:
+@intrinsic("store", value, @intrinsic("construct", chosen))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", value))
