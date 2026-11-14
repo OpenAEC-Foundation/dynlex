@@ -7,7 +7,7 @@ class IncrementalBodyDemand {
 	MatcherPathSnapshots &paths;
 	InitialParameterCounts &counts;
 	std::unordered_map<const Section *, BodyResolutionUnit> pending;
-	std::unordered_map<const PatternReference *, std::vector<PatternDefinition *>> headers;
+	std::array<std::unordered_map<const PatternReference *, std::vector<PatternDefinition *>>, 2> headers;
 	std::optional<MatcherTreeChanges> finalChanges;
 	bool checked = false, stableRules = false;
 
@@ -27,7 +27,8 @@ class IncrementalBodyDemand {
 		}))
 			return false;
 		if (!checked) {
-			stableRules = precedenceRulesSignature(*context.mainSection) == prior->at("precedence_rules");
+			stableRules =
+				precedenceRulesSignature(*context.mainSection) == prior->at("precedence_rules").get_ref<const std::string &>();
 			finalChanges = paths.compare(prior->at("final_matcher_tree").get_ref<const std::string &>(), tree);
 			checked = true;
 		}
@@ -48,21 +49,25 @@ class IncrementalBodyDemand {
 					cache.retain(key);
 				}
 		const auto &scopes = counts.sections();
-		for (const Json &header : saved.at("header_definitions").at(unit.path)) {
-			auto &definitions = headers[unit.references.at(header.at(0).get<size_t>())];
-			for (const Json &encoded : header.at(1)) {
-				Section *provider = scopes.at(encoded.at(0).get<std::string>());
-				size_t occurrence = encoded.at(2).get<size_t>();
-				PatternDefinition *found = nullptr;
-				for (PatternDefinition *definition : provider->patternDefinitions)
-					if (definition->toString() == encoded.at(1).get_ref<const std::string &>() && occurrence-- == 0) {
-						found = definition;
-						break;
-					}
-				requireCompilerInvariant(found, "deferred header lost a validated definition");
-				definitions.push_back(found);
+		for (size_t stage = 0; stage < 2; stage++) {
+			const char *field = stage ? "header_definitions" : "initial_header_definitions";
+			for (const Json &header : saved.at(field).at(unit.path)) {
+				auto &definitions = headers[stage][unit.references.at(header.at(0).get<size_t>())];
+				for (const Json &encoded : header.at(1)) {
+					Section *provider = scopes.at(encoded.at(0).get<std::string>());
+					size_t occurrence = encoded.at(2).get<size_t>();
+					PatternDefinition *found = nullptr;
+					for (PatternDefinition *definition : provider->patternDefinitions)
+						if (definition->toString() == encoded.at(1).get_ref<const std::string &>() && occurrence-- == 0) {
+							found = definition;
+							break;
+						}
+					requireCompilerInvariant(found, "deferred header lost a validated definition");
+					definitions.push_back(found);
+				}
 			}
 		}
+
 		for (size_t index = 0; index < unit.references.size(); index++) {
 			PatternReference *reference = unit.references[index];
 			reference->incrementalMatcherKey = entries->at(index).initialKey;
@@ -91,8 +96,9 @@ class IncrementalBodyDemand {
 			demand(scope);
 		};
 		context.deferredHeaderDefinitions = [&](PatternReference *reference) {
-			auto found = headers.find(reference);
-			return found == headers.end() ? std::vector<PatternDefinition *>{} : found->second;
+			const auto &stage = headers[context.patternPrecedenceRevision != 0];
+			auto found = stage.find(reference);
+			return found == stage.end() ? std::vector<PatternDefinition *>{} : found->second;
 		};
 		context.demandBodiesForDefinition = [&](PatternDefinition &definition) {
 			std::vector<Section *> affected;

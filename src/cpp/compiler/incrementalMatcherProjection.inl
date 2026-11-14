@@ -58,6 +58,7 @@ struct InitialMatcherProjection {
 			{"body_units", Json::object()},
 			{"final_body_units", Json::object()},
 			{"header_definitions", Json::object()},
+			{"initial_header_definitions", Json::object()},
 			{"bodies", bodyDigests},
 			{"scope_rule_bodies", scopeRuleBodyPaths(sections)},
 			{"global_resolution", globalResolutionIdentity(*context.mainSection)},
@@ -94,22 +95,52 @@ struct InitialMatcherProjection {
 		}
 	}
 
+	static Json headerDefinitions(const Owner &owner, const std::map<const Section *, std::string> &paths) {
+		Json headers = Json::array();
+		for (size_t index = 0; index < owner.references.size(); index++) {
+			PatternReference *reference = owner.references[index];
+			if (!reference->range().line->sectionOpening || !reference->match)
+				continue;
+			Json definitions = Json::array();
+			for (PatternDefinition *definition : reference->match->matchingDefinitions) {
+				size_t occurrence = 0;
+				for (const PatternDefinition *other : definition->section->patternDefinitions) {
+					if (other == definition)
+						break;
+					occurrence += other->toString() == definition->toString();
+				}
+				definitions.push_back(Json::array({paths.at(definition->section), definition->toString(), occurrence}));
+			}
+			headers.push_back(Json::array({index, std::move(definitions)}));
+		}
+		return headers;
+	}
+
 	void captureBodyUnits(ParseContext &context, IncrementalMatcherCache &matcherCache) {
 		if (unitsCaptured)
 			return;
+		std::map<std::string, Section *> scopes;
+		std::map<const Section *, std::string> paths;
+		collectSections(context.mainSection, "root", scopes);
+		for (const auto &[path, section] : scopes)
+			paths.emplace(section, path);
 		for (const Owner &owner : owners) {
 			if (!owner.topLevel)
 				continue;
 			if (context.deferredBodyResolution && context.deferredBodyResolution(owner.section)) {
 				value.at("body_units")[owner.path] = priorUnits->at("body_units").at(owner.path);
+				value.at("initial_header_definitions")[owner.path] =
+					priorUnits->at("initial_header_definitions").at(owner.path);
 				matcherCache.retain(value.at("body_units").at(owner.path).get_ref<const std::string &>());
 				continue;
 			}
 			std::vector<std::pair<size_t, PatternReference *>> references;
 			for (size_t index = 0; index < owner.references.size(); index++)
 				references.emplace_back(index, owner.references[index]);
-			if (auto key = matcherCache.recordBodyResolution(references))
+			if (auto key = matcherCache.recordBodyResolution(references)) {
 				value.at("body_units")[owner.path] = std::move(*key);
+				value.at("initial_header_definitions")[owner.path] = headerDefinitions(owner, paths);
+			}
 		}
 		unitsCaptured = true;
 	}
@@ -138,24 +169,9 @@ struct InitialMatcherProjection {
 				continue;
 			}
 			std::vector<std::pair<size_t, PatternReference *>> references;
-			Json headers = Json::array();
-			for (size_t index = 0; index < owner.references.size(); index++) {
-				PatternReference *reference = owner.references[index];
-				references.emplace_back(index, reference);
-				if (!reference->range().line->sectionOpening || !reference->match)
-					continue;
-				Json definitions = Json::array();
-				for (PatternDefinition *definition : reference->match->matchingDefinitions) {
-					size_t occurrence = 0;
-					for (const PatternDefinition *other : definition->section->patternDefinitions) {
-						if (other == definition)
-							break;
-						occurrence += other->toString() == definition->toString();
-					}
-					definitions.push_back(Json::array({paths.at(definition->section), definition->toString(), occurrence}));
-				}
-				headers.push_back(Json::array({index, std::move(definitions)}));
-			}
+			for (size_t index = 0; index < owner.references.size(); index++)
+				references.emplace_back(index, owner.references[index]);
+			Json headers = headerDefinitions(owner, paths);
 			if (owner.topLevel)
 				if (auto key = matcherCache.recordBodyResolution(references, false)) {
 					value.at("final_body_units")[owner.path] = std::move(*key);
