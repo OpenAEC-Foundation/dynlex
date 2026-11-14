@@ -621,7 +621,7 @@ bool compileIncrementally(
 				resolvedFunctionProjection["binding_units"] = bindings.snapshot();
 				resolvedFunctionProjection["initial_parameter_counts"] = initialParameterCounts.snapshot();
 				resolvedFunctionProjection["matcher_projection"] =
-					initialMatcherProjection.finish(context, resolvedFunctionProjection, matcherCache);
+					initialMatcherProjection.finish(context, resolvedFunctionProjection, matcherCache, sections);
 				initialMatcherProjection.published = &resolvedFunctionProjection["matcher_projection"];
 				resolvedFunctionProjection["matcher_projection"]["classifications"] = classification.snapshot();
 				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);

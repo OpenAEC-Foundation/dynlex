@@ -44,7 +44,7 @@ context.restoreDeferredBodyUnits = [&]() {
 	return bodyDemand.restore(bodyUnits, initialMatcherTree);
 };
 context.preparePrecedenceMatcherReplay = [&](const std::vector<PatternReference *> &references) {
-	initialMatcherProjection.captureBodyUnits(context, matcherCache);
+	initialMatcherProjection.captureBodyUnits(context, matcherCache, initialParameterCounts.sections());
 	if (frontendState)
 		preparePrecedenceMatchReplay(
 			context, frontendState->at("all_function_projection"), matcherCache, precedenceKeys, matcherPaths, references,

@@ -4,7 +4,7 @@ struct InitialMatcherProjection {
 	struct Owner {
 		std::string path;
 		const Section *section;
-		bool topLevel;
+		bool topLevel, demandEligible;
 		std::vector<PatternReference *> references;
 		std::vector<std::pair<size_t, PatternReference *>> deferredReferences;
 	};
@@ -36,7 +36,11 @@ struct InitialMatcherProjection {
 			if (!reusableResolutionSection(*section))
 				continue;
 			reusable.insert(section);
-			Owner owner{path, section, section->parent == context.mainSection, {}, {}};
+			bool topLevel = section->parent == context.mainSection;
+			Owner owner{
+				path, section, topLevel,
+				topLevel && section->type == SectionType::Function && !section->isFlex && hasNoGlobalAccess(section), {}, {}
+			};
 			const auto collect = [&](auto &&self, Section *body) -> void {
 				owner.references.insert(owner.references.end(), body->patternReferences.begin(), body->patternReferences.end());
 				for (Section *child : body->children)
@@ -116,13 +120,13 @@ struct InitialMatcherProjection {
 		return headers;
 	}
 
-	void captureBodyUnits(ParseContext &context, IncrementalMatcherCache &matcherCache) {
+	void captureBodyUnits(
+		ParseContext &context, IncrementalMatcherCache &matcherCache, const std::map<std::string, Section *> &sections
+	) {
 		if (unitsCaptured)
 			return;
-		std::map<std::string, Section *> scopes;
 		std::map<const Section *, std::string> paths;
-		collectSections(context.mainSection, "root", scopes);
-		for (const auto &[path, section] : scopes)
+		for (const auto &[path, section] : sections)
 			paths.emplace(section, path);
 		for (const Owner &owner : owners) {
 			if (!owner.topLevel)
@@ -139,13 +143,17 @@ struct InitialMatcherProjection {
 				references.emplace_back(index, owner.references[index]);
 			if (auto key = matcherCache.recordBodyResolution(references)) {
 				value.at("body_units")[owner.path] = std::move(*key);
-				value.at("initial_header_definitions")[owner.path] = headerDefinitions(owner, paths);
+				if (owner.demandEligible)
+					value.at("initial_header_definitions")[owner.path] = headerDefinitions(owner, paths);
 			}
 		}
 		unitsCaptured = true;
 	}
 
-	Json finish(const ParseContext &context, const Json &expanded, IncrementalMatcherCache &matcherCache) {
+	Json finish(
+		const ParseContext &context, const Json &expanded, IncrementalMatcherCache &matcherCache,
+		const std::map<std::string, Section *> &sections
+	) {
 		requireCompilerInvariant(value.is_object(), "successful frontend has no initial matcher projection");
 		requireCompilerInvariant(unitsCaptured, "successful frontend has no initial body-resolution boundary");
 		for (const char *field : {"matches", "match_entries"})
@@ -155,9 +163,7 @@ struct InitialMatcherProjection {
 					matcherCache.retain(key);
 			}
 		std::map<const Section *, std::string> paths;
-		std::map<std::string, Section *> scopes;
-		collectSections(context.mainSection, "root", scopes);
-		for (const auto &[path, section] : scopes)
+		for (const auto &[path, section] : sections)
 			paths.emplace(section, path);
 		for (const Owner &owner : owners) {
 			if (context.deferredBodyResolution && context.deferredBodyResolution(owner.section)) {
@@ -168,15 +174,15 @@ struct InitialMatcherProjection {
 					value.at("match_overrides")[owner.path] = priorUnits->at("match_overrides").at(owner.path);
 				continue;
 			}
-			std::vector<std::pair<size_t, PatternReference *>> references;
-			for (size_t index = 0; index < owner.references.size(); index++)
-				references.emplace_back(index, owner.references[index]);
-			Json headers = headerDefinitions(owner, paths);
-			if (owner.topLevel)
+			if (owner.demandEligible) {
+				std::vector<std::pair<size_t, PatternReference *>> references;
+				for (size_t index = 0; index < owner.references.size(); index++)
+					references.emplace_back(index, owner.references[index]);
 				if (auto key = matcherCache.recordBodyResolution(references, false)) {
 					value.at("final_body_units")[owner.path] = std::move(*key);
-					value.at("header_definitions")[owner.path] = std::move(headers);
+					value.at("header_definitions")[owner.path] = headerDefinitions(owner, paths);
 				}
+			}
 			// Most bodies retain their references through expansion. Store only
 			// overrides for bodies whose earlier matcher boundary differs.
 			const Json &finalEntries = expanded.at("match_entries");
