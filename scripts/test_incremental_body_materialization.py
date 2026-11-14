@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 def check_body_materialization(root, build):
+    check_generated_body_products(root, build)
     main = root / 'body_materialization.dl'
     source = ('to emit {value}:\n'
               '    @intrinsic("variadic call", "libc", "printf", '
@@ -62,6 +63,38 @@ def check_body_materialization(root, build):
     check_mutable_runtime_condition(root, build)
     check_nested_diagnostic_body_eviction(root, build)
     check_managed_runtime_effects(root, build)
+
+
+def check_generated_body_products(root, build):
+    main = root / 'generated_body_products.dl'
+    source = ('class sample:\n    members:\n        value\n'
+              'to idle: @intrinsic("discard", 0)\n'
+              '@intrinsic("discard", 0)\n')
+    main.write_text(source)
+    unused = build(entry=main)
+    assert unused[1:] == build(False, entry=main)[1:]
+    assert unused[0]['generated_body_units_materialized'] == 0, unused[0]
+    assert unused[0]['generated_body_units_deferred'] == 1, unused[0]
+    main.write_text(source.replace('to idle: @intrinsic("discard", 0)',
+                                   'to idle: @intrinsic("discard", 1)'))
+    edited = build(entry=main)
+    assert edited[1:] == build(False, entry=main)[1:]
+    assert edited[0]['generated_body_units_materialized'] == 0, edited[0]
+    assert edited[0]['generated_body_units_deferred'] == 1, edited[0]
+
+    call = ('@intrinsic("store", {item}, @intrinsic("construct", sample, 7))\n'
+            '@intrinsic("variadic call", "libc", "printf", '
+            '@intrinsic("type", "nothing"), 1, "%d\\n", item\'s value)\n')
+    main.write_text(source + call)
+    used = build(entry=main)
+    assert used[2] == b'7\n'
+    assert used[1:] == build(False, entry=main)[1:]
+    assert used[0]['generated_body_units_materialized'] == 1, used[0]
+    assert used[0]['generated_body_units_deferred'] == 0, used[0]
+    main.write_text((source + call).replace('sample, 7', 'sample, 8'))
+    changed = build(entry=main)
+    assert changed[2] == b'8\n'
+    assert changed[1:] == build(False, entry=main)[1:]
 
 
 def check_nested_body_reactivation(root, build):

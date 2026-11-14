@@ -34,6 +34,15 @@ BodyReferenceOwnership bodyReferenceOwnership(const Section *root) {
 
 template <typename Statistics> void emitIncrementalStatistics(const ParseContext &context, const Statistics &statistics) {
 	BodyReferenceOwnership bodyReferences = bodyReferenceOwnership(context.mainSection);
+	std::unordered_set<const Section *> generatedBodies, generatedMaterialized;
+	for (const auto &product : context.sourceSyntaxProducts) {
+		const Section &owner = product->bodyOwner();
+		if (!owner.declarationProducer)
+			continue;
+		generatedBodies.insert(&owner);
+		if (product->syntaxMaterialized())
+			generatedMaterialized.insert(&owner);
+	}
 	std::cerr << "incremental: "
 			  << Json{{"cache_directory", statistics.cacheDirectory},
 					  {"binding_units_evaluated", statistics.bindings.evaluated},
@@ -66,6 +75,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"body_syntax_units_parsed", statistics.bodySyntaxUnitsParsed},
 					  {"body_syntax_units_restored", statistics.bodySyntaxUnitsRestored},
 					  {"body_syntax_units_skipped", statistics.bodySyntaxUnitsSkipped},
+					  {"generated_body_units_materialized", generatedMaterialized.size()},
+					  {"generated_body_units_deferred", generatedBodies.size() - generatedMaterialized.size()},
 					  {"source_function_body_clones", context.sourceFunctionBodyClones},
 					  {"source_body_expressions_cloned", context.sourceBodyExpressionsCloned},
 					  {"source_body_clone_ms", context.sourceBodyCloneMilliseconds},

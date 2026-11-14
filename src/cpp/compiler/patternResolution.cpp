@@ -107,6 +107,8 @@ static PatternDefinition *createClassPropertyPatternDefinition(
 	return definition;
 }
 
+#include "generatedPropertyBody.inl"
+
 static void generateClassPropertyPatterns(ParseContext &context) {
 	std::vector<ClassSection *> classSections;
 	std::function<void(Section *)> collectClasses = [&](Section *section) {
@@ -143,31 +145,11 @@ static void generateClassPropertyPatterns(ParseContext &context) {
 			);
 			replacementSection->codeLines.push_back(bodyLine);
 
-			auto *intrinsic = new Expression();
-			intrinsic->kind = Expression::Kind::IntrinsicCall;
-			intrinsic->intrinsicName = "property";
-			intrinsic->range = Range(bodyLine, bodyLine->fullText);
-
-			auto *intrinsicName = new Expression();
-			intrinsicName->kind = Expression::Kind::Literal;
-			intrinsicName->literalValue = std::string("property");
-			intrinsicName->range = intrinsic->range;
-			intrinsic->arguments.push_back(intrinsicName);
-
-			auto *instance = new Expression();
-			instance->kind = Expression::Kind::Variable;
-			instance->range = intrinsic->range;
-			instance->variable = context.createVariableReference(instance->range, "instance");
-			intrinsic->arguments.push_back(instance);
-			replacementSection->addVariableReference(context, instance->variable);
-
-			auto *propertyName = new Expression();
-			propertyName->kind = Expression::Kind::Literal;
-			propertyName->literalValue = field.name;
-			propertyName->range = intrinsic->range;
-			intrinsic->arguments.push_back(propertyName);
-
-			bodyLine->expression = intrinsic;
+			auto *receiver = context.createVariableReference(Range(bodyLine, bodyLine->fullText), "instance");
+			replacementSection->addVariableReference(context, receiver);
+			auto product = std::make_unique<GeneratedPropertyBody>(context, *accessorSection, *bodyLine, *receiver, field.name);
+			bodyLine->expression.defer(*product);
+			context.sourceSyntaxProducts.push_back(std::move(product));
 			bodyLine->resolved = true;
 		}
 	}
@@ -503,7 +485,8 @@ definitionsHaveAmbiguousTypeDomainOverlap(const PatternDefinition &leftDefinitio
 						break;
 					}
 				}
-				pending.push_back({leftTransition.target, rightTransition.target, leftCanBeMoreSpecific, rightCanBeMoreSpecific}
+				pending.push_back(
+					{leftTransition.target, rightTransition.target, leftCanBeMoreSpecific, rightCanBeMoreSpecific}
 				);
 			}
 		}

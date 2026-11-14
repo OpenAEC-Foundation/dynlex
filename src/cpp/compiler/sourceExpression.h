@@ -2,6 +2,7 @@
 
 struct Expression;
 struct PatternReference;
+struct Section;
 
 // A body product owns its input proof and publishes its source expressions
 // together. A consumer cannot observe a partially materialized body.
@@ -10,6 +11,7 @@ struct BodySyntaxProduct {
 	virtual void demand() = 0;
 	virtual bool syntaxMaterialized() const = 0;
 	virtual PatternReference *rootReference() const = 0;
+	virtual const Section &bodyOwner() const = 0;
 };
 
 class SourceExpression {

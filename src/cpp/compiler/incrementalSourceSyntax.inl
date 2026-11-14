@@ -168,6 +168,7 @@ class CachedSourceSyntax : public BodySyntaxProduct, public DeferredExpressionSo
 	}
 	bool syntaxMaterialized() const override { return materialized; }
 	PatternReference *rootReference() const override { return replay.references.at(0); }
+	const Section &bodyOwner() const override { return *owner; }
 	Expression *expression(size_t node) override {
 		if (!replay.expressions.at(node))
 			demand();
