@@ -1,0 +1,62 @@
+# Marker meshes use the shared material, placement and scene submission APIs.
+import scene_route.dl
+
+class:
+    patterns:
+        website Farm markers
+    members:
+        landscape as a pointer to website Farm landscape
+        selection as a pointer to UI scene object
+        destination as a pointer to UI scene object
+        route as a pointer to website Farm route scenery
+        navigation as website Farm navigation display
+
+to get [a website Farm marker using] {UI scene mesh:mesh} [colored] {UI paint:color} [named] {C string:name} [in] {a pointer to website Farm landscape:landscape}:
+    set material to a UI scene material with color color roughness 1.0 metalness 0.0
+    set material's unlit and material's double sided to true
+    set model to a website Farm scene model using mesh colored material casting shadow false
+    set object to a website Farm object named name using model in landscape
+    set object's pickable and object's visible to false
+    return object
+
+to get [website Farm markers in] {a pointer to website Farm landscape:landscape}:
+    set result to storage for one slot initialized with (a new website Farm markers)
+    set result's landscape to landscape
+    set result's route to website Farm route scenery in landscape
+    set result's selection to a website Farm marker using (a UI ring mesh with inner 0.34 outer 0.42 around 32 sides) colored (UI ink 255 228 160) named "selected-person" in landscape
+    set result's destination to a website Farm marker using (a UI ring mesh with inner 0.32 outer 0.40 around 32 sides) colored (UI ink 255 240 161) named "route-destination" in landscape
+    return result
+
+to get [place website Farm marker] {a pointer to UI scene object:object} [at] {UI scene vector:position} [visible] {boolean:visible}:
+    set changed to object's visible != visible
+    set object's visible to visible
+    if visible:
+        set pose to an identity UI scene pose
+        set pose's position to position
+        set pose's rotation's x to -1.5707963267948966
+        if (pose is the same UI scene pose as object's instance's root pose) = false:
+            set UI scene root pose in (object's instance) to pose
+            set changed to true
+    return changed
+
+to get [refresh website Farm markers] {a pointer to website Farm markers:markers} [using] {a pointer to website Farm characters:characters} [dragging] {string:dragged}:
+    set data to markers's navigation
+    set position to a UI scene vector from [0.0,0.0,0.0]
+    set selected to data's person is not empty
+    if selected:
+        set character to the website Farm character named (data's person) in characters
+        require condition (character != (0 as a pointer to website Farm character)) reporting "The selected Farm person has no scene character"
+        set position to character's motion's position
+        if character's id = dragged:
+            set position to character's object's instance's root pose's position
+    set changed to place website Farm marker (markers's selection) at (position + (a UI scene vector from [0.0,0.018,0.0])) visible selected
+    set destination to place website Farm marker (markers's destination) at (data's destination) visible (data's destination present)
+    set route to refresh website Farm route (markers's route) through data from (position + (a UI scene vector from [0.0,0.07,0.0]))
+    return changed or (destination or route)
+
+to [close website Farm markers] {a pointer to website Farm markers:markers}:
+    close website Farm route (markers's route)
+    remove website Farm scene object (markers's selection) from (markers's landscape)
+    remove website Farm scene object (markers's destination) from (markers's landscape)
+    destroy the value at markers
+    deallocate markers

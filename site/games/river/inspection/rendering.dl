@@ -1,0 +1,81 @@
+import types.dl
+import ../character_rendering.dl
+import ../../../packages/dynlex-ui/ui/clipping.dl
+
+to get website river artwork status {integer:previous} including sprite {integer:index} in {a pointer to UI view:view}:
+    set image to UI image from (the string form of (the item at index in (the website river artwork))) in view
+    if (previous = 2) or (image's status = 2):
+        return 2
+    if (previous = 0) or (image's status = 0):
+        return 0
+    return 1
+
+to get the website river portrait box for {integer:subject} inside {UI bounds:stage}:
+    set width to the minimum of (stage's width - 36.0) and (stage's height - 32.0)
+    set height to width
+    if subject = 0:
+        set width to the minimum of (stage's width - 36.0) and ((stage's height - 32.0) * (1672.0 / 941.0))
+        set height to width * (941.0 / 1672.0)
+    return UI box at (stage's x + (stage's width - width) / 2.0) (stage's y + (stage's height - height) / 2.0) sized width height
+
+to paint website river portrait {a pointer to UI canvas frame:painting}:
+    set instance to painting's instance
+    set session to instance's event context as a pointer to website river inspection session
+    set specification to instance's event target's configuration as a pointer to website river portrait specification
+    set subject to specification's subject
+    set kind to specification's mode's kind
+    set frame to painting's frame
+    set view to frame's view
+    set stage to painting's bounds
+    set ready to website river artwork status 1 including sprite (subject + 1) in view
+    if subject < 3:
+        set ready to website river artwork status ready including sprite (subject + 5) in view
+    if kind = 8:
+        set ready to website river artwork status ready including sprite 8 in view
+    set {previous selectable} to view's selectable
+    set view's selectable to false
+    if ready != 1:
+        draw UI text ("Loading artwork…" if (ready = 0), else "An error occurred. Check the log.") centered in stage with (view's small) in (UI ink 74 91 80) on frame
+        set view's selectable to previous selectable
+        return nothing
+    set saved to a UI clip restricted to stage in view on frame
+    set actor to the website river portrait box for subject inside stage
+    set clock to the address of (session's clock)
+    set moving to ((kind = 0) and (subject != 3)) or ((kind = 4) or (kind = 8))
+    set timing to the website river blink timing for subject
+    set seconds to (clock's phase * timing's duration) + (the website river inspection time of clock at (painting's seconds))
+    set expression to the website river expression for subject at (seconds if moving, else 0.0)
+    if kind = 1:
+        set expression's left blink and expression's right blink to 255
+    if kind = 6:
+        set expression's left blink to 255
+        set expression's right blink to 0
+    if kind = 7:
+        set expression's left blink to 0
+        set expression's right blink to 255
+    if kind = 3:
+        set expression's mouth to 1.0
+    if kind = 8:
+        set expression's licking to true
+        set expression's tongue phase to the website river inspection phase of clock cycling 0.85 at (painting's seconds)
+    set outlining to the "Show overlay bounds" switch is on in instance
+    if kind = 4:
+        set seconds to (the website river inspection phase of clock cycling 0.3 at (painting's seconds)) * 0.3
+        begin website river scuffle in actor at seconds on frame
+    if kind = 5:
+        draw UI text "Disappeared" centered in stage with (view's small) in (UI ink 103 113 107) on frame
+    else:
+        paint website river sprite (subject + 1) in actor flipped (kind = 2) opacity 255 on frame
+        if kind = 8:
+            set guide to UI image from (the string form of "assets/games/river/wolf-mouth-guide.svg") in view
+            if guide's status = 1:
+                draw UI image guide in actor rounded by 0.0 fitting 0 on frame
+            if guide's status = 2:
+                draw UI text "An error occurred. Check the log." centered in stage with (view's small) in (UI ink 74 91 80) on frame
+        paint website river expressions for subject in actor using expression flipped (kind = 2) outlining outlining on frame
+    if kind = 4:
+        restore the model transform in frame
+    if moving and (clock's playing):
+        set view's animating to true
+    restore UI clip saved in view on frame
+    set view's selectable to previous selectable

@@ -1,6 +1,8 @@
 import downloads/controller.dl
 import editor/entry.dl
 import games/farm/controller.dl
+import editor/theme.dl
+import games/river/inspection/controller.dl
 
 # Resolve anchors from retained layout coordinates, including their parent regions.
 to get the top of {a pointer to UI layout:target} inside {a pointer to UI layout:layout} below {floating-point number:origin}:
@@ -18,6 +20,8 @@ to apply location {a pointer to JSON value:location} to {a pointer to website st
     set path to the JSON text named "path" in location
     if path has "/" at offset (path's length - 1):
         set path to path + "index.html"
+    if (state's route = "/river-character-sheet.html") and (path != state's route):
+        leave website river inspection the address of (state's river inspection)
     if path != "/index.html":
         leave website Farm in state
     set pages to the site's pages
@@ -35,6 +39,7 @@ to apply location {a pointer to JSON value:location} to {a pointer to website st
     show page (selected's path) in (state's view's instance)
     request "document" containing (a JSON object containing [JSON text "action" is "metadata", JSON text "title" is (selected's title), JSON text "description" is (selected's description), JSON text "path" is (selected's path)]) for purpose 0 indexed 0 in state
     set view to state's view
+    apply website appearance for path in state
     reflow the UI document in view
     set fragment to the JSON text named "hash" in location
     if fragment's length > 0:
@@ -48,6 +53,8 @@ to apply location {a pointer to JSON value:location} to {a pointer to website st
         set view's layout's scroll target to 0.0
     set state's route to path
     set state's fragment to fragment
+    if path = "/river-character-sheet.html":
+        open website river inspection the address of (state's river inspection)
     if path = "/ide/index.html":
         apply website editor entry (the JSON member named "search" in location) in state
     if path = "/download.html":

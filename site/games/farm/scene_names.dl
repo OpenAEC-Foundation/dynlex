@@ -1,0 +1,74 @@
+# Names are regular retained controls, attached to the scene's visible surface.
+import session.dl
+import name_appearance.dl
+import ../../packages/dynlex-ui/ui/scene_labels.dl
+
+to get [the website Farm name for] {string:id} [in] {a pointer to UI floating controls:names}:
+    set name to names's first
+    loop while name != (0 as a pointer to UI floating control):
+        if name's key = id:
+            return name
+        set name to name's next
+    return 0 as a pointer to UI floating control
+
+to [select website Farm name] {a pointer to UI instance:instance}:
+    set name to instance's event context as a pointer to UI floating control
+    choose website Farm person (name's key) in (the website state in instance)
+
+function [show website Farm name of] {a pointer to website farm actor:actor} [selected] {string:selected} [in] {a pointer to UI floating controls:names}:
+    globals:
+        farm name appearance
+        selected farm name appearance
+    execute:
+        set name to the website Farm name for (actor's id) in names
+        set instance to names's view's instance
+        if name = (0 as a pointer to UI floating control):
+            set name to a UI floating control from farm name prototype named (actor's id) in names
+            bind (the address of (name's node)) in instance to (the function named "select website Farm name $") for event 0 with context (name as a pointer)
+        set UI text of (the address of (name's node)) in instance to (actor's name)
+        style UI floating control name using (selected farm name appearance if actor's id = selected, else farm name appearance)
+
+to [refresh website Farm names in] {a pointer to website state:state}:
+    set names to state's farm's names
+    set document to state's farm's document
+    set entry to names's first
+    loop while entry != (0 as a pointer to UI floating control):
+        set next to entry's next
+        if (the website farm actor identified by (entry's key) in (document's world)) = (0 as a pointer to website farm actor):
+            remove UI floating control entry
+        set entry to next
+    show website Farm name of (document's world's player) selected (document's selected) in names
+    for each actor in (document's world's workers):
+        show website Farm name of actor selected (document's selected) in names
+
+to [project website Farm names in] {a pointer to website state:state}:
+    set session to the address of (state's farm)
+    set renderer to session's renderer
+    set name to session's names's first
+    loop while name != (0 as a pointer to UI floating control):
+        set character to the website Farm character named (name's key) in (renderer's characters)
+        require condition (character != (0 as a pointer to website Farm character)) reporting "A Farm name has no scene person"
+        set position to character's motion's position
+        if character's id = renderer's dragged:
+            set position to character's object's instance's root pose's position
+        set position to position + (a UI scene vector from [0.0,1.25,0.0])
+        project UI floating control name above position through (renderer's camera's orbit's camera) in (session's viewport)
+        set name to name's next
+
+to [hide website Farm names in] {a pointer to UI floating controls:names}:
+    set name to names's first
+    loop while name != (0 as a pointer to UI floating control):
+        hide UI floating control name
+        set name to name's next
+
+to get [the website Farm name at] {UI point:point} [in] {a pointer to website state:state}:
+    set names to state's farm's names
+    if names = (0 as a pointer to UI floating controls):
+        return 0 as a pointer to UI floating control
+    set hit to the UI hit at point in (state's view)
+    set name to names's first
+    loop while name != (0 as a pointer to UI floating control):
+        if name's layout = hit:
+            return name
+        set name to name's next
+    return 0 as a pointer to UI floating control

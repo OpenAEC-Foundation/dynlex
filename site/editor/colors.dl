@@ -1,0 +1,28 @@
+import ../patterns.dl
+
+palette website dark colors:
+    color "Studio background" is UI ink 24 24 29
+    color "Studio surface" is UI ink 34 34 41
+    color "Studio border" is UI ink 62 62 72
+    color "Studio text" is UI ink 244 244 245
+    color "Studio muted" is UI ink 161 161 170
+    color "Studio accent" is UI ink 245 158 11
+    color "Editor background" is UI ink 42 42 50
+    color "Editor text" is UI ink 250 250 249
+
+palette website light colors:
+    color "Studio background" is UI ink 250 250 249
+    color "Studio surface" is UI ink 255 255 255
+    color "Studio border" is UI ink 220 218 213
+    color "Studio text" is UI ink 54 54 62
+    color "Studio muted" is UI ink 98 98 109
+    color "Studio accent" is UI ink 146 64 14
+    color "Editor background" is UI ink 250 250 249
+    color "Editor text" is UI ink 54 54 62
+
+function [the website colors for] {boolean:bright}:
+    globals:
+        website dark colors
+        website light colors
+    execute:
+        return website light colors if bright, else website dark colors

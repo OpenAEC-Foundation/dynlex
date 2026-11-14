@@ -1,0 +1,56 @@
+# Preserve the original Farm motion assertions against the shared DynLex engine.
+import ../../site/packages/dynlex-ui/ui/scene_motion.dl
+
+set origin to a new vector with x 0.0, y 0.0 and z 0.0
+set step to 1.0 / 120.0
+for each duration in [0.5,0.25]:
+    set motion to a UI scene motion at origin facing 1.5707963267948966 with stride 0.85
+    set {frames per tile} to (120.0 * duration) as an integer
+    loop frame from 0 to (frames per tile * 5):
+        if (frame % frames per tile) = 0:
+            set tile to (frame / frames per tile) + 1
+            set target to a new vector with x (tile as a floating-point number), y 0.0 and z 0.0
+            aim UI scene motion motion at target facing 1.5707963267948966 over duration seconds
+        set previous to motion's position's x
+        ignore (advance UI scene motion motion by step seconds)
+        if frame >= frames per tile:
+            set speed to (motion's position's x - previous) / step
+            require condition ((speed > (0.95 / duration)) and (speed < (1.05 / duration))) reporting "Crossing a tile restarted the motion easing"
+    set {previous yaw} to motion's yaw
+    set target to a new vector with x 5.0, y 0.0 and z 1.0
+    aim UI scene motion motion at target facing 0.0 over duration seconds
+    ignore (advance UI scene motion motion by step seconds)
+    require condition ((the absolute value of (motion's yaw - previous yaw)) < 0.2) reporting "The person snapped ninety degrees when turning"
+    loop frame from 0 to 240:
+        ignore (advance UI scene motion motion by step seconds)
+    require condition ((the length of (motion's position - target)) < 0.000001) reporting "The person did not finish walking to its destination"
+    require condition (motion's weight < 0.001) reporting "The walk cycle did not blend back to rest"
+    require condition ((the absolute value of (motion's yaw)) < 0.001) reporting "The person did not finish facing its destination"
+    set target to a new vector with x 8.0, y 0.4 and z 8.0
+    place UI scene motion motion at target facing -1.5707963267948966
+    ignore (advance UI scene motion motion by 0.1 seconds)
+    require condition ((the length of (motion's position - target)) = 0.0) reporting "Dropping a worker retained its old walking path"
+    close UI scene motion motion
+
+set backward to a UI scene motion at origin facing 3.141592653589793 with stride 0.85
+aim UI scene motion backward at (a new vector with x 0.0, y 0.0 and z 1.0) facing 3.141592653589793 over 0.5 seconds
+loop frame from 0 to 120:
+    ignore (advance UI scene motion backward by step seconds)
+    require condition ((the absolute value of (backward's yaw - 3.141592653589793)) < 0.000001) reporting "Stepping backward changed the person's facing"
+close UI scene motion backward
+
+set regular to a UI scene motion at origin facing 1.5707963267948966 with stride 0.85
+set slow to a UI scene motion at origin facing 1.5707963267948966 with stride 0.85
+loop tile from 1 to 5:
+    set target to a new vector with x (tile as a floating-point number), y 0.0 and z 0.0
+    aim UI scene motion regular at target facing 1.5707963267948966 over 0.5 seconds
+    aim UI scene motion slow at target facing 1.5707963267948966 over 0.5 seconds
+    loop frame from 0 to 60:
+        ignore (advance UI scene motion regular by step seconds)
+    ignore (advance UI scene motion slow by 0.5 seconds)
+    require condition ((the length of (slow's position - regular's position)) < 0.000001) reporting "Slow rendering changed the walking speed"
+ignore (advance UI scene motion slow by 1.0 seconds)
+require condition ((the length of (slow's position - (a new vector with x 4.0, y 0.0 and z 0.0))) < 0.000001) reporting "Releasing a held key left a backlog of animation"
+close UI scene motion regular
+close UI scene motion slow
+print line "Walking keeps its speed across tiles at both paces, turns smoothly, settles, and resets on placement."

@@ -1,0 +1,120 @@
+import ../../site/actions.dl
+import site_fixture.dl
+import ../../site/packages/dynlex-ui/testing/driver.dl
+
+the site's pages means: [home page, IDE page]
+
+to [paint Farm label test] {a pointer to UI canvas frame:painting}:
+    set state to the website state in (painting's instance)
+    set state's farm's viewport to painting's bounds
+    resize website Farm camera (the address of (state's farm's renderer's camera)) to (painting's bounds)
+    project website Farm names in state
+
+to [paint empty label test] {a pointer to UI canvas frame:painting}:
+    ignore painting
+
+to [press Farm label test at] {UI point:point} [in] {a pointer to UI view:view}:
+    queue UI input of kind 1 key 0 at (point's x) (point's y) with modifiers 0 containing "" in view
+    queue UI input of kind 2 key 1 at (point's x) (point's y) with modifiers 0 containing "" in view
+
+to [release Farm label test at] {UI point:point} [in] {a pointer to UI view:view}:
+    queue UI input of kind 1 key 0 at (point's x) (point's y) with modifiers 0 containing "" in view
+    queue UI input of kind 2 key 0 at (point's x) (point's y) with modifiers 0 containing "" in view
+    ignore update UI view view
+
+to get [the Farm label test center of] {a pointer to UI floating control:name}:
+    set box to name's layout's hit bounds
+    require condition ((box's width > 0.0) and (box's height > 0.0)) reporting "The test label is not visible"
+    return a UI point at (box's x + box's width * 0.5) and (box's y + box's height * 0.5)
+
+to get [a Farm label test destination for] {a pointer to website farm actor:actor} [in] {a pointer to website state:state}:
+    set world to state's farm's document's world
+    loop y from (actor's y - 2) to (actor's y + 3):
+        loop x from (actor's x - 2) to (actor's x + 3):
+            if (x != actor's x) or (y != actor's y):
+                if website farm land at x y is walkable in world except actor actor:
+                    set point to the website Farm scene point at x y in world
+                    set projection to the UI scene projection for point through (state's farm's renderer's camera's orbit's camera) in (state's farm's viewport)
+                    if projection's visible:
+                        return website farm point x y
+    require condition false reporting "The Farm label test has no visible free drop square"
+    return a new website farm point
+
+set instance to an instance of website fixture
+show page "/index.html" in (the address of instance)
+set driver to the value at the test UI driver
+set driver's shader operations to the browser UI shader operations
+set view to a UI view of (the address of instance) sized 1600 by 1100 using font "regular" with (the address of driver)
+set state to a new website state
+set state's services to the browser UI service provider
+set state's view to the address of view
+set state's route to "/index.html"
+set instance's state to (the address of state) as a pointer
+set state's farm's names to UI floating controls attached to (the control labeled "Farm scene" in (the address of instance)) in (the address of view)
+open website source editors in (the address of state)
+initialize the website Farm in (the address of state)
+open website Farm document in (the address of state)
+set session to the address of (state's farm)
+set session's renderer to a website Farm renderer for (session's document's world) in (UI box at 0 0 sized 600 450) using shader (42 as a pointer) in (the address of view)
+set the value of "Challenge views" in (the address of instance) to 2
+bind (the control labeled "Live shader" in (the address of instance)) in (the address of instance) to (the function named "paint empty label test $") for event 1
+bind (the control labeled "River scene" in (the address of instance)) in (the address of instance) to (the function named "paint empty label test $") for event 1
+bind (the control labeled "Farm scene" in (the address of instance)) in (the address of instance) to (the function named "paint Farm label test $") for event 1
+watch UI input in (the address of view) using (the function named "read website Farm input $")
+ignore update UI view (the address of view)
+set canvas to the UI layout labeled "Farm scene" in (view's layout)
+set top to the top of canvas inside (view's layout) below 0.0
+set view's layout's scroll target and view's layout's scroll position to top
+request a UI redraw in (the address of view)
+ignore update UI view (the address of view)
+set names to session's names
+set document to session's document
+set world to document's world
+set count to 0
+set name to names's first
+loop while name != (0 as a pointer to UI floating control):
+    increment count
+    set name to name's next
+require condition (count = (the length of world's workers) + 1) reporting "Farm labels did not include every person"
+set player to the website Farm name for (world's player's id) in names
+set point to the Farm label test center of player
+press Farm label test at point in (the address of view)
+release Farm label test at point in (the address of view)
+require condition ((document's selected = "player") and (world's player's target's present = false)) reporting "A name click also clicked the terrain below it"
+set actor to the item at 0 in (world's workers)
+set worker to the website Farm name for (actor's id) in names
+set identity to the address of (worker's node)
+set actor's name to "Ada 🌻"
+refresh website Farm controls in (the address of state)
+ignore update UI view (the address of view)
+require condition (((the UI value for identity in (the address of instance))'s text = "Ada 🌻") and (identity = (the address of (worker's node)))) reporting "Renaming a person replaced the retained label or lost Unicode"
+set destination to a Farm label test destination for actor in (the address of state)
+set position to the website Farm scene point at (destination's x) (destination's y) in world
+set projection to the UI scene projection for position through (session's renderer's camera's orbit's camera) in (session's viewport)
+press Farm label test at (the Farm label test center of worker) in (the address of view)
+release Farm label test at (projection's screen) in (the address of view)
+require condition ((actor's x = destination's x) and (actor's y = destination's y)) reporting "Dragging a name did not use the existing worker placement gesture"
+require condition ((actor's held = false) and ((session's pointer name = false) and (session's pointer mode = 0))) reporting "A completed name drag retained pointer capture"
+require condition ((document's selected = actor's id) and (world's player's target's present = false)) reporting "A worker name drag also activated a terrain or button click"
+set id to formatted "worker-{the next website farm entity in world}"
+set spawn to a Farm label test destination for (world's player) in (the address of state)
+append (a website farm worker named "New person" identified by id at (spawn's x) (spawn's y)) to world's workers
+update website Farm world view in (the address of state) instantly true
+require condition ((the website Farm name for id in names) != (0 as a pointer to UI floating control)) reporting "A new worker did not receive a retained label"
+reload website Farm progress in (the address of state)
+require condition ((the website Farm name for id in names) = (0 as a pointer to UI floating control)) reporting "Replacing the saved world retained a removed person's label"
+leave website Farm in (the address of state)
+set name to names's first
+loop while name != (0 as a pointer to UI floating control):
+    require condition (name's visible = false) reporting "Leaving Farm retained an interactive scene label"
+    set name to name's next
+close website Farm in (the address of state)
+free UI source workspace (state's language)
+close the address of view
+close the address of instance
+set pending to state's requests
+loop while pending != (0 as a pointer to website request):
+    set next to pending's next
+    deallocate pending
+    set pending to next
+print line "Farm names retain identity through selection, Unicode renaming, dragging, new people, profile replacement and scene lifetime."

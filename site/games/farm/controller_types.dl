@@ -2,6 +2,7 @@ import document.dl
 import rendering.dl
 import scene_queries.dl
 import scene_focus.dl
+import ../../packages/dynlex-ui/ui/scene_labels.dl
 
 # A session is lazy: opening the challenge loads its saved document and graphics.
 class:
@@ -10,6 +11,7 @@ class:
     members:
         document as a pointer to website farm document
         renderer as a pointer to website Farm renderer
+        names as a pointer to UI floating controls
         graphics resource as a pointer
         graphics phase as an integer
         graphics request as an integer
@@ -38,5 +40,6 @@ class:
         pointer entity as a string
         pointer selection as website Farm entity selection
         pointer moved as a boolean
+        pointer name as a boolean
         pointer square as website Farm square selection
         pointer origin as website Farm square selection

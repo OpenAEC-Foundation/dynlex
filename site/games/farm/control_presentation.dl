@@ -1,10 +1,15 @@
 import control_choices.dl
 import annotations.dl
+import scene_names.dl
 
 to [refresh website Farm controls in] {a pointer to website state:state}:
     set session to the address of (state's farm)
     set document to session's document
     set world to document's world
+    if session's renderer != (0 as a pointer to website Farm renderer):
+        supply website Farm navigation (the website Farm navigation shown for document) in (session's renderer)
+    if session's names != (0 as a pointer to UI floating controls):
+        refresh website Farm names in state
     set actor to the website farm actor identified by (document's selected) in world
     set role to the website Farm viewed role in state
     set instance to state's view's instance

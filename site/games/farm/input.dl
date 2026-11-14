@@ -14,6 +14,12 @@ to [read website Farm input] {a pointer to UI view:view}:
     set cursor to the UI cursor in view
     set inside to (cursor's x >= session's viewport's x) and (cursor's x < session's viewport's x + session's viewport's width)
     set inside to inside and ((cursor's y >= session's viewport's y) and (cursor's y < session's viewport's y + session's viewport's height))
+    set name to the website Farm name at cursor in state
+    if inside:
+        set hit to the UI hit at cursor in view
+        if hit != (0 as a pointer to UI layout):
+            if (hit's node != (the control labeled "Farm scene" in (view's instance))) and (name = (0 as a pointer to UI floating control)):
+                set inside to false
     if (view's input kind = 2) and (view's input code = 1):
         set session's focused to inside
         set session's held key to 0
@@ -31,6 +37,7 @@ to [read website Farm input] {a pointer to UI view:view}:
                 release website Farm gesture in state cancelled true
                 set session's pointer start and session's pointer previous to cursor
                 set session's pointer moved to false
+                set session's pointer name to false
                 set session's pointer entity to ""
                 if button = 0:
                     set session's pointer mode to 4 if session's drawing != 0, else 1
@@ -38,6 +45,13 @@ to [read website Farm input] {a pointer to UI view:view}:
                     set session's pointer square to the website Farm square from ray in (session's renderer's landscape)
                     set session's pointer origin to session's pointer square
                     set session's pointer selection to the website Farm entity from ray in (session's renderer's landscape) with (session's renderer's characters) and (session's renderer's flags)
+                    if (name != (0 as a pointer to UI floating control)) and (session's drawing = 0):
+                        set character to the website Farm character named (name's key) in (session's renderer's characters)
+                        require condition (character != (0 as a pointer to website Farm character)) reporting "The pressed Farm name has no scene person"
+                        set session's pointer name to true
+                        set session's pointer selection's entity to name's key
+                        set session's pointer selection's object to character's object
+                        set session's pointer selection's hit's hit to true
                     set id to session's pointer selection's entity
                     if ((id starts with "worker-") or (id starts with "chicken-")) or (id starts with "flag-"):
                         set session's pointer entity to id

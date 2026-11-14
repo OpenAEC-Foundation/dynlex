@@ -1,0 +1,80 @@
+# A route reuses one immutable mesh and retains segment objects between plans.
+import navigation_display.dl
+import scene_character_types.dl
+import ../../packages/dynlex-ui/ui/scene_rotations.dl
+
+class:
+    patterns:
+        website Farm route segment
+    members:
+        object as a pointer to UI scene object
+        first as UI scene vector
+        second as UI scene vector
+
+class:
+    patterns:
+        website Farm route scenery
+    members:
+        landscape as a pointer to website Farm landscape
+        model as UI scene model
+        segments as the type of (an empty list of a pointer to website Farm route segment)
+
+to get [website Farm route scenery in] {a pointer to website Farm landscape:landscape}:
+    set result to storage for one slot initialized with (a new website Farm route scenery)
+    set result's landscape to landscape
+    set material to a UI scene material with color (UI ink 255 240 161) roughness 1.0 metalness 0.0
+    set material's unlit and material's double sided to true
+    set mesh to a UI cylinder mesh with top 1.0 bottom 1.0 height 1.0 around 6 sides capped true
+    set result's model to a website Farm scene model using mesh colored material casting shadow false
+    set result's segments to an empty list of a pointer to website Farm route segment
+    return result
+
+to get [place website Farm route segment] {a pointer to website Farm route segment:segment} [from] {UI scene vector:first} [to] {UI scene vector:second}:
+    set object to segment's object
+    set same to (first is the same website Farm navigation point as segment's first) and (second is the same website Farm navigation point as segment's second)
+    set segment's first to first
+    set segment's second to second
+    set difference to second - first
+    set length to the length of difference
+    if length < 0.000001:
+        set changed to object's visible
+        set object's visible to false
+        return changed
+    if same and (object's visible):
+        return false
+    set center to (first + second) * 0.5
+    set rotation to the UI scene rotation from direction (a new vector with x 0.0, y 1.0 and z 0.0) to direction difference
+    set matrix to a UI scene matrix at center oriented rotation scaled (a new vector with x 0.014, y length and z 0.014)
+    set UI scene anchor in (object's instance) to (a UI scene transform from matrix)
+    set object's visible to true
+    return true
+
+to get [refresh website Farm route] {a pointer to website Farm route scenery:route} [through] {website Farm navigation display:data} [from] {UI scene vector:start}:
+    set count to the length of data's path
+    loop while (the length of route's segments) < count:
+        set segment to storage for one slot initialized with (a new website Farm route segment)
+        set segment's object to a website Farm object named "selected-route" using (route's model) in (route's landscape)
+        set segment's object's visible and segment's object's pickable to false
+        append segment to (route's segments)
+    set changed to false
+    set first to start
+    loop index from 0 to (the length of route's segments):
+        set segment to the item at index in (route's segments)
+        if index < count:
+            set second to the item at index in (data's path)
+            set placed to place website Farm route segment segment from first to second
+            set changed to changed or placed
+            set first to second
+        else if segment's object's visible:
+            set segment's object's visible to false
+            set changed to true
+    return changed
+
+to [close website Farm route] {a pointer to website Farm route scenery:route}:
+    for each segment in route's segments:
+        remove website Farm scene object (segment's object) from (route's landscape)
+        destroy the value at segment
+        deallocate segment
+    free route's segments
+    destroy the value at route
+    deallocate route

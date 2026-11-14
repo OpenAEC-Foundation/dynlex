@@ -1,0 +1,81 @@
+import ../../site/games/farm/scene_markers.dl
+import ../../site/games/farm/scene_characters.dl
+import ../../site/games/farm/scene_landscape.dl
+
+set document to the initial website farm document
+set world to document's world
+set landscape to a website Farm landscape for world
+set characters to website Farm characters for world in landscape
+set count to the length of (landscape's objects)
+set markers to website Farm markers in landscape
+require condition ((the length of (landscape's objects)) = count + 2) reporting "Farm markers were not retained scene objects"
+set data to the website Farm navigation shown for document
+require condition ((data's person = "worker-1") and (data's destination present = false)) reporting "An unapplied worker role acquired a destination"
+set markers's navigation to data
+ignore (refresh website Farm markers markers using characters dragging (the string form of ""))
+require condition ((markers's selection's visible) and (markers's destination's visible = false)) reporting "The selected worker ring did not appear"
+require condition ((markers's selection's pickable = false) and (markers's destination's pickable = false)) reporting "Marker geometry would intercept scene picking"
+set part to the item at 0 in (markers's selection's instance's model's parts)
+require condition (((part's casts shadow = false) and (part's material's unlit)) and (part's material's double sided)) reporting "A selection ring changed scene lighting or disappeared from below"
+require condition ((refresh website Farm markers markers using characters dragging (the string form of "")) = false) reporting "Unchanged markers invalidated the scene"
+set actor to the item at 0 in (world's workers)
+set previous to markers's selection's instance's root pose's position
+set actor's x to actor's x + 1
+update website Farm characters characters from world over 1.0 seconds instantly false
+ignore (advance website Farm characters characters at 0.5 over 0.5 seconds dragging (the string form of ""))
+ignore (refresh website Farm markers markers using characters dragging (the string form of ""))
+set character to the website Farm character named "worker-1" in characters
+set position to markers's selection's instance's root pose's position
+require condition ((position's x = character's motion's position's x) and (position's x != previous's x)) reporting "The ring did not follow the displayed, interpolated worker"
+set {height above ground} to position's y - character's motion's position's y
+require condition ((the absolute value of (height above ground - 0.018)) < 0.000001) reporting "The worker ring lost its ground offset"
+set document's selected to "player"
+set player to world's player
+set player's target's present to true
+set player's target's x to world's player's x
+set player's target's y to world's player's y
+set player's target's adjacent to false
+set data to the website Farm navigation shown for document
+require condition ((data's destination present) and ((the length of data's path) = 0)) reporting "An already reached destination must still have a marker"
+set markers's navigation to data
+ignore (refresh website Farm markers markers using characters dragging (the string form of ""))
+require condition ((markers's destination's visible) and (markers's destination's instance's root pose's position is the same website Farm navigation point as data's destination)) reporting "The destination ring did not use its resolved world position"
+set player's target's x to world's barn's x
+set player's target's y to world's barn's y
+set player's target's adjacent to true
+set path to the website Farm navigation shown for document
+require condition ((path's destination present) and ((the length of path's path) > 0)) reporting "A reachable destination lost its route snapshot"
+set markers's navigation to path
+ignore (refresh website Farm markers markers using characters dragging (the string form of ""))
+set route to markers's route
+set {count of segments} to the length of path's path
+require condition ((the length of route's segments) = count of segments) reporting "The route did not connect every planned waypoint"
+set segment to the item at 0 in (route's segments)
+set character to the website Farm character named "player" in characters
+set start to character's motion's position + (a UI scene vector from [0.0,0.07,0.0])
+require condition ((segment's first is the same website Farm navigation point as start) and (segment's second is the same website Farm navigation point as (the item at 0 in (path's path)))) reporting "The route did not start at the displayed person"
+set first to the UI scene position of (a new vector with x 0.0, y -0.5 and z 0.0) through (a UI scene transform from (segment's object's instance's anchor))
+set second to the UI scene position of (a new vector with x 0.0, y 0.5 and z 0.0) through (a UI scene transform from (segment's object's instance's anchor))
+require condition (((the length of (first - segment's first)) < 0.00001) and ((the length of (second - segment's second)) < 0.00001)) reporting "The route segment transform does not join its endpoints"
+for each entry in route's segments:
+    require condition ((entry's object's visible) and (entry's object's pickable = false)) reporting "A planned route segment was hidden or intercepted picking"
+    require condition (((the item at 0 in (entry's object's instance's model's parts))'s mesh shares UI mesh storage with (the item at 0 in (segment's object's instance's model's parts))'s mesh)) reporting "Route segments did not share immutable geometry"
+require condition ((refresh website Farm markers markers using characters dragging (the string form of "")) = false) reporting "An unchanged route invalidated the scene"
+set {retained count} to the length of (landscape's objects)
+set player's target's present to false
+set cleared to the website Farm navigation shown for document
+require condition ((cleared's destination present = false) and (path's destination present)) reporting "Navigation snapshots shared mutable target state"
+set markers's navigation to cleared
+ignore (refresh website Farm markers markers using characters dragging (the string form of ""))
+require condition (markers's destination's visible = false) reporting "Clearing a target retained its destination ring"
+for each entry in route's segments:
+    require condition (entry's object's visible = false) reporting "Clearing a route retained a visible segment"
+set markers's navigation to path
+ignore (refresh website Farm markers markers using characters dragging (the string form of ""))
+require condition ((the length of (landscape's objects)) = retained count) reporting "Reopening a route allocated duplicate scene objects"
+close website Farm markers markers
+require condition ((the length of (landscape's objects)) = count) reporting "Closing markers left scene objects behind"
+close website Farm characters characters
+close website Farm landscape landscape
+free website farm document document
+print line "Farm markers share scene geometry, follow interpolated people, retain navigation snapshots and release their scene objects."

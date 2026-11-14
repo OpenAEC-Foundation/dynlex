@@ -1,0 +1,21 @@
+import appearance.dl
+
+appearance farm name appearance:
+    background is UI ink 35 55 41
+    text is UI ink 246 240 212
+    border is UI ink 107 123 87
+    border width is 1
+    font is "assets/fonts/Inter-600.ttf"
+    font size is 12
+    padding is 6
+    corner radius is 12
+    minimum height is 28
+    text is centered
+
+appearance selected farm name appearance:
+    use farm name appearance
+    background is UI ink 255 228 160
+    text is UI ink 37 53 35
+    border is UI ink 255 242 202
+
+farm name prototype means: (button "Person") wearing farm name appearance

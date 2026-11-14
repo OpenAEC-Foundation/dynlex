@@ -1,0 +1,56 @@
+import ../games/river/inspection/declarations.dl
+
+website page river character page at "/river-character-sheet.html" titled "River character animation sheet · DynLex" described "Inspect the River challenge's production artwork, expressions and animation frames.":
+    region "River character sheet" using content appearance:
+        paragraph "RIVER CHALLENGE / PRODUCTION ARTWORK" using signal appearance
+        paragraph "Character animation sheet" using title appearance
+        paragraph "Forced frames stay visible. Pause, scrub and inspect the same artwork and animation used in the game." using body appearance
+        link "← Back to the challenges" to "/index.html#challenges" using link appearance
+        region "Animation inspection controls" using inspection controls appearance:
+            region "Inspection playback" using stack appearance:
+                region "Loop controls" using inspection buttons appearance:
+                    (button "Pause loops") wearing primary link appearance
+                    (button "Restart loops") wearing link appearance
+                switch "Show overlay bounds" using inspection bounds appearance
+            region "Frame controls" using stack appearance:
+                range field "Inspection frame" from 0.0 through 100.0 stepping 1.0 initially 0.0 using inspection frame appearance
+                paragraph "Choose a frame to pause every loop at the same fraction." using portrait detail appearance
+        paragraph "Live loop · Forced frame · Final state" using portrait badge appearance
+        paragraph "Overlay bounds: cyan marks eyelids; pink marks the mouth or tongue. The green line follows the wolf's mouth." using portrait detail appearance
+
+        region "Boat portraits" using stack appearance:
+            paragraph "Farmer + boat" using heading appearance
+            paragraph "The farmer is part of the production boat artwork." using body appearance
+            region "Boat frames" using portrait grid appearance:
+                river portrait "Idle / blink loop" of the river boat showing a live river loop described "The farmer blinks while waiting."
+                river portrait "Blink frame" of the river boat showing a closed river blink described "The painted eyelid stays closed."
+                river portrait "Facing home" of the river boat showing a river boat facing home described "The production boat and eyelid turn together."
+
+        region "Sheep portraits" using stack appearance:
+            paragraph "Sheep" using heading appearance
+            paragraph "Blink, anxious bellow, danger scuffle and disappearance." using body appearance
+            region "Sheep frames" using portrait grid appearance:
+                river portrait "Idle / blink loop" of the river sheep showing a live river loop described "Both eyes share the production blink timing."
+                river portrait "Blink frame" of the river sheep showing a closed river blink described "Both painted eyelids stay closed."
+                river portrait "Bellowing" of the river sheep showing an open sheep mouth described "The mouth opens over the painted face."
+                river portrait "Danger scuffle" of the river sheep showing a river scuffle described "The same motion used during a danger event."
+                river portrait "Eaten" of the river sheep showing an eaten river character described "No character remains after the danger event."
+
+        region "Wolf portraits" using stack appearance:
+            paragraph "Wolf" using heading appearance
+            paragraph "Blink, isolated eyelids, danger scuffle and the post-fight lick, looped for inspection." using body appearance
+            region "Wolf frames" using portrait grid appearance:
+                river portrait "Idle / blink loop" of the river wolf showing a live river loop described "The painted eyes blink over the original face."
+                river portrait "Blink frame" of the river wolf showing a closed river blink described "Both painted eyelids stay closed."
+                river portrait "Left eyelid isolated" of the river wolf showing a left river eyelid described "Only the left eyelid is visible."
+                river portrait "Right eyelid isolated" of the river wolf showing a right river eyelid described "Only the right eyelid is visible."
+                river portrait "Danger scuffle" of the river wolf showing a river scuffle described "The same motion used during a danger event."
+                river portrait "Licking" of the river wolf showing a licking river wolf described "The tongue follows the production mouth path."
+
+        region "Hay portraits" using stack appearance:
+            paragraph "Hay" using heading appearance
+            paragraph "The hay has no face or idle animation." using body appearance
+            region "Hay frames" using portrait grid appearance:
+                river portrait "Idle" of the river hay showing a live river loop described "The original painted bundle."
+                river portrait "Danger scuffle" of the river hay showing a river scuffle described "The same motion used during a danger event."
+                river portrait "Eaten" of the river hay showing an eaten river character described "No bundle remains after the danger event."

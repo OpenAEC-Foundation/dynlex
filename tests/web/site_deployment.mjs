@@ -19,6 +19,8 @@ try {
   assert.match(workflow,/add_header Cache-Control "no-cache" always/);
   assert.match(workflow,/-mmin \+1440/);
   const pages=JSON.parse(await readFile(path.join(directory,'routes.json'),'utf8'));
+  assert(pages.some(page=>page.path==='/river-character-sheet.html'),
+    'The release omitted the production character inspection route');
   const generated=spawnSync('python3',['-c',`
 import json,sys
 from pathlib import Path
@@ -47,7 +49,8 @@ write_routes(root/'site',output,json.loads((directory/'routes.json').read_text()
   const application=JSON.parse(await readFile(path.join(directory,'application.json'),'utf8'));
   for(const file of [application.module,...application.fonts,'compiler/dynlex_web.js',
     'compiler/dynlex_web.wasm','compiler/dynlex_wgsl_translator.wasm',
-    'platform/start.js','packages/dynlex-ui/platform/browser/application.js']) {
+    'platform/start.js','packages/dynlex-ui/platform/browser/application.js',
+    'assets/games/river/wolf-mouth-guide.svg']) {
     assert((await stat(path.join(directory,file))).isFile(),file);
   }
   assert.equal(await readFile(path.join(directory,'install.sh'),'utf8'),

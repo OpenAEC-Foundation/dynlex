@@ -10,6 +10,9 @@ import {canvasControls} from './canvas_controls.mjs';
 import {verifySourceSearch} from './source_search_checks.mjs';
 import {verifyFarmPage} from './site_farm_page_checks.mjs';
 import {verifyFarmRestore} from './site_farm_restore_checks.mjs';
+import {verifyFarmWeather} from './site_farm_weather_checks.mjs';
+import {verifyIdeTheme} from './site_theme_checks.mjs';
+import {verifyRiverInspection} from './site_river_inspection_checks.mjs';
 
 const directory = path.resolve(process.argv[2] || 'build/site');
 const graphicsMode = process.argv[3] || 'system';
@@ -134,7 +137,7 @@ try {
   });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: await fs.readFile(new URL('./fixtures/ui-color-probe.js', import.meta.url), 'utf8') });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], completions: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], farmDraws: [], farmFrames: [] };
+    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], completions: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], farmDraws: [], farmFrames: [], farmClouds: [], farmWeather: [], farmMeshUploads: 0 };
     const instantiate = WebAssembly.instantiate.bind(WebAssembly);
     WebAssembly.instantiate = function(bytes, imports, ...args) {
       const env = imports?.env;
@@ -143,6 +146,21 @@ try {
         const decoder = new TextDecoder();
         const farm = new Set(), textures = new Set(), draws = env.ui_shader_draws, frame = env.ui_shader_frame;
         const triangles = env.ui_triangles;
+        const vertexBuffer=env.ui_shader_vertex_buffer,uniform=env.ui_shader_uniform;
+        env.ui_shader_vertex_buffer=(surface,shader,pass,slot,pointer,count)=>{
+          if(pass===50 && slot===0) window.siteProbe.farmMeshUploads++;
+          if(pass===50 && slot===2) {
+            const data=new DataView(env.__linear_memory.buffer,pointer,count);let clouds=0;
+            for(let offset=0;offset<count;offset+=176) if(data.getUint32(offset+160,true)===3) clouds++;
+            window.siteProbe.farmClouds.push(clouds);
+          }
+          return vertexBuffer(surface,shader,pass,slot,pointer,count);
+        };
+        env.ui_shader_uniform=(surface,shader,pass,group,binding,scalar,rows,columns,pointer,count)=>{
+          if(pass===50 && binding===16)
+            window.siteProbe.farmWeather.push(new DataView(env.__linear_memory.buffer,pointer,count).getFloat32(0,true));
+          return uniform(surface,shader,pass,group,binding,scalar,rows,columns,pointer,count);
+        };
         env.ui_shader_draws = (surface, shader, pass, data, count) => {
           if (pass === 50) { farm.add(shader); window.siteProbe.farmDraws.push({shader,count}); }
           return draws(surface,shader,pass,data,count);
@@ -242,21 +260,26 @@ try {
     }
   ` });
   await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
-  await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` });
+  const inspection=process.env.DYNLEX_SITE_SCENARIO==='river-inspection';
+  await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}${inspection?'/river-character-sheet.html':'/'}` });
   await waitFor('window.siteProbe?.paints > 2');
-  await waitFor('window.siteProbe.pictures.includes("assets/games/river/painted-river.webp")');
+  await waitFor(`window.siteProbe.pictures.includes(${JSON.stringify('assets/games/river/'+(inspection?'boat.webp':'painted-river.webp'))})`);
   await pause(1800);
   assert.equal(errors.length,0,JSON.stringify(errors));
   const capture = async name => {
     const result = await command('Page.captureScreenshot', { format: 'png' });
     await fs.writeFile(`.cache/site-${name}-${graphicsMode}.png`,Buffer.from(result.data,'base64'));
   };
-  await capture('desktop');
+  await capture(inspection?'river-character-desktop':'desktop');
   console.log(JSON.stringify(await evaluate('({title:document.title,api:window.siteProbe.api,paints:window.siteProbe.paints})')));
-  const {click,clickText,clickVisibleText}=canvasControls({command,evaluate,capture});
-  if (process.env.DYNLEX_SITE_SCENARIO === 'farm') {
+  const controls=canvasControls({command,evaluate,capture});
+  const {click,key,clickText,clickVisibleText}=controls;
+  if (inspection) {
+    await verifyRiverInspection({command,evaluate,waitFor,controls,capture});
+  } else if (process.env.DYNLEX_SITE_SCENARIO === 'farm') {
     await verifyFarmPage({command,evaluate,waitFor,controls:canvasControls({command,evaluate,capture}),capture});
     await verifyFarmRestore({command,evaluate,waitFor,controls:canvasControls({command,evaluate,capture}),capture});
+    await verifyFarmWeather({command,evaluate,waitFor,controls:canvasControls({command,evaluate,capture}),capture});
   } else {
   await click(335,627); await pause(1500); await capture('terrain');
   await click(335,627); await pause(1500); await capture('nano');
@@ -275,10 +298,6 @@ try {
   await click(237,287);
   await waitFor('window.siteProbe.texts.includes("Hello from DynLex.")');
   await click(120,480);
-  const key = async (code,key,number,modifiers=0) => {
-    await command('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:number,modifiers});
-    await command('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:number,modifiers});
-  };
   await verifySourceCompletion({command,evaluate,waitFor,key,capture,
     source:'import lib/std.dl\npri',prefix:'',name:'ide'});
   await verifySourcePaste({command,evaluate,waitFor,key,source:'import lib/std.dl\nprint line 7'});
@@ -315,9 +334,11 @@ try {
   const analyzed = await evaluate('window.siteProbe.paints');
   await pause(500);
   assert.equal(await evaluate('window.siteProbe.paints'), analyzed, 'An idle analyzed editor kept repainting');
+  await verifyIdeTheme({command,evaluate,waitFor,key,capture,
+    controls:canvasControls({command,evaluate,capture}),source:'import lib/std.dl\nprint line "😀"'});
   await click(120,480); await key('KeyA','a',65,2);
   await command('Input.insertText',{text:'import lib/std.dl\nloop while true:\n    ignore 1'});
-  await click(237,287); await pause(1800); await click(640,287);
+  await clickText('Run program ▶'); await pause(1800); await clickText('Stop program ■');
   await waitFor('window.siteProbe.texts.includes("Stopped.")');
   await click(480,363);
   await waitFor('window.siteProbe.texts.some(text => text.startsWith("Shader compiled in"))');

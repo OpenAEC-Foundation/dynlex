@@ -12,6 +12,7 @@ to [reset website Farm tools in] {a pointer to website state:state}:
     set session's pointer mode to 0
     set session's pointer entity to ""
     set session's pointer moved to false
+    set session's pointer name to false
     set session's pointer selection to a new website Farm entity selection
     set session's pointer square and session's pointer origin to a new website Farm square selection
     set session's pointer start and session's pointer previous to a new UI point
@@ -47,6 +48,8 @@ to [pause website Farm in] {a pointer to website state:state}:
 
 to [leave website Farm in] {a pointer to website state:state}:
     pause website Farm in state
+    if state's farm's names != (0 as a pointer to UI floating controls):
+        hide website Farm names in (state's farm's names)
     stop website program (the website program for source "Farm source") in state
 
 to [initialize the website Farm in] {a pointer to website state:state}:
@@ -71,6 +74,9 @@ to [initialize the website Farm in] {a pointer to website state:state}:
 to [close website Farm in] {a pointer to website state:state}:
     set session to the address of (state's farm)
     pause website Farm in state
+    if session's names != (0 as a pointer to UI floating controls):
+        close UI floating controls (session's names)
+        set session's names to 0 as a pointer to UI floating controls
     stop website program (the website program for source "Farm source") in state
     if session's graphics request != 0:
         ignore cancel website request (session's graphics request) in state

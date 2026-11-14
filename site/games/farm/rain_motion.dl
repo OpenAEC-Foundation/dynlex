@@ -1,0 +1,8 @@
+import lib/std.dl
+
+to get [the website Farm rain height from] {floating-point number:height} [at] {floating-point number:seconds} [seconds]:
+    set fallen to height - (seconds * 7.0)
+    set cycle to (fallen - 0.4) % 9.0
+    if cycle < 0.0:
+        set cycle to cycle + 9.0
+    return 0.4 + cycle

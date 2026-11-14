@@ -1,0 +1,94 @@
+import ../../site/pages/river_characters.dl
+import ../../site/games/river/inspection/controller.dl
+import ../../site/packages/dynlex-ui/testing/driver.dl
+
+document inspection fixture:
+    river character page
+
+to load inspection fixture image {a pointer to UI image:image} in {a pointer to UI view:view}:
+    open test UI image image in view
+    complete UI image image in view with resource (1 as a pointer) sized 750 by 750 at status 1
+
+to get the inspection portrait count within {UI reference:node}:
+    set total to 0
+    if node's variant = "river-portrait":
+        set specification to node's configuration as a pointer to website river portrait specification
+        require condition ((0 <= specification's subject <= 3) and (0 <= specification's mode's kind <= 8)) reporting "A portrait contains an unsupported production pose."
+        increment total
+    set index to 0
+    loop while index < node's count:
+        set total to total + (the inspection portrait count within (the UI child at index in node))
+        increment index
+    return total
+
+to click inspection control {C string:label} in {a pointer to UI view:view}:
+    set layout to the UI layout labeled label in (view's layout)
+    set box to layout's painted bounds
+    queue UI input of kind 1 key 0 at (box's x + box's width / 2.0) (box's y + box's height / 2.0) with modifiers 0 containing "" in view
+    queue UI input of kind 2 key 1 at 0.0 0.0 with modifiers 0 containing "" in view
+    queue UI input of kind 2 key 0 at 0.0 0.0 with modifiers 0 containing "" in view
+    ignore update UI view view
+
+set application to 42
+set instance to an instance of inspection fixture with state (the address of application)
+set window to the address of instance
+show page "/river-character-sheet.html" in window
+require condition ((the inspection portrait count within (instance's description)) = 17) reporting "The inspection page lost an original character state."
+set driver to the value at (the test UI driver)
+set driver's open image to (the function named "load inspection fixture image $ in $") as a pointer
+set view to a UI view of window sized 1440 by 5000 using font "regular" with (the address of driver)
+set session to a new website river inspection session
+set view's seconds to 10.0
+connect website river inspection (the address of session) within (river character page's content) in (the address of view)
+open website river inspection the address of session
+require condition ((session's clock's playing) and ((the range value of "Inspection frame" in window) = 0.0)) reporting "Opening the inspection page did not start at its displayed frame."
+ignore update UI view (the address of view)
+set surface to view's window as a pointer to test UI surface
+require condition (surface's image opens = 9) reporting "Portraits did not share the production sprites and mouth guide."
+require condition (surface's textured > 0) reporting "The inspection page did not paint its production artwork."
+set view's seconds to 11.0
+click inspection control "Pause loops" in (the address of view)
+require condition ((session's clock's playing = false) and ((the website river inspection time of (the address of (session's clock)) at 50.0) = 1.0)) reporting "The pause control did not freeze the shared timeline."
+set view's seconds to 60.0
+click inspection control "Pause loops" in (the address of view)
+require condition (session's clock's playing) reporting "The play control did not resume the shared timeline."
+set view's seconds to 70.0
+click inspection control "Restart loops" in (the address of view)
+require condition ((session's clock's playing) and ((the range value of "Inspection frame" in window) = 0.0)) reporting "Restart invoked the input-only scrub callback or retained the previous frame."
+set range to the UI layout labeled "Inspection frame" in (view's layout)
+set track to the UI range track in (range's painted bounds) padded by (range's appearance's padding)
+queue UI input of kind 1 key 0 at (track's x + track's width * 0.75) (track's y + track's height / 2.0) with modifiers 0 containing "" in (the address of view)
+queue UI input of kind 2 key 1 at 0.0 0.0 with modifiers 0 containing "" in (the address of view)
+queue UI input of kind 2 key 0 at 0.0 0.0 with modifiers 0 containing "" in (the address of view)
+ignore update UI view (the address of view)
+require condition ((session's clock's playing = false) and (session's clock's phase = 0.75)) reporting "The range control did not pause every loop at the selected frame."
+queue UI input of kind 3 key 269 at 0.0 0.0 with modifiers 0 containing "" in (the address of view)
+ignore update UI view (the address of view)
+require condition ((the range value of "Inspection frame" in window) = 100.0) reporting "The inspection scrubber did not share range keyboard input."
+click inspection control "Show overlay bounds" in (the address of view)
+require condition (the "Show overlay bounds" switch is on in window) reporting "The overlay control did not retain its state."
+require condition ((application = 42) and (instance's event context = (0 as a pointer))) reporting "Inspection bindings overwrote the application's state or leaked callback context."
+set view's width to 360
+ignore update UI view (the address of view)
+set group to the UI layout labeled "Boat frames" in (view's layout)
+require condition (group's first's next's bounds' y > group's first's bounds' y) reporting "Portrait cards did not stack on a narrow viewport."
+set view's width to 1440
+ignore update UI view (the address of view)
+set view's seconds to 80.0
+click inspection control "Restart loops" in (the address of view)
+set view's seconds to 81.0
+leave website river inspection the address of session
+require condition ((session's resume) and (session's clock's playing = false)) reporting "Leaving the page did not preserve its playback intent."
+set view's seconds to 100.0
+open website river inspection the address of session
+require condition ((session's clock's playing) and ((the website river inspection time of (the address of (session's clock)) at 100.0) = 1.0)) reporting "Returning to the page included time spent elsewhere."
+set instance's reduced motion to true
+leave website river inspection the address of session
+set view's seconds to 200.0
+open website river inspection the address of session
+require condition (session's clock's playing = false) reporting "The page ignored reduced motion when resuming."
+click inspection control "Restart loops" in (the address of view)
+require condition ((session's clock's playing = false) and (session's clock's elapsed = 0.0)) reporting "Restart ignored reduced motion."
+close the address of view
+close window
+print line "River portraits share production art, scoped controls, timeline playback, range input, overlay state and responsive layout."

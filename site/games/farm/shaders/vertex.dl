@@ -1,4 +1,5 @@
 import ../materials.dl
+import ../rain_motion.dl
 import ../../../packages/dynlex-ui/ui/scene_shader.dl
 
 set camera to the shader uniform named "camera" at binding 0 as (@intrinsic("matrix", 4, 4, @intrinsic("type", "float", 32)))
@@ -10,6 +11,10 @@ set normal to the UI scene shader normal
 set flags to the UI scene shader flags
 if (the element at 0 in flags) = (2 as a 32 bit unsigned integer):
     set normal to the website Farm water normal from normal at point at time (the element at 3 in eye)
+else if (the element at 0 in flags) = (3 as a 32 bit unsigned integer):
+    set seed to the element at 0 in (the UI scene shader coordinates)
+    set height to the website Farm rain height from seed at (the element at 3 in eye) seconds
+    set point to a new vector with x (the x of point), y ((the y of point) + (height - seed)) and z (the z of point)
 set normal to the UI scene shader world normal from normal
 set clip to the UI scene shader clip position of point through camera
 set shadow to the UI scene shader clip position of (point + normal * (the element at 3 in settings)) through light

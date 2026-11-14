@@ -1,0 +1,58 @@
+import ../../../appearance.dl
+
+appearance portrait grid appearance:
+    columns are 3
+    gap is 20
+    when viewport is below 1000:
+        columns are 2
+    when viewport is below 650:
+        columns are 1
+
+appearance portrait card appearance:
+    use card appearance
+    padding is 16
+    gap is 10
+
+appearance portrait stage appearance:
+    height is 220
+    background is UI ink 233 240 236
+    corner radius is 10
+
+appearance portrait title appearance:
+    font is "assets/fonts/Inter-600.ttf"
+    font size is 17
+    text is UI ink 42 49 46
+
+appearance portrait badge appearance:
+    font is "assets/fonts/JetBrainsMono-400.ttf"
+    font size is 11
+    text is UI ink 58 107 79
+
+appearance portrait detail appearance:
+    font size is 13
+    text is UI ink 103 113 107
+
+appearance inspection controls appearance:
+    use card appearance
+    columns are 2
+    stack below 800
+    gap is 24
+
+appearance inspection buttons appearance:
+    flow is horizontal
+    gap is 10
+
+appearance inspection frame appearance:
+    background is UI ink 246 248 244
+    text is UI ink 42 49 46
+    accent is UI ink 164 111 29
+    padding is 12
+    minimum height is 68
+    corner radius is 8
+    border width is 1
+    border is UI ink 215 222 216
+
+appearance inspection bounds appearance:
+    padding is 10
+    minimum height is 44
+    font size is 14

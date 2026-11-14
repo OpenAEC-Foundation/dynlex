@@ -1,0 +1,12 @@
+# These portraits are immutable UI data, including their renderer parameters.
+import types.dl
+import appearance.dl
+
+a website river portrait canvas {C string:name} of {integer:subject} showing {website river portrait mode:mode} means: ((a UI text component 20 labeled name styled "river-portrait") wearing portrait stage appearance) with configuration @intrinsic("cast", (a static reference to @intrinsic("construct", website river portrait specification, subject, mode)), a pointer)
+
+river portrait {C string:caption} of {integer:subject} showing {website river portrait mode:mode} described {C string:detail} means: (a UI container of kind 41 containing [
+    a website river portrait canvas caption of subject showing mode,
+    paragraph caption using portrait title appearance,
+    paragraph (mode's badge) using portrait badge appearance,
+    paragraph detail using portrait detail appearance
+]) wearing portrait card appearance

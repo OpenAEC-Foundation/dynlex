@@ -1,0 +1,40 @@
+import ../inspection_clock.dl
+import ../../../packages/dynlex-ui/ui/view.dl
+
+class:
+    patterns:
+        website river portrait mode
+    members:
+        kind as an integer
+        badge as a C string
+
+class:
+    patterns:
+        website river portrait specification
+    members:
+        subject as an integer
+        mode as website river portrait mode
+
+class:
+    patterns:
+        website river inspection session
+    members:
+        clock as website river inspection clock
+        view as a pointer to UI view
+        opened as a boolean
+        resume as a boolean
+
+the river boat means: 0
+the river sheep means: 1
+the river wolf means: 2
+the river hay means: 3
+
+a live river loop means: @intrinsic("construct", website river portrait mode, 0, "Live loop")
+a closed river blink means: @intrinsic("construct", website river portrait mode, 1, "Forced frame")
+a river boat facing home means: @intrinsic("construct", website river portrait mode, 2, "Forced frame")
+an open sheep mouth means: @intrinsic("construct", website river portrait mode, 3, "Forced frame")
+a river scuffle means: @intrinsic("construct", website river portrait mode, 4, "Live loop")
+an eaten river character means: @intrinsic("construct", website river portrait mode, 5, "Final state")
+a left river eyelid means: @intrinsic("construct", website river portrait mode, 6, "Forced frame")
+a right river eyelid means: @intrinsic("construct", website river portrait mode, 7, "Forced frame")
+a licking river wolf means: @intrinsic("construct", website river portrait mode, 8, "Live loop")

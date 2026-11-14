@@ -1,0 +1,1 @@
+River inspection pauses, resumes, scrubs every loop to one frame, wraps at each duration and respects reduced motion.

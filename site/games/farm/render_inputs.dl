@@ -54,4 +54,5 @@ to [prepare website Farm frame inputs in] {website Farm shader inputs:inputs} [t
     add website Farm input (a website Farm light from RGB 13950403 with strength 1.0) at binding 7 in pass pass to inputs
     add website Farm input (a UI float shader vector from [0.0,2048.0,-0.0002,0.02]) at binding 8 in pass pass to inputs
     add website Farm input (a UI float shader vector from [0.75,((the website Farm reflection levels) - 1),0.0,0.0]) at binding 15 in pass pass to inputs
+    add website Farm input (a UI float shader vector from [rain,0.0,0.0,0.0]) at binding 16 in pass pass to inputs
     add website Farm input (a UI float shader vector from [width,height,0,0]) at binding 0 in pass (the website Farm post pass) to inputs

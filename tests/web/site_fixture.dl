@@ -5,6 +5,9 @@ import ../../site/pages/ide.dl
 import ../../site/editor/language.dl
 
 document website fixture:
+    code:
+        use UI palette (the website colors for false) in this window
+        set the value of "Studio appearance notice" in this window to -1
     home page
     IDE page
 

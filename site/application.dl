@@ -2,6 +2,7 @@ import interface.dl
 import actions.dl
 import programs/commands.dl
 import games/river/rendering.dl
+import games/river/inspection/controller.dl
 
 # Replies have explicit owners and purposes. Platform services do not decide UI state.
 to get receive website reply {a pointer to JSON value:response} for {integer:job} indexed {integer:index} in {a pointer to website state:state}:
@@ -73,6 +74,9 @@ to read website input {a pointer to UI view:view}:
         set state's shader editor's preview's active to false
         set state's river's active to false
         pause website Farm in state
+        if state's route = "/river-character-sheet.html":
+            pause website river inspection (the address of (state's river inspection's clock)) at (view's seconds)
+            refresh website river inspection the address of (state's river inspection)
         flush website account save in state
     if (view's input kind != 11) and (view's input kind != 12):
         return nothing
@@ -185,13 +189,16 @@ function open the DynLex website using {a pointer to UI driver:driver} with {a p
         show page "/index.html" in instance
         set view to storage for one slot initialized with (a UI view of instance sized 1280 by 900 using fonts "assets/fonts/Inter-400.ttf" and "assets/fonts/Inter-600.ttf" with driver)
         set state's view to view
+        set state's farm's names to UI floating controls attached to (the control labeled "Farm scene" in instance) in view
         set state's shader editor's description to the custom website shader
         store 1.0 into (state's shader weights) at 0
         set state's route to "/index.html"
         set view's close action to (the function named "close the website $") as a pointer
+        open website appearance in state
         open website source editors in state
         initialize the website river in state
         initialize the website Farm in state
+        connect website river inspection (the address of (state's river inspection)) within (river character page's content) in view
         open website progress in state
         open website account with (the website account configuration) in state
         bind (the control labeled "River scene" in instance) in instance to (the function named "paint the website river $") for event 1

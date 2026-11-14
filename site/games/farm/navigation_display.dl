@@ -1,0 +1,54 @@
+# Resolve the selected person's navigation when application state changes.
+# Rendering retains this owning snapshot instead of searching the world each frame.
+import document.dl
+import preview.dl
+import scene_landscape_types.dl
+
+class:
+    patterns:
+        website Farm navigation display
+    members:
+        person as a string
+        destination present as a boolean
+        destination as UI scene vector
+        path as the type of (an empty sequence of UI scene vector)
+
+to get [the website Farm navigation shown for] {a pointer to website farm document:document}:
+    set world to document's world
+    set actor to the website farm actor identified by (document's selected) in world
+    require condition (actor != (0 as a pointer to website farm actor)) reporting "Farm navigation requires an existing selected person"
+    set result to a new website Farm navigation display
+    set result's person to actor's id
+    set preview to a new website farm route preview
+    if actor's id = "player":
+        set plan to an empty website farm plan
+        set preview to the planned website farm route for actor in world following plan prepared false
+        free website farm plan the address of plan
+    else if actor's role is not empty:
+        set role to the website farm role identified by (actor's role) in (document's roles)
+        set preview to the planned website farm route for actor in world following (role's program) prepared (role's prepared and (role's needs rebuilding = false))
+    set result's destination present to preview's present
+    if preview's present:
+        set result's destination to (the website Farm scene point at (preview's target's x) (preview's target's y) in world) + (a UI scene vector from [0.0,0.055,0.0])
+        set points to an empty list of UI scene vector
+        for each step in (preview's route's steps):
+            append ((the website Farm scene point at (step's x) (step's y) in world) + (a UI scene vector from [0.0,0.07,0.0])) to points
+        set result's path to a sequence taking the items from points
+        free points
+    return result
+
+to get {UI scene vector:first} [is the same website Farm navigation point as] {UI scene vector:second}:
+    return (first's x = second's x) and ((first's y = second's y) and (first's z = second's z))
+
+to get {website Farm navigation display:first} [is the same website Farm navigation as] {website Farm navigation display:second}:
+    if (first's person != second's person) or (first's destination present != second's destination present):
+        return false
+    if first's destination present:
+        if (first's destination is the same website Farm navigation point as second's destination) = false:
+            return false
+    if (the length of first's path) != (the length of second's path):
+        return false
+    loop index from 0 to (the length of first's path):
+        if ((the item at index in (first's path)) is the same website Farm navigation point as (the item at index in (second's path))) = false:
+            return false
+    return true

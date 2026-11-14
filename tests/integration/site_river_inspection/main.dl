@@ -1,0 +1,22 @@
+import ../../../site/games/river/inspection_clock.dl
+import lib/check.dl
+
+set clock to a new website river inspection clock
+set timeline to the address of clock
+restart website river inspection timeline at 10.0 animating true
+require condition ((the website river inspection phase of timeline cycling 4.0 at 11.0) = 0.25) reporting "Live inspection did not advance its loop."
+pause website river inspection timeline at 11.0
+require condition ((the website river inspection phase of timeline cycling 4.0 at 50.0) = 0.25) reporting "A paused inspection kept advancing."
+pause website river inspection timeline at 51.0
+resume website river inspection timeline at 60.0
+resume website river inspection timeline at 61.0
+require condition ((the website river inspection phase of timeline cycling 4.0 at 61.0) = 0.5) reporting "Resuming inspection restarted or counted paused time."
+scrub website river inspection timeline to 75.0 percent at 70.0
+require condition ((clock's playing = false) and ((the website river inspection phase of timeline cycling 4.0 at 80.0) = 0.75)) reporting "Scrubbing did not pause at the selected frame."
+require condition ((the website river inspection phase of timeline cycling 8.0 at 80.0) = 0.75) reporting "Different inspection loops disagreed on the selected frame."
+resume website river inspection timeline at 90.0
+require condition ((the website river inspection phase of timeline cycling 4.0 at 91.0) = 0.0) reporting "A live inspection loop did not wrap."
+require condition ((the website river inspection phase of timeline cycling 8.0 at 91.0) = 0.875) reporting "Live inspection lost each loop's own duration."
+restart website river inspection timeline at 100.0 animating false
+require condition ((clock's playing = false) and ((the website river inspection phase of timeline cycling 4.0 at 101.0) = 0.0)) reporting "Reduced motion restarted live loops."
+print line "River inspection pauses, resumes, scrubs every loop to one frame, wraps at each duration and respects reduced motion."

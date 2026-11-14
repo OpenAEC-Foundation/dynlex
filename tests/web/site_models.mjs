@@ -6,9 +6,11 @@ import os from 'node:os';
 import {execFileSync} from 'node:child_process';
 const root=path.resolve(import.meta.dirname,'../..');
 const directory=await fs.mkdtemp(path.join(os.tmpdir(),'dynlex-site-models-'));
-const cases=['json_edit','json_text_buffers','json_float_roundtrip','string_integer_width','site_account_model'];
+const cases=['json_edit','json_text_buffers','json_float_roundtrip','string_integer_width','site_account_model','site_river_inspection','site_river_expressions'];
 try {
   const files=cases.map(name=>`tests/integration/${name}/main.dl`);
+  files.push('site/games/river/inspection_clock.dl');
+  files.push('site/games/river/expressions.dl');
   for(const folder of ['site/games/progress','site/account'])
     for(const name of await fs.readdir(path.join(root,folder))) if(name.endsWith('.dl')) files.push(`${folder}/${name}`);
   const sources=Object.fromEntries(await Promise.all(files.map(async name=>[name,await fs.readFile(path.join(root,name),'utf8')])));

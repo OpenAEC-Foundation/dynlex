@@ -1,0 +1,1 @@
+Walking keeps its speed across tiles at both paces, turns smoothly, settles, and resets on placement.

@@ -6,6 +6,7 @@ export async function verifyFarmRestore({command, evaluate, waitFor, controls, c
   const saved = await evaluate(String.raw`(() => {
     const key = 'dynlex.games.guest';
     const progress = JSON.parse(localStorage.getItem(key));
+    if(progress.lastGame!=='farm') throw new Error('The Farm restore scenario did not retain its last game');
     const data = progress.games.farm.data;
     const role = data.roles.find(role => role.id === data.roleId);
     if (!role.program) throw new Error('The applied Farm role was not saved');
@@ -19,7 +20,7 @@ export async function verifyFarmRestore({command, evaluate, waitFor, controls, c
   await waitFor('window.siteProbe.pictures.includes("assets/games/river/painted-river.webp")');
   assert.equal(await evaluate('JSON.parse(localStorage.getItem("dynlex.games.guest")).games.farm.data.roles[0].needsRebuild'), true,
     'Reload discarded the saved role awaiting rebuilding.');
-  await controls.clickText('Open the farm challenge →');
+  await controls.clickText('Continue your game →');
   await waitFor(`(() => {
     const data = JSON.parse(localStorage.getItem('dynlex.games.guest')).games.farm.data;
     return data.roles.every(role => !role.needsRebuild);

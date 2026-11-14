@@ -1,0 +1,60 @@
+# The rain cloud is uploaded once; the vertex shader advances every drop.
+import scene_character_types.dl
+import ../../packages/dynlex-ui/ui/scene_rotations.dl
+import rain_motion.dl
+
+class:
+    patterns:
+        website Farm weather
+    members:
+        landscape as a pointer to website Farm landscape
+        object as a pointer to UI scene object
+
+to get [the website Farm rain mesh]:
+    set drop to a UI cylinder mesh with top 1.0 bottom 1.0 height 1.0 around 6 sides capped true
+    set rotation to the UI scene rotation from direction (a new vector with x 0.0, y 1.0 and z 0.0) to direction (a new vector with x -0.05, y 0.3 and z 0.0)
+    set length to the square root of ((0.05 * 0.05) + (0.3 * 0.3))
+    set matrix to a UI scene matrix at (a new vector with x 0.0, y 0.0 and z 0.0) oriented rotation scaled (a new vector with x 0.009, y length and z 0.009)
+    set transform to a UI scene transform from matrix
+    set vertices to an empty list of UI mesh vertex
+    set indices to an empty list of a 32 bit unsigned integer
+    loop index from 0 to 600:
+        set phase to ((index % 53) as a floating-point number) / 53.0
+        set seed to phase * 9.0
+        set center to a new vector with x ((the sine of (index * 54.3)) * 11.0), y seed and z ((the sine of (index * 21.7)) * 11.0)
+        set base to the length of vertices
+        for each vertex in drop's vertices:
+            set position to (the UI scene position of (the UI mesh position of vertex) through transform) + center
+            set normal to the UI scene normal of (the UI mesh normal of vertex) through transform
+            # All vertices of a drop carry its seed height, so wrapping moves it whole.
+            append UI mesh vertex at position normal normal uv seed 0.0 to vertices
+        for each item in drop's indices:
+            append ((base + (item as an integer)) as a 32 bit unsigned integer) to indices
+    set result to a UI scene mesh taking vertices vertices and indices indices
+    free vertices
+    free indices
+    return result
+
+to get [website Farm weather in] {a pointer to website Farm landscape:landscape}:
+    set result to storage for one slot initialized with (a new website Farm weather)
+    set result's landscape to landscape
+    set material to a UI scene material with color (UI ink 201 224 221) roughness 1.0 metalness 0.0
+    set material's unlit and material's double sided to true
+    set material's depth write to false
+    set material's opacity to 0.6
+    set material's flags to 3 as a 32 bit unsigned integer
+    set model to a website Farm scene model using (the website Farm rain mesh) colored material casting shadow false
+    set result's object to a website Farm object named "rain" using model in landscape
+    set result's object's visible and result's object's pickable to false
+    return result
+
+to get [refresh website Farm weather] {a pointer to website Farm weather:weather} [at amount] {floating-point number:rain}:
+    set visible to rain > 0.002
+    set changed to weather's object's visible != visible
+    set weather's object's visible to visible
+    return changed
+
+to [close website Farm weather] {a pointer to website Farm weather:weather}:
+    remove website Farm scene object (weather's object) from (weather's landscape)
+    destroy the value at weather
+    deallocate weather

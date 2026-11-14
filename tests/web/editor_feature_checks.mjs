@@ -15,8 +15,8 @@ export async function verifySourceNavigationAppearance({waitFor,disabled}) {
   }
 }
 
-export async function verifySourceCallColor({waitFor,text,depth=0}) {
-  const channels=callColors[depth].dark.match(/../g).map(channel=>{
+export async function verifySourceCallColor({waitFor,text,depth=0,theme='dark'}) {
+  const channels=callColors[depth][theme].match(/../g).map(channel=>{
     const value=parseInt(channel,16)/255;
     return value<=0.04045?value/12.92:Math.pow((value+0.055)/1.055,2.4);
   });

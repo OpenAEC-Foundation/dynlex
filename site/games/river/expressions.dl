@@ -1,0 +1,75 @@
+# Character expressions are data. Playback and inspection choose a pose;
+# both use the same painter over the production artwork.
+import lib/std.dl
+
+class:
+    patterns:
+        website river expression pose
+    members:
+        left blink as an integer
+        right blink as an integer
+        mouth as a floating-point number
+        licking as a boolean
+        tongue phase as a floating-point number
+
+class:
+    patterns:
+        website river blink timing
+    members:
+        duration as a floating-point number
+        offset as a floating-point number
+
+the website river blink timings means: [
+    @intrinsic("construct", website river blink timing, 7.3, 0.0),
+    @intrinsic("construct", website river blink timing, 6.4, 2.1),
+    @intrinsic("construct", website river blink timing, 8.1, 4.6),
+    @intrinsic("construct", website river blink timing, 1.0, 0.0)
+]
+
+to get the website river blink timing for {integer:subject}:
+    return the item at subject in (the website river blink timings)
+
+class:
+    patterns:
+        website river eye overlay
+    members:
+        subject as an integer
+        side as an integer
+        sprite as an integer
+        horizontal offset as a floating-point number
+        vertical offset as a floating-point number
+        x as a floating-point number
+        y as a floating-point number
+        horizontal radius as a floating-point number
+        vertical radius as a floating-point number
+        solid as a floating-point number
+
+a river eye for {integer:subject} side {integer:side} using sprite {integer:sprite} shifted {floating-point number:horizontal} {floating-point number:vertical} centered {floating-point number:x} {floating-point number:y} radius {floating-point number:rx} {floating-point number:ry} solid {floating-point number:solid} means: @intrinsic("construct", website river eye overlay, subject, side, sprite, horizontal, vertical, x, y, rx, ry, solid)
+
+the website river eye overlays means: [
+    a river eye for 0 side 0 using sprite 5 shifted 0.0 0.0 centered 0.36 0.35 radius 0.09 0.15 solid (0.55 / 0.78),
+    a river eye for 1 side 0 using sprite 6 shifted 0.0 -0.03 centered 0.455 0.44 radius 0.09 0.09 solid 0.8,
+    a river eye for 1 side 1 using sprite 6 shifted 0.0 -0.03 centered 0.68 0.44 radius 0.09 0.09 solid 0.8,
+    a river eye for 2 side 0 using sprite 7 shifted 0.0 0.0 centered 0.364 0.504 radius 0.08 0.075 solid 0.82,
+    a river eye for 2 side 1 using sprite 7 shifted -0.018 0.012 centered 0.559 0.49 radius 0.08 0.075 solid 0.82
+]
+
+to get the website river blink at {floating-point number:seconds} cycling {floating-point number:duration} offset {floating-point number:offset}:
+    set phase to (seconds + offset) / duration
+    set phase to phase - (the floor of phase)
+    if (phase <= 0.91) or (phase >= 0.95):
+        return 0
+    if phase < 0.92:
+        return ((phase - 0.91) * 25500.0) as an integer
+    if phase > 0.94:
+        return ((0.95 - phase) * 25500.0) as an integer
+    return 255
+
+to get the website river expression for {integer:subject} at {floating-point number:seconds}:
+    set pose to a new website river expression pose
+    set blink to 0
+    if subject < 3:
+        set timing to the website river blink timing for subject
+        set blink to the website river blink at seconds cycling (timing's duration) offset (timing's offset)
+    set pose's left blink and pose's right blink to blink
+    return pose

@@ -9,6 +9,9 @@ import account/controller.dl
 to follow website link {a pointer to UI instance:instance}:
     set state to the website state in instance
     set destination to (the UI value for (instance's event target) in instance)'s destination
+    if destination = "action:toggle-ide-theme":
+        toggle website editor theme in state
+        return nothing
     if follow website account action destination in state:
         return nothing
     if destination = "action:resume-game":

@@ -1,0 +1,63 @@
+# Bindings carry the inspection session; they leave the website's state alone.
+import types.dl
+import rendering.dl
+import ../../../packages/dynlex-ui/ui/application.dl
+import ../../../packages/dynlex-ui/ui/ranges.dl
+
+the website river inspection bound to {a pointer to UI instance:instance} means: instance's event context as a pointer to website river inspection session
+
+to refresh website river inspection {a pointer to website river inspection session:session}:
+    set view to session's view
+    set the text of "Pause loops" in (view's instance) to ("Pause loops" if (session's clock's playing), else "Play loops")
+    request a UI redraw in view
+
+to toggle website river inspection {a pointer to UI instance:instance}:
+    set session to the website river inspection bound to instance
+    set view to session's view
+    if session's clock's playing:
+        pause website river inspection (the address of (session's clock)) at (view's seconds)
+    else:
+        resume website river inspection (the address of (session's clock)) at (view's seconds)
+    refresh website river inspection session
+
+to restart website river portraits {a pointer to UI instance:instance}:
+    set session to the website river inspection bound to instance
+    set view to session's view
+    restart website river inspection (the address of (session's clock)) at (view's seconds) animating (view's instance's reduced motion = false)
+    set the range value of "Inspection frame" in instance to 0.0
+    refresh website river inspection session
+
+to choose website river inspection frame {a pointer to UI instance:instance}:
+    set session to the website river inspection bound to instance
+    scrub website river inspection (the address of (session's clock)) to (the range value of "Inspection frame" in instance) percent at (session's view's seconds)
+    refresh website river inspection session
+
+to bind website river portraits within {UI reference:node} in {a pointer to UI instance:instance} using {a pointer to website river inspection session:session}:
+    if (node's kind = 20) and (node's variant = "river-portrait"):
+        bind node in instance to (the function named "paint website river portrait $") for event 1 with context (session as a pointer)
+    set index to 0
+    loop while index < node's count:
+        bind website river portraits within (the UI child at index in node) in instance using session
+        increment index
+
+to connect website river inspection {a pointer to website river inspection session:session} within {UI reference:root} in {a pointer to UI view:view}:
+    set session's view to view
+    set instance to view's instance
+    bind website river portraits within root in instance using session
+    bind (the control labeled "Pause loops" in instance) in instance to (the function named "toggle website river inspection $") for event 0 with context (session as a pointer)
+    bind (the control labeled "Restart loops" in instance) in instance to (the function named "restart website river portraits $") for event 0 with context (session as a pointer)
+    bind (the control labeled "Inspection frame" in instance) in instance to (the function named "choose website river inspection frame $") for event 0 with context (session as a pointer)
+
+to open website river inspection {a pointer to website river inspection session:session}:
+    set view to session's view
+    if session's opened = false:
+        restart website river inspection (the address of (session's clock)) at (view's seconds) animating (view's instance's reduced motion = false)
+        set session's opened to true
+    else if session's resume and (view's instance's reduced motion = false):
+        resume website river inspection (the address of (session's clock)) at (view's seconds)
+    set session's resume to false
+    refresh website river inspection session
+
+to leave website river inspection {a pointer to website river inspection session:session}:
+    set session's resume to session's clock's playing
+    pause website river inspection (the address of (session's clock)) at (session's view's seconds)

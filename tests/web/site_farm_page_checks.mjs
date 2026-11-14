@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {setTimeout as pause} from 'node:timers/promises';
+import {verifyFarmNames} from './site_farm_name_checks.mjs';
 
 // Follow rendered captions and real input; never call application callbacks.
 export async function verifyFarmPage({ command, evaluate, waitFor, controls, capture }) {
@@ -13,6 +14,7 @@ export async function verifyFarmPage({ command, evaluate, waitFor, controls, cap
   const scene = await evaluate('window.siteProbe.farmDraws.at(-1)');
   assert(scene.count > 0, 'The Farm must draw the actual scene mesh instances.');
   await capture('farm-scene');
+  await verifyFarmNames({evaluate,waitFor,controls,capture});
 
   await controls.clickText('Show Farm vocabulary');
   await controls.clickText('Checks');

@@ -90,8 +90,7 @@ to [paint the website river] {a pointer to UI canvas frame:painting}:
     set heading to target's heading if (kind = 3), else scene's heading
     set flipped to heading = 0
     paint website river sprite 1 in boat flipped flipped opacity 255 on frame
-    set blink to the website river blink at (river's seconds) cycling 7.3 offset 0.0
-    paint website river blink 5 across boat flipped flipped centered 0.36 0.35 radius 0.09 0.15 solid (0.55 / 0.78) opacity blink on frame
+    paint website river expressions for 0 in boat using (the website river expression for 0 during river) flipped flipped outlining false on frame
     set subject to 1
     loop while subject <= 3:
         set box to website river box between (the website river passenger box for subject in scene across world) and (the website river passenger box for subject in target across world) at movement
@@ -103,14 +102,10 @@ to [paint the website river] {a pointer to UI canvas frame:painting}:
                 set opacity to 0
         set scuffle to (kind = 4) and ((river's elapsed < 0.65) and ((subject = target's predator) or (subject = target's prey)))
         if scuffle and (painting's instance's reduced motion = false):
-            save the model transform in frame
-            set wave to 0.0 - (the cosine of (river's elapsed * 20.9439510239))
-            move the model in frame by x (box's x + box's width / 2.0 + wave * 4.0), y (box's y + box's height / 2.0 - 0.5 - wave * 2.5) and z 0.0
-            rotate the model in frame by (0.5 + wave * 8.5) degrees around x 0.0, y 0.0 and z 1.0
-            move the model in frame by x (0.0 - box's x - box's width / 2.0), y (0.0 - box's y - box's height / 2.0) and z 0.0
+            begin website river scuffle in box at (river's elapsed) on frame
         paint website river sprite (subject + 1) in box flipped false opacity opacity on frame
         if opacity > 0:
-            paint website river expressions for subject in box at river on frame
+            paint website river expressions for subject in box using (the website river expression for subject during river) flipped false outlining false on frame
         if scuffle and (painting's instance's reduced motion = false):
             restore the model transform in frame
         increment subject

@@ -1,0 +1,45 @@
+import ../appearance.dl
+import colors.dl
+
+appearance IDE workspace appearance:
+    use content appearance
+    background is palette color "Studio background"
+    text is palette color "Studio text"
+
+appearance IDE card appearance:
+    use card appearance
+    background is palette color "Studio surface"
+    border is palette color "Studio border"
+
+appearance IDE code appearance:
+    use code appearance
+    background is palette color "Editor background"
+    text is palette color "Editor text"
+    border is palette color "Studio border"
+    border width is 1
+    height is 560
+
+appearance IDE signal appearance:
+    use signal appearance
+    text is palette color "Studio muted"
+
+appearance IDE link appearance:
+    use link appearance
+    text is palette color "Studio accent"
+    background is palette color "Studio surface"
+    border is palette color "Studio border"
+    border width is 1
+
+appearance IDE tabs appearance:
+    font size is 14
+    gap is 12
+
+appearance IDE tools appearance:
+    columns are 4
+    stack below 700
+    gap is 12
+
+appearance IDE preview appearance:
+    height is 320
+    background is UI ink 9 11 18
+    corner radius is 12

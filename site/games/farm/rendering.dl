@@ -4,6 +4,8 @@ import scene_characters.dl
 import scene_fences.dl
 import scene_flags.dl
 import scene_areas.dl
+import scene_markers.dl
+import scene_weather.dl
 import render_inputs.dl
 
 class:
@@ -17,6 +19,8 @@ class:
         fences as a pointer to website Farm fences
         flags as a pointer to website Farm flags
         areas as a pointer to website Farm areas
+        markers as a pointer to website Farm markers
+        weather as a pointer to website Farm weather
         dragged as a string
         bank as a pointer to UI scene mesh bank
         frame as a pointer to UI scene frame
@@ -47,6 +51,8 @@ to get [a website Farm renderer for] {a pointer to website farm world:world} [in
     set result's fences to website Farm fences for world in (result's landscape)
     set result's flags to website Farm flags for world in (result's landscape)
     set result's areas to website Farm areas in (result's landscape)
+    set result's markers to website Farm markers in (result's landscape)
+    set result's weather to website Farm weather in (result's landscape)
     ignore (update website Farm areas (result's areas) from world)
     set result's bank to a UI scene mesh bank
     set result's frame to a UI scene frame using (result's bank)
@@ -57,6 +63,11 @@ to get [a website Farm renderer for] {a pointer to website farm world:world} [in
     set result's raining to world's raining
     set result's dirty and result's shadow dirty to true
     return result
+
+to [supply website Farm navigation] {website Farm navigation display:data} [in] {a pointer to website Farm renderer:renderer}:
+    if (data is the same website Farm navigation as renderer's markers's navigation) = false:
+        set renderer's markers's navigation to data
+        set renderer's dirty to true
 
 to [update website Farm renderer] {a pointer to website Farm renderer:renderer} [from] {a pointer to website farm world:world} [over] {floating-point number:duration} [seconds instantly] {boolean:instant}:
     update website Farm landscape (renderer's landscape) from world
@@ -93,6 +104,9 @@ to [upload website Farm frame in] {a pointer to website Farm renderer:renderer}:
         set UI shader (renderer's resource) pass (the website Farm shadow pass) in (renderer's view) to draws (frame's shadow draws' data) counting (the length of frame's shadow draws)
 
 to get [the rendered website Farm] {a pointer to website Farm renderer:renderer} [sized] {integer:width} [by] {integer:height} [in] {UI bounds:viewport}:
+    set markers to refresh website Farm markers (renderer's markers) using (renderer's characters) dragging (renderer's dragged)
+    set weather to refresh website Farm weather (renderer's weather) at amount (renderer's rain)
+    set renderer's dirty to renderer's dirty or (markers or weather)
     set previous to renderer's camera's viewport
     if (previous's width != viewport's width) or (previous's height != viewport's height):
         resize website Farm camera (the address of (renderer's camera)) to viewport
@@ -137,6 +151,8 @@ to [close website Farm renderer] {a pointer to website Farm renderer:renderer}:
     free renderer's inputs
     close UI scene frame (renderer's frame)
     close UI scene mesh bank (renderer's bank)
+    close website Farm weather (renderer's weather)
+    close website Farm markers (renderer's markers)
     close website Farm areas (renderer's areas)
     close website Farm flags (renderer's flags)
     close website Farm fences (renderer's fences)

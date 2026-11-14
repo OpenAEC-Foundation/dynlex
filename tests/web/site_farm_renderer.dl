@@ -6,9 +6,11 @@ set driver's shader operations to the browser UI shader operations
 set view to a new UI view
 set view's driver to the address of driver
 set view's window to 7 as a pointer
-set world to the initial website farm world
+set document to the initial website farm document
+set world to document's world
 set viewport to UI box at 20.0 30.0 sized 480.0 360.0
 set renderer to a website Farm renderer for world in viewport using shader (42 as a pointer) in (the address of view)
+supply website Farm navigation (the website Farm navigation shown for document) in renderer
 ignore (the rendered website Farm renderer sized 480 by 360 in viewport)
 ignore (the rendered website Farm renderer sized 480 by 360 in viewport)
 set renderer's seconds to 0.1
@@ -20,6 +22,12 @@ set actor's x to actor's x + 1
 update website Farm renderer renderer from world over 0.5 seconds instantly false
 ignore (advance website Farm renderer renderer over 0.3 seconds dragging "")
 ignore (the rendered website Farm renderer sized 600 by 360 in viewport)
+set renderer's rain to 1.0
+ignore (the rendered website Farm renderer sized 600 by 360 in viewport)
+set renderer's seconds to 0.5
+ignore (the rendered website Farm renderer sized 600 by 360 in viewport)
+set renderer's rain to 0.0
+ignore (the rendered website Farm renderer sized 600 by 360 in viewport)
 close website Farm renderer renderer
-free website farm world world
-print line "Farm rendering retains baked lighting and static geometry, reuses unchanged frames, and refreshes changed world poses."
+free website farm document document
+print line "Farm rendering retains baked lighting and static geometry, reuses unchanged frames, and refreshes world poses, navigation markers and rain."

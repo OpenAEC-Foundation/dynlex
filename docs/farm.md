@@ -181,7 +181,7 @@ node tests/web/farm.mjs
 node tests/web/farm_programs.mjs
 node tests/web/farm_arguments.mjs
 node tests/web/farm_language_upgrade.mjs
-node tests/web/farm_motion.mjs
+python3 tests/web/site_runtime.py --case site_farm_motion
 node tests/web/farm_equipment.mjs
 node tests/web/farm_livestock.mjs
 node tests/web/farm_management.mjs

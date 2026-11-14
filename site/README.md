@@ -32,7 +32,10 @@ pointer capture and request generations. Its visual declaration is in
 `games/farm/interface.dl`, with shared model-backed fields for roles, workers,
 areas, flags and supplies. Its controller manages playback, worker roles, manual
 tools, pointer gestures and saved profiles. `rendering.dl` composes the landscape,
-characters, equipment, fences, flags and work areas through the shared scene API.
+characters, equipment, fences, flags, work areas and navigation markers through
+the shared scene API. Route segments reuse one mesh and follow the displayed
+person. Rain is one cloud mesh whose shader advances the drops and fades their
+opacity; weather changes retain the mesh and sunlight shadow data.
 Farm source uses the same source workspace and program service as the IDE and
 River. `application.dl` connects the interface, controllers and platform events.
 
@@ -74,12 +77,29 @@ python3 tests/web/site_runtime.py
 python3 tests/web/site_runtime.py --case site_entry
 python3 tests/web/site_runtime.py --case site_farm_interface
 python3 tests/web/site_runtime.py --case site_farm_controller --case site_farm_profiles
+python3 tests/web/site_runtime.py --frontend native --case site_farm_markers
 node tests/web/project_sources.mjs
 python3 tests/web/source_package.py
 node tests/web/farm_models.mjs build/dynlex --native-wasm --shipped
 node tests/web/library_values.mjs build/dynlex --shipped
 node tests/web/site_games.mjs
 node tests/web/site_program_protocol.mjs
+```
+
+Controller and model checks use both the native compiler and the compiler shipped
+to browsers. `--frontend native` or `--frontend shipped` selects one for an
+independent preflight check.
+
+`/river-character-sheet.html` declares the 17 production character states in
+`pages/river_characters.dl`. The game and inspection page share artwork, eyelid
+geometry, expression poses, tongue motion and scuffle transforms. Pause and
+Restart control a shared timeline; the range control scrubs every loop to the
+same fraction. Overlay bounds use the production painter. Leaving the page
+pauses its timeline, and automatic playback respects reduced motion.
+
+```bash
+python3 tests/web/site_runtime.py --case site_river_inspection_interface
+DYNLEX_SITE_SCENARIO=river-inspection node tests/web/site_browser.mjs build/site webgpu
 ```
 
 Source editors use `dynlex-ui/ui/source_tools.dl`. Its workspace discovers

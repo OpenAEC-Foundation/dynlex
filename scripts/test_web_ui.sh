@@ -34,7 +34,7 @@ node "$PROJECT_DIR/tests/web/farm_arguments.mjs"
 node "$PROJECT_DIR/tests/web/farm_collection.mjs"
 node "$PROJECT_DIR/tests/web/farm_collection_upgrade.mjs"
 node "$PROJECT_DIR/tests/web/farm_language_upgrade.mjs"
-node "$PROJECT_DIR/tests/web/farm_motion.mjs"
+python3 "$PROJECT_DIR/tests/web/site_runtime.py" --case site_farm_motion
 node "$PROJECT_DIR/tests/web/farm_equipment.mjs"
 node "$PROJECT_DIR/tests/web/farm_livestock.mjs"
 node "$PROJECT_DIR/tests/web/farm_management.mjs"

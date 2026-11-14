@@ -1,0 +1,1 @@
+Farm markers share scene geometry, follow interpolated people, retain navigation snapshots and release their scene objects.

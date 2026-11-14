@@ -1,0 +1,39 @@
+# Inspection chooses one normalized frame for loops with different durations.
+# The production renderer supplies its animation durations and samples the clock.
+import lib/std.dl
+
+class:
+    patterns:
+        website river inspection clock
+    members:
+        phase as a floating-point number
+        elapsed as a floating-point number
+        started as a floating-point number
+        playing as a boolean
+
+to get the website river inspection time of {a pointer to website river inspection clock:clock} at {floating-point number:seconds}:
+    return clock's elapsed + ((seconds - clock's started) if (clock's playing), else 0.0)
+
+to get the website river inspection phase of {a pointer to website river inspection clock:clock} cycling {floating-point number:duration} at {floating-point number:seconds}:
+    set position to clock's phase + (the website river inspection time of clock at seconds) / duration
+    return position - (the floor of position)
+
+to pause website river inspection {a pointer to website river inspection clock:clock} at {floating-point number:seconds}:
+    if clock's playing:
+        set clock's elapsed to the website river inspection time of clock at seconds
+        set clock's playing to false
+
+to resume website river inspection {a pointer to website river inspection clock:clock} at {floating-point number:seconds}:
+    if clock's playing = false:
+        set clock's started to seconds
+        set clock's playing to true
+
+to scrub website river inspection {a pointer to website river inspection clock:clock} to {floating-point number:amount} percent at {floating-point number:seconds}:
+    set clock's phase to amount / 100.0
+    set clock's elapsed to 0.0
+    set clock's started to seconds
+    set clock's playing to false
+
+to restart website river inspection {a pointer to website river inspection clock:clock} at {floating-point number:seconds} animating {boolean:moving}:
+    scrub website river inspection clock to 0.0 percent at seconds
+    set clock's playing to moving

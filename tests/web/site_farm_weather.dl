@@ -1,0 +1,37 @@
+import ../../site/games/farm/scene_landscape.dl
+import ../../site/games/farm/scene_weather.dl
+
+require condition ((the absolute value of ((the website Farm rain height from 4.0 at 0.1 seconds) - 3.3)) < 0.00001) reporting "Rain did not fall at seven world units per second"
+require condition ((the absolute value of ((the website Farm rain height from 0.5 at 0.1 seconds) - 8.8)) < 0.00001) reporting "Rain did not wrap below the ground"
+require condition ((the absolute value of ((the website Farm rain height from 4.0 at (9.0 / 7.0) seconds) - 4.0)) < 0.00001) reporting "A rain cycle did not return to its initial height"
+set world to the initial website farm world
+set landscape to a website Farm landscape for world
+set count to the length of (landscape's objects)
+set weather to website Farm weather in landscape
+require condition ((the length of (landscape's objects)) = count + 1) reporting "Rain must be one retained cloud object"
+require condition ((weather's object's visible = false) and (weather's object's pickable = false)) reporting "Clear skies exposed rain geometry or intercepted picking"
+set part to the item at 0 in (weather's object's instance's model's parts)
+set base to a UI cylinder mesh with top 1.0 bottom 1.0 height 1.0 around 6 sides capped true
+require condition ((the length of part's mesh's vertices) = (the length of base's vertices) * 600) reporting "The rain cloud omitted drops"
+require condition ((part's material's unlit) and ((part's material's depth write = false) and (part's casts shadow = false))) reporting "Rain changed the scene lighting or opaque depth"
+require condition ((part's material's opacity = 0.6) and (part's material's flags = (3 as a 32 bit unsigned integer))) reporting "Rain lost its shared shader effect material"
+require condition (refresh website Farm weather weather at amount 1.0) reporting "Rain did not become visible"
+require condition ((refresh website Farm weather weather at amount 0.5) = false) reporting "Changing rain strength rebuilt geometry"
+set bank to a UI scene mesh bank
+set frame to a UI scene frame using bank
+set camera to a UI scene camera at (a UI scene vector from [12.0,18.0,15.0]) aimed at (a UI scene vector from [0.0,0.4,0.0]) with angle 35.0 aspect 1.0 near 0.1 far 150.0
+set objects to an empty list of a pointer to UI scene object
+append (weather's object) to objects
+prepare UI scene frame frame from objects through camera
+require condition (((the length of frame's records) = 1) and ((the length of frame's draws) = 1)) reporting "Rain must use one mesh draw instead of per-drop submissions"
+require condition ((the length of frame's shadow records) = 0) reporting "Rain was submitted to the shadow pass"
+require condition ((the length of bank's spans) = 1) reporting "Rain duplicated its mesh storage"
+require condition (refresh website Farm weather weather at amount 0.0) reporting "Clear skies did not hide rain"
+free objects
+close UI scene frame frame
+close UI scene mesh bank bank
+close website Farm weather weather
+require condition ((the length of (landscape's objects)) = count) reporting "Closing rain retained its scene object"
+close website Farm landscape landscape
+free website farm world world
+print line "Farm rain uses one retained cloud, shader motion, fading opacity and no shadow, picking or per-drop draw overhead."

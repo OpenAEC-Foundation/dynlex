@@ -1,0 +1,76 @@
+import ../../site/editor/theme.dl
+import site_fixture.dl
+
+function check website theme scenario {integer:scenario}:
+    globals:
+        website fixture
+    execute:
+        @intrinsic("call", "host", "theme_fixture", nothing, scenario as a 32 bit integer)
+        set instance to an instance of website fixture
+        set window to the address of instance
+        show page "/ide/index.html" in window
+        set driver to a website shader test driver
+        set view to a new UI view
+        set view's instance to window
+        set view's driver to the address of driver
+        set state to a new website state
+        set state's view to the address of view
+        set state's services to the browser UI service provider
+        set state's route to "/ide/index.html"
+        set instance's state to (the address of state) as a pointer
+        prepare website fixture editors in (the address of state)
+        open website appearance in (the address of state)
+        require condition (state's editor light = (scenario = 1)) reporting "The stored theme or default dark preference was not applied"
+        if (scenario = 2) or (scenario = 3):
+            require condition ((the value of "Studio appearance notice" in window) = 0) reporting "A failed or invalid theme load was hidden"
+            require condition (((the UI value for (the control labeled "Studio appearance error" in window) in window)'s text) = "An error occurred. Check the log.") reporting "A theme failure exposed internal details"
+        else:
+            require condition ((the value of "Studio appearance notice" in window) = -1) reporting "A successful theme load retained an error notice"
+        set style to UI appearance ((the control labeled "IDE source" in window)'s appearance) resolved for 1280.0 using (instance's palette)
+        require condition (style's background's red = (250 if state's editor light, else 42)) reporting "The editor background ignored its selected theme"
+        if scenario = 0:
+            set node to the control labeled "IDE source" in window
+            set value to the UI value for node in window
+            ignore record UI text edit in (the address of (value's text state)) replacing with (the string form of "f") from 0 through 0 selecting 1 through 1
+            set history to value's undo
+            synchronize UI source workspace (state's language) at 0.0 seconds
+            set document to (the UI source editor labeled "IDE source" in (state's language))'s document
+            free document's token types
+            set document's token types to a JSON array containing [a new JSON-RPC text for "function"]
+            free document's token modifiers
+            set document's token modifiers to a JSON array containing [a new JSON-RPC text for "callDepth0"]
+            set position to the UI analysis position for source byte 0 in document
+            set row to (the JSON number named "line" in position) as an integer
+            set column to (the JSON number named "character" in position) as an integer
+            free position
+            free document's tokens
+            set document's tokens to a JSON object containing [JSON child "data" is (a JSON array containing [a new JSON-RPC integer for row, a new JSON-RPC integer for column, a new JSON-RPC integer for 1, a new JSON-RPC integer for 0, a new JSON-RPC integer for 1])]
+            set document's token revision to document's revision
+            increment document's token generation
+            toggle website editor theme in (the address of state)
+            present website source colors in (the address of state)
+            require condition ((state's editor light) and (view's theme's background's red = 250)) reporting "Switching to light did not update the complete workbench"
+            require condition (value's colors' ink's red = 48) reporting "The IDE light theme did not use shared source colors"
+            require condition ((value's text = "f") and (value's undo = history)) reporting "Changing theme replaced a draft or its undo history"
+            toggle website editor theme in (the address of state)
+            present website source colors in (the address of state)
+            require condition ((state's editor light = false) and (view's theme's background's red = 24)) reporting "Switching to dark did not update the complete workbench"
+            require condition (value's colors' ink's red = 184) reporting "The IDE retained light semantic colors after switching back"
+            require condition (value's undo = history) reporting "A second theme switch replaced undo history"
+            apply website appearance for (the string form of "/index.html") in (the address of state)
+            require condition (view's theme's background's red = 250) reporting "Leaving Studio changed the website's paper background"
+        if scenario = 4:
+            toggle website editor theme in (the address of state)
+            require condition ((state's editor light) and ((the value of "Studio appearance notice" in window) = 0)) reporting "A failed save discarded the visible choice or hid its error"
+        release website fixture editors in (the address of state)
+        set pending to state's requests
+        loop while pending != (0 as a pointer to website request):
+            set next to pending's next
+            deallocate pending
+            set pending to next
+        close window
+set scenario to 0
+loop while scenario < 5:
+    check website theme scenario scenario
+    increment scenario
+print line "Studio preserves theme preferences, source colors and drafts, restores the site background, and reports storage failures explicitly."

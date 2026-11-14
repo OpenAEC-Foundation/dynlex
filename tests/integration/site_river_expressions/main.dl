@@ -1,0 +1,28 @@
+import ../../../site/games/river/expressions.dl
+import lib/check.dl
+
+require condition ((the website river blink at 0.0 cycling 7.3 offset 0.0) = 0) reporting "A blink began outside its eyelid interval."
+require condition ((the website river blink at (7.3 * 0.915) cycling 7.3 offset 0.0) = 127) reporting "A closing eyelid lost its fade."
+require condition ((the website river blink at (7.3 * 0.93) cycling 7.3 offset 0.0) = 255) reporting "A blink never fully closed."
+require condition ((the website river blink at (7.3 * 0.945) cycling 7.3 offset 0.0) = 127) reporting "An opening eyelid lost its fade."
+require condition ((the website river blink at (7.3 * 0.96) cycling 7.3 offset 0.0) = 0) reporting "An eyelid stayed closed after the blink."
+set boat to the website river expression for 0 at (7.3 * 0.93)
+set sheep to the website river expression for 1 at (6.4 * 0.93 - 2.1)
+set wolf to the website river expression for 2 at (8.1 * 0.93 - 4.6)
+set hay to the website river expression for 3 at 5.0
+require condition ((the website river blink timing for 0)'s duration = 7.3) reporting "Inspection lost the farmer's production loop duration."
+require condition ((the website river blink timing for 2)'s offset = 4.6) reporting "Inspection lost the wolf's production loop offset."
+require condition ((boat's left blink = 255) and (boat's right blink = 255)) reporting "The farmer's blink changed timing."
+require condition ((sheep's left blink = 255) and (sheep's right blink = 255)) reporting "The sheep's eyes changed timing."
+require condition ((wolf's left blink = 255) and (wolf's right blink = 255)) reporting "The wolf's eyes changed timing."
+require condition (((hay's left blink = 0) and (hay's right blink = 0)) and ((hay's mouth = 0.0) and (hay's licking = false))) reporting "Hay acquired an animated expression."
+set sheep's left blink to 0
+set sheep's mouth to 1.0
+require condition ((sheep's right blink = 255) and (wolf's mouth = 0.0)) reporting "Independent inspection frames shared mutable expression state."
+set eyes to the website river eye overlays
+require condition ((the length of eyes) = 5) reporting "Production eye overlays are missing."
+set farmer to the item at 0 in eyes
+set eyelid to the item at 4 in eyes
+require condition ((farmer's sprite = 5) and (farmer's vertical radius = 0.15)) reporting "The farmer's painted eyelid geometry changed."
+require condition (((eyelid's subject = 2) and (eyelid's side = 1)) and ((eyelid's horizontal offset = -0.018) and (eyelid's vertical offset = 0.012))) reporting "The wolf's right eyelid lost its production alignment."
+print line "River expressions share production blink timing and independent eye, mouth and tongue poses."

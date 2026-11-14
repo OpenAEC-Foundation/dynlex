@@ -1,0 +1,1 @@
+Farm rain uses one retained cloud, shader motion, fading opacity and no shadow, picking or per-drop draw overhead.

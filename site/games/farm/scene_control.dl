@@ -57,9 +57,13 @@ to get [website Farm entity] {string:id} [can be dropped at] {website farm point
 to [release website Farm gesture in] {a pointer to website state:state} [cancelled] {boolean:cancelled}:
     set session to the address of (state's farm)
     set mode to session's pointer mode
+    set naming to session's pointer name
     set session's pointer mode to 0
+    set session's pointer name to false
     if mode = 0:
         return nothing
+    if cancelled or ((mode = 4) or (session's pointer moved)):
+        set state's view's pressed to 0 as a pointer to UI layout
     set renderer to session's renderer
     set world to session's document's world
     hide website Farm area preview in (renderer's areas)
@@ -82,7 +86,7 @@ to [release website Farm gesture in] {a pointer to website state:state} [cancell
                 notify website farm world saying ("Placed here. The farm can continue." if moved, else "Choose a free square on available land.")
                 if moved and (session's pointer entity starts with "worker-"):
                     choose website Farm person (session's pointer entity) in state
-            else if session's pointer moved = false:
+            else if (session's pointer moved = false) and (naming = false):
                 click website Farm selection (session's pointer selection) above (session's pointer square) in state
     set dropped to session's pointer entity
     set session's pointer entity and renderer's dragged to ""
@@ -125,6 +129,7 @@ to [move website Farm gesture to] {UI point:cursor} [in] {a pointer to website s
         if ((dx * dx + dy * dy) < 36.0) and (session's pointer moved = false):
             return nothing
         set session's pointer moved to true
+        set state's view's pressed to 0 as a pointer to UI layout
         if session's pointer entity is empty:
             return nothing
         set renderer's dragged to session's pointer entity

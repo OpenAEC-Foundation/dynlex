@@ -7,6 +7,10 @@ export function canvasControls({command,evaluate,capture}) {
     await command('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});
     await command('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});
   };
+  const key=async(code,key,number,modifiers=0)=>{
+    for(const type of ['keyDown','keyUp'])
+      await command('Input.dispatchKeyEvent',{type,code,key,windowsVirtualKeyCode:number,modifiers});
+  };
   // Captions may wrap into several lines; choose a visible part of the whole.
   const location=text=>`(() => {
     const target=${JSON.stringify(text)},entries=window.colorProbe;
@@ -63,5 +67,5 @@ export function canvasControls({command,evaluate,capture}) {
       await evaluate('JSON.stringify(window.colorProbe.map(item=>item.text))'));
   };
   const clickVisibleText=(text,settle=350)=>clickText(text,settle,false);
-  return {click,clickText,clickVisibleText,textVisible,wheel};
+  return {click,key,clickText,clickVisibleText,textVisible,wheel};
 }
