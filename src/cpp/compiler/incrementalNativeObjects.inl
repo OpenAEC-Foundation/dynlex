@@ -24,6 +24,7 @@ struct BuildStatistics {
 		   bindingRecordMilliseconds = 0;
 	std::string cacheDirectory;
 	std::string cacheEntry;
+	std::string parserIndexEntry;
 	bool reusedFrontend = false;
 	bool reusedTypeInference = false;
 	bool linkedCachedObjects = false;

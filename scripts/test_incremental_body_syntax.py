@@ -1,6 +1,5 @@
 """Unchanged body syntax stays unmaterialized until a consumer needs it."""
 
-import json
 from pathlib import Path
 
 
@@ -107,7 +106,7 @@ def check_partial_parser_snapshot(root, build):
     main.write_text(main.read_text().replace(source.splitlines(keepends=True)[2], ""))
     removed = build(entry=main)
     assert removed[1:] == build(False, entry=main)[1:]
-    manifest_path = Path(removed[0]["cache_entry"])
-    manifest = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
-    parser = manifest_path.parent / f"parser-{manifest['parser_key']}.entry"
+    index = Path(removed[0]["parser_index_entry"])
+    parser_key = index.read_bytes().split(b"\n", 2)[2].decode()
+    parser = index.parent / f"parser-{parser_key}.entry"
     assert b"retained syntax sentinel" not in parser.read_bytes()

@@ -305,12 +305,15 @@ importSourceFile(const std::string &path, ParseContext &context, const std::stri
 				 {context.sourceTokenAnnotations.begin() + tokenStart, context.sourceTokenAnnotations.end()}}
 			);
 		}
-		if (!importLine(line, importPathView))
-			return false;
 		lineStart = lineEnd;
 		sourceFileLineIndex++;
+		// File preparation is complete even when this last line's import fails.
+		if (products && lineStart == fileView.size())
+			products->record(*sourceFile, syntax, prepared);
+		if (!importLine(line, importPathView))
+			return false;
 	}
-	if (products)
+	if (products && fileView.empty())
 		products->record(*sourceFile, syntax, prepared);
 	return true;
 }

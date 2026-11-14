@@ -24,6 +24,7 @@ from test_incremental_conversions import check_conversion_reuse
 from test_incremental_matcher_work import check_matcher_fingerprint_work
 from test_incremental_source_observations import check_source_observation_reuse, check_configured_source_comments
 from test_incremental_source_preparation import check_source_preparation
+from test_incremental_source_checkpoints import check_source_checkpoints
 from test_incremental_static_references import check_static_reference_identities
 from test_incremental_partition_closures import check_partition_closure_work
 from test_incremental_validation import check_capture_note_wording, check_validation_units, check_failed_validation_units, check_capture_scope_queries, check_validation_flow, check_validation_bound_parameters, check_diagnostic_stage_reuse
@@ -102,6 +103,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_matcher_fingerprint_work(root, build)
     check_source_observation_reuse(root, build)
     check_source_preparation(root, build)
+    check_source_checkpoints(root, build)
     check_static_reference_identities(root, build)
     check_partition_closure_work(root, build)
     check_capture_note_wording(root, build)

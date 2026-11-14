@@ -51,6 +51,12 @@ and expands it against the current completed resolution. Inference indexes that
 published tree before it can be cloned or regrouped, preserving canonical source
 identities. Partial parser snapshots retain unvisited products after an error;
 complete snapshots prune removed products.
+Parser/source products have a per-program index published independently of semantic
+program and error manifests. Every attempted frontend publishes its actual products;
+import and preprocessing failures retain completed and unvisited prior units without
+advancing the compilation stage. A physical file product completes when its last
+line is lexed, before that line's import is resolved. The index points to an atomic,
+content-addressed parser snapshot and remains usable when a later stage fails.
 
 - Which line opens a new section?
 - What patterns does each section have?

@@ -190,6 +190,7 @@ void writeEntry(const fs::path &path, std::string_view payload) {
 
 #include "incrementalDiagnosticCache.inl"
 #include "incrementalParsedExpressionCache.inl"
+#include "incrementalParserProductIndex.inl"
 #include "incrementalSourceLineCodec.inl"
 #include "incrementalSourcePreparation.inl"
 #include "incrementalSourceTransforms.inl"
@@ -388,6 +389,7 @@ bool compileIncrementally(
 		InferenceSummaryStore summaryStore(directory, statistics);
 		statistics.cacheDirectory = directory.string();
 		statistics.cacheEntry = programEntry.string();
+		statistics.parserIndexEntry = (directory / ("parser-index-" + programKey + ".entry")).string();
 		bool success = false;
 		std::optional<Json> previous;
 		std::optional<Json> previousFailure;
@@ -397,7 +399,6 @@ bool compileIncrementally(
 		std::string cachedDiagnostics;
 		std::string previousMatches;
 		std::string previousMatcherKey;
-		std::string previousParserKey;
 		if (auto cached = readEntry(failedEntry)) {
 			previousFailure = Json::parse(*cached);
 			if (const auto &state = previousFailure->at("inference_state"); !state.is_null())
@@ -410,8 +411,6 @@ bool compileIncrementally(
 				observationsStillEquivalent(*previousFailure, *recording, context, cachedDiagnostics, configOnlyChange);
 			if (!reuseFailedFrontend)
 				previousMatcherKey = previousFailure->at("matcher_key").get<std::string>();
-			if (!reuseFailedFrontend)
-				previousParserKey = previousFailure->at("parser_key").get<std::string>();
 		}
 		if (!reuseFailedFrontend) {
 			if (auto cached = readProgramManifest(programEntry)) {
@@ -425,8 +424,6 @@ bool compileIncrementally(
 					observationsStillEquivalent(*previous, *recording, context, cachedDiagnostics, configOnlyChange);
 				if (!reusePreviousFrontend && previousMatcherKey.empty())
 					previousMatcherKey = previous->at("matcher_key").get<std::string>();
-				if (!reusePreviousFrontend && previousParserKey.empty())
-					previousParserKey = previous->at("parser_key").get<std::string>();
 			}
 		}
 		statistics.cacheLoadMilliseconds = elapsedMilliseconds(compileStart);
@@ -489,15 +486,8 @@ bool compileIncrementally(
 					previousMatches = std::move(*cached);
 				}
 			}
-			std::string previousParsedExpressions;
-			if (!previousParserKey.empty()) {
-				fs::path parserEntry = directory / ("parser-" + previousParserKey + ".entry");
-				if (auto cached = readEntry(parserEntry)) {
-					if (digest(*cached) != previousParserKey)
-						throw std::runtime_error("corrupt parser cache entry: " + parserEntry.string());
-					previousParsedExpressions = std::move(*cached);
-				}
-			}
+			ParserProductIndex parserIndex(directory, statistics.parserIndexEntry);
+			std::string previousParsedExpressions = parserIndex.load();
 			IncrementalParsedExpressionCache parserCache(context, previousParsedExpressions);
 			IncrementalSourcePreparation sourcePreparation(context, parserCache, *recording);
 			IncrementalSourceTransforms sourceTransforms(context, parserCache, *recording);
@@ -550,14 +540,6 @@ bool compileIncrementally(
 				writeEntry(directory / ("matcher-" + key + ".entry"), payload);
 				recordPhase(statistics.matcherStoreMilliseconds, statistics.matcherStoreCPUMilliseconds);
 				statistics.matcherSnapshotMilliseconds += elapsedMilliseconds(saveStart);
-				return key;
-			};
-			auto saveParser = [&](IncrementalParsedExpressionCache::SnapshotScope scope) {
-				auto saveStart = Clock::now();
-				std::string payload = parserCache.snapshot(scope);
-				std::string key = digest(payload);
-				writeEntry(directory / ("parser-" + key + ".entry"), payload);
-				statistics.parserSnapshotMilliseconds += elapsedMilliseconds(saveStart);
 				return key;
 			};
 			IncrementalSourceScopes sourceScopes(context);
@@ -749,7 +731,6 @@ bool compileIncrementally(
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
 					result["frontend_diagnostic_units"] = std::move(frontendDiagnosticUnits);
 					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
-					result["parser_key"] = saveParser(IncrementalParsedExpressionCache::SnapshotScope::Complete);
 					recordNativeOutput(result, statistics, &*previous);
 					recordSemanticSources(result, *recording, context);
 					result["linked_output"] = linkedOutputIdentity(context);
@@ -803,7 +784,6 @@ bool compileIncrementally(
 						{"diagnostic_sources", diagnosticSources}
 					};
 					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
-					result["parser_key"] = saveParser(IncrementalParsedExpressionCache::SnapshotScope::Complete);
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
 					result["validation_units"] = validation.snapshot();
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
@@ -899,15 +879,12 @@ bool compileIncrementally(
 				std::set<std::string> diagnosticSources;
 				Json records = captureCachedDiagnostics(context, diagnostics, diagnosticSources);
 				Json savedBindings = bindings.snapshot();
-				Json result{
-					{"files", recording->observations},
-					{"diagnostics", diagnostics},
-					{"diagnostic_records", std::move(records)},
-					{"diagnostic_sources", std::move(diagnosticSources)},
-					{"binding_units", std::move(savedBindings)},
-					{"matcher_key", saveMatcher(IncrementalMatcherCache::SnapshotScope::Partial)},
-					{"parser_key", saveParser(IncrementalParsedExpressionCache::SnapshotScope::Partial)}
-				};
+				Json result{{"files", recording->observations},
+							{"diagnostics", diagnostics},
+							{"diagnostic_records", std::move(records)},
+							{"diagnostic_sources", std::move(diagnosticSources)},
+							{"binding_units", std::move(savedBindings)},
+							{"matcher_key", saveMatcher(IncrementalMatcherCache::SnapshotScope::Partial)}};
 				recordSemanticSources(result, *recording, context);
 				result["validation_units"] = validation.snapshot();
 				if (constraintState.is_null() && previousFailure)
@@ -931,6 +908,12 @@ bool compileIncrementally(
 				writeEntry(failedEntry, result.dump());
 				statistics.cacheWriteMilliseconds += elapsedMilliseconds(failureWriteStart);
 			}
+			auto parserSaveStart = Clock::now();
+			parserIndex.publish(
+				parserCache, compiled ? IncrementalParsedExpressionCache::SnapshotScope::Complete
+									  : IncrementalParsedExpressionCache::SnapshotScope::Partial
+			);
+			statistics.parserSnapshotMilliseconds += elapsedMilliseconds(parserSaveStart);
 			statistics.bodySyntaxUnitsParsed = parserCache.bodyAssemblyCount();
 			statistics.bodySyntaxUnitsRestored = parserCache.bodyRestorationCount();
 			statistics.bodySyntaxUnitsSkipped = parserCache.bodySkippedCount();

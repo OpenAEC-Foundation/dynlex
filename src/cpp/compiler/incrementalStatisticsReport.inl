@@ -54,6 +54,7 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"validation_scope_fingerprints_computed", statistics.validation.fingerprintsComputed},
 					  {"validation_references_fingerprinted", statistics.validation.referencesFingerprinted},
 					  {"cache_entry", statistics.cacheEntry},
+					  {"parser_index_entry", statistics.parserIndexEntry},
 					  {"frontend_reused", statistics.reusedFrontend},
 					  {"type_inference_reused", statistics.reusedTypeInference},
 					  {"inference_instantiations_reused", statistics.reusedInferenceInstantiations},
