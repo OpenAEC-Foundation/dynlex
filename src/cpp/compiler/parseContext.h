@@ -3,6 +3,7 @@
 #include "codeLine.h"
 #include "compilerUtils.h"
 #include "diagnostic.h"
+#include "inferenceReadOwner.h"
 #include "lsp/fileSystem.h"
 #include "patternMatch.h"
 #include "patternTreeNode.h"
@@ -19,6 +20,7 @@
 #include <optional>
 #include <set>
 #include <stack>
+#include <string_view>
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
@@ -44,15 +46,44 @@ class DIScope;
 class TargetMachine;
 } // namespace llvm
 
+struct CallableFunctionMatch;
+struct InferenceContext;
+struct InferenceProductHooks;
+
+struct VariableBindingHooks;
+struct SourcePreparationHooks;
+struct SourceTransformHooks;
+
 struct ParseContext {
+	enum class InferenceReuseUse { RuntimeCall, ConstantCall, Callable, SymbolicReference };
 	struct IncrementalFunctionRequest {
 		Section *section;
 		std::vector<std::string> parameterNames;
-		std::vector<DataType> argumentTypes;
+		InstantiationKey key;
+		std::unordered_set<std::string> requiredCompileTimeParameters;
+		std::vector<std::vector<CompileTimeValue>> observedArguments;
+		PatternDefinition *definition = nullptr;
 	};
 	struct IncrementalConstraintValue {
 		TypeConstraint constraint;
 		DataType parameterType;
+	};
+	struct IncrementalConstraintQuery {
+		enum class State { Pending, Ready, Failed, Blocked };
+		std::string identity;
+		std::string text;
+		State state = State::Pending;
+		int pass = 0;
+		std::optional<IncrementalConstraintValue> value;
+		std::unordered_set<const Section *> dependencies;
+		std::vector<Diagnostic> diagnostics;
+		bool reusable = false;
+		bool readsReused = false;
+	};
+	struct RestoredBodyReference {
+		PatternReference *reference;
+		std::unique_ptr<PatternMatch> match;
+		std::optional<std::tuple<PatternElement, int, int>> variable;
 	};
 
 	struct ShaderUniform {
@@ -106,31 +137,43 @@ struct ParseContext {
 	std::function<std::optional<PatternMatch *>(PatternReference *, MatchOptions, MatchDependencies *)> reuseMatcherResult;
 	std::function<void(PatternReference *, MatchOptions, const PatternMatch *, const MatchDependencies *)> recordMatcherResult;
 	std::function<void(const std::list<PatternReference *> &)> prepareDeferredMatcherReplay;
+	std::function<std::vector<RestoredBodyReference>()> restoreDeferredBodyUnits;
 	std::function<void(const std::vector<PatternReference *> &)> preparePrecedenceMatcherReplay;
-	std::function<std::vector<Section *>()> selectInactiveBodiesForResolutionReuse;
-	std::function<bool()> inactiveBodyMatcherTreeUnchanged;
-	std::function<void(const std::vector<Section *> &)> retainInactiveBodyMatcherResults;
-	size_t inactiveBodyResolutionReferencesSkipped = 0;
-	// A native build may reuse the successful ordering of type-constraint probes
-	// when its saved dependency closure and matching environment are unchanged.
-	bool reuseDeclaredConstraintProbes = false;
-	std::vector<std::string> priorConstraintProbeItems;
-	std::vector<int> priorConstraintProbePasses;
-	std::vector<bool> priorConstraintProbeReusable;
-	std::vector<std::optional<IncrementalConstraintValue>> priorConstraintProbeValues;
-	std::vector<std::unordered_set<const Section *>> priorConstraintProbeDependencies;
-	std::vector<std::string> constraintProbeItems;
-	std::vector<std::string> constraintProbeTexts;
-	std::vector<int> constraintProbePasses;
-	std::vector<std::optional<IncrementalConstraintValue>> constraintProbeValues;
-	std::vector<std::unordered_set<const Section *>> constraintProbeDependencies;
+	std::function<std::vector<Section *>()> selectCachedBodiesForResolutionReuse;
+	std::function<std::vector<Section *>()> invalidateCachedClassifications;
+	size_t cachedBodyResolutionReferencesSkipped = 0;
+	std::function<bool(Section &)> reuseInitialVariableLikeCounts;
+	std::function<void(const std::list<Section *> &)> recordInitialVariableLikeCounts;
+	size_t variableLikeCountUnitsReused = 0;
+	// Query products survive an incomplete constraint stage. Unvisited queries
+	// remain pending; completed values and terminal errors retain their reads.
+	bool collectedConstraintQueries = false;
+	std::vector<IncrementalConstraintQuery> priorConstraintQueries;
+	std::vector<IncrementalConstraintQuery> constraintQueries;
+	// A stage query retains every selected diagnostic before display suppression.
+	std::vector<Diagnostic> *activeDiagnosticProduct = nullptr;
 	size_t constraintProbesReused = 0;
 	size_t constraintProbesRun = 0;
 	size_t constraintValuesReused = 0;
 	size_t constraintExpressionsReused = 0;
+	// Type queries can affect inference even when the trial that read them was rejected.
+	std::function<
+		void(const InferenceReadOwner &, const lsp::SourceFile &, std::string_view, const std::vector<CallableFunctionMatch> &)>
+		recordCallableLookup;
+	std::function<void(const InferenceReadOwner &, const Section &, const std::shared_ptr<const VariableStorageScope> &)>
+		recordInferenceDependency;
+	std::function<void(
+		const InferenceReadOwner &, const Section &, const std::shared_ptr<const VariableStorageScope> &,
+		const std::vector<CompileTimeValue> &, const CompileTimeValue &
+	)>
+		recordInferenceValue;
 	// Parse cache entries contain only unresolved syntax. Restored executable
 	// expressions register references; temporary type expressions keep them local.
 	std::function<Expression *(Section *, Range, SectionType, bool)> reuseParsedExpression;
+	std::function<bool(Section *, CodeLine *, SectionType)> deferParsedLine;
+	std::vector<std::unique_ptr<BodySyntaxProduct>> sourceSyntaxProducts;
+	bool sourceSyntaxResolutionComplete = false;
+	std::function<void(CodeLine *, Expression *)> sourceExpressionPublished;
 	std::function<void(Range, SectionType, bool, const Expression *)> recordParsedExpression;
 	std::function<void(Range, SectionType)> retainParsedTemporaryExpression;
 	std::function<bool(Range, std::vector<DefinitionPatternElement> &)> reuseParsedDefinition;
@@ -138,16 +181,24 @@ struct ParseContext {
 	// Native incremental builds may import a previously generated function body
 	// after this compilation has inferred its current types and selected calls.
 	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;
-	std::function<bool(Section *, const InstantiationKey &, Instantiation &, bool)> reuseInferredInstantiation;
+	std::function<bool(Section *, const InstantiationKey &, Instantiation &, InferenceReuseUse, InferenceContext *)>
+		reuseInferredInstantiation;
+	std::function<bool(Section *, Instantiation &, InferenceContext *)> restoreInferredBody;
+	size_t functionBodyInferencePasses = 0;
+	size_t inferenceFailuresReused = 0;
+	size_t sourceBodyClones = 0;
+	size_t sourceFunctionBodyClones = 0;
+	size_t sourceBodyExpressionsCloned = 0;
+	double sourceBodyCloneMilliseconds = 0;
+	size_t inferenceBodiesLoaded = 0;
+	double inferenceBodyLoadMilliseconds = 0;
 	std::function<void(ParseContext &, const std::function<bool(const IncrementalFunctionRequest &)> &)>
 		runIncrementalPreinference;
+	std::function<void()> activateIncrementalReplacements;
 	std::vector<IncrementalFunctionRequest> incrementalReplacementFunctions;
-	std::function<void(Section *, const InstantiationKey *, llvm::Function *, bool)> recordGeneratedFunction;
+	bool reuseRootExecution = false;
+	std::function<void(Section *, const InstantiationKey &, llvm::Function *, bool)> recordGeneratedFunction;
 	std::function<bool(ParseContext &)> importReusedFunctions;
-	// Code generation names definitions and concrete types independently of call order.
-	std::map<const Section *, std::string> codegenSectionIdentities;
-	std::map<const ClassDefinition *, std::string> codegenClassIdentities;
-	std::map<DataType, std::string> codegenTypeIdentities;
 	std::array<double, 4> frontendStageMilliseconds{};
 	std::array<double, 6> inferenceStageMilliseconds{};
 	double resolutionSetupMilliseconds = 0;
@@ -160,11 +211,14 @@ struct ParseContext {
 	double resolutionReplaySetupMilliseconds = 0;
 	double resolutionCandidateMatchMilliseconds = 0;
 	size_t bodyResolutionReferenceVisits = 0;
+	size_t bodyResolutionUnitsReused = 0;
+	size_t bodyResolutionReferencesRestored = 0;
 	size_t bodyResolutionMatchCacheHits = 0;
 	size_t bodyResolutionMatchComputations = 0;
 	size_t variableLikeCountReferencesScanned = 0;
 	size_t patternPrecedenceGraphEdges = 0;
 	size_t pureValueSummaryHits = 0;
+	size_t preinferredPureValuesChecked = 0;
 	// On-demand signature probes are scoped to this compilation and never committed.
 	std::set<std::tuple<PatternDefinition *, size_t, size_t>> activePatternConstraintProbes;
 	std::map<std::tuple<PatternDefinition *, size_t, size_t>, TypeConstraint> provisionalConstraintDomains;
@@ -188,6 +242,7 @@ struct ParseContext {
 		ResolvedPatternPrecedence,
 		ResolvedPatterns,
 		Validated,
+		InferredConstraints,
 		InferredTypes,
 	};
 	enum class SourceTokenKind {
@@ -246,6 +301,7 @@ struct ParseContext {
 	std::unique_ptr<llvm::TargetMachine> targetMachine;
 	std::string resolvedTargetTuneCPU;
 	llvm::Function *mainLLVMFunction{};
+	std::unordered_map<const Section *, std::string> functionSymbolIdentities;
 	llvm::BasicBlock *mainCleanupBlock{};
 	llvm::AllocaInst *mainReturnStorage{};
 	llvm::GlobalVariable *commandLineArgumentCountGlobal{};
@@ -363,12 +419,30 @@ struct ParseContext {
 	// Owns all VariableReference instances for this compilation.
 	// Other structures keep non-owning raw pointers into this arena.
 	std::vector<std::unique_ptr<VariableReference>> ownedVariableReferences;
+	// Temporary constraint matches retain absent-name lookups separately from
+	// source declarations. Selected unbound references are diagnosed by inference.
+	std::unordered_map<const VariableReference *, Section *> unboundConstraintVariableScopes;
+	std::vector<std::shared_ptr<ExpressionStorage>> restoredBodyExpressionArenas;
+	std::vector<std::unique_ptr<PatternReference>> restoredBodyPatternReferences;
 	// Explicit source captures are parsed before pattern definitions. Register
 	// their references after definition parameters have been indexed.
 	std::vector<VariableReference *> pendingExplicitVariableReferences;
+	VariableBindingHooks *variableBindingHooks = nullptr;
 	// A conversion source is usable only while its selected call storage lives.
 	// Failed trials and replaced bodies expire these entries before finalization.
-	std::unordered_set<std::string> emittedOperandGroupingWarnings;
+	std::unordered_set<std::string> emittedDiagnosticKeys;
+	bool incrementalPreinferenceActive = false;
+	std::shared_ptr<const VariableStorageScope> preinferenceDiagnosticRoot;
+	std::unordered_set<const DiagnosticPublication *> preinferencePublications;
+	std::map<std::string, std::shared_ptr<DiagnosticPublication>> inferenceDiagnosticPublications;
+	std::map<
+		std::shared_ptr<const VariableStorageScope>, std::vector<Diagnostic>,
+		std::owner_less<std::shared_ptr<const VariableStorageScope>>>
+		deferredInferenceDiagnostics;
+	size_t preinferredDiagnosticsDeferred = 0;
+	size_t deferredInferenceDiagnosticsPublished = 0;
+	size_t inferenceDiagnosticUnitsRestored = 0;
+	size_t inferenceDiagnosticRecordsRestored = 0;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
 	// Parse-time source token annotations for metadata syntax that is not represented as normal functions.
@@ -377,15 +451,50 @@ struct ParseContext {
 	SyntaxConfig projectSyntax;
 	std::string builtinSyntaxConfigPath;
 	std::string projectSyntaxConfigPath;
+	SourcePreparationHooks *sourcePreparationHooks = nullptr;
+	SourceTransformHooks *sourceTransformHooks = nullptr;
 	// prohibit copies
 	ParseContext(ParseContext &) = delete;
 	ParseContext();
 	~ParseContext();
 	bool hasCompleted(CompilationStage stage) const { return compilationStage >= stage; }
-	void addDiagnostic(Diagnostic diagnostic) { diagnostics.push_back(std::move(diagnostic)); }
+	void retainInferenceDiagnostic(const Diagnostic &diagnostic);
+	[[gnu::noinline]] void addDiagnostic(Diagnostic diagnostic) {
+		retainInferenceDiagnostic(diagnostic);
+		const DiagnosticEmission *emission = diagnostic.emission.get();
+		if (emission && emission->publication) {
+			if (incrementalPreinferenceActive) {
+				if (!preinferencePublications.insert(emission->publication.get()).second)
+					return;
+			} else {
+				if (emission->publication->published)
+					return;
+				if (!emission->publication->identity.empty()) {
+					auto [canonical, inserted] =
+						inferenceDiagnosticPublications.try_emplace(emission->publication->identity, emission->publication);
+					if (canonical->second->published)
+						return;
+					canonical->second->published = true;
+				}
+				emission->publication->published = true;
+			}
+		}
+		if (emission && !emission->discriminator.empty()) {
+			std::string key = std::to_string(reinterpret_cast<uintptr_t>(diagnostic.range.line)) + "|" +
+							  std::to_string(diagnostic.range.start()) + "|" + std::to_string(diagnostic.range.end()) + "|" +
+							  emission->discriminator;
+			if (!emittedDiagnosticKeys.insert(std::move(key)).second)
+				return;
+		}
+		if (emission && emission->publication && !incrementalPreinferenceActive)
+			deferredInferenceDiagnosticsPublished++;
+		diagnostics.push_back(std::move(diagnostic));
+	}
 	CodeLine *createCodeLine(
 		lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string text, std::vector<SourceSlice> sourceSlices
 	);
+	// The caller owns immutable source text for this context's lifetime.
+	CodeLine *createBorrowedSourceLine(lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string_view text);
 	void addSourceToken(Range range, SourceTokenKind kind, SectionType referencedPatternType = SectionType::Function) {
 		sourceTokenAnnotations.push_back({range, kind, referencedPatternType});
 	}
@@ -410,6 +519,12 @@ struct ParseContext {
 		std::shared_ptr<const VariableStorageScope> storageScope = {}
 	);
 
+	InferenceProductHooks *inferenceProducts = nullptr;
+	std::map<std::pair<Section *, InstantiationKey>, std::shared_ptr<const VariableStorageScope>> instantiationStorageScopes;
+	std::map<std::string, std::shared_ptr<const VariableStorageScope>> logicalInstantiationScopes;
+	std::map<const VariableStorageScope *, std::string> frozenStorageIdentities;
+	std::shared_ptr<const VariableStorageScope> storageScopeForInstantiation(Section *section, const InstantiationKey &key);
+	void refineInstantiationStorageScope(Section *section, const InstantiationKey &before, const InstantiationKey &after);
 	std::map<
 		std::tuple<std::shared_ptr<const VariableStorageScope>, const Expression *, size_t>,
 		std::shared_ptr<const VariableStorageScope>>

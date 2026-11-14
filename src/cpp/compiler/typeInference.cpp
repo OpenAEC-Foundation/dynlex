@@ -1,4 +1,8 @@
 #include "atomicIntrinsics.h"
+#include "classInstantiationRequest.h"
+#include "incrementalClassRestoration.h"
+#include "inferenceProductHooks.h"
+#include "sectionIdentity.h"
 #include "shaderUniformType.h"
 #include "sourceStringLiterals.h"
 #include "type_inference/section_inference.inl"

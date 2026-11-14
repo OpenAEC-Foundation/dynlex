@@ -1,8 +1,8 @@
 #pragma once
-#include "classInstantiationRequestRecord.h"
 #include "range.h"
 #include "type.h"
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <string_view>
@@ -14,6 +14,7 @@ class StructType;
 }
 
 struct Section;
+struct ClassInstantiationRequest;
 
 inline constexpr std::string_view managedLifecycleParameterName = "\x1fmanaged_lifecycle_value";
 
@@ -37,7 +38,7 @@ struct ClassDefinition {
 	std::vector<FieldDefinition> fields;
 	std::vector<ClassInstantiation> instantiations;
 	// Canonical instantiation selected for a structural set of bound class-pattern arguments.
-	std::map<std::string, ClassInstantiationRequestRecord> instantiationsByRequest;
+	std::map<std::string, std::shared_ptr<const ClassInstantiationRequest>> instantiationRequests;
 	Section *retainSection{};
 	Section *releaseSection{};
 	unsigned alignment = 0; // Minimum struct alignment in bytes (0 = natural)

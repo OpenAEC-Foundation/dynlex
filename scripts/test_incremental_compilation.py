@@ -8,8 +8,9 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from test_incremental_dependency_graph import check_cross_file_typed_overload, check_deferred_match_key_replay, check_independent_constraint_probes, check_skipped_constraint_expression_retention, check_class_constraint_value_reuse, check_header_parameter_constraint_owner, check_precedence_match_key_replay, check_folded_value_remains_active, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_resolved_declaration_snapshot_reuse, check_reused_ir_dependency_graph_variants, check_runtime_pure_value_summary, check_temporary_expression_parse_reuse, check_top_level_projection_reuse, check_top_level_execution_constraint_probes, check_unrelated_added_pattern_constraint_probes
-from test_incremental_program_cache import check_integration_builds, check_program_payloads, check_cache_eviction, check_shared_class_type_graph
+from test_incremental_dependency_graph import check_cross_file_typed_overload, check_deferred_match_key_replay, check_independent_constraint_probes, check_skipped_constraint_expression_retention, check_class_constraint_value_reuse, check_header_parameter_constraint_owner, check_precedence_match_key_replay, check_folded_value_remains_active, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_resolved_declaration_snapshot_reuse, check_reused_ir_dependency_graph_variants, check_runtime_pure_value_summary, check_temporary_expression_parse_reuse, check_top_level_projection_reuse, check_top_level_execution_constraint_probes, check_unrelated_added_pattern_constraint_probes
+from test_incremental_program_cache import check_integration_builds, check_program_payloads, check_cache_eviction, check_recent_cache_entries, check_shared_class_type_graph
+from test_incremental_frontend_diagnostic_owners import check_frontend_diagnostic_units
 from test_incremental_match_replay import check_choice_declaration_replay, check_deferred_body_match_replay, check_flex_body_match_replay
 from test_incremental_native_units import check_interned_literal_identity, check_native_partition_edits
 from test_incremental_typed_variants import check_typed_variant_dependency_retention
@@ -18,6 +19,31 @@ from test_default_incremental_cache import check_default_cache
 from test_incremental_optimized_ir import check_optimized_function_reuse
 from test_incremental_optimization_units import check_optimization_units
 from test_incremental_scope_rules import check_scope_rule_after_local_edit
+from test_incremental_body_activation import check_inactive_body_activation
+from test_incremental_storage_origins import check_storage_origin_reuse
+from test_incremental_conversions import check_conversion_reuse
+from test_incremental_matcher_work import check_matcher_fingerprint_work
+from test_incremental_source_observations import check_source_observation_reuse, check_configured_source_comments
+from test_incremental_source_preparation import check_source_preparation
+from test_incremental_source_checkpoints import check_source_checkpoints
+from test_incremental_static_references import check_static_reference_identities
+from test_incremental_partition_closures import check_partition_closure_work
+from test_incremental_validation import check_capture_note_wording, check_validation_units, check_failed_validation_units, check_capture_scope_queries, check_validation_flow, check_validation_bound_parameters, check_diagnostic_stage_reuse
+from test_incremental_bindings import check_variable_binding_units
+from test_incremental_body_materialization import check_body_materialization
+from test_incremental_body_syntax import check_body_syntax_products
+from test_incremental_inference_failures import check_inference_failures
+from test_incremental_entry_metadata import check_entry_metadata_reuse
+from test_incremental_diagnostic_units import check_persistent_diagnostic_units, check_preinferred_diagnostic_context
+from test_incremental_definition_units import check_definition_resolution_units
+from test_incremental_resolution_units import check_active_resolution_units, check_implicit_parameter_classification_cascade
+from test_incremental_lifecycle_replacements import check_lifecycle_replacement_roots
+from test_incremental_root_execution import check_local_function_symbols, check_root_class_reuse, check_root_execution_reuse, check_static_function_dependency
+from test_incremental_body_units import check_body_resolution_units
+from test_incremental_native_codegen import check_optimized_native_codegen
+from test_incremental_classification import check_recursive_classification_cascade, check_incremental_classification
+from test_incremental_effect_cascade import check_bounded_effect_cascade
+from test_incremental_inferred_dependencies import check_callable_trial_dependencies, check_inferred_section_dependencies
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -46,7 +72,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         else:
             arguments += ["--no-incremental"]
         result = subprocess.run(arguments, cwd=root, capture_output=True, text=True, timeout=120)
-        if (result.returncode == 0) != success:
+        if result.returncode != (0 if success else 1):
             raise AssertionError(f"wrong build outcome: {arguments}\n{result.stdout}\n{result.stderr}")
         lines = result.stderr.splitlines(keepends=True)
         statistics = [line for line in lines if line.startswith("incremental: ")]
@@ -67,8 +93,41 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_default_cache(compiler, root / "automatic-cache")
     check_scope_rule_after_local_edit(root, build)
     check_shared_class_type_graph(root, build)
+    check_recent_cache_entries(root, build)
     check_optimized_function_reuse(root, build)
     check_optimization_units(root, build)
+    check_body_resolution_units(root, build)
+    check_optimized_native_codegen(root, build)
+    check_root_execution_reuse(root, build)
+    check_root_class_reuse(root, build)
+    check_inactive_body_activation(root, build)
+    check_storage_origin_reuse(root, build)
+    check_conversion_reuse(root, build)
+    check_matcher_fingerprint_work(root, build)
+    check_source_observation_reuse(root, build)
+    check_source_preparation(root, build)
+    check_source_checkpoints(root, build)
+    check_static_reference_identities(root, build)
+    check_partition_closure_work(root, build)
+    check_capture_note_wording(root, build)
+    check_diagnostic_stage_reuse(root, build)
+    check_variable_binding_units(root, build)
+    check_body_materialization(root, build)
+    check_body_syntax_products(root, build)
+    check_inference_failures(root, build)
+    check_validation_units(root, build)
+    check_failed_validation_units(root, build)
+    check_capture_scope_queries(root, build)
+    check_validation_flow(root, build)
+    check_validation_bound_parameters(root, build)
+    check_entry_metadata_reuse(root, build)
+    check_active_resolution_units(root, build)
+    check_definition_resolution_units(root, build)
+    check_incremental_classification(root, build)
+    check_lifecycle_replacement_roots(root, build)
+    check_local_function_symbols(root, build)
+    check_static_function_dependency(root, build)
+    check_recursive_classification_cascade(root, build)
     cold = build()
     assert not cold[0]["frontend_reused"] and not cold[0]["linked_cached_objects"]
     assert cold[0]["source_projection_mask_ms"] >= 0 and cold[0]["source_projection_files_ms"] >= 0
@@ -350,7 +409,10 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_inactive_projection_refresh(root, build)
     check_inactive_edit_with_unrelated_warning(root, build)
     check_frontend_warning_inference_reuse(root, build)
+    check_frontend_diagnostic_units(root, build)
     check_inference_warning_rechecked(root, build)
+    check_preinferred_diagnostic_context(root, build, output)
+    check_persistent_diagnostic_units(root, build)
     check_inactive_edit_after_warning_wording(root, build)
     check_runtime_pure_value_summary(root, build)
     check_global_match_reuse_after_execution_edit(root, build)
@@ -464,6 +526,8 @@ function left times right:
     check_header_parameter_constraint_owner(root, build)
     check_cross_file_typed_overload(root, build)
     check_reused_ir_dependency_graph_variants(root, build)
+    check_inferred_section_dependencies(root, build)
+    check_callable_trial_dependencies(root, build)
     check_leaf_dependency_cascade(root, build)
     check_resolved_declaration_snapshot_reuse(root, build)
     specific_main = root / "specific_addition.dl"
@@ -606,31 +670,7 @@ function left times right:
     assert "_ct_destination_bool" in llvm_text and "_ct_destination_i32" in llvm_text, \
         "distinct compile-time type arguments received colliding LLVM names"
 
-    bounded_cascade = root / "bounded_cascade.dl"
-    bounded_source = ('integer means: @intrinsic("type", "int")\n'
-                      'to leaf:\n'
-                      '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "leaf"))\n'
-                      'to middle:\n'
-                      '    leaf\n'
-                      '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "middle"))\n'
-                      'to outer: middle\n'
-                      'outer\n')
-    bounded_cascade.write_text(bounded_source)
-    build(entry=bounded_cascade)
-    bounded_cascade.write_text(bounded_source.replace('@intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "leaf"))', '@intrinsic("discard", 1)'))
-    bounded_edit = build(entry=bounded_cascade)
-    assert bounded_edit[0]["inference_instantiations_reused"] >= 1, f"effect change cascaded past unchanged middle interface: {bounded_edit[0]}"
-    assert bounded_edit[0]["functions_ir_reused"] >= 1, "effect change rebuilt the outer caller IR"
-    assert bounded_edit[1:] == build(False, entry=bounded_cascade)[1:], "bounded effect cascade differs from clean build"
-    bounded_cascade.write_text(bounded_cascade.read_text().replace('@intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "middle"))', '@intrinsic("discard", 2)'))
-    changed_middle = build(entry=bounded_cascade)
-    assert changed_middle[0]["inference_instantiations_reused"] == 0, "changed middle interface reused outer inference"
-    assert changed_middle[1:] == build(False, entry=bounded_cascade)[1:], "changed middle interface differs from clean build"
-    invalid_cascade = root / "invalid_cascade.dl"
-    invalid_cascade.write_text(bounded_source)
-    build(entry=invalid_cascade)
-    invalid_cascade.write_text(bounded_source.replace('    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "leaf"))', '    @intrinsic("add", 1, "x")'))
-    assert build(success=False, entry=invalid_cascade)[1] == build(False, success=False, entry=invalid_cascade)[1], "failed nested preinference changed diagnostics"
+    check_bounded_effect_cascade(root, build)
 
     first_helper = root / "first_helper.dl"
     second_helper = root / "second_helper.dl"
@@ -912,18 +952,7 @@ function left times right:
                                       capture_output=True, text=True, timeout=30)
             assert verified.returncode == 0, verified.stdout + verified.stderr
 
-    config = root / "config.dl"
-    config.write_text('dynlex options:\n    comment: "//"\n')
-    configured = build()
-    assert not configured[0]["frontend_reused"], "new syntax config was ignored"
-    assert configured[1:] == build(False)[1:]
-    configured_source = main.read_text()
-    main.write_text("// A comment with the configured prefix.\n" + configured_source)
-    assert build()[0]["frontend_reused"], "configured comment syntax rebuilt the frontend"
-    main.write_text(configured_source)
-    assert build()[0]["frontend_reused"], "removing a configured comment rebuilt the frontend"
-    config.unlink()
-    assert not build()[0]["frontend_reused"], "deleted syntax config was ignored"
+    check_configured_source_comments(root, main, build)
 
     original_time = main.stat().st_mtime_ns
     main.write_text("this is an undefined expression\n")

@@ -5,11 +5,9 @@
 #include <cstdint>
 #include <sstream>
 
-inline ExpressionCapture
-captureExpression(ParseContext &context, Expression *pack, size_t index, const BindingFrameStack &bindings) {
+inline std::string expressionCaptureIdentity(Expression *pack, size_t index, const BindingFrameStack &bindings) {
 	std::ostringstream identity;
 	identity << pack << ":" << index;
-	context.retainCapturedExpressionBody(pack);
 	bindings.forEachFrame([&](const BindingFrame &frame) {
 		std::vector<std::string> entries;
 		for (const auto &[name, value] : frame.bindings) {
@@ -33,5 +31,11 @@ captureExpression(ParseContext &context, Expression *pack, size_t index, const B
 			identity << entry.size() << ":" << entry;
 		identity << "]";
 	});
-	return {identity.str(), std::make_shared<ExpressionCaptureData>(pack, index, bindings)};
+	return identity.str();
+}
+
+inline ExpressionCapture
+captureExpression(ParseContext &context, Expression *pack, size_t index, const BindingFrameStack &bindings) {
+	context.retainCapturedExpressionBody(pack);
+	return {expressionCaptureIdentity(pack, index, bindings), std::make_shared<ExpressionCaptureData>(pack, index, bindings)};
 }

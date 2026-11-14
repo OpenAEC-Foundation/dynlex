@@ -1,252 +1,337 @@
 bool stableConstraintProbePrelude(const Json &prior, const Json &current) {
-	for (const char *field :
-		 {"precedence_signature", "precedence_rules", "ambient_declarations", "global_resolution", "scope_rule_bodies"})
+	for (const char *field : {"precedence_signature", "precedence_rules", "scope_rule_bodies"})
 		if (prior.at(field) != current.at(field))
 			return false;
-	return sourceProjectionsEqual(prior.at("sources"), current.at("sources")) ||
-		   sourceProjectionsEqual(prior.at("ambient_sources"), current.at("ambient_sources")) ||
-		   sourceProjectionsEqual(prior.at("ambient_nonexecution_sources"), current.at("ambient_nonexecution_sources"));
+	return sourceProjectionsEqual(prior.at("constraint_context_sources"), current.at("constraint_context_sources"));
 }
 
-bool constraintDefinitionMayMatch(const Section &section, std::string_view loweredText) {
-	for (const PatternDefinition *definition : section.patternDefinitions)
-		for (const auto &path : canonicalPatternPaths(definition->patternElements))
-			for (const DefinitionPatternElement &element : path) {
-				if (element.type == PatternElement::Type::Variable || element.promotedFromVariableLike)
-					return true;
-				if (element.type == PatternElement::Type::Other) {
-					if (std::ranges::all_of(element.text, [](unsigned char character) {
-						return std::isspace(character);
-					}))
-						continue;
-					return true;
-				}
-				std::string literal;
-				for (unsigned char character : element.text) {
-					if (character >= 128)
-						return true;
-					literal.push_back(static_cast<char>(std::tolower(character)));
-				}
-				if (literal.empty())
-					continue;
-				if (loweredText.find(literal) != std::string_view::npos)
-					return true;
-				break;
-			}
-	return false;
-}
+// Necessary matcher literals exclude captures and surrounding source. Words are
+// complete tokens; punctuation can be split by the matcher, so retain its bytes.
+class ConstraintProbeQuery {
+  public:
+	ConstraintProbeQuery() = default;
+	explicit ConstraintProbeQuery(std::string_view text) { append(text); }
+	static ConstraintProbeQuery requiredBy(const std::vector<DefinitionPatternElement> &path) {
+		ConstraintProbeQuery result;
+		for (const DefinitionPatternElement &element : path)
+			if (element.type != PatternElement::Type::Variable && !element.promotedFromVariableLike)
+				result.append(element.text);
+		return result;
+	}
+	bool containsAll(const ConstraintProbeQuery &required) const {
+		return std::ranges::all_of(required.literals, [&](const std::string &literal) {
+			return literals.contains(literal);
+		});
+	}
+
+  private:
+	static std::string lowered(std::string text) {
+		for (char &character : text)
+			character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+		return text;
+	}
+	void append(std::string_view text) {
+		for (const PatternElement &element : getPatternElements(text))
+			if (element.type == PatternElement::Type::VariableLike)
+				literals.insert(lowered(element.text));
+			else if (element.type == PatternElement::Type::Other)
+				for (unsigned char character : element.text)
+					if (!std::isspace(character))
+						literals.insert(lowered(std::string(1, character)));
+	}
+	std::unordered_set<std::string> literals;
+};
+
+class ConstraintProbePattern {
+  public:
+	explicit ConstraintProbePattern(const Section &section) {
+		for (const PatternDefinition *definition : section.patternDefinitions) {
+			if (definition->indexedTreeType != SectionType::Function)
+				continue;
+			for (const auto &path : canonicalPatternPaths(definition->patternElements))
+				requirements.emplace_back(definition, ConstraintProbeQuery::requiredBy(path));
+		}
+	}
+	bool mayMatch(const ConstraintProbeQuery &query, const lsp::SourceFile &source) const {
+		return std::ranges::any_of(requirements, [&](const auto &path) {
+			return isPatternDefinitionVisibleFromSource(*path.first, source) && query.containsAll(path.second);
+		});
+	}
+
+  private:
+	std::vector<std::pair<const PatternDefinition *, ConstraintProbeQuery>> requirements;
+};
 
 std::vector<bool> reusableConstraintProbes(
-	const Json &prior, const Json &current, const Json &graph, const std::map<std::string, Section *> &sections
+	ParseContext &context, const Json &prior, const Json &current, const Json &graph,
+	const std::map<std::string, Section *> &sections, const IncrementalInferenceReads::Keys &changedLookups,
+	std::set<std::string> &reusableClasses
 ) {
 	if (!stableConstraintProbePrelude(prior, current))
 		return {};
 	const Json &schedule = prior.at("constraint_probe_schedule");
-	const Json &forward = graph.at("forward");
 	const Json &reverse = graph.at("reverse");
-	for (const char *field : {"function_declarations", "inactive"}) {
+	std::vector<std::string> pending;
+	std::unordered_set<std::string> changedDeclarations;
+	// Both sides of a declaration edit participate: readers of a removed
+	// provider still depend on its previous signature.
+	for (const char *field : {"pattern_declarations", "inactive", "bodies", "matches"}) {
 		for (const auto &[path, value] : prior.at(field).items())
-			if (!current.at(field).contains(path) || current.at(field).at(path) != value)
-				return {};
+			if (!current.at(field).contains(path) || current.at(field).at(path) != value) {
+				pending.push_back(path);
+				if (std::string_view(field) == "pattern_declarations")
+					changedDeclarations.insert(path);
+			}
+		for (const auto &[path, value] : current.at(field).items())
+			if (!prior.at(field).contains(path))
+				pending.push_back(path);
 	}
-	std::vector<const Section *> addedDefinitions;
-	for (const auto &[path, _] : current.at("function_declarations").items()) {
-		if (prior.at("function_declarations").contains(path))
-			continue;
-		if (!sections.contains(path))
-			return {};
-		addedDefinitions.push_back(sections.at(path));
-	}
-	for (const auto &[path, _] : current.at("inactive").items())
-		if (!prior.at("inactive").contains(path) && !current.at("function_declarations").contains(path))
-			return {};
+	std::vector<ConstraintProbePattern> addedPatterns;
+	for (const auto &[path, value] : current.at("pattern_declarations").items())
+		if (!prior.at("pattern_declarations").contains(path) || prior.at("pattern_declarations").at(path) != value)
+			addedPatterns.emplace_back(*sections.at(path));
 	const auto items = schedule.at("items").get<std::vector<std::string>>();
 	const auto texts = schedule.at("texts").get<std::vector<std::string>>();
-	const auto passes = schedule.at("passes").get<std::vector<int>>();
+	const Json &owners = schedule.at("owners");
+	const Json &sources = schedule.at("sources");
 	const Json &roots = schedule.at("roots");
+	const Json &lookupReads = schedule.at("callable_lookups");
+	requireCompilerInvariant(
+		items.size() == texts.size() && items.size() == schedule.at("passes").size() && items.size() == roots.size() &&
+			items.size() == lookupReads.size() && items.size() == owners.size() && items.size() == sources.size() &&
+			items.size() == schedule.at("states").size(),
+		"saved type-constraint probe schedule has mismatched item records"
+	);
 	bool topLevelExecutionChanged = !sourceProjectionsEqual(prior.at("ambient_sources"), current.at("ambient_sources"));
-	std::unordered_set<std::string> topLevelDependent;
-	if (topLevelExecutionChanged) {
-		std::vector<std::string> pending;
+	if (topLevelExecutionChanged || prior.at("global_resolution") != current.at("global_resolution"))
 		for (const auto &[path, section] : sections)
 			if (!section->parent || !section->globalVariables.empty())
 				pending.push_back(path);
-		while (!pending.empty()) {
-			std::string path = std::move(pending.back());
-			pending.pop_back();
-			if (!topLevelDependent.insert(path).second)
-				continue;
-			if (reverse.contains(path))
-				for (const Json &caller : reverse.at(path))
-					pending.push_back(caller.get<std::string>());
+	std::unordered_map<std::string_view, const lsp::SourceFile *> currentSources;
+	for (const auto &[_, source] : context.importedFiles)
+		currentSources.emplace(source->uri, source);
+	// A constraint result changes its declaration's signature. Link each
+	// recorded read through that declaration before following ordinary callers,
+	// including candidates observed by deferred or rejected trials.
+	std::map<std::string, std::vector<size_t>> readers;
+	std::unordered_set<std::string> blockedOwners;
+	std::vector<bool> dirty(items.size(), false);
+	for (size_t index = 0; index < items.size(); index++) {
+		const std::string &owner = owners.at(index).get_ref<const std::string &>();
+		if (schedule.at("states").at(index).get<int>() ==
+			static_cast<int>(ParseContext::IncrementalConstraintQuery::State::Blocked))
+			blockedOwners.insert(owner);
+		for (const Json &root : roots.at(index))
+			readers[root.get<std::string>()].push_back(index);
+		auto source = currentSources.find(sources.at(index).get_ref<const std::string &>());
+		dirty[index] = !sections.contains(owner) || changedDeclarations.contains(owner) || source == currentSources.end() ||
+					   std::ranges::any_of(lookupReads.at(index), [&](const Json &key) {
+			return changedLookups.contains(key.get_ref<const std::string &>());
+		});
+		if (!dirty[index]) {
+			ConstraintProbeQuery query(texts[index]);
+			dirty[index] = std::ranges::any_of(addedPatterns, [&](const ConstraintProbePattern &added) {
+				return added.mayMatch(query, *source->second);
+			});
 		}
+		if (dirty[index])
+			pending.push_back(owner);
 	}
-	requireCompilerInvariant(
-		items.size() == texts.size() && items.size() == passes.size() && items.size() == roots.size(),
-		"saved type-constraint probe schedule has mismatched item records"
-	);
-	std::vector<std::string> loweredTexts;
-	loweredTexts.reserve(texts.size());
-	for (const std::string &text : texts) {
-		std::string lowered;
-		lowered.reserve(text.size());
-		for (unsigned char character : text)
-			lowered.push_back(static_cast<char>(std::tolower(character)));
-		loweredTexts.push_back(std::move(lowered));
-	}
-	for (const Section *added : addedDefinitions) {
-		auto mayMatchText = [&](std::string_view source) {
-			std::string lowered;
-			lowered.reserve(source.size());
-			for (unsigned char character : source)
-				lowered.push_back(static_cast<char>(std::tolower(character)));
-			return constraintDefinitionMayMatch(*added, lowered);
-		};
-		for (const std::string &text : loweredTexts)
-			if (constraintDefinitionMayMatch(*added, text))
-				return {};
-		for (const auto &[_, section] : sections)
-			for (const PatternReference *reference : section->patternReferences) {
-				if (mayMatchText(reference->pattern.text) || mayMatchText(reference->range().line->fullText))
-					return {};
-				if (reference->expression)
-					for (size_t index = 0; index < reference->expression->arguments.size(); index++)
-						if (std::optional<std::string> spelling = numericPatternArgumentSpelling(reference, index);
-							spelling && mayMatchText(*spelling))
-							return {};
-			}
-	}
-	std::vector<std::string> changedBodies;
-	for (const auto &[path, oldBody] : prior.at("bodies").items()) {
-		if (!current.at("bodies").contains(path))
-			return {};
-		if (oldBody != current.at("bodies").at(path) ||
-			(prior.at("matches").contains(path) &&
-			 (!current.at("matches").contains(path) || prior.at("matches").at(path) != current.at("matches").at(path))))
-			changedBodies.push_back(path);
-	}
-	for (const auto &[path, _] : current.at("bodies").items())
-		if (!prior.at("bodies").contains(path) && !current.at("function_declarations").contains(path))
-			return {};
-	// Reverse reachability identifies both committed dependencies and candidate
-	// functions that an earlier speculative grouping may have rejected.
+	for (const std::string &key : changedLookups)
+		for (const Json &owner : graph.at("callable_lookups").at(key).at("owners"))
+			pending.push_back(owner.get<std::string>());
 	std::unordered_set<std::string> dirtyClosure;
-	std::vector<std::string> pending = std::move(changedBodies);
+	bool blockedFrontierInvalidated = false;
 	while (!pending.empty()) {
 		std::string path = std::move(pending.back());
 		pending.pop_back();
 		if (!dirtyClosure.insert(path).second)
 			continue;
-		if (!sections.contains(path) || !forward.contains(path))
-			return {};
+		if (!blockedFrontierInvalidated && blockedOwners.contains(path)) {
+			blockedFrontierInvalidated = true;
+			for (const std::string &owner : blockedOwners)
+				pending.push_back(owner);
+		}
 		if (reverse.contains(path))
 			for (const Json &caller : reverse.at(path))
 				pending.push_back(caller.get<std::string>());
-	}
-	std::vector<bool> dirty(items.size(), false);
-	for (size_t index = 0; index < items.size(); index++)
-		for (const Json &root : roots.at(index)) {
-			std::string path = root.get<std::string>();
-			if (!forward.contains(path))
-				return {};
-			if (dirtyClosure.contains(path) || topLevelDependent.contains(path))
+		if (auto found = readers.find(path); found != readers.end())
+			for (size_t index : found->second) {
 				dirty[index] = true;
-		}
-	for (const std::string &path : dirtyClosure) {
-		const Section &section = *sections.at(path);
-		if (section.patternDefinitions.empty())
-			continue;
-		for (size_t index = 0; index < items.size(); index++)
-			if (!dirty[index] && constraintDefinitionMayMatch(section, loweredTexts[index]))
-				dirty[index] = true;
+				pending.push_back(owners.at(index).get<std::string>());
+			}
 	}
-	size_t firstDirty = items.size();
-	for (size_t index = 0; index < items.size(); index++)
-		if (dirty[index])
-			firstDirty = std::min(firstDirty, index);
 	std::vector<bool> reusable(items.size(), false);
 	for (size_t index = 0; index < items.size(); index++)
-		reusable[index] = !dirty[index] && (firstDirty == items.size() || (passes[index] == 1 && index < firstDirty));
+		reusable[index] = !dirty[index];
+	for (const auto &[path, section] : sections)
+		if (section->type == SectionType::Class && !dirtyClosure.contains(path))
+			reusableClasses.insert(path);
 	return reusable;
+}
+
+Json reusableClassInstantiations(const Json &saved, const std::set<std::string> &reusable) {
+	std::set<std::string> clean;
+	for (const auto &[path, state] : saved.items())
+		if (reusable.contains(path) && !state.at("requests").is_null())
+			clean.insert(path);
+	std::map<std::string, std::vector<std::string>> callers;
+	std::stack<std::string> pending;
+	for (const auto &path : clean)
+		for (const auto &dependency : classInstantiationDependencies(saved.at(path))) {
+			callers[dependency].push_back(path);
+			if (!clean.contains(dependency))
+				pending.push(path);
+		}
+	while (!pending.empty()) {
+		std::string path = std::move(pending.top());
+		pending.pop();
+		if (!clean.erase(path))
+			continue;
+		if (auto found = callers.find(path); found != callers.end())
+			for (const auto &caller : found->second)
+				pending.push(caller);
+	}
+	Json result = Json::object();
+	for (const auto &path : clean)
+		result[path] = saved.at(path);
+	return result;
 }
 
 void prepareConstraintProbeReuse(
 	ParseContext &context, const Json &prior, const Json &current, const Json &graph,
-	const std::map<std::string, Section *> &sections
+	const std::map<std::string, Section *> &sections, const IncrementalInferenceReads::Keys &changedLookups
 ) {
-	std::vector<bool> reusable = reusableConstraintProbes(prior, current, graph, sections);
+	std::set<std::string> reusableClasses;
+	std::vector<bool> reusable =
+		reusableConstraintProbes(context, prior, current, graph, sections, changedLookups, reusableClasses);
 	if (std::ranges::none_of(reusable, [](bool value) {
 		return value;
 	}))
 		return;
-	if (!restoreClassInstantiations(prior.at("class_instantiations"), sections))
+	if (!restoreClassInstantiations(reusableClassInstantiations(prior.at("class_instantiations"), reusableClasses), sections))
 		return;
+	using Query = ParseContext::IncrementalConstraintQuery;
 	const Json &schedule = prior.at("constraint_probe_schedule");
-	context.priorConstraintProbeItems = schedule.at("items").get<std::vector<std::string>>();
-	context.priorConstraintProbePasses = schedule.at("passes").get<std::vector<int>>();
-	const Json &values = schedule.at("values");
-	const Json &roots = schedule.at("roots");
-	requireCompilerInvariant(
-		values.size() == reusable.size() && roots.size() == reusable.size(),
-		"saved type-constraint values and dependencies do not match the probe schedule"
-	);
-	context.priorConstraintProbeValues.resize(reusable.size());
-	context.priorConstraintProbeDependencies.resize(reusable.size());
+	for (const char *field : {"values", "roots", "states", "diagnostics"})
+		requireCompilerInvariant(
+			schedule.at(field).size() == reusable.size(), "saved constraint products have mismatched sizes"
+		);
+	std::map<const Section *, std::string> paths;
+	for (const auto &[path, section] : sections)
+		paths.emplace(section, path);
+	InferenceValueIdentities identities(paths);
+	std::unique_ptr<InferenceBodySources> sources;
+	context.priorConstraintQueries.resize(reusable.size());
 	for (size_t index = 0; index < reusable.size(); index++) {
-		if (!reusable[index])
+		Query &query = context.priorConstraintQueries[index];
+		query.identity = schedule.at("items").at(index).get<std::string>();
+		query.text = schedule.at("texts").at(index).get<std::string>();
+		query.pass = schedule.at("passes").at(index).get<int>();
+		query.state = static_cast<Query::State>(schedule.at("states").at(index).get<int>());
+		query.reusable = reusable[index] && query.state != Query::State::Pending;
+		if (!query.reusable)
 			continue;
-		for (const Json &root : roots.at(index)) {
+		for (const Json &root : schedule.at("roots").at(index)) {
 			auto section = sections.find(root.get<std::string>());
 			if (section == sections.end()) {
-				reusable[index] = false;
-				context.priorConstraintProbeDependencies[index].clear();
+				query.reusable = false;
+				query.dependencies.clear();
 				break;
 			}
-			context.priorConstraintProbeDependencies[index].insert(section->second);
+			query.dependencies.insert(section->second);
 		}
-		if (reusable[index] && !values.at(index).is_null())
-			context.priorConstraintProbeValues[index] = decodePortableConstraintValue(values.at(index), sections);
+		if (!query.reusable)
+			continue;
+		if (!schedule.at("values").at(index).is_null())
+			query.value = decodePortableConstraintValue(schedule.at("values").at(index), sections);
+		for (const Json &record : schedule.at("diagnostics").at(index)) {
+			if (!sources)
+				sources = std::make_unique<InferenceBodySources>(context, identities);
+			query.diagnostics.push_back(restoreUnitDiagnostic(context, record, *sources));
+		}
+		requireCompilerInvariant(
+			query.state != Query::State::Failed || !query.diagnostics.empty(), "failed constraint product has no diagnostic"
+		);
 	}
-	context.priorConstraintProbeReusable = std::move(reusable);
-	context.reuseDeclaredConstraintProbes = true;
 }
 
-Json captureConstraintProbeSchedule(const ParseContext &context, const std::map<const Section *, std::string> &sectionPaths) {
-	requireCompilerInvariant(
-		context.constraintProbeItems.size() == context.constraintProbePasses.size(),
-		"type-constraint probe schedule has mismatched item and pass counts"
-	);
-	for (int pass : context.constraintProbePasses)
-		requireCompilerInvariant(pass > 0, "successful type-constraint probe has no pass");
-	requireCompilerInvariant(
-		context.constraintProbeItems.size() == context.constraintProbeTexts.size(),
-		"type-constraint probe schedule has mismatched item and text counts"
-	);
-	requireCompilerInvariant(
-		context.constraintProbeItems.size() == context.constraintProbeDependencies.size(),
-		"type-constraint probe schedule has mismatched item and dependency counts"
-	);
-	requireCompilerInvariant(
-		context.constraintProbeItems.size() == context.constraintProbeValues.size(),
-		"type-constraint probe schedule has mismatched item and value counts"
-	);
-	Json roots = Json::array();
-	Json values = Json::array();
+Json captureConstraintProbeSchedule(
+	ParseContext &context, const std::map<const Section *, std::string> &sectionPaths,
+	const IncrementalInferenceReads &inferenceReads, const Json *priorSchedule, const Json *priorLookups
+) {
+	using Query = ParseContext::IncrementalConstraintQuery;
+	std::unordered_map<std::string, size_t> priorIndices;
+	if (priorSchedule)
+		for (size_t index = 0; index < priorSchedule->at("items").size(); index++)
+			requireCompilerInvariant(
+				priorIndices.emplace(priorSchedule->at("items").at(index).get<std::string>(), index).second,
+				"saved constraint queries have duplicate identities"
+			);
+	std::map<std::string, const Section *> sections;
+	for (const auto &[section, path] : sectionPaths)
+		sections.emplace(path, section);
+	Json result = Json::object();
+	for (const char *field :
+		 {"items", "texts", "owners", "sources", "passes", "states", "roots", "values", "diagnostics", "callable_lookups"})
+		result[field] = Json::array();
 	ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
-	for (size_t index = 0; index < context.constraintProbeDependencies.size(); index++) {
-		const auto &dependencies = context.constraintProbeDependencies[index];
+	std::unique_ptr<InferenceValueIdentities> identities;
+	std::unique_ptr<InferenceBodySources> sources;
+	for (size_t index = 0; index < context.constraintQueries.size(); index++) {
+		const Query &current = context.constraintQueries[index];
+		const Query *product = &current;
+		// A preceding error may prevent a still-valid prior result from being
+		// demanded. Retain that product without publishing its diagnostics.
+		bool retained = current.state == Query::State::Pending && !context.priorConstraintQueries.empty() &&
+						context.priorConstraintQueries.at(index).reusable;
+		if (retained)
+			product = &context.priorConstraintQueries.at(index);
+		const Query &query = *product;
+		requireCompilerInvariant(
+			(query.state == Query::State::Pending) == (query.pass == 0), "constraint product has an inconsistent readiness pass"
+		);
 		std::set<std::string> paths;
-		for (const Section *section : dependencies)
+		for (const Section *section : query.dependencies)
 			paths.insert(sectionPaths.at(section));
-		roots.push_back(paths);
-		const auto &value = context.constraintProbeValues[index];
-		values.push_back(value ? encodePortableConstraintValue(*value, classPaths).value_or(Json(nullptr)) : Json(nullptr));
+		const auto &direct = inferenceReads.dependenciesOfProbe(index);
+		paths.insert(direct.begin(), direct.end());
+		Json identity = Json::parse(current.identity);
+		const Section *owner = sections.at(identity.at(2).get<std::string>());
+		while (owner->parent && owner->patternDefinitions.empty())
+			owner = owner->parent;
+		result["items"].push_back(current.identity);
+		result["texts"].push_back(current.text);
+		result["owners"].push_back(sectionPaths.at(owner));
+		result["sources"].push_back(identity.back());
+		result["passes"].push_back(query.pass);
+		result["states"].push_back(static_cast<int>(query.state));
+		std::optional<size_t> previousIndex;
+		if (retained || query.readsReused)
+			previousIndex = priorIndices.at(current.identity);
+		auto keys = inferenceReads.readsOfProbe(index, priorSchedule, previousIndex);
+		if (previousIndex)
+			for (const Json &path : priorSchedule->at("roots").at(*previousIndex))
+				paths.insert(path.get_ref<const std::string &>());
+		for (const std::string &key : keys) {
+			const Json &candidates = inferenceReads.observation(key, priorLookups).at("candidates");
+			if (candidates.size() == 1)
+				paths.insert(candidates.at(0).at(0).get<std::string>());
+		}
+		result["callable_lookups"].push_back(std::move(keys));
+		result["roots"].push_back(paths);
+		result["values"].push_back(
+			query.value ? encodePortableConstraintValue(*query.value, classPaths).value_or(Json(nullptr)) : Json(nullptr)
+		);
+		Json diagnostics = Json::array();
+		for (const Diagnostic &diagnostic : query.diagnostics) {
+			if (!sources) {
+				identities = std::make_unique<InferenceValueIdentities>(sectionPaths);
+				sources = std::make_unique<InferenceBodySources>(context, *identities);
+			}
+			diagnostics.push_back(captureUnitDiagnostic(diagnostic, *sources));
+		}
+		result["diagnostics"].push_back(std::move(diagnostics));
 	}
-	return Json{
-		{"items", context.constraintProbeItems},
-		{"texts", context.constraintProbeTexts},
-		{"passes", context.constraintProbePasses},
-		{"roots", roots},
-		{"values", values}
-	};
+	return result;
 }

@@ -191,21 +191,15 @@ static bool validateStoreConstraint(
 	if (!context.typesValid)
 		return false;
 	Range diagnosticRange = valueExpr->range;
-	const SyntaxConfig &syntax = syntaxConfigForRange(context.parseContext, diagnosticRange);
-	std::string detail = renderConfiguredMessage(
-		syntax, "variable type constraint mismatch", "message",
+	Diagnostic diagnostic = context.setConfiguredTypeFailure(
+		diagnosticRange, "variable type constraint mismatch", "message",
 		{{"name", variableName}, {"constraint", sourceConstraintName}, {"actual_type", typeToUserName(valueType)}}
 	);
-	context.setTypeFailure(detail);
 	if (!context.trial) {
-		Diagnostic diagnostic = buildFailureDetailDiagnostic(diagnosticRange, detail);
-		diagnostic.relatedInfo.push_back(
-			{renderConfiguredMessage(
-				 syntax, "variable type constraint mismatch", "related declaration",
-				 {{"name", variableName}, {"constraint", sourceConstraintName}}
-			 ),
-			 sourceConstraintRange}
-		);
+		diagnostic.relatedInfo.push_back(configuredRelatedInfo(
+			context.parseContext, diagnosticRange, "variable type constraint mismatch", "related declaration",
+			sourceConstraintRange, {{"name", variableName}, {"constraint", sourceConstraintName}}
+		));
 		context.addDiagnosticWithCurrentTrace(std::move(diagnostic));
 	}
 	return false;
@@ -250,9 +244,7 @@ static bool inferPointerStoreEffects(
 ) {
 	DataType pointerType = ensureExpressionType(pointer, context, pointerBindings);
 	if (!pointerType.isDeduced() || !pointerType.isPointer()) {
-		context.setTypeFailure(renderConfiguredMessage(
-			syntaxConfigForRange(context.parseContext, range), "store at requires pointer", "message", {}
-		));
+		context.setConfiguredTypeFailure(range, "store at requires pointer");
 		return false;
 	}
 	DataType elementType = pointerType.dereferenced();
@@ -268,10 +260,10 @@ static bool inferPointerStoreEffects(
 	if (!isVariableAssignmentCompatible(elementType, valueType) &&
 		!tryApplyUserConversion(value, elementType, true, context, valueBindings)) {
 		if (context.typesValid)
-			context.setTypeFailure(renderConfiguredMessage(
-				syntaxConfigForRange(context.parseContext, range), "store at value incompatible", "message",
+			context.setConfiguredTypeFailure(
+				range, "store at value incompatible", "message",
 				{{"value_type", typeToUserName(valueType)}, {"element_type", typeToUserName(elementType)}}
-			));
+			);
 		return false;
 	}
 	applyStoreThroughAddress(context, inferAddressProvenance(pointer, context, pointerBindings), value, valueBindings);
@@ -339,19 +331,17 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		std::string valueText = storeValueText(valueExpr);
 		std::vector<RelatedInfo> unboundParameterInfo;
 		appendUnboundParameterTrace(context, valueExpr, unboundParameterInfo);
-		context.setTypeFailure(renderConfiguredMessage(
-			syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range), "store value unresolved",
-			"message", {{"value", valueText}}
-		));
+		context.setConfiguredTypeFailure(
+			valueExpr ? valueExpr->range : expr->range, "store value unresolved", "message", {{"value", valueText}}
+		);
 		context.insertTypeFailureCause(std::move(unboundParameterInfo));
 		return;
 	}
 	if (!valueType.isRuntimeValueType() && !valueType.isMetaType()) {
 		std::string valueText = storeValueText(valueExpr);
-		context.setTypeFailure(renderConfiguredMessage(
-			syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range), "store value not runtime",
-			"message", {{"value", valueText}}
-		));
+		context.setConfiguredTypeFailure(
+			valueExpr ? valueExpr->range : expr->range, "store value not runtime", "message", {{"value", valueText}}
+		);
 		return;
 	}
 	if (!validateBoundParameterStoreConstraints(
@@ -434,11 +424,10 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			return;
 		}
 
-		context.setTypeFailure(renderConfiguredMessage(
-			syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range), "variable type change",
-			"message",
+		context.setConfiguredTypeFailure(
+			valueExpr ? valueExpr->range : expr->range, "variable type change", "message",
 			{{"name", variable->name}, {"from_type", typeToUserName(variable->type)}, {"to_type", typeToUserName(valueType)}}
-		));
+		);
 		if (!context.trial) {
 			context.addDiagnosticWithCurrentTrace(
 				buildVariableTypeChangeDiagnostic(variable, valueExpr, valueType, context.parseContext)
@@ -531,13 +520,12 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 					std::string destinationName = destinationSourceExpr && !destinationSourceExpr->range.subString.empty()
 													  ? std::string(destinationSourceExpr->range.subString)
 													  : fieldName;
-					context.setTypeFailure(renderConfiguredMessage(
-						syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range),
-						"variable type change", "message",
+					context.setConfiguredTypeFailure(
+						valueExpr ? valueExpr->range : expr->range, "variable type change", "message",
 						{{"name", destinationName},
 						 {"from_type", typeToUserName(currentFieldType)},
 						 {"to_type", typeToUserName(valueType)}}
-					));
+					);
 					if (!context.trial) {
 						context.addDiagnosticWithCurrentTrace(buildAssignmentTypeChangeDiagnostic(
 							destinationName, currentFieldType, {}, {}, valueExpr, valueType, context.parseContext

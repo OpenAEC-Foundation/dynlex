@@ -40,6 +40,8 @@ cache location instead. Build that toolchain independently with:
 The normal build uses `-O2` while retaining debug information and compiler
 invariants. Use `./scripts/build.sh --debug` when an unoptimized executable is
 needed for source-level debugging.
+Use `./scripts/build.sh -j1` to limit compilation to one job. `-j N`,
+`--jobs N`, and `--jobs=N` also accept a positive job count.
 
 ## Tests
 

@@ -1,22 +1,33 @@
-Json functionBodyDigests(const ParseContext &context, const std::map<std::string, Section *> &sections) {
-	std::map<const Section *, std::string> bodies;
+Json definitionBodyDigests(const ParseContext &context, const std::map<std::string, Section *> &sections) {
+	struct Body {
+		const lsp::SourceFile *source = nullptr;
+		std::string text;
+	};
+	std::map<const Section *, Body> bodies;
 	for (const auto &[_, section] : sections)
-		if ((section->type == SectionType::Function && !section->patternDefinitions.empty()) ||
-			section->type == SectionType::Retain || section->type == SectionType::Release)
-			bodies.emplace(section, "");
+		if (!section->patternDefinitions.empty() || section->type == SectionType::Retain ||
+			section->type == SectionType::Release)
+			bodies.try_emplace(section);
 	for (const CodeLine *line : context.codeLines) {
 		if (line->rightTrimmedText.empty())
 			continue;
 		for (const Section *section = line->section; section; section = section->parent)
 			if (auto body = bodies.find(section); body != bodies.end()) {
-				body->second.append(line->rightTrimmedText);
-				body->second += '\n';
+				Body &content = body->second;
+				// Equal text can resolve differently under file-local visibility.
+				// Frame source transitions and lines so their boundaries are unambiguous.
+				if (content.source != line->sourceFile) {
+					content.source = line->sourceFile;
+					content.text += 'F' + std::to_string(content.source->uri.size()) + ':' + content.source->uri;
+				}
+				content.text += 'L' + std::to_string(line->rightTrimmedText.size()) + ':';
+				content.text.append(line->rightTrimmedText);
 			}
 	}
 	Json result = Json::object();
 	for (const auto &[path, section] : sections)
 		if (auto body = bodies.find(section); body != bodies.end())
-			result[path] = digest(body->second);
+			result[path] = digest(body->second.text);
 	return result;
 }
 
@@ -56,8 +67,8 @@ Json scopeRuleBodyPaths(const std::map<std::string, Section *> &sections) {
 
 Json captureAllFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
-	IncrementalMatcherCache &matcherCache, std::string_view initialMatcherTree, const Json &initialMatcherRoots,
-	const Json *previous, SourceProjectionWork *projectionWork, bool compatibleSyntax
+	IncrementalMatcherCache &matcherCache, MatcherPathSnapshots &matcherPaths, std::string_view initialMatcherTree,
+	std::string_view finalMatcherTree, const Json *previous, SourceProjectionWork *projectionWork, bool compatibleSyntax
 ) {
 	auto phaseStart = Clock::now();
 	const Json *prior =
@@ -67,10 +78,13 @@ Json captureAllFunctionProjection(
 	Json matchEntries = Json::object();
 	std::map<const Section *, std::string> paths;
 	std::unordered_set<const Section *> reusable;
+	std::unordered_set<const Section *> constraintDefinitions;
 	std::unordered_set<const Section *> selectedSections;
 	size_t declarationSections = 0;
 	for (const auto &[path, section] : sections) {
 		paths.emplace(section, path);
+		if (!section->patternDefinitions.empty())
+			constraintDefinitions.insert(section);
 		if (section->type == SectionType::Function && !section->patternDefinitions.empty()) {
 			if (!containsNestedDefinition(*section)) {
 				selected[path] = sectionIdentity(*section);
@@ -86,7 +100,7 @@ Json captureAllFunctionProjection(
 	if (projectionWork)
 		projectionWork->setupMilliseconds += elapsedMilliseconds(phaseStart);
 	phaseStart = Clock::now();
-	Json bodyDigests = functionBodyDigests(context, sections);
+	Json bodyDigests = definitionBodyDigests(context, sections);
 	Json currentScopeRuleBodies = scopeRuleBodyPaths(sections);
 	if (projectionWork)
 		projectionWork->bodyMilliseconds += elapsedMilliseconds(phaseStart);
@@ -122,13 +136,13 @@ Json captureAllFunctionProjection(
 		}
 	}
 	Json declarations = Json::object();
+	Json patternDeclarations = Json::object();
 	Json allDeclarationEntries = Json::array();
 	Json ambientDeclarationEntries = Json::array();
 	Json currentGlobalResolution = globalResolutionIdentity(*context.mainSection);
-	std::string finalMatcherTree = matcherTreeSignature(context);
-	Json finalMatcherRoots = matcherTreeMutationSnapshot(context);
 	if (reuseDeclarations) {
 		declarations = prior->at("function_declarations");
+		patternDeclarations = prior->at("pattern_declarations");
 		if (projectionWork)
 			projectionWork->declarationSectionsReused += declarationSections - changedDeclarations;
 	} else {
@@ -136,10 +150,10 @@ Json captureAllFunctionProjection(
 		bool stableRootBindings = stableDeclarationContext && currentGlobalResolution == prior->at("global_resolution");
 		std::optional<MatcherTreeChanges> initialChanges, finalChanges;
 		if (stableDeclarationContext) {
-			if (initialMatcherTree != prior->at("initial_matcher_tree").get_ref<const std::string &>())
-				initialChanges.emplace(prior->at("initial_matcher_roots"), initialMatcherRoots);
-			if (finalMatcherTree != prior->at("final_matcher_tree").get_ref<const std::string &>())
-				finalChanges.emplace(prior->at("final_matcher_roots"), finalMatcherRoots);
+			initialChanges =
+				matcherPaths.compare(prior->at("initial_matcher_tree").get_ref<const std::string &>(), initialMatcherTree);
+			finalChanges =
+				matcherPaths.compare(prior->at("final_matcher_tree").get_ref<const std::string &>(), finalMatcherTree);
 		}
 		for (const auto &[path, section] : sections) {
 			bool reusableSection = reusable.contains(section);
@@ -161,6 +175,7 @@ Json captureAllFunctionProjection(
 			if (reusableSection)
 				declarations[path] = entry;
 			if (!section->patternDefinitions.empty()) {
+				patternDeclarations[path] = digest(entry.dump());
 				entry["path"] = path;
 				if (reusableSection)
 					allDeclarationEntries.push_back(std::move(entry));
@@ -173,9 +188,7 @@ Json captureAllFunctionProjection(
 	}
 	Json projection{
 		{"initial_matcher_tree", initialMatcherTree},
-		{"initial_matcher_roots", initialMatcherRoots},
-		{"final_matcher_tree", std::move(finalMatcherTree)},
-		{"final_matcher_roots", std::move(finalMatcherRoots)},
+		{"final_matcher_tree", finalMatcherTree},
 		{"precedence_signature", matcherCache.precedenceSignature()},
 		{"precedence_rules", precedenceRulesSignature(*context.mainSection)},
 		{"inactive", std::move(selected)},
@@ -189,6 +202,7 @@ Json captureAllFunctionProjection(
 	phaseStart = Clock::now();
 	projection["bodies"] = std::move(bodyDigests);
 	projection["function_declarations"] = std::move(declarations);
+	projection["pattern_declarations"] = std::move(patternDeclarations);
 	projection["ambient_declarations"] =
 		reuseDeclarations ? prior->at("ambient_declarations") : Json(digest(ambientDeclarationEntries.dump()));
 	if (projectionWork)
@@ -200,6 +214,10 @@ Json captureAllFunctionProjection(
 	projection["ambient_nonexecution_sources"] = sourceProjection(
 		context, observations, reusable, true, true, true, prior ? &prior->at("ambient_nonexecution_sources") : nullptr,
 		projectionWork
+	);
+	projection["constraint_context_sources"] = sourceProjection(
+		context, observations, constraintDefinitions, true, true, true,
+		prior ? &prior->at("constraint_context_sources") : nullptr, projectionWork
 	);
 	if (projectionWork)
 		projectionWork->ambientMilliseconds += elapsedMilliseconds(phaseStart);
@@ -227,7 +245,8 @@ Json captureAllFunctionProjection(
 			const Json *oldEntries =
 				prior && prior->at("match_entries").contains(path) ? &prior->at("match_entries").at(path) : nullptr;
 			ResolvedFunctionMatches result = resolvedFunctionMatches(
-				section, paths, matcherCache, oldEntries, projectionWork ? &projectionWork->matchEntriesReused : nullptr
+				section, paths, matcherCache, oldEntries, oldEntries ? &prior->at("matches").at(path) : nullptr,
+				projectionWork ? &projectionWork->matchEntriesReused : nullptr
 			);
 			matches[path] = std::move(result.fingerprint);
 			matchEntries[path] = std::move(result.entries);

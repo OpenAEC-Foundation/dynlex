@@ -1,10 +1,8 @@
 // Inference summaries require portable argument values. Dependency edges do
 // not: variants without such keys retain their complete union under this key.
-constexpr const char *aggregateGraphVariant = "*";
 
 struct RetainedGraphVariants {
 	std::map<std::string, std::set<std::string>> keysByPath;
-	std::set<std::string> unkeyedPaths;
 };
 
 RetainedGraphVariants retainedGraphVariants(const IncrementalIRReuse *reuse, const Json *previous) {
@@ -14,30 +12,51 @@ RetainedGraphVariants retainedGraphVariants(const IncrementalIRReuse *reuse, con
 	requireCompilerInvariant(previous != nullptr, "reused IR has no previous dependency graph");
 	const Json &owners = previous->at("function_sections");
 	const Json &keys = previous->at("function_instantiations");
-	const Json &callables = previous->at("callable_functions");
 	for (const std::string &name : reuse->reusedFunctionNames()) {
 		std::string path = owners.at(name).get<std::string>();
-		if (keys.contains(name))
-			result.keysByPath[path].insert(keys.at(name).get<std::string>());
-		else if (!callables.contains(name))
-			result.unkeyedPaths.insert(std::move(path));
+		result.keysByPath[path].insert(keys.at(name).get<std::string>());
 	}
 	return result;
 }
 
 Json captureSectionDependencyGraph(
-	const std::map<const Section *, std::string> &paths, Json *previous = nullptr,
+	const ParseContext &context, const Json &program, const std::map<const Section *, std::string> &paths,
+	IncrementalInferenceReads &inferenceReads, const Json &probeLookups, BuildStatistics &statistics,
+	std::map<std::string, std::string> &fingerprints, InferenceGlobalInputs &globalInputs, Json *previous = nullptr,
 	const std::unordered_set<const Section *> &stable = {}, const RetainedGraphVariants &retained = {},
-	size_t *reused = nullptr, size_t *reverseUpdated = nullptr
+	const IncrementalInferenceProducts *products = nullptr
 ) {
 	const bool hadPrevious = previous != nullptr;
-	Json graph = hadPrevious
-					 ? std::move(*previous)
-					 : Json{{"forward", Json::object()}, {"reverse", Json::object()}, {"instantiations", Json::object()}};
+	Json graph = hadPrevious ? std::move(*previous)
+							 : Json{
+								   {"forward", Json::object()},
+								   {"reverse", Json::object()},
+								   {"instantiations", Json::object()},
+								   {"callable_lookups", Json::object()},
+								   {"inference_reads", Json::object()}
+							   };
 	Json &forward = graph.at("forward");
+	Json *priorUnits = hadPrevious ? &graph.at("inference_units") : nullptr;
 	Json &reverse = graph.at("reverse");
 	Json &instantiations = graph.at("instantiations");
-	ClassIdentityPaths classPaths = classIdentityPaths(paths);
+	const Json &priorLookups = graph.at("callable_lookups");
+	InferenceUnitInputs lookupInputs(context, program.at("all_function_projection"), paths, statistics, fingerprints);
+	inferenceReads.finalizeInterfaces(priorLookups, [&](const auto &path) {
+		return lookupInputs.declarationFingerprint(path);
+	}, false);
+	const Json &priorReads = graph.at("inference_reads");
+	Json sectionReads = Json::object();
+	std::map<std::string, std::set<std::string>> lookupOwners;
+	std::unordered_map<std::string, std::vector<std::string_view>> priorLookupsByOwner;
+	for (const auto &[key, lookup] : priorLookups.items())
+		for (const Json &owner : lookup.at("owners"))
+			priorLookupsByOwner[owner.get<std::string>()].push_back(key);
+	auto retainLookups = [&](const std::string &path, IncrementalInferenceReads::Keys &keys) {
+		if (auto found = priorLookupsByOwner.find(path); found != priorLookupsByOwner.end())
+			for (std::string_view signature : found->second)
+				keys.emplace(signature);
+	};
+	InferenceValueIdentities identities(paths);
 	std::unordered_set<std::string> currentPaths;
 	struct DependencyChange {
 		std::string caller;
@@ -56,14 +75,34 @@ Json captureSectionDependencyGraph(
 		std::set<std::string> retainedKeys;
 		if (auto keys = retained.keysByPath.find(path); keys != retained.keysByPath.end())
 			retainedKeys = keys->second;
-		if (retained.unkeyedPaths.contains(path))
-			retainedKeys.insert(aggregateGraphVariant);
-		bool reuseEntry = hadPrevious && stable.contains(section) && forward.contains(path) && instantiations.contains(path);
+		std::map<const Instantiation *, std::optional<std::string>> currentIdentities;
+		std::set<std::string> instantiatedKeys;
+		for (const auto &[key, instantiation] : section->instantiations) {
+			auto identity = inferenceSummaryKey(key, identities);
+			if (identity)
+				instantiatedKeys.insert(*identity);
+			currentIdentities.emplace(&instantiation, std::move(identity));
+		}
+		if (products && products->variants().contains(path))
+			for (const auto &[key, _] : products->variants().at(path))
+				instantiatedKeys.insert(key);
+		// A retained pure value can have no native function and no body visited
+		// in this build. Its dependency variant belongs to the saved result.
+		if (const auto &summaries = program.at("inference_summaries"); summaries.contains(path))
+			for (const auto &[key, _] : summaries.at(path).items())
+				if (!instantiatedKeys.contains(key))
+					retainedKeys.insert(key);
+		IncrementalInferenceReads::Keys sectionLookups = inferenceReads.readsOf(path);
+		IncrementalInferenceReads::Keys reads = inferenceReads.dependenciesOf(path);
+		bool reuseEntry = hadPrevious && stable.contains(section) && forward.contains(path) && instantiations.contains(path) &&
+						  sectionLookups.empty() && reads.empty();
 		std::set<std::string> currentKeys = retainedKeys;
 		if (reuseEntry)
 			for (const auto &[key, instantiation] : section->instantiations) {
-				std::optional<std::string> identity = inferenceSummaryKey(key, classPaths);
-				if (!instantiation.inferenceReusedFromCache || !identity || !instantiations.at(path).contains(*identity)) {
+				const auto &identity = currentIdentities.at(&instantiation);
+				if (!instantiation.inferenceReusedFromCache || !products ||
+					!products->previousProducer(instantiation.inferenceProductIdentity) || !identity ||
+					!instantiations.at(path).contains(*identity)) {
 					reuseEntry = false;
 					break;
 				}
@@ -75,27 +114,37 @@ Json captureSectionDependencyGraph(
 				return instantiations.at(path).contains(key);
 			});
 		if (reuseEntry) {
-			if (reused)
-				(*reused)++;
+			retainLookups(path, sectionLookups);
+			for (const std::string &key : sectionLookups)
+				lookupOwners[key].insert(path);
+			if (priorReads.contains(path))
+				sectionReads[path] = priorReads.at(path);
+			statistics.dependencyGraphEntriesReused++;
 			continue;
 		}
 		std::set<std::string> direct;
 		std::vector<Section *> matched;
 		collectMatchedSectionDependencies(section, matched);
+		if (!section->parent)
+			InferredSectionDependencies(matched).collectExecution(*section);
 		for (Section *dependency : matched)
 			direct.insert(paths.at(dependency));
 		Json variants = Json::object();
+		if (products && products->variants().contains(path))
+			for (const auto &[key, selected] : products->variants().at(path)) {
+				variants[key] = selected;
+				direct.insert(selected.begin(), selected.end());
+			}
 		std::set<std::string> aggregateDependencies;
-		bool hasAggregateVariant = retained.unkeyedPaths.contains(path);
+		bool hasAggregateVariant = retainedKeys.contains(aggregateGraphVariant);
+		bool retainPriorLookups = !retainedKeys.empty() || (context.reuseRootExecution && section == context.mainSection);
 		for (const auto &[key, instantiation] : section->instantiations) {
-			std::optional<std::string> keyText = inferenceSummaryKey(key, classPaths);
+			const auto &keyText = currentIdentities.at(&instantiation);
 			Json selected = Json::array();
 			if (instantiation.inferenceReusedFromCache) {
-				requireCompilerInvariant(
-					keyText && hadPrevious && instantiations.contains(path) && instantiations.at(path).contains(*keyText),
-					"reused inference has no saved dependency variant"
-				);
-				selected = instantiations.at(path).at(*keyText);
+				requireCompilerInvariant(products && keyText, "reused inference has no dependency product");
+				retainPriorLookups |= products->previousProducer(instantiation.inferenceProductIdentity);
+				selected = products->selection(instantiation.inferenceProductIdentity);
 			} else {
 				std::vector<Section *> inferred;
 				collectInferredSectionDependencies(instantiation.body.get(), inferred);
@@ -132,12 +181,32 @@ Json captureSectionDependencyGraph(
 		}
 		if (hasAggregateVariant)
 			variants[aggregateGraphVariant] = aggregateDependencies;
+		if (retainPriorLookups) {
+			retainLookups(path, sectionLookups);
+			if (priorReads.contains(path))
+				for (const Json &dependency : priorReads.at(path))
+					reads.insert(dependency.get_ref<const std::string &>());
+		}
+		if (!reads.empty()) {
+			direct.insert(reads.begin(), reads.end());
+			sectionReads[path] = std::move(reads);
+		}
+		for (const std::string &key : sectionLookups) {
+			lookupOwners[key].insert(path);
+			const Json &candidates = inferenceReads.observation(key, &priorLookups).at("candidates");
+			if (candidates.size() == 1)
+				direct.insert(candidates.at(0).at(0).get<std::string>());
+		}
 		std::set<std::string> before = forward.contains(path) ? dependencySet(forward.at(path)) : std::set<std::string>{};
 		if (before != direct)
 			changes.push_back({path, std::move(before), direct});
 		forward[path] = direct;
 		instantiations[path] = std::move(variants);
 	}
+	for (const Json &keys : probeLookups)
+		for (const Json &key : keys)
+			lookupOwners.try_emplace(key.get<std::string>());
+	graph["inference_reads"] = std::move(sectionReads);
 	if (hadPrevious) {
 		for (auto entry = forward.begin(); entry != forward.end();) {
 			if (currentPaths.contains(entry.key())) {
@@ -169,8 +238,7 @@ Json captureSectionDependencyGraph(
 				reverse.erase(path);
 			else
 				reverse[path] = callers;
-			if (reverseUpdated)
-				(*reverseUpdated)++;
+			statistics.dependencyGraphReverseNodesUpdated++;
 		}
 	} else {
 		std::map<std::string, std::set<std::string>> callers;
@@ -180,5 +248,22 @@ Json captureSectionDependencyGraph(
 		for (const auto &[path, dependents] : callers)
 			reverse[path] = dependents;
 	}
+	graph["inference_units"] =
+		InferenceUnitGraphCapture(
+			context, program.at("all_function_projection"), paths, inferenceReads, graph, priorUnits, lookupOwners, statistics,
+			fingerprints, products, globalInputs, retained.keysByPath
+		)
+			.capture(program.at("inference_summaries"), program.at("function_sections"), program.at("function_instantiations"));
+	for (const auto &[path, variants] : graph.at("inference_units").items())
+		for (const auto &[variant, unit] : variants.items())
+			for (const auto &[key, fingerprint] : unit.at("lookups").items())
+				lookupOwners[key].insert(path);
+	Json callableLookups = Json::object();
+	for (auto &[key, owners] : lookupOwners) {
+		Json lookup = inferenceReads.observation(key, &priorLookups);
+		lookup["owners"] = std::move(owners);
+		callableLookups[key] = std::move(lookup);
+	}
+	graph["callable_lookups"] = std::move(callableLookups);
 	return graph;
 }

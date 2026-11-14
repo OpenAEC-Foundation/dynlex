@@ -1,0 +1,4 @@
+function [run]:
+    execute:
+        import body.dl
+@intrinsic("discard", run)

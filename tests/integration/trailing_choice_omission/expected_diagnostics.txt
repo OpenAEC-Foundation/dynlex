@@ -1,0 +1,2 @@
+tests/integration/trailing_choice_omission/main.dl:6-12: Warning: Pattern argument 'factor' is assigned before being read
+  note: Defined as argument here tests/integration/trailing_choice_omission/main.dl:29-35

@@ -9,20 +9,56 @@ void collectMatchedSectionDependencies(const Section *body, std::vector<Section 
 		if (reference->match)
 			visitMatch(*reference->match);
 	for (const Section *child : body->children)
-		if (child->patternDefinitions.empty())
+		if (child->patternDefinitions.empty() && !hasCodegenSectionIdentity(*child))
 			collectMatchedSectionDependencies(child, dependencies);
 }
 
-void collectInferredSectionDependencies(const InstantiatedSectionBody *body, std::vector<Section *> &dependencies) {
-	if (!body)
-		return;
-	for (Expression *expression : body->lineExpressions)
+class InferredSectionDependencies {
+  public:
+	explicit InferredSectionDependencies(std::vector<Section *> &dependencies) : dependencies(dependencies) {}
+
+	void collectExpression(Expression *expression) {
 		visitExpressionTree(expression, [&](Expression *node) {
 			for (PatternDefinition *definition : {node->selectedPatternDefinition, node->selectedCallableDefinition})
 				if (definition)
 					dependencies.push_back(definition->section);
+			collectBody(node->inferredFlexBody.get());
+			collectBody(node->inferredCallerBody.get());
+			if (node->staticLoopBodies)
+				for (const auto &iteration : *node->staticLoopBodies)
+					collectBody(iteration.get());
+			if (const auto &values = node->dataSectionValues) {
+				collectExpression(values->record);
+				for (const auto &[_, value] : values->fields)
+					collectExpression(value);
+			}
 			return false;
-		});
-	for (const auto &child : body->childBodies)
-		collectInferredSectionDependencies(child.get(), dependencies);
+		}, visitedExpressions);
+	}
+
+	void collectBody(const InstantiatedSectionBody *body) {
+		if (!body || !visitedBodies.insert(body).second)
+			return;
+		for (Expression *expression : body->lineExpressions)
+			collectExpression(expression);
+		for (const auto &child : body->childBodies)
+			collectBody(child.get());
+	}
+
+	void collectExecution(const Section &section) {
+		for (CodeLine *line : section.codeLines)
+			collectExpression(line->expression);
+		for (const Section *child : section.children)
+			if (child->runsInEnclosingBody())
+				collectExecution(*child);
+	}
+
+  private:
+	std::vector<Section *> &dependencies;
+	std::unordered_set<Expression *> visitedExpressions;
+	std::unordered_set<const InstantiatedSectionBody *> visitedBodies;
+};
+
+void collectInferredSectionDependencies(const InstantiatedSectionBody *body, std::vector<Section *> &dependencies) {
+	InferredSectionDependencies(dependencies).collectBody(body);
 }

@@ -1,7 +1,63 @@
-ClassDefinition *constraintClassForPath(const Json &path, const std::map<std::string, Section *> &sections) {
-	Section *section = sections.at(path.get<std::string>());
+ClassDefinition *findPortableClass(const Json &path, const std::map<std::string, Section *> &sections) {
+	auto found = sections.find(path.get_ref<const std::string &>());
+	if (found == sections.end())
+		return nullptr;
+	Section *section = found->second;
 	requireCompilerInvariant(section->type == SectionType::Class, "saved constraint class path is not a class");
 	return static_cast<ClassSection *>(section)->classDefinition;
+}
+
+ClassDefinition *findPortableClass(const Json &path, const ClassIdentityPaths &classes) {
+	const std::string &wanted = path.get_ref<const std::string &>();
+	auto found = std::ranges::find_if(classes, [&](const auto &entry) {
+		return entry.second == wanted;
+	});
+	return found == classes.end() ? nullptr : const_cast<ClassDefinition *>(found->first);
+}
+
+template <typename Classes> ClassDefinition *constraintClassForPath(const Json &path, const Classes &classes) {
+	ClassDefinition *definition = findPortableClass(path, classes);
+	requireCompilerInvariant(definition, "saved constraint class has not been restored");
+	return definition;
+}
+
+template <typename Classes> bool portableConstraintTypeReferencesPresent(const Json &type, const Classes &classes) {
+	if (!type.at(7).is_null()) {
+		ClassDefinition *definition = findPortableClass(type.at(7), classes);
+		if (!definition || type.at(8).get<int>() >= static_cast<int>(definition->instantiations.size()))
+			return false;
+	}
+	if (!type.at(6).is_null() && !portableConstraintTypeReferencesPresent(type.at(6), classes))
+		return false;
+	if (!type.at(9).is_null()) {
+		const Json &signature = type.at(9);
+		if (!portableConstraintTypeReferencesPresent(signature.at(0), classes))
+			return false;
+		for (const Json &parameter : signature.at(1))
+			if (!portableConstraintTypeReferencesPresent(parameter, classes))
+				return false;
+	}
+	return true;
+}
+
+template <typename Classes> bool portableConstraintReferencesPresent(const Json &constraint, const Classes &classes) {
+	if (!constraint.at(10).is_null()) {
+		ClassDefinition *definition = findPortableClass(constraint.at(10), classes);
+		if (!definition || (!constraint.at(11).is_null() &&
+							constraint.at(11).get<int>() >= static_cast<int>(definition->instantiations.size())))
+			return false;
+	}
+	if (!constraint.at(9).is_null() && !portableConstraintReferencesPresent(constraint.at(9), classes))
+		return false;
+	if (!constraint.at(12).is_null()) {
+		const Json &signature = constraint.at(12);
+		if (!portableConstraintTypeReferencesPresent(signature.at(0), classes))
+			return false;
+		for (const Json &parameter : signature.at(1))
+			if (!portableConstraintTypeReferencesPresent(parameter, classes))
+				return false;
+	}
+	return true;
 }
 
 std::optional<Json> encodePortableConstraintType(const DataType &type, const ClassIdentityPaths &classPaths);
@@ -53,10 +109,10 @@ std::optional<Json> encodePortableConstraintType(const DataType &type, const Cla
 	);
 }
 
-DataType decodePortableConstraintType(const Json &encoded, const std::map<std::string, Section *> &sections);
+template <typename Classes> DataType decodePortableConstraintType(const Json &encoded, const Classes &sections);
 
-std::shared_ptr<const FunctionSignature>
-decodePortableFunctionSignature(const Json &encoded, const std::map<std::string, Section *> &sections) {
+template <typename Classes>
+std::shared_ptr<const FunctionSignature> decodePortableFunctionSignature(const Json &encoded, const Classes &sections) {
 	DataType result = decodePortableConstraintType(encoded.at(0), sections);
 	std::vector<DataType> parameters;
 	for (const Json &parameter : encoded.at(1))
@@ -64,7 +120,7 @@ decodePortableFunctionSignature(const Json &encoded, const std::map<std::string,
 	return std::make_shared<FunctionSignature>(std::move(result), std::move(parameters));
 }
 
-DataType decodePortableConstraintType(const Json &encoded, const std::map<std::string, Section *> &sections) {
+template <typename Classes> DataType decodePortableConstraintType(const Json &encoded, const Classes &sections) {
 	DataType type;
 	type.kind = static_cast<DataType::Kind>(encoded.at(0).get<int>());
 	type.numericSize = encoded.at(1).get<int>();
@@ -88,7 +144,7 @@ DataType decodePortableConstraintType(const Json &encoded, const std::map<std::s
 }
 
 std::optional<Json> encodePortableConstraint(const TypeConstraint &constraint, const ClassIdentityPaths &classPaths) {
-	if (!constraint.isResolved() || (constraint.classInstantiationIndex && *constraint.classInstantiationIndex < -1))
+	if (constraint.classInstantiationIndex && *constraint.classInstantiationIndex < -1)
 		return std::nullopt;
 	Json classPath = nullptr;
 	if (constraint.classDefinition) {
@@ -121,12 +177,13 @@ std::optional<Json> encodePortableConstraint(const TypeConstraint &constraint, c
 		 optionalInt(constraint.pointerDepth), optionalInt(constraint.arraySize), optionalInt(constraint.matrixRows),
 		 optionalInt(constraint.matrixColumns), constraint.requiresNumeric, constraint.requiresInteger,
 		 constraint.requiresCompileTimeValue, std::move(element), std::move(classPath),
-		 optionalInt(constraint.classInstantiationIndex), std::move(signature)}
+		 optionalInt(constraint.classInstantiationIndex), std::move(signature), constraint.resolved}
 	);
 }
 
-TypeConstraint decodePortableConstraint(const Json &encoded, const std::map<std::string, Section *> &sections) {
+template <typename Classes> TypeConstraint decodePortableConstraint(const Json &encoded, const Classes &sections) {
 	TypeConstraint constraint = TypeConstraint::any();
+	constraint.resolved = encoded.at(13).get<bool>();
 	if (!encoded.at(0).is_null())
 		constraint.kind = static_cast<DataType::Kind>(encoded.at(0).get<int>());
 	auto optionalInt = [](const Json &value) -> std::optional<int> {
@@ -167,7 +224,7 @@ encodePortableConstraintValue(const ParseContext::IncrementalConstraintValue &va
 	return Json::array({std::move(*constraint), std::move(*type)});
 }
 
-ParseContext::IncrementalConstraintValue
-decodePortableConstraintValue(const Json &encoded, const std::map<std::string, Section *> &sections) {
+template <typename Classes>
+ParseContext::IncrementalConstraintValue decodePortableConstraintValue(const Json &encoded, const Classes &sections) {
 	return {decodePortableConstraint(encoded.at(0), sections), decodePortableConstraintType(encoded.at(1), sections)};
 }

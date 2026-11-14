@@ -139,6 +139,7 @@ run_with_timeout() {
     local standard_input_bytes_file=""
     local working_directory_file=""
     local environment_file=""
+    local isolate_temporaries=false
     while [[ "${1:-}" == --* ]]; do
         if [[ $# -lt 2 ]]; then
             echo "run_with_timeout: ${1:-option} requires a path" >&2
@@ -150,6 +151,7 @@ run_with_timeout() {
         --standard-input-file) standard_input_file="$2" ;;
         --working-directory-file) working_directory_file="$2" ;;
         --environment-file) environment_file="$2" ;;
+        --isolate-temporaries) isolate_temporaries="$2" ;;
         *)
             echo "run_with_timeout: unknown option $1" >&2
             return 125
@@ -157,13 +159,15 @@ run_with_timeout() {
         esac
         shift 2
     done
-    python3 - "$seconds" "$arguments_file" "$standard_input_file" "$standard_input_bytes_file" "$working_directory_file" "$environment_file" "$PROJECT_DIR" "$@" <<'PY'
+    python3 - "$seconds" "$arguments_file" "$standard_input_file" "$standard_input_bytes_file" "$working_directory_file" "$environment_file" "$PROJECT_DIR" "$isolate_temporaries" "$@" <<'PY'
+import atexit
 import os
 from pathlib import Path
 import re
 import signal
 import subprocess
 import sys
+import tempfile
 
 timeout_seconds = int(sys.argv[1])
 arguments_file = sys.argv[2]
@@ -172,7 +176,8 @@ standard_input_bytes_file = sys.argv[4]
 working_directory_file = sys.argv[5]
 environment_file = sys.argv[6]
 project_directory = Path(sys.argv[7])
-cmd = sys.argv[8:]
+isolate_temporaries = sys.argv[8] == "true"
+cmd = sys.argv[9:]
 if arguments_file:
     data = Path(arguments_file).read_bytes()
     argument_lines = [] if not data else data.split(b"\n")
@@ -255,9 +260,19 @@ if environment_file:
         configured_names.add(name)
         process_environment[name] = value
 
+if isolate_temporaries:
+    temporary_root = tempfile.TemporaryDirectory(prefix="dynlex-test-suite-")
+    atexit.register(temporary_root.cleanup)
+    if process_environment is None:
+        process_environment = os.environ.copy()
+    temporary_path = Path(temporary_root.name).as_posix()
+    process_environment.update({name: temporary_path for name in ("TMPDIR", "TMP", "TEMP")})
+
 popen_options = {
     "stdout": subprocess.PIPE,
-    "stderr": subprocess.PIPE,
+    # The suite compares combined output. Capture one pipe rather than replaying
+    # two streams in an order determined by this Python process's buffering.
+    "stderr": subprocess.STDOUT,
 }
 if standard_input is not None:
     popen_options["stdin"] = subprocess.PIPE
@@ -317,7 +332,7 @@ def kill_posix_tree(pid):
             pass
 
 try:
-    stdout, stderr = process.communicate(input=standard_input, timeout=timeout_seconds)
+    output, _ = process.communicate(input=standard_input, timeout=timeout_seconds)
 except subprocess.TimeoutExpired:
     termination_error = b""
     if os.name == "nt":
@@ -335,32 +350,26 @@ except subprocess.TimeoutExpired:
         kill_posix_tree(process.pid)
 
     try:
-        stdout, stderr = process.communicate(timeout=5)
+        output, _ = process.communicate(timeout=5)
     except subprocess.TimeoutExpired as cleanup_timeout:
         if process.poll() is None:
             process.kill()
-        if process.stdout is not None:
-            process.stdout.close()
-        if process.stderr is not None:
-            process.stderr.close()
+        process.stdout.close()
         process.wait(timeout=5)
-        stdout = cleanup_timeout.output or b""
-        stderr = cleanup_timeout.stderr or b""
+        output = cleanup_timeout.output or b""
         termination_error += b"Timed-out process tree did not release its output pipes\n"
 
-    if stdout:
-        sys.stdout.buffer.write(stdout)
-    if stderr:
-        sys.stderr.buffer.write(stderr)
+    if output:
+        sys.stdout.buffer.write(output)
+        sys.stdout.buffer.flush()
     if termination_error:
         sys.stderr.buffer.write(termination_error)
         sys.exit(125)
     sys.exit(124)
 
-if stdout:
-    sys.stdout.buffer.write(stdout)
-if stderr:
-    sys.stderr.buffer.write(stderr)
+if output:
+    sys.stdout.buffer.write(output)
+    sys.stdout.buffer.flush()
 if process.returncode < 0:
     signal_number = -process.returncode
     if signal_number <= 127:
@@ -389,7 +398,7 @@ if [[ "$run_only" != "true" ]]; then
 fi
 
 if [[ "$suite" == required && "$suite_worker" != true ]]; then
-    run_with_timeout 120 "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --suite-worker
+    run_with_timeout 120 --isolate-temporaries true "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --suite-worker
     suite_exit=$?
     if [[ $suite_exit -eq 124 ]]; then
         printf '%s\n' "${RED}Required tests exceeded the 120-second budget.${NC}"
@@ -412,6 +421,7 @@ trap cleanup_test_output EXIT
 
 total_start_ms=$(now_ms)
 
+run_fixture_tests() {
 for test_dir in "$TESTS_DIR"/*/; do
     test_start_ms=$(now_ms)
     test_dir="${test_dir%/}"
@@ -678,12 +688,57 @@ for test_dir in "$TESTS_DIR"/*/; do
         failures+=("$test_name")
     fi
 done
+return 0
+}
+
+start_fixture_tests() {
+    fixture_results="$TEST_OUTPUT_DIR/fixture-results"
+    (
+        trap - EXIT
+        run_fixture_tests || exit "$?"
+        printf '%s\0' "$passed" "$failed" "$skipped" "$test_output" "${failures[@]}" > "$fixture_results"
+    ) &
+    fixture_worker=$!
+}
+
+collect_fixture_tests() {
+    local worker_status=0
+    wait "$fixture_worker" || worker_status=$?
+    if [[ $worker_status -ne 0 ]]; then
+        echo "Fixture worker exited with status $worker_status." >&2
+        return "$worker_status"
+    fi
+    local fixture_passed fixture_failed fixture_skipped fixture_output fixture_failure
+    local fixture_failures=()
+    {
+        IFS= read -r -d '' fixture_passed &&
+        IFS= read -r -d '' fixture_failed &&
+        IFS= read -r -d '' fixture_skipped &&
+        IFS= read -r -d '' fixture_output || return 1
+        while IFS= read -r -d '' fixture_failure; do
+            fixture_failures+=("$fixture_failure")
+        done
+    } < "$fixture_results" || return 1
+    passed=$((passed + fixture_passed))
+    failed=$((failed + fixture_failed))
+    skipped=$((skipped + fixture_skipped))
+    test_output="$fixture_output$test_output"
+    failures=("${fixture_failures[@]}" "${failures[@]}")
+}
+
+# Run fixtures concurrently with the independent auxiliary checks in the short gate.
+# Integration checks keep their existing single-group memory budget.
+if [[ "$suite" == required ]]; then
+    start_fixture_tests
+else
+    run_fixture_tests
+fi
 
 run_auxiliary_test() {
     local test_name="$1"
     local required_test=false
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|incremental_compilation|incremental_cache_entries|data_declaration_cache|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout)
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|build_arguments|entrypoint_checker|incremental_compilation|incremental_cache_entries|data_declaration_cache|cache_codec|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
         required_test=true ;;
     esac
     if [[ "$suite" == required && "$required_test" != true ]] ||
@@ -718,6 +773,7 @@ run_auxiliary_test "elf_binary_guard" 10 python3 -B "$SCRIPT_DIR/test_no_elf_bin
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
 run_auxiliary_test "fixture_compile_budget" 10 python3 -B "$SCRIPT_DIR/test_fixture_options.py"
 run_auxiliary_test "required_focus" 10 python3 -B "$SCRIPT_DIR/test_required_focus.py"
+run_auxiliary_test "suite_groups" 10 python3 -B "$SCRIPT_DIR/test_suite_groups.py"
 run_auxiliary_test "diagnostic_expectations" 10 python3 -B "$SCRIPT_DIR/test_diagnostic_expectations.py"
 run_auxiliary_test "process_error_mode" 10 python3 -B "$SCRIPT_DIR/test_process_error_mode.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
@@ -737,8 +793,11 @@ run_auxiliary_test "llvm_toolchain" 10 python3 -B "$SCRIPT_DIR/test_llvm_toolcha
 run_auxiliary_test "entrypoint_checker" 60 python3 -B "$SCRIPT_DIR/test_entrypoint_checker.py" "$COMPILER"
 run_auxiliary_test "numeric_literals" 30 python3 -B "$SCRIPT_DIR/test_numeric_literals.py" "$PROJECT_DIR"
 run_auxiliary_test "class_layout" 30 python3 -B "$SCRIPT_DIR/test_class_layout.py" "$PROJECT_DIR"
+run_auxiliary_test "incremental_module_partition" 30 python3 -B "$SCRIPT_DIR/test_incremental_module_partition.py" "$PROJECT_DIR"
+run_auxiliary_test "build_arguments" 10 python3 -B "$SCRIPT_DIR/test_build_arguments.py" "$PROJECT_DIR"
 run_auxiliary_test "incremental_compilation" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR"
 run_auxiliary_test "incremental_cache_entries" 600 python3 -B "$SCRIPT_DIR/test_incremental_cache_entries.py" "$PROJECT_DIR"
+run_auxiliary_test "cache_codec" 10 python3 -B "$SCRIPT_DIR/test_cache_codec.py" "$PROJECT_DIR"
 run_auxiliary_test "incremental_compilation_integration" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --integration
 run_auxiliary_test "address_provenance" 600 python3 -B "$SCRIPT_DIR/test_address_provenance.py" "$PROJECT_DIR"
 run_auxiliary_test "expression_ownership" 600 python3 -B "$SCRIPT_DIR/test_expression_ownership.py" "$PROJECT_DIR"
@@ -762,6 +821,7 @@ run_auxiliary_test "pattern_precedence" 60 python3 -B "$SCRIPT_DIR/test_pattern_
 run_auxiliary_test "associative_grouping" 30 python3 -B "$SCRIPT_DIR/test_associative_grouping.py" "$COMPILER"
 run_auxiliary_test "compiler_stack" 45 python3 -B "$SCRIPT_DIR/test_compiler_stack.py" "$COMPILER"
 run_auxiliary_test "nested_timeout" 10 python3 -B "$SCRIPT_DIR/test_nested_timeout.py"
+run_auxiliary_test "timeout_output" 10 python3 -B "$SCRIPT_DIR/test_timeout_output.py"
 run_auxiliary_test "completion_visibility" 15 python3 -B "$SCRIPT_DIR/test_completion_visibility.py" "$COMPILER"
 run_auxiliary_test "data_declaration_cache" 30 python3 -B "$SCRIPT_DIR/test_data_declaration_cache.py" "$COMPILER"
 run_auxiliary_test \
@@ -874,6 +934,10 @@ if [[ "$suite" == integration ]]; then
         ((failed++)) || true
         failures+=("lsp_integration")
     fi
+fi
+
+if [[ "$suite" == required ]]; then
+    collect_fixture_tests || exit "$?"
 fi
 
 total_elapsed_ms=$(elapsed_ms_since "$total_start_ms")

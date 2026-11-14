@@ -205,20 +205,6 @@ static std::string renderResolvedExpression(Expression *expr) {
 	return rendered.empty() && !expr->range.subString.empty() ? (std::string)expr->range.subString : rendered;
 }
 
-static std::string
-buildOperandGroupingWarningKey(const Range &range, std::string_view chosenGrouping, std::string_view alternativeGrouping) {
-	std::string key = std::to_string(reinterpret_cast<uintptr_t>(range.line));
-	key += "|";
-	key += std::to_string(range.start());
-	key += "|";
-	key += std::to_string(range.end());
-	key += "|";
-	key += chosenGrouping;
-	key += "|";
-	key += alternativeGrouping;
-	return key;
-}
-
 enum class GroupingEnumerationProgress {
 	NoCandidate,
 	EmittedContinue,
@@ -618,14 +604,14 @@ class GroupingInferenceTransaction {
 		  savedSubject(context.currentSubject), savedTypesValid(context.typesValid),
 		  savedSuppressDiagnostics(context.suppressDiagnostics),
 		  savedSuppressReinferPassDiagnostics(context.suppressReinferPassDiagnostics),
-		  savedTypeFailureDetail(context.typeFailureDetail), savedTypeFailureRelatedInfo(context.typeFailureRelatedInfo),
-		  savedTypeFailureSnapshot(context.typeFailureSnapshot), savedTypeFailureDiagnostic(context.typeFailureDiagnostic),
-		  savedTypeFailurePriority(context.typeFailurePriority),
+		  savedTypeFailureDetail(context.typeFailureDetail),
+		  savedConfiguredTypeFailureDetail(context.configuredTypeFailureDetail),
+		  savedTypeFailureRelatedInfo(context.typeFailureRelatedInfo), savedTypeFailureSnapshot(context.typeFailureSnapshot),
+		  savedTypeFailureDiagnostic(context.typeFailureDiagnostic), savedTypeFailurePriority(context.typeFailurePriority),
 		  savedHasTypeFailureDiagnostic(context.hasTypeFailureDiagnostic), savedTrialJournal(context.trialJournal),
 		  savedGroupingTrialJournal(context.groupingTrialJournal), savedFixedGroupingRoots(context.fixedGroupingRoots),
 		  savedResolvedGroupingRoots(context.resolvedGroupingRoots),
-		  savedDetectGroupingAmbiguity(context.detectGroupingAmbiguity),
-		  savedPendingOperandGroupingWarnings(context.pendingOperandGroupingWarnings),
+		  savedDetectGroupingAmbiguity(context.detectGroupingAmbiguity), savedPendingDiagnostics(context.pendingDiagnostics),
 		  savedExpressionStack(context.expressionStack), savedInheritedTrialContext(context.inheritedTrialContext),
 		  trialFixedGroupingRoots(fixedGroupingRoots),
 		  trialFixedGroupingScope{trialFixedGroupingRoots, savedFixedGroupingRoots} {
@@ -633,7 +619,7 @@ class GroupingInferenceTransaction {
 		context.trialJournal = &journal;
 		context.groupingTrialJournal = &groupingJournal;
 		context.detectGroupingAmbiguity = true;
-		context.pendingOperandGroupingWarnings = &groupingWarnings;
+		context.pendingDiagnostics = &queuedDiagnostics;
 		context.fixedGroupingRoots = &trialFixedGroupingScope;
 		context.resolvedGroupingRoots = &trialFixedGroupingRoots;
 		context.typesValid = true;
@@ -650,15 +636,17 @@ class GroupingInferenceTransaction {
 
 	const std::unordered_set<Expression *> &resolvedGroupingRoots() const { return trialFixedGroupingRoots; }
 
-	std::vector<InferenceContext::OperandGroupingWarning> takeGroupingWarnings() { return std::move(groupingWarnings); }
+	std::vector<Diagnostic> takeDiagnostics() { return std::move(queuedDiagnostics); }
 	bool dependsOnRecursiveDependency() const { return recursiveInferenceObservation.ownerObserved(); }
 	bool observedRecursiveDependency() const { return recursiveInferenceObservation.observed(); }
 
 	void rollback() {
 		requireCompilerInvariant(active, "grouping inference transaction was resolved twice");
 		recursiveInferenceObservation.discard();
+		// Freeze completed bodies while their inferred values still belong to
+		// this transaction; undoing the grouping maps first loses those values.
+		rollbackTrialJournal(context, journal);
 		groupingJournal.rollback();
-		rollbackTrialJournal(journal);
 		restoreSavedState();
 		active = false;
 	}
@@ -726,6 +714,7 @@ class GroupingInferenceTransaction {
 	bool savedSuppressDiagnostics;
 	bool savedSuppressReinferPassDiagnostics;
 	std::string savedTypeFailureDetail;
+	std::shared_ptr<const ConfiguredDiagnosticMessage> savedConfiguredTypeFailureDetail;
 	std::vector<RelatedInfo> savedTypeFailureRelatedInfo;
 	DiagnosticExpressionSnapshot savedTypeFailureSnapshot;
 	Diagnostic savedTypeFailureDiagnostic;
@@ -736,12 +725,12 @@ class GroupingInferenceTransaction {
 	const InferenceContext::FixedGroupingScope *savedFixedGroupingRoots;
 	std::unordered_set<Expression *> *savedResolvedGroupingRoots;
 	bool savedDetectGroupingAmbiguity;
-	std::vector<InferenceContext::OperandGroupingWarning> *savedPendingOperandGroupingWarnings;
-	std::vector<Expression *> savedExpressionStack;
+	std::vector<Diagnostic> *savedPendingDiagnostics;
+	std::vector<InferenceContext::ExpressionFrame> savedExpressionStack;
 	const InferenceContext *savedInheritedTrialContext;
 	std::unordered_set<Expression *> trialFixedGroupingRoots;
 	InferenceContext::FixedGroupingScope trialFixedGroupingScope;
-	std::vector<InferenceContext::OperandGroupingWarning> groupingWarnings;
+	std::vector<Diagnostic> queuedDiagnostics;
 	bool active = true;
 
 	void restoreConfiguration() {
@@ -752,7 +741,7 @@ class GroupingInferenceTransaction {
 		context.fixedGroupingRoots = savedFixedGroupingRoots;
 		context.resolvedGroupingRoots = savedResolvedGroupingRoots;
 		context.detectGroupingAmbiguity = savedDetectGroupingAmbiguity;
-		context.pendingOperandGroupingWarnings = savedPendingOperandGroupingWarnings;
+		context.pendingDiagnostics = savedPendingDiagnostics;
 		context.inheritedTrialContext = savedInheritedTrialContext;
 	}
 
@@ -772,6 +761,7 @@ class GroupingInferenceTransaction {
 		context.suppressDiagnostics = savedSuppressDiagnostics;
 		context.suppressReinferPassDiagnostics = savedSuppressReinferPassDiagnostics;
 		context.typeFailureDetail = std::move(savedTypeFailureDetail);
+		context.configuredTypeFailureDetail = std::move(savedConfiguredTypeFailureDetail);
 		context.typeFailureRelatedInfo = std::move(savedTypeFailureRelatedInfo);
 		context.typeFailureSnapshot = savedTypeFailureSnapshot;
 		context.typeFailureDiagnostic = std::move(savedTypeFailureDiagnostic);
@@ -802,7 +792,7 @@ static bool validateGroupingInTrial(
 	const BindingFrameStack &flexBindingFrameStack, const DiagnosticExpressionSnapshot &failureSnapshot,
 	bool requireVoidResult = false, GroupingFailure *trialFailure = nullptr,
 	std::unordered_set<Expression *> *resolvedGroupingRoots = nullptr, GroupingSnapshot *resolvedGroupingSnapshot = nullptr,
-	std::vector<InferenceContext::OperandGroupingWarning> *resolvedGroupingWarnings = nullptr,
+	std::vector<Diagnostic> *resolvedDiagnostics = nullptr,
 	std::unique_ptr<GroupingInferenceTransaction> *retainedTransaction = nullptr
 ) {
 	ExpressionNodeSet originalExpressionNodes;
@@ -834,8 +824,8 @@ static bool validateGroupingInTrial(
 	}
 	if (trialSucceeded && resolvedGroupingSnapshot)
 		*resolvedGroupingSnapshot = captureGroupingSnapshot(expr);
-	if (trialSucceeded && resolvedGroupingWarnings)
-		*resolvedGroupingWarnings = transaction->takeGroupingWarnings();
+	if (trialSucceeded && resolvedDiagnostics)
+		*resolvedDiagnostics = transaction->takeDiagnostics();
 	if (!trialSucceeded) {
 		if (context.hasTypeFailureDiagnostic) {
 			considerGroupingFailure(trialFailure, context.typeFailureDiagnostic, context.typeFailurePriority);
@@ -844,7 +834,10 @@ static bool validateGroupingInTrial(
 				context.typeFailureSnapshot.range.line ? context.typeFailureSnapshot.range : failureSnapshot.range;
 			considerGroupingFailure(
 				trialFailure,
-				buildFailureDetailDiagnostic(failureRange, context.typeFailureDetail, context.typeFailureRelatedInfo), 1
+				buildFailureDetailDiagnostic(
+					failureRange, context.typeFailureDetail, context.typeFailureRelatedInfo, context.configuredTypeFailureDetail
+				),
+				1
 			);
 		}
 	}

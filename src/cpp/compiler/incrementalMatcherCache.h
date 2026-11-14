@@ -1,11 +1,14 @@
 #pragma once
 #include "patternMatch.h"
+#include <array>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -14,18 +17,50 @@ struct ParseContext;
 struct PatternReference;
 struct PatternTreeNode;
 // Caches pointer-free matcher results across native compiler invocations.
-// The key includes the trie mutation history, because a newly added overload can
+// The key includes active candidate signatures, because a newly added overload can
 // change a match even when the call never used that overload before.
 class IncrementalMatcherCache {
   public:
 	using Json = nlohmann::json;
-	IncrementalMatcherCache(ParseContext &context, std::string_view previous);
+	using LoadSegment = std::function<std::optional<std::string>(std::string_view)>;
+	IncrementalMatcherCache(ParseContext &context, std::string_view previous, LoadSegment loadSegment);
 	std::optional<PatternMatch *> reuse(PatternReference *reference, MatchOptions options, MatchDependencies *dependencies);
 	void
 	record(PatternReference *reference, MatchOptions options, const PatternMatch *match, const MatchDependencies *dependencies);
-	std::string snapshot() const;
-	bool contains(std::string_view key) const;
+	struct Snapshot {
+		std::string index;
+		std::vector<std::pair<std::string, std::string>> segments;
+	};
+	struct StorageStatistics {
+		size_t loaded = 0, missing = 0, built = 0, reused = 0, loadedBytes = 0;
+	};
+	enum class SnapshotScope { Complete, Partial };
+	Snapshot snapshot(SnapshotScope scope);
+	const StorageStatistics &storageStatistics() const { return storage; }
+	bool contains(std::string_view key);
 	void retain(std::string_view key);
+	struct BodyResolution {
+		size_t referenceIndex;
+		std::string matchKey;
+		std::optional<std::tuple<PatternElement, int, int>> variable;
+	};
+	std::optional<std::string> recordBodyResolution(const std::vector<std::pair<size_t, PatternReference *>> &references);
+	std::optional<std::vector<BodyResolution>> restoreBodyResolution(std::string_view key);
+	struct ReferenceMatchKeys {
+		std::string_view pattern;
+		int patternType;
+		int purpose;
+		std::string_view finalKey;
+		std::string_view initialKey;
+	};
+	std::string recordReferenceKeys(const std::vector<PatternReference *> &references);
+	const std::vector<ReferenceMatchKeys> *restoreReferenceKeys(std::string_view key);
+	size_t referenceMetadataLoads() const { return referenceMetadataLoadCount; }
+	size_t referenceMetadataReuses() const { return referenceMetadataReuseCount; }
+	std::string recordMatchIdentities(const std::vector<std::string_view> &identities);
+	std::optional<std::vector<std::string_view>> restoreMatchIdentities(std::string_view key);
+	std::string recordClassificationData(const Json &value);
+	std::optional<Json> restoreClassificationData(std::string_view key);
 	std::optional<std::string_view> resultKey(const PatternReference *reference) const;
 	size_t hits() const { return reusedCount; }
 	size_t precedenceHits() const { return reusedPrecedenceCount; }
@@ -35,11 +70,28 @@ class IncrementalMatcherCache {
 	void reusePrecedenceSignature(std::string_view signature);
 	double keyTimeMilliseconds() const { return keyMilliseconds; }
 	double restoreTimeMilliseconds() const { return restoreMilliseconds; }
+	size_t keyComputations() const { return keyComputationCount; }
+	size_t signatureLookups() const { return signatureLookupCount; }
 
   private:
 	ParseContext &context;
 	std::unordered_map<std::string_view, std::string_view> previousEntries;
 	std::map<std::string, std::variant<std::string, std::string_view>> recorded;
+	struct Segment {
+		std::string key;
+		size_t entries = 0;
+		bool loaded = false;
+		std::string bytes;
+	};
+	std::array<Segment, 256> segments;
+	LoadSegment loadSegment;
+	StorageStatistics storage;
+	void loadPreviousSegment(size_t index);
+	decltype(previousEntries)::iterator findPrevious(std::string_view key);
+	void recordValue(const std::string &key, std::string value);
+	std::unordered_map<std::string_view, std::vector<ReferenceMatchKeys>> decodedReferenceKeys;
+	size_t referenceMetadataLoadCount = 0;
+	size_t referenceMetadataReuseCount = 0;
 	std::uint64_t cachedPrecedenceRevision = 0;
 	std::string cachedPrecedenceDigest;
 	size_t reusedCount = 0;
@@ -48,6 +100,8 @@ class IncrementalMatcherCache {
 	size_t prevalidatedPrecedenceCount = 0;
 	double keyMilliseconds = 0;
 	double restoreMilliseconds = 0;
+	size_t keyComputationCount = 0;
+	size_t signatureLookupCount = 0;
 
 	bool available(MatchOptions options);
 	std::string key(PatternReference &reference, bool trackDependencies);

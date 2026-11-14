@@ -5,6 +5,11 @@
 #include <utility>
 #include <vector>
 
+inline std::string_view trimSourceIndent(std::string_view text) {
+	size_t first = text.find_first_not_of(" \t");
+	return first == std::string_view::npos ? std::string_view{} : text.substr(first);
+}
+
 inline bool sourceWordCharacter(char character) {
 	return std::isalnum(static_cast<unsigned char>(character)) != 0 || character == '_';
 }

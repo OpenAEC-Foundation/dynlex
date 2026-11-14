@@ -46,7 +46,7 @@ class DataDeclarationNameIndex {
 		}
 	}
 
-	bool refresh(ParseContext &context) {
+	bool refresh(ParseContext &context, std::unordered_set<Section *> &changedScopes) {
 		std::unordered_map<Section *, Names> discovered;
 		for (const auto &header : headers) {
 			PatternReference &reference = header->reference;
@@ -90,7 +90,10 @@ class DataDeclarationNameIndex {
 			}
 			scope.ordinary = std::move(ordinary);
 			Names &names = discovered[section];
-			changed |= !sameNames(scope.published, names);
+			if (!sameNames(scope.published, names)) {
+				changed = true;
+				changedScopes.insert(section);
+			}
 			scope.published = names;
 			section->explicitVariableDeclarations = scope.ordinary;
 			section->dataVariableDeclarations.clear();

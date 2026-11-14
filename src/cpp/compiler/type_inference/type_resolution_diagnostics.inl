@@ -1,3 +1,5 @@
+#include "inferenceFailure.h"
+
 static bool isWholeNumberLiteral(Expression *expr) {
 	if (!expr || expr->kind != Expression::Kind::Literal)
 		return false;
@@ -70,11 +72,6 @@ static std::string diagnosticExpressionText(Expression *expr) {
 	return (std::string)lineText;
 }
 
-struct DiagnosticExpressionSnapshot {
-	Range range;
-	std::string text;
-};
-
 static DiagnosticExpressionSnapshot captureDiagnosticExpressionSnapshot(Expression *expr) {
 	if (!expr)
 		return {};
@@ -83,7 +80,7 @@ static DiagnosticExpressionSnapshot captureDiagnosticExpressionSnapshot(Expressi
 
 static Diagnostic buildTypeFailureDiagnostic(
 	const ParseContext &parseContext, const DiagnosticExpressionSnapshot &snapshot, const std::string &detail,
-	const std::vector<RelatedInfo> &relatedInfo = {}
+	const std::vector<RelatedInfo> &relatedInfo = {}, const std::shared_ptr<const ConfiguredDiagnosticMessage> &configured = {}
 ) {
 	std::string expressionText = snapshot.text;
 	Diagnostic diagnostic;
@@ -98,14 +95,20 @@ static Diagnostic buildTypeFailureDiagnostic(
 			"expression", expressionText, "detail", detail
 		);
 	}
+	if (configured)
+		diagnostic.setConfiguredPlaceholder(parseContext, "detail", *configured);
 	diagnostic.relatedInfo = relatedInfo;
 	return diagnostic;
 }
 
-static Diagnostic buildFailureDetailDiagnostic(Range range, std::string detail, std::vector<RelatedInfo> relatedInfo = {}) {
+static Diagnostic buildFailureDetailDiagnostic(
+	Range range, std::string detail, std::vector<RelatedInfo> relatedInfo = {},
+	std::shared_ptr<const ConfiguredDiagnosticMessage> configured = {}
+) {
 	Diagnostic diagnostic;
 	diagnostic.level = Diagnostic::Level::Error;
 	diagnostic.message = std::move(detail);
+	diagnostic.configuredMessage = std::move(configured);
 	diagnostic.range = range;
 	diagnostic.relatedInfo = std::move(relatedInfo);
 	return diagnostic;

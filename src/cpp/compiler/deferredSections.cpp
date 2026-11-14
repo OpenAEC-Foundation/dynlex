@@ -14,9 +14,9 @@ bool prepareDeferredSectionBodies(ParseContext &context) {
 	std::vector<CodeLine *> candidates = context.codeLines;
 	size_t serial = 0;
 	for (CodeLine *line : candidates) {
-		if (!line->sectionOpening || !line->expression || !line->expression->patternReference)
+		if (!line->sectionOpening || !line->expression.rootReference())
 			continue;
-		PatternMatch *match = line->expression->patternReference->match;
+		PatternMatch *match = line->expression.rootReference()->match;
 		if (!match || match->matchingDefinitions.size() != 1)
 			continue;
 		Section *definition = match->matchingDefinitions.front()->section;
@@ -38,6 +38,7 @@ bool prepareDeferredSectionBodies(ParseContext &context) {
 		requireCompilerInvariant(position != parent->children.end(), "deferred section has no parent slot");
 		size_t slot = position - parent->children.begin();
 		auto *function = new FunctionSection(parent);
+		function->declarationProducer = parent;
 		parent->children[slot] = function;
 		parent->children.pop_back();
 		function->startLineIndex = source->startLineIndex;

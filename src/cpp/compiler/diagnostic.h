@@ -11,6 +11,20 @@
 #include <vector>
 
 struct ParseContext;
+struct VariableStorageScope;
+
+struct DiagnosticPublication {
+	bool published = false;
+	std::string identity;
+};
+
+struct DiagnosticEmission {
+	std::string discriminator;
+	std::shared_ptr<DiagnosticPublication> publication;
+	std::shared_ptr<const VariableStorageScope> owner;
+	std::vector<std::pair<std::shared_ptr<const VariableStorageScope>, int>> retentionScopes;
+	int traceBase = -1;
+};
 
 struct ConfiguredDiagnosticMessage {
 	std::string key;
@@ -31,6 +45,9 @@ struct RelatedInfo {
 	std::string message;
 	Range range;
 	std::shared_ptr<const ConfiguredDiagnosticMessage> configuredMessage = {};
+	std::shared_ptr<const VariableStorageScope> inferenceOwner = {};
+	int inferenceDepth = -1;
+	int inferenceOwnerBase = -1;
 };
 
 RelatedInfo configuredRelatedInfo(
@@ -52,6 +69,14 @@ struct Diagnostic {
 	Range range;
 	std::vector<RelatedInfo> relatedInfo;
 	std::vector<DiagnosticFix> quickFixes;
+	std::shared_ptr<DiagnosticEmission> emission;
+	DiagnosticEmission &editEmission() {
+		if (!emission)
+			emission = std::make_shared<DiagnosticEmission>();
+		else if (!emission.unique())
+			emission = std::make_shared<DiagnosticEmission>(*emission);
+		return *emission;
+	}
 	Diagnostic() = default;
 	template <typename... Args>
 	Diagnostic(const ParseContext &context, Level level, Range range, Args &&...args)
@@ -78,6 +103,8 @@ struct Diagnostic {
 
 	static Diagnostic configParseError(std::string_view message, Range range);
 	std::string toString() const;
+	Diagnostic relativeToInference(int base) const;
+	bool sameEmission(const Diagnostic &other) const;
 	void setConfiguredMessage(
 		const ParseContext &context, Range syntaxRange, std::string_view key, std::string_view variant,
 		std::vector<std::pair<std::string, std::string>> placeholders = {}

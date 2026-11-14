@@ -7,6 +7,7 @@ generateStaticReferenceIntrinsic(ParseContext &context, Expression *callExpr, co
 		*context.llvmModule, getLLVMType(context, valueType), true, llvm::GlobalValue::InternalLinkage, nullptr, "section.data"
 	);
 	global->setAlignment(getLLVMABIAlignment(context, valueType));
+	global->setMetadata("dynlex.static.reference", llvm::MDNode::get(*context.llvmContext, {}));
 	context.staticLLVMValues[callExpr] = global;
 	struct StaticReferenceScope {
 		ParseContext &context;

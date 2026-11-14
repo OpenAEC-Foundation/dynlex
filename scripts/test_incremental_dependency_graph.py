@@ -4,6 +4,17 @@ import json
 from test_incremental_program_cache import read_program
 from test_incremental_inactive_selection import check_literal_inactive_body
 from test_incremental_class_layouts import check_class_layout_restoration
+from test_incremental_constraint_dependencies import check_constraint_lookup_dependencies
+from test_incremental_preinfer_summaries import check_preinfer_summary_capture
+from test_incremental_variant_dependencies import check_variant_dependency_cascade
+from test_incremental_compile_time_variants import check_compile_time_variant_cascade
+from test_incremental_summary_units import check_summary_unit_reuse
+from test_incremental_value_queries import check_value_query_dependencies
+from test_incremental_callable_identity import check_callable_identity_reuse
+from test_incremental_symbolic_values import check_symbolic_value_queries
+from test_incremental_typed_bodies import check_typed_body_reuse
+from test_incremental_native_globals import check_native_global_reuse
+from test_incremental_reference_metadata import check_reference_metadata_reuse
 
 
 def graph_for(cache, entry):
@@ -74,6 +85,7 @@ def check_temporary_expression_parse_reuse(root, build):
 
 
 def check_independent_constraint_probes(root, build):
+    check_constraint_lookup_dependencies(root, build)
     main = root / "independent_constraint_probes.dl"
     source = ('floating-point means: @intrinsic("type", "float")\n'
               'integer means: @intrinsic("type", "int")\n'
@@ -190,14 +202,24 @@ def check_unrelated_added_pattern_constraint_probes(root, build):
         "an unrelated added pattern re-inferred an existing type constraint"
     assert edited[1:] == build(False, entry=main)[1:]
 
+    partial = root / "partial_added_pattern_constraint_probes.dl"
+    partial.write_text(source)
+    build(entry=partial)
+    partial.write_text(source + 'to integer marker: @intrinsic("discard", 2)\n')
+    partial_edit = build(entry=partial)
+    assert partial_edit[0]["constraint_probes_reused"] >= 1
+    assert partial_edit[0]["constraint_probes_run"] == 0, \
+        "a missing required word still invalidated the type constraint"
+    assert partial_edit[1:] == build(False, entry=partial)[1:]
+
     relevant = root / "relevant_added_pattern_constraint_probes.dl"
     relevant.write_text(source)
     build(entry=relevant)
-    relevant.write_text(source + 'to integer marker: @intrinsic("discard", 2)\n')
-    affected = build(entry=relevant)
-    assert affected[0]["constraint_probes_run"] >= 1, \
-        "a pattern containing the constraint name reused its prior probe"
-    assert affected[1:] == build(False, entry=relevant)[1:]
+    relevant.write_text(source + 'function [integer]:\n    execute:\n'
+                        '        @intrinsic("return", @intrinsic("type", "float"))\n')
+    affected = build(entry=relevant, success=False)
+    assert affected[0]["constraint_probes_run"] >= 1, "a competing type provider reused its prior probe"
+    assert affected[1:] == build(False, entry=relevant, success=False)[1:]
 
 
 def check_header_parameter_constraint_owner(root, build):
@@ -275,6 +297,15 @@ def check_reused_ir_dependency_graph_variants(root, build):
 
 
 def check_leaf_dependency_cascade(root, build):
+    check_preinfer_summary_capture(root, build)
+    check_variant_dependency_cascade(root, build)
+    check_compile_time_variant_cascade(root, build)
+    check_summary_unit_reuse(root, build)
+    check_value_query_dependencies(root, build)
+    check_callable_identity_reuse(root, build)
+    check_symbolic_value_queries(root, build)
+    check_typed_body_reuse(root, build)
+    check_native_global_reuse(root, build)
     leaf_a = root / "leaf_a.dl"
     leaf_b = root / "leaf_b.dl"
     leaf_helper = root / "leaf_helper.dl"
@@ -353,6 +384,8 @@ def check_leaf_dependency_cascade(root, build):
     integer_graph = graph_for(root / "cache", variant_main)
     consume_path = next(path for path, variants in integer_graph["instantiations"].items() if variants)
     integer_keys = set(integer_graph["instantiations"][consume_path])
+    assert set(read_program(root / "cache", variant_main)["inference_summaries"][consume_path]) == integer_keys, \
+        "unused native specialization retained an unusable inference summary"
     variant_main.write_text(variant_definition + 'consume 1.0\n')
     variant_edit = build(entry=variant_main)
     float_graph = graph_for(root / "cache", variant_main)
@@ -421,7 +454,7 @@ def check_inactive_projection_refresh(root, build):
     cold = build(entry=skipped)
     skipped.write_text(skipped_source.replace('"discard", 1', '"discard", 2'))
     reused = build(entry=skipped)
-    assert reused[0]["inactive_body_resolution_references_skipped"] >= 2, \
+    assert reused[0]["cached_body_resolution_references_skipped"] >= 2, \
         "unchanged inactive bodies repeated pattern resolution"
     assert reused[0]["body_resolution_reference_visits"] < cold[0]["body_resolution_reference_visits"]
     assert reused[1:] == build(False, entry=skipped)[1:]
@@ -442,7 +475,7 @@ def check_inactive_projection_refresh(root, build):
     build(entry=nested)
     nested.write_text(nested_source.replace('"discard", 1', '"discard", 2'))
     nested_edit = build(entry=nested)
-    assert nested_edit[0]["inactive_body_resolution_references_skipped"] >= 2, \
+    assert nested_edit[0]["cached_body_resolution_references_skipped"] >= 2, \
         "unchanged inactive control-flow body repeated pattern resolution"
     assert nested_edit[1:] == build(False, entry=nested)[1:]
     nested.write_text(nested.read_text().removesuffix('live\n') + 'spare\n')
@@ -450,20 +483,21 @@ def check_inactive_projection_refresh(root, build):
         "later call did not restore an inactive control-flow body"
 
     new_call = root / "inactive_new_call.dl"
-    new_call_source = ('to live: @intrinsic("discard", 1)\n'
-                       'to spare: @intrinsic("discard", 2)\n'
+    new_call_source = ('integer means: @intrinsic("type", "int")\n'
+                       'to live: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "live"))\n'
+                       'to spare: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "spare"))\n'
                        'live\n')
     new_call.write_text(new_call_source)
-    build(entry=new_call)
-    assert "spare".encode().hex() not in projection_for(root / "cache", new_call)["reference_literals_global"]
-    new_call.write_text(new_call_source.replace('to live: @intrinsic("discard", 1)', 'to live: spare'))
-    assert build(entry=new_call)[1:] == build(False, entry=new_call)[1:]
-    assert "spare".encode().hex() in projection_for(root / "cache", new_call)["reference_literals_global"], \
-        "changed call was omitted from the persisted matcher literal index"
+    assert build(entry=new_call)[2] == b"live\n"
+    new_call.write_text(new_call_source.replace(
+        'to live: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "live"))', 'to live: spare'))
+    added_call = build(entry=new_call)
+    assert added_call[2] == b"spare\n"
+    assert added_call[1:] == build(False, entry=new_call)[1:]
     new_call.write_text(new_call_source)
-    assert build(entry=new_call)[1:] == build(False, entry=new_call)[1:]
-    assert "spare".encode().hex() not in projection_for(root / "cache", new_call)["reference_literals_global"], \
-        "removed call remained in the matcher literal index"
+    removed_call = build(entry=new_call)
+    assert removed_call[2] == b"live\n"
+    assert removed_call[1:] == build(False, entry=new_call)[1:]
 
     unicode_source = root / "inactive_unicode_literal.dl"
     unicode_source.write_text('to greet é: @intrinsic("discard", 1)\ngreet é\n')
@@ -704,9 +738,14 @@ def check_folded_value_remains_active(root, build):
 def check_local_match_projection_reuse(root, build):
     main = root / "local_match_projection.dl"
     prefix = 'to leaf: @intrinsic("discard", 1)\nto run:\n    leaf\n    leaf\n'
-    main.write_text(prefix + '    @intrinsic("discard", 1)\nrun\n')
+    execution = '@intrinsic("discard", 0)\n'
+    main.write_text(prefix + '    @intrinsic("discard", 1)\nrun\n' + execution)
     build(entry=main)
-    main.write_text(prefix + '    @intrinsic("discard", 2)\nrun\n')
+    main.write_text(main.read_text().replace('"discard", 0)', '"discard", 9)'))
+    entry_edit = build(entry=main)
+    assert entry_edit[0]["projection_top_level_sections_reused"] >= 2
+    assert entry_edit[1:] == build(False, entry=main)[1:]
+    main.write_text(prefix + '    @intrinsic("discard", 2)\nrun\n' + execution.replace('0)', '9)'))
     edited = build(entry=main)
     assert edited[0]["projection_match_entries_reused"] >= 2, \
         "a one-line body edit re-fingerprinted unchanged pattern calls"
@@ -743,49 +782,6 @@ def check_pointer_preinfer(root, build):
     assert edited[1:] == build(False, entry=main)[1:]
 
 
-def check_implicit_parameter_classification_cascade(root, build):
-    main = root / "implicit_classification_cascade.dl"
-    caller = ('to wrapper thing:\n'
-              '    use thing\n'
-              '    @intrinsic("discard", thing)\n'
-              'wrapper 1\n')
-    parameter_body = '    @intrinsic("discard", thing)\n'
-    literal_body = '    @intrinsic("discard", 1)\n'
-    main.write_text('to use thing:\n' + parameter_body + caller)
-    build(entry=main)
-    before = projection_for(root / "cache", main)
-    main.write_text('to use thing:\n' + literal_body + caller)
-    edited = build(entry=main)
-    after = projection_for(root / "cache", main)
-    assert edited[0]["projection_declaration_sections_reused"] == 0, \
-        "implicit parameter reclassification reused a stale declaration snapshot"
-    assert edited[0]["variable_like_count_references_scanned"] >= 2
-    assert before["declarations"] != after["declarations"], \
-        "implicit parameter removal kept the old declaration dependency"
-    changed = [path for path in before["function_declarations"]
-               if before["function_declarations"][path] != after["function_declarations"][path]]
-    assert len(changed) == 1, "body edit did not isolate the reclassified declaration"
-    caller_path = next(path for path, declaration in before["function_declarations"].items()
-                       if declaration["identity"]["header"] == "wrapper thing:")
-    assert before["matches"][caller_path] != after["matches"][caller_path], \
-        "caller matches ignored reclassified pattern"
-    assert edited[1:] == build(False, entry=main)[1:]
-
-    nested = root / "nested_body_implicit_classification.dl"
-    nested_source = ('function use thing:\n'
-                     '    execute:\n'
-                     '        @intrinsic("discard", thing)\n')
-    nested.write_text(nested_source)
-    build(entry=nested)
-    nested_before = projection_for(root / "cache", nested)
-    nested.write_text(nested_source.replace('"discard", thing', '"discard", 1'))
-    nested_edit = build(entry=nested)
-    nested_after = projection_for(root / "cache", nested)
-    assert nested_before["declarations"] != nested_after["declarations"], \
-        "nested body reference did not affect its ancestor's implicit parameter"
-    assert nested_edit[1:] == build(False, entry=nested)[1:]
-
-
 def check_independent_body_resolution_order(root, build):
     main = root / "independent_body_resolution.dl"
     source = ('integer means: @intrinsic("type", "int")\n'
@@ -800,7 +796,8 @@ def check_independent_body_resolution_order(root, build):
         "an independent body was matched before its callees were indexed"
     main.write_text(source.replace('alpha 1\n', 'alpha 2\n'))
     edited = build(entry=main)
-    assert edited[0]["body_resolution_reference_visits"] == 2
+    assert edited[0]["body_resolution_reference_visits"] + edited[0]["body_resolution_references_restored"] == 2
+    assert edited[0]["body_resolution_references_restored"] >= 1
     assert edited[1:] == build(False, entry=main)[1:]
 
     alternative = root / "single_word_alternative_promotion.dl"
@@ -907,6 +904,7 @@ def check_global_reader_after_top_level_edit(root, build):
 
 
 def check_deferred_match_key_replay(root, build):
+    check_reference_metadata_reuse(root, build)
     main = root / "deferred_match_key_replay.dl"
     source = ('integer means: @intrinsic("type", "int")\n'
               'to first: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\n'
@@ -917,19 +915,23 @@ def check_deferred_match_key_replay(root, build):
     cold = build(entry=main)
     assert cold[0]["body_resolution_match_cache_hits"] == 0
     projection = projection_for(root / "cache", main)
-    assert projection["initial_matcher_tree"] and projection["initial_matcher_roots"], \
-        "the indexed pattern tree state was not persisted"
+    assert projection["initial_matcher_tree"]
+    assert "initial_matcher_roots" not in projection and "final_matcher_roots" not in projection
+    assert cold[0]["matcher_path_snapshots_built"] > 0
     main.write_text(source.replace('"discard", 3', '"discard", 4'))
     edited = build(entry=main)
+    assert edited[0]["matcher_path_snapshots_loaded"] == edited[0]["matcher_path_snapshots_built"] == 0, \
+        "an unchanged pattern tree loaded or rebuilt path snapshots"
     assert edited[0]["deferred_match_keys_replayed"] >= 1, \
         "unchanged body matched after definitions were indexed instead of replaying its resolved reference"
-    assert edited[0]["body_resolution_match_cache_hits"] >= 1, \
+    assert edited[0]["body_resolution_match_cache_hits"] + edited[0]["body_resolution_references_restored"] >= 1, \
         "unchanged body reference ran the matcher instead of restoring its result"
     assert edited[0]["body_resolution_match_cache_hits"] + edited[0]["body_resolution_match_computations"] <= \
         edited[0]["body_resolution_reference_visits"]
     assert edited[1:] == build(False, entry=main)[1:]
     main.write_text(main.read_text().replace('to independent:', 'to renamed independent:'))
     renamed = build(entry=main)
+    assert renamed[0]["matcher_path_snapshots_loaded"] > 0, "a changed tree did not check the saved paths"
     assert renamed[0]["deferred_match_keys_replayed"] >= 1, \
         "an unrelated declaration edit recomputed unchanged references"
     assert renamed[0]["precedence_match_keys_replayed"] == 0, \

@@ -9,7 +9,7 @@ SourceFile *LspFileSystem::snapshot(const TextDocument &document) {
 	return it->second.get();
 }
 
-SourceFile *LspFileSystem::getFile(const std::string &path) {
+SourceFile *LspFileSystem::getFile(const std::string &path, FileReadPurpose purpose) {
 	auto it = documents.find(path);
 	if (it != documents.end())
 		return snapshot(*it->second);
@@ -19,7 +19,7 @@ SourceFile *LspFileSystem::getFile(const std::string &path) {
 	if (it != documents.end())
 		return snapshot(*it->second);
 
-	return localFs.getFile(path);
+	return localFs.getFile(path, purpose);
 }
 
 } // namespace lsp

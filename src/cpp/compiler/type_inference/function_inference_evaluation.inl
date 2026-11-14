@@ -89,16 +89,42 @@ struct PureSectionFlexBodyExecutionFrame {
 
 struct PureExecutionState {
 	ParseContext &parseContext;
-	InferenceContext *inferenceContext{};
+	InferenceContext &inferenceContext;
 	size_t steps = 0;
 	size_t depth = 0;
 	std::vector<InstantiatedSectionBody *> activeBodies;
 	std::vector<PureSectionFlexBodyExecutionFrame> sectionFlexBodyFrames;
 	std::vector<Section *> activeFlexDefinitionStack;
 	std::vector<Section *> flexCallSiteSectionStack;
+	std::vector<InferenceReadOwner> valueReadOwners;
 
-	PureExecutionState(ParseContext &context, InferenceContext *inference)
+	PureExecutionState(ParseContext &context, InferenceContext &inference)
 		: parseContext(context), inferenceContext(inference) {}
+	void recordValueRead(const Section &section, const std::shared_ptr<const VariableStorageScope> &scope) const {
+		if (valueReadOwners.empty()) {
+			inferenceContext.recordBodyRead(section, scope);
+			return;
+		}
+		if (const auto &record = parseContext.recordInferenceDependency) {
+			record(valueReadOwners.back(), section, scope);
+			if (inferenceContext.dependencyReads.constraintProbe)
+				record(
+					{.section = nullptr, .scope = {}, .constraintProbe = inferenceContext.dependencyReads.constraintProbe},
+					section, scope
+				);
+		}
+	}
+};
+
+struct ScopedPureValueReads {
+	PureExecutionState &state;
+	ScopedPureValueReads(
+		PureExecutionState &state, const Section *section, const std::shared_ptr<const VariableStorageScope> &scope
+	)
+		: state(state) {
+		state.valueReadOwners.push_back({.section = section, .scope = scope, .constraintProbe = {}});
+	}
+	~ScopedPureValueReads() { state.valueReadOwners.pop_back(); }
 };
 
 // Resource exhaustion unwinds the entire evaluator. Returning an unknown
@@ -230,8 +256,10 @@ static CompileTimeValue pureExecutionImmediateValue(Expression *expr) {
 }
 
 static CompileTimeValue pureExecutionStoredValue(Expression *expr, const PureExecutionState &state) {
-	return state.inferenceContext ? state.inferenceContext->lookupExpressionValue(expr) : getExpressionCompileTimeValue(expr);
+	return state.inferenceContext.lookupExpressionValue(expr);
 }
+
+#include "pure_execution_body.inl"
 
 static CompileTimeValue executePureInstantiationReturnValue(
 	PureExecutionState &state, Section *section, Instantiation &instantiation,
@@ -241,18 +269,41 @@ static CompileTimeValue executePureInstantiationReturnValue(
 		instantiation.needsReinfer || !instantiation.valid || !instantiation.returnType.isDeduced() ||
 		instantiation.returnType.kind == DataType::Kind::Void)
 		return {};
+	requireCompilerInvariant(
+		static_cast<bool>(instantiation.storageScope), "pure execution encountered an instantiation without a unit scope"
+	);
+	state.recordValueRead(*section, instantiation.storageScope);
 	std::vector<CompileTimeValue> argumentValueKey = compileTimeArgumentValueVector(argumentValues);
+	std::optional<InferenceReadOwner> valueOwner;
+	if (!state.valueReadOwners.empty())
+		valueOwner = state.valueReadOwners.back();
+	auto observe = [&](const CompileTimeValue &value) {
+		if (const auto &record = state.parseContext.recordInferenceValue) {
+			auto emit = [&](const InferenceReadOwner &owner) {
+				record(owner, *section, instantiation.storageScope, argumentValueKey, value);
+			};
+			if (valueOwner)
+				emit(*valueOwner);
+			else
+				state.inferenceContext.recordDependencyRead(emit);
+		}
+	};
+	// An evaluation that cannot produce a portable result still consumes the
+	// body. Keep that dependency even if execution stops before returning.
+	observe({});
 	auto cachedIt = instantiation.pureReturnValuesByArguments.find(argumentValueKey);
-	if (cachedIt != instantiation.pureReturnValuesByArguments.end())
+	if (cachedIt != instantiation.pureReturnValuesByArguments.end()) {
+		observe(cachedIt->second);
 		return cachedIt->second;
+	}
+	if (!ensurePureExecutionBody(state, section, instantiation, argumentValues))
+		return {};
 	PureExecutionFrame frame;
 	frame.instantiation = &instantiation;
 	requireCompilerInvariant(
-		static_cast<bool>(instantiation.body), "pure execution encountered an instantiation without an inferred body"
-	);
-	requireCompilerInvariant(
 		instantiation.body->sourceSection == section, "pure execution encountered an instantiation body for another section"
 	);
+	ScopedPureValueReads valueReads(state, section, instantiation.storageScope);
 	for (const auto &[parameterName, value] : argumentValues) {
 		Variable *parameterVariable = findExecutionSectionVariable(section, parameterName);
 		if (!parameterVariable || !parameterVariable->definition)
@@ -273,9 +324,11 @@ static CompileTimeValue executePureInstantiationReturnValue(
 	});
 	if ((!executionResult.returned && !hasImplicitDefinitionValue) || !isCompileTimeKnown(executionResult.value))
 		return {};
-	if (state.inferenceContext && state.inferenceContext->trial && state.inferenceContext->trialJournal)
-		state.inferenceContext->trialJournal->recordInstantiationWrite(&instantiation);
+	if (state.inferenceContext.trial && state.inferenceContext.trialJournal)
+		state.inferenceContext.trialJournal->recordInstantiationWrite(&instantiation);
+	observe(executionResult.value);
 	instantiation.pureReturnValuesByArguments.emplace(std::move(argumentValueKey), executionResult.value);
+	instantiation.valueSummaryChanged = true;
 	return executionResult.value;
 }
 
@@ -607,7 +660,7 @@ static CompileTimeValue evaluatePureFunctionCallReturnValue(
 	}, parameterBindings, argumentValues)) {
 		return {};
 	}
-	PureExecutionState executionState{context.parseContext, &context};
+	PureExecutionState executionState{context.parseContext, context};
 	try {
 		return executePureInstantiationReturnValue(executionState, section, instantiation, argumentValues);
 	} catch (const PureExecutionStopped &stopped) {
@@ -679,6 +732,21 @@ static Instantiation *ensureCallableFunctionInstantiationInferred(
 	} else
 		definition->callableInstantiation = &instantiation->second;
 	return &instantiation->second;
+}
+
+void recordInferenceRestoration(InferenceContext *context, Section *section, const InstantiationKey &key) {
+	if (context && context->trial && context->trialJournal)
+		context->trialJournal->recordSectionInstantiationWrite(section, key);
+}
+
+void recordInferenceClassRestoration(InferenceContext *context, ClassDefinition *definition) {
+	if (context && context->trial && context->trialJournal)
+		context->trialJournal->recordClassInstantiationAppend(definition);
+}
+
+void recordInferenceClassRequestRestoration(InferenceContext *context, ClassDefinition *definition, const std::string &key) {
+	if (context && context->trial && context->trialJournal)
+		context->trialJournal->classRequestInsertions.emplace_back(definition, key);
 }
 
 static CompileTimeValue

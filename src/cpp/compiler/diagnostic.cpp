@@ -4,6 +4,37 @@
 #include "parseContext.h"
 #include <algorithm>
 
+bool Diagnostic::sameEmission(const Diagnostic &other) const {
+	if (!emission || !other.emission)
+		return false;
+	if (emission->publication && other.emission->publication) {
+		if (emission->publication == other.emission->publication)
+			return true;
+		if (!emission->publication->identity.empty() &&
+			emission->publication->identity == other.emission->publication->identity)
+			return true;
+	}
+	return !emission->discriminator.empty() && emission->discriminator == other.emission->discriminator &&
+		   range.line == other.range.line && range.start() == other.range.start() && range.end() == other.range.end();
+}
+
+Diagnostic Diagnostic::relativeToInference(int base) const {
+	Diagnostic relative = *this;
+	std::erase_if(relative.relatedInfo, [&](const RelatedInfo &note) {
+		return note.inferenceDepth >= 0 && note.inferenceDepth < base;
+	});
+	for (RelatedInfo &note : relative.relatedInfo)
+		if (note.inferenceDepth >= 0) {
+			note.inferenceDepth -= base;
+			note.inferenceOwnerBase -= base;
+		}
+	auto &metadata = relative.editEmission();
+	metadata.retentionScopes.clear(); // Actual callers supply their own retention scopes on replay.
+	if (metadata.traceBase >= 0)
+		metadata.traceBase -= base;
+	return relative;
+}
+
 ConfiguredDiagnosticMessage configuredDiagnosticMessage(
 	const ParseContext &, Range sourceRange, std::string_view key, std::string_view variant,
 	std::vector<std::pair<std::string, std::string>> placeholders

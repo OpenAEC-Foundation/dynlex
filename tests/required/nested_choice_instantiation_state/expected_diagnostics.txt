@@ -1,2 +1,0 @@
-tests/required/nested_choice_instantiation_state/main.dl:21-26: Warning: Pattern argument 'slot' is assigned before being read
-  note: Defined as argument here tests/required/nested_choice_instantiation_state/main.dl:63-67

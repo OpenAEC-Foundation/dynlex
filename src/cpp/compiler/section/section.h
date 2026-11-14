@@ -21,6 +21,8 @@
 #include <unordered_set>
 #include <vector>
 
+struct InferenceFailure;
+
 namespace llvm {
 class Function;
 } // namespace llvm
@@ -120,6 +122,7 @@ inline InstantiationKey buildInstantiationKey(
 // Effects of executing a function, separate from its inferred representation.
 struct InstantiationExecutionEffects {
 	std::unordered_map<std::string, DataType> parameterOutputTypesByName;
+	std::unordered_set<VariableReference *> accessedGlobalReferences;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
 	GlobalAddressProvenance finalGlobalAddressProvenance;
@@ -143,12 +146,22 @@ struct Instantiation : InstantiationExecutionEffects {
 	Range returnTypeOriginRange;
 	bool hasReturnIntrinsic = false;
 	std::vector<DataType> argumentTypes;
+	PatternDefinition *invokedDefinition = nullptr;
+	std::vector<std::string> argumentNames;
 	std::unordered_map<std::string, DataType> parameterTypesByName;
 	std::unordered_map<std::string, DataType> parameterSeedTypesByName;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_set<std::string> requiredCompileTimeParameters;
 	std::map<std::vector<CompileTimeValue>, CompileTimeValue> pureReturnValuesByArguments;
+	// A restored table can omit values that were not portable. Retained caller
+	// code can still depend on those observations after another argument is seen.
+	bool pureReturnValuesComplete = true;
+	bool valueSummaryChanged = false;
+	// Semantic facts and diagnostic ownership exist before an executable body is demanded.
+	std::shared_ptr<const VariableStorageScope> storageScope;
+	std::shared_ptr<const InferenceFailure> failure;
 	std::shared_ptr<InstantiatedSectionBody> body;
+	bool bodyInferred = false;
 	std::map<std::vector<unsigned>, llvm::Function *> llvmFunctionsByParameterAddressSpaces;
 	llvm::Function *llvmCallableFunction = nullptr;
 	bool fallsThrough = true;
@@ -156,6 +169,7 @@ struct Instantiation : InstantiationExecutionEffects {
 	bool needsReinfer = false;
 	bool valid = true;
 	bool inferenceReusedFromCache = false;
+	std::string inferenceProductIdentity;
 };
 
 struct Section {
@@ -167,6 +181,9 @@ struct Section {
 	virtual ~Section() = default;
 	SectionType type;
 	Section *parent{};
+	// Source declaration/body which produces this compiler-generated declaration.
+	// Authored declarations have no producer; generated producers can form a chain.
+	Section *declarationProducer{};
 	std::vector<PatternDefinition *> patternDefinitions;
 	std::vector<PatternReference *> patternReferences;
 	std::unordered_map<std::string, std::vector<VariableReference *>> variableReferences;

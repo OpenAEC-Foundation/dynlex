@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 namespace {
@@ -25,6 +26,14 @@ void expectWindowsObjectTarget(llvm::StringRef input, llvm::StringRef expected) 
 } // namespace
 
 int main() {
+	const std::vector<std::string> libraryOrder{"first", "second", "third"};
+	for (const std::unordered_set<std::string> &libraries :
+		 {std::unordered_set<std::string>{"third", "first", "second"},
+		  std::unordered_set<std::string>{"second", "first", "third"}}) {
+		expect(orderedNativeLibraries(libraries) == libraryOrder, "Native library order depends on discovery order");
+	}
+	expect(orderedNativeLibraries({}).empty(), "An empty library set produced linker inputs");
+
 	expectWindowsObjectTarget("x86_64-w64-mingw32", "x86_64-w64-windows-gnu");
 	expectWindowsObjectTarget("aarch64-w64-mingw32", "aarch64-w64-windows-gnu");
 	expectWindowsObjectTarget("x86_64-w64-windows-gnu", "x86_64-w64-windows-gnu");

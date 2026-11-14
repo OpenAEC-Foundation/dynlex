@@ -1,0 +1,2 @@
+tests/required/type_constraint_unbound_explicit_argument/main.dl:35-44: Error: Unknown variable: missing
+  note: while inferring intrinsic 'type of' in '@intrinsic("type of", {missing})' with arguments [an unresolved value] -> an unresolved value tests/required/type_constraint_unbound_explicit_argument/main.dl:13-45

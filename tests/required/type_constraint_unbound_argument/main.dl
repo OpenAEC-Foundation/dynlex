@@ -1,0 +1,2 @@
+type for amount means: @intrinsic("type", "int", amount)
+to consume {type for missing:value}: @intrinsic("discard", value)

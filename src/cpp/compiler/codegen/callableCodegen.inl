@@ -1,10 +1,7 @@
-static std::string
-buildCallableFunctionName(ParseContext &context, PatternDefinition *definition, const std::vector<DataType> &argumentTypes) {
-	const bool exposed = definition->section->isExposed;
-	std::string name =
-		(exposed ? getPatternName(definition->section) : getPatternFunctionName(context, definition->section)) + "_callable";
+static std::string buildCallableFunctionName(PatternDefinition *definition, const std::vector<DataType> &argumentTypes) {
+	std::string name = getPatternName(definition->section) + "_callable";
 	for (const DataType &type : argumentTypes)
-		name += "_" + (exposed ? encodeLLVMNameComponent(type.toString()) : encodeLLVMTypeName(context, type));
+		name += "_" + encodeLLVMNameComponent(type.toString());
 	return name;
 }
 
@@ -53,15 +50,24 @@ bool ensureCallableFunctionGenerated(
 		parameterTypes.push_back(getLLVMType(context, parameterType));
 	llvm::Type *returnType = getLLVMType(context, instantiationPointer->returnType);
 	llvm::FunctionType *callableType = llvm::FunctionType::get(returnType, parameterTypes, false);
-	std::string callableName = buildCallableFunctionName(context, definition, argumentTypes);
+	std::string callableName = buildCallableFunctionName(definition, argumentTypes);
 	llvm::GlobalValue::LinkageTypes linkage = (requireExternalLinkage || section->isExposed)
 												  ? llvm::GlobalValue::ExternalLinkage
 												  : llvm::GlobalValue::InternalLinkage;
+	if (linkage == llvm::GlobalValue::InternalLinkage)
+		appendInternalFunctionIdentity(context, section, argumentTypes, callableName);
 	llvm::Function *callableFunction = llvm::Function::Create(callableType, linkage, callableName, context.llvmModule);
 	instantiationPointer->llvmCallableFunction = callableFunction;
 	applyNativeScalarABI(
 		*callableFunction, context.llvmModule->getTargetTriple(), instantiationPointer->returnType, argumentTypes
 	);
+	if (context.recordGeneratedFunction)
+		context.recordGeneratedFunction(section, InstantiationKey{argumentTypes, {}}, callableFunction, true);
+	if (context.reuseGeneratedFunction && context.reuseGeneratedFunction(section, *instantiationPointer, callableFunction)) {
+		callableFunction->setLinkage(llvm::GlobalValue::ExternalLinkage);
+		generatedFunction = callableFunction;
+		return true;
+	}
 
 	size_t argumentIndex = 0;
 	for (llvm::Argument &argument : callableFunction->args())
@@ -138,8 +144,6 @@ bool ensureCallableFunctionGenerated(
 
 	if (!succeeded)
 		return false;
-	if (context.recordGeneratedFunction)
-		context.recordGeneratedFunction(section, nullptr, callableFunction, true);
 	generatedFunction = callableFunction;
 	return true;
 }

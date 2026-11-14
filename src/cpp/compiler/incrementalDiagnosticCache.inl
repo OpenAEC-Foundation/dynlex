@@ -126,21 +126,25 @@ Json captureCachedDiagnostics(const ParseContext &context, std::string &rendered
 	return records;
 }
 
-std::set<std::string> diagnosticSourcesAfter(const ParseContext &context, size_t firstDiagnostic) {
-	requireCompilerInvariant(firstDiagnostic <= context.diagnostics.size(), "diagnostic stage boundary exceeds diagnostic count");
-	std::set<std::string> sources;
-	auto addRange = [&](const Range &range) {
-		for (const lsp::SourceFile *source : {range.sourceStart().sourceFile, range.sourceEnd().sourceFile})
-			if (source)
-				sources.insert(source->uri);
+// Resolution reuse can suppress diagnostics from the skipped body, not from
+// unrelated definitions which happen to share its source file. Include enclosing
+// definitions and note locations so a nested diagnostic cannot escape its unit.
+Json captureFrontendDiagnosticUnits(const ParseContext &context) {
+	Json units = Json::object();
+	auto capture = [&](const Range &range) {
+		if (!range.line)
+			return; // Diagnostics without source positions belong to outer stages.
+		Section *scope = range.line->sectionOpening ? range.line->sectionOpening : range.section();
+		for (; scope; scope = scope->parent)
+			if (!scope->patternDefinitions.empty())
+				units[digest(sectionIdentity(*scope).dump())] = true;
 	};
-	for (size_t index = firstDiagnostic; index < context.diagnostics.size(); index++) {
-		const Diagnostic &diagnostic = context.diagnostics[index];
-		addRange(diagnostic.range);
+	for (const Diagnostic &diagnostic : context.diagnostics) {
+		capture(diagnostic.range);
 		for (const RelatedInfo &note : diagnostic.relatedInfo)
-			addRange(note.range);
+			capture(note.range);
 	}
-	return sources;
+	return units;
 }
 
 std::optional<std::string> renderCachedRange(

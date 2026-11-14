@@ -20,11 +20,22 @@ static bool inferSectionLineRange(
 	requireCompilerInvariant(!body || body->sourceSection == section, "active instantiated body does not match section");
 	InstantiatedSectionBody *savedInstantiatedBody = context.currentInstantiatedSectionBody;
 	context.currentInstantiatedSectionBody = body;
+	InferenceContext::DependencyOwner dependencyOwner{
+		section, context.dependencyReads.owner, body ? body->storageScope : nullptr
+	};
+	if ((context.parseContext.recordCallableLookup || context.parseContext.recordInferenceDependency) &&
+		(section == context.parseContext.mainSection || (section->type == SectionType::Function && !section->isFlex) ||
+		 section->type == SectionType::Retain || section->type == SectionType::Release))
+		context.dependencyReads.owner = &dependencyOwner;
 	struct InstantiatedBodyRestore {
 		InferenceContext &context;
 		InstantiatedSectionBody *savedBody;
-		~InstantiatedBodyRestore() { context.currentInstantiatedSectionBody = savedBody; }
-	} instantiatedBodyRestore{context, savedInstantiatedBody};
+		const InferenceContext::DependencyOwner *savedOwner;
+		~InstantiatedBodyRestore() {
+			context.currentInstantiatedSectionBody = savedBody;
+			context.dependencyReads.owner = savedOwner;
+		}
+	} instantiatedBodyRestore{context, savedInstantiatedBody, dependencyOwner.parent};
 	// The first valid inference determines operand ordering per code line. Later
 	// passes reuse the committed grouping stored on the line itself.
 	if (context.trial && context.trialJournal)
@@ -576,9 +587,26 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 		}
 	}
 
-	RuntimeLifecycleUses uses;
+	RuntimeLifecycleUses uses(callerContext);
 	uses.collectSection(parseContext.mainSection);
 	uses.collectExposedFunctions(parseContext.mainSection);
+	size_t replacementIndex = 0;
+	auto collectReplacements = [&]() {
+		if (parseContext.activateIncrementalReplacements)
+			parseContext.activateIncrementalReplacements();
+		for (; replacementIndex < parseContext.incrementalReplacementFunctions.size(); replacementIndex++) {
+			const auto &request = parseContext.incrementalReplacementFunctions[replacementIndex];
+			auto instantiation = request.section->instantiations.find(request.key);
+			requireCompilerInvariant(
+				instantiation != request.section->instantiations.end() && instantiation->second.valid,
+				"incremental replacement lost its inferred lifecycle root"
+			);
+			uses.collectInstantiation(instantiation->second);
+		}
+	};
+	collectReplacements();
+	if (!uses.valid)
+		return false;
 	for (size_t index = 0; index < uses.customTypes.size(); index++) {
 		DataType classType = uses.customTypes[index];
 		ClassDefinition &definition = *classType.classDefinition;
@@ -613,9 +641,12 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 			}
 			uses.collectInstantiation(instantiation->second);
 		}
+		collectReplacements();
 	}
-	return true;
+	return uses.valid;
 }
+
+#include "incremental_function_inference.inl"
 
 bool inferTypes(ParseContext &parseContext) {
 	auto stageStart = std::chrono::steady_clock::now();
@@ -635,25 +666,11 @@ bool inferTypes(ParseContext &parseContext) {
 	finishStage();
 	if (!validatePatternDefinitionConflicts(parseContext))
 		return false;
+	parseContext.compilationStage = ParseContext::CompilationStage::InferredConstraints;
 	finishStage();
 	if (parseContext.runIncrementalPreinference) {
 		auto inferRequest = [&](const ParseContext::IncrementalFunctionRequest &request) {
-			Section *section = request.section;
-			requireCompilerInvariant(
-				section->type == SectionType::Function && !section->patternDefinitions.empty(),
-				"incremental preinference requires a function definition"
-			);
-			std::vector<std::pair<std::string, Expression *>> bindings;
-			for (const std::string &name : request.parameterNames)
-				bindings.emplace_back(name, nullptr);
-			size_t diagnosticCount = parseContext.diagnostics.size();
-			bool inferred = ensureSectionInstantiationInferred(
-				parseContext, section, section->patternDefinitions.front(), bindings, request.argumentTypes, {}, nullptr,
-				nullptr
-			);
-			if (!inferred)
-				parseContext.diagnostics.resize(diagnosticCount);
-			return inferred;
+			return inferIncrementalFunction(parseContext, request);
 		};
 		parseContext.runIncrementalPreinference(parseContext, inferRequest);
 	}
@@ -672,9 +689,19 @@ bool inferTypes(ParseContext &parseContext) {
 	InferenceContext context(parseContext);
 	context.currentVariableValues.clear();
 	context.currentAddressState = {};
-	if (!inferSection(parseContext.mainSection, nullptr, nullptr, context, {})) {
-		emitPendingInferenceFailure(context);
-		return false;
+	if (!parseContext.reuseRootExecution) {
+		size_t firstDiagnostic = parseContext.diagnostics.size();
+		if (!inferSection(parseContext.mainSection, nullptr, nullptr, context, {})) {
+			emitPendingInferenceFailure(context);
+			return false;
+		}
+		auto &rootDiagnostics = parseContext.deferredInferenceDiagnostics[{}];
+		validateVariableUsage(context, parseContext.mainSection, nullptr, {}, {});
+		for (size_t index = firstDiagnostic; index < parseContext.diagnostics.size(); index++) {
+			Diagnostic diagnostic = parseContext.diagnostics[index];
+			context.prepareDiagnostic(diagnostic);
+			rootDiagnostics.push_back(std::move(diagnostic));
+		}
 	}
 	finishStage();
 	std::function<bool(Section *)> inferExposedFunctions = [&](Section *section) {
@@ -732,7 +759,8 @@ bool inferTypes(ParseContext &parseContext) {
 			validateVariables(child);
 		}
 	};
-	validateVariables(parseContext.mainSection);
+	if (!parseContext.reuseRootExecution)
+		validateVariables(parseContext.mainSection);
 
 	// Validate non-flex functions have deduced return types
 	std::function<void(Section *)> validateReturnTypes = [&](Section *section) {

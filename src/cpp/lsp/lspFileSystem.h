@@ -12,7 +12,7 @@ class LspFileSystem : public FileSystem {
   public:
 	LspFileSystem(std::unordered_map<std::string, std::unique_ptr<TextDocument>> &documents) : documents(documents) {}
 
-	SourceFile *getFile(const std::string &path) override;
+	SourceFile *getFile(const std::string &path, FileReadPurpose purpose = FileReadPurpose::Source) override;
 
   private:
 	std::unordered_map<std::string, std::unique_ptr<TextDocument>> &documents;

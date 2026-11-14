@@ -1,96 +1,100 @@
-std::optional<Json> encodeClassRequestValue(const CompileTimeValue &value, const ClassIdentityPaths &classPaths) {
+std::optional<Json> encodeClassRequestValue(const CompileTimeValue &value, const InferenceValueIdentities &identities) {
 	if (std::holds_alternative<std::monostate>(value))
 		return Json::array({"unknown"});
 	if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
 		return Json::array({"minimum"});
-	if (const auto *reference = std::get_if<TypeReferenceValue>(&value)) {
-		auto type = encodePortableConstraintType(reference->type, classPaths);
-		auto constraint = encodePortableConstraint(reference->constraint, classPaths);
-		if (!type || !constraint)
-			return std::nullopt;
-		return Json::array({"type", std::move(*type), std::move(*constraint)});
-	}
-	if (const auto *constraint = std::get_if<TypeConstraint>(&value)) {
-		auto encoded = encodePortableConstraint(*constraint, classPaths);
-		if (!encoded)
-			return std::nullopt;
-		return Json::array({"constraint", std::move(*encoded)});
-	}
-	auto scalar = encodeGlobalConstant(value);
-	return scalar ? std::optional<Json>{Json::array({"scalar", std::move(*scalar)})} : std::nullopt;
+	return encodeInferenceValue(value, identities);
 }
 
-CompileTimeValue decodeClassRequestValue(const Json &encoded, const std::map<std::string, Section *> &sections) {
-	const std::string kind = encoded.at(0).get<std::string>();
+std::optional<CompileTimeValue> decodeClassRequestValue(const Json &encoded, const InferenceValueIdentities &identities) {
+	const std::string &kind = encoded.at(0).get_ref<const std::string &>();
 	if (kind == "unknown")
-		return {};
+		return CompileTimeValue{};
 	if (kind == "minimum")
 		return MinimumSignedIntegerMagnitude{std::make_shared<const MinimumSignedIntegerMagnitudeIdentity>()};
-	if (kind == "type")
-		return TypeReferenceValue{
-			decodePortableConstraintType(encoded.at(1), sections), decodePortableConstraint(encoded.at(2), sections)
-		};
-	if (kind == "constraint")
-		return decodePortableConstraint(encoded.at(1), sections);
-	if (kind == "scalar")
-		return decodeGlobalConstant(encoded.at(1));
-	crashCompilerBug("cached class request contains an unknown value kind");
+	return decodeInferenceValue(encoded, identities);
 }
 
-std::optional<Json> encodeClassInstantiationRequests(const ClassDefinition &definition, const ClassIdentityPaths &paths) {
-	Json result = Json::array();
-	for (const auto &[key, record] : definition.instantiationsByRequest) {
-		if (!record.persistent)
-			return std::nullopt;
-		Json parameters = Json::array();
-		for (const auto &[name, type, value] : record.persistent->parameters) {
-			auto encodedType = encodePortableConstraintType(type, paths);
-			auto encodedValue = encodeClassRequestValue(value, paths);
+bool classRequestTypeIsPortable(const DataType &type) {
+	if (type.typeExpression)
+		return false;
+	if (type.arrayElementType && !classRequestTypeIsPortable(*type.arrayElementType))
+		return false;
+	if (type.functionSignature) {
+		if (!classRequestTypeIsPortable(type.functionSignature->result))
+			return false;
+		for (const DataType &parameter : type.functionSignature->parameters)
+			if (!classRequestTypeIsPortable(parameter))
+				return false;
+	}
+	return true;
+}
+
+Json encodeClassRequests(const ClassDefinition &definition, const InferenceValueIdentities &identities) {
+	std::vector<Json> requests;
+	for (const auto &[key, pointer] : definition.instantiationRequests) {
+		const auto &request = *pointer;
+		Json parameters = Json::array(), construction = nullptr;
+		for (const auto &[name, type, value] : request.parameters) {
+			if (!classRequestTypeIsPortable(type))
+				return nullptr;
+			if (const auto *reference = std::get_if<TypeReferenceValue>(&value);
+				reference && !classRequestTypeIsPortable(reference->type))
+				return nullptr;
+			auto encodedType = encodePortableConstraintType(type, identities.classes);
+			auto encodedValue = encodeClassRequestValue(value, identities);
 			if (!encodedType || !encodedValue)
-				return std::nullopt;
+				return nullptr;
 			parameters.push_back(Json::array({name, std::move(*encodedType), std::move(*encodedValue)}));
 		}
-		Json construction = nullptr;
-		if (record.persistent->constructionArgumentTypes) {
+		if (request.constructionArgumentTypes) {
 			construction = Json::array();
-			for (const DataType &type : *record.persistent->constructionArgumentTypes) {
-				auto encoded = encodePortableConstraintType(type, paths);
+			for (const DataType &type : *request.constructionArgumentTypes) {
+				if (!classRequestTypeIsPortable(type))
+					return nullptr;
+				auto encoded = encodePortableConstraintType(type, identities.classes);
 				if (!encoded)
-					return std::nullopt;
+					return nullptr;
 				construction.push_back(std::move(*encoded));
 			}
 		}
-		result.push_back(Json::array({record.index, std::move(parameters), std::move(construction)}));
+		requests.push_back(Json::array({std::move(parameters), std::move(construction), request.index}));
 	}
-	std::sort(result.begin(), result.end());
-	return result;
+	std::ranges::sort(requests);
+	return requests;
 }
 
-void restoreClassInstantiationRequests(
-	ClassDefinition &definition, const Json &requests, const std::map<std::string, Section *> &sections
-) {
-	requireCompilerInvariant(definition.instantiationsByRequest.empty(), "class requests exist before cache restoration");
-	for (const Json &encoded : requests) {
-		int index = encoded.at(0).get<int>();
-		requireCompilerInvariant(
-			index >= 0 && index < static_cast<int>(definition.instantiations.size()), "saved class request has no layout"
-		);
+std::optional<std::map<std::string, std::shared_ptr<const ClassInstantiationRequest>>>
+decodeClassRequests(const Json &records, const InferenceValueIdentities &identities) {
+	if (records.is_null())
+		return std::nullopt;
+	std::map<std::string, std::shared_ptr<const ClassInstantiationRequest>> result;
+	for (const Json &record : records) {
 		ClassInstantiationRequest request;
-		for (const Json &parameter : encoded.at(1))
+		for (const Json &parameter : record.at(0)) {
+			if (!portableConstraintTypeReferencesPresent(parameter.at(1), identities.classes))
+				return std::nullopt;
+			auto value = decodeClassRequestValue(parameter.at(2), identities);
+			if (!value)
+				return std::nullopt;
 			request.parameters.emplace_back(
-				parameter.at(0).get<std::string>(), decodePortableConstraintType(parameter.at(1), sections),
-				decodeClassRequestValue(parameter.at(2), sections)
+				parameter.at(0).get<std::string>(), decodePortableConstraintType(parameter.at(1), identities.classes),
+				std::move(*value)
 			);
-		if (!encoded.at(2).is_null()) {
-			request.constructionArgumentTypes.emplace();
-			for (const Json &type : encoded.at(2))
-				request.constructionArgumentTypes->push_back(decodePortableConstraintType(type, sections));
 		}
+		if (!record.at(1).is_null()) {
+			request.constructionArgumentTypes.emplace();
+			for (const Json &type : record.at(1)) {
+				if (!portableConstraintTypeReferencesPresent(type, identities.classes))
+					return std::nullopt;
+				request.constructionArgumentTypes->push_back(decodePortableConstraintType(type, identities.classes));
+			}
+		}
+		request.index = record.at(2).get<int>();
 		std::string key = classInstantiationRequestKey(request);
-		auto [entry, inserted] = definition.instantiationsByRequest.emplace(
-			std::move(key),
-			ClassInstantiationRequestRecord{index, std::make_shared<const ClassInstantiationRequest>(std::move(request))}
-		);
-		requireCompilerInvariant(inserted, "saved class requests have duplicate identities");
+		auto [found, inserted] =
+			result.emplace(std::move(key), std::make_shared<const ClassInstantiationRequest>(std::move(request)));
+		requireCompilerInvariant(inserted, "saved class requests have duplicate inputs");
 	}
+	return result;
 }

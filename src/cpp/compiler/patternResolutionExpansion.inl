@@ -125,8 +125,8 @@ void expandExpression(Expression *expr, Section *section) {
 }
 
 // Compute initial variableLikeCounts for each definition section.
-static void computeVariableLikeCounts(ParseContext &context, std::list<Section *> &sections) {
-	std::unordered_set<Section *> pending(sections.begin(), sections.end());
+static void computeVariableLikeCounts(ParseContext &context, std::list<Section *> &sections, bool initial = false) {
+	std::unordered_set<Section *> pending;
 	for (Section *section : sections) {
 		section->variableLikeCounts.clear();
 		for (PatternDefinition *def : section->patternDefinitions) {
@@ -135,6 +135,10 @@ static void computeVariableLikeCounts(ParseContext &context, std::list<Section *
 					section->variableLikeCounts.try_emplace(elem.text, 0);
 			});
 		}
+		if (initial && context.reuseInitialVariableLikeCounts && context.reuseInitialVariableLikeCounts(*section)) {
+			context.variableLikeCountUnitsReused++;
+		} else if (!section->variableLikeCounts.empty())
+			pending.insert(section);
 	}
 	std::vector<Section *> ancestors;
 	std::function<void(Section *)> visit = [&](Section *owner) {
@@ -159,7 +163,20 @@ static void computeVariableLikeCounts(ParseContext &context, std::list<Section *
 		if (relevant)
 			ancestors.pop_back();
 	};
-	visit(context.mainSection);
+	for (Section *section : sections) {
+		if (!pending.contains(section))
+			continue;
+		bool covered = false;
+		for (Section *parent = section->parent; parent; parent = parent->parent)
+			if (pending.contains(parent)) {
+				covered = true;
+				break;
+			}
+		if (!covered)
+			visit(section);
+	}
+	if (initial && context.recordInitialVariableLikeCounts)
+		context.recordInitialVariableLikeCounts(sections);
 }
 
 // After a body reference resolves, decrement VL counts on all ancestor definition sections

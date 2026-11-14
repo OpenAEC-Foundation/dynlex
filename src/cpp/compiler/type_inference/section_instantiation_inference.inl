@@ -31,8 +31,11 @@ bool ensureSectionInstantiationInferred(
 	if (instIt == section->instantiations.end())
 		instIt = section->instantiations.emplace(instantiationKey, Instantiation{}).first;
 	Instantiation &inst = instIt->second;
-	if (!inst.body)
-		inst.body = callerContext ? callerContext->cloneSectionBody(section) : parseContext.cloneSectionBody(section);
+	inst.invokedDefinition = definition;
+	auto storageScope = parseContext.storageScopeForInstantiation(section, instantiationKey);
+	inst.storageScope = storageScope;
+	if (callerContext)
+		callerContext->recordBodyRead(*section, storageScope);
 	if (inst.argumentTypes.empty())
 		inst.argumentTypes = argTypes;
 	else
@@ -52,25 +55,47 @@ bool ensureSectionInstantiationInferred(
 		inst, paramBindings, argTypes, inst.requiredCompileTimeParameters, evaluateParameterValue
 	);
 	if (!inst.returnType.isDeduced() && parseContext.reuseInferredInstantiation)
-		parseContext.reuseInferredInstantiation(section, instantiationKey, inst, false);
-	if (inst.inferenceReusedFromCache && inst.purity == InstantiationPurity::Pure &&
-		inst.returnType.kind != DataType::Kind::Void)
-		inst.needsReinfer = true;
-	if (inst.returnType.isDeduced() && !inst.needsReinfer)
+		parseContext.reuseInferredInstantiation(
+			section, instantiationKey, inst, ParseContext::InferenceReuseUse::Callable, callerContext
+		);
+	if (inst.inferenceReusedFromCache && parseContext.reuseInferredInstantiation)
+		parseContext.reuseInferredInstantiation(
+			section, instantiationKey, inst, ParseContext::InferenceReuseUse::Callable, callerContext
+		);
+	if (inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer) {
+		InferenceContext publication(parseContext, callerContext && callerContext->trial);
+		if (callerContext)
+			publication.inheritDiagnosticContext(*callerContext);
+		publishDeferredInferenceDiagnostics(publication, inst);
 		return inst.valid;
+	}
+	if (inst.failure) {
+		if (callerContext)
+			replayInferenceFailure(*callerContext, *inst.failure);
+		return false;
+	}
 
 	ScopedSectionLocalVariableState calleeVariableState(section);
 	InferenceContext context(parseContext, callerContext && callerContext->trial);
+	struct RetainTrialProducts {
+		InferenceContext &child;
+		InferenceContext *caller;
+		~RetainTrialProducts() {
+			if (child.trial)
+				caller->absorbTrialResultsFrom(child);
+		}
+	} retainTrialProducts{context, callerContext};
 	if (callerContext) {
+		context.inheritDiagnosticContext(*callerContext);
+		context.dependencyReads = callerContext->dependencyReads;
 		// Cached instantiations cannot consume the caller's tracked constants.
 		// Only globals and instantiation-key parameter constants enter a pass.
 		context.inheritedTrialContext = callerContext->trial ? callerContext : callerContext->inheritedTrialContext;
 		context.trialJournal = callerContext->trialJournal;
 		context.unresolvedPatternConstraintSignal = callerContext->unresolvedPatternConstraintSignal;
-		context.suppressDiagnostics = callerContext->suppressDiagnostics;
-		context.suppressReinferPassDiagnostics = callerContext->suppressReinferPassDiagnostics;
 	}
 	Instantiation *savedInst = context.currentInstantiation;
+	int failureBase = static_cast<int>(context.diagnosticTraceDepth());
 	Range fallbackRange = definition			 ? definition->range
 						  : section->openingLine ? Range(section->openingLine, section->openingLine->patternText)
 												 : Range{};
@@ -80,6 +105,7 @@ bool ensureSectionInstantiationInferred(
 		context, inst, definition, fallbackRange, std::move(functionName), callerInstantiation != nullptr, [&]() {
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 		beginParameterOutputReinference(inst);
+		inst.accessedGlobalReferences.clear();
 		inst.writtenGlobalReferences.clear();
 		inst.finalGlobalConstantValues.clear();
 		inst.finalGlobalAddressProvenance.clear();
@@ -102,8 +128,9 @@ bool ensureSectionInstantiationInferred(
 		context.currentVariableValues.clear();
 		context.currentAddressState = {};
 		context.currentSubject = {};
-		if (context.trial)
-			inst.body = context.cloneSectionBody(section);
+		if (context.trial || !inst.body)
+			inst.body = context.cloneSectionBody(section, nullptr, storageScope);
+		parseContext.functionBodyInferencePasses++;
 		bool passSucceeded = inferSection(section, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
 		finishParameterOutputReinference(context, inst, passSucceeded);
 		inst.fallsThrough = instantiationFallsThrough;
@@ -134,6 +161,8 @@ bool ensureSectionInstantiationInferred(
 	context.currentInstantiation = savedInst;
 	inst.inferring = false;
 	inst.valid = inferenceSucceeded;
+	if (!inferenceSucceeded && !inst.needsReinfer)
+		inst.failure = captureInferenceFailure(context, failureBase);
 	if (callerContext) {
 		if (inferenceSucceeded && inst.needsReinfer)
 			propagateUnresolvedRecursiveDependencyToCaller(*callerContext, callerInstantiation);
@@ -141,15 +170,20 @@ bool ensureSectionInstantiationInferred(
 		if (!inferenceSucceeded || !context.typesValid)
 			callerContext->typesValid = false;
 	}
-	if (!inst.valid || !context.typesValid)
+	if (!inst.valid || !context.typesValid) {
+		noteInferenceProduct(inst, context);
 		return false;
+	}
 
 	if (!inst.needsReinfer && !validateLocalVariableTypes(section, *inst.body, context)) {
 		inst.valid = false;
+		inst.failure = captureInferenceFailure(context, failureBase);
+		noteInferenceProduct(inst, context);
 		if (callerContext)
 			callerContext->inheritTypeFailureFrom(context);
 		return false;
 	}
+	inst.bodyInferred = !inst.needsReinfer;
 	InstantiationKey refinedKey =
 		buildInstantiationKey(inst.requiredCompileTimeParameters, paramBindings, argTypes, evaluateParameterValue);
 	if (refinedKey != instIt->first) {
@@ -160,10 +194,10 @@ bool ensureSectionInstantiationInferred(
 		node.key() = refinedKey;
 		auto insertResult = section->instantiations.insert(std::move(node));
 		requireCompilerInvariant(insertResult.inserted, "Refined instantiation key collided with existing entry");
+		parseContext.refineInstantiationStorageScope(section, instantiationKey, refinedKey);
 	}
 	// The body and its trial metadata must survive together. A child context
 	// owns constants, groupings and callable selections until its caller commits.
-	if (context.trial)
-		callerContext->absorbTrialResultsFrom(context);
+	noteInferenceProduct(inst, context);
 	return inst.returnType.isDeduced();
 }

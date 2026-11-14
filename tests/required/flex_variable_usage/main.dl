@@ -1,0 +1,4 @@
+function write {destination}:
+    replacement: @intrinsic("store", destination, 0)
+to warn {item}: write item
+warn @intrinsic("command line argument count")

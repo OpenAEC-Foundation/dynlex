@@ -50,6 +50,7 @@ struct BodySection : MetadataSection {
 	BodySection(ParseContext &context, Section *parent, DataSectionDefinition &definition, Range declarationRange)
 		: MetadataSection(parent), definition(definition) {
 		auto *record = new ClassSection(context.mainSection, declarationRange);
+		record->declarationProducer = parent;
 		definition.bodyClass = record->classDefinition;
 		record->classDefinition->patternNames.push_back("section body");
 		record->classDefinition->displayPatternNames.push_back("section body");
@@ -156,19 +157,22 @@ std::optional<Section *> createDataSectionMetadata(ParseContext &context, CodeLi
 
 bool prepareDataSectionCalls(ParseContext &context) {
 	for (CodeLine *line : context.codeLines) {
-		if (!line->sectionOpening || !line->expression || line->expression->kind != Expression::Kind::PatternCall)
+		if (!line->sectionOpening || !line->expression.rootReference() || !line->expression.rootReference()->match)
 			continue;
-		Expression *call = line->expression;
+		PatternMatch *match = line->expression.rootReference()->match;
 		DataSectionDefinition *data = nullptr;
-		for (PatternDefinition *definition : call->patternMatch->matchingDefinitions) {
+		for (PatternDefinition *definition : match->matchingDefinitions) {
 			if (definition->section->dataSection) {
 				if (data && data != definition->section->dataSection.get())
-					return dataSectionDiagnostic(context, call->range, "A data section header must identify one body schema");
+					return dataSectionDiagnostic(
+						context, Range(line, line->patternText), "A data section header must identify one body schema"
+					);
 				data = definition->section->dataSection.get();
 			}
 		}
 		if (!data)
 			continue;
+		Expression *call = line->expression;
 		if (!data->hasValue)
 			return dataSectionDiagnostic(context, call->range, "A data section requires a value block");
 		if (data->declarationParameter.empty())
@@ -214,6 +218,7 @@ void prepareDataSectionDefinitions(ParseContext &context) {
 	for (Section *definition : definitions) {
 		for (const auto &field : definition->dataSection->fields) {
 			auto *header = new SectionSection(context.mainSection);
+			header->declarationProducer = definition;
 			header->dataFieldOwner = definition;
 			header->dataField = field.get();
 			header->patternDefinitions.push_back(new PatternDefinition(field->range, header));

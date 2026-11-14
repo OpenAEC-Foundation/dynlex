@@ -9,13 +9,10 @@ void ExpressionInferenceSupport::inferLiteral() {
 				expr->range, "number rule literal unrepresentable", "message",
 				{{"rule", std::string(typing.unrepresentableBy->range.subString)}}
 			);
-			context.typeFailureRelatedInfo.push_back(
-				{renderConfiguredMessage(
-					 syntaxConfigForRange(context.parseContext, expr->range), "number rule literal unrepresentable",
-					 "related rule"
-				 ),
-				 typing.unrepresentableBy->range}
-			);
+			context.typeFailureRelatedInfo.push_back(configuredRelatedInfo(
+				context.parseContext, expr->range, "number rule literal unrepresentable", "related rule",
+				typing.unrepresentableBy->range
+			));
 			return;
 		}
 		// A literal's typing does not depend on how its line is grouped, so trials record it too.
@@ -81,6 +78,8 @@ bool ExpressionInferenceSupport::inferArrayLiteral() {
 	expr->type = DataType(DataType::Kind::Array);
 	expr->type.arraySize = static_cast<int>(expr->arguments.size());
 	expr->type.arrayElementType = std::make_shared<DataType>(elementType);
+	if (typeHasManagedLifecycle(expr->type))
+		markCurrentInstantiationImpure(context);
 	return true;
 }
 
@@ -122,9 +121,7 @@ bool ExpressionInferenceSupport::inferVariable() {
 		Variable *var = sec ? sec->findVariable(expr->variable) : nullptr;
 		if (!var) {
 			context.typesValid = false;
-			context.setTypeFailure(renderConfiguredMessage(
-				syntaxConfigForRange(context.parseContext, expr->range), "unknown variable", "message", {{"name", varName}}
-			));
+			context.setConfiguredTypeFailure(expr->range, "unknown variable", "message", {{"name", varName}});
 			if (!context.trial)
 				context.addDiagnosticWithCurrentTrace(
 					Diagnostic(context.parseContext, Diagnostic::Level::Error, "unknown variable", expr->range, "name", varName)
@@ -155,6 +152,8 @@ bool ExpressionInferenceSupport::inferVariable() {
 				var->type = type->type.toReferencedType();
 			}
 		}
+		if (var->isGlobal)
+			context.noteAccessedGlobalReference(var->definition);
 		if (context.currentInstantiation && var->isGlobal && !var->dataInitializer && !expressionIsLValueOnlyUse(context, expr))
 			markCurrentInstantiationImpure(context);
 		restoreRefinedVariableType(expr, var, context);
@@ -162,6 +161,11 @@ bool ExpressionInferenceSupport::inferVariable() {
 			expr->type = var->type;
 		else if (var->declaredType.isDeduced() && expressionIsLValueOnlyUse(context, expr))
 			expr->type = var->declaredType;
+		if (context.parseContext.incrementalPreinferenceActive && var->isGlobal && !expr->type.isDeduced() &&
+			!expressionIsLValueOnlyUse(context, expr)) {
+			context.fail(context.setConfiguredTypeFailure(expr->range, "variable has no type", "message", {{"name", varName}}));
+			return false;
+		}
 	}
 	context.setExpressionValue(expr, inferVariableCompileTimeValue(expr, context, flexBindingFrameStack));
 	if (expr->type.kind == DataType::Kind::ArgumentReference && !context.inferringReferenceAssignmentTarget) {

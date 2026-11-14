@@ -1,5 +1,3 @@
-#include "classInstantiationRequest.h"
-
 struct ActiveClassInstantiation {
 	ParseContext *parseContext{};
 	ClassDefinition *classDefinition{};
@@ -39,15 +37,19 @@ static ClassInstantiationRequest buildClassInstantiationRequest(
 	return request;
 }
 
-static std::shared_ptr<const ClassInstantiationRequest> persistentClassInstantiationRequest(ClassInstantiationRequest request) {
+std::string classInstantiationRequestKey(const ClassInstantiationRequest &request) {
+	std::string key;
 	for (const auto &[name, type, value] : request.parameters) {
-		// Provisional callable instances and captured expression scopes can end
-		// before a snapshot. Runtime request lookup still uses their identities.
-		if (std::holds_alternative<CompileTimeFunction>(value) || std::holds_alternative<ExpressionCapture>(value) ||
-			std::holds_alternative<ArgumentPackValue>(value))
-			return {};
+		key += std::to_string(name.size()) + ":" + name;
+		key += "=" + encodeDataTypeForCacheKey(type);
+		key += ":" + encodeCompileTimeValueForCacheKey(value) + ";";
 	}
-	return std::make_shared<const ClassInstantiationRequest>(std::move(request));
+	if (request.constructionArgumentTypes) {
+		key += "#construct";
+		for (const DataType &type : *request.constructionArgumentTypes)
+			key += ":" + encodeDataTypeForCacheKey(type);
+	}
+	return key;
 }
 
 static void recordClassInstantiationAppend(ClassDefinition *classDefinition) {
@@ -62,19 +64,22 @@ static void recordClassInstantiationAppend(ClassDefinition *classDefinition) {
 }
 
 static void cacheClassInstantiationRequest(
-	ClassDefinition *classDefinition, const std::string &requestKey, int index, ClassInstantiationRequest request
+	ClassDefinition *classDefinition, const std::string &requestKey, ClassInstantiationRequest request, int index,
+	InferenceContext *context
 ) {
-	auto [it, inserted] = classDefinition->instantiationsByRequest.emplace(
-		requestKey, ClassInstantiationRequestRecord{index, persistentClassInstantiationRequest(std::move(request))}
+	request.index = index;
+	auto [it, inserted] = classDefinition->instantiationRequests.emplace(
+		requestKey, std::make_shared<const ClassInstantiationRequest>(std::move(request))
 	);
 	if (!inserted) {
-		requireCompilerInvariant(it->second.index == index, "class instantiation request resolved to inconsistent indices");
+		requireCompilerInvariant(it->second->index == index, "class instantiation request resolved to inconsistent indices");
 		return;
 	}
 	requireCompilerInvariant(
 		activeClassInstantiationTransaction.has_value(), "class instantiation request cache has no active transaction"
 	);
 	activeClassInstantiationTransaction->insertedRequestKeys.push_back({classDefinition, requestKey});
+	recordInferenceClassRequestRestoration(context, classDefinition, requestKey);
 }
 
 static void rollbackClassInstantiationTransaction() {
@@ -83,7 +88,7 @@ static void rollbackClassInstantiationTransaction() {
 	);
 	for (auto it = activeClassInstantiationTransaction->insertedRequestKeys.rbegin();
 		 it != activeClassInstantiationTransaction->insertedRequestKeys.rend(); ++it) {
-		it->first->instantiationsByRequest.erase(it->second);
+		it->first->instantiationRequests.erase(it->second);
 	}
 	for (const auto &[classDefinition, originalSize] : activeClassInstantiationTransaction->originalInstantiationSizes) {
 		requireCompilerInvariant(
@@ -116,7 +121,7 @@ struct ScopedClassInstantiationSavepoint {
 		auto &current = *activeClassInstantiationTransaction;
 		for (size_t index = current.insertedRequestKeys.size(); index > saved->insertedRequestKeys.size(); --index) {
 			const auto &[definition, request] = current.insertedRequestKeys[index - 1];
-			definition->instantiationsByRequest.erase(request);
+			definition->instantiationRequests.erase(request);
 		}
 		for (const auto &[definition, originalSize] : current.originalInstantiationSizes) {
 			auto previous = savedSizes.find(definition);

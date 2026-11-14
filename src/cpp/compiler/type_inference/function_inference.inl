@@ -16,6 +16,7 @@ static bool inferExpression(
 static DataType ensureExpressionType(Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
 [[gnu::noinline]] static void resetExpressionTypes(Expression *expr);
 #include "type_resolution.inl"
+#include "variable_usage_validation.inl"
 #include <bit>
 #include <memory>
 
@@ -56,7 +57,9 @@ static bool definitionsHaveUnresolvedTypeConstraints(const std::vector<PatternDe
 	});
 }
 
+#include "deferred_inference_diagnostics.inl"
 #include "execution_state.inl"
+#include "inference_failure_products.inl"
 
 #include "inferred_arguments.inl"
 
@@ -66,6 +69,7 @@ struct InstantiationProgressSnapshot {
 	std::vector<DataType> argumentTypes;
 	std::unordered_map<std::string, DataType> parameterOutputTypesByName;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
+	std::unordered_set<VariableReference *> accessedGlobalReferences;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
 	GlobalAddressProvenance finalGlobalAddressProvenance;
@@ -91,6 +95,7 @@ static std::unique_ptr<InstantiationProgressSnapshot> snapshotInstantiationProgr
 	snapshot->argumentTypes = instantiation.argumentTypes;
 	snapshot->parameterOutputTypesByName = instantiation.parameterOutputTypesByName;
 	snapshot->constantParameterValues = instantiation.constantParameterValues;
+	snapshot->accessedGlobalReferences = instantiation.accessedGlobalReferences;
 	snapshot->writtenGlobalReferences = instantiation.writtenGlobalReferences;
 	snapshot->finalGlobalConstantValues = instantiation.finalGlobalConstantValues;
 	snapshot->finalGlobalAddressProvenance = instantiation.finalGlobalAddressProvenance;
@@ -110,10 +115,11 @@ static std::unique_ptr<InstantiationProgressSnapshot> snapshotInstantiationProgr
 
 static void joinAddressProvenance(AddressProvenance &destination, const AddressProvenance &source);
 
-// Applies a callee's global write effects to the caller context, mirroring a
-// direct store to each written global: the caller's own effect summary and the
-// value produced by the callee in the current execution state.
-static void mergeCalleeGlobalWritesIntoCaller(InferenceContext &context, const Instantiation &inst) {
+// Callee accesses are execution effects. Their query inputs remain dependencies
+// of the callee rather than becoming direct type reads by its caller.
+static void mergeCalleeGlobalEffectsIntoCaller(InferenceContext &context, const Instantiation &inst) {
+	for (VariableReference *reference : inst.accessedGlobalReferences)
+		context.noteGlobalEffectAccess(reference);
 	for (VariableReference *reference : inst.addressTakenGlobalReferences)
 		context.currentAddressState.write().addressTakenVariables.insert({reference, nullptr});
 	for (VariableReference *reference : inst.writtenGlobalReferences) {
@@ -305,8 +311,11 @@ static InstantiationPurity classifyPropertyIntrinsicPurity(
 
 static InstantiationPurity
 classifyStoreIntrinsicPurity(Expression *storeExpr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack) {
-	if (!storeExpr || storeExpr->arguments.size() <= 1)
+	if (!storeExpr || storeExpr->arguments.size() <= 2)
 		crashCompilerBug("store purity classification encountered malformed intrinsic arguments");
+	// Copying into managed storage invokes the value's user-defined lifecycles.
+	if (typeHasManagedLifecycle(effectiveInferredExpressionType(storeExpr->arguments[2])))
+		return InstantiationPurity::Impure;
 	ResolvedBindingLayers resolvedDestination =
 		resolveInferenceBindingLayers(storeExpr->arguments[1], flexBindingFrameStack, &context);
 	Expression *destinationExpr = resolvedDestination.expression;
@@ -335,6 +344,12 @@ classifyCustomIntrinsicPurity(Expression *expr, InferenceContext &context, const
 	if (!expr)
 		return InstantiationPurity::Impure;
 	switch (intrinsicKind(expr->intrinsicName)) {
+	case IntrinsicKind::Construct:
+		return typeHasManagedLifecycle(expr->type) ? InstantiationPurity::Impure : InstantiationPurity::Pure;
+	case IntrinsicKind::Return:
+		return expr->arguments.size() > 1 && typeHasManagedLifecycle(effectiveInferredExpressionType(expr->arguments[1]))
+				   ? InstantiationPurity::Impure
+				   : InstantiationPurity::Pure;
 	case IntrinsicKind::SetSubject: {
 		DataType type = effectiveInferredExpressionType(expr->arguments[1]);
 		if (type.isMetaType())
@@ -378,16 +393,15 @@ static void setRecursiveInferenceFailure(
 	Range diagnosticRange = definition ? definition->range : fallbackRange;
 	if (functionName.empty())
 		functionName = definition ? (std::string)definition->range.subString : "<expression>";
-	std::string detail = renderConfiguredMessage(
-		syntaxConfigForRange(context.parseContext, diagnosticRange), "recursive type inference did not converge", "message",
-		{{"function", functionName}}
+	Diagnostic diagnostic = context.setConfiguredTypeFailure(
+		diagnosticRange, "recursive type inference did not converge", "message", {{"function", functionName}}
 	);
-	context.setTypeFailure(detail);
 	// Candidate failures from the final reinference pass are provisional: the
 	// fixed-point check owns the terminal cause once that pass makes no
 	// progress. Keep unrelated grouping priorities unchanged.
 	Range failureRange = context.typeFailureSnapshot.range.line ? context.typeFailureSnapshot.range : diagnosticRange;
-	context.fail(buildFailureDetailDiagnostic(failureRange, std::move(detail)), 2);
+	diagnostic.range = failureRange;
+	context.fail(std::move(diagnostic), 2);
 }
 
 template <typename InferPassFn>
@@ -399,7 +413,26 @@ static bool runInstantiationReinferenceLoop(
 	InferenceContext &context, Instantiation &instantiation, PatternDefinition *definition, const Range &fallbackRange,
 	std::string functionName, bool canDeferToCaller, InferPassFn &&inferPass
 ) {
+	struct RetainedPureValues {
+		Instantiation &instantiation;
+		decltype(Instantiation::pureReturnValuesByArguments) values;
+		bool complete;
+		~RetainedPureValues() {
+			instantiation.pureReturnValuesByArguments.merge(values);
+			instantiation.pureReturnValuesComplete &= complete;
+		}
+	} retained{
+		instantiation,
+		instantiation.inferenceReusedFromCache ? std::move(instantiation.pureReturnValuesByArguments)
+											   : decltype(Instantiation::pureReturnValuesByArguments){},
+		!instantiation.inferenceReusedFromCache || instantiation.pureReturnValuesComplete
+	};
 	instantiation.inferenceReusedFromCache = false;
+	instantiation.inferenceProductIdentity.clear();
+	instantiation.failure.reset();
+	instantiation.bodyInferred = false;
+	instantiation.valueSummaryChanged = false;
+	instantiation.pureReturnValuesComplete = true;
 	size_t reinferPass = 0;
 	constexpr size_t maxReinferPasses = 32;
 	while (true) {
@@ -410,6 +443,9 @@ static bool runInstantiationReinferenceLoop(
 			if (!instantiation.needsReinfer)
 				return false;
 		} else if (!instantiation.needsReinfer) {
+			validateVariableUsage(
+				context, instantiation.body->sourceSection, instantiation.body.get(), {}, instantiation.body->storageScope
+			);
 			return true;
 		}
 		if (*afterPass == *beforePass) {
@@ -428,40 +464,7 @@ static bool runInstantiationReinferenceLoop(
 	}
 }
 
-static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
-	for (auto it = journal.borrowedExpressionUndo.rbegin(); it != journal.borrowedExpressionUndo.rend(); ++it)
-		*it->expression = std::move(it->value);
-	for (Section *section : journal.touchedSections)
-		resetSectionExpressionTypes(section);
-	for (auto it = journal.variableTypeUndo.rbegin(); it != journal.variableTypeUndo.rend(); ++it) {
-		it->variable->type = it->type;
-		it->variable->typeOriginRange = it->typeOriginRange;
-		it->variable->typeOriginFloatLiteralReplacement = it->typeOriginFloatLiteralReplacement;
-	}
-	for (auto it = journal.instantiationUndo.rbegin(); it != journal.instantiationUndo.rend(); ++it) {
-		*it->instantiation = std::move(*it->value);
-	}
-	for (auto it = journal.sectionInstantiationUndo.rbegin(); it != journal.sectionInstantiationUndo.rend(); ++it) {
-		auto instantiationIt = it->section->instantiations.find(it->key);
-		if (it->existed) {
-			if (instantiationIt == it->section->instantiations.end()) {
-				crashCompilerBug(
-					"trial rollback lost a previously-existing section instantiation; instantiation map changed unexpectedly"
-				);
-			}
-			instantiationIt->second = it->value;
-			continue;
-		}
-		if (instantiationIt == it->section->instantiations.end())
-			crashCompilerBug("trial rollback expected to erase a provisional section instantiation, but it was missing");
-		it->section->instantiations.erase(instantiationIt);
-	}
-	for (auto it = journal.classInstantiationSizes.rbegin(); it != journal.classInstantiationSizes.rend(); ++it) {
-		if (it->first->instantiations.size() < it->second)
-			crashCompilerBug("trial rollback observed class instantiation list shrink below recorded snapshot");
-		it->first->instantiations.resize(it->second);
-	}
-}
+#include "inference_trial_rollback.inl"
 
 static bool instantiationKeyHasOnlyKnownCompileTimeParameters(const InstantiationKey &key) {
 	for (const auto &[parameterName, value] : key.compileTimeParameters) {
@@ -630,7 +633,7 @@ static bool expressionContainsTargetExpression(Expression *expr, Expression *tar
 static bool expressionIsLValueOnlyUse(const InferenceContext &context, Expression *expr) {
 	if (!expr || context.expressionStack.size() < 2)
 		return false;
-	Expression *consumer = context.expressionStack[context.expressionStack.size() - 2];
+	Expression *consumer = context.expressionStack[context.expressionStack.size() - 2].expression;
 	if (!consumer || consumer->kind != Expression::Kind::IntrinsicCall)
 		return false;
 	IntrinsicKind kind = intrinsicKind(consumer->intrinsicName);
@@ -865,15 +868,14 @@ appendUnboundParameterTrace(InferenceContext &context, Expression *argumentExpre
 			Range elementRange = findUnboundParameterElementRange(context, name);
 			if (!elementRange.line)
 				return;
-			std::string message = renderConfiguredMessage(
-				syntaxConfigForRange(context.parseContext, elementRange), "unbound choice parameter", "message",
-				{{"name", name}}
+			RelatedInfo note = configuredRelatedInfo(
+				context.parseContext, elementRange, "unbound choice parameter", "message", elementRange, {{"name", name}}
 			);
 			for (const RelatedInfo &existing : relatedInfo) {
-				if (existing.message == message)
+				if (existing.message == note.message)
 					return;
 			}
-			relatedInfo.push_back({std::move(message), elementRange});
+			relatedInfo.push_back(std::move(note));
 			return;
 		}
 		for (Expression *argument : expression->arguments)

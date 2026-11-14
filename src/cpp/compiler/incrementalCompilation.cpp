@@ -1,23 +1,41 @@
 #include "incrementalCompilation.h"
+#include "bindingResolution.h"
+#include "cachedCbor.h"
 #include "classInstantiationRequest.h"
 #include "codegen/codegen.h"
 #include "codegen/native.h"
+#include "codegen/nativeLibraries.h"
 #include "codegen/targetOptions.h"
+#include "compileTimeValue.h"
 #include "compiler.h"
+#include "conversionLookup.h"
+#include "dataSections.h"
 #include "expression.h"
+#include "expressionCapture.h"
 #include "incrementalCacheEntry.h"
+#include "incrementalClassRestoration.h"
 #include "incrementalIRReuse.h"
 #include "incrementalMatcherCache.h"
 #include "incrementalModuleBitcode.h"
+#include "incrementalModulePartition.h"
+#include "incrementalUnitSelection.h"
+#include "inferenceFailure.h"
+#include "inferenceProductHooks.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
+#include "numberScopeRules.h"
 #include "pathUtils.h"
 #include "patternTreeNode.h"
 #include "section.h"
 #include "section/classSection.h"
 #include "section/variable.h"
-#include "semanticIdentity.h"
+#include "sectionIdentity.h"
+#include "sourcePreparation.h"
+#include "sourcePreprocessing.h"
 #include "syntaxConfig.h"
+#include "validation.h"
+#include "variableBindings.h"
+#include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Analysis/ModuleSummaryAnalysis.h"
@@ -30,21 +48,25 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Mangler.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/LTO/LTO.h"
 #include "llvm/Linker/Linker.h"
 #include "llvm/Object/BuildID.h"
+#include "llvm/Object/ModuleSymbolTable.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/BLAKE3.h"
 #include "llvm/Support/Caching.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Path.h"
+#include "llvm/Support/Process.h"
 #include "llvm/Support/SHA256.h"
 #include "llvm/Support/Threading.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
-#include "llvm/Transforms/IPO/GlobalDCE.h"
 #include "llvm/Transforms/IPO/StripDeadPrototypes.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include <algorithm>
@@ -52,6 +74,7 @@
 #include <bit>
 #include <cctype>
 #include <chrono>
+#include <deque>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -59,6 +82,7 @@
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <queue>
 #include <set>
 #include <stack>
 #include <stdexcept>
@@ -71,12 +95,19 @@ using Json = nlohmann::json;
 namespace fs = std::filesystem;
 constexpr std::string_view cacheHeader = IncrementalCacheEntry::header;
 constexpr uintmax_t maximumEntryBytes = IncrementalCacheEntry::maximumBytes;
+constexpr std::string_view parserIndexPrefix = "parser-index-";
 constexpr uintmax_t maximumCacheBytes = 512 * 1024 * 1024;
-constexpr unsigned partitionCount = 16;
 using Clock = std::chrono::steady_clock;
 
 double elapsedMilliseconds(Clock::time_point start) {
 	return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+}
+
+double processCPUMilliseconds() {
+	llvm::sys::TimePoint<> elapsed;
+	std::chrono::nanoseconds user, system;
+	llvm::sys::Process::GetTimeUsage(elapsed, user, system);
+	return std::chrono::duration<double, std::milli>(user + system).count();
 }
 
 std::string digest(std::string_view text) { return stableIdentityDigest(text); }
@@ -97,10 +128,19 @@ std::string readFile(const fs::path &path) {
 	return result;
 }
 
+bool recordCacheAccess(const fs::path &path) {
+	std::error_code error;
+	fs::last_write_time(path, fs::file_time_type::clock::now(), error);
+	if (error && error != std::errc::no_such_file_or_directory)
+		throw fs::filesystem_error("cannot record cache access", path, error);
+	return !error;
+}
+
 std::optional<std::string> readEntry(const fs::path &path) {
 	auto entry = IncrementalCacheEntry::open(path);
 	if (!entry)
 		return std::nullopt;
+	(void)recordCacheAccess(path);
 	return std::string(entry->payload());
 }
 
@@ -128,42 +168,23 @@ void writeEntry(const fs::path &path, std::string_view payload) {
 
 #include "incrementalProgramCache.inl"
 
-Json observeFile(const std::string &path, lsp::SourceFile *file) {
-	if (!file)
-		return nullptr;
-	return Json{
-		{"content", digest(file->content)},
-		{"canonical", fs::canonical(pathutil::toFilesystemPath(path)).string()},
-		{"internal", file->isInternal}
-	};
-}
-
-class RecordingFileSystem : public lsp::FileSystem {
-  public:
-	lsp::SourceFile *getFile(const std::string &path) override {
-		lsp::SourceFile *file = files.getFile(path);
-		observations[path] = observeFile(path, file);
-		return file;
-	}
-	lsp::SourceFile *cachedFile(const std::string &path) { return files.getFile(path); }
-	Json observations = Json::object();
-
-  private:
-	lsp::LocalFileSystem files;
-};
+#include "incrementalSourceObservations.inl"
 
 #include "incrementalDiagnosticCache.inl"
 #include "incrementalParsedExpressionCache.inl"
+#include "incrementalParserProductIndex.inl"
+#include "incrementalSourceLineCodec.inl"
+#include "incrementalSourcePreparation.inl"
+#include "incrementalSourceTransforms.inl"
 
 void recordSemanticSources(Json &result, RecordingFileSystem &files, const ParseContext &context) {
 	result["comment_prefixes"] =
 		Json{{"builtin", context.builtinSyntax.commentPrefix}, {"project", context.projectSyntax.commentPrefix}};
-	result["config_paths"] = Json::array({context.builtinSyntaxConfigPath, context.projectSyntaxConfigPath});
+	result["configuration_files"] = files.configurationObservations;
 	result["syntax_structure"] =
 		Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity});
 	for (auto &[path, observation] : result["files"].items()) {
-		if (observation.is_null() || fs::path(path).extension() != ".dl" || path == context.builtinSyntaxConfigPath ||
-			path == context.projectSyntaxConfigPath)
+		if (observation.is_null() || fs::path(path).extension() != ".dl")
 			continue;
 		lsp::SourceFile *file = files.cachedFile(path);
 		if (!file)
@@ -186,8 +207,7 @@ Json inactiveFunctionSections(const std::map<std::string, Section *> &sections) 
 	Json inactive = Json::object();
 	for (const auto &[path, section] : sections) {
 		if (section->type != SectionType::Function || section->patternDefinitions.empty() || section->isFlex ||
-			section->isConversion || section->isExposed || !section->instantiations.empty() ||
-			containsNestedDefinition(*section))
+			section->isExposed || !section->instantiations.empty() || containsNestedDefinition(*section))
 			continue;
 		inactive[path] = sectionIdentity(*section);
 	}
@@ -200,7 +220,7 @@ bool reusableCodegenSection(const Section &section) {
 	if (section.type == SectionType::Retain || section.type == SectionType::Release)
 		return !containsNestedDefinition(section);
 	return section.type == SectionType::Function && !section.patternDefinitions.empty() && !section.isFlex &&
-		   !section.isConversion && !containsNestedDefinition(section);
+		   !containsNestedDefinition(section);
 }
 
 bool sourceProjectionsEqual(const Json &left, const Json &right);
@@ -218,51 +238,22 @@ bool hasNoGlobalAccess(const Section *section);
 
 #include "incrementalFunctionProjection.inl"
 #include "incrementalExecutionProjection.inl"
-#include "incrementalInactiveBodyResolution.inl"
+#include "incrementalClassificationLiterals.inl"
 #include "incrementalMatcherProjection.inl"
 // clang-format on
 
+#include "incrementalInferenceReads.inl"
 #include "incrementalSectionDependencies.inl"
-
-bool functionDependenciesUnchanged(
-	Section *section, const std::unordered_map<const Section *, bool> &unchanged, std::unordered_map<Section *, bool> &memo,
-	const std::unordered_set<const Section *> &stableBoundaries = {}
-) {
-	if (stableBoundaries.contains(section))
-		return true;
-	auto cached = memo.find(section);
-	if (cached != memo.end())
-		return cached->second;
-	std::unordered_set<Section *> visited;
-	std::vector<Section *> pending{section};
-	bool safe = true;
-	while (!pending.empty() && safe) {
-		Section *node = pending.back();
-		pending.pop_back();
-		if (stableBoundaries.contains(node) || !visited.insert(node).second)
-			continue;
-		if (auto known = memo.find(node); known != memo.end()) {
-			safe = known->second;
-			continue;
-		}
-		if (!unchanged.at(node)) {
-			safe = false;
-			break;
-		}
-		collectMatchedSectionDependencies(node, pending);
-		for (const auto &[_, instantiation] : node->instantiations)
-			collectInferredSectionDependencies(instantiation.body.get(), pending);
-	}
-	return memo[section] = safe;
-}
 
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context);
 
-#include "incrementalCodegenEligibility.inl"
+#include "incrementalRootBindings.inl"
 
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context) {
 	const Json &before = previous.at("files");
-	if (before.size() != current.size())
+	if (before.size() != current.size() ||
+		previous.at("syntax_structure") !=
+			Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity}))
 		return false;
 	std::set<std::string> imported;
 	for (const auto &[canonical, _] : context.importedFiles)
@@ -276,8 +267,7 @@ bool compatibleObservations(const Json &previous, const Json &current, const Par
 		if (old == current.at(path))
 			continue;
 		if (!old.is_object() || !current.at(path).is_object() ||
-			!imported.contains(current.at(path).at("canonical").get<std::string>()) ||
-			path == context.builtinSyntaxConfigPath || path == context.projectSyntaxConfigPath)
+			!imported.contains(current.at(path).at("canonical").get<std::string>()))
 			return false;
 		old.erase("content");
 		Json now = current.at(path);
@@ -290,6 +280,10 @@ bool compatibleObservations(const Json &previous, const Json &current, const Par
 
 #include "incrementalDeferredMatchReplay.inl"
 #include "incrementalInactiveFunctionProjection.inl"
+#include "incrementalInitialParameterCounts.inl"
+// clang-format off
+#include "incrementalClassification.inl"
+// clang-format on
 #include "incrementalObservationReuse.inl"
 
 #include "incrementalOptions.inl"
@@ -305,32 +299,55 @@ std::string renderModule(const llvm::Module &module) {
 
 #include "incrementalCacheTrim.inl"
 
-// clang-format off: the native fragments share declarations in this order.
+// clang-format off: these fragments share declarations in this order.
 #include "incrementalNativeObjects.inl"
+#include "incrementalSourceScopes.inl"
+#include "incrementalVariableBindings.inl"
+#include "incrementalInferenceSymbolDependencies.inl"
+#include "incrementalClassDependencies.inl"
+#include "incrementalInferenceSummaryStore.inl"
 #include "incrementalNativeLayout.inl"
 #include "incrementalNativeSymbols.inl"
 #include "incrementalNativeDependencies.inl"
-// clang-format on
-
 #include "incrementalCompilationPartitions.inl"
+#include "incrementalClassIdentityPaths.inl"
+#include "incrementalConstraintValue.inl"
 #include "incrementalInferenceTypes.inl"
-// clang-format off: the optimizer consumes the input descriptors.
+#include "incrementalInferenceIdentities.inl"
 #include "incrementalOptimizationInputs.inl"
 #include "incrementalOptimization.inl"
-// clang-format on
-
+#include "incrementalOptimizedNativeUnits.inl"
+#include "incrementalInferenceValues.inl"
+#include "incrementalInferenceKeys.inl"
 #include "incrementalInferenceEffects.inl"
-#include "incrementalInferenceReuse.inl"
-
-// clang-format off: these includes depend on the declarations in the preceding files.
-#include "incrementalDependencyGraph.inl"
-#include "incrementalConstraintValue.inl"
+#include "incrementalInferenceDeclarations.inl"
+#include "incrementalInferenceGlobalInputs.inl"
+#include "incrementalInferenceParameterState.inl"
 #include "incrementalClassRequests.inl"
 #include "incrementalClassInstantiations.inl"
+#include "incrementalInferenceClassSnapshot.inl"
+#include "incrementalBodySources.inl"
+#include "incrementalInferenceDiagnostics.inl"
+#include "incrementalInferenceFailure.inl"
+#include "incrementalValidation.inl"
+#include "incrementalBodySchema.inl"
+#include "incrementalBodyReferences.inl"
+#include "incrementalBodyWriter.inl"
+#include "incrementalBodyReader.inl"
+#include "incrementalInferenceReuse.inl"
+#include "incrementalInferenceProducts.inl"
+
+#include "incrementalInferenceUnitInputs.inl"
+#include "incrementalInferenceUnitGraph.inl"
+#include "incrementalDependencyGraph.inl"
 #include "incrementalConstraintProbeReuse.inl"
+#include "incrementalConstraintState.inl"
+#include "incrementalInferenceUnitCheck.inl"
+#include "incrementalRootExecution.inl"
+#include "incrementalInferenceController.inl"
+#include "incrementalInferenceState.inl"
 // clang-format on
 
-#include "incrementalInferencePreinfer.inl"
 #include "incrementalStatisticsReport.inl"
 } // namespace
 
@@ -346,12 +363,15 @@ bool compileIncrementally(
 		std::string programKey = digest(compilerIdentity + options.dump());
 		fs::path programEntry = directory / ("program-" + programKey + ".entry");
 		fs::path failedEntry = directory / ("errors-" + programKey + ".entry");
+		fs::path parserIndexEntry = directory / (std::string(parserIndexPrefix) + programKey + ".entry");
 		auto files = std::make_unique<RecordingFileSystem>();
 		RecordingFileSystem *recording = files.get();
 		context.fileSystem = std::move(files);
 		BuildStatistics statistics;
+		InferenceSummaryStore summaryStore(directory, statistics);
 		statistics.cacheDirectory = directory.string();
 		statistics.cacheEntry = programEntry.string();
+		statistics.parserIndexEntry = parserIndexEntry.string();
 		bool success = false;
 		std::optional<Json> previous;
 		ProgramPayloads retainedPayloads;
@@ -362,20 +382,24 @@ bool compileIncrementally(
 		std::string cachedDiagnostics;
 		std::string previousMatches;
 		std::string previousMatcherKey;
-		std::string previousParserKey;
 		if (auto cached = readEntry(failedEntry)) {
 			previousFailure = Json::parse(*cached);
+			if (const auto &state = previousFailure->at("inference_state"); !state.is_null())
+				summaryStore.observe(
+					state.at("inference_summary_keys"), state.at("inference_body_keys"), state.at("inference_class_keys")
+				);
 			if (!initializeSyntaxConfigs(context, context.options.inputPath))
 				return false;
 			reuseFailedFrontend =
 				observationsStillEquivalent(*previousFailure, *recording, context, cachedDiagnostics, configOnlyChange);
 			if (!reuseFailedFrontend)
 				previousMatcherKey = previousFailure->at("matcher_key").get<std::string>();
-			if (!reuseFailedFrontend)
-				previousParserKey = previousFailure->at("parser_key").get<std::string>();
 		}
 		if (!reuseFailedFrontend) {
 			if (auto cached = readProgramManifest(programEntry, retainedPayloads)) {
+				summaryStore.observe(
+					cached->at("inference_summary_keys"), cached->at("inference_body_keys"), cached->at("inference_class_keys")
+				);
 				previous = std::move(*cached);
 				if (!previousFailure && !initializeSyntaxConfigs(context, context.options.inputPath))
 					return false;
@@ -383,8 +407,6 @@ bool compileIncrementally(
 					observationsStillEquivalent(*previous, *recording, context, cachedDiagnostics, configOnlyChange);
 				if (!reusePreviousFrontend && previousMatcherKey.empty())
 					previousMatcherKey = previous->at("matcher_key").get<std::string>();
-				if (!reusePreviousFrontend && previousParserKey.empty())
-					previousParserKey = previous->at("parser_key").get<std::string>();
 			}
 		}
 		statistics.cacheLoadMilliseconds = elapsedMilliseconds(compileStart);
@@ -399,10 +421,10 @@ bool compileIncrementally(
 			}
 		} else if (reusePreviousFrontend) {
 			statistics.reusedFrontend = true;
-			std::vector<std::string> objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 			std::cerr << cachedDiagnostics;
 			if (linkedOutputUnchanged(context, *previous)) {
 				success = true;
+				statistics.objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 			} else {
 				context.llvmContext = new llvm::LLVMContext();
 				context.llvmModule = new llvm::Module("dynlex_cached_link", *context.llvmContext);
@@ -412,35 +434,22 @@ bool compileIncrementally(
 					throw std::runtime_error(error);
 				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
 				context.requiredLibraries.insert(libraries.begin(), libraries.end());
-				std::optional<bool> cachedLink = linkCachedObjects(context, directory, objectKeys, libraries, statistics);
-				if (cachedLink) {
-					success = *cachedLink;
-				} else {
-					auto payloadStart = Clock::now();
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "ir");
-					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
-					restoreCachedModule(context, *previous, programEntry);
-					success = emitPartitions(
-						context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics, &*previous,
-						nullptr, true
-					);
-					if (success)
-						(*previous)["object_keys"] = statistics.objectKeys;
-				}
+				success = linkOrRestoreNativeOutput(
+					context, directory, retainedPayloads, programEntry, compilerIdentity, options, libraries, statistics,
+					*previous
+				);
 			}
-			if (success) {
-				bool updateEntry = configOnlyChange;
-				if (!linkedOutputUnchanged(context, *previous)) {
-					(*previous)["linked_output"] = linkedOutputIdentity(context);
-					updateEntry = true;
-				}
+			if (success &&
+				(configOnlyChange || !statistics.nativeUnits.is_null() || !linkedOutputUnchanged(context, *previous))) {
+				Json result = *previous;
+				recordNativeOutput(result, statistics, &*previous);
+				result["linked_output"] = linkedOutputIdentity(context);
 				if (configOnlyChange) {
-					(*previous)["files"] = recording->observations;
-					(*previous)["diagnostics"] = cachedDiagnostics;
-					recordSemanticSources(*previous, *recording, context);
+					result["files"] = recording->observations;
+					result["diagnostics"] = cachedDiagnostics;
+					recordSemanticSources(result, *recording, context);
 				}
-				if (updateEntry)
-					writeProgramEntry(programEntry, *previous, &*previous);
+				writeProgramEntry(programEntry, std::move(result), &*previous);
 			}
 		} else {
 			if (previous) {
@@ -448,6 +457,10 @@ bool compileIncrementally(
 				statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "all_function_projection");
 				statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 			}
+			const Json *frontendState = selectFrontendReuseState(
+				previous ? &*previous : nullptr, previousFailure ? &*previousFailure : nullptr, directory, retainedPayloads,
+				statistics
+			);
 			auto restoreStart = Clock::now();
 			recording->observations = Json::object();
 			if (!previousMatcherKey.empty()) {
@@ -458,16 +471,14 @@ bool compileIncrementally(
 					previousMatches = std::move(*cached);
 				}
 			}
-			std::string previousParsedExpressions;
-			if (!previousParserKey.empty()) {
-				fs::path parserEntry = directory / ("parser-" + previousParserKey + ".entry");
-				if (auto cached = readEntry(parserEntry)) {
-					if (digest(*cached) != previousParserKey)
-						throw std::runtime_error("corrupt parser cache entry: " + parserEntry.string());
-					previousParsedExpressions = std::move(*cached);
-				}
-			}
+			ParserProductIndex parserIndex(directory, parserIndexEntry);
+			std::string previousParsedExpressions = parserIndex.load();
 			IncrementalParsedExpressionCache parserCache(context, previousParsedExpressions);
+			IncrementalSourcePreparation sourcePreparation(context, parserCache, *recording);
+			IncrementalSourceTransforms sourceTransforms(context, parserCache, *recording);
+			context.deferParsedLine = [&](Section *section, CodeLine *line, SectionType type) {
+				return parserCache.defer(section, line, type);
+			};
 			context.reuseParsedExpression = [&](Section *section, Range range, SectionType patternType,
 												bool registerReferences) {
 				return parserCache.reuse(section, range, patternType, registerReferences);
@@ -485,94 +496,72 @@ bool compileIncrementally(
 			context.recordParsedDefinition = [&](Range range, const std::vector<DefinitionPatternElement> &elements) {
 				parserCache.recordDefinition(range, elements);
 			};
-			IncrementalMatcherCache matcherCache(context, previousMatches);
-			std::unordered_map<const Section *, const Json *> inactiveMatchEntries;
-			context.selectInactiveBodiesForResolutionReuse = [&]() {
-				if (!previous || previousMatches.empty() || context.options.emitDebugInfo || context.options.traceExecution ||
-					!previous->contains("inactive_projection") ||
-					!compatibleObservations(*previous, recording->observations, context))
-					return std::vector<Section *>{};
-				auto selectionStart = Clock::now();
-				std::vector<Section *> selected = selectInactiveBodiesForResolutionReuse(
-					context, recording->observations, previous->at("all_function_projection"),
-					previous->at("inactive_projection"), previous->at("diagnostic_sources").get<std::set<std::string>>(),
-					matcherCache, inactiveMatchEntries
-				);
-				statistics.inactiveBodySelectionMilliseconds += elapsedMilliseconds(selectionStart);
-				return selected;
-			};
-			context.inactiveBodyMatcherTreeUnchanged = [&]() {
-				return previous &&
-					   matcherTreeSignature(context) ==
-						   previous->at("all_function_projection").at("initial_matcher_tree").get_ref<const std::string &>();
-			};
-			context.retainInactiveBodyMatcherResults = [&](const std::vector<Section *> &sections) {
-				for (const Section *section : sections)
-					for (const Json &entry : *inactiveMatchEntries.at(section))
-						for (const char *field : {"key", "initial_key"})
-							if (entry.at(field).is_string())
-								matcherCache.retain(entry.at(field).get_ref<const std::string &>());
-			};
-			std::string initialMatcherTree;
-			Json initialMatcherRoots;
-			InitialMatcherProjection initialMatcherProjection;
-			PriorMatchKeys precedenceKeys;
-			context.reuseMatcherResult = [&](PatternReference *reference, MatchOptions options,
-											 MatchDependencies *dependencies) {
-				return matcherCache.reuse(reference, options, dependencies);
-			};
-			context.recordMatcherResult = [&](PatternReference *reference, MatchOptions options, const PatternMatch *match,
-											  const MatchDependencies *dependencies) {
-				matcherCache.record(reference, options, match, dependencies);
-			};
-			context.prepareDeferredMatcherReplay = [&](const std::list<PatternReference *> &references) {
-				auto projectionStart = Clock::now();
-				initialMatcherProjection.capture(context, recording->observations, inactiveMatchEntries);
-				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
-				initialMatcherTree = matcherTreeSignature(context);
-				initialMatcherRoots = matcherTreeMutationSnapshot(context);
-				if (previous)
-					prepareDeferredMatchReplay(
-						context, *previous, recording->observations, initialMatcherTree, initialMatcherRoots, references,
-						precedenceKeys
-					);
-			};
-			context.preparePrecedenceMatcherReplay = [&](const std::vector<PatternReference *> &references) {
-				if (previous)
-					preparePrecedenceMatchReplay(
-						context, previous->at("all_function_projection"), matcherCache, precedenceKeys, references,
-						statistics.precedenceTreeSignatureMilliseconds, statistics.precedenceSignatureMilliseconds,
-						statistics.precedenceRuleSignatureMilliseconds, statistics.precedenceSignaturesReused
-					);
-			};
+			IncrementalMatcherCache matcherCache(context, previousMatches, [&](std::string_view key) {
+				return readEntry(directory / ("matcher-segment-" + std::string(key) + ".entry"));
+			});
+#include "incrementalFrontendSetup.inl"
 			statistics.cacheRestoreMilliseconds = elapsedMilliseconds(restoreStart);
-			auto saveMatcher = [&]() {
+			auto saveMatcher = [&](IncrementalMatcherCache::SnapshotScope scope) {
 				auto saveStart = Clock::now();
-				std::string payload = matcherCache.snapshot();
+				auto phaseStart = saveStart;
+				double phaseCPU = processCPUMilliseconds();
+				auto recordPhase = [&](double &wall, double &cpu) {
+					wall += elapsedMilliseconds(phaseStart);
+					cpu += processCPUMilliseconds() - phaseCPU;
+					phaseStart = Clock::now();
+					phaseCPU = processCPUMilliseconds();
+				};
+				auto snapshot = matcherCache.snapshot(scope);
+				const std::string &payload = snapshot.index;
+				statistics.matcherSnapshotBytes += payload.size();
+				for (const auto &[key, bytes] : snapshot.segments)
+					statistics.matcherSnapshotBytes += bytes.size();
+				statistics.matcherStorage = matcherCache.storageStatistics();
+				recordPhase(statistics.matcherSerializeMilliseconds, statistics.matcherSerializeCPUMilliseconds);
 				std::string key = digest(payload);
+				recordPhase(statistics.matcherDigestMilliseconds, statistics.matcherDigestCPUMilliseconds);
+				for (const auto &[segmentKey, bytes] : snapshot.segments)
+					writeEntry(directory / ("matcher-segment-" + segmentKey + ".entry"), bytes);
 				writeEntry(directory / ("matcher-" + key + ".entry"), payload);
+				recordPhase(statistics.matcherStoreMilliseconds, statistics.matcherStoreCPUMilliseconds);
 				statistics.matcherSnapshotMilliseconds += elapsedMilliseconds(saveStart);
 				return key;
 			};
-			auto saveParser = [&]() {
-				auto saveStart = Clock::now();
-				std::string payload = parserCache.snapshot();
-				std::string key = digest(payload);
-				writeEntry(directory / ("parser-" + key + ".entry"), payload);
-				statistics.parserSnapshotMilliseconds += elapsedMilliseconds(saveStart);
-				return key;
-			};
+			IncrementalSourceScopes sourceScopes(context);
+			IncrementalVariableBindings bindings(
+				context, matcherCache, statistics, sourceScopes, initialMatcherProjection, previous ? &*previous : nullptr,
+				previousFailure ? &*previousFailure : nullptr
+			);
+			IncrementalValidation validation(context, statistics, sourceScopes, [&]() {
+				Json records = Json::object();
+				if (previous) {
+					auto start = Clock::now();
+					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "validation_units");
+					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(start);
+					records = previous->at("validation_units");
+				}
+				if (previousFailure)
+					for (const auto &[path, record] : previousFailure->at("validation_units").items())
+						records[path] = record;
+				return records;
+			});
 			auto stageStart = Clock::now();
-			bool compiled = compileBeforeTypeInference(context.options.inputPath, context);
+			bool compiled = compileBeforeTypeInference(context.options.inputPath, context, [&]() {
+				return validation.run();
+			});
 			statistics.frontendMilliseconds = elapsedMilliseconds(stageStart);
 			std::map<std::string, Section *> sections;
-			if (compiled)
-				collectSections(context.mainSection, "root", sections);
+			std::string finalMatcherTree;
+			if (compiled) {
+				sections = sourceScopes.canonical();
+				finalMatcherTree = matcherTreeSignature(context);
+				matcherPaths.retain(finalMatcherTree, context);
+			}
 			std::string frontendDiagnosticText;
 			std::set<std::string> frontendDiagnosticSources;
 			Json frontendDiagnosticRecords =
 				compiled ? captureCachedDiagnostics(context, frontendDiagnosticText, frontendDiagnosticSources) : Json::array();
-			size_t frontendDiagnosticCount = context.diagnostics.size();
+			Json frontendDiagnosticUnits = captureFrontendDiagnosticUnits(context);
 			Json inactiveProjection;
 			stageStart = Clock::now();
 			bool reuseTypeInference = compiled && previous &&
@@ -583,17 +572,20 @@ bool compileIncrementally(
 			statistics.inactiveProjectionMilliseconds = elapsedMilliseconds(stageStart);
 			stageStart = Clock::now();
 			std::optional<Json> refreshedProjection;
-			if (reuseTypeInference)
-				refreshedProjection = refreshInactiveFunctionProjection(
-					context, recording->observations, sections, matcherCache, previous->at("all_function_projection"),
-					previous->at("inactive_projection"), statistics.inactiveProjectionMatchesRechecked,
-					statistics.sourceProjectionWork.matchEntriesReused
-				);
-			if (compiled && !refreshedProjection && previous &&
-				compatibleObservations(*previous, recording->observations, context))
+			if (reuseTypeInference) {
+				const Json &prior = previous->at("all_function_projection");
+				if (initialMatcherTree == prior.at("initial_matcher_tree").get_ref<const std::string &>() &&
+					finalMatcherTree == prior.at("final_matcher_tree").get_ref<const std::string &>())
+					refreshedProjection = refreshInactiveFunctionProjection(
+						context, recording->observations, sections, matcherCache, prior, previous->at("inactive_projection"),
+						statistics.inactiveProjectionMatchesRechecked, statistics.sourceProjectionWork.matchEntriesReused
+					);
+			}
+			if (compiled && !refreshedProjection && frontendState &&
+				compatibleObservations(*frontendState, recording->observations, context))
 				refreshedProjection = refreshTopLevelExecutionProjection(
 					context, recording->observations, sections, matcherCache, initialMatcherTree,
-					previous->at("all_function_projection"), &statistics.sourceProjectionWork,
+					frontendState->at("all_function_projection"), &statistics.sourceProjectionWork,
 					statistics.topLevelProjectionSectionsReused
 				);
 			Json resolvedFunctionProjection = nullptr;
@@ -601,180 +593,131 @@ bool compileIncrementally(
 				resolvedFunctionProjection = std::move(*refreshedProjection);
 			else if (compiled)
 				resolvedFunctionProjection = captureAllFunctionProjection(
-					context, recording->observations, sections, matcherCache, initialMatcherTree, initialMatcherRoots,
-					previous ? &*previous : nullptr, &statistics.sourceProjectionWork,
-					previous && compatibleObservations(*previous, recording->observations, context)
+					context, recording->observations, sections, matcherCache, matcherPaths, initialMatcherTree,
+					finalMatcherTree, frontendState, &statistics.sourceProjectionWork,
+					frontendState && compatibleObservations(*frontendState, recording->observations, context)
 				);
 			if (compiled) {
 				auto projectionStart = Clock::now();
-				resolvedFunctionProjection["matcher_projection"] = initialMatcherProjection.finish(resolvedFunctionProjection);
+				resolvedFunctionProjection["binding_units"] = bindings.snapshot();
+				resolvedFunctionProjection["initial_parameter_counts"] = initialParameterCounts.snapshot();
+				resolvedFunctionProjection["matcher_projection"] =
+					initialMatcherProjection.finish(resolvedFunctionProjection, matcherCache);
+				resolvedFunctionProjection["matcher_projection"]["classifications"] = classification.snapshot();
 				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
-				const Json *priorLiteralProjection =
-					previous && compatibleObservations(*previous, recording->observations, context) &&
-							initialMatcherTree == previous->at("all_function_projection")
-													  .at("initial_matcher_tree")
-													  .get_ref<const std::string &>()
-						? &previous->at("all_function_projection")
-						: nullptr;
-				refreshReferenceLiteralIndex(
-					resolvedFunctionProjection, context, recording->observations, sections, priorLiteralProjection
-				);
 			}
 			statistics.projectionMilliseconds = elapsedMilliseconds(stageStart);
 			std::map<const Section *, std::string> sectionPaths;
 			for (const auto &[path, section] : sections)
 				sectionPaths.emplace(section, path);
+			IncrementalInferenceReads inferenceReads(sectionPaths);
+			IncrementalInferenceProducts products(context, sectionPaths, sections, summaryStore, inferenceReads, statistics);
+			InferenceValueIdentities valueIdentities(sectionPaths);
+			// Signatures and scope rules are finalized before preinference. Their
+			// source inputs stay immutable through body inference and persistence.
+			std::map<std::string, std::string> inferenceInputFingerprints;
 			std::unique_ptr<IncrementalIRReuse> functionReuse;
 			std::unique_ptr<IncrementalInferenceReuse> inferenceReuse;
 			std::unordered_set<const Section *> graphStable;
+			Json *priorInference = previous ? &*previous : nullptr;
+			ConstraintReuseState priorConstraints;
+			if (previousFailure && !previousFailure->at("inference_state").is_null())
+				priorInference = &previousFailure->at("inference_state");
 			if (compiled && !reuseTypeInference) {
-				if (previous) {
-					auto payloadStart = Clock::now();
-					statistics.cachePayloadsLoaded +=
-						hydrateProgramField(*previous, retainedPayloads, "section_dependency_graph");
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "inference_summaries");
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "ir");
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "unoptimized_ir");
-					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
-					if (compatibleObservations(*previous, recording->observations, context))
-						prepareConstraintProbeReuse(
-							context, previous->at("all_function_projection"), resolvedFunctionProjection,
-							previous->at("section_dependency_graph"), sections
-						);
-					IncrementalPreinferPlan plan = incrementalInferenceCandidates(
-						context, *previous, recording->observations, sectionPaths, resolvedFunctionProjection
+				context.recordInferenceDependency = [&](const auto &owner, const auto &dependency, const auto &scope) {
+					inferenceReads.recordDependency(owner, dependency, scope);
+				};
+				context.recordInferenceValue = [&](const auto &owner, const auto &dependency, const auto &scope,
+												   const auto &arguments, const auto &value) {
+					inferenceReads.recordValue(
+						owner, dependency, scope, captureInferenceValueQuery(arguments, value, valueIdentities)
 					);
-					statistics.preinferDependencyGraphSectionsChecked = plan.dependencyGraphSectionsChecked;
-					context.runIncrementalPreinference =
-						[&, plan = std::move(plan)](
-							ParseContext &inferred,
-							const std::function<bool(const ParseContext::IncrementalFunctionRequest &)> &inferRequest
-						) {
-						auto preinferStart = Clock::now();
-						const Json &priorSummaries = previous->at("inference_summaries");
-						std::unordered_set<const Section *> stable;
-						for (size_t first = 0; first < plan.requests.size();) {
-							Section *section = plan.requests[first].section;
-							size_t end = first + 1;
-							while (end < plan.requests.size() && plan.requests[end].section == section)
-								end++;
-							std::unordered_map<Section *, bool> memo;
-							if (!functionDependenciesUnchanged(section, plan.bodyUnchanged, memo, stable)) {
-								std::vector<ParseContext::IncrementalFunctionRequest> variants(
-									plan.requests.begin() + first, plan.requests.begin() + end
-								);
-								for (const auto &request : variants)
-									if (inferRequest(request))
-										statistics.preinferredInstantiations++;
-								Json currentSummaries = captureInferenceSummaries(sectionPaths, {}, Json(nullptr));
-								auto newlyStable = stableIncrementalReplacements(
-									variants, sectionPaths, currentSummaries, priorSummaries,
-									inferred.incrementalReplacementFunctions
-								);
-								stable.insert(newlyStable.begin(), newlyStable.end());
-							}
-							first = end;
-						}
-						std::unordered_set<const Section *> eligible = eligibleCodegenSections(
-							inferred, *previous, recording->observations, resolvedFunctionProjection, sections, stable,
-							&statistics.dependencyGraphSectionsReused
-						);
-						statistics.preinferenceMilliseconds = elapsedMilliseconds(preinferStart);
-						if (eligible.empty())
-							return;
-						graphStable = eligible;
-						std::unordered_set<std::string> replacementPaths;
-						for (const Section *section : stable)
-							replacementPaths.insert(sectionPaths.at(section));
-						functionReuse = std::make_unique<IncrementalIRReuse>(
-							inferred, previous->at("unoptimized_ir").get_ref<const std::string &>(),
-							previous->at("function_sections"), previous->at("callable_functions"),
-							previous->at("function_instantiations"), sectionPaths, eligible, std::move(replacementPaths)
-						);
-						inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
-							priorSummaries, previous->at("global_types"), *functionReuse, sectionPaths, std::move(eligible)
-						);
-						inferred.reuseInferredInstantiation = [&](Section *section, const InstantiationKey &key,
-																  Instantiation &instantiation, bool allowPureValueSummary) {
-							return inferenceReuse->reuse(section, key, instantiation, allowPureValueSummary);
-						};
-					};
-				}
+				};
+				context.recordCallableLookup = [&](const auto &owner, const auto &source, auto signature, const auto &matches) {
+					inferenceReads.record(owner, source, signature, matches);
+				};
+#include "incrementalInferenceSetup.inl"
 			}
 			stageStart = Clock::now();
 			if (compiled && !reuseTypeInference)
 				compiled = finishTypeInference(context);
 			statistics.inferenceMilliseconds = elapsedMilliseconds(stageStart);
-			if (compiled) {
-				if (reuseTypeInference) {
-					const Json &inferred = previous->at("all_function_projection");
-					for (const char *field : {"constraint_probe_schedule", "class_instantiations"})
-						resolvedFunctionProjection[field] = inferred.at(field);
-				} else {
-					resolvedFunctionProjection["constraint_probe_schedule"] =
-						captureConstraintProbeSchedule(context, sectionPaths);
-					resolvedFunctionProjection["class_instantiations"] = captureClassInstantiations(sectionPaths);
-				}
-			}
+			statistics.reusedRootExecution = context.reuseRootExecution;
+			auto constraintSnapshotStart = Clock::now();
+			Json constraintState = captureCurrentConstraintState(
+				context, *recording, resolvedFunctionProjection, sectionPaths, inferenceReads, frontendDiagnosticUnits,
+				priorConstraints, compiled, reuseTypeInference, previous ? &*previous : nullptr
+			);
+			statistics.constraintSnapshotMilliseconds += elapsedMilliseconds(constraintSnapshotStart);
 			statistics.expressionParseHits = parserCache.hits();
 			statistics.temporaryExpressionParseHits = parserCache.temporaryHitCount();
 			statistics.expressionParseMisses = parserCache.missCount();
 			statistics.definitionParseHits = parserCache.definitionHitCount();
 			statistics.definitionParseMisses = parserCache.definitionMissCount();
+			context.deferParsedLine = {};
 			context.reuseParsedExpression = {};
 			context.recordParsedExpression = {};
 			context.retainParsedTemporaryExpression = {};
 			context.reuseParsedDefinition = {};
 			context.recordParsedDefinition = {};
 			statistics.reusedInferenceInstantiations = inferenceReuse ? inferenceReuse->reusedCount() : 0;
+			statistics.restoredCurrentInferenceProducts = inferenceReuse ? inferenceReuse->currentRestoredCount() : 0;
 			context.reuseInferredInstantiation = {};
+			context.restoreInferredBody = {};
 			context.runIncrementalPreinference = {};
+			context.recordCallableLookup = {};
+			context.recordInferenceDependency = {};
+			context.recordInferenceValue = {};
+			statistics.callableLookupsObserved = inferenceReads.observedCount();
+			statistics.failedCallableLookupsObserved = inferenceReads.failedCount();
+			statistics.callableLookupsChecked = inferenceReads.checkedCount();
+			statistics.callableLookupsChanged = inferenceReads.changedKeys().size();
 			statistics.matcherCacheHits = matcherCache.hits();
+			statistics.referenceMetadataUnitsLoaded = matcherCache.referenceMetadataLoads();
+			statistics.referenceMetadataUnitsReused = matcherCache.referenceMetadataReuses();
+			statistics.matcherPathSnapshotsBuilt = matcherPaths.pathsBuilt();
+			statistics.matcherPathSnapshotsLoaded = matcherPaths.pathsLoaded();
 			statistics.deferredMatchKeysReplayed = matcherCache.deferredKeyReplays();
 			statistics.precedenceMatchKeysReplayed = matcherCache.precedenceKeyReplays();
 			statistics.precedenceMatcherCacheHits = matcherCache.precedenceHits();
 			statistics.matcherKeyMilliseconds = matcherCache.keyTimeMilliseconds();
+			statistics.matcherKeyComputations = matcherCache.keyComputations();
+			statistics.matcherSignatureLookups = matcherCache.signatureLookups();
 			statistics.matcherRestoreMilliseconds = matcherCache.restoreTimeMilliseconds();
 			context.reuseMatcherResult = {};
 			context.recordMatcherResult = {};
 			context.prepareDeferredMatcherReplay = {};
+			context.restoreDeferredBodyUnits = {};
 			context.preparePrecedenceMatcherReplay = {};
 			if (reuseTypeInference) {
 				statistics.reusedTypeInference = true;
 				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
 				context.requiredLibraries.insert(libraries.begin(), libraries.end());
-				std::vector<std::string> objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 				if (linkedOutputUnchanged(context, *previous)) {
 					success = true;
-					statistics.objectKeys = objectKeys;
+					statistics.objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 				} else {
-					std::optional<bool> cachedLink = linkCachedObjects(context, directory, objectKeys, libraries, statistics);
-					if (cachedLink) {
-						success = *cachedLink;
-						statistics.objectKeys = objectKeys;
-					} else {
-						auto payloadStart = Clock::now();
-						statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "ir");
-						statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
-						restoreCachedModule(context, *previous, programEntry);
-						success = emitPartitions(
-							context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics, &*previous,
-							nullptr, true
-						);
-					}
+					success = linkOrRestoreNativeOutput(
+						context, directory, retainedPayloads, programEntry, compilerIdentity, options, libraries, statistics,
+						*previous
+					);
 				}
 				if (success) {
-					std::cerr << previous->at("diagnostics").get_ref<const std::string &>();
+					auto diagnostics = renderCachedDiagnostics(*previous, *recording, context, {});
+					requireCompilerInvariant(diagnostics.has_value(), "unchanged diagnostic sources lost their ranges");
+					std::cerr << *diagnostics;
 					context.diagnostics.clear();
 					statistics.reusedDiagnosticRecords = previous->at("diagnostic_records").size();
 					Json result = *previous;
+					result["diagnostics"] = std::move(*diagnostics);
+					result["validation_units"] = validation.snapshot();
 					result["files"] = recording->observations;
 					result["inactive_projection"] = std::move(inactiveProjection);
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
-					result["matcher_key"] = saveMatcher();
-					result["parser_key"] = saveParser();
-					result["object_keys"] = statistics.objectKeys;
+					result["frontend_diagnostic_units"] = std::move(frontendDiagnosticUnits);
+					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
+					recordNativeOutput(result, statistics, &*previous);
 					recordSemanticSources(result, *recording, context);
 					result["linked_output"] = linkedOutputIdentity(context);
 					auto writeStart = Clock::now();
@@ -785,62 +728,58 @@ bool compileIncrementally(
 				std::map<std::string, std::string> functionSections;
 				Json callableFunctions = Json::object();
 				Json functionInstantiations = Json::object();
-				ClassIdentityPaths functionClassPaths = classIdentityPaths(sectionPaths);
-				context.recordGeneratedFunction = [&](Section *section, const InstantiationKey *key, llvm::Function *function,
+				InferenceValueIdentities functionIdentities(sectionPaths);
+				for (const auto &[section, path] : sectionPaths)
+					if (hasCodegenSectionIdentity(*section))
+						context.functionSymbolIdentities.emplace(section, sectionIdentityDigest(path));
+				context.recordGeneratedFunction = [&](Section *section, const InstantiationKey &key, llvm::Function *function,
 													  bool callable) {
-					requireCompilerInvariant(
-						callable == (key == nullptr), "generated function has an invalid instantiation key"
-					);
 					std::string name = function->getName().str();
 					functionSections.emplace(name, sectionPaths.at(section));
 					if (callable)
 						callableFunctions[name] = true;
-					else if (std::optional<std::string> identity = inferenceSummaryKey(*key, functionClassPaths))
-						functionInstantiations[name] = *identity;
+					functionInstantiations[name] = inferenceSummaryKey(key, functionIdentities).value_or(aggregateGraphVariant);
 				};
 				if (functionReuse) {
-					context.reuseGeneratedFunction = [&](Section *section, Instantiation &instantiation,
-														 llvm::Function *function) {
-						return functionReuse->reuse(section, instantiation, function);
+					context.reuseGeneratedFunction = [&](Section *section, Instantiation &, llvm::Function *function) {
+						return functionReuse->reuse(section, function, functionInstantiations);
 					};
 					context.importReusedFunctions = [&](ParseContext &compiled) {
-						return functionReuse->import(compiled);
+						return functionReuse->import(compiled, functionInstantiations);
 					};
 				}
 				stageStart = Clock::now();
-				std::string unoptimizedIR;
-				auto optimizationStart = stageStart;
 				success = generateCode(context, [&](ParseContext &compiled) {
-					statistics.optimizationMilliseconds = elapsedMilliseconds(optimizationStart);
-					auto snapshotStart = Clock::now();
+					statistics.irGenerationMilliseconds = elapsedMilliseconds(stageStart);
+					auto irStart = Clock::now();
 					sortModuleSymbols(*compiled.llvmModule);
-					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
+					std::string generatedIR = serializeCachedModule(*compiled.llvmModule);
+					statistics.generatedIRSnapshotMilliseconds = elapsedMilliseconds(irStart);
+					auto snapshotStart = Clock::now();
+					std::vector<std::string> libraries = orderedNativeLibraries(compiled.requiredLibraries);
 					std::string diagnostics;
 					std::set<std::string> diagnosticSources;
 					Json diagnosticRecords = captureCachedDiagnostics(compiled, diagnostics, diagnosticSources);
-					std::set<std::string> inferenceDiagnosticSources =
-						diagnosticSourcesAfter(compiled, frontendDiagnosticCount);
 					Json result{
 						{"files", recording->observations},
-						{"ir", serializeCachedModule(*compiled.llvmModule)},
-						{"unoptimized_ir", std::move(unoptimizedIR)},
+						{"generated_ir", std::move(generatedIR)},
 						{"module_id", compiled.llvmModule->getModuleIdentifier()},
 						{"libraries", libraries},
 						{"diagnostics", diagnostics},
 						{"diagnostic_records", diagnosticRecords},
 						{"diagnostic_sources", diagnosticSources}
 					};
-					result["matcher_key"] = saveMatcher();
-					result["parser_key"] = saveParser();
+					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
+					result["validation_units"] = validation.snapshot();
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
+					result["frontend_diagnostic_units"] = std::move(frontendDiagnosticUnits);
 					if (functionReuse) {
 						for (const std::string &name : functionReuse->reusedFunctionNames()) {
 							functionSections.emplace(name, previous->at("function_sections").at(name).get<std::string>());
 							if (previous->at("callable_functions").contains(name))
 								callableFunctions[name] = true;
-							if (previous->at("function_instantiations").contains(name))
-								functionInstantiations[name] = previous->at("function_instantiations").at(name);
+							functionInstantiations[name] = previous->at("function_instantiations").at(name);
 						}
 					}
 					result["function_sections"] = functionSections;
@@ -852,102 +791,129 @@ bool compileIncrementally(
 					const Json *priorInactiveSources = previous ? &previous->at("inactive_projection").at("sources") : nullptr;
 					std::set<std::string> retainedActivePaths =
 						retainedActiveFunctionPaths(functionReuse.get(), previous ? &*previous : nullptr);
+					Json globalTypes = compiled.reuseRootExecution
+										   ? previous->at("global_types")
+										   : captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
+					result["global_types"] = globalTypes;
+					result["inference_summaries"] =
+						inferenceReuse
+							? inferenceReuse->snapshot(
+								  sectionPaths, result.at("function_sections"), result.at("function_instantiations"),
+								  &statistics.reusedInferenceSummarySections
+							  )
+							: captureInferenceSummaries(
+								  compiled, products.sourceIndex(), sectionPaths, products.globalInputs(), summaryStore,
+								  nativeInferenceUnits(result.at("function_sections"), result.at("function_instantiations")),
+								  nullptr, nullptr, false, &products.references()
+							  );
+					result["root_diagnostics"] =
+						captureRootInferenceDiagnostics(compiled, sectionPaths, products.sourceIndex());
+					auto graphStart = Clock::now();
+					result["section_dependency_graph"] = captureSectionDependencyGraph(
+						compiled, result, sectionPaths, inferenceReads,
+						result.at("all_function_projection").at("constraint_probe_schedule").at("callable_lookups"), statistics,
+						inferenceInputFingerprints, products.globalInputs(),
+						priorInference ? &priorInference->at("section_dependency_graph") : nullptr, graphStable,
+						retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr), &products
+					);
+					statistics.dependencyGraphMilliseconds = elapsedMilliseconds(graphStart);
+					retainInferenceInputPaths(
+						result.at("all_function_projection").at("constraint_probe_schedule"),
+						result.at("section_dependency_graph"), retainedActivePaths
+					);
 					result["inactive_projection"] = captureInactiveProjection(
 						result.at("all_function_projection").at("declarations"), compiled, recording->observations, nullptr,
 						&generatedFunctionPaths, &sections, priorInactiveSources, &statistics.sourceProjectionWork, nullptr,
 						&retainedActivePaths
 					);
-					Json globalTypes = captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
-					result["global_types"] = globalTypes;
-					result["inference_summaries"] =
-						inferenceReuse ? inferenceReuse->snapshot(
-											 sectionPaths, inferenceDiagnosticSources, globalTypes,
-											 &statistics.reusedInferenceSummarySections
-										 )
-									   : captureInferenceSummaries(sectionPaths, inferenceDiagnosticSources, globalTypes);
-					auto graphStart = Clock::now();
-					result["section_dependency_graph"] = captureSectionDependencyGraph(
-						sectionPaths, previous ? &previous->at("section_dependency_graph") : nullptr, graphStable,
-						retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr),
-						&statistics.dependencyGraphEntriesReused, &statistics.dependencyGraphReverseNodesUpdated
-					);
-					statistics.dependencyGraphMilliseconds = elapsedMilliseconds(graphStart);
 					recordSemanticSources(result, *recording, compiled);
 					statistics.snapshotMilliseconds = elapsedMilliseconds(snapshotStart);
-					bool reusedGeneratedCode = false;
-					if (previous && previous->at("ir") == result.at("ir")) {
-						std::vector<std::string> priorObjects = previous->at("object_keys").get<std::vector<std::string>>();
+					bool emitted;
+					if (previous && previous->at("generated_ir") == result.at("generated_ir")) {
 						if (previous->at("libraries") == libraries && linkedOutputUnchanged(compiled, *previous)) {
-							statistics.objectKeys = std::move(priorObjects);
-							reusedGeneratedCode = true;
-						} else {
-							std::optional<bool> cachedLink =
-								linkCachedObjects(compiled, directory, priorObjects, libraries, statistics);
-							if (cachedLink) {
-								if (!*cachedLink)
-									return false;
-								statistics.objectKeys = std::move(priorObjects);
-								reusedGeneratedCode = true;
-							}
-						}
-					}
-					if (!reusedGeneratedCode && !emitPartitions(
-													compiled, directory, retainedPayloads, compilerIdentity, options, libraries,
-													statistics, previous ? &*previous : nullptr, functionReuse.get(),
-													previous && previous->at("ir") == result.at("ir")
-												))
+							statistics.objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
+							emitted = true;
+						} else
+							emitted = linkOrRestoreNativeOutput(
+								compiled, directory, retainedPayloads, programEntry, compilerIdentity, options, libraries,
+								statistics, *previous, true
+							);
+					} else
+						emitted = buildNativeOutput(
+							compiled, directory, retainedPayloads, compilerIdentity, options, libraries, statistics,
+							previous ? &*previous : nullptr, functionReuse.get()
+						);
+					if (!emitted)
 						return false;
-					result["object_keys"] = statistics.objectKeys;
-					if (reusedGeneratedCode)
-						result["payload_keys"]["native_units"] = previous->at("payload_keys").at("native_units");
-					else
-						result["native_units"] = std::move(statistics.nativeUnits);
-					result["optimization_units"] = std::move(statistics.optimizationUnits);
+					recordNativeOutput(result, statistics, previous ? &*previous : nullptr);
 					result["linked_output"] = linkedOutputIdentity(compiled);
 					auto writeStart = Clock::now();
 					writeProgramEntry(programEntry, std::move(result), previous ? &*previous : nullptr);
 					statistics.cacheWriteMilliseconds = elapsedMilliseconds(writeStart);
 					return true;
-				}, [&](ParseContext &generated) {
-					statistics.irGenerationMilliseconds = elapsedMilliseconds(stageStart);
-					auto snapshotStart = Clock::now();
-					sortModuleSymbols(*generated.llvmModule);
-					unoptimizedIR = serializeCachedModule(*generated.llvmModule);
-					statistics.unoptimizedIRSnapshotMilliseconds = elapsedMilliseconds(snapshotStart);
-					optimizationStart = Clock::now();
-				}, [&](ParseContext &generated) {
-					return optimizeIncrementalModule(
-						generated, directory, retainedPayloads, compilerIdentity, options, previous ? &*previous : nullptr,
-						statistics, functionReuse.get()
-					);
 				});
 				statistics.codegenMilliseconds = elapsedMilliseconds(stageStart);
-				statistics.reusedFunctionIR = functionReuse ? functionReuse->reusedCount() : 0;
+				if (functionReuse)
+					recordIRReuseStatistics(statistics, *functionReuse, *previous, sectionPaths);
 				context.recordGeneratedFunction = {};
 				context.reuseGeneratedFunction = {};
 				context.importReusedFunctions = {};
 			} else if (context.compilationStage >= ParseContext::CompilationStage::ImportedFiles &&
 					   !context.diagnostics.empty()) {
+				auto failureWriteStart = Clock::now();
 				std::string diagnostics;
 				std::set<std::string> diagnosticSources;
 				Json records = captureCachedDiagnostics(context, diagnostics, diagnosticSources);
-				Json result{
-					{"files", recording->observations},
-					{"diagnostics", diagnostics},
-					{"diagnostic_records", std::move(records)},
-					{"diagnostic_sources", std::move(diagnosticSources)},
-					{"matcher_key", saveMatcher()},
-					{"parser_key", saveParser()}
-				};
+				Json savedBindings = bindings.snapshot();
+				Json result{{"files", recording->observations},
+							{"diagnostics", diagnostics},
+							{"diagnostic_records", std::move(records)},
+							{"diagnostic_sources", std::move(diagnosticSources)},
+							{"binding_units", std::move(savedBindings)},
+							{"matcher_key", saveMatcher(IncrementalMatcherCache::SnapshotScope::Partial)}};
 				recordSemanticSources(result, *recording, context);
+				result["validation_units"] = validation.snapshot();
+				if (constraintState.is_null() && previousFailure)
+					constraintState = previousFailure->at("constraint_state");
+				result["constraint_state"] =
+					constraintState.is_null() ? Json(nullptr) : constraintStateManifest(directory, std::move(constraintState));
+				Json state = nullptr;
+				if (context.hasCompleted(ParseContext::CompilationStage::InferredConstraints)) {
+					auto snapshotStart = Clock::now();
+					state = inferenceStateManifest(
+						directory, captureFailedInferenceState(
+									   context, *recording, resolvedFunctionProjection, sectionPaths, inferenceReads,
+									   inferenceReuse.get(), summaryStore, statistics, inferenceInputFingerprints,
+									   priorInference, graphStable, previous ? &*previous : nullptr, products
+								   )
+					);
+					statistics.snapshotMilliseconds += elapsedMilliseconds(snapshotStart);
+				} else if (priorInference)
+					state = inferenceStateManifest(directory, *priorInference);
+				result["inference_state"] = std::move(state);
 				writeEntry(failedEntry, result.dump());
+				statistics.cacheWriteMilliseconds += elapsedMilliseconds(failureWriteStart);
 			}
+			auto parserSaveStart = Clock::now();
+			parserIndex.publish(
+				parserCache, compiled ? IncrementalParsedExpressionCache::SnapshotScope::Complete
+									  : IncrementalParsedExpressionCache::SnapshotScope::Partial
+			);
+			statistics.parserSnapshotMilliseconds += elapsedMilliseconds(parserSaveStart);
+			statistics.bodySyntaxUnitsParsed = parserCache.bodyAssemblyCount();
+			statistics.bodySyntaxUnitsRestored = parserCache.bodyRestorationCount();
+			statistics.bodySyntaxUnitsSkipped = parserCache.bodySkippedCount();
+			statistics.sourcePreparation = sourcePreparation.work;
+			statistics.sourceTransforms = sourceTransforms.work;
 		}
 		auto finalizeStart = Clock::now();
 		if (success)
 			fs::remove(failedEntry);
-		trimCache(directory);
+		statistics.cacheTrimWork = trimCache(directory);
 		statistics.cacheFinalizeMilliseconds = elapsedMilliseconds(finalizeStart);
+		statistics.fileObservationRequests = recording->observationRequests();
+		statistics.fileObservationsComputed = recording->observationsComputed();
+		statistics.fileObservationsReused = recording->observationsReused();
 		statistics.totalMilliseconds = elapsedMilliseconds(compileStart);
 		if (showStatistics)
 			emitIncrementalStatistics(context, statistics);

@@ -15,10 +15,6 @@
 
 namespace {
 
-struct ActiveShorthand {
-	int sourceIndentLevel = 0;
-};
-
 static std::string_view trimRight(std::string_view text) {
 	while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())))
 		text.remove_suffix(1);
@@ -164,11 +160,9 @@ static bool reportMissingPattern(ParseContext &context, CodeLine *line, size_t k
 
 } // namespace
 
-bool expandDefinitionShorthands(ParseContext &context) {
+bool expandDefinitionShorthands(ParseContext &context, SourceTransformState &state) {
 	std::vector<CodeLine *> transformedLines;
 	transformedLines.reserve(context.codeLines.size());
-	std::unordered_map<lsp::SourceFile *, std::vector<ActiveShorthand>> activeByFile;
-	IndentData sourceIndentData{};
 
 	for (CodeLine *line : context.codeLines) {
 		if (line->rightTrimmedText.empty()) {
@@ -179,10 +173,10 @@ bool expandDefinitionShorthands(ParseContext &context) {
 		size_t indentLength = leadingWhitespaceLength(line->rightTrimmedText);
 		std::string_view indent = line->rightTrimmedText.substr(0, indentLength);
 		std::string_view measuredIndent = line->hasIndentOverride ? std::string_view(line->indentOverride) : indent;
-		IndentMeasurement indentation = measureIndent(sourceIndentData, measuredIndent);
+		IndentMeasurement indentation = measureIndent(state.indentation, measuredIndent);
 		int sourceIndentLevel = indentation.physicalIndentLevel + line->logicalIndentOffset;
-		auto &active = activeByFile[line->sourceFile];
-		while (!active.empty() && sourceIndentLevel <= active.back().sourceIndentLevel) {
+		auto &active = state.activeByFile[line->sourceFile];
+		while (!active.empty() && sourceIndentLevel <= active.back()) {
 			active.pop_back();
 		}
 		int baseLogicalIndent = line->logicalIndentOffset + static_cast<int>(active.size());
@@ -268,7 +262,7 @@ bool expandDefinitionShorthands(ParseContext &context) {
 		transformedLines.push_back(
 			createBodySectionLine(context, line, indent, bodySection, syntax.sectionOpener, openerEnd, baseLogicalIndent + 1)
 		);
-		active.push_back({sourceIndentLevel});
+		active.push_back(sourceIndentLevel);
 	}
 
 	context.codeLines = std::move(transformedLines);

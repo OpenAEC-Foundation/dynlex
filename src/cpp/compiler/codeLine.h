@@ -1,6 +1,7 @@
 #pragma once
 #include "groupingSnapshot.h"
 #include "patternElement.h"
+#include "sourceExpression.h"
 #include <string>
 #include <vector>
 
@@ -74,7 +75,7 @@ struct CodeLine {
 	std::vector<PatternElement> patternElements;
 
 	// the expression tree for this code line (built during analysis)
-	Expression *expression{};
+	SourceExpression expression;
 	// Operand regrouping chosen for this code line. Once a valid grouping is
 	// known, later inference passes reuse it instead of searching again.
 	bool hasCommittedGrouping = false;

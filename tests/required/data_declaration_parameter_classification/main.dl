@@ -1,0 +1,11 @@
+integer means: @intrinsic("type", "int")
+section [answer] {name}:
+    declares: name
+    result: integer
+    value:
+        42
+[selected] {value} means: @intrinsic("add", value, 1)
+[read] selected name means: selected name
+@intrinsic("store", name, 7)
+answer selected name:
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", read selected name))

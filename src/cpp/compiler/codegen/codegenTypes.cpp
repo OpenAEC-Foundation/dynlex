@@ -328,14 +328,6 @@ std::string getPatternName(Section *section) {
 	return name;
 }
 
-std::string getPatternFunctionName(ParseContext &context, Section *section) {
-	auto identity = context.codegenSectionIdentities.find(section);
-	requireCompilerInvariant(
-		identity != context.codegenSectionIdentities.end(), "generated function has no stable declaration identity"
-	);
-	return getPatternName(section) + "_definition_" + identity->second;
-}
-
 static void
 collectFinalizedVariableTypes(InstantiatedSectionBody *body, VariableReference *definition, std::optional<DataType> &type) {
 	if (!body)

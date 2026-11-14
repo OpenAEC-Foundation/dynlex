@@ -1,5 +1,5 @@
 #include "incrementalCacheEntry.h"
-#include "semanticIdentity.h"
+#include "stableIdentity.h"
 #include <stdexcept>
 
 std::optional<IncrementalCacheEntry> IncrementalCacheEntry::open(const std::filesystem::path &path) {

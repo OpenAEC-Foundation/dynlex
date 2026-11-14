@@ -1,7 +1,7 @@
 class NativeSymbolReferences {
 	std::unordered_set<const llvm::Value *> values;
 	std::unordered_set<const llvm::Metadata *> metadata;
-	std::set<std::string> names;
+	std::vector<const llvm::GlobalValue *> globals;
 
 	void visitMetadata(const llvm::Metadata *item) {
 		if (!item || !metadata.insert(item).second)
@@ -16,7 +16,7 @@ class NativeSymbolReferences {
 		if (!values.insert(value).second)
 			return;
 		if (const auto *global = llvm::dyn_cast<llvm::GlobalValue>(value)) {
-			names.insert(global->getName().str());
+			globals.push_back(global);
 			return;
 		}
 		if (const auto *user = llvm::dyn_cast<llvm::User>(value))
@@ -31,7 +31,7 @@ class NativeSymbolReferences {
 	}
 
   public:
-	std::set<std::string> collect(const llvm::GlobalValue &value) {
+	std::vector<const llvm::GlobalValue *> collectGlobals(const llvm::GlobalValue &value) {
 		for (const llvm::Use &operand : value.operands())
 			visit(operand.get());
 		if (const auto *object = llvm::dyn_cast<llvm::GlobalObject>(&value))
@@ -43,7 +43,13 @@ class NativeSymbolReferences {
 						visit(operand.get());
 					visitAttachments(instruction);
 				}
-		return std::move(names);
+		return std::move(globals);
+	}
+	std::set<std::string> collect(const llvm::GlobalValue &value) {
+		std::set<std::string> names;
+		for (const llvm::GlobalValue *global : collectGlobals(value))
+			names.insert(global->getName().str());
+		return names;
 	}
 };
 

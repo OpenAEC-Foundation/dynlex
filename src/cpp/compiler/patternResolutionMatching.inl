@@ -1,4 +1,6 @@
+#include "patternResolutionDataNames.inl"
 #include "patternResolutionVariableDeclarations.inl"
+#include "variableBindings.h"
 
 static void removeVariableReferencesFromMatch(
 	ParseContext &context, PatternReference *reference, PatternMatch &match, std::vector<Section *> &affectedSections,
@@ -102,7 +104,12 @@ static std::vector<Section *> unresolveReference(
 	return affectedSections;
 }
 
-static bool cleanupStaleImplicitPromotionsInSection(ParseContext &context, Section *section) {
+static bool cleanupStaleImplicitPromotionsInSection(
+	ParseContext &context, Section *section,
+	const std::function<bool(const std::string &)> &acceptName = [](const std::string &) {
+		return true;
+	}
+) {
 	bool changed = false;
 	std::vector<std::pair<std::string, VariableReference *>> ownedDefinitions;
 	ownedDefinitions.reserve(section->variableDefinitions.size());
@@ -110,6 +117,8 @@ static bool cleanupStaleImplicitPromotionsInSection(ParseContext &context, Secti
 		ownedDefinitions.emplace_back(name, definitionReference);
 
 	for (const auto &[name, definitionReference] : ownedDefinitions) {
+		if (!acceptName(name))
+			continue;
 		if (sectionSubtreeHasBoundReferenceToDefinition(section, name, definitionReference))
 			continue;
 
@@ -165,7 +174,7 @@ static bool definitionCouldMatchReference(const PatternDefinition &definition, c
 				return source.text == required.text;
 			});
 			if (!present && reference.expression) {
-				for (size_t index = 0; index < reference.expression->arguments.size(); index++) {
+				for (size_t index = 0; index < reference.expression.argumentCount(); index++) {
 					if (numericPatternArgumentSpelling(&reference, index) == required.text) {
 						present = true;
 						break;
@@ -210,13 +219,15 @@ static bool isArgumentExpressionReference(const PatternReference *reference) {
 		reference && reference->expression && reference->range().line,
 		"pattern reference argument classification requires a source expression"
 	);
-	return reference->range().line->expression != reference->expression ||
+	return (reference->expression.deferred()
+				? !reference->expression.isRoot()
+				: reference->range().line->expression.materialized() != reference->expression.get()) ||
 		   reference->range().section()->isValueExpressionContext();
 }
 
 #include "patternResolutionDeferredBodies.inl"
 
-#include "patternResolutionInactiveBodies.inl"
+#include "patternResolutionSkippedBodies.inl"
 
 // Resolve a list of pattern references against the tree. Returns true if all resolved.
 static bool resolveReferences(
@@ -243,6 +254,8 @@ static bool resolveReferences(
 			);
 			reference->patternElements = {PatternElement(PatternElement::Type::Variable, *explicitVariableName, 0)};
 			reference->resolve();
+			reference->variableResolutionOffsets =
+				std::pair{variableRange.start() - reference->range().start(), variableRange.end() - reference->range().start()};
 			reference->range().section()->addVariableReference(
 				context, context.createVariableReference(variableRange, *explicitVariableName)
 			);
@@ -362,6 +375,7 @@ static bool resolveReferences(
 			// An unmatched word can only be a variable when another expression consumes it as an argument.
 			reference->patternElements[0].type = PatternElement::Type::Variable;
 			reference->resolve();
+			reference->variableResolutionOffsets = std::pair{0, static_cast<int>(reference->range().subString.size())};
 			reference->range().section()->addVariableReference(
 				context, context.createVariableReference(reference->range(), reference->patternElements[0].text)
 			);
@@ -382,6 +396,8 @@ static bool resolveReferences(
 }
 
 #include "patternPrecedenceMatching.inl"
+#include "patternResolutionCachedBodies.inl"
+#include "patternResolutionClassificationInvalidation.inl"
 
 // step 3: loop over code, resolve patterns and build up a pattern tree until all patterns are resolved
 bool resolvePatterns(ParseContext &context) {
@@ -440,15 +456,15 @@ bool resolvePatterns(ParseContext &context) {
 		ref->patternElements = getPatternElements(ref->pattern.text);
 	for (PatternReference *ref : globalReferences)
 		ref->patternElements = getPatternElements(ref->pattern.text);
-	SkippedInactiveBodies skippedInactiveBodies;
-	skipInactiveBodyReferences(context, bodyReferences, skippedInactiveBodies);
-
 	DataDeclarationNameIndex declarationNames;
 	declarationNames.add(globalReferences);
 	declarationNames.add(bodyReferences);
 
 	// Compute initial VL counts before resolution
-	computeVariableLikeCounts(context, unResolvedSections);
+	computeVariableLikeCounts(context, unResolvedSections, true);
+	std::vector<PatternReference *> definitionReferences(bodyReferences.begin(), bodyReferences.end());
+	SkippedCachedBodies skippedCachedBodies;
+	skipCachedBodyReferences(context, bodyReferences, skippedCachedBodies);
 	std::list<PatternReference *> deferredBodyReferences;
 	for (auto reference = bodyReferences.begin(); reference != bodyReferences.end();) {
 		if (!bodyReferenceCanWaitForDefinitions(*reference)) {
@@ -671,8 +687,17 @@ bool resolvePatterns(ParseContext &context) {
 			}
 			declarationNames.add(globalReferences);
 			declarationNames.add(bodyReferences);
-			if (declarationNames.refresh(context)) {
-				failedBodyWorklist.invalidateExplicitVariableNames();
+			std::unordered_set<Section *> changedScopes;
+			if (declarationNames.refresh(context, changedScopes)) {
+				for (PatternReference *reference : referencesAffectedByDataNames(definitionReferences, changedScopes)) {
+					if (reference->match)
+						queueReferenceForRematch(reference);
+					else
+						for (Section *section = reference->range().section(); section; section = section->parent)
+							if (!section->patternDefinitions.empty())
+								appendUniqueSection(pendingPromotionCleanupSections, section);
+				}
+				failedBodyWorklist.wakeNewExplicitVariables();
 				appendRequeuedReferences();
 				continue;
 			}
@@ -718,10 +743,11 @@ bool resolvePatterns(ParseContext &context) {
 			}
 
 			if (unResolvedSections.empty() && bodyReferences.empty() && !failedBodyWorklist.hasWaiting()) {
-				std::vector<Section *> activated =
-					inactiveBodiesToReactivate(context, skippedInactiveBodies, definitionToReferences);
-				if (!activated.empty()) {
-					reactivateInactiveBodies(context, bodyReferences, skippedInactiveBodies, activated);
+				if (reactivateCachedClassifications(
+						context, skippedCachedBodies, bodyReferences, unResolvedSections, definitionToReferences,
+						queueReferenceForRematch
+					)) {
+					appendRequeuedReferences();
 					continue;
 				}
 				break;
@@ -828,8 +854,14 @@ bool resolvePatterns(ParseContext &context) {
 			emitUnresolvedPatternDiagnostics();
 			return false;
 		}
+		replayCachedBodies(context, deferredBodyReferences, skippedCachedBodies);
 		if (context.prepareDeferredMatcherReplay && context.patternPrecedenceRevision == 0)
 			context.prepareDeferredMatcherReplay(deferredBodyReferences);
+		{
+			auto bodyStart = ResolutionClock::now();
+			restoreDeferredBodyReferences(context, deferredBodyReferences, definitionToReferences);
+			context.resolutionBodyMilliseconds += resolutionMilliseconds(bodyStart);
+		}
 		for (int iteration = 0; iteration < context.options.maxResolutionIterations && !deferredBodyReferences.empty();
 			 iteration++) {
 			auto bodyStart = ResolutionClock::now();
@@ -938,60 +970,12 @@ bool resolvePatterns(ParseContext &context) {
 	}
 
 	emitExplicitDefinitionParameterAmbiguityWarnings(context);
-	retainSkippedInactiveBodyResults(context, skippedInactiveBodies);
 	// All patterns resolved — expand expressions and resolve variable references
+	context.sourceSyntaxResolutionComplete = true;
 	for (CodeLine *line : context.codeLines) {
-		if (line->expression)
+		if (line->expression.materialized())
 			expandExpression(line->expression, line->section);
 	}
-	std::vector<std::string> unresolvedNames;
-	unresolvedNames.reserve(context.unresolvedVariableReferences.size());
-	for (auto &[name, _] : context.unresolvedVariableReferences)
-		unresolvedNames.push_back(name);
-	std::sort(unresolvedNames.begin(), unresolvedNames.end());
-
-	for (const std::string &name : unresolvedNames) {
-		auto refsIt = context.unresolvedVariableReferences.find(name);
-		if (refsIt == context.unresolvedVariableReferences.end())
-			continue;
-		auto &references = refsIt->second;
-		bool isGlobal = context.declaredGlobalVariables.contains(name);
-
-		std::unordered_map<VariableReference *, Section *> referenceOwners;
-		std::unordered_map<Section *, VariableReference *> earliestImplicitSectionReferences;
-		for (VariableReference *ref : references) {
-			Section *sec = ref->range.section();
-			if (Section *explicitSection = visibleExplicitVariableSection(sec, name, ref)) {
-				referenceOwners[ref] = explicitSection;
-				continue;
-			}
-			auto [existing, inserted] = earliestImplicitSectionReferences.emplace(sec, ref);
-			if (!inserted && variableReferenceSourcePosition(ref) < variableReferenceSourcePosition(existing->second))
-				existing->second = ref;
-		}
-		std::unordered_map<Section *, Section *> implicitSectionOwners;
-		for (const auto &[sec, _] : earliestImplicitSectionReferences) {
-			implicitSectionOwners[sec] = highestImplicitVariableSection(sec, name, earliestImplicitSectionReferences);
-		}
-		std::unordered_map<Section *, std::vector<VariableReference *>> groups;
-		for (VariableReference *ref : references) {
-			auto explicitOwner = referenceOwners.find(ref);
-			Section *owner =
-				explicitOwner != referenceOwners.end() ? explicitOwner->second : implicitSectionOwners.at(ref->range.section());
-			groups[owner].push_back(ref);
-		}
-		std::vector<Section *> orderedGroupSections;
-		orderedGroupSections.reserve(groups.size());
-		for (auto &[highestSection, _] : groups)
-			orderedGroupSections.push_back(highestSection);
-		std::sort(orderedGroupSections.begin(), orderedGroupSections.end(), sectionComesBefore);
-
-		for (Section *highestSection : orderedGroupSections) {
-			auto groupIt = groups.find(highestSection);
-			if (groupIt == groups.end())
-				continue;
-			materializeVariableGroup(name, highestSection, groupIt->second, isGlobal);
-		}
-	}
+	materializeVariableGroups(context);
 	return true;
 }

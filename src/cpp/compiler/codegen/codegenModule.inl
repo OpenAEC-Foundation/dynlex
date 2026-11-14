@@ -1,3 +1,5 @@
+#include "codegenStaticReferences.inl"
+
 bool initializeTargetLayout(ParseContext &context) {
 	requireCompilerInvariant(
 		!context.llvmContext && !context.llvmModule && !context.targetMachine, "target layout was initialized twice"
@@ -29,6 +31,18 @@ bool initializeTargetLayout(ParseContext &context) {
 		return false;
 	}
 	context.llvmModule->setDataLayout(context.targetMachine->createDataLayout());
+	if (!context.options.noMain && !context.options.emitSPIRV && !context.options.emitWASM) {
+		auto *integerType = llvm::Type::getInt32Ty(*context.llvmContext);
+		auto *pointerType = llvm::PointerType::get(*context.llvmContext, 0);
+		context.commandLineArgumentCountGlobal = new llvm::GlobalVariable(
+			*context.llvmModule, integerType, false, llvm::GlobalValue::InternalLinkage, llvm::ConstantInt::get(integerType, 0),
+			"dynlex.command_line_argument_count"
+		);
+		context.commandLineArgumentValuesGlobal = new llvm::GlobalVariable(
+			*context.llvmModule, pointerType, false, llvm::GlobalValue::InternalLinkage,
+			llvm::Constant::getNullValue(pointerType), "dynlex.command_line_argument_values"
+		);
+	}
 	return true;
 }
 
@@ -98,24 +112,12 @@ void optimizeLLVMModule(ParseContext &context, llvm::Module &module, bool prepar
 	mpm.run(module, mam);
 }
 
-bool generateCode(
-	ParseContext &context, const std::function<bool(ParseContext &)> &nativeEmitter,
-	const std::function<void(ParseContext &)> &beforeOptimization, const std::function<bool(ParseContext &)> &optimizer
-) {
-#ifdef DYNLEX_WEB
-	(void)nativeEmitter;
-#endif
+bool generateCode(ParseContext &context, const std::function<bool(ParseContext &)> &nativeEmitter) {
 	requireCompilerInvariant(
 		context.llvmContext && context.llvmModule && !context.llvmBuilder,
 		"code generation requires one initialized target layout"
 	);
-	std::map<std::string, Section *> identities;
-	collectSections(context.mainSection, "root", identities);
-	for (const auto &[path, section] : identities) {
-		context.codegenSectionIdentities.emplace(section, stableIdentityDigest(path));
-		if (section->type == SectionType::Class)
-			context.codegenClassIdentities.emplace(static_cast<ClassSection *>(section)->classDefinition, path);
-	}
+	initializeSectionSymbolIdentities(context);
 	context.llvmBuilder = new llvm::IRBuilder<>(*context.llvmContext);
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
@@ -143,16 +145,6 @@ bool generateCode(
 	// No first pass — non-flex functions are generated on-demand via monomorphization.
 	const bool generatesMain = !context.options.noMain;
 	const bool supportsCommandLineArguments = generatesMain && !context.options.emitSPIRV && !context.options.emitWASM;
-	if (supportsCommandLineArguments) {
-		context.commandLineArgumentCountGlobal = new llvm::GlobalVariable(
-			*context.llvmModule, builder.getInt32Ty(), false, llvm::GlobalValue::InternalLinkage, builder.getInt32(0),
-			"dynlex.command_line_argument_count"
-		);
-		context.commandLineArgumentValuesGlobal = new llvm::GlobalVariable(
-			*context.llvmModule, builder.getPtrTy(), false, llvm::GlobalValue::InternalLinkage,
-			llvm::Constant::getNullValue(builder.getPtrTy()), "dynlex.command_line_argument_values"
-		);
-	}
 
 	// In SPIR-V mode, declare shader I/O globals before generating code.
 	llvm::GlobalVariable *shaderInputGlobal = nullptr;
@@ -228,11 +220,11 @@ bool generateCode(
 		context.currentDebugScope = mainSP;
 	}
 
-	if (mainFunc) {
+	if (mainFunc && !context.reuseRootExecution) {
 		llvm::BasicBlock *entry = llvm::BasicBlock::Create(*context.llvmContext, "entry", mainFunc);
 		builder.SetInsertPoint(entry);
 	}
-	if (supportsCommandLineArguments) {
+	if (supportsCommandLineArguments && !context.reuseRootExecution) {
 		auto argument = mainFunc->arg_begin();
 		llvm::Value *rawArgumentCount = &*argument++;
 		llvm::Value *rawArgumentValues = &*argument;
@@ -248,8 +240,8 @@ bool generateCode(
 		builder.CreateStore(userArgumentCount, context.commandLineArgumentCountGlobal);
 		builder.CreateStore(userArgumentValues, context.commandLineArgumentValuesGlobal);
 	}
-	if (mainFunc) {
-		context.mainLLVMFunction = mainFunc;
+	context.mainLLVMFunction = mainFunc;
+	if (mainFunc && !context.reuseRootExecution) {
 		context.mainCleanupBlock = llvm::BasicBlock::Create(*context.llvmContext, "main.cleanup", mainFunc);
 		if (!context.options.emitSPIRV)
 			context.mainReturnStorage = builder.CreateAlloca(builder.getInt32Ty(), nullptr, "main.return");
@@ -262,9 +254,7 @@ bool generateCode(
 		return false;
 	for (const auto &request : context.incrementalReplacementFunctions) {
 		Section *section = request.section;
-		InstantiationKey key;
-		key.argumentTypes = request.argumentTypes;
-		auto instantiation = section->instantiations.find(key);
+		auto instantiation = section->instantiations.find(request.key);
 		requireCompilerInvariant(
 			instantiation != section->instantiations.end(), "incremental replacement lost its inferred instantiation"
 		);
@@ -272,13 +262,15 @@ bool generateCode(
 		std::vector<llvm::Value *> arguments;
 		for (const std::string &name : request.parameterNames) {
 			bindings.emplace_back(name, nullptr);
-			arguments.push_back(llvm::UndefValue::get(builder.getPtrTy()));
 		}
+		arguments.assign(
+			collectRuntimeParameterIndices(instantiation->second, bindings).size(), llvm::UndefValue::get(builder.getPtrTy())
+		);
 		if (!generateSpecializedFunction(context, section, bindings, instantiation->second, arguments))
 			return false;
 	}
 
-	if (mainFunc) {
+	if (mainFunc && !context.reuseRootExecution) {
 		if (!builder.GetInsertBlock()->hasTerminator()) {
 			if (!context.options.emitSPIRV)
 				builder.CreateStore(builder.getInt32(0), context.mainReturnStorage);
@@ -309,6 +301,7 @@ bool generateCode(
 	}
 	if (context.importReusedFunctions && !context.importReusedFunctions(context))
 		return false;
+	stabilizeStaticReferenceIdentities(*context.llvmModule);
 
 	// Finalize debug info before verification
 	if (context.diBuilder)
@@ -328,16 +321,11 @@ bool generateCode(
 		return false;
 	}
 
-	if (beforeOptimization)
-		beforeOptimization(context);
-
-	// Optimization passes
-	if (optimizer) {
-		if (!optimizer(context))
-			return false;
-	} else if (context.options.optimizationLevel > 0) {
+	// The incremental native emitter owns optimization and object lowering.
+	if (nativeEmitter)
+		return nativeEmitter(context);
+	if (context.options.optimizationLevel > 0)
 		optimizeLLVMModule(context, *context.llvmModule);
-	}
 
 	if (context.options.emitSPIRV) {
 		if (!emitSPIRVModule(context))
@@ -367,7 +355,7 @@ bool generateCode(
 		if (!emitNativeObject(context))
 			return false;
 	} else {
-		if (!(nativeEmitter ? nativeEmitter(context) : emitNativeExecutable(context)))
+		if (!emitNativeExecutable(context))
 			return false;
 	}
 #endif

@@ -40,12 +40,11 @@ struct InferenceContext {
 		bool operator==(const SubjectState &other) const { return setter == other.setter && ambiguous == other.ambiguous; }
 	};
 
-	struct OperandGroupingWarning {
-		Range range;
-		std::string expressionText;
-		std::string chosenGrouping;
-		std::string alternativeGrouping;
-		std::vector<RelatedInfo> relatedInfo;
+	struct ExpressionFrame {
+		Expression *expression;
+		std::shared_ptr<const VariableStorageScope> owner;
+		int ownerBase;
+		bool operator==(const ExpressionFrame &) const = default;
 	};
 
 	struct TrialCodeLineGrouping {
@@ -109,6 +108,7 @@ struct InferenceContext {
 		std::unordered_set<Expression *> seenBorrowedExpressions;
 		std::unordered_set<Variable *> seenVariables;
 		std::vector<std::pair<ClassDefinition *, size_t>> classInstantiationSizes;
+		std::vector<std::pair<ClassDefinition *, std::string>> classRequestInsertions;
 		std::unordered_set<ClassDefinition *> seenClassDefinitions;
 		std::vector<Section *> touchedSections;
 		std::unordered_set<Section *> seenSections;
@@ -197,6 +197,8 @@ struct InferenceContext {
 				if (seenClassDefinitions.insert(entry.first).second)
 					classInstantiationSizes.push_back(std::move(entry));
 			}
+			for (auto &entry : nested.classRequestInsertions)
+				classRequestInsertions.push_back(std::move(entry));
 			for (Section *section : nested.touchedSections) {
 				if (seenSections.insert(section).second)
 					touchedSections.push_back(section);
@@ -223,8 +225,7 @@ struct InferenceContext {
 			if (fromSeenIt == seenSectionInstantiations.end())
 				return SectionInstantiationRetargetResult::MissingSourceRecord;
 			auto undoIt = std::find_if(
-				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(),
-				[&](const SectionInstantiationUndo &undo) {
+				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(), [&](const SectionInstantiationUndo &undo) {
 				return undo.section == section && undo.key == fromKey;
 			}
 			);
@@ -367,6 +368,16 @@ struct InferenceContext {
 	};
 
 	ParseContext &parseContext;
+	struct DependencyOwner {
+		const Section *section;
+		const DependencyOwner *parent;
+		std::shared_ptr<const VariableStorageScope> scope;
+	};
+	struct DependencyReads {
+		const DependencyOwner *owner = nullptr;
+		std::optional<size_t> constraintProbe;
+	};
+	DependencyReads dependencyReads;
 	Instantiation *currentInstantiation{};
 	const InferredArgumentScope *inferredArguments{};
 	bool inferringReferenceAssignmentTarget = false;
@@ -394,6 +405,7 @@ struct InferenceContext {
 	bool suppressDiagnostics = false;
 	bool suppressReinferPassDiagnostics = false;
 	std::string typeFailureDetail;
+	std::shared_ptr<const ConfiguredDiagnosticMessage> configuredTypeFailureDetail;
 	std::vector<RelatedInfo> typeFailureRelatedInfo;
 	DiagnosticExpressionSnapshot typeFailureSnapshot;
 	Diagnostic typeFailureDiagnostic;
@@ -408,8 +420,9 @@ struct InferenceContext {
 	const FixedGroupingScope *fixedGroupingRoots{};
 	std::unordered_set<Expression *> *resolvedGroupingRoots{};
 	bool detectGroupingAmbiguity = false;
-	std::vector<OperandGroupingWarning> *pendingOperandGroupingWarnings{};
-	std::vector<Expression *> expressionStack;
+	std::vector<Diagnostic> *pendingDiagnostics{};
+	std::vector<ExpressionFrame> expressionStack;
+	const InferenceContext *diagnosticCaller = nullptr;
 	std::unordered_map<Expression *, CompileTimeValue> trialExpressionValues;
 	const InferenceContext *inheritedTrialContext{};
 	std::unordered_map<CodeLine *, TrialCodeLineGrouping> trialCodeLineGroupings;
@@ -418,7 +431,34 @@ struct InferenceContext {
 	InferenceContext(ParseContext &pc) : parseContext(pc) {}
 	InferenceContext(ParseContext &pc, bool trial) : parseContext(pc), trial(trial) {}
 
+	template <typename Recorder> void recordDependencyRead(Recorder &&record) const {
+		if (dependencyReads.constraintProbe)
+			record(InferenceReadOwner{.scope = {}, .constraintProbe = dependencyReads.constraintProbe});
+		if (dependencyReads.owner) {
+			// Rejected trials may leave no call expression linking the caller
+			// to the callee whose inference it consumed.
+			for (const auto *owner = dependencyReads.owner; owner; owner = trial ? owner->parent : nullptr)
+				record(
+					InferenceReadOwner{
+						.section = owner->section,
+						.scope = owner->scope,
+						.constraintProbe = {},
+						.direct = owner == dependencyReads.owner
+					}
+				);
+		}
+		// Stage-level requests (for example exposed-function validation) are
+		// not reads by entry-point execution. Root execution installs its owner.
+	}
+	void recordBodyRead(const Section &dependency, const std::shared_ptr<const VariableStorageScope> &calleeScope = {}) const {
+		if (const auto &record = parseContext.recordInferenceDependency)
+			recordDependencyRead([&](const InferenceReadOwner &owner) {
+				record(owner, dependency, calleeScope);
+			});
+	}
+
 	void inheritSectionExecutionState(const InferenceContext &other) {
+		dependencyReads = other.dependencyReads;
 		typeRefinements = other.typeRefinements;
 		memoryFlexBase = other.memoryFlexBase;
 		currentInstantiatedSectionBody = other.currentInstantiatedSectionBody;
@@ -431,35 +471,137 @@ struct InferenceContext {
 		flexCallSiteSectionStack = other.flexCallSiteSectionStack;
 	}
 
-	void addDiagnostic(Diagnostic diagnostic) {
-		if (!trial && !suppressDiagnostics && !suppressReinferPassDiagnostics)
-			parseContext.addDiagnostic(std::move(diagnostic));
+	void inheritDiagnosticContext(const InferenceContext &other) {
+		pendingDiagnostics = other.pendingDiagnostics;
+		diagnosticCaller = &other;
+		detectGroupingAmbiguity = other.detectGroupingAmbiguity;
+		suppressDiagnostics = other.suppressDiagnostics;
+		suppressReinferPassDiagnostics = other.suppressReinferPassDiagnostics;
 	}
 
-	Expression *currentExpression() const { return expressionStack.empty() ? nullptr : expressionStack.back(); }
+	void addDiagnostic(Diagnostic diagnostic) {
+		if (!trial && !suppressDiagnostics && !suppressReinferPassDiagnostics) {
+			prepareDiagnostic(diagnostic);
+			parseContext.addDiagnostic(std::move(diagnostic));
+		}
+	}
 
-	void pushExpression(Expression *expression) { expressionStack.push_back(expression); }
+	std::shared_ptr<const VariableStorageScope> diagnosticOwner() const {
+		// Signature probes use a bodyless instantiation for purity tracking.
+		// Diagnostic ownership follows executable inference units instead.
+		for (const DependencyOwner *owner = dependencyReads.owner; owner; owner = owner->parent)
+			if ((owner->section->type == SectionType::Function && !owner->section->isFlex) ||
+				owner->section->type == SectionType::Retain || owner->section->type == SectionType::Release) {
+				requireCompilerInvariant(owner->scope != nullptr, "inference diagnostic unit has no logical scope");
+				return owner->scope;
+			}
+		return {};
+	}
+	int diagnosticTraceBase(const std::shared_ptr<const VariableStorageScope> &owner) const {
+		if (!owner)
+			return -1;
+		for (const InferenceContext *context = this; context; context = context->diagnosticCaller)
+			for (const ExpressionFrame &frame : context->expressionStack)
+				if (frame.owner == owner)
+					return frame.ownerBase;
+		return static_cast<int>(diagnosticTraceDepth());
+	}
+	void prepareDiagnostic(Diagnostic &diagnostic) const {
+		auto &emission = diagnostic.editEmission();
+		if (!emission.owner) {
+			emission.owner = diagnosticOwner();
+			if (emission.owner)
+				emission.traceBase = diagnosticTraceBase(emission.owner);
+		}
+		if (!emission.publication)
+			emission.publication = std::make_shared<DiagnosticPublication>();
+		// Caller products retain diagnostics independently of visible trace notes.
+		// Metadata stays on pending diagnostics until their trial is accepted.
+		for (const InferenceContext *context = this; context; context = context->diagnosticCaller) {
+			auto owner = context->diagnosticOwner();
+			if (owner && std::ranges::none_of(emission.retentionScopes, [&](const auto &entry) {
+				return entry.first == owner;
+			}))
+				emission.retentionScopes.emplace_back(owner, context->diagnosticTraceBase(owner));
+		}
+	}
+	void queueDiagnostic(Diagnostic diagnostic) {
+		prepareDiagnostic(diagnostic);
+		if (pendingDiagnostics)
+			pendingDiagnostics->push_back(std::move(diagnostic));
+		else
+			addDiagnostic(std::move(diagnostic));
+	}
+
+	Expression *currentExpression() const { return expressionStack.empty() ? nullptr : expressionStack.back().expression; }
+
+	void pushExpression(Expression *expression) {
+		auto owner = diagnosticOwner();
+		int base = diagnosticTraceBase(owner);
+		expressionStack.push_back({expression, std::move(owner), base});
+	}
 
 	void popExpression() {
 		requireCompilerInvariant(!expressionStack.empty(), "Expression stack underflow during type inference");
 		expressionStack.pop_back();
 	}
 
+	size_t diagnosticTraceDepth() const {
+		size_t depth = 0;
+		for (const InferenceContext *context = this; context; context = context->diagnosticCaller)
+			depth += context->expressionStack.size();
+		return depth;
+	}
+
 	std::vector<RelatedInfo> captureInferenceTraceRelatedInfo(Expression *currentExpressionOverride = nullptr) const {
 		std::vector<RelatedInfo> relatedInfo;
 		std::unordered_set<Expression *> seenExpressions;
+		size_t totalDepth = diagnosticTraceDepth();
 		if (currentExpressionOverride && expressionParticipatesInInferenceTrace(currentExpressionOverride) &&
 			currentExpressionOverride->range.line) {
-			relatedInfo.push_back({describeInferenceTraceFrame(currentExpressionOverride), currentExpressionOverride->range});
+			auto owner = diagnosticOwner();
+			int base = diagnosticTraceBase(owner);
+			int depth = static_cast<int>(totalDepth);
+			size_t offset = totalDepth;
+			for (const InferenceContext *context = this; context; context = context->diagnosticCaller) {
+				offset -= context->expressionStack.size();
+				auto position =
+					std::ranges::find(context->expressionStack, currentExpressionOverride, &ExpressionFrame::expression);
+				if (position != context->expressionStack.end()) {
+					owner = position->owner;
+					base = position->ownerBase;
+					depth = static_cast<int>(offset + (position - context->expressionStack.begin()));
+					break;
+				}
+			}
+			relatedInfo.push_back(
+				{describeInferenceTraceFrame(currentExpressionOverride),
+				 currentExpressionOverride->range,
+				 {},
+				 std::move(owner),
+				 depth,
+				 base}
+			);
 			seenExpressions.insert(currentExpressionOverride);
 		}
-		for (auto it = expressionStack.rbegin(); it != expressionStack.rend(); ++it) {
-			Expression *expression = *it;
-			if (!expressionParticipatesInInferenceTrace(expression) || !expression->range.line)
-				continue;
-			if (!seenExpressions.insert(expression).second)
-				continue;
-			relatedInfo.push_back({describeInferenceTraceFrame(expression), expression->range});
+		size_t offset = totalDepth;
+		for (const InferenceContext *context = this; context; context = context->diagnosticCaller) {
+			offset -= context->expressionStack.size();
+			for (auto it = context->expressionStack.rbegin(); it != context->expressionStack.rend(); ++it) {
+				Expression *expression = it->expression;
+				if (!expressionParticipatesInInferenceTrace(expression) || !expression->range.line)
+					continue;
+				if (!seenExpressions.insert(expression).second)
+					continue;
+				relatedInfo.push_back(
+					{describeInferenceTraceFrame(expression),
+					 expression->range,
+					 {},
+					 it->owner,
+					 static_cast<int>(offset + (context->expressionStack.rend() - it - 1)),
+					 it->ownerBase}
+				);
+			}
 		}
 		return relatedInfo;
 	}
@@ -490,13 +632,24 @@ struct InferenceContext {
 		addDiagnostic(std::move(diagnostic));
 	}
 
-	void setTypeFailure(std::string detail) {
+	void setTypeFailure(std::string detail, std::shared_ptr<const ConfiguredDiagnosticMessage> configured = {}) {
 		typesValid = false;
 		if (typeFailureDetail.empty()) {
 			typeFailureDetail = std::move(detail);
+			configuredTypeFailureDetail = std::move(configured);
 			typeFailureRelatedInfo = captureInferenceTraceRelatedInfo();
 			typeFailureSnapshot = captureDiagnosticExpressionSnapshot(currentExpression());
 		}
+	}
+	Diagnostic setConfiguredTypeFailure(
+		Range range, std::string_view key, std::string_view variant = "message",
+		std::vector<std::pair<std::string, std::string>> replacements = {}
+	) {
+		Diagnostic diagnostic;
+		diagnostic.range = range;
+		diagnostic.setConfiguredMessage(parseContext, range, key, variant, std::move(replacements));
+		setTypeFailure(diagnostic.message, diagnostic.configuredMessage);
+		return diagnostic;
 	}
 
 	void fail(Diagnostic diagnostic, int priority = 1, bool includeInferenceTrace = true) {
@@ -512,6 +665,7 @@ struct InferenceContext {
 
 	void clearTypeFailure() {
 		typeFailureDetail.clear();
+		configuredTypeFailureDetail.reset();
 		typeFailureRelatedInfo.clear();
 		typeFailureSnapshot = {};
 		typeFailureDiagnostic = Diagnostic();
@@ -528,6 +682,7 @@ struct InferenceContext {
 		if (!typeFailureDetail.empty() || other.typeFailureDetail.empty())
 			return;
 		typeFailureDetail = other.typeFailureDetail;
+		configuredTypeFailureDetail = other.configuredTypeFailureDetail;
 		typeFailureRelatedInfo = other.typeFailureRelatedInfo;
 		typeFailureSnapshot = other.typeFailureSnapshot;
 	}
@@ -652,6 +807,28 @@ struct InferenceContext {
 		setAddressProvenance(variableStorageKey(reference, currentInstantiatedSectionBody), std::move(provenance));
 	}
 
+	void noteAccessedGlobalReference(VariableReference *reference) {
+		VariableReference *key = normalizeReference(reference);
+		requireCompilerInvariant(key, "global access lost its declaration");
+		if (auto *products = parseContext.inferenceProducts)
+			recordDependencyRead([&](const InferenceReadOwner &owner) {
+				products->globalInput(owner, key);
+			});
+		noteGlobalEffectAccess(key);
+	}
+
+	void noteGlobalEffectAccess(VariableReference *reference) {
+		if (!currentInstantiation)
+			return;
+		if (trial) {
+			requireCompilerInvariant(trialJournal, "trial global-access mutation requires a rollback journal");
+			trialJournal->recordInstantiationWrite(currentInstantiation);
+		}
+		VariableReference *key = normalizeReference(reference);
+		requireCompilerInvariant(key, "global effect lost its declaration");
+		currentInstantiation->accessedGlobalReferences.insert(key);
+	}
+
 	void noteWrittenGlobalReference(VariableReference *reference) {
 		if (!currentInstantiation || !reference)
 			return;
@@ -661,6 +838,7 @@ struct InferenceContext {
 				requireCompilerInvariant(trialJournal, "trial global-write mutation requires a rollback journal");
 				trialJournal->recordInstantiationWrite(currentInstantiation);
 			}
+			currentInstantiation->accessedGlobalReferences.insert(key);
 			currentInstantiation->writtenGlobalReferences.insert(key);
 		}
 	}

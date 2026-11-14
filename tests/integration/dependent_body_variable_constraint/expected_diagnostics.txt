@@ -1,0 +1,2 @@
+tests/integration/dependent_body_variable_constraint/main.dl:9-15: Warning: Pattern argument 'values' is assigned before being read
+  note: Defined as argument here tests/integration/dependent_body_variable_constraint/main.dl:45-51

@@ -15,8 +15,9 @@
 #include "numberScopeRules.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
+#include "runtimeConstantCall.h"
 #include "sectionFlexBody.h"
-#include "semanticIdentity.h"
+#include "sectionIdentity.h"
 #include "spirv.h"
 #include "type.h"
 #include "variable.h"
@@ -41,6 +42,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "codegenFunctionIdentities.inl"
+
 static std::vector<size_t> collectRuntimeParameterIndices(
 	const Instantiation &instantiation, const std::vector<std::pair<std::string, Expression *>> &paramBindings
 ) {
@@ -56,8 +59,6 @@ static std::vector<size_t> collectRuntimeParameterIndices(
 	}
 	return runtimeIndices;
 }
-
-#include "symbolNames.inl"
 
 namespace {
 struct ScopedActiveFlexDefinition {
@@ -132,7 +133,6 @@ llvm::Function *generateSpecializedFunction(
 	requireCompilerInvariant(!activeInst.inferring, "in-progress function instantiation reached codegen");
 	requireCompilerInvariant(!activeInst.needsReinfer, "unfinished function instantiation reached codegen");
 	requireCompilerInvariant(activeInst.returnType.isDeduced(), "function without a deduced return type reached codegen");
-	requireCompilerInvariant(activeInst.body != nullptr, "function without an inferred body reached codegen");
 	std::vector<size_t> runtimeParameterIndices = collectRuntimeParameterIndices(activeInst, paramBindings);
 	std::vector<std::string> runtimeParameterNames;
 	runtimeParameterNames.reserve(runtimeParameterIndices.size());
@@ -149,9 +149,9 @@ llvm::Function *generateSpecializedFunction(
 	llvm::FunctionType *funcType = llvm::FunctionType::get(returnType, paramTypes, false);
 
 	// Name includes type signature for uniqueness
-	std::string funcName = getPatternFunctionName(context, section);
+	std::string funcName = getPatternName(section);
 	for (const DataType &t : argTypes) {
-		funcName += "_" + encodeLLVMTypeName(context, t);
+		funcName += "_" + encodeLLVMNameComponent(t.toString());
 	}
 	funcName += encodeInstantiationKeyForFunctionName(context, instantiationKey);
 	if (std::ranges::any_of(parameterAddressSpaces, [](unsigned addressSpace) {
@@ -162,15 +162,16 @@ llvm::Function *generateSpecializedFunction(
 			funcName += "_" + std::to_string(addressSpace);
 	}
 
+	appendInternalFunctionIdentity(context, section, argTypes, funcName);
 	llvm::Function *func = llvm::Function::Create(funcType, llvm::Function::InternalLinkage, funcName, context.llvmModule);
 	activeInst.llvmFunctionsByParameterAddressSpaces.emplace(std::move(parameterAddressSpaces), func);
 	if (context.recordGeneratedFunction)
-		context.recordGeneratedFunction(section, &instantiationKey, func, false);
+		context.recordGeneratedFunction(section, instantiationKey, func, false);
 	if (context.reuseGeneratedFunction && context.reuseGeneratedFunction(section, activeInst, func)) {
 		func->setLinkage(llvm::GlobalValue::ExternalLinkage);
 		return func;
 	}
-	requireCompilerInvariant(!activeInst.inferenceReusedFromCache, "cached inference summary lost its reusable LLVM function");
+	requireCompilerInvariant(activeInst.bodyInferred, "function codegen has no typed executable body");
 
 	size_t argIdx = 0;
 	for (auto &arg : func->args()) {
@@ -687,9 +688,7 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		// Pure calls with constant operands can materialize their inferred result.
 		Instantiation *inst = expr->selectedInstantiation;
 		requireCompilerInvariant(inst != nullptr, "non-flex call reached codegen without its selected instantiation");
-		CompileTimeValue knownResult = inst->purity == InstantiationPurity::Pure
-										   ? resolveStoredCompileTimeValue(expr, context.flexBindingFrames)
-										   : CompileTimeValue{};
+		CompileTimeValue knownResult = runtimeConstantCallValue(expr, context.flexBindingFrames);
 		if (inst->returnType.isMetaType()) {
 			if (isCompileTimeKnown(knownResult))
 				return nullptr;

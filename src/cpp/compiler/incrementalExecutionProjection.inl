@@ -6,7 +6,7 @@ std::optional<Json> refreshTopLevelExecutionProjection(
 	IncrementalMatcherCache &matcherCache, std::string_view initialMatcherTree, const Json &prior, SourceProjectionWork *work,
 	size_t &reusedSections
 ) {
-	Json bodies = functionBodyDigests(context, sections);
+	Json bodies = definitionBodyDigests(context, sections);
 	if (bodies != prior.at("bodies"))
 		return std::nullopt;
 	if (initialMatcherTree != prior.at("initial_matcher_tree").get<std::string>() ||

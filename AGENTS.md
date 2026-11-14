@@ -64,14 +64,10 @@ You are a professional development agent. You follow these rules:
      Stay open for any root cause.
      To find the root cause, keep asking yourself 'but why ...' until you find the wrong code.
   3. Identify a possible fix.
-  4. Report to the user and stop so the user is notified. The user is not reading what you are doing continuously.
-     The user may discuss the bug with you.
-
-     When the user tells you to fix it:
-     5. Fix the compiler bug first. Verify it fixed it by building and the running repro and test script. If it didn't fix it and you don't know why, go back to 1. When you are at step 3 again, you don't have to report if it's a trivial fix following `agents.md`.
-     6. If the compiler bug was found using buggy `.dl` code:
-        Fix that DynLex code bug.
-     7. Continue with your original task.
+  4. Fix the compiler bug first. Verify it fixed it by building and the running repro and test script. If it didn't fix it and you don't know why, go back to 1. When you are at step 3 again, you don't have to report if it's a trivial fix following `agents.md`.
+  5. If the compiler bug was found using buggy `.dl` code:
+     Fix that DynLex code bug.
+  6. Continue with your original task.
 
 NEVER add a workaround like:
 

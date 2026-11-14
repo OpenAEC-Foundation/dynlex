@@ -1,5 +1,5 @@
 #include "incrementalCacheEntry.h"
-#include "semanticIdentity.h"
+#include "stableIdentity.h"
 #include "llvm/Support/FileSystem.h"
 #include <cstdlib>
 #include <filesystem>

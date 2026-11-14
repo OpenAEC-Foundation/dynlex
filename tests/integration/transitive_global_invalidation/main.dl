@@ -6,12 +6,12 @@ import std.dl
 
 set delay to 0
 
-function arm the delay:
+function arm the [delay]:
 	globals: delay
 	execute:
 		set delay to 2
 
-function tick the delay:
+function tick the [delay]:
 	globals: delay
 	execute:
 		if delay > 0:
@@ -23,7 +23,7 @@ to arm the delay count [time|times]:
 		arm the delay
 		increment iteration
 
-function the delay:
+function the [delay]:
 	globals: delay
 	execute:
 		return delay

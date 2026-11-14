@@ -57,7 +57,8 @@ static void emitPendingInferenceFailure(InferenceContext &context) {
 	}
 	requireCompilerInvariant(!context.typeFailureDetail.empty(), "type inference failed without a diagnostic");
 	context.addDiagnostic(buildTypeFailureDiagnostic(
-		context.parseContext, context.typeFailureSnapshot, context.typeFailureDetail, context.typeFailureRelatedInfo
+		context.parseContext, context.typeFailureSnapshot, context.typeFailureDetail, context.typeFailureRelatedInfo,
+		context.configuredTypeFailureDetail
 	));
 }
 
@@ -83,7 +84,7 @@ static std::optional<Expression::SectionOutcome::Kind> inferExpressionSectionOut
 	std::optional<Expression::SectionOutcome::Kind> kind;
 	if (inferExpression(trialExpression, trialContext, alreadyOrdered, bindingFrameStack, false) && trialContext.typesValid)
 		kind = finalizedBranchOutcome(trialExpression);
-	rollbackTrialJournal(journal);
+	rollbackTrialJournal(trialContext, journal);
 	applyGroupingSnapshot(originalGrouping);
 	recomputeRanges(expression);
 	resetExpressionTypes(expression);
@@ -122,7 +123,7 @@ static bool inferNextLoopHeaderOutcomeInTrial(
 	std::optional<InferenceExecutionSnapshot> execution;
 	if (inferred && execute)
 		execution.emplace(trialContext);
-	rollbackTrialJournal(journal);
+	rollbackTrialJournal(trialContext, journal);
 	if (execution)
 		execution->restore(context);
 	return inferred;

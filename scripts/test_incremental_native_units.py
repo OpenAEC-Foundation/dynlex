@@ -4,6 +4,7 @@ import json
 import os
 import hashlib
 from test_incremental_program_cache import read_program
+from test_incremental_lifecycles import check_lifecycle_inference_reuse
 
 
 def check_interned_literal_identity(root, build):
@@ -32,6 +33,7 @@ def check_interned_literal_identity(root, build):
 
 
 def check_native_partition_edits(root, build):
+    check_lifecycle_inference_reuse(root, build)
     main = root / "partition_main.dl"
     main_source = ('integer means: @intrinsic("type", "int")\n' +
                    ''.join(f'import part{i:02d}.dl\n' for i in range(20)) +
@@ -48,6 +50,7 @@ def check_native_partition_edits(root, build):
     edited = build(entry=main)
     assert edited[0]["inference_instantiations_reused"] >= 19
     assert edited[0]["functions_ir_reused"] == 19
+    assert edited[0]["native_functions_lowered"] == 1, "unrelated functions shared the edited function's native unit"
     assert edited[0]["objects_built"] <= 3
     assert edited[0]["native_function_dependencies_reused"] >= 19
     assert edited[0]["native_partition_modules_skipped"] >= 1, "unchanged native units were cloned again"

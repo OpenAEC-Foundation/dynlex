@@ -1,6 +1,7 @@
 #include "parseContext.h"
 #include "compileTimeValue.h"
 #include "expression.h"
+#include "inferenceProductHooks.h"
 #include "matchProgress.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
@@ -13,6 +14,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Target/TargetMachine.h"
+#include <chrono>
 #include <iostream>
 #include <iterator>
 #include <unordered_set>
@@ -40,6 +42,38 @@ void deletePatternTree(PatternTreeNode *node, std::unordered_set<PatternTreeNode
 } // namespace
 
 ParseContext::ParseContext() = default;
+
+void ParseContext::retainInferenceDiagnostic(const Diagnostic &diagnostic) {
+	if (activeDiagnosticProduct && std::ranges::none_of(*activeDiagnosticProduct, [&](const Diagnostic &prior) {
+		return prior.sameEmission(diagnostic);
+	}))
+		activeDiagnosticProduct->push_back(diagnostic);
+	if (diagnostic.level == Diagnostic::Level::Error || !diagnostic.emission || !diagnostic.emission->publication)
+		return;
+	using Scope = std::shared_ptr<const VariableStorageScope>;
+	std::map<Scope, int, std::owner_less<Scope>> owners;
+	if (incrementalPreinferenceActive) {
+		requireCompilerInvariant(preinferenceDiagnosticRoot != nullptr, "speculative diagnostic lost its root query");
+		owners[preinferenceDiagnosticRoot] = 0;
+	}
+	if (diagnostic.emission->owner)
+		owners[diagnostic.emission->owner] = diagnostic.emission->traceBase;
+	for (const auto &[scope, base] : diagnostic.emission->retentionScopes)
+		owners.try_emplace(scope, base);
+	for (const RelatedInfo &note : diagnostic.relatedInfo)
+		if (note.inferenceOwner)
+			owners[note.inferenceOwner] = note.inferenceOwnerBase;
+	for (const auto &[owner, base] : owners) {
+		auto &records = deferredInferenceDiagnostics[owner];
+		if (std::ranges::none_of(records, [&](const Diagnostic &prior) {
+			return prior.sameEmission(diagnostic);
+		})) {
+			records.push_back(diagnostic.relativeToInference(base));
+			if (incrementalPreinferenceActive)
+				preinferredDiagnosticsDeferred++;
+		}
+	}
+}
 
 void ParseContext::printDiagnostics() {
 	for (Diagnostic d : diagnostics) {
@@ -343,6 +377,15 @@ ParseContext::cloneExpressionTree(Expression *expression, ExpressionStorage &sto
 	);
 }
 
+CodeLine *ParseContext::createBorrowedSourceLine(lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string_view text) {
+	auto line = std::make_unique<CodeLine>(text, sourceFile);
+	line->sourceFileLineIndex = sourceFileLineIndex;
+	line->sourceSlices.push_back({0, static_cast<int>(text.size()), sourceFile, sourceFileLineIndex, 0});
+	CodeLine *result = line.get();
+	ownedCodeLines.push_back(std::move(line));
+	return result;
+}
+
 CodeLine *ParseContext::createCodeLine(
 	lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string text, std::vector<SourceSlice> sourceSlices
 ) {
@@ -361,6 +404,12 @@ std::shared_ptr<InstantiatedSectionBody> ParseContext::cloneSectionBody(
 ) {
 	if (!section)
 		return {};
+	auto cloneStarted = std::chrono::steady_clock::now();
+	sourceBodyClones++;
+	if (!parentBody && !section->isFlex &&
+		(section->type == SectionType::Function || section->type == SectionType::Retain ||
+		 section->type == SectionType::Release))
+		sourceFunctionBodyClones++;
 	auto body = std::make_shared<InstantiatedSectionBody>();
 	body->sourceSection = section;
 	body->storageScope = storageScope ? std::move(storageScope) : std::make_shared<VariableStorageScope>();
@@ -372,10 +421,46 @@ std::shared_ptr<InstantiatedSectionBody> ParseContext::cloneSectionBody(
 			*body->expressions, line ? line->expression : nullptr, preserveInferenceMetadata, body.get()
 		));
 	}
+	sourceBodyExpressionsCloned += body->expressions->expressions.size();
+	sourceBodyCloneMilliseconds +=
+		std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - cloneStarted).count();
 	body->childBodies.reserve(section->children.size());
 	for (Section *child : section->children)
 		body->childBodies.push_back(cloneSectionBody(child, preserveInferenceMetadata, body.get(), body->storageScope));
 	return body;
+}
+
+std::shared_ptr<const VariableStorageScope>
+ParseContext::storageScopeForInstantiation(Section *section, const InstantiationKey &key) {
+	auto identity = inferenceProducts ? inferenceProducts->storageIdentity(section, key) : std::nullopt;
+	auto [entry, inserted] = instantiationStorageScopes.try_emplace({section, key});
+	if (identity) {
+		auto [logical, fresh] = logicalInstantiationScopes.try_emplace(*identity);
+		if (fresh)
+			logical->second = !inserted && !frozenStorageIdentities.contains(entry->second.get())
+								  ? entry->second
+								  : std::make_shared<VariableStorageScope>();
+		entry->second = logical->second;
+		frozenStorageIdentities[entry->second.get()] = *identity;
+	} else if (inserted || (inferenceProducts && frozenStorageIdentities.contains(entry->second.get())))
+		entry->second = std::make_shared<VariableStorageScope>();
+	return entry->second;
+}
+
+void ParseContext::refineInstantiationStorageScope(
+	Section *section, const InstantiationKey &before, const InstantiationKey &after
+) {
+	auto scope = instantiationStorageScopes.extract({section, before});
+	requireCompilerInvariant(!scope.empty(), "refined instantiation has no storage scope");
+	if (auto previous = frozenStorageIdentities.find(scope.mapped().get()); previous != frozenStorageIdentities.end()) {
+		logicalInstantiationScopes.erase(previous->second);
+		frozenStorageIdentities.erase(previous);
+	}
+	if (auto identity = inferenceProducts ? inferenceProducts->storageIdentity(section, after) : std::nullopt) {
+		logicalInstantiationScopes[*identity] = scope.mapped();
+		frozenStorageIdentities[scope.mapped().get()] = *identity;
+	}
+	instantiationStorageScopes.insert_or_assign({section, after}, std::move(scope.mapped()));
 }
 
 std::shared_ptr<const VariableStorageScope> ParseContext::storageScopeForInvocation(
@@ -394,8 +479,8 @@ std::shared_ptr<const VariableStorageScope> ParseContext::storageScopeForInvocat
 ParseContext::~ParseContext() {
 	std::unordered_set<Expression *> visitedFunctions;
 	for (auto &line : ownedCodeLines) {
-		if (line && line->expression)
-			deleteExpressionTree(line->expression, visitedFunctions);
+		if (line && line->expression.materialized())
+			deleteExpressionTree(line->expression.materialized(), visitedFunctions);
 	}
 	std::unordered_set<Section *> visitedSections;
 	std::unordered_set<PatternDefinition *> visitedDefinitions;
@@ -420,8 +505,7 @@ ParseContext::~ParseContext() {
 		for (PatternReference *reference : section->patternReferences) {
 			if (!reference || !visitedReferences.insert(reference).second)
 				continue;
-			if (reference->expression)
-				deleteExpressionTree(reference->expression, visitedFunctions);
+			deleteExpressionTree(reference->expression.materialized(), visitedFunctions);
 			delete reference;
 		}
 		for (auto &[_, variable] : section->variables) {

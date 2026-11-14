@@ -3,9 +3,11 @@
 #include "patternMatch.h"
 #include "range.h"
 #include "sectionType.h"
+#include "sourceExpressionSite.h"
 #include "transformedPattern.h"
 #include <memory>
 #include <optional>
+#include <utility>
 struct Section;
 // Parsed spellings stay fixed while the matcher revisits a reference.
 struct MatcherKeyLiterals {
@@ -23,20 +25,23 @@ struct PatternReference {
 	SectionType patternType;
 	std::vector<PatternElement> patternElements{};
 	PatternMatch *match{};
-	// Dependency key of the match currently attached to this reference.
+	// Exact source span selected when a lookup resolves directly to a variable.
+	std::optional<std::pair<int, int>> variableResolutionOffsets;
+	// Dependency key of the last lookup, including failed variable lookups.
 	std::string incrementalMatcherKey;
 	// Match key before precedence regrouping, for replay after definitions are indexed.
 	std::string initialMatcherKey;
 	std::string prevalidatedMatcherKey;
 	std::unique_ptr<MatcherKeyLiterals> matcherKeyLiterals;
 	// for extracting arguments
-	Expression *expression;
+	SourceExpressionSite expression;
 	// Lexical scope used for matching explicit variable names. Synthetic references,
 	// such as dependent type constraints, can use a source range owned by a parent section.
 	Section *matchingScope{};
 	bool resolved{};
 	Purpose purpose = Purpose::Expression;
 	PatternReference(Expression *expression, SectionType patternType);
+	PatternReference(SourceExpressionSite expression, SectionType patternType);
 	~PatternReference();
 	PatternReference(const PatternReference &) = delete;
 	PatternReference &operator=(const PatternReference &) = delete;

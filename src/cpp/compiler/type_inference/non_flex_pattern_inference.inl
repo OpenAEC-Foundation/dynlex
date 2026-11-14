@@ -17,9 +17,7 @@
 			if (argTypeResult.deferred && context.currentInstantiation)
 				return false;
 			if (context.trial) {
-				context.setTypeFailure(renderConfiguredMessage(
-					syntaxConfigForRange(context.parseContext, expr->range), "undeduced argument type in trial inference"
-				));
+				context.setConfiguredTypeFailure(expr->range, "undeduced argument type in trial inference");
 				DefinitionPatternElement *parameterElement = findParameterElement(def->patternElements, parameterName);
 				if (parameterElement && parameterElement->promotedFromVariableLike && argumentExpression &&
 					argumentExpression->kind == Expression::Kind::Variable && argumentExpression->variable &&
@@ -49,6 +47,10 @@
 	if (context.trial && context.trialJournal)
 		context.trialJournal->recordSectionInstantiationWrite(matchedSection, instantiationKey);
 	Instantiation &inst = matchedSection->instantiations[instantiationKey];
+	inst.invokedDefinition = def;
+	auto storageScope = context.parseContext.storageScopeForInstantiation(matchedSection, instantiationKey);
+	inst.storageScope = storageScope;
+	context.recordBodyRead(*matchedSection, storageScope);
 	expr->selectedInstantiation = &inst;
 	if (inst.argumentTypes.empty()) {
 		inst.argumentTypes = argTypes;
@@ -59,32 +61,46 @@
 	std::vector<std::pair<std::string, CompileTimeValue>> knownValues;
 	if (context.parseContext.reuseInferredInstantiation || inst.inferenceReusedFromCache) {
 		std::vector<std::pair<std::string, Expression *>> knownBindings;
-		knownCallArguments = collectKnownCallArgumentValues(
-			expr, def, [&](Expression *argumentExpression) {
-				return resolveStoredCompileTimeValue(argumentExpression, flexBindingFrameStack, &context);
-			}, knownBindings, knownValues
-		);
+		knownCallArguments = collectKnownCallArgumentValues(expr, def, [&](Expression *argumentExpression) {
+			return resolveStoredCompileTimeValue(argumentExpression, flexBindingFrameStack, &context);
+		}, knownBindings, knownValues);
 	}
 	if (!inst.returnType.isDeduced() && context.parseContext.reuseInferredInstantiation) {
-		if (!inst.body)
-			inst.body = context.cloneSectionBody(matchedSection);
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
-		context.parseContext.reuseInferredInstantiation(matchedSection, instantiationKey, inst, true);
+		context.parseContext.reuseInferredInstantiation(
+			matchedSection, instantiationKey, inst,
+			knownCallArguments ? ParseContext::InferenceReuseUse::ConstantCall : ParseContext::InferenceReuseUse::RuntimeCall,
+			&context
+		);
+	} else if (inst.inferenceReusedFromCache && !knownCallArguments && !inst.needsReinfer &&
+			   !inst.pureReturnValuesByArguments.empty() && context.parseContext.reuseInferredInstantiation) {
+		bool prepared = context.parseContext.reuseInferredInstantiation(
+			matchedSection, instantiationKey, inst, ParseContext::InferenceReuseUse::RuntimeCall, &context
+		);
+		requireCompilerInvariant(prepared, "cached pure observations changed before runtime use");
+	}
+	if (inst.failure) {
+		replayInferenceFailure(context, *inst.failure);
+		return true;
 	}
 	if (knownCallArguments && inst.inferenceReusedFromCache && inst.purity == InstantiationPurity::Pure &&
 		inst.returnType.kind != DataType::Kind::Void) {
 		auto argumentValues = compileTimeArgumentValueVector(knownValues);
 		if (inst.pureReturnValuesByArguments.contains(argumentValues))
 			context.parseContext.pureValueSummaryHits++;
-		else
+		else if (!inst.bodyInferred && (!context.parseContext.restoreInferredBody ||
+										!context.parseContext.restoreInferredBody(matchedSection, inst, &context)))
 			inst.needsReinfer = true;
 	}
 	std::optional<InstantiationKey> refinedInstantiationKey;
 	bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer;
+	if (!inst.inferring && hasReusableInstantiation)
+		publishDeferredInferenceDiagnostics(context, inst);
 	if (!inst.inferring && !hasReusableInstantiation) {
+		int failureBase = static_cast<int>(context.diagnosticTraceDepth());
 		ScopedSectionLocalVariableState calleeVariableState(matchedSection);
 		if (context.trial)
-			inst.body = context.cloneSectionBody(matchedSection);
+			inst.body = context.cloneSectionBody(matchedSection, nullptr, storageScope);
 		Instantiation *savedInst = context.currentInstantiation;
 		size_t callerMemoryFlexBase = context.memoryFlexBase;
 		auto callerKnownConstants = context.currentVariableValues;
@@ -95,6 +111,7 @@
 			context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr, [&]() -> bool {
 			seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 			beginParameterOutputReinference(inst);
+			inst.accessedGlobalReferences.clear();
 			inst.writtenGlobalReferences.clear();
 			inst.finalGlobalConstantValues.clear();
 			inst.finalGlobalAddressProvenance.clear();
@@ -130,7 +147,8 @@
 			bool savedReinferSuppression = context.suppressReinferPassDiagnostics;
 			context.suppressReinferPassDiagnostics = true;
 			if (!inst.body)
-				inst.body = context.cloneSectionBody(matchedSection);
+				inst.body = context.cloneSectionBody(matchedSection, nullptr, storageScope);
+			context.parseContext.functionBodyInferencePasses++;
 			bool passSucceeded =
 				inferSection(matchedSection, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
 			finishParameterOutputReinference(context, inst, passSucceeded);
@@ -163,12 +181,15 @@
 		);
 		if (inferenceSucceeded && !inst.needsReinfer)
 			inferenceSucceeded = validateLocalVariableTypes(matchedSection, *inst.body, context);
+		if (!inferenceSucceeded && !inst.needsReinfer)
+			inst.failure = captureInferenceFailure(context, failureBase);
 		context.currentVariableValues = std::move(callerKnownConstants);
 		context.currentAddressState = std::move(callerAddressState);
 		context.currentSubject = callerSubject;
 		context.currentInstantiation = savedInst;
 		context.memoryFlexBase = callerMemoryFlexBase;
 		inst.valid = inferenceSucceeded;
+		inst.bodyInferred = inst.valid && !inst.needsReinfer;
 		if (inferenceSucceeded && inst.needsReinfer)
 			propagateUnresolvedRecursiveDependencyToCaller(context, savedInst);
 		refinedInstantiationKey =
@@ -179,6 +200,7 @@
 		observeUnresolvedRecursiveDependency(context);
 	}
 	if (!inst.valid) {
+		noteInferenceProduct(inst, context);
 		context.typesValid = false;
 		return true;
 	}
@@ -199,7 +221,7 @@
 		if (binding != paramBindings.end())
 			refineStorageExpressionType(binding->second, outputType, context, flexBindingFrameStack);
 	}
-	mergeCalleeGlobalWritesIntoCaller(context, inst);
+	mergeCalleeGlobalEffectsIntoCaller(context, inst);
 	mergeInstantiationPurityIntoCaller(context, inst);
 	AddressProvenance callArgumentProvenance;
 	for (const auto &[parameterName, argumentExpression] : paramBindings) {
@@ -240,7 +262,9 @@
 		node.key() = *refinedInstantiationKey;
 		auto insertResult = matchedSection->instantiations.insert(std::move(node));
 		requireCompilerInvariant(insertResult.inserted, "Refined instantiation key collided with existing entry");
+		context.parseContext.refineInstantiationStorageScope(matchedSection, instantiationKey, *refinedInstantiationKey);
 	}
 	context.setExpressionValue(expr, context.lookupExpressionValue(expr));
+	noteInferenceProduct(inst, context);
 	return true;
 }
