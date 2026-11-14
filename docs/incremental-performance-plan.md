@@ -200,6 +200,7 @@ remaining measured costs, not by table order alone.
 | I020 | P14: resolved declaration input/output units | Complete: kept and published | Active edits audit one of 1,750 inputs. Unused CPU improves 10.1%; ordinary/cold controls and LLVM parity pass. Required: 329, root 103.048 s; integration: 464. Published `cf78161d`. |
 | I021 | P14: consume fingerprints without redundant full records | Complete: kept, merged and qualified | Independent 31-pair unused CPU gain 4.46% [3.07%, 5.33%]; active gain 1.58% in seven pairs; no established cold change. Required: 329, root 107.682 s; full integration: 464 in 789.208 s; three LLVM parity cases. Measured and root archives replay after worktree removal. |
 | I022 | P03/P06 screening, then P14 sorted matcher record directories | Complete: rejected | Eager tokenization and binding-proof hypotheses were screened out. Sorted directories pass focused replay/eviction/corruption checks, but independent 31 pairs give unused-edit CPU ratio 1.002023 [0.972789, 1.011769], failing the predeclared 2% gate. No experimental C++ or inspector change reaches master. |
+| I023 | Resolver completion transitions after cached-body reactivation | Qualification in progress | Baseline fresh success/cached failure and debugger states false/true/true verified. Two-file state-transition fix passes repeated activation/value/deactivation, cached-syntax and classification assertions, broader body/cascade checks, and 329 required checks uncached in 108.166 s. Integration/real-program IR/publication remain pending. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -1731,7 +1732,10 @@ The full incremental compiler goal remains active and incomplete.
 
 ## I022: matcher record directories after source-consumer screening
 
-Started 14 November 2026 at 19:30 UTC; first deadline 20:15 UTC.
+P03 screening began 14 November 2026 at 19:04 UTC. The implementation
+timebox was recorded at selection, 19:30 UTC, with a 20:15 UTC deadline.
+The full audit-to-decision interval ended at 19:53 UTC; count the 31-pair
+confirmation as its single extension rather than excluding the earlier audit.
 Baseline master `33ee096a`, compiler `7657790e...`. The preceding P03 audit
 found declaration-element products already cached. On the frozen LEXI8 unused
 edit, three debugger observations isolate eager reference tokenization at
@@ -1775,7 +1779,8 @@ Evidence: `i022-build.json`, `i022-baseline-red.log`, `i022-focused.log`,
 `i022-comparison-index.json`, three `i022-*-comparison.json` files,
 `i022-confirmation.json`, `i022-stage-confirmation.json`. Preserve the source
 branch and immutable compiler/data archive. The completed one-off profiling
-cache was pruned; source, debugger probes and reports remain. No extension used.
+cache was pruned; source, debugger probes and reports remain. The complete
+screening interval includes the intervening direct-question turn.
 
 Next bounded correctness goal: import and qualify the already reduced resolver
 retry fix from the UI agent's `b265ca5f`. Its six-line, library-free regression
@@ -1799,3 +1804,23 @@ changed input and deactivation must agree with clean builds. Run the focused
 body/classification regressions, uncached required suite and relevant integration
 coverage before publication. This does not change the rejected I022 format or
 complete source-owner deferral. Other UI inference/diagnostic fixes stay separate.
+
+
+I023 qualification progress: the published baseline fails the new cache-only
+activation case after its clean build succeeds. GDB through `scripts/debug.sh`
+records the definition-complete wakeup flag as false, true, true; later
+completion events return without waking blocked names. The committed fix tracks
+current eligibility and retracts it while reopened definitions are pending.
+Candidate source `d0ec97c4`, compiler `322cd31d...`, passes the new repeated
+activation/value/deactivation test, its cached-syntax/reactivation work assertions,
+whole-body reuse cases and implicit-parameter cascades. All 329 required checks
+pass uncached in 108.166 s (109.173 s observer), with source and executable
+unchanged during the gate. This is not full qualification or publication: full
+integration and real-program LLVM/diagnostic parity are still pending.
+
+Evidence: `i023-baseline-red.log`, `i023-repro/gdb-guard.log`,
+`i023-build.json`, `i023-focused.log`, `i023-regressions.log`,
+`i023-required.json` and `i023-required.log`. The heavy-job slot was released
+after the required gate for the UI agent's queued browser rebuild. Only I022's
+rejection documentation has reached master (`d5b5eb0c`); its experimental cache
+format and inspector remain on the archived, unmerged source branch.
