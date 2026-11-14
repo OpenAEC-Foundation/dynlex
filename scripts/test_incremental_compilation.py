@@ -41,6 +41,7 @@ from test_incremental_lifecycle_replacements import check_lifecycle_replacement_
 from test_incremental_root_execution import check_local_function_symbols, check_root_class_reuse, check_root_execution_reuse, check_static_function_dependency
 from test_incremental_body_units import check_body_resolution_units
 from test_incremental_section_analysis import check_section_analysis_work
+from test_incremental_import_edits import check_source_and_import_edits
 from test_incremental_native_codegen import check_optimized_native_codegen
 from test_incremental_classification import check_recursive_classification_cascade, check_incremental_classification
 from test_incremental_effect_cascade import check_bounded_effect_cascade
@@ -956,33 +957,7 @@ function left times right:
 
     check_configured_source_comments(root, main, build)
 
-    original_time = main.stat().st_mtime_ns
-    main.write_text("this is an undefined expression\n")
-    os.utime(main, ns=(original_time, original_time))
-    broken = build(success=False)
-    reference = build(False, success=False)
-    assert broken[1] == reference[1], "invalid source reused old diagnostics or code"
-    main.write_text(source)
-    assert build()[1:] == build(False)[1:]
-
-    nested = root / "nested"
-    nested.mkdir()
-    imported_main = nested / "main.dl"
-    imported_main.write_text("import helper.dl\n")
-    helper = root / "helper.dl"
-    helper.write_text(source)
-    first_import = build(entry=imported_main)
-    assert first_import[1:] == build(False, entry=imported_main)[1:]
-    assert build(entry=imported_main)[0]["frontend_reused"]
-    (nested / "helper.dl").write_text(source.replace('"alpha"))', '"delta"))'))
-    shadow = build(entry=imported_main)
-    assert not shadow[0]["frontend_reused"], "new higher-priority import was ignored"
-    assert shadow[1:] == build(False, entry=imported_main)[1:]
-    (nested / "helper.dl").unlink()
-    helper.write_text(source.replace('"alpha"))', '"omega"))'))
-    assert build(entry=imported_main)[1:] == build(False, entry=imported_main)[1:]
-    helper.unlink()
-    assert build(success=False, entry=imported_main)[1] == build(False, success=False, entry=imported_main)[1]
+    check_source_and_import_edits(root, main, source, build)
 
     main.write_text(source)
     build()
