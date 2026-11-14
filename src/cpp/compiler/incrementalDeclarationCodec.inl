@@ -2,25 +2,25 @@
 // the nested JSON arrays used by a declaration record.
 class DeclarationJsonWriter {
 	Json result;
-	std::vector<Json *> containers;
+	std::stack<Json *> containers;
 	std::string field;
 
 	Json &append(Json value) {
 		if (containers.empty())
 			return result = std::move(value);
-		if (containers.back()->is_array())
-			return containers.back()->emplace_back(std::move(value));
-		return (*containers.back())[std::exchange(field, {})] = std::move(value);
+		if (containers.top()->is_array())
+			return containers.top()->emplace_back(std::move(value));
+		return (*containers.top())[std::exchange(field, {})] = std::move(value);
 	}
 
   public:
-	void object(size_t) { containers.push_back(&append(Json::object())); }
+	void object(size_t) { containers.push(&append(Json::object())); }
 	void array(size_t size) {
 		Json &value = append(Json::array());
 		value.get_ref<Json::array_t &>().reserve(size);
-		containers.push_back(&value);
+		containers.push(&value);
 	}
-	void end() { containers.pop_back(); }
+	void end() { containers.pop(); }
 	void key(std::string_view name) { field = name; }
 	template <typename Value> void value(Value &&value) { append(Json(std::forward<Value>(value))); }
 	Json finish() { return std::move(result); }

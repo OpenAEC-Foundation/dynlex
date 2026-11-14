@@ -9,7 +9,7 @@ std::optional<Json> refreshTopLevelExecutionProjection(
 	Json bodies = definitionBodyDigests(context, sections);
 	if (bodies != prior.at("bodies"))
 		return std::nullopt;
-	if (declarationUnits.digest() != prior.at("declarations"))
+	if (declarationUnits.digest() != prior.at("declarations").get_ref<const std::string &>())
 		return std::nullopt;
 	if (initialMatcherTree != prior.at("initial_matcher_tree").get<std::string>() ||
 		matcherTreeSignature(context) != prior.at("final_matcher_tree").get<std::string>() ||

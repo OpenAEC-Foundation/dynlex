@@ -109,7 +109,7 @@ Json captureAllFunctionProjection(
 		context, observations, selectedSections, false, false, false, prior ? &prior->at("sources") : nullptr, projectionWork
 	);
 	std::string resolvedDeclarations = declarationUnits.digest();
-	bool reuseDeclarations = prior && resolvedDeclarations == prior->at("declarations") &&
+	bool reuseDeclarations = prior && resolvedDeclarations == prior->at("declarations").get_ref<const std::string &>() &&
 							 reusable.size() == prior->at("function_declarations").size();
 	if (reuseDeclarations) {
 		for (const auto &[path, section] : sections) {
