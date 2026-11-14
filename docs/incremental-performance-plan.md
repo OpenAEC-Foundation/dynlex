@@ -3,7 +3,7 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state after I023 qualification (publication pending)
+## Current state after I023
 
 I022 does not change the published compiler: its sorted matcher-directory
 experiment failed the independent 31-pair CPU gate and remains unmerged.
@@ -200,7 +200,7 @@ remaining measured costs, not by table order alone.
 | I020 | P14: resolved declaration input/output units | Complete: kept and published | Active edits audit one of 1,750 inputs. Unused CPU improves 10.1%; ordinary/cold controls and LLVM parity pass. Required: 329, root 103.048 s; integration: 464. Published `cf78161d`. |
 | I021 | P14: consume fingerprints without redundant full records | Complete: kept, merged and qualified | Independent 31-pair unused CPU gain 4.46% [3.07%, 5.33%]; active gain 1.58% in seven pairs; no established cold change. Required: 329, root 107.682 s; full integration: 464 in 789.208 s; three LLVM parity cases. Measured and root archives replay after worktree removal. |
 | I022 | P03/P06 screening, then P14 sorted matcher record directories | Complete: rejected | Eager tokenization and binding-proof hypotheses were screened out. Sorted directories pass focused replay/eviction/corruption checks, but independent 31 pairs give unused-edit CPU ratio 1.002023 [0.972789, 1.011769], failing the predeclared 2% gate. No experimental C++ or inspector change reaches master. |
-| I023 | Resolver completion transitions after cached-body reactivation | Qualified; publication in progress | Baseline fresh success/cached failure and debugger states false/true/true verified. Two-file state-transition fix passes repeated activation/value/deactivation, cached-syntax and classification assertions, broader body/cascade checks, and 329 required checks uncached in 108.166 s. Three real-program LLVM/diagnostic edit cases and all 464 integration checks pass; root publication remains pending. |
+| I023 | Resolver completion transitions after cached-body reactivation | Complete: qualified and merged | Baseline fresh success/cached failure and debugger states false/true/true verified. Two-file state-transition fix passes repeated activation/value/deactivation, cached-syntax and classification assertions, broader body/cascade checks, and 329 required checks uncached in 108.166 s. Three real-program LLVM/diagnostic edit cases and all 464 integration checks pass. Merged root a49ebcf0 passes all 329 required checks uncached in 108.502 s; final publication/archive cleanup follows. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -1846,3 +1846,15 @@ regression before resuming source-owner deferral. Evidence:
 `i024-global-initializer-screen/{report,dependency-screen,screen-summary}.json`.
 The first copied UI shorthand was unsupported by this baseline; the verified
 repro uses ordinary long-form function syntax and no imports.
+
+
+I023 root qualification: local master `a49ebcf0`, rebuilt compiler
+`d7ca3497...`, passes all 329 required checks uncached in 108.502 s suite /
+109.768 s observer. Its code/tests match qualified candidate `d0ec97c4`;
+source and executable remain unchanged during the root gate. The Root C++ build
+passes in 28.568 s with one job. A frozen copy of the published executable is
+added to the replay manifest. Publish the documentation/fix, remove the merged
+worktree/branch, then prove replay from the archived binary and data paths.
+Evidence: `i023-root-build.json`, `i023-root-required.json` and their logs.
+The global-initializer screen remains an unresolved next correctness task;
+this iteration does not complete source-unit deferral or the full goal.
