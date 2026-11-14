@@ -27,8 +27,8 @@ class InferenceSourceIndex {
 				roots.at(root).expression = expression;
 				indexExpression(expression, root, nullptr, {});
 			}
-			statistics.inferenceSourceExpressionsIndexed += nodes.size() - prior;
-			statistics.inferenceSourceIndexMilliseconds += elapsedMilliseconds(started);
+			this->statistics.inferenceSourceExpressionsIndexed += nodes.size() - prior;
+			this->statistics.inferenceSourceIndexMilliseconds += elapsedMilliseconds(started);
 		};
 		statistics.inferenceSourceIndexBuilds++;
 		statistics.inferenceSourceExpressionsIndexed += nodes.size();
