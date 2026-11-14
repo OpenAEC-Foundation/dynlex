@@ -709,7 +709,7 @@ bool resolvePatterns(ParseContext &context) {
 							if (!section->patternDefinitions.empty())
 								appendUniqueSection(pendingPromotionCleanupSections, section);
 				}
-				failedBodyWorklist.wakeNewExplicitVariables();
+				failedBodyWorklist.invalidateExplicitVariableNames();
 				appendRequeuedReferences();
 				continue;
 			}

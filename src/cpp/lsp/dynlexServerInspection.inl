@@ -323,11 +323,11 @@ resolveCursorData(ParseContext &context, const std::string &uri, int line, int c
 		if (localOffset < 0)
 			continue;
 
-		Expression *expr = findDeepestExpression(codeLine->expression, localOffset);
-		if (Expression *sourceVariable = findVariableArgumentAtOffset(codeLine->expression, localOffset))
+		Expression *root = codeLine->expression;
+		Expression *expr = findDeepestExpression(root, localOffset);
+		if (Expression *sourceVariable = findVariableArgumentAtOffset(root, localOffset))
 			expr = sourceVariable;
-		else if (Expression *sourceVariable =
-					 sourceVariableExpressionAt(codeLine->expression, codeLine->mapOffsetToSource(localOffset, true)))
+		else if (Expression *sourceVariable = sourceVariableExpressionAt(root, codeLine->mapOffsetToSource(localOffset, true)))
 			expr = sourceVariable;
 
 		CursorResolution resolved;

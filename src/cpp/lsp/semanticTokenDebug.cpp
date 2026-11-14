@@ -89,7 +89,8 @@ static Section *findOwningVariableSection(Section *fromSection, VariableReferenc
 static bool hasStoredConstantAtSource(const ParseContext &context, const ::Range &range, const std::string &name) {
 	if (!context.hasCompleted(ParseContext::CompilationStage::InferredTypes) || !range.line)
 		return false;
-	if (const Expression *expression = sourceVariableExpressionAt(range.line->expression, range.sourceStart()))
+	const Expression *root = range.line->expression;
+	if (const Expression *expression = sourceVariableExpressionAt(root, range.sourceStart()))
 		return sourceExpressionHasConstant(expression);
 	// A signature parameter is described by its instance, outside body expressions.
 	Section *owner = findOwningVariableSection(range.line->section, nullptr, name);

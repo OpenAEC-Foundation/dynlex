@@ -215,6 +215,7 @@ Json inactiveFunctionSections(const std::map<std::string, Section *> &sections) 
 }
 
 #include "incrementalResolvedDeclaration.inl"
+#include "incrementalSectionIdentity.inl"
 
 bool reusableCodegenSection(const Section &section) {
 	if (section.type == SectionType::Retain || section.type == SectionType::Release)
