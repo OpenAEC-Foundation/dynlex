@@ -51,6 +51,14 @@ and expands it against the current completed resolution. Inference indexes that
 published tree before it can be cloned or regrouped, preserving canonical source
 identities. Partial parser snapshots retain unvisited products after an error;
 complete snapshots prune removed products.
+Generated property bodies use the same demand/publication interface. Their
+receiver bindings exist before matching, while executable expression nodes wait
+for a semantic consumer. Publication indexes a demanded tree before a consumer
+can clone it. Body products expose their owning declaration, so work counters
+use producer provenance rather than pattern spelling.
+`generated_body_units_materialized` counts generated owners whose executable
+syntax was demanded; `generated_body_units_deferred` counts owners whose syntax
+remained unmaterialized. These counters describe actual work in this process.
 Parser/source products have a per-program index published independently of semantic
 program and error manifests. Every attempted frontend publishes its actual products;
 import and preprocessing failures retain completed and unvisited prior units without
