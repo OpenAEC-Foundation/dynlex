@@ -154,10 +154,9 @@ bool ExpressionInferenceSupport::inferVariable() {
 		}
 		if (var->isGlobal)
 			context.noteAccessedGlobalReference(var->definition);
-		if (var->isGlobal && var->dataInitializer && !expressionIsLValueOnlyUse(context, expr) &&
-			isCompileTimeKnown(context.lookupKnownConstant(variableStorageKey(expr)))) {
-			// A folded declaration value also consumes its initializing execution,
-			// including provider calls and compile-time control flow in that query.
+		if (var->isGlobal && var->dataInitializer && !expressionIsLValueOnlyUse(context, expr)) {
+			// The declaration's value may become known only during pure execution.
+			// Retain its producer before that execution can publish folded results.
 			// An engaged null scope identifies entry execution; no scope is a source read.
 			context.recordBodyRead(*context.parseContext.mainSection, std::shared_ptr<const VariableStorageScope>{});
 		}

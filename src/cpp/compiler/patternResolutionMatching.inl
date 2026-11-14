@@ -714,8 +714,7 @@ bool resolvePatterns(ParseContext &context) {
 				continue;
 			}
 
-			if (unResolvedSections.empty())
-				failedBodyWorklist.wakeUnmatchedVariables();
+			failedBodyWorklist.setUnmatchedVariablesAllowed(unResolvedSections.empty());
 			if (failedBodyWorklist.drain(bodyReferences))
 				madeProgress = true;
 			appendRequeuedReferences();

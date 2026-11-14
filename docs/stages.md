@@ -204,6 +204,11 @@ with their concrete inference units without acquiring caller traces on cache rep
 Caller retention scopes are explicit diagnostic metadata, so reusing an enclosing
 unit also replays nested warnings which have no visible call-trace notes.
 The analysis follows evaluation order and joins the typed control-flow alternatives.
+Parameter first-access queries span every executable body section of the function.
+A conditional or loop write leaves skipped paths available to a later read;
+the first lexical reference alone cannot determine whether the incoming value is unused.
+A first-expression read already proves that the input is used. Remaining path
+analysis ends once every executable path has its first access.
 Only parameters bound by the concrete call have incoming values; omitted choice
 parameters are locals. Releasing an initialized managed parameter before replacement
 consumes its incoming value.
@@ -712,6 +717,10 @@ Windows default stack.
 The grouping candidate generator also has a non-inlined entry point. This keeps
 coroutine allocation elision from placing its suspended enumeration state in
 the recursive inference stack.
+Execution snapshots retain immutable instantiation-effect records through shared
+ownership. Recursive argument and grouping frames do not reserve an inline copy
+of that aggregate when no function instantiation is active. Snapshot copies share
+the immutable record; restoring a snapshot still copies its effects into the owner.
 
 Unary arithmetic intrinsics require numeric scalar or vector values. Classes, pointers, arrays, matrices, booleans, and type values are rejected during inference, before code generation. Floating-point vector negation uses the element type to select floating-point instructions.
 
@@ -1532,6 +1541,9 @@ provisional headers cannot leave stale data declarations in a lexical scope.
 `classification_units_invalidated` counts units evaluated, and
 `classification_units_reactivated` counts cached units restarted by changed exports.
 `classification_cascades_stopped` counts retained units from the potential cascade.
+Failed local-variable lookups track whether definition resolution currently permits
+unmatched names. Each transition back to completed definitions wakes those lookups,
+including after cached classification reopens the definition phase.
 The topology, reference-literal sets, potential signatures, and promoted parameters
 are separate content-addressed CBOR records in the matcher store. Unchanged query
 and dependency units retain their records. Promotion locations use reference
@@ -1979,10 +1991,12 @@ different input contexts are not merged. A repeated
 known-argument call can use that value without reinferring the body; a new
 argument evaluates the retained typed body normally. Nested callee
 body reads remain dependencies of the observed value.
-Reading a known named global declaration also records its initializing entry
+Reading a named global declaration also records its initializing entry
 execution as a concrete query dependency. Its provider calls, declaration
 arguments and compile-time control flow therefore remain inputs of a folded
 reader even when the reader's source and the global's structural type are unchanged.
+The read is recorded during inference even if its value becomes known only in
+later pure execution.
 Source-only dependencies and execution dependencies are distinct: an absent
 execution scope denotes a source read, while an explicitly selected null scope
 identifies entry execution.

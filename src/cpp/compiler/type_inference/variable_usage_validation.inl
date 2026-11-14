@@ -43,6 +43,17 @@ static void validateVariableUsage(
 			continue;
 		std::unordered_set<Expression *> active;
 		VariableUsage usage = analyzeVariableUsage(expression, definition, parameter, bindings, active);
+		if (parameter && !(usage.first & VariableUsage::Read)) {
+			// A conditional first write does not discard the incoming value on
+			// paths that skip it and reach a later read in this function.
+			usage = {};
+			section->forEachDefinitionBodySection([&](Section *execution) {
+				auto *executionBody = execution == section ? body : body->bodyForChild(execution);
+				requireCompilerInvariant(executionBody, "parameter usage lost its executable body");
+				usage.then(analyzeVariableUsageBody(*executionBody, definition, true, bindings, active));
+				return true;
+			});
+		}
 		if (!(parameter ? ((usage.first & VariableUsage::Write) && !(usage.first & VariableUsage::Read))
 						: (usage.first & VariableUsage::Read)))
 			continue;

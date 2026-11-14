@@ -12,16 +12,16 @@ def verify_edits(compiler, prefix, edits, options=()):
         source = folder / 'main.dl'
         output = folder / 'main.out'
         cache = folder / 'cache'
-        for text, expected in edits:
+        for index, (text, expected) in enumerate(edits):
             source.write_text(text)
             for arguments in [['--cache-dir', str(cache)], ['--no-incremental']]:
                 compiled = subprocess.run([str(compiler), str(source), *arguments, *options, '-o', str(output)],
-                                          check=True, text=True, capture_output=True, timeout=15)
-                if compiled.stderr:
-                    raise AssertionError(compiled.stderr)
-                result = subprocess.run([str(output)], check=True, text=True, capture_output=True, timeout=5)
-                if result.stdout != expected or result.stderr:
-                    raise AssertionError((expected, result.stdout, result.stderr))
+                                          text=True, capture_output=True, timeout=15)
+                if compiled.returncode or compiled.stderr:
+                    raise AssertionError((index, arguments, compiled.returncode, compiled.stdout, compiled.stderr))
+                result = subprocess.run([str(output)], text=True, capture_output=True, timeout=5)
+                if result.returncode or result.stdout != expected or result.stderr:
+                    raise AssertionError((index, arguments, expected, result.returncode, result.stdout, result.stderr))
 
 
 def main():
@@ -29,13 +29,15 @@ def main():
     root = Path(__file__).resolve().parents[1]
     original = (root / 'tests/required/data_declaration_function_globals/main.dl').read_text()
     changed = original.replace('42', '43')
+    changed_again = original.replace('42', '44')
     renamed = changed.replace('sample entry', 'another answer')
     verify_edits(compiler, 'dynlex-declaration-cache-',
-                 [(text, '') for text in [original, changed, renamed, renamed, original]])
+                 [(text, '') for text in [original, changed, changed_again, renamed, renamed, original]])
     # A static value consumes both the declaration's arguments and the calls
     # that produced them, even when the reader's source and global type stay put.
     source = '''integer means: @intrinsic("type", "int", 32)
-to get initial: @intrinsic("return", 42)
+to get initial:
+    @intrinsic("return", 42)
 section answer {name} from {integer:initial value}:
     declares: name
     result: integer

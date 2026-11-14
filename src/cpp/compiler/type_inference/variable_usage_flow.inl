@@ -48,6 +48,8 @@ static VariableUsage analyzeVariableUsageBody(
 	}
 	VariableUsage result;
 	for (size_t index = 0; index < lines.size(); index++) {
+		if (!(result.first & VariableUsage::None))
+			break; // Every executable path already has its first access.
 		Expression *line = expression(index);
 		if (line && !line->type.isDeduced())
 			continue; // Inference did not execute this unreachable source line.
