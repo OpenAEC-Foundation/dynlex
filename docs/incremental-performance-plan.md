@@ -2,6 +2,18 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+
+## Current state after I021
+
+Native builds reuse source preparation, eligible body syntax/resolution, resolved
+signature fingerprints, typed products and native artifacts in the verified edit
+cases. I021 removes an unconsumed full declaration table; it does not complete the
+compiler-wide goal. Semantic section construction and broad matching/binding,
+validation and persistence work still need finer reuse. Debug/trace builds disable
+major reuse paths; LSP and other output modes still need the shared frontend.
+Next: P03, immutable parser-boundary products, with explicit factory input/effect
+audits and a minimal work-count regression before implementation.
+
 ## Objective and constraints
 
 For edits to any `.dl` source or configuration, propagate changed inputs through
@@ -178,6 +190,12 @@ remaining measured costs, not by table order alone.
 | I014 | P03/P06: demand-driven generated body products | Complete: keep, merged and verified | Started 06:27 UTC on 14 November; first deadline 07:12 UTC, extended deadline 07:57 UTC; one extension used. Baseline `40b94d06` / compiler `4bff53b6...`, final production code `e9a82d20` / compiler `7b01bbee...`. Unused edits index 551 expressions instead of 4,267, deferring all 929 generated property bodies; active edits index 937 instead of 4,601. The independent 31-pair unused CPU ratio is 0.97355 [0.95838, 0.99494], clearing the predeclared 1% gate. All 292 final comparison rows pass their artifact/diagnostic checks; common and cold controls establish no regression. All 329 required checks pass uncached in 119.241 s. The integration run passes 463 checks and exposes three unmigrated C++ ownership-test doubles; after implementing their new ownership interface, the remaining check rebuilds and passes with the production compiler unchanged. Preserve the original failed full run. Root compiler `092562a6...` passes 329 required uncached in 117.219 s; merged worktree removal and actual archived replay pass. Verification overruns the 07:57 deadline; no additional optimization is added. Full semantic section/reference reuse and clean-IR parity remain incomplete. |
 | I015 | P03/P06: resolved match products with independently reusable effects | Parked; not accepted | 08:08–09:24 UTC on 14 November; one extension used, closed before its 09:38 deadline. Source `54692e8e`, refined compiler `8cb03cbc...`. Match construction falls sharply, but the independent first-candidate 31-pair CPU gain is only 1%, and the refined screen does not demonstrate the original 2% gate. All focused/parity checks pass; 329 required checks pass uncached in 106.732 s. Integration was not rerun for the rejected candidate. Preserve the unmerged branch and three compiler snapshots; owned worktree removed. Published compiler code remains `9cbdc95a`; full goal incomplete. |
 | I016 | P06: independent lookup edges and local definition origins | Correctness fix kept; optimization parked | Started 10:03 UTC on 14 November; one extension used. Lookup-edge candidate `07c4d241` fails its 0.5% gain gate after 31 pairs and remains unmerged. Isolated source-origin fix `df66b881` / compiler `215313d6...` corrects stale implicit parameters after moving a local definition across imported files. Required: 329 uncached in 107.937 s. Integration: 464 in 844.401 s. All 188 matrix and 66 independent control rows pass parity; the control does not reproduce the initial body slowdown. Root merge `60aa8d4f` / compiler `86635023...` passes 329 required uncached in 107.293 s. Owned worktree removed; actual six-row archived replay passes and cleans its data directory. Full goal incomplete. |
+
+| I017 | P03/P06: demand-driven whole-body resolution products | Complete: kept and published | Unused CPU improves 6.35%, active body 5.86%; three full LLVM parity cases pass. Required: 329, root 101.113 s; integration: 464. Unchanged matching/binding products stay encoded until demanded. |
+| I018 | P03: section-stage measurement and header-cache hypothesis | Complete: instrumentation kept; optimization rejected | Header-cache target measured below 1% of the workload, so no gain is claimed. Retained scoped section counters and failed-stage timing. Required: 329, root 103.850 s; integration: 464. |
+| I019 | P06: ordered source-input joins | Complete: rejected | Independent 31 pairs do not establish the 2% gate. Prototype remains unmerged; evidence and source retained. Published decision: `5a213ad7`. |
+| I020 | P14: resolved declaration input/output units | Complete: kept and published | Active edits audit one of 1,750 inputs. Unused CPU improves 10.1%; ordinary/cold controls and LLVM parity pass. Required: 329, root 103.048 s; integration: 464. Published `cf78161d`. |
+| I021 | P14: consume fingerprints without redundant full records | Complete: kept, merged and qualified | Independent 31-pair unused CPU gain 4.46% [3.07%, 5.33%]; active gain 1.58% in seven pairs; no established cold change. Required: 329, root 107.682 s; full integration: 464 in 789.208 s; three LLVM parity cases. Measured and root archives replay after worktree removal. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -1688,3 +1706,20 @@ and PatternDefinition construction itself does not parse its element syntax.
 Final candidate evidence: `i021-integration-retry.json`,
 `i021-integration-retry.log`, `i021-confirmation.json`,
 `i021-required.json`, `i021-ir-parity-final/report.json`.
+
+I021 publication proof: merged root `2091bb9f`, compiler
+`7657790ea96f5ce13c90ec96f0b8fbb9822ccca0c33c8259deba3bef1a494c90`,
+passes all 329 required checks uncached in 107.682 s suite / 108.646 s
+observer, with compiler and test sources unchanged. The first root test-observer
+invocation omitted its suite argument and stopped before launching tests; its
+corrected invocation passes. Root rebuild and qualification make no source change.
+
+The accepted worktree and branch are removed after a live-process audit. An actual
+six-row comparison runs the frozen measured development binary against the frozen
+root binary after removal: all executable/diagnostic comparisons pass, both binary
+hashes remain unchanged, and the temporary compiler-data directory is removed.
+This verifies archival replay and root parity, not a new performance estimate.
+Evidence: `i021-root-build.json`, `i021-root-required.json`,
+`i021-archived-replay.json`. Candidate acceptance closed within the single
+extension; root publication closure continued afterward without another optimization.
+The full incremental compiler goal remains active and incomplete.
