@@ -1909,3 +1909,14 @@ LLVM parity, recording any measured cost rather than calling a correctness
 repair a performance gain. Then qualify/publish root and remove the worktree.
 Preflight evidence is in `i024-global-initializer-screen/`; no optimization is
 claimed from its single observations.
+
+
+I024's one extension is reserved through 21:52 UTC. Concrete progress: the
+minimal required O0 test fails on published root with cached 42 versus clean 43;
+source/graph inspection identifies the missing producer execution, and commit
+`e5a24ee4` migrates every dependency callback and pure forwarding site. Ordinary
+instantiations allocate storage identities; entry execution alone uses an
+engaged null identity. The candidate is not yet built or accepted. The UI
+browser compiler's live CMake/Ninja job (453043/453044) and wasm-opt child
+454233 occupy the shared heavy slot. Queue the native build without overlapping
+it; use the extension only to finish this correctness goal and its qualification.
