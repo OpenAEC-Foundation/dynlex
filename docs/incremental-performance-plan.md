@@ -171,7 +171,7 @@ remaining measured costs, not by table order alone.
 
 | I010 | P00/P14/P22: reduce structured-payload codec costs | Complete: keep, merged and verified | 01:03–02:25 UTC on 14 November, one extension used, before the 02:33 deadline. Candidate source `3dcc89a5` / compiler `c3c0252a...` clears the 25% codec gate (ratio 0.3415) and the 2% ordinary-edit gate: unused CPU ratio 0.9322 [0.9183, 0.9487], active body 0.9610 [0.9253, 0.9672]. Eight-case executable/diagnostic parity passes. Candidate: 329 required checks uncached in 111.020 s and 464 integration checks in 822.425 s. Merged source/docs `73eca64c`; root compiler `cfbeec1f...` passes 329 required checks uncached in 101.873 s. Eleven cold pairs establish no change. The merged worktree is removed; an actual archived-compiler benchmark replay passes after removal and cleans its temporary data root. This reduces persistence costs, not source/section reuse coverage. |
 | I011 | P02/P03: source chunks with a compact section-line consumer | Complete: keep, merged and verified | 02:31–03:36 UTC on 14 November; one extension used, before the 04:01 deadline. Source `c4907513`, compiler `111070f3...`: seven paired unused-body edits have CPU ratio 0.97037 [0.96212, 0.98083], active-body 0.96685 [0.95092, 0.99687]. All eight-case 180-row executable/diagnostic comparisons pass; eleven cold pairs establish no change. The unused edit reuses 44 files, 79 chunks and 7,087 section-line products; CodeLine layout is unchanged. All 329 required checks pass uncached in 103.073 s and all 464 integration checks in 899.856 s, with unchanged source/compiler hashes. Merged source/docs `9bccf692`, rebuilt root compiler `a0d50521...`, passes all 329 required checks uncached in 100.451 s. The merged worktree is removed, archived replay passes after removal, and its temporary data root is cleaned. Semantic section reconstruction and early-failure source publication remain incomplete. |
-| I012 | P13: publish completed parser/source products before import-stage success | Accepted; merged-root verification pending | Started 03:41 UTC on 14 November; first deadline 04:26 UTC, extended deadline 05:11 UTC; one extension used after checkpoint/wording/pruning and cache-budget tests passed. Baseline source `033646a5`, compiler `a0d50521...`. Give parser/source products an independent per-program index and publish partial snapshots after every attempted frontend, including NotStarted import/preprocessing failures. Remove parser-key ownership from semantic program/error manifests and migrate every reader/test. Mark a physical file product complete at its last lexed line before resolving that line's import. Keep error-demand order and incomplete stages explicit. Tests must show healthy files survive a fresh failure, repeated failure, repair, and an intervening earlier error; removed products must still be pruned after complete success. This is a required incremental boundary, not a 2% optimization claim: require actual reuse/work reduction, clean parity, no established common/cold regression, the uncached required gate <=120 seconds, and relevant integration. |
+| I012 | P13: publish completed parser/source products before import-stage success | Complete: keep, merged and verified | 03:41–04:56 UTC on 14 November; one extension used, before the 05:11 deadline. Source `91787c29`, compiler `7836413f...`, retains completed products after early import/preprocessing failures. The repeated-failure real application reuses all 45 files instead of processing them; fifteen paired samples have CPU ratio 0.74177 [0.71805, 0.88529]. The complete eight-case 196-row parity matrix and independent 31-pair active-body control establish no ordinary/cold change. Candidate: 329 required checks uncached in 112.431 s and 464 integration checks in 870.334 s. Merged source/docs `2858eb6a`; root compiler `ce8d77e1...` passes 329 required checks uncached in 112.520 s. The merged worktree is removed and actual archived replay passes afterward, cleaning its temporary data root. Semantic section/reference preparation is the next selected boundary; the full goal remains incomplete. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -820,7 +820,13 @@ All executable and diagnostic parity checks pass. The exact candidate passes all
 329 required checks uncached in 112.431 s (113.799 s including the recording
 driver), with unchanged source and binary hashes. All 464 integration checks pass
 in 870.334 s (871.590 s including the recording driver), again with unchanged
-source and binary hashes. Merged-root verification is still pending.
+source and binary hashes. The merged root `2858eb6a` has identical compiler and
+test sources. Rebuilt compiler `ce8d77e145bdfcc32f8859cbafe2593b93cb3dad862abef2ceed83f2b67c554b`
+passes all 329 required checks uncached in 112.520 s (113.708 s with its driver),
+with unchanged source and binary hashes. The clean merged worktree is removed;
+an actual archived benchmark replay passes after removal and removes its temporary
+data directory. Its single timing pair is a reproducibility check, not new
+performance evidence.
 
 The next frontend boundary is semantic section/reference preparation. In the
 31-pair active-body control, median resolution setup is 171.640 ms; classification
@@ -830,3 +836,7 @@ The resolver visits 81 references while restoring 7,299 saved results. Reusing
 lexical products and deferred expression syntax does not yet avoid that work.
 The full goal also remains incomplete for semantic section fragments, tooling,
 other output modes, and broader semantic/backend metadata materialization.
+
+Evidence completing I012: `i012-remaining-comparison.json`, `i012-required.json`,
+`i012-integration.json`, `i012-root-required.json`, `i012-worktree-cleanup.json`,
+`i012-post-cleanup-replay.json`, and `i012-compiler-data/manifest.json`.
