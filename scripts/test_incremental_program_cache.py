@@ -281,9 +281,11 @@ to get retain value:
     cache = root / "cache"
     program = read_program(cache, main)
     assert any(program["inference_summaries"].values()), "the graph type was not cached"
-    key = program["payload_keys"]["inference_summaries"]
-    summary = cache / "native-v1" / f"payload-{key}.entry"
-    assert summary.stat().st_size < 64 * 1024, "shared class types expanded into a tree in the cache"
+    summaries = [cache / "native-v1" / f"inference-summary-{key}.entry"
+                 for key in program["inference_summary_keys"]]
+    assert summaries, "the graph type has no concrete inference payload"
+    assert all(summary.stat().st_size < 64 * 1024 for summary in summaries), \
+        "shared class types expanded into a tree in a concrete inference payload"
     assert build(entry=main)[0]["frontend_reused"]
     main.write_text(source.replace('"store", seed, 1', '"store", seed, 1.0'))
     assert build(entry=main)[1:] == build(False, entry=main)[1:] == ("", b"graph\n")
