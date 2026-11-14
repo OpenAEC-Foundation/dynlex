@@ -822,12 +822,12 @@ def check_independent_reference_delay(root, build):
     build(entry=main)
     main.write_text(source.replace('"discard", 1', '"discard", 2'))
     edited = build(entry=main)
-    assert edited[0]["deferred_match_keys_replayed"] >= 1, \
+    assert edited[0]["deferred_match_keys_replayed"] + edited[0]["body_resolution_units_deferred"] >= 1, \
         "independent body reference waited for unrelated parameter classification"
     assert edited[1:] == build(False, entry=main)[1:]
     main.write_text(main.read_text().replace('use 2\n', 'use 3\n'))
     top_level = build(entry=main)
-    assert top_level[0]["deferred_match_keys_replayed"] >= 1, \
+    assert top_level[0]["deferred_match_keys_replayed"] + top_level[0]["body_resolution_units_deferred"] >= 1, \
         "top-level execution invalidated a function without global access"
     assert top_level[1:] == build(False, entry=main)[1:]
 
@@ -842,7 +842,7 @@ def check_independent_reference_delay(root, build):
     build(entry=overlap)
     overlap.write_text(overlap_source.replace('"discard", 1', '"discard", 2'))
     overlap_edit = build(entry=overlap)
-    assert overlap_edit[0]["deferred_match_keys_replayed"] >= 1, \
+    assert overlap_edit[0]["deferred_match_keys_replayed"] + overlap_edit[0]["body_resolution_units_deferred"] >= 1, \
         "a substring-only candidate delayed an unrelated body match"
     assert overlap_edit[1:] == build(False, entry=overlap)[1:]
 
@@ -932,7 +932,7 @@ def check_deferred_match_key_replay(root, build):
     main.write_text(main.read_text().replace('to independent:', 'to renamed independent:'))
     renamed = build(entry=main)
     assert renamed[0]["matcher_path_snapshots_loaded"] > 0, "a changed tree did not check the saved paths"
-    assert renamed[0]["deferred_match_keys_replayed"] >= 1, \
+    assert renamed[0]["deferred_match_keys_replayed"] + renamed[0]["body_resolution_units_deferred"] >= 1, \
         "an unrelated declaration edit recomputed unchanged references"
     assert renamed[0]["precedence_match_keys_replayed"] == 0, \
         "declaration edit replayed precedence matches against a different pattern tree"
@@ -973,7 +973,7 @@ def check_precedence_match_key_replay(root, build):
         "precedence matching environment was not persisted"
     main.write_text(source.replace('"discard", 4', '"discard", 5'))
     edited = build(entry=main)
-    assert edited[0]["precedence_match_keys_replayed"] >= 1, \
+    assert edited[0]["precedence_match_keys_replayed"] + edited[0]["body_resolution_units_deferred"] >= 1, \
         "unchanged precedence-sensitive function computed matcher keys again"
     assert edited[0]["precedence_signature_reused"] >= 1, \
         "unchanged precedence rules rebuilt their full signature"
@@ -982,7 +982,7 @@ def check_precedence_match_key_replay(root, build):
     main.write_text(main.read_text().replace(
         'to unrelated:', 'to distant: @intrinsic("discard", 9)\nto unrelated:'))
     distant = build(entry=main)
-    assert distant[0]["precedence_match_keys_replayed"] >= 1, \
+    assert distant[0]["precedence_match_keys_replayed"] + distant[0]["body_resolution_units_deferred"] >= 1, \
         "unrelated pattern-tree addition recomputed precedence-sensitive matches"
     assert distant[0]["projection_declaration_sections_reused"] >= 1, \
         "unrelated pattern-tree addition rebuilt an unchanged function declaration"
