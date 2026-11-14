@@ -35,8 +35,8 @@ def check_compile_time_variant_cascade(root, build):
     assert edited[0]["native_functions_lowered"] == 3
     assert edited[0]["functions_ir_reused"] >= 2
     program = read_program(root / "cache", main)
-    path = next(path for path, declaration in program["all_function_projection"]["function_declarations"].items()
-                if declaration["identity"]["header"].startswith("function [forward]"))
+    path = next(path for path, declaration in program["all_function_projection"]["inactive"].items()
+                if declaration["header"].startswith("function [forward]"))
     assert len(program["inference_summaries"][path]) == 2
     assert "*" not in program["section_dependency_graph"]["instantiations"][path]
 
@@ -87,8 +87,8 @@ def check_scalar_compile_time_variants(root, build):
     assert edited[0]["preinferred_instantiations"] == 2
     assert edited[0]["functions_ir_reused"] >= 2
     program = read_program(root / "cache", main)
-    path = next(path for path, declaration in program["all_function_projection"]["function_declarations"].items()
-                if declaration["identity"]["header"].startswith("function [forward]"))
+    path = next(path for path, declaration in program["all_function_projection"]["inactive"].items()
+                if declaration["header"].startswith("function [forward]"))
     variants = list(program["inference_summaries"][path].values())
     assert len(variants) == 2 and variants[0]["argument_types"] == variants[1]["argument_types"]
     assert variants[0]["compile_time_parameters"] != variants[1]["compile_time_parameters"]
@@ -156,8 +156,8 @@ def check_retained_pure_observations(root, build):
     assert added[0]["functions_ir_reused"] >= 1
     assert added[1:] == build(False, entry=main)[1:]
     program = read_program(root / "cache", main)
-    path = next(path for path, declaration in program["all_function_projection"]["function_declarations"].items()
-                if declaration["identity"]["header"].startswith("function [compute]"))
+    path = next(path for path, declaration in program["all_function_projection"]["inactive"].items()
+                if declaration["header"].startswith("function [compute]"))
     summary = next(iter(program["inference_summaries"][path].values()))
     arguments = {value[0][0][1] for value in summary["pure_values"]}
     assert arguments == {4, 5}, "a new observed argument discarded the value used by retained caller IR"
@@ -183,8 +183,8 @@ def check_meta_constraint_name_stability(root, build):
     main.write_text(source + "".join(calls))
     assert build(entry=main)[2] == b"4\n4\n"
     program = read_program(root / "cache", main)
-    path = next(path for path, declaration in program["all_function_projection"]["function_declarations"].items()
-                if declaration["identity"]["header"].startswith("function [forward]"))
+    path = next(path for path, declaration in program["all_function_projection"]["inactive"].items()
+                if declaration["header"].startswith("function [forward]"))
     names = [name for name, owner in program["function_sections"].items() if owner == path]
     assert len(names) == 2 and not any(name.endswith(".1") for name in names), \
         f"distinct type constraints needed an order-dependent LLVM symbol suffix: {names}"
@@ -212,8 +212,8 @@ def check_unused_pure_summary_retention(root, build):
     reused = build(entry=main)
     assert reused[2] == b"5\n" and reused[0]["root_execution_reused"]
     program = read_program(root / "cache", main)
-    path = next(path for path, declaration in program["all_function_projection"]["function_declarations"].items()
-                if declaration["identity"]["header"].startswith("function [compute]"))
+    path = next(path for path, declaration in program["all_function_projection"]["inactive"].items()
+                if declaration["header"].startswith("function [compute]"))
     variants = program["inference_summaries"][path]
     graph = program["section_dependency_graph"]
     assert set(variants) <= graph["instantiations"][path].keys(), \
@@ -270,8 +270,8 @@ def check_wide_argument_name_stability(root, build):
     main.write_text(source + "".join(calls))
     assert build(entry=main)[2] == b"1\n2\n"
     program = read_program(root / "cache", main)
-    path = next(path for path, declaration in program["all_function_projection"]["function_declarations"].items()
-                if declaration["identity"]["header"].startswith("function [forward]"))
+    path = next(path for path, declaration in program["all_function_projection"]["inactive"].items()
+                if declaration["header"].startswith("function [forward]"))
     names = [name for name, owner in program["function_sections"].items() if owner == path]
     assert len(names) == 2 and not any(name.endswith(".1") for name in names), \
         f"distinct wide arguments needed an order-dependent LLVM symbol suffix: {names}"

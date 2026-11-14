@@ -18,10 +18,10 @@ std::optional<Json> refreshInactiveFunctionProjection(
 		if (reusableCodegenSection(*section))
 			reusable.insert(path);
 	}
-	if (selected != prior.at("inactive") || reusable.size() != prior.at("function_declarations").size())
+	if (selected != prior.at("inactive") || reusable.size() != prior.at("matches").size())
 		return std::nullopt;
 	for (const std::string &path : reusable)
-		if (!prior.at("function_declarations").contains(path) || !prior.at("matches").contains(path))
+		if (!prior.at("matches").contains(path))
 			return std::nullopt;
 	Json bodies = definitionBodyDigests(context, sections);
 	const Json &oldBodies = prior.at("bodies");

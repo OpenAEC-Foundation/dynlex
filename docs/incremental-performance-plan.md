@@ -1588,3 +1588,43 @@ unchanged, and the temporary compiler-data path is absent afterward. This is
 a reproducibility check, not a new performance estimate. Root proof and replay
 evidence are `i020-root-build.json`, `i020-root-required.json`, and
 `i020-archived-replay.json`. The full objective remains active and incomplete.
+
+## I021: consume resolved declaration fingerprints without full records
+
+Start: 2026-11-14 17:15 UTC. First deadline: 18:00 UTC; no extension
+used. Baseline `cf78161d`, published compiler `33a30814...`. The shared
+heavy-job slot belongs to the UI cache-fix rebuild; prepare without a concurrent
+C++ build or benchmark and record any verified wait separately.
+
+Verified consumer audit: runtime readers of `function_declarations` use only
+key membership, counts, equality, and a hash input. Settled declaration values
+already have complete typed fingerprints. `matches` records precisely the
+reusable-section membership; `declaration_fingerprints` also includes flex and
+lifecycle declarations, so substituting that larger key set alone is incorrect.
+Keep membership checks tied to reusable units and preserve all existing
+source, matching, inference and backend dependencies.
+
+Hypothesis: removing unused full declaration records from persistent function
+projections reduces decoding, copying and serialization on ordinary small edits.
+Use fingerprints as the equality/input product and existing match membership as
+the reusable-unit set. Remove the unconsumed record registry/counters and migrate
+all test inspectors before running them; inspect classification's actual output
+units for promotion assertions. Do not add a second metadata table solely for
+tests or retain a compatibility field. Compiler-build identities isolate cache
+schemas. Other semantic uses of structured section declarations remain.
+
+Keep only with at least 3% paired CPU gain in active or unused real edits,
+seven ordinary pairs (31 if uncertain), fresh full-LLVM/diagnostic parity,
+no established ordinary/cold regression, all required checks uncached under
+120 seconds, and affected integration coverage. First add a minimal persistence
+regression and retain its baseline failure. If migrating inspectors reveals a
+real semantic consumer, reassess before changing the schema.
+
+The baseline fails the new persistence regression as expected (`i021-red.log`).
+All migrated classification inspectors pass independently on that same published
+compiler (`i021-inspectors-baseline.log`): recursive parameter retraction,
+transitive propagation, nested lookups and file-local definition moves retain
+their assertions. Outputs are read from the real classification topology and
+its CBOR matcher units. In that schema whitespace is a leaf, so `value` is
+element 2 in `alpha value`; the minimal probe verifies that position against
+the baseline's full declaration before removing it.

@@ -242,9 +242,9 @@ class IncrementalInferenceController {
 		const Json &prior = previous.at("all_function_projection"), &summaries = previous.at("inference_summaries");
 		std::map<InferenceUnitKey, Request> candidates;
 		for (const auto &[section, path] : paths) {
-			if (!hasNoGlobalAccess(section) || !summaries.contains(path) || !prior.at("function_declarations").contains(path) ||
-				!projection.at("function_declarations").contains(path) ||
-				prior.at("function_declarations").at(path) != projection.at("function_declarations").at(path))
+			if (!hasNoGlobalAccess(section) || !summaries.contains(path) || !prior.at("matches").contains(path) ||
+				!projection.at("matches").contains(path) ||
+				prior.at("declaration_fingerprints").at(path) != projection.at("declaration_fingerprints").at(path))
 				continue;
 			statistics.preinferDependencyGraphSectionsChecked++;
 			for (const auto &[key, summary] : summaries.at(path).items()) {

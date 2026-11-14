@@ -1,6 +1,6 @@
 """Section headers depend on the function patterns matched inside their captures."""
 
-from test_incremental_program_cache import read_program
+from test_incremental_program_cache import classification_promotions, read_program
 
 
 def check_nested_classification_lookups(root, build):
@@ -42,10 +42,11 @@ def check_nested_classification_lookups(root, build):
         main.write_text(main.read_text().replace('outer 7)', 'outer value)'))
         recovered = build(entry=main)
         assert recovered[1:] == build(False, entry=main)[1:]
-        declarations = read_program(root / "cache", main)["all_function_projection"]["function_declarations"]
-        assert all(not element[4] for declaration in declarations.values()
-                   for definition in declaration["definitions"] for element in definition["elements"]
-                   if element[1] == "value"), "the parameter did not become a literal word"
+        program = read_program(root / "cache", main)
+        outer, = [path for path, identity in program["all_function_projection"]["inactive"].items()
+                  if identity["header"] == "function [outer] value:"]
+        assert not classification_promotions(root / "cache", program)[outer], \
+            "the parameter did not become a literal word"
         if imported:
             helper.write_text("")
         main.write_text(prefix + source)

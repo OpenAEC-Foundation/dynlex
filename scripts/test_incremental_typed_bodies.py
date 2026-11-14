@@ -272,13 +272,13 @@ def check_recursive_class_requests(root, build):
     for value in (11, 12, 13):
         program = read_program(root / 'cache', main)
         manifests = summary_manifest(root, main)
-        for owner, declaration in program['all_function_projection']['function_declarations'].items():
-            if declaration['identity']['header'].startswith('function [wrapper]'):
+        for owner, declaration in program['all_function_projection']['inactive'].items():
+            if declaration['header'].startswith('function [wrapper]'):
                 for reference in manifests[owner].values():
                     assert reference['body'] is None, "an impure function stored an unused executable body"
                     assert reference['classes'], "native inference facts lost their class-layout units"
-        path = next(path for path, decl in program['all_function_projection']['function_declarations'].items()
-                    if decl['identity']['header'].startswith('function [offset]'))
+        path = next(path for path, decl in program['all_function_projection']['inactive'].items()
+                    if decl['header'].startswith('function [offset]'))
         for reference in summary_manifest(root, main)[path].values():
             (root / 'cache/native-v1' / f'inference-summary-{reference["payload"]}.entry').unlink()
         main.write_text(source.replace('"discard", 10)', f'"discard", {value})'))
@@ -320,8 +320,8 @@ def check_impure_callback_reuses_ir(root, build):
     main.write_text(source)
     assert build(entry=main)[2] == b'1\n'
     program = read_program(root / 'cache', main)
-    owner = next(path for path, declaration in program['all_function_projection']['function_declarations'].items()
-                 if declaration['identity']['header'].startswith('function [handler]'))
+    owner = next(path for path, declaration in program['all_function_projection']['inactive'].items()
+                 if declaration['header'].startswith('function [handler]'))
     assert owner in program['function_sections'].values()
     assert all(reference['body'] is None for reference in summary_manifest(root, main)[owner].values())
     main.write_text(source + 'handler\n')
@@ -345,8 +345,8 @@ def check_impure_signature_promotion(root, build):
     main.write_text(source)
     assert build(entry=main)[2] == b''
     program = read_program(root / 'cache', main)
-    owner = next(path for path, declaration in program['all_function_projection']['function_declarations'].items()
-                 if declaration['identity']['header'].startswith('function [handler]'))
+    owner = next(path for path, declaration in program['all_function_projection']['inactive'].items()
+                 if declaration['header'].startswith('function [handler]'))
     assert owner not in program['function_sections'].values()
     assert all(reference['body'] for reference in summary_manifest(root, main)[owner].values())
     main.write_text(definition + '@intrinsic("discard", 0)\n')

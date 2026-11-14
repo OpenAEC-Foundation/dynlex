@@ -39,8 +39,8 @@ def check_summary_unit_reuse(root, build):
                for variants in before.values() for reference in variants.values()]
     identities = {path: (path.stat().st_ino, path.read_bytes()) for path in records}
     program = read_program(root / "cache", main)
-    leaf = next(path for path, declaration in program["all_function_projection"]["function_declarations"].items()
-                if declaration["identity"]["header"].startswith("function [leaf]"))
+    leaf = next(path for path, declaration in program["all_function_projection"]["inactive"].items()
+                if declaration["header"].startswith("function [leaf]"))
     main.write_text(source.replace('"add", value, 1)', '"add", value, 2)'))
     edited = build(entry=main)
     assert edited[2] == b"2 10 11 12 13\n" and edited[0]["root_execution_reused"]
@@ -103,8 +103,8 @@ def check_evicted_pure_observations(root, build):
     main.write_text(source)
     assert build(entry=main)[2] == b"2\n1\n"
     program = read_program(root / "cache", main)
-    path = next(path for path, declaration in program["all_function_projection"]["function_declarations"].items()
-                if declaration["identity"]["header"].startswith("function [compute]"))
+    path = next(path for path, declaration in program["all_function_projection"]["inactive"].items()
+                if declaration["header"].startswith("function [compute]"))
     reference = next(iter(summary_manifest(root, main)[path].values()))
     (root / "cache" / "native-v1" / f"inference-summary-{reference['payload']}.entry").unlink()
     added = source + '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", compute 5))\n'
@@ -143,8 +143,8 @@ def check_evicted_function_observation(root, build):
         main.write_text(source)
         assert build(entry=main)[2] == expected + b"1\n"
         program = read_program(root / "cache", main)
-        path = next(path for path, declaration in program["all_function_projection"]["function_declarations"].items()
-                    if declaration["identity"]["header"].startswith("function [choose]"))
+        path = next(path for path, declaration in program["all_function_projection"]["inactive"].items()
+                    if declaration["header"].startswith("function [choose]"))
         changed = source.replace('"discard", 1)', '"discard", 2)')
         main.write_text(changed)
         assert build(entry=main)[2] == expected + b"1\n"

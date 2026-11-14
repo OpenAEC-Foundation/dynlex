@@ -88,19 +88,17 @@ def check_implicit_parameter_classification_cascade(root, build):
     after = read_program(root / "cache", main)["all_function_projection"]
     assert edited[0]["declaration_projection_units_built"] == 1, \
         "implicit parameter reclassification did not isolate its changed declaration"
-    assert edited[0]["declaration_records_built"] == 1, \
-        "the reclassified declaration record was not rebuilt alone"
-    assert edited[0]["declaration_records_reused"] >= 1, \
+    assert edited[0]["declaration_projection_units_reused"] >= 1, \
         "an unchanged caller declaration was rebuilt with its changed matches"
     assert edited[0]["variable_like_count_units_reused"] >= 1, "unchanged wrapper recomputed its parameter counts"
     assert edited[0]["variable_like_count_references_scanned"] == 0, "parameter removal rescanned an unchanged body"
     assert before["declarations"] != after["declarations"], \
         "implicit parameter removal kept the old declaration dependency"
-    changed = [path for path in before["function_declarations"]
-               if before["function_declarations"][path] != after["function_declarations"][path]]
+    changed = [path for path in before["declaration_fingerprints"]
+               if before["declaration_fingerprints"][path] != after["declaration_fingerprints"][path]]
     assert len(changed) == 1, "body edit did not isolate the reclassified declaration"
-    caller_path = next(path for path, declaration in before["function_declarations"].items()
-                       if declaration["identity"]["header"] == "wrapper thing:")
+    caller_path = next(path for path, identity in before["inactive"].items()
+                       if identity["header"] == "wrapper thing:")
     assert before["matches"][caller_path] != after["matches"][caller_path], \
         "caller matches ignored reclassified pattern"
     assert edited[1:] == build(False, entry=main)[1:]

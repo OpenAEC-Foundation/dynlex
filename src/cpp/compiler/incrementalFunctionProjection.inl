@@ -80,7 +80,6 @@ Json captureAllFunctionProjection(
 	std::unordered_set<const Section *> reusable;
 	std::unordered_set<const Section *> constraintDefinitions;
 	std::unordered_set<const Section *> selectedSections;
-	size_t declarationSections = 0;
 	for (const auto &[path, section] : sections) {
 		paths.emplace(section, path);
 		if (!section->patternDefinitions.empty())
@@ -94,8 +93,6 @@ Json captureAllFunctionProjection(
 		bool reusableSection = reusableCodegenSection(*section);
 		if (reusableSection)
 			reusable.insert(section);
-		if (reusableSection || !section->patternDefinitions.empty())
-			declarationSections++;
 	}
 	if (projectionWork)
 		projectionWork->setupMilliseconds += elapsedMilliseconds(phaseStart);
@@ -117,31 +114,6 @@ Json captureAllFunctionProjection(
 			initialMatcherTree, finalMatcherTree
 		);
 	std::string resolvedDeclarations = declarationUnits.digest();
-	bool reuseDeclarations = prior && resolvedDeclarations == prior->at("declarations").get_ref<const std::string &>() &&
-							 reusable.size() == prior->at("function_declarations").size();
-	if (reuseDeclarations) {
-		for (const auto &[path, section] : sections) {
-			if (reusable.contains(section) && !prior->at("function_declarations").contains(path)) {
-				reuseDeclarations = false;
-				break;
-			}
-		}
-	}
-	Json declarations = Json::object();
-	if (reuseDeclarations) {
-		declarations = prior->at("function_declarations");
-		if (projectionWork)
-			projectionWork->declarationSectionsReused += declarationSections;
-	} else {
-		for (const auto &[path, section] : sections) {
-			bool reusableSection = reusable.contains(section);
-			if (!reusableSection)
-				continue;
-			declarations[path] = declarationUnits.record(*section);
-		}
-		if (projectionWork)
-			projectionWork->declarationSectionsReused += declarationUnits.reusedRecords();
-	}
 	Json projection{
 		{"initial_matcher_tree", initialMatcherTree},
 		{"final_matcher_tree", finalMatcherTree},
@@ -157,7 +129,6 @@ Json captureAllFunctionProjection(
 		projectionWork->inactiveMilliseconds += elapsedMilliseconds(phaseStart);
 	phaseStart = Clock::now();
 	projection["bodies"] = std::move(bodyDigests);
-	projection["function_declarations"] = std::move(declarations);
 	projection["declaration_fingerprints"] = declarationUnits.fingerprints();
 	projection["ambient_declarations"] = declarationUnits.digest(reusable);
 	if (projectionWork)
@@ -196,7 +167,7 @@ Json captureAllFunctionProjection(
 		}
 		if ((stableMatchingEnvironment || (stableGlobalFreeEnvironment && hasNoGlobalAccess(section)) || reuseGlobalMatches) &&
 			prior->at("bodies").contains(path) && prior->at("bodies").at(path) == projection.at("bodies").at(path) &&
-			prior->at("function_declarations").at(path) == projection.at("function_declarations").at(path)) {
+			prior->at("declaration_fingerprints").at(path) == projection.at("declaration_fingerprints").at(path)) {
 			matches[path] = prior->at("matches").at(path);
 			matchEntries[path] = prior->at("match_entries").at(path);
 			if (reuseGlobalMatches && !stableMatchingEnvironment && !hasNoGlobalAccess(section) && projectionWork)

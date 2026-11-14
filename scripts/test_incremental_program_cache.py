@@ -252,6 +252,26 @@ def read_program(cache, entry):
     return matches[0]
 
 
+def classification_promotions(cache, program):
+    """Inspect the actual output units used to restore implicit parameters."""
+    from test_incremental_matcher_work import matcher_records
+
+    directory = cache / "native-v1"
+    index = json.loads((directory / f'matcher-{program["matcher_key"]}.entry')
+                       .read_bytes().split(b"\n", 2)[2])
+    records = {}
+    for descriptor in index.values():
+        records.update(matcher_records(directory / f'matcher-segment-{descriptor["payload"]}.entry', {5}))
+
+    def read(key):
+        value = records[key.encode()]
+        assert value[0] == 5
+        return decode_cbor(value[1:])
+
+    topology = read(program["all_function_projection"]["matcher_projection"]["classifications"])
+    return {unit[0]: {(output[0], output[1]) for output in read(unit[4])} for unit in topology["units"]}
+
+
 def check_program_payloads(root, build):
     main = root / "program_payloads.dl"
     source = ('integer means: @intrinsic("type", "int")\n'

@@ -1,6 +1,6 @@
 """A body edit can change an entire recursive signature dependency cycle."""
 
-from test_incremental_program_cache import read_program
+from test_incremental_program_cache import classification_promotions, read_program
 from test_incremental_classification_inputs import check_classification_inputs
 from test_incremental_nested_lookups import check_nested_classification_lookups
 
@@ -15,19 +15,19 @@ def check_recursive_classification_cascade(root, build):
               '@intrinsic("discard", 0)\n')
 
     def promoted_parameters():
-        declarations = read_program(root / "cache", main)["all_function_projection"]["function_declarations"]
-        # The compact declaration record stores the promotion flag in slot 4.
-        return {definition["spelling"]: [element[1] for element in definition["elements"] if element[4]]
-                for declaration in declarations.values() for definition in declaration["definitions"]}
+        program = read_program(root / "cache", main)
+        promotions = classification_promotions(root / "cache", program)
+        return {identity["header"]: promotions[path]
+                for path, identity in program["all_function_projection"]["inactive"].items()}
 
     main.write_text(source)
     build(entry=main)
-    expected = {"alpha value": ["value"], "beta value": ["value"]}
+    expected = {"alpha value:": {(0, 2)}, "beta value:": {(0, 2)}}
     assert promoted_parameters() == expected
     removed = source.replace('    @intrinsic("discard", value)\n', '')
     main.write_text(removed)
     assert build(entry=main)[1:] == build(False, entry=main)[1:]
-    assert promoted_parameters() == {"alpha value": [], "beta value": []}, \
+    assert promoted_parameters() == {"alpha value:": set(), "beta value:": set()}, \
         "a cached recursive signature sustained a removed parameter"
     main.write_text(removed + 'alpha 1\n')
     failed = build(entry=main, success=False)
@@ -257,21 +257,23 @@ def check_classification_propagation(root, build):
     assert stable[0]["classification_parameters_reused"] >= 3, "an unchanged signature reclassified its callers"
     assert stable[0]["classification_units_reactivated"] == 0
     assert stable[1:] == build(False, entry=main)[1:]
-    before = read_program(root / "cache", main)["all_function_projection"]["function_declarations"]
+    before = read_program(root / "cache", main)["all_function_projection"]["declaration_fingerprints"]
     main.write_text(source.replace('"discard", value', '"discard", 0'))
     changed = build(entry=main)
     assert changed[0]["classification_units_reactivated"] >= 2, "a changed signature retained cached callers"
     assert changed[0]["classification_parameters_reused"] == 1
     assert changed[0]["variable_like_count_references_scanned"] == 0, "a restarted unchanged caller rescanned its words"
     assert changed[1:] == build(False, entry=main)[1:]
-    projection = read_program(root / "cache", main)["all_function_projection"]
-    after = projection["function_declarations"]
+    program = read_program(root / "cache", main)
+    projection = program["all_function_projection"]
+    after = projection["declaration_fingerprints"]
     chain = {path for path, identity in projection["inactive"].items()
              if any(word in identity["header"] for word in ("core", "outer", "final"))}
     assert len(chain) == 3
     assert all(before[path] != after[path] for path in chain), "a last-use removal did not cascade through every caller"
-    assert all(not element[4] for path in chain for definition in after[path]["definitions"]
-               for element in definition["elements"]), "a caller kept an implicit parameter after its last use vanished"
+    promotions = classification_promotions(root / "cache", program)
+    assert all(not promotions[path] for path in chain), \
+        "a caller kept an implicit parameter after its last use vanished"
     main.write_text(main.read_text() + 'final 7\n')
     assert build(entry=main, success=False)[1:] == build(False, entry=main, success=False)[1:]
     main.write_text(source)
