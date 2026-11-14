@@ -171,7 +171,11 @@ try {
           window.siteProbe.pictures.push(decoder.decode(new Uint8Array(env.__linear_memory.buffer,pointer,count)));
           return picture(surface,view,image,done,pointer,count);
         };
-        env.ui_begin = (...args) => { window.siteProbe.visible = []; return begin(...args); };
+        env.ui_begin = (...args) => {
+          window.siteProbe.visible = [];
+          window.siteProbe.farmBounds = null;
+          return begin(...args);
+        };
         env.ui_text_mask = (font, pointer, count, ...args) => {
           const result = mask(font, pointer, count, ...args);
           if (result) window.siteProbe.visible.push(decoder.decode(new Uint8Array(env.__linear_memory.buffer, pointer, count)));

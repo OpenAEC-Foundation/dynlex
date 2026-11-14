@@ -47,8 +47,6 @@ to [paint the website Farm] {a pointer to UI canvas frame:painting}:
         set height to the maximum of 1 and ((painting's bounds' height * state's view's pixel scale) as an integer)
         set texture to the rendered website Farm (session's renderer) sized width by height in (painting's bounds)
         draw UI texture texture in (painting's bounds) in (UI ink 255 255 255) with opacity 255 on (painting's frame)
-        set session's active to true
-        animate UI view (state's view)
     else:
         set text to "Preparing the Farm…" if (session's graphics phase != 4), else "An error occurred. Check the log."
         draw UI text text centered in (painting's bounds) with (state's view's small) in (UI ink 54 74 45) on (painting's frame)

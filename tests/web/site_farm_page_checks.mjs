@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {setTimeout as pause} from 'node:timers/promises';
 
 // Follow rendered captions and real input; never call application callbacks.
 export async function verifyFarmPage({ command, evaluate, waitFor, controls, capture }) {
@@ -39,6 +40,15 @@ export async function verifyFarmPage({ command, evaluate, waitFor, controls, cap
   await controls.clickText('Hide Farm vocabulary');
   await command('Emulation.setDeviceMetricsOverride', viewport);
 
+  await controls.wheel(100000);
+  await waitFor('!window.siteProbe.farmBounds');
+  await pause(1200);
+  const idle = await evaluate('window.siteProbe.paints');
+  await pause(800);
+  assert.equal(await evaluate('window.siteProbe.paints'), idle,
+    'Farm kept repainting after its scene scrolled out of view.');
+  await capture('farm-offscreen-idle');
+
   const turnPoint=await controls.clickText('One turn');
   console.log('Farm turn input:',JSON.stringify({point:turnPoint,after:await evaluate('window.colorProbe.find(item => item.text === "One turn")')}));
   await waitFor('window.siteProbe.texts.includes("TURN 1")');
@@ -58,6 +68,7 @@ export async function verifyFarmPage({ command, evaluate, waitFor, controls, cap
   await capture('farm-role');
   await controls.clickText('Pause farm Ⅱ');
   await controls.clickText('Whole farm');
+  await waitFor('window.siteProbe.farmBounds !== null');
   const before = await evaluate('window.siteProbe.farmFrames.length');
   const point = await evaluate(`(() => {
     const box = window.siteProbe.farmBounds;
