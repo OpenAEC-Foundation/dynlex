@@ -32,6 +32,25 @@ def main():
     renamed = changed.replace('sample entry', 'another answer')
     verify_edits(compiler, 'dynlex-declaration-cache-',
                  [(text, '') for text in [original, changed, renamed, renamed, original]])
+    # A static value consumes both the declaration's arguments and the calls
+    # that produced them, even when the reader's source and global type stay put.
+    source = '''integer means: @intrinsic("type", "int", 32)
+to get initial: @intrinsic("return", 42)
+section answer {name} from {integer:initial value}:
+    declares: name
+    result: integer
+    value: initial value
+function inspect:
+    globals: sample entry
+    execute: @intrinsic("return", sample entry)
+answer sample entry from initial:
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", inspect))
+'''
+    provider = source.replace('"return", 42', '"return", 43')
+    argument = provider.replace('sample entry from initial:', 'sample entry from 44:')
+    verify_edits(compiler, 'dynlex-declaration-value-inputs-',
+                 [(source, '42\n'), (provider, '43\n'), (argument, '44\n'),
+                  (argument, '44\n'), (source, '42\n')])
     # Runtime-backed descriptions must keep one snapshot when readers are
     # reused, other declarations move, or the initializer changes.
     fixture = root / 'tests/required/data_section_cross_function_value/main.dl'

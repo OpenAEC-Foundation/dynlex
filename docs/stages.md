@@ -1970,6 +1970,13 @@ different input contexts are not merged. A repeated
 known-argument call can use that value without reinferring the body; a new
 argument evaluates the retained typed body normally. Nested callee
 body reads remain dependencies of the observed value.
+Reading a known named global declaration also records its initializing entry
+execution as a concrete query dependency. Its provider calls, declaration
+arguments and compile-time control flow therefore remain inputs of a folded
+reader even when the reader's source and the global's structural type are unchanged.
+Source-only dependencies and execution dependencies are distinct: an absent
+execution scope denotes a source read, while an explicitly selected null scope
+identifies entry execution.
 Summaries record return address provenance and storage-parameter relationships, plus
 writes, known constants, address provenance, and address escapes for global variables.
 Storage origins retain their lexical declaration and logical invocation across compiler
