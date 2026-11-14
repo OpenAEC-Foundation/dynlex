@@ -607,7 +607,7 @@ bool compileIncrementally(
 			if (compiled && !refreshedProjection && frontendState &&
 				compatibleObservations(*frontendState, recording->observations, context))
 				refreshedProjection = refreshTopLevelExecutionProjection(
-					context, recording->observations, sections, matcherCache, initialMatcherTree,
+					context, recording->observations, sections, declarationUnits, matcherCache, initialMatcherTree,
 					frontendState->at("all_function_projection"), &statistics.sourceProjectionWork,
 					statistics.topLevelProjectionSectionsReused
 				);

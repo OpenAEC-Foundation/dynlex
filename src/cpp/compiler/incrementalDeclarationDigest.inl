@@ -15,6 +15,7 @@ class ResolvedDeclarationUnits {
 	const std::map<std::string, Section *> &sections;
 	DeclarationProjectionWork &work;
 	std::unordered_map<const Section *, Unit> units;
+	mutable std::optional<std::string> aggregate;
 
   public:
 	ResolvedDeclarationUnits(
@@ -64,13 +65,15 @@ class ResolvedDeclarationUnits {
 		return result;
 	}
 	std::string digest(const std::unordered_set<const Section *> &excluded = {}) const {
+		if (excluded.empty() && aggregate)
+			return *aggregate;
 		DeclarationFingerprintWriter writer;
 		size_t count = std::ranges::count_if(sections, [&](const auto &entry) {
-			return !entry.second->patternDefinitions.empty() && !excluded.contains(entry.second);
+			return units.contains(entry.second) && !excluded.contains(entry.second);
 		});
 		writer.array(count);
 		for (const auto &[path, section] : sections) {
-			if (section->patternDefinitions.empty() || excluded.contains(section))
+			if (!units.contains(section) || excluded.contains(section))
 				continue;
 			writer.array(2);
 			writer.value(path);
@@ -78,6 +81,9 @@ class ResolvedDeclarationUnits {
 			writer.end();
 		}
 		writer.end();
-		return writer.finish();
+		std::string result = writer.finish();
+		if (excluded.empty())
+			aggregate = result;
+		return result;
 	}
 };

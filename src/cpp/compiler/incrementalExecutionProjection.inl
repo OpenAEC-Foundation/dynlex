@@ -3,11 +3,13 @@
 // that include execution, and carry the function projections forward.
 std::optional<Json> refreshTopLevelExecutionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
-	IncrementalMatcherCache &matcherCache, std::string_view initialMatcherTree, const Json &prior, SourceProjectionWork *work,
-	size_t &reusedSections
+	const ResolvedDeclarationUnits &declarationUnits, IncrementalMatcherCache &matcherCache,
+	std::string_view initialMatcherTree, const Json &prior, SourceProjectionWork *work, size_t &reusedSections
 ) {
 	Json bodies = definitionBodyDigests(context, sections);
 	if (bodies != prior.at("bodies"))
+		return std::nullopt;
+	if (declarationUnits.digest() != prior.at("declarations"))
 		return std::nullopt;
 	if (initialMatcherTree != prior.at("initial_matcher_tree").get<std::string>() ||
 		matcherTreeSignature(context) != prior.at("final_matcher_tree").get<std::string>() ||

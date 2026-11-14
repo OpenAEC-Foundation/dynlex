@@ -108,31 +108,15 @@ Json captureAllFunctionProjection(
 	Json maskedSources = sourceProjection(
 		context, observations, selectedSections, false, false, false, prior ? &prior->at("sources") : nullptr, projectionWork
 	);
-	bool reuseDeclarations =
-		prior && selected == prior->at("inactive") && sourceProjectionsEqual(maskedSources, prior->at("sources")) &&
-		currentScopeRuleBodies == prior->at("scope_rule_bodies") &&
-		reusable.size() == prior->at("function_declarations").size() && bodyDigests.size() == prior->at("bodies").size();
-	size_t changedDeclarations = 0;
+	std::string resolvedDeclarations = declarationUnits.digest();
+	bool reuseDeclarations = prior && resolvedDeclarations == prior->at("declarations") &&
+							 reusable.size() == prior->at("function_declarations").size();
 	if (reuseDeclarations) {
 		for (const auto &[path, section] : sections) {
 			if (reusable.contains(section) && !prior->at("function_declarations").contains(path)) {
 				reuseDeclarations = false;
 				break;
 			}
-			if (!bodyDigests.contains(path))
-				continue;
-			if (!prior->at("bodies").contains(path)) {
-				reuseDeclarations = false;
-				break;
-			}
-			if (bodyDigests.at(path) == prior->at("bodies").at(path))
-				continue;
-			if (!reusable.contains(section) || currentScopeRuleBodies.contains(path) ||
-				declarationUnits.fingerprint(*section) != prior->at("declaration_fingerprints").at(path)) {
-				reuseDeclarations = false;
-				break;
-			}
-			changedDeclarations++;
 		}
 	}
 	Json declarations = Json::object();
@@ -140,7 +124,7 @@ Json captureAllFunctionProjection(
 	if (reuseDeclarations) {
 		declarations = prior->at("function_declarations");
 		if (projectionWork)
-			projectionWork->declarationSectionsReused += declarationSections - changedDeclarations;
+			projectionWork->declarationSectionsReused += declarationSections;
 	} else {
 		for (const auto &[path, section] : sections) {
 			bool reusableSection = reusable.contains(section);
@@ -157,7 +141,7 @@ Json captureAllFunctionProjection(
 		{"precedence_signature", matcherCache.precedenceSignature()},
 		{"precedence_rules", precedenceRulesSignature(*context.mainSection)},
 		{"inactive", std::move(selected)},
-		{"declarations", declarationUnits.digest()},
+		{"declarations", std::move(resolvedDeclarations)},
 		{"global_resolution", std::move(currentGlobalResolution)},
 		{"sources", std::move(maskedSources)},
 		{"scope_rule_bodies", std::move(currentScopeRuleBodies)}
