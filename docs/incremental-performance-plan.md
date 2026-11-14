@@ -1531,3 +1531,45 @@ compatible-observations result for this proof; current resolved fingerprints can
 still preserve the unchanged output record after auditing. Wording-only edits
 remain on the existing no-frontend fast path. This is the final source change
 before full qualification; no further optimization extends this iteration.
+
+I020 qualification: accept the declaration projection producer/consumer change.
+Final frozen source `8edd89d1`, compiler
+`1aed552b4c667a70aa28a0b36d2053c2e580fe5216f59319ebd77bfc346f65ff`.
+The final seven-pair screen (50 build rows) gives unused-edit CPU ratio
+0.899477 [0.892954, 0.931892], medians 0.681789 to 0.611354 s;
+active-body ratio 0.982816 [0.947035, 0.999603], medians 1.495829
+to 1.476218 s; cold ratio 1.005481 [0.998692, 1.017861], medians
+5.246041 to 5.261879 s. No cold regression is established. The independent
+31-pair body/cold controls preceded the final syntax-profile guard; they are
+recorded separately rather than described as measurements of the final binary.
+
+Every final screen row passes executable/diagnostic comparisons. Full fresh
+versus incremental LLVM text and diagnostics also match for all three real
+edits (unused library body, active renderer body and emulator lives constant).
+Only the inspector-input ModuleID comment is removed; all fresh semantic reuse
+counters, including declaration reuse, are zero. Retain the nine build reports
+and complete .bc/.ll intermediates; transient parity caches have been pruned.
+
+All 329 required checks pass uncached in 102.581 s suite / 103.873 s
+observer. All 464 integration checks pass in 811.030 s suite / 811.433 s
+observer. Compiler and test sources remain unchanged across both gates.
+Implementation closed on the frozen source; terminal qualification completed
+after the extended timebox without introducing another optimization. Publish
+only after merged root build and required qualification. The full incremental
+compiler objective remains incomplete.
+
+Evidence: `i020-final-focused.log`, `i020-final-comparison.json`,
+`i020-ordinary-controls.json`, `i020-ir-parity-final/report.json`,
+`i020-required.json`, `i020-integration.json`. Intermediate eager/refined
+compilers, rejected/incomplete timing data and minimal red tests remain named
+separately. Temporary benchmark compiler slots use same-filesystem hardlinks
+to immutable archived binaries, verified by hashes before/after, to avoid
+400 MiB of redundant staging copies; shared runtime inputs remain pinned.
+
+Next inspect the actual consumers and persistence costs of full declaration
+records. The new fingerprints may let equality/membership consumers avoid
+decoding, copying and encoding those structured values at all. Verify every
+reader before choosing that next bounded unit; do not add another storage
+layer without a measured consumer. Source section reconstruction, broad
+validation/setup, debug/trace reuse and tooling/output-mode coverage still
+require work under the full objective.
