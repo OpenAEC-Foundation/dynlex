@@ -1573,3 +1573,18 @@ reader before choosing that next bounded unit; do not add another storage
 layer without a measured consumer. Source section reconstruction, broad
 validation/setup, debug/trace reuse and tooling/output-mode coverage still
 require work under the full objective.
+
+I020 publication: merged root `f9ac899f`, compiler
+`33a30814ef55dbcf9f10f5f481225df4e74293ae043af98c8e714de96b440a60`,
+passes all 329 required checks uncached in 103.048 s suite / 104.007 s
+observer, with compiler and test sources unchanged. The merged worktree and
+branch are removed after verifying no process uses them. A partial archive copy
+failed for lack of disk space; it was removed before retrying successfully.
+The published compiler is frozen independently of the mutable root build.
+
+An actual six-row archived baseline/published replay completes after worktree
+removal: executable and diagnostic comparisons pass, compiler hashes remain
+unchanged, and the temporary compiler-data path is absent afterward. This is
+a reproducibility check, not a new performance estimate. Root proof and replay
+evidence are `i020-root-build.json`, `i020-root-required.json`, and
+`i020-archived-replay.json`. The full objective remains active and incomplete.
