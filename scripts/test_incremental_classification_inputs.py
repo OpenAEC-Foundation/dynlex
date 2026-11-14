@@ -35,7 +35,53 @@ def check_classification_inputs(root, build):
     restored = build(entry=main)
     assert restored[2] == b"7\n"
     assert restored[1:] == build(False, entry=main)[1:]
+    check_declaration_input_units(root, build)
     check_reference_only_inputs(root, build)
+
+
+def check_declaration_input_units(root, build):
+    main = root / "classification_declaration_units.dl"
+    source = ('to alpha value: @intrinsic("discard", value)\n'
+              'to beta item: @intrinsic("discard", item)\n'
+              'to idle: @intrinsic("discard", 0)\n'
+              '@intrinsic("discard", 0)\n')
+    main.write_text(source)
+    cold = build(entry=main)
+    assert cold[1:] == build(False, entry=main)[1:]
+    main.write_text(source.replace('to idle: @intrinsic("discard", 0)',
+                                   'to idle: @intrinsic("discard", 1)'))
+    edited = build(entry=main)
+    assert edited[1:] == build(False, entry=main)[1:]
+    assert edited[0]["classification_input_units_built"] == 1, edited[0]
+    assert edited[0]["classification_input_units_reused"] == 2, edited[0]
+
+    main.write_text(main.read_text() + '@intrinsic("discard", 2)\n')
+    root_edit = build(entry=main)
+    assert root_edit[1:] == build(False, entry=main)[1:]
+    assert root_edit[0]["classification_input_units_built"] == 0, root_edit[0]
+    assert root_edit[0]["classification_input_units_reused"] == 3, root_edit[0]
+
+    # The bodies stay identical, but a file rule changes declaration visibility.
+    main.write_text(main.read_text() + 'in this file, by default:\n    functions are local\n')
+    locality = build(entry=main)
+    assert locality[1:] == build(False, entry=main)[1:]
+    assert locality[0]["classification_input_units_built"] == 3, locality[0]
+    assert locality[0]["classification_input_units_reused"] == 0, locality[0]
+
+    main = root / "classification_ancestor_inputs.dl"
+    nested = ('to outer value:\n'
+              '    to inner item: @intrinsic("discard", item)\n'
+              '    @intrinsic("discard", value)\n'
+              'to idle: @intrinsic("discard", 0)\n'
+              '@intrinsic("discard", 0)\n')
+    main.write_text(nested)
+    build(entry=main)
+    main.write_text(nested.replace('    @intrinsic("discard", value)',
+                                   '    @intrinsic("discard", @intrinsic("add", value, 1))'))
+    ancestor = build(entry=main)
+    assert ancestor[1:] == build(False, entry=main)[1:]
+    assert ancestor[0]["classification_input_units_built"] == 2, ancestor[0]
+    assert ancestor[0]["classification_input_units_reused"] == 1, ancestor[0]
 
 
 def check_reference_only_inputs(root, build):

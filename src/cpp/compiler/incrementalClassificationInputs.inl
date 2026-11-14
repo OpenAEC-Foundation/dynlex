@@ -1,3 +1,22 @@
+// The section identity includes its authored header and ancestor headers. Body
+// digests include metadata, nested declarations and source-file transitions.
+// Locality can be supplied by a rule outside those bodies, so retain it as an
+// explicit input. Generated signatures still consume their semantic producer.
+bool IncrementalClassification::unchangedSourceInputs(const Unit &unit) const {
+	if (!unit.old || !unit.sourceLocality || unit.old->at(SourceLocality) != *unit.sourceLocality ||
+		unit.old->at(HasCandidates) != unit.hasCandidates || !sameBody(unit.path))
+		return false;
+	for (const Section *ancestor = unit.section->parent; ancestor && ancestor != context.mainSection;
+		 ancestor = ancestor->parent)
+		if (!ancestor->patternDefinitions.empty()) {
+			auto identity = sectionUnits.find(ancestor);
+			requireCompilerInvariant(identity != sectionUnits.end(), "classification scope has no section identity");
+			if (!sameBody(units.at(identity->second).path))
+				return false;
+		}
+	return true;
+}
+
 // Classification reads pattern references and lexical bindings, not literal-only
 // execution statements. Keep the latter in the separate body-resolution digest.
 std::string IncrementalClassification::classificationBodyInput(const Unit &unit) const {

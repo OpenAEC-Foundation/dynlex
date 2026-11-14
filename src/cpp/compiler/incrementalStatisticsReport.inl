@@ -158,6 +158,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"classification_parameters_reused", statistics.classification.parametersReused},
 					  {"classification_parameters_recorded", statistics.classification.parametersRecorded},
 					  {"classification_units_invalidated", statistics.classification.unitsInvalidated},
+					  {"classification_input_units_reused", statistics.classification.inputUnitsReused},
+					  {"classification_input_units_built", statistics.classification.inputUnitsBuilt},
 					  {"classification_query_units_reused", statistics.classification.queryUnitsReused},
 					  {"classification_query_units_built", statistics.classification.queryUnitsBuilt},
 					  {"classification_dependency_units_reused", statistics.classification.dependencyUnitsReused},

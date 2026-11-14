@@ -46,26 +46,38 @@ void IncrementalClassification::prepare() {
 					self(self, child);
 		};
 		collect(collect, section);
-		std::string input = declarationInput(unit);
+		if (section->openingLine && !section->openingLine->synthetic && !section->dataFieldOwner &&
+			std::ranges::none_of(section->patternDefinitions, [](const PatternDefinition *definition) {
+			return definition->hasPrebuiltPatternElements;
+		}))
+			unit.sourceLocality = section->isLocal;
 		for (const Section *ancestor = section; ancestor; ancestor = ancestor->parent)
 			unit.hasCandidates |= std::ranges::any_of(ancestor->variableLikeCounts, [](const auto &candidate) {
 				return candidate.second != 0;
 			});
-		input += unit.hasCandidates ? '1' : '0';
-		if (unit.hasCandidates) {
-			unit.bodyInput = unit.old && unit.old->at(HasCandidates).get<bool>() && sameBody(path)
-								 ? unit.old->at(BodyInput).get<std::string>()
-								 : classificationBodyInput(unit);
-			input += unit.bodyInput;
-		}
-		for (const Section *ancestor = section->parent; ancestor && ancestor != context.mainSection;
-			 ancestor = ancestor->parent)
-			if (!ancestor->patternDefinitions.empty()) {
-				auto identity = sectionUnits.find(ancestor);
-				requireCompilerInvariant(identity != sectionUnits.end(), "classification scope has no section identity");
-				input += bodies.at(units.at(identity->second).path).get_ref<const std::string &>();
+		if (unchangedSourceInputs(unit)) {
+			unit.input = unit.old->at(Input).get<std::string>();
+			unit.bodyInput = unit.old->at(BodyInput).get<std::string>();
+			work.inputUnitsReused++;
+		} else {
+			std::string input = declarationInput(unit);
+			input += unit.hasCandidates ? '1' : '0';
+			if (unit.hasCandidates) {
+				unit.bodyInput = unit.old && unit.old->at(HasCandidates).get<bool>() && sameBody(path)
+									 ? unit.old->at(BodyInput).get<std::string>()
+									 : classificationBodyInput(unit);
+				input += unit.bodyInput;
 			}
-		unit.input = digest(input);
+			for (const Section *ancestor = section->parent; ancestor && ancestor != context.mainSection;
+				 ancestor = ancestor->parent)
+				if (!ancestor->patternDefinitions.empty()) {
+					auto identity = sectionUnits.find(ancestor);
+					requireCompilerInvariant(identity != sectionUnits.end(), "classification scope has no section identity");
+					input += bodies.at(units.at(identity->second).path).get_ref<const std::string &>();
+				}
+			unit.input = digest(input);
+			work.inputUnitsBuilt++;
+		}
 		if (unit.old && prior->at("zero_width_functions") == zeroWidthFunctions &&
 			unit.old->at(HasCandidates) == unit.hasCandidates && unit.old->at(BodyInput) == unit.bodyInput) {
 			unit.queries = unit.old->at(Queries).get<std::string>();

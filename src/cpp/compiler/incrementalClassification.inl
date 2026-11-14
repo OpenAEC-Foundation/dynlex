@@ -6,6 +6,7 @@ struct ClassificationWork {
 	size_t parametersReused = 0;
 	size_t parametersRecorded = 0;
 	size_t unitsInvalidated = 0;
+	size_t inputUnitsReused = 0, inputUnitsBuilt = 0;
 	size_t queryUnitsReused = 0;
 	size_t queryUnitsBuilt = 0;
 	size_t dependencyUnitsReused = 0;
@@ -18,7 +19,19 @@ struct ClassificationWork {
 };
 
 class IncrementalClassification {
-	enum Field { Path, Input, Queries, Provides, Outputs, Edges, HasCandidates, Environment, Export, BodyInput };
+	enum Field {
+		Path,
+		Input,
+		Queries,
+		Provides,
+		Outputs,
+		Edges,
+		HasCandidates,
+		Environment,
+		Export,
+		BodyInput,
+		SourceLocality
+	};
 	struct Unit {
 		std::string path, input, queries, provides, outputs, exportKey, bodyInput;
 		Section *section;
@@ -27,6 +40,7 @@ class IncrementalClassification {
 		bool environment = false;
 		bool selected = false;
 		bool headerOnly = false;
+		std::optional<bool> sourceLocality;
 		std::vector<PatternReference *> references;
 		std::vector<size_t> edges;
 	};
@@ -157,7 +171,8 @@ class IncrementalClassification {
 			entries.push_back(
 				Json::array(
 					{unit.path, unit.input, unit.queries, unit.provides, unit.outputs, unit.edges, unit.hasCandidates,
-					 unit.environment, unit.exportKey, unit.bodyInput}
+					 unit.environment, unit.exportKey, unit.bodyInput,
+					 unit.sourceLocality ? Json(*unit.sourceLocality) : Json(nullptr)}
 				)
 			);
 		}
@@ -190,6 +205,7 @@ class IncrementalClassification {
 		return before.contains(path) && before.at(path) == counts.bodies().at(path);
 	}
 	bool canReuse(Unit &unit);
+	bool unchangedSourceInputs(const Unit &unit) const;
 	std::string classificationBodyInput(const Unit &unit) const;
 	std::string exported(const Unit &unit) const;
 	void preparePropagation(std::vector<std::vector<size_t>> reverse, const std::vector<bool> &inputsChanged);
