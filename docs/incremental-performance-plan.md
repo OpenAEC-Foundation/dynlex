@@ -1508,3 +1508,9 @@ and explicit settled-signature checks for each changed ordinary body. Other
 cases audit current resolved inputs normally. Counters distinguish actually
 checked inputs from retained units. Keep the original 5% gate and ordinary/cold
 controls; do not add unrelated optimizations or a second extension.
+
+Demand-driven refinement `4926a9bb` / compiler `fc7d2442...` builds and
+passes the exact focused cascade/failure checks. A minimal body edit now audits
+one declaration input; the preceding eager binary fails that assertion. Retain
+that red evidence and the new check. No performance acceptance is claimed until
+the refined binary repeats the paired screen and qualification gates.

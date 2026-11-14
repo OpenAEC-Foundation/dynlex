@@ -19,6 +19,8 @@ def check_declaration_projection_units(root, build):
     assert body[0]["declaration_projection_units_built"] == 0
     assert body[0]["declaration_projection_units_reused"] >= 2
     assert body[0]["declaration_records_built"] == 0
+    assert body[0]["declaration_input_units_checked"] == 1, \
+        "a body edit audited an unchanged declaration input"
 
     main.write_text(main.read_text().replace('"discard", value', '"discard", 0'))
     signature = build(entry=main)
