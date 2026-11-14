@@ -1,17 +1,19 @@
 // Body units share the compact matcher store. Their keys never enter the
 // ordinary matcher: the leading kind byte distinguishes their serialized data.
-std::optional<std::string>
-IncrementalMatcherCache::recordBodyResolution(const std::vector<std::pair<size_t, PatternReference *>> &references) {
+std::optional<std::string> IncrementalMatcherCache::recordBodyResolution(
+	const std::vector<std::pair<size_t, PatternReference *>> &references, bool initial
+) {
 	if (references.empty())
 		return std::nullopt;
 	std::string packed(1, '\2');
 	appendLength(packed, references.size());
 	for (const auto &[index, reference] : references) {
 		requireCompilerInvariant(reference->resolved, "body-resolution snapshot contains an unresolved reference");
-		if (!reference->variableResolutionOffsets && reference->initialMatcherKey.empty())
+		if (!reference->variableResolutionOffsets &&
+			(initial ? reference->initialMatcherKey : reference->incrementalMatcherKey).empty())
 			return std::nullopt;
 		appendLength(packed, index);
-		appendString(packed, reference->initialMatcherKey);
+		appendString(packed, initial ? reference->initialMatcherKey : reference->incrementalMatcherKey);
 		appendLength(packed, reference->variableResolutionOffsets.has_value());
 		if (reference->variableResolutionOffsets) {
 			requireCompilerInvariant(

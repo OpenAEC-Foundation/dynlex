@@ -21,6 +21,7 @@ bool loadSourceFiles(
 );
 bool analyzeSections(ParseContext &context);
 bool resolvePatterns(ParseContext &context);
+bool definitionCouldMatchReference(const PatternDefinition &definition, const PatternReference &reference);
 bool validate(ParseContext &context);
 bool inferTypes(ParseContext &context);
 bool validatePatternDefinitionConflicts(ParseContext &context);

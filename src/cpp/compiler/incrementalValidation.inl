@@ -98,6 +98,11 @@ class IncrementalValidation {
 	bool reusable(const Json &record) {
 		for (const Json &read : record.at("reads")) {
 			auto found = sections.find(read.at(0).get<std::string>());
+			if (found != sections.end() && context.deferredBodyResolution && context.deferredBodyResolution(found->second) &&
+				(static_cast<ValidationRead>(read.at(1).get<int>()) == ValidationRead::References ||
+				 static_cast<ValidationRead>(read.at(1).get<int>()) == ValidationRead::Binding ||
+				 static_cast<ValidationRead>(read.at(1).get<int>()) == ValidationRead::DiagnosticOrder))
+				continue;
 			if (found == sections.end() ||
 				fingerprint(
 					{found->second, static_cast<ValidationRead>(read.at(1).get<int>()), read.at(2).get<std::string>()}
@@ -119,6 +124,17 @@ class IncrementalValidation {
 				statistics.validation.diagnosticsRestored++;
 			}
 			return prior->at("success").get<bool>();
+		}
+		if (context.deferredBodyResolution && context.deferredBodyResolution(section)) {
+			context.demandBodyResolution(section);
+			for (const auto &[scope, id] : paths) {
+				const Section *owner = scope;
+				while (owner && owner != section)
+					owner = owner->parent;
+				if (owner)
+					for (const auto &[name, reference] : scope->variableDefinitions)
+						declarations[reference] = Json::array({id, name});
+			}
 		}
 		std::map<Read, std::string> dependencies;
 		reads = &dependencies;

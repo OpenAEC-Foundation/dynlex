@@ -1148,3 +1148,19 @@ lookups, capture effects, diagnostics and never-demanded snapshot retention.
 I015 already showed that deferring individual match allocations is insufficient.
 Name/timebox that next implementation before editing it; require real unit
 work reduction and at least 5% paired CPU gain for its larger consumer change.
+
+## I017: demand-driven whole-body resolution products
+
+Started 14 November 2026 at 11:08:12 UTC; first deadline 11:53:12 UTC.
+Baseline `13658706` / compiler `86635023...`. Reuse validated body-resolution
+products without restoring each match and binding until a semantic consumer
+requests that body. Preserve whole-unit dependencies, source/capture effects,
+precedence, diagnostics and snapshots for units that remain undemanded.
+
+Add minimal no-library activation/invalidation tests before implementation.
+Require actual restoration counters to fall and at least 5% real-program paired
+CPU gain for this larger consumer change, minimum seven pairs (31 if uncertain),
+no established ordinary/cold regression, required uncached <=120 seconds and
+relevant integration. I015 allocation-only and I016 lookup-edge experiments
+remain rejected. Audit all consumers before code; park if the full consumer
+boundary cannot be completed within the allowed iteration and one extension.

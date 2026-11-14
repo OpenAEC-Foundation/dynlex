@@ -599,7 +599,9 @@ struct ScopedSectionLocalVariableState {
 	};
 	std::vector<Entry> entries;
 
-	explicit ScopedSectionLocalVariableState(Section *section) {
+	explicit ScopedSectionLocalVariableState(ParseContext &context, Section *section) {
+		if (context.demandBodyResolution)
+			context.demandBodyResolution(section);
 		section->forEachExecutionSection([&](Section *current) {
 			for (const auto &[name, variable] : current->variables) {
 				(void)name;

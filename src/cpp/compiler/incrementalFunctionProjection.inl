@@ -234,6 +234,11 @@ Json captureAllFunctionProjection(
 	for (const Section *section : reusable) {
 		const std::string &path = paths.at(section);
 		bool reuseGlobalMatches = stableGlobalResolutionEnvironment && section->parent == context.mainSection;
+		if (context.deferredBodyResolution && context.deferredBodyResolution(section)) {
+			matches[path] = prior->at("matches").at(path);
+			matchEntries[path] = prior->at("match_entries").at(path);
+			continue;
+		}
 		if ((stableMatchingEnvironment || (stableGlobalFreeEnvironment && hasNoGlobalAccess(section)) || reuseGlobalMatches) &&
 			prior->at("bodies").contains(path) && prior->at("bodies").at(path) == projection.at("bodies").at(path) &&
 			prior->at("function_declarations").at(path) == projection.at("function_declarations").at(path)) {

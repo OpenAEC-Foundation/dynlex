@@ -44,7 +44,8 @@ class IncrementalMatcherCache {
 		std::string matchKey;
 		std::optional<std::tuple<PatternElement, int, int>> variable;
 	};
-	std::optional<std::string> recordBodyResolution(const std::vector<std::pair<size_t, PatternReference *>> &references);
+	std::optional<std::string>
+	recordBodyResolution(const std::vector<std::pair<size_t, PatternReference *>> &references, bool initial = true);
 	std::optional<std::vector<BodyResolution>> restoreBodyResolution(std::string_view key);
 	struct ReferenceMatchKeys {
 		std::string_view pattern;

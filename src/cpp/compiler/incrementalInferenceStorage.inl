@@ -55,6 +55,8 @@ class InferenceStorageIdentities {
 	// Executable-body records share the same declaration and invocation keys.
 	VariableReference *decodeDefinition(const Json &definition) const {
 		Section *section = identities.sections.at(definition.at(0).get<std::string>());
+		if (context.demandBodyResolution)
+			context.demandBodyResolution(section);
 		return normalizeBindingReference(section->variableDefinitions.at(definition.at(1).get<std::string>()));
 	}
 	std::optional<Json> encodeDefinition(VariableReference *reference) {

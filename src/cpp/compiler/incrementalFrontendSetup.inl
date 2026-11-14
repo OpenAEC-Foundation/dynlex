@@ -17,6 +17,7 @@ MatcherPathSnapshots matcherPaths(directory, compilerIdentity);
 InitialMatcherProjection initialMatcherProjection;
 PriorMatchKeys precedenceKeys;
 std::vector<BodyResolutionUnit> bodyUnits;
+IncrementalBodyDemand bodyDemand(context, matcherCache, frontendState, matcherPaths, initialParameterCounts);
 context.reuseMatcherResult = std::bind_front(&IncrementalMatcherCache::reuse, &matcherCache);
 context.recordMatcherResult = std::bind_front(&IncrementalMatcherCache::record, &matcherCache);
 context.prepareDeferredMatcherReplay = [&](const std::list<PatternReference *> &references) {
@@ -40,10 +41,10 @@ context.prepareDeferredMatcherReplay = [&](const std::list<PatternReference *> &
 		);
 };
 context.restoreDeferredBodyUnits = [&]() {
-	return restoreBodyResolutionUnits(context, matcherCache, bodyUnits);
+	return bodyDemand.restore(bodyUnits, initialMatcherTree);
 };
 context.preparePrecedenceMatcherReplay = [&](const std::vector<PatternReference *> &references) {
-	initialMatcherProjection.captureBodyUnits(matcherCache);
+	initialMatcherProjection.captureBodyUnits(context, matcherCache);
 	if (frontendState)
 		preparePrecedenceMatchReplay(
 			context, frontendState->at("all_function_projection"), matcherCache, precedenceKeys, matcherPaths, references,

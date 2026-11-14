@@ -324,6 +324,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalNativeObjects.inl"
 #include "incrementalSourceScopes.inl"
 #include "incrementalVariableBindings.inl"
+#include "incrementalBodyDemand.inl"
 #include "incrementalInferenceSymbolDependencies.inl"
 #include "incrementalClassDependencies.inl"
 #include "incrementalInferenceSummaryStore.inl"
@@ -620,7 +621,8 @@ bool compileIncrementally(
 				resolvedFunctionProjection["binding_units"] = bindings.snapshot();
 				resolvedFunctionProjection["initial_parameter_counts"] = initialParameterCounts.snapshot();
 				resolvedFunctionProjection["matcher_projection"] =
-					initialMatcherProjection.finish(resolvedFunctionProjection, matcherCache);
+					initialMatcherProjection.finish(context, resolvedFunctionProjection, matcherCache);
+				initialMatcherProjection.published = &resolvedFunctionProjection["matcher_projection"];
 				resolvedFunctionProjection["matcher_projection"]["classifications"] = classification.snapshot();
 				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
 			}
@@ -731,6 +733,7 @@ bool compileIncrementally(
 					result["files"] = recording->observations;
 					result["inactive_projection"] = std::move(inactiveProjection);
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
+					result["all_function_projection"]["binding_units"] = bindings.snapshot();
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
 					result["frontend_diagnostic_units"] = std::move(frontendDiagnosticUnits);
 					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
@@ -788,6 +791,7 @@ bool compileIncrementally(
 					};
 					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
+					result["all_function_projection"]["binding_units"] = bindings.snapshot();
 					result["validation_units"] = validation.snapshot();
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
 					result["frontend_diagnostic_units"] = std::move(frontendDiagnosticUnits);
