@@ -3,15 +3,16 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state after I024 candidate qualification
+## Current state after I024
 
-I024 fixes stale folded values read from named global initializers. The required
-O0/O2 regression fails on published master (cached 42 versus clean 43), then
-passes with an explicit dependency on entry execution. All 329 required checks
-pass uncached in 111.734 seconds; all 464 integration checks pass in 845.712
-seconds. Three real-program edit cases match complete normalized LLVM text and
-diagnostics. Root merge/rebuild/publication remains pending. The full goal is
-incomplete: source/section construction and tooling/output-mode reuse need work.
+I024 is merged and qualified: named global readers now retain their initializer
+execution, fixing cached 42 versus clean 43 after a provider edit. All 329
+required checks pass uncached on master in 111.772 seconds; all 464 integration
+checks pass on the identical candidate sources. Three real-program edits match
+complete normalized LLVM text and diagnostics. Seven paired controls show no
+established active-edit or cold-build regression; this is a correctness repair,
+not a speedup claim. The merged worktree/branch are removed, and an actual
+six-build archived replay passes after removal. The full goal remains incomplete.
 
 I022 does not change the published compiler: its sorted matcher-directory
 experiment failed the independent 31-pair CPU gate and remains unmerged.
@@ -22,8 +23,9 @@ cases. I021 removes an unconsumed full declaration table; it does not complete t
 compiler-wide goal. Semantic section construction and broad matching/binding,
 validation and persistence work still need finer reuse. Debug/trace builds disable
 major reuse paths; LSP and other output modes still need the shared frontend.
-Next: finish I024 root qualification/publication, then resume P03 source-owner
-deferral using the completed factory/consumer audit.
+Next: P03 source-owner deferral using the completed factory/consumer audit.
+Select unchanged owners before reconstructing outlines, with counters proving
+the work skipped and full activation/classification/lookup parity.
 
 ## Objective and constraints
 
@@ -210,7 +212,7 @@ remaining measured costs, not by table order alone.
 | I022 | P03/P06 screening, then P14 sorted matcher record directories | Complete: rejected | Eager tokenization and binding-proof hypotheses were screened out. Sorted directories pass focused replay/eviction/corruption checks, but independent 31 pairs give unused-edit CPU ratio 1.002023 [0.972789, 1.011769], failing the predeclared 2% gate. No experimental C++ or inspector change reaches master. |
 | I023 | Resolver completion transitions after cached-body reactivation | Complete: published and verified | Baseline fresh success/cached failure and debugger states false/true/true verified. Two-file state-transition fix passes repeated activation/value/deactivation, cached-syntax and classification assertions, broader body/cascade checks, and 329 required checks uncached in 108.166 s. Three real-program LLVM/diagnostic edit cases and all 464 integration checks pass. Merged root a49ebcf0 passes all 329 required checks uncached in 108.502 s; snapshot 5f11c2aa is pushed; worktree/branch removed and archived replay passes after removal. |
 
-| I024 | Named global initializer producer execution dependencies | Correctness candidate qualified; root publication pending | Red O0 cached 42/fresh 43; O0/O2 provider, argument, rename, repeat and revert cases pass. Required: 329 uncached in 111.734 s; integration: 464 in 845.712 s. Complete LLVM parity for three real-program edits; seven paired samples each for unused/body/game-data/cold controls. Full goal remains incomplete. |
+| I024 | Named global initializer producer execution dependencies | Correctness fix merged and qualified | Red O0 cached 42/fresh 43; O0/O2 provider, argument, rename, repeat and revert cases pass. Required: 329 uncached in 111.734 s; integration: 464 in 845.712 s. Complete LLVM parity for three real-program edits; seven paired samples each for unused/body/game-data/cold controls. Full goal remains incomplete. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -1964,3 +1966,24 @@ Evidence: `i024-{build,required,integration}.json`, focused/regression logs,
 `i024-ir-parity/report.json`, `i024-cost-summary.json`, individual raw comparison
 reports, and `i024-native-object-cleanup.json`. The full compiler-wide goal
 remains active and incomplete.
+
+
+I024 root qualification and cleanup finish on 14 November at 21:55 UTC. Merge
+`0dfe6d82`, compiler `1d743883...`, passes all 329 required checks uncached in
+111.772 s (112.736 s observer), with source/executable unchanged. Source, tests
+and library inputs match the qualified candidate exactly. The one-job master
+C++ rebuild takes 640.910 wall / 628.453 CPU seconds, peak 2,271,836 KiB. A frozen
+root executable is added to the replay manifest. The merged worktree and branch
+are removed; an actual six-build archived replay compares development and root
+compilers afterward, checks identical executables/diagnostics and unchanged
+compiler hashes, then removes the reconstructed 105-file data root. Its single
+pair establishes replay, not a performance estimate.
+
+The 21:52 timebox was exceeded during the final master build, required gate and
+archive/publication leg. Candidate implementation qualification and cost controls
+finished at 21:41; no implementation was added after that decision. This is an
+overrun, not a third optimization extension or an in-time completion claim.
+The full compiler-wide goal stays active and incomplete. Next is the coupled
+P03 owner/reference consumer boundary, not another isolated header/allocation
+cache. Evidence: `i024-root-{build,required}.json`, their logs,
+`i024-archived-replay.{json,log}`, and `p03-source-owner-boundary-audit.json`.
