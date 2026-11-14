@@ -3,7 +3,10 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state after I021
+## Current state after I022 (rejected experiment)
+
+I022 does not change the published compiler: its sorted matcher-directory
+experiment failed the independent 31-pair CPU gate and remains unmerged.
 
 Native builds reuse source preparation, eligible body syntax/resolution, resolved
 signature fingerprints, typed products and native artifacts in the verified edit
@@ -196,6 +199,7 @@ remaining measured costs, not by table order alone.
 | I019 | P06: ordered source-input joins | Complete: rejected | Independent 31 pairs do not establish the 2% gate. Prototype remains unmerged; evidence and source retained. Published decision: `5a213ad7`. |
 | I020 | P14: resolved declaration input/output units | Complete: kept and published | Active edits audit one of 1,750 inputs. Unused CPU improves 10.1%; ordinary/cold controls and LLVM parity pass. Required: 329, root 103.048 s; integration: 464. Published `cf78161d`. |
 | I021 | P14: consume fingerprints without redundant full records | Complete: kept, merged and qualified | Independent 31-pair unused CPU gain 4.46% [3.07%, 5.33%]; active gain 1.58% in seven pairs; no established cold change. Required: 329, root 107.682 s; full integration: 464 in 789.208 s; three LLVM parity cases. Measured and root archives replay after worktree removal. |
+| I022 | P03/P06 screening, then P14 sorted matcher record directories | Complete: rejected | Eager tokenization and binding-proof hypotheses were screened out. Sorted directories pass focused replay/eviction/corruption checks, but independent 31 pairs give unused-edit CPU ratio 1.002023 [0.972789, 1.011769], failing the predeclared 2% gate. No experimental C++ or inspector change reaches master. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -1723,3 +1727,61 @@ Evidence: `i021-root-build.json`, `i021-root-required.json`,
 `i021-archived-replay.json`. Candidate acceptance closed within the single
 extension; root publication closure continued afterward without another optimization.
 The full incremental compiler goal remains active and incomplete.
+
+
+## I022: matcher record directories after source-consumer screening
+
+Started 14 November 2026 at 19:30 UTC; first deadline 20:15 UTC.
+Baseline master `33ee096a`, compiler `7657790e...`. The preceding P03 audit
+found declaration-element products already cached. On the frozen LEXI8 unused
+edit, three debugger observations isolate eager reference tokenization at
+5.74–7.10 ms CPU and eager binding-domain proof construction at 1.26–2.14 ms.
+Reject both speculative container/proof changes before implementation. The
+initial wider tokenization probe included initial count setup; the corrected
+probe stops before that call. Debugger wall time is not a benchmark estimate.
+Evidence: `i022-reference-profile/token-profile.json`, `binding-profile.json`.
+
+One P14 producer/consumer goal: store sorted matcher-record directories and look
+up demanded record spans directly, eliminating the broad `previousEntries` hash
+map built whenever a bucket is loaded. Preserve all key/value bytes, partial
+retention, eviction, corruption errors and initial/final body products. Migrate
+the sole segment inspector with the new format; no runtime compatibility path.
+Add the format/work regression first and verify red against the frozen baseline.
+Keep only if paired real unused-edit CPU improves by at least 2% (seven pairs;
+31 if uncertain), with no established active/cold regression, clean LLVM and
+diagnostic parity, and the uncached required suite within 120 seconds. Full
+section persistence, tooling and every-stage incremental coverage remain open.
+
+
+I022 decision: reject. The exact frozen candidate `086b69ab...`, source
+`48f3484c`, builds successfully and passes focused format, replay, untouched
+segment retention, partial eviction, corruption, binding and signature-cascade
+checks against clean builds. Seven unused-edit pairs suggested CPU ratio
+0.968870 [0.954989, 1.013735], requiring confirmation. Independent 31 pairs
+produce ratio 1.002023 [0.972789, 1.011769], CPU medians 0.619357 versus
+0.621298 seconds; wall medians 0.634228 versus 0.627282 seconds, paired ratio
+0.992964 [0.963312, 1.002465]. This fails the 2% CPU gate. A lower substage
+load cost does not establish a whole-build gain. Do not merge the C++ or the
+new-format inspector.
+
+The seven-pair active-body CPU ratio is 0.989956 [0.975851, 0.998523]; cold
+ratio is 0.994844 [0.982791, 1.020039]. These controls do not override the
+predeclared target. All 50 screening rows and 66 confirmation rows complete,
+with identical executables/diagnostics and unchanged frozen compilers. The
+unused-edit checks also prove zero object builds and no link. No full required
+or integration qualification is claimed for this rejected prototype.
+
+Evidence: `i022-build.json`, `i022-baseline-red.log`, `i022-focused.log`,
+`i022-comparison-index.json`, three `i022-*-comparison.json` files,
+`i022-confirmation.json`, `i022-stage-confirmation.json`. Preserve the source
+branch and immutable compiler/data archive. The completed one-off profiling
+cache was pruned; source, debugger probes and reports remain. No extension used.
+
+Next bounded correctness goal: import and qualify the already reduced resolver
+retry fix from the UI agent's `b265ca5f`. Its six-line, library-free regression
+activates an unchanged function with a local binding after a cached build.
+Definition reclassification reopens the resolver, but the current one-shot
+unmatched-variable wakeup cannot run again. Keep this distinct from the
+remaining named-global dependency and diagnostic-flow fixes on that branch.
+Then resume source-owner deferral across classification and body replay; a
+header-only cache and a lazy token vector remain rejected hypotheses.
