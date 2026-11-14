@@ -6,7 +6,8 @@
 #include "syntaxConfig.h"
 
 bool ClassSection::processLine(ParseContext &context, CodeLine *line) {
-	context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "unexpected class line", Range(line, line->patternText))
+	context.addDiagnostic(
+		Diagnostic(context, Diagnostic::Level::Error, "unexpected class line", Range(line, line->patternText))
 	);
 	return false;
 }
@@ -43,4 +44,15 @@ Section *ClassSection::createSection(ParseContext &context, CodeLine *line) {
 
 	// Fall back to base class (handles "replacement" for flexes, or gives error)
 	return DefinitionSection::createSection(context, line);
+}
+
+bool ClassSection::finalize(ParseContext &context) {
+	if (static_cast<bool>(classDefinition->retainSection) == static_cast<bool>(classDefinition->releaseSection))
+		return true;
+	Section *present = classDefinition->retainSection ? classDefinition->retainSection : classDefinition->releaseSection;
+	context.addDiagnostic(Diagnostic(
+		context, Diagnostic::Level::Error, "managed class requires both retain and release sections",
+		Range(present->openingLine, present->openingLine->patternText)
+	));
+	return false;
 }

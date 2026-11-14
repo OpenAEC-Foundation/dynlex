@@ -878,6 +878,7 @@ order and release them in reverse order; pointer copies, arguments, returns, and
 Lifecycle inference follows runtime expressions from main, exposed functions and their selected callees. Type-only
 operands do not make their class lifecycle bodies reachable. Runtime owning values, nested owning fields and explicit
 destruction do; lifecycle bodies can in turn require more runtime types. Retain/release declaration pairing is validated
+when the class section is finalized, before any type consumer can inspect its lifecycle,
 independently of runtime use. Intrinsic type-only operand classification is shared with memory diagnostics.
 Resolved data-field values and symbolic callable constants participate in this graph:
 their generated arrays and callbacks can own managed values even when the containing

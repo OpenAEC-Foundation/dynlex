@@ -4,6 +4,7 @@ from test_incremental_lifecycle_constraints import check_lifecycle_constraint_de
 
 
 def check_lifecycle_replacement_roots(root, build):
+    check_lifecycle_pair_edits(root, build)
     check_lifecycle_constraint_dependencies(root, build)
     main = root / "lifecycle_replacement_roots.dl"
     source = (
@@ -37,3 +38,31 @@ def check_lifecycle_replacement_roots(root, build):
     assert invalid[1:] == build(False, entry=main, success=False)[1:]
     main.write_text(valid)
     assert build(entry=main)[1:] == build(False, entry=main)[1:]
+
+
+def check_lifecycle_pair_edits(root, build):
+    for present, missing in (("retain", "release"), ("release", "retain")):
+        main = root / f"lifecycle_missing_{missing}.dl"
+        declaration = ('class:\n    patterns:\n        token\n'
+                       f'    {present}:\n        @intrinsic("discard", 0)\n')
+        use = ('to use managed: @intrinsic("discard", @intrinsic("construct", token))\n'
+               'use managed\n')
+        invalid_source = declaration + use
+        main.write_text(invalid_source)
+        invalid = build(entry=main, success=False)
+        assert "managed class requires both retain and release sections" in invalid[1]
+        assert invalid[1:] == build(False, entry=main, success=False)[1:]
+        repeated = build(entry=main, success=False)
+        assert repeated[0]["frontend_reused"], "unchanged malformed class repeated frontend work"
+        assert repeated[1:] == invalid[1:]
+
+        main.write_text(declaration + f'    {missing}:\n        @intrinsic("discard", 0)\n' + use)
+        assert build(entry=main)[1:] == build(False, entry=main)[1:]
+        main.write_text(invalid_source)
+        assert build(entry=main, success=False)[1:] == invalid[1:]
+
+        # An unused declaration has the same pairing contract.
+        main.write_text(declaration)
+        unused = build(entry=main, success=False)
+        assert unused[1:] == build(False, entry=main, success=False)[1:]
+        assert "managed class requires both retain and release sections" in unused[1]

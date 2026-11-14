@@ -1987,3 +1987,38 @@ The full compiler-wide goal stays active and incomplete. Next is the coupled
 P03 owner/reference consumer boundary, not another isolated header/allocation
 cache. Evidence: `i024-root-{build,required}.json`, their logs,
 `i024-archived-replay.{json,log}`, and `p03-source-owner-boundary-audit.json`.
+
+## I026: malformed lifecycle-pair source diagnostics
+
+Started 2026-11-14T23:34:34.308962+00:00 from published master `3a78aa02`; 45-minute
+iteration including qualification, one extension available only after concrete
+progress. I025 source-owner work is parked on `codex/incremental-source-owners`
+at `ecae0ad1`; its executable/evidence remain in the structured evidence folder.
+It is unqualified (330 required passes, one precedence reuse assertion failure
+in 103.962 seconds), with no paired performance claim and no master changes.
+
+Independent correctness goal: a class declaring only retain or only release
+must report a configured source diagnostic at the present lifecycle header,
+before managed-type consumers enforce their internal complete-pair invariant.
+Both minimal no-import required fixtures abort on the published compiler.
+Acceptance: both emit the expected single diagnostic, complete paired classes
+retain their behavior, required checks pass uncached within 120 seconds, and
+the relevant lifecycle/incremental integration checks pass. No speedup claim.
+The compiler-wide incremental objective remains active and incomplete.
+
+The suite split additionally needs an audit: integration currently contains
+compiler-only regressions with standard-library imports. Required-suite timing
+alone does not prove all focused compiler coverage meets the budget.
+
+I026 root-cause correction: unused malformed classes already report the existing
+diagnostic during inference. Construction reaches the managed-type invariant
+before that late check and aborts. Both required regressions now construct the
+class and reproduce SIGABRT on published master. Pair validation is moved from
+the late whole-tree inference walk into class finalization; the old walk is
+removed. The initial unused-fixture baseline evidence is retained separately.
+
+I026 migrates the old library-importing `integration/lifecycle_missing_release`
+fixture to the minimal required reproduction, adding the symmetric missing-retain
+case. Incremental tests cover cached diagnostics, adding the missing section,
+removing it again, unused declarations, and clean-build parity. The obsolete
+late whole-tree pairing scan and duplicate integration fixture are removed.
