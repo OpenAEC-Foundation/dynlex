@@ -58,10 +58,10 @@ void retainInferenceInputPaths(const Json &schedule, const Json &graph, std::set
 	}
 }
 
+template <typename Declarations>
 Json captureInactiveProjection(
-	const Json &resolvedDeclarations, const ParseContext &context, const Json &observations,
-	const Json *priorInactive = nullptr,
-	const std::set<std::string> *generatedFunctionPaths = nullptr,
+	Declarations resolvedDeclarations, const ParseContext &context, const Json &observations,
+	const Json *priorInactive = nullptr, const std::set<std::string> *generatedFunctionPaths = nullptr,
 	const std::map<std::string, Section *> *knownSections = nullptr, const Json *priorSources = nullptr,
 	SourceProjectionWork *projectionWork = nullptr, const Json *requiredSources = nullptr,
 	const std::set<std::string> *retainedActivePaths = nullptr
@@ -89,5 +89,5 @@ Json captureInactiveProjection(
 	Json sources = sourceProjection(context, observations, selected, false, false, false, priorSources, projectionWork);
 	if (requiredSources && !sourceProjectionsEqual(sources, *requiredSources))
 		return nullptr;
-	return Json{{"inactive", inactive}, {"declarations", resolvedDeclarations}, {"sources", std::move(sources)}};
+	return Json{{"inactive", inactive}, {"declarations", resolvedDeclarations()}, {"sources", std::move(sources)}};
 }

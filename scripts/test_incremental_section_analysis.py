@@ -1,5 +1,7 @@
 """Expose actual section work and time spent before a section-stage error."""
 
+from test_incremental_declaration_projections import check_declaration_projection_units
+
 
 def check_section_analysis_work(root, build):
     main = root / "section_analysis_work.dl"
@@ -24,6 +26,7 @@ def check_section_analysis_work(root, build):
     assert sum(stats[name] for name in phases) <= stats["parse_ms"]
     assert stats["source_outline_restore_ms"] <= stats["parse_ms"]
     check_section_failure_work(root, build)
+    check_declaration_projection_units(root, build)
 
 
 def check_section_failure_work(root, build):

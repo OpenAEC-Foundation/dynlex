@@ -75,11 +75,11 @@ std::vector<bool> reusableConstraintProbes(
 	std::unordered_set<std::string> changedDeclarations;
 	// Both sides of a declaration edit participate: readers of a removed
 	// provider still depend on its previous signature.
-	for (const char *field : {"pattern_declarations", "inactive", "bodies", "matches"}) {
+	for (const char *field : {"declaration_fingerprints", "inactive", "bodies", "matches"}) {
 		for (const auto &[path, value] : prior.at(field).items())
 			if (!current.at(field).contains(path) || current.at(field).at(path) != value) {
 				pending.push_back(path);
-				if (std::string_view(field) == "pattern_declarations")
+				if (std::string_view(field) == "declaration_fingerprints")
 					changedDeclarations.insert(path);
 			}
 		for (const auto &[path, value] : current.at(field).items())
@@ -87,8 +87,8 @@ std::vector<bool> reusableConstraintProbes(
 				pending.push_back(path);
 	}
 	std::vector<ConstraintProbePattern> addedPatterns;
-	for (const auto &[path, value] : current.at("pattern_declarations").items())
-		if (!prior.at("pattern_declarations").contains(path) || prior.at("pattern_declarations").at(path) != value)
+	for (const auto &[path, value] : current.at("declaration_fingerprints").items())
+		if (!prior.at("declaration_fingerprints").contains(path) || prior.at("declaration_fingerprints").at(path) != value)
 			addedPatterns.emplace_back(*sections.at(path));
 	const auto items = schedule.at("items").get<std::vector<std::string>>();
 	const auto texts = schedule.at("texts").get<std::vector<std::string>>();
