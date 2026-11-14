@@ -3,7 +3,7 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state after I022 (rejected experiment)
+## Current state after I023 qualification (publication pending)
 
 I022 does not change the published compiler: its sorted matcher-directory
 experiment failed the independent 31-pair CPU gate and remains unmerged.
@@ -200,7 +200,7 @@ remaining measured costs, not by table order alone.
 | I020 | P14: resolved declaration input/output units | Complete: kept and published | Active edits audit one of 1,750 inputs. Unused CPU improves 10.1%; ordinary/cold controls and LLVM parity pass. Required: 329, root 103.048 s; integration: 464. Published `cf78161d`. |
 | I021 | P14: consume fingerprints without redundant full records | Complete: kept, merged and qualified | Independent 31-pair unused CPU gain 4.46% [3.07%, 5.33%]; active gain 1.58% in seven pairs; no established cold change. Required: 329, root 107.682 s; full integration: 464 in 789.208 s; three LLVM parity cases. Measured and root archives replay after worktree removal. |
 | I022 | P03/P06 screening, then P14 sorted matcher record directories | Complete: rejected | Eager tokenization and binding-proof hypotheses were screened out. Sorted directories pass focused replay/eviction/corruption checks, but independent 31 pairs give unused-edit CPU ratio 1.002023 [0.972789, 1.011769], failing the predeclared 2% gate. No experimental C++ or inspector change reaches master. |
-| I023 | Resolver completion transitions after cached-body reactivation | Qualification in progress | Baseline fresh success/cached failure and debugger states false/true/true verified. Two-file state-transition fix passes repeated activation/value/deactivation, cached-syntax and classification assertions, broader body/cascade checks, and 329 required checks uncached in 108.166 s. Integration/real-program IR/publication remain pending. |
+| I023 | Resolver completion transitions after cached-body reactivation | Qualified; publication in progress | Baseline fresh success/cached failure and debugger states false/true/true verified. Two-file state-transition fix passes repeated activation/value/deactivation, cached-syntax and classification assertions, broader body/cascade checks, and 329 required checks uncached in 108.166 s. Three real-program LLVM/diagnostic edit cases and all 464 integration checks pass; root publication remains pending. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -1824,3 +1824,25 @@ Evidence: `i023-baseline-red.log`, `i023-repro/gdb-guard.log`,
 after the required gate for the UI agent's queued browser rebuild. Only I022's
 rejection documentation has reached master (`d5b5eb0c`); its experimental cache
 format and inspector remain on the archived, unmerged source branch.
+
+
+I023 candidate qualification is complete: full integration passes all 464 checks
+with zero failures/skips in 819.926 s suite / 821.110 s observer. Compiler
+`322cd31d...` and source remain unchanged. The inherited observer names its
+files `i023-integration-retry.*`; this is the first and only I023 integration
+attempt. All nine real LEXI8 builds also pass complete normalized LLVM-text and
+diagnostic parity for unused-body, active-body and game-data edits. Fresh builds
+report zero reused products; source/IR/reports remain after six completed caches
+were pruned. Root merge/rebuild/required qualification and publication are next.
+
+A separate correctness screen confirms the next dependency hole on this same
+root-derived compiler: changing a named global's initializer provider from 42
+to 43 leaves incremental output at 42 while a clean build prints 43. The reader
+unit records only its own source and one global type input, with no execution
+callee or value query. Entry inference reruns, but one instantiation and two pure
+results are reused. This identifies a missing producer dependency in inference,
+not an IR-only cache issue. Port the existing UI fix with a minimal required
+regression before resuming source-owner deferral. Evidence:
+`i024-global-initializer-screen/{report,dependency-screen,screen-summary}.json`.
+The first copied UI shorthand was unsupported by this baseline; the verified
+repro uses ordinary long-form function syntax and no imports.
