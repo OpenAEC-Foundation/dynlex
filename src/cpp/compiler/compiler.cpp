@@ -239,7 +239,7 @@ bool compileBeforeTypeInference(const std::string &path, ParseContext &context, 
 			std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - stageStart).count();
 		stageStart = std::chrono::steady_clock::now();
 	};
-	auto unfinishedStage = llvm::make_scope_exit([&]() {
+	llvm::scope_exit unfinishedStage([&]() {
 		if (stageIndex < context.frontendStageMilliseconds.size())
 			context.frontendStageMilliseconds.at(stageIndex) =
 				std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - stageStart).count();
