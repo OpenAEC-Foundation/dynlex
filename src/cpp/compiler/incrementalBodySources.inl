@@ -19,7 +19,19 @@ class InferenceBodySources {
 			for (const auto &[name, reference] : section->variableDefinitions)
 				declarations.emplace(reference, Json::array({path, name}));
 		}
+		context.bodyBindingObservers[this] = [this](Section &owner) {
+			auto visit = [&](auto &&self, Section &scope) -> void {
+				for (const auto &[name, reference] : scope.variableDefinitions)
+					declarations.emplace(reference, Json::array({this->identities.paths.at(&scope), name}));
+				for (Section *child : scope.children)
+					self(self, *child);
+			};
+			visit(visit, owner);
+		};
 	}
+	InferenceBodySources(const InferenceBodySources &) = delete;
+	InferenceBodySources &operator=(const InferenceBodySources &) = delete;
+	~InferenceBodySources() { context.bodyBindingObservers.erase(this); }
 
 	Json section(const Section *value) const { return value ? Json(identities.paths.at(value)) : Json(nullptr); }
 	Section *section(const Json &value) const {
@@ -41,7 +53,10 @@ class InferenceBodySources {
 		return found == declarations.end() ? Json(nullptr) : found->second;
 	}
 	VariableReference *declaration(const Json &value) const {
-		return section(value.at(0))->variableDefinitions.at(value.at(1).get<std::string>());
+		Section *owner = section(value.at(0));
+		if (context.demandBodyResolution)
+			context.demandBodyResolution(owner);
+		return owner->variableDefinitions.at(value.at(1).get<std::string>());
 	}
 
 	Json line(const CodeLine *value) const {

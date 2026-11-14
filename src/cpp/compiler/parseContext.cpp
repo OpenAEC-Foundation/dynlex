@@ -404,6 +404,8 @@ std::shared_ptr<InstantiatedSectionBody> ParseContext::cloneSectionBody(
 ) {
 	if (!section)
 		return {};
+	if (demandBodyResolution)
+		demandBodyResolution(section);
 	auto cloneStarted = std::chrono::steady_clock::now();
 	sourceBodyClones++;
 	if (!parentBody && !section->isFlex &&
@@ -545,4 +547,10 @@ ParseContext::~ParseContext() {
 	llvmModule = nullptr;
 	delete llvmContext;
 	llvmContext = nullptr;
+}
+
+std::vector<PatternDefinition *> ParseContext::sourceDefinitions(PatternReference *reference) {
+	if (reference->match)
+		return reference->match->matchingDefinitions;
+	return deferredHeaderDefinitions ? deferredHeaderDefinitions(reference) : std::vector<PatternDefinition *>{};
 }

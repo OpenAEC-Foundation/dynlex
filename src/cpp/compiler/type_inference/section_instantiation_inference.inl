@@ -75,7 +75,7 @@ bool ensureSectionInstantiationInferred(
 		return false;
 	}
 
-	ScopedSectionLocalVariableState calleeVariableState(section);
+	ScopedSectionLocalVariableState calleeVariableState(parseContext, section);
 	InferenceContext context(parseContext, callerContext && callerContext->trial);
 	struct RetainTrialProducts {
 		InferenceContext &child;

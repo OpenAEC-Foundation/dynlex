@@ -1,7 +1,10 @@
 """A changed caller can activate an unchanged body through a function value."""
 
+from test_incremental_body_demand import check_body_resolution_demand
+
 
 def check_inactive_body_activation(root, build):
+    check_body_resolution_demand(root, build)
     main = root / "inactive_callback_activation.dl"
     source = (
         'integer means: @intrinsic("type", "int")\n'

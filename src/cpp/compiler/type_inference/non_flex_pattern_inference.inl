@@ -98,7 +98,7 @@
 		publishDeferredInferenceDiagnostics(context, inst);
 	if (!inst.inferring && !hasReusableInstantiation) {
 		int failureBase = static_cast<int>(context.diagnosticTraceDepth());
-		ScopedSectionLocalVariableState calleeVariableState(matchedSection);
+		ScopedSectionLocalVariableState calleeVariableState(context.parseContext, matchedSection);
 		if (context.trial)
 			inst.body = context.cloneSectionBody(matchedSection, nullptr, storageScope);
 		Instantiation *savedInst = context.currentInstantiation;

@@ -29,8 +29,8 @@ struct VariableBindingWork {
 struct VariableBindingHooks {
 	using Groups = std::vector<VariableBindingGroup>;
 	std::function<Groups(const VariableBindingUnit &, const std::function<Groups()> &)> unit;
-	std::function<void()> complete;
+	std::function<void(Section *)> complete;
 	VariableBindingWork &work;
 };
 
-void materializeVariableGroups(ParseContext &context);
+void materializeVariableGroups(ParseContext &context, Section *domain = nullptr);

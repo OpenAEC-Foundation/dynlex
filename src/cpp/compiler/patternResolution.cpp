@@ -837,5 +837,6 @@ findAlternativePatternSuggestion(PatternReference *reference, PatternMatch *matc
 		if (resolutionTraceEnabled())                                                                                          \
 			std::cerr << "[res] " << (__VA_ARGS__) << '\n';                                                                    \
 	} while (false)
+#include "patternResolutionBodyDemand.inl"
 #include "patternResolutionMatching.inl"
 #undef TRACE_RESOLUTION

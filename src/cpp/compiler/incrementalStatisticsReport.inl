@@ -163,6 +163,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"definition_parse_misses", statistics.definitionParseMisses},
 					  {"body_resolution_reference_visits", context.bodyResolutionReferenceVisits},
 					  {"body_resolution_units_reused", context.bodyResolutionUnitsReused},
+					  {"body_resolution_units_deferred", context.bodyResolutionUnitsDeferred},
+					  {"body_resolution_units_demanded", context.bodyResolutionUnitsDemanded},
 					  {"body_resolution_references_restored", context.bodyResolutionReferencesRestored},
 					  {"cached_body_resolution_references_skipped", context.cachedBodyResolutionReferencesSkipped},
 					  {"cached_body_selection_ms", statistics.cachedBodySelectionMilliseconds},

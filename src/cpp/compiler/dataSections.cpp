@@ -157,11 +157,11 @@ std::optional<Section *> createDataSectionMetadata(ParseContext &context, CodeLi
 
 bool prepareDataSectionCalls(ParseContext &context) {
 	for (CodeLine *line : context.codeLines) {
-		if (!line->sectionOpening || !line->expression.rootReference() || !line->expression.rootReference()->match)
+		if (!line->sectionOpening || !line->expression.rootReference())
 			continue;
-		PatternMatch *match = line->expression.rootReference()->match;
+		auto definitions = context.sourceDefinitions(line->expression.rootReference());
 		DataSectionDefinition *data = nullptr;
-		for (PatternDefinition *definition : match->matchingDefinitions) {
+		for (PatternDefinition *definition : definitions) {
 			if (definition->section->dataSection) {
 				if (data && data != definition->section->dataSection.get())
 					return dataSectionDiagnostic(
@@ -172,6 +172,8 @@ bool prepareDataSectionCalls(ParseContext &context) {
 		}
 		if (!data)
 			continue;
+		if (context.demandBodyResolution)
+			context.demandBodyResolution(line->section);
 		Expression *call = line->expression;
 		if (!data->hasValue)
 			return dataSectionDiagnostic(context, call->range, "A data section requires a value block");

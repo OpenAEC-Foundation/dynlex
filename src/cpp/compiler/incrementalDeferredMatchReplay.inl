@@ -7,6 +7,8 @@ struct PriorMatchKey {
 using PriorMatchKeys = std::unordered_map<const PatternReference *, PriorMatchKey>;
 
 struct BodyResolutionUnit {
+	Section *section = nullptr;
+	std::string path;
 	std::vector<PatternReference *> references;
 	std::vector<size_t> deferredIndices;
 	std::string key;
@@ -81,6 +83,8 @@ void prepareDeferredMatchReplay(
 		if (!sameShapes)
 			continue;
 		BodyResolutionUnit unit;
+		unit.section = const_cast<Section *>(section);
+		unit.path = path;
 		bool restoreUnit = section->parent == context.mainSection &&
 						   (diagnosticUnits.empty() || !diagnosticUnits.contains(digest(sectionIdentity(*section).dump()))) &&
 						   prior.at("body_units").contains(path);

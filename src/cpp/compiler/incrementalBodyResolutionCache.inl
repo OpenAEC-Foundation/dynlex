@@ -1,17 +1,19 @@
 // Body units share the compact matcher store. Their keys never enter the
 // ordinary matcher: the leading kind byte distinguishes their serialized data.
-std::optional<std::string>
-IncrementalMatcherCache::recordBodyResolution(const std::vector<std::pair<size_t, PatternReference *>> &references) {
+std::optional<std::string> IncrementalMatcherCache::recordBodyResolution(
+	const std::vector<std::pair<size_t, PatternReference *>> &references, bool initial
+) {
 	if (references.empty())
 		return std::nullopt;
 	std::string packed(1, '\2');
 	appendLength(packed, references.size());
 	for (const auto &[index, reference] : references) {
 		requireCompilerInvariant(reference->resolved, "body-resolution snapshot contains an unresolved reference");
-		if (!reference->variableResolutionOffsets && reference->initialMatcherKey.empty())
+		if (!reference->variableResolutionOffsets &&
+			(initial ? reference->initialMatcherKey : reference->incrementalMatcherKey).empty())
 			return std::nullopt;
 		appendLength(packed, index);
-		appendString(packed, reference->initialMatcherKey);
+		appendString(packed, initial ? reference->initialMatcherKey : reference->incrementalMatcherKey);
 		appendLength(packed, reference->variableResolutionOffsets.has_value());
 		if (reference->variableResolutionOffsets) {
 			requireCompilerInvariant(
@@ -32,17 +34,15 @@ IncrementalMatcherCache::recordBodyResolution(const std::vector<std::pair<size_t
 	return key;
 }
 
-std::optional<std::vector<IncrementalMatcherCache::BodyResolution>>
-IncrementalMatcherCache::restoreBodyResolution(std::string_view key) {
+bool IncrementalMatcherCache::visitBodyResolution(std::string_view key, const std::function<void(BodyResolution)> &visit) {
 	auto entry = findPrevious(key);
 	if (entry == previousEntries.end())
-		return std::nullopt;
+		return false;
 	std::string_view packed = entry->second;
 	if (packed.empty() || packed.front() != '\2')
 		throw std::runtime_error("invalid body-resolution cache kind");
 	size_t position = 1;
 	std::uint64_t count = readLength(packed, position);
-	std::vector<BodyResolution> result;
 	for (std::uint64_t index = 0; index < count; index++) {
 		size_t referenceIndex = readLength(packed, position);
 		std::string matchKey(readString(packed, position));
@@ -59,10 +59,36 @@ IncrementalMatcherCache::restoreBodyResolution(std::string_view key) {
 			int end = readLength(packed, position);
 			reference.variable.emplace(std::move(element), start, end);
 		}
-		result.push_back(std::move(reference));
+		visit(std::move(reference));
 	}
 	if (position != packed.size())
 		throw std::runtime_error("trailing body-resolution cache data");
 	retain(key);
+	return true;
+}
+
+std::optional<std::vector<IncrementalMatcherCache::BodyResolution>>
+IncrementalMatcherCache::restoreBodyResolution(std::string_view key) {
+	std::vector<BodyResolution> result;
+	if (!visitBodyResolution(key, [&](BodyResolution reference) {
+		result.push_back(std::move(reference));
+	}))
+		return std::nullopt;
 	return result;
+}
+
+bool IncrementalMatcherCache::retainBodyResolutionDependencies(std::string_view key) {
+	std::vector<std::string> dependencies;
+	if (!visitBodyResolution(key, [&](BodyResolution reference) {
+		if (!reference.matchKey.empty())
+			dependencies.push_back(std::move(reference.matchKey));
+	}))
+		return false;
+	if (!std::ranges::all_of(dependencies, [&](const std::string &dependency) {
+		return contains(dependency);
+	}))
+		return false;
+	for (const std::string &dependency : dependencies)
+		retain(dependency);
+	return true;
 }

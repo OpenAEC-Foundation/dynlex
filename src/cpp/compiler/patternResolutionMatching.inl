@@ -164,7 +164,7 @@ static bool patternMatchUsesDefinition(const PatternMatch &match, const PatternD
 // reference's matcher input (or in the spelling of a numeric argument). If
 // every canonical path requires a missing word, adding this definition cannot
 // change the reference's existing match.
-static bool definitionCouldMatchReference(const PatternDefinition &definition, const PatternReference &reference) {
+bool definitionCouldMatchReference(const PatternDefinition &definition, const PatternReference &reference) {
 	for (const auto &path : definition.indexedPaths) {
 		bool pathPossible = true;
 		for (const PatternElement &required : path) {
@@ -486,6 +486,14 @@ bool resolvePatterns(ParseContext &context) {
 
 	// Phase 1: resolve body references and definitions
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> definitionToReferences;
+	context.restoredBodyReference = [&](PatternReference *reference) {
+		if (reference->match)
+			trackMatchDefinitions(*reference->match, reference, definitionToReferences);
+	};
+	struct RestoredBodyTrackingScope {
+		ParseContext &context;
+		~RestoredBodyTrackingScope() { context.restoredBodyReference = {}; }
+	} restoredBodyTrackingScope{context};
 	FailedMatchDependencies failedBodyMatchDependencies;
 	FailedReferenceWorklist failedBodyWorklist(failedBodyMatchDependencies);
 	bool staleInvalidationOccurred = false;
@@ -576,6 +584,8 @@ bool resolvePatterns(ParseContext &context) {
 
 	// Helper: add a definition to the pattern tree.
 	auto addDefinitionToTree = [&](PatternDefinition *definition, SectionType treeType) {
+		if (context.demandBodiesForDefinition)
+			context.demandBodiesForDefinition(*definition);
 		context.patternTrees[(size_t)treeType]->addPatternDefinition(definition, treeType);
 		failedBodyWorklist.notifyAddedDefinition(*definition);
 		TRACE_RESOLUTION("add " + definitionTraceId(definition) + " tree=" + std::to_string((int)treeType));
@@ -606,6 +616,8 @@ bool resolvePatterns(ParseContext &context) {
 		if (activeResolvingReference && activeResolvingMatch && patternMatchUsesDefinition(*activeResolvingMatch, &definition))
 			queueReferenceForRematch(activeResolvingReference);
 
+		if (context.demandBodiesForDefinition)
+			context.demandBodiesForDefinition(definition);
 		tree->removePatternDefinition(&definition);
 		mutation();
 		tree->addPatternDefinition(&definition, treeType);
@@ -859,7 +871,7 @@ bool resolvePatterns(ParseContext &context) {
 			context.prepareDeferredMatcherReplay(deferredBodyReferences);
 		{
 			auto bodyStart = ResolutionClock::now();
-			restoreDeferredBodyReferences(context, deferredBodyReferences, definitionToReferences);
+			restoreDeferredBodyReferences(context, deferredBodyReferences);
 			context.resolutionBodyMilliseconds += resolutionMilliseconds(bodyStart);
 		}
 		for (int iteration = 0; iteration < context.options.maxResolutionIterations && !deferredBodyReferences.empty();

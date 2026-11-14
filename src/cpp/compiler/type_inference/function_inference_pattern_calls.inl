@@ -578,7 +578,7 @@ bool FlexInferenceScope::enter(Expression *expr, const PatternCallResolution &re
 	}
 	BindingFrameStack callBindingFrameStack = flexBindingFrameStack;
 	pushResolvedFlexBindingScope(callBindingFrameStack, expr, resolution);
-	ScopedSectionLocalVariableState calleeVariableState(matchedSection);
+	ScopedSectionLocalVariableState calleeVariableState(context.parseContext, matchedSection);
 	resetSectionLocalVariableTypes(matchedSection);
 	if (matchedSection->dataSection && !inferDataSectionFields(expr, matchedSection, context, callBindingFrameStack))
 		return;

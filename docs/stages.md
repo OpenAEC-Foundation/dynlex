@@ -41,6 +41,21 @@ section-line offsets and opener/import decisions for the ordinary section analyz
 These descriptors contain no owned strings and do not enlarge mutable code lines.
 Semantic section objects are still constructed against the current program.
 
+Native incremental builds also retain eligible ordinary function bodies as whole
+resolution products. Source, declaration, scope-rule, matcher-tree and precedence
+proofs select reusable units. Initial and final outcomes retain their complete
+positive and failed-lookup product closures. Small header-definition summaries
+serve section metadata without demanding detailed matches. Source materialization,
+inference, cloning and relevant provider mutations demand a unit before consuming
+its matches or bindings. Reusing a typed body can leave its original resolution
+product encoded for the entire build. Binding snapshots retain untouched domains;
+late demands publish new source bindings to live inference identity indexes.
+`body_resolution_units_deferred` counts units still encoded at reporting time,
+`body_resolution_units_demanded` counts units restored on semantic demand, and
+`body_resolution_references_restored` counts actual replayed reference outcomes.
+This whole-unit path currently excludes debug/trace builds and does not extend
+the native incremental driver to tooling or other output modes.
+
 Native incremental builds retain unresolved expression syntax with a reference
 outline. An unchanged function body registers its current-source pattern and
 variable references from that outline without constructing its expression tree.

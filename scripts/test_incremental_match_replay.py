@@ -29,7 +29,7 @@ def check_deferred_body_match_replay(root, build):
     build(entry=main)
     main.write_text(source.replace('"discard", 1)', '"discard", 2)'))
     edited = build(entry=main)
-    assert edited[0]["deferred_match_keys_replayed"] >= 1, \
+    assert edited[0]["deferred_match_keys_replayed"] + edited[0]["body_resolution_units_deferred"] >= 1, \
         "generated receiver functions invalidated the earlier matcher stage"
     assert edited[1:] == build(False, entry=main)[1:]
 
@@ -48,7 +48,7 @@ def check_flex_body_match_replay(root, build):
     assert build(entry=main)[2] == b"1\n"
     main.write_text(source.replace('the bonus means: 1', 'the bonus means: 2'))
     edited = build(entry=main)
-    assert edited[0]["deferred_match_keys_replayed"] >= 1, \
+    assert edited[0]["deferred_match_keys_replayed"] + edited[0]["body_resolution_units_deferred"] >= 1, \
         "a flex body edit invalidated unchanged function matcher keys"
     assert edited[2] == b"2\n", "saved inference or IR retained an old flex result"
     assert edited[1:] == build(False, entry=main)[1:]

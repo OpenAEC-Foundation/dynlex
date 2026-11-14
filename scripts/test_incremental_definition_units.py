@@ -20,7 +20,8 @@ def check_definition_resolution_units(root, build):
     for value in (2, 3):
         main.write_text(source.replace('"discard", 1)', f'"discard", {value})'))
         edited = build(entry=main)
-        assert edited[0]["body_resolution_references_restored"] >= 3, "flex references bypassed resolution-unit reuse"
+        assert edited[0]["body_resolution_references_restored"] == 2, "flex references bypassed resolution-unit reuse"
+        assert edited[0]["body_resolution_units_deferred"] == 1, "unchanged caller replayed its cached body"
         assert edited[0]["body_resolution_reference_visits"] == 0, "unchanged flex bodies repeated resolution"
         assert edited[0]["body_resolution_reference_visits"] < cold[0]["body_resolution_reference_visits"]
         assert edited[1:] == build(False, entry=main)[1:]
