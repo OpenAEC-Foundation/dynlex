@@ -73,6 +73,7 @@
 #include <bit>
 #include <cctype>
 #include <chrono>
+#include <deque>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -628,7 +629,7 @@ bool compileIncrementally(
 			for (const auto &[path, section] : sections)
 				sectionPaths.emplace(section, path);
 			IncrementalInferenceReads inferenceReads(sectionPaths);
-			IncrementalInferenceProducts products(context, sectionPaths, summaryStore, inferenceReads, statistics);
+			IncrementalInferenceProducts products(context, sectionPaths, sections, summaryStore, inferenceReads, statistics);
 			InferenceValueIdentities valueIdentities(sectionPaths);
 			// Signatures and scope rules are finalized before preinference. Their
 			// source inputs stay immutable through body inference and persistence.

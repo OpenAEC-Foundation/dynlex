@@ -175,7 +175,7 @@ remaining measured costs, not by table order alone.
 
 | I013 | P06: reuse source-proven classification declaration inputs | Complete: keep, merged and verified | 04:57–06:26 UTC on 14 November; one extension used, before the 06:27 deadline. Final source `d77c79cd` / compiler `06ecae56...` follows explicit producers for generated declarations. Real unused/active edits evaluate one input and reuse 1,747. Independent 31-pair unused CPU ratio 0.98479 [0.96568, 0.99350] clears the 1% gate; medians 0.811005 to 0.791013 s. Input preparation falls 27.944 to 8.304 ms. Active-body, other common and cold gains remain unproven; their intervals show no established regression. All 196 current eight-case rows plus the 66-row control pass the stated artifact/diagnostic checks. Candidate: 329 required uncached in 111.728 s, 464 integration in 830.955 s. Merged source/docs `f3c07fd6`; root compiler `4bff53b6...` passes 329 required uncached in 110.554 s. The merged worktree is removed and archived replay passes afterward, cleaning its temporary data path. Full goal incomplete. |
 
-| I014 | P03/P06: demand-driven generated body products | Active | Started 06:27 UTC on 14 November; first deadline 07:12 UTC, no extension used. Baseline source `40b94d06`, compiler `4bff53b6...`. GDB inspection through the project debugger proves 929 generated property body units account for 3,716 of 4,267 materialized expressions after the real unused edit. Use existing body-product ownership/publication to defer these executable trees until consumers need them; preserve parameter binding, canonical source identities, diagnostics and callbacks. Add generic product ownership/work counters and a minimal unused/used property-body regression before changing the compiler. Require at least 50% fewer indexed source expressions on real unused/active edits, at least 1% paired unused-edit CPU gain, no established active/cold/common regression, runtime/diagnostic parity, required <=120 s uncached and relevant integration. Preserve broader semantic section/reference and clean-IR gaps. |
+| I014 | P03/P06: demand-driven generated body products | Active | Started 06:27 UTC on 14 November; first deadline 07:12 UTC, extended deadline 07:57 UTC; one extension used after actual work/parity proof. Baseline source `40b94d06`, compiler `4bff53b6...`. GDB inspection through the project debugger proves 929 generated property body units account for 3,716 of 4,267 materialized expressions after the real unused edit. Use existing body-product ownership/publication to defer these executable trees until consumers need them; preserve parameter binding, canonical source identities, diagnostics and callbacks. Add generic product ownership/work counters and a minimal unused/used property-body regression before changing the compiler. Require at least 50% fewer indexed source expressions on real unused/active edits, at least 1% paired unused-edit CPU gain, no established active/cold/common regression, runtime/diagnostic parity, required <=120 s uncached and relevant integration. Preserve broader semantic section/reference and clean-IR gaps. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -915,3 +915,23 @@ consumer-driven materialization of unaffected units. Existing `SourceExpression`
 body products and generated-declaration provenance are the relevant interfaces.
 Add the work-count regression before changing them; avoid another hash/codec
 layer. Preserve the clean-IR verification gap above until it is directly tested.
+
+### I014 first screen and consumer refinement
+
+Source `e04a386e` / compiler `553a66d1...` passes the focused generated-body,
+body-reuse, source-syntax and classification tests. All 36 real-program rows pass
+the benchmark parity checks. Unused edits index 551 expressions instead of 4,267,
+with zero generated bodies materialized and 929 deferred; active edits index 937
+instead of 4,601, materializing 13 generated bodies and deferring 916. The seven-pair
+unused CPU ratio is 0.99087 [0.94760, 1.00270], below the predeclared gain
+and certainty gates. Active CPU is 0.99642 [0.97095, 1.00897]; active wall
+ratio 1.01476 [1.00717, 1.03409] needs independent verification. No acceptance.
+
+Source-index time remains 10.046 to 11.858 ms on unused edits despite fewer
+nodes. Its constructor still copies/sorts all scopes, registers every root and
+indexes all declaration bindings. The single extension removes that eager consumer
+work: retain the existing ordered scope map, register deferred scope roots on demand,
+and index declaration bindings on their first actual query. Materialized source
+syntax still receives its canonical identities before inference can change grouping.
+The added scope-work check precedes this correction. No further extension is
+available after 07:57 UTC.

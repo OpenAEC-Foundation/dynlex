@@ -57,6 +57,7 @@ struct BuildStatistics {
 	size_t inferenceClassStatesCaptured = 0;
 	size_t inferenceSourceExpressionLookups = 0;
 	size_t inferenceSourceIndexBuilds = 0, inferenceSourceExpressionsIndexed = 0;
+	size_t inferenceSourceScopesIndexed = 0, inferenceSourceDefinitionsIndexed = 0;
 	size_t inferenceSourceExpressionsEncoded = 0;
 	double inferenceSourceIndexMilliseconds = 0;
 	double inferenceBodyEncodeMilliseconds = 0;

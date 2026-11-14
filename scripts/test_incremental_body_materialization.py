@@ -75,12 +75,14 @@ def check_generated_body_products(root, build):
     assert unused[1:] == build(False, entry=main)[1:]
     assert unused[0]['generated_body_units_materialized'] == 0, unused[0]
     assert unused[0]['generated_body_units_deferred'] == 1, unused[0]
+    assert unused[0]['inference_source_scopes_indexed'] <= 2, unused[0]
     main.write_text(source.replace('to idle: @intrinsic("discard", 0)',
                                    'to idle: @intrinsic("discard", 1)'))
     edited = build(entry=main)
     assert edited[1:] == build(False, entry=main)[1:]
     assert edited[0]['generated_body_units_materialized'] == 0, edited[0]
     assert edited[0]['generated_body_units_deferred'] == 1, edited[0]
+    assert edited[0]['inference_source_scopes_indexed'] <= 2, edited[0]
 
     call = ('@intrinsic("store", {item}, @intrinsic("construct", sample, 7))\n'
             '@intrinsic("variadic call", "libc", "printf", '

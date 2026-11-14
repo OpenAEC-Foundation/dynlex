@@ -104,6 +104,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"inference_source_expression_lookups", statistics.inferenceSourceExpressionLookups},
 					  {"inference_source_index_builds", statistics.inferenceSourceIndexBuilds},
 					  {"inference_source_expressions_indexed", statistics.inferenceSourceExpressionsIndexed},
+					  {"inference_source_scopes_indexed", statistics.inferenceSourceScopesIndexed},
+					  {"inference_source_definitions_indexed", statistics.inferenceSourceDefinitionsIndexed},
 					  {"inference_source_expressions_encoded", statistics.inferenceSourceExpressionsEncoded},
 					  {"inference_source_index_ms", statistics.inferenceSourceIndexMilliseconds},
 					  {"inference_body_load_ms", context.inferenceBodyLoadMilliseconds},

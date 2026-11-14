@@ -7,11 +7,13 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 	using Scope = std::shared_ptr<const VariableStorageScope>;
 	using Scopes = std::map<Scope, Key, std::owner_less<Scope>>;
 	IncrementalInferenceProducts(
-		ParseContext &context, const std::map<const Section *, std::string> &paths, InferenceSummaryStore &store,
-		IncrementalInferenceReads &reads, BuildStatistics &statistics
+		ParseContext &context, const std::map<const Section *, std::string> &paths,
+		const std::map<std::string, Section *> &sections, InferenceSummaryStore &store, IncrementalInferenceReads &reads,
+		BuildStatistics &statistics
 	)
 		: context(context), paths(paths), identities(paths), store(store), reads(reads),
-		  sourceIdentities(context, paths, statistics), globalInputQueries(paths, sourceIdentities, statistics, reads) {
+		  sourceIdentities(context, paths, sections, statistics),
+		  globalInputQueries(paths, sourceIdentities, statistics, reads) {
 		context.inferenceProducts = this;
 	}
 	~IncrementalInferenceProducts() { context.inferenceProducts = nullptr; }

@@ -3,38 +3,30 @@
 class InferenceSourceIndex {
   public:
 	InferenceSourceIndex(
-		ParseContext &context, const std::map<const Section *, std::string> &paths, BuildStatistics &statistics
+		ParseContext &context, const std::map<const Section *, std::string> &paths,
+		const std::map<std::string, Section *> &sections, BuildStatistics &statistics
 	)
-		: context(context), statistics(statistics) {
+		: context(context), paths(paths), sections(sections), statistics(statistics) {
 		auto start = Clock::now();
-		std::map<std::string, const Section *> sections;
-		for (const auto &[section, path] : paths)
-			sections.emplace(path, section);
-		for (const auto &[path, section] : sections) {
-			for (const auto &[name, definition] : section->variableDefinitions)
-				definitions.emplace(normalizeBindingReference(definition), Json::array({path, name}));
-			std::unordered_map<std::string, size_t> occurrences;
-			for (CodeLine *line : section->codeLines)
-				if (line->expression) {
-					std::string text = digest(line->rightTrimmedText);
-					size_t root = roots.size();
-					roots.push_back({path, text, occurrences[text]++, line, line->expression.materialized()});
-					lineRoots.emplace(line, root);
-					indexExpression(line->expression.materialized(), root, nullptr, {});
-				}
-		}
-		for (size_t index = 0; index < roots.size(); index++) {
-			const Root &root = roots.at(index);
-			rootExpressions.emplace(RootKey{root.path, root.text, root.occurrence}, index);
-		}
+		for (const auto &[_, section] : sections)
+			if (std::ranges::any_of(section->codeLines, [](const CodeLine *line) {
+				return line->expression.materialized() != nullptr;
+			}))
+				indexScope(*section);
 		requireCompilerInvariant(!context.sourceExpressionPublished, "source expression index already has a publisher");
-		context.sourceExpressionPublished = [&](CodeLine *line, Expression *expression) {
+		context.sourceExpressionPublished = [this](CodeLine *line, Expression *expression) {
 			auto started = Clock::now();
 			size_t prior = nodes.size();
-			size_t root = lineRoots.at(line);
-			requireCompilerInvariant(!roots.at(root).expression, "canonical source root was published twice");
-			roots.at(root).expression = expression;
-			indexExpression(expression, root, nullptr, {});
+			if (indexScope(*line->section)) {
+				requireCompilerInvariant(
+					roots.at(lineRoots.at(line)).expression == expression, "new source scope lost its published root"
+				);
+			} else {
+				size_t root = lineRoots.at(line);
+				requireCompilerInvariant(!roots.at(root).expression, "canonical source root was published twice");
+				roots.at(root).expression = expression;
+				indexExpression(expression, root, nullptr, {});
+			}
 			statistics.inferenceSourceExpressionsIndexed += nodes.size() - prior;
 			statistics.inferenceSourceIndexMilliseconds += elapsedMilliseconds(started);
 		};
@@ -48,6 +40,15 @@ class InferenceSourceIndex {
 		statistics.inferenceStorageOriginsIndexed += count;
 	}
 	const Json &definition(const VariableReference *reference) const {
+		if (!definitionsReady) {
+			auto started = Clock::now();
+			for (const auto &[path, scope] : sections)
+				for (const auto &[name, definition] : scope->variableDefinitions)
+					definitions.emplace(normalizeBindingReference(definition), Json::array({path, name}));
+			definitionsReady = true;
+			statistics.inferenceSourceDefinitionsIndexed += definitions.size();
+			statistics.inferenceSourceIndexMilliseconds += elapsedMilliseconds(started);
+		}
 		auto found = definitions.find(reference);
 		requireCompilerInvariant(found != definitions.end(), "storage origin has no lexical declaration");
 		return found->second;
@@ -70,6 +71,14 @@ class InferenceSourceIndex {
 	}
 	Expression *decodeExpression(const Json &site) const {
 		statistics.inferenceSourceExpressionLookups++;
+		const std::string &path = site.at(0).get_ref<const std::string &>();
+		if (!indexedScopes.contains(sections.at(path))) {
+			auto started = Clock::now();
+			size_t prior = nodes.size();
+			indexScope(*sections.at(path));
+			statistics.inferenceSourceExpressionsIndexed += nodes.size() - prior;
+			statistics.inferenceSourceIndexMilliseconds += elapsedMilliseconds(started);
+		}
 		auto root = rootExpressions.find(
 			RootKey{
 				site.at(0).get_ref<const std::string &>(), site.at(1).get_ref<const std::string &>(), site.at(2).get<size_t>()
@@ -109,7 +118,27 @@ class InferenceSourceIndex {
 		size_t argumentStart, argumentCount;
 		Expression *declaration;
 	};
-	void indexExpression(const Expression *expression, size_t root, const Expression *parent, std::optional<size_t> component) {
+	bool indexScope(const Section &section) const {
+		if (!indexedScopes.insert(&section).second)
+			return false;
+		statistics.inferenceSourceScopesIndexed++;
+		const std::string &path = paths.at(&section);
+		std::unordered_map<std::string, size_t> occurrences;
+		for (CodeLine *line : section.codeLines)
+			if (line->expression) {
+				std::string text = digest(line->rightTrimmedText);
+				size_t root = roots.size();
+				roots.push_back({path, text, occurrences[text]++, line, line->expression.materialized()});
+				const Root &source = roots.back();
+				rootExpressions.emplace(RootKey{source.path, source.text, source.occurrence}, root);
+				requireCompilerInvariant(lineRoots.emplace(line, root).second, "canonical source line has two owning scopes");
+				indexExpression(source.expression, root, nullptr, {});
+			}
+		return true;
+	}
+	void indexExpression(
+		const Expression *expression, size_t root, const Expression *parent, std::optional<size_t> component
+	) const {
 		if (!expression ||
 			!nodes
 				 .emplace(
@@ -124,13 +153,18 @@ class InferenceSourceIndex {
 		indexExpression(expression->dataDeclaration, root, expression, {});
 	}
 	ParseContext &context;
+	const std::map<const Section *, std::string> &paths;
+	const std::map<std::string, Section *> &sections;
 	BuildStatistics &statistics;
-	std::vector<Root> roots;
+	// Published views and decoded roots must survive later scope registration.
+	mutable std::deque<Root> roots;
 	using RootKey = std::tuple<std::string_view, std::string_view, size_t>;
-	std::map<RootKey, size_t> rootExpressions;
-	std::unordered_map<CodeLine *, size_t> lineRoots;
-	std::vector<Expression *> arguments;
-	std::unordered_map<const Expression *, Node> nodes;
-	std::unordered_map<const VariableReference *, Json> definitions;
+	mutable std::map<RootKey, size_t> rootExpressions;
+	mutable std::unordered_map<CodeLine *, size_t> lineRoots;
+	mutable std::vector<Expression *> arguments;
+	mutable std::unordered_map<const Expression *, Node> nodes;
+	mutable std::unordered_set<const Section *> indexedScopes;
+	mutable std::unordered_map<const VariableReference *, Json> definitions;
+	mutable bool definitionsReady = false;
 	mutable std::unordered_map<const Expression *, Json> expressions;
 };
