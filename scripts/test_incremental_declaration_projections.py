@@ -29,3 +29,18 @@ def check_declaration_projection_units(root, build):
     assert after["declarations"] != before["declarations"]
     assert "pattern_declarations" not in after
     assert after["declaration_fingerprints"]
+    check_failed_declaration_projection_units(root, build)
+
+
+def check_failed_declaration_projection_units(root, build):
+    main = root / "failed_declaration_projection_units.dl"
+    source = ('to broken {value}:\n'
+              '    @intrinsic("discard", @intrinsic("multiply", value, "text"))\n'
+              'broken 1\n')
+    main.write_text(source)
+    build(entry=main, success=False)
+    main.write_text(source.replace('broken 1', 'broken 2'))
+    edited = build(entry=main, success=False)
+    assert edited[1:] == build(False, entry=main, success=False)[1:]
+    assert edited[0]["declaration_projection_units_built"] == 0
+    assert edited[0]["declaration_projection_units_reused"] >= 1

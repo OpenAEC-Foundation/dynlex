@@ -584,7 +584,8 @@ bool compileIncrementally(
 			Json frontendDiagnosticUnits = captureFrontendDiagnosticUnits(context);
 			Json inactiveProjection;
 			ResolvedDeclarationUnits declarationUnits(
-				sections, previous ? &previous->at("all_function_projection") : nullptr, statistics.declarationProjection
+				sections, frontendState ? &frontendState->at("all_function_projection") : nullptr,
+				statistics.declarationProjection
 			);
 			stageStart = Clock::now();
 			bool reuseTypeInference = compiled && previous &&

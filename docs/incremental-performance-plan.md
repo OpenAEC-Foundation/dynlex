@@ -1468,3 +1468,13 @@ programs are isolated by compiler build identity; no old-schema reader is added.
 Minimal work tests were added first and fail on the baseline's missing counter.
 The registry reports changed/reused summaries and actual built/reused structured
 records separately; input auditing remains explicit work, not skipped work.
+
+The lifecycle audit corrected the aggregate to include every indexed declaration
+unit and added an exact settled-interface check to top-level projection reuse.
+The first complete compiler (`eb5d569f`, `2197b42b...`) passes the new ordinary
+body-edit and last-parameter-use checks but fails a minimal failed-build reuse
+check. Root cause: the registry received the last native program, excluding
+healthy declaration results from a newer failed typed build. The existing
+frontend-state selector already preserves and hydrates that state. Connect the
+registry to that selected state; retain the old native snapshot separately for
+IR validation. The new three-line typed-failure regression precedes this fix.
