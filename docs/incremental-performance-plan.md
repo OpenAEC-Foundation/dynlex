@@ -169,6 +169,8 @@ remaining measured costs, not by table order alone.
 
 | I009 | P06: reusable function-body input queries | Parked; not accepted | Closed 01:00 UTC on 14 November, before the extended 01:32 deadline; one extension used. Baseline `4c73c053` / `a3c07989...`; final prototype `15850647` / `ff21b137...`. First candidate `3278ce18` / `e591d597...` still rehashes 51 bodies after a one-line edit because of whole-file input keys. Per-file physical-line products fix the same-file regression: one changed body is hashed, zero bodies are hashed after code is inserted above them, and the real edit hashes one body while reusing 789 results. All nine focused groups pass, all eight artifact/diagnostic comparisons pass, and 328 required checks pass uncached in 100.421 s. Decisive 31-pair CPU ratios fail the predeclared 2% whole-build gain: unused 1.00782 [0.98712, 1.01979], active-body 1.00714 [1.00127, 1.01901]. Full integration was not run for this rejected optimization. Retain the prototype separately; do not merge its extra cache records. |
 
+| I010 | P00/P14/P22: reduce structured-payload codec costs | Complete: keep; local-master verification pending | Started 01:03 UTC on 14 November; first deadline 01:48 UTC, extended deadline 02:33 UTC; one extension used after the real-payload codec probe and 1,000 randomized value round trips passed. Baseline source `20e3a323`, compiler `a3c07989...`. First retain real application payloads and benchmark JSON versus the existing nlohmann binary codecs in a small standalone tool. Do not implement a format change unless codec encode/decode CPU improves by at least 25%. A proposed compiler change must then show at least 2% repeatable whole-build CPU gain on an ordinary real-program edit, clean-build parity, no unexplained repeatable common/cold regression, all affected artifact readers migrated, and the uncached required gate within 120 seconds. This measures persistence cost; it does not complete source/section unit reuse. |
+
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
 464 integration checks. The inherited modifications subsequently passed the full
@@ -607,3 +609,61 @@ largest serialized fields are constraint scheduling (603,948), matcher projectio
 existing JSON codec with existing-library binary codecs on retained real payloads
 first, then pursue a complete-build candidate only if that measurement supports it.
 This is a separate P00/P22 investigation; source/section-fragment reuse is unfinished.
+
+### I010 codec screening
+
+On six retained LEXI8 structured payloads (7,093,754 JSON bytes), generic CBOR and
+MessagePack do not clear the codec gate. Encoding is faster but their existing
+readers decode more slowly. A bounded cache CBOR reader copies complete strings,
+reserves arrays and uses ordered map insertion hints. Seven rotated-order samples
+with three iterations each reduce combined median codec CPU from 108.854 to
+37.177 ms (ratio 0.3415), including 48.977 to 17.126 ms for the function projection.
+All six payloads round-trip unchanged. Native property checks compare the reader
+with nlohmann on 1,000 randomized values, integer boundaries, floating-point
+values, Unicode, binary subtypes and malformed frames. Python inspection checks
+consume a native-generated fixture. This establishes only the codec hypothesis;
+whole-build timing, required and integration gates still decide acceptance.
+
+Evidence: `i010-codec-study/manifest.json`, both raw codec result files, retained
+JSON payloads, the standalone tool sources, and their build logs. No system JSON
+library is patched and no new external dependency is added. All program-payload
+inspection helpers are migrated to the single current CBOR representation.
+
+### I010 decision: keep the measured codec improvement
+
+Candidate source `3dcc89a5a674dfc28dba805995222b8ee2b97190`, compiler
+`c3c0252a48126c66c058f493b0dd6552968eed5a75da14f351ae8c6a7208172c`.
+The baseline is source `20e3a323` and compiler `a3c07989...`. These are identical
+frozen LEXI8 inputs, with alternating compiler order and seven pairs per ordinary
+edit. Reported ratios are medians of paired CPU ratios, which need not equal the
+ratio of the two marginal medians.
+
+| Edit | Baseline median CPU | Candidate median CPU | Paired CPU ratio, 95% interval |
+| --- | --- | --- | --- |
+| Unused library body | 0.868897 s | 0.802388 s | 0.9322 [0.9183, 0.9487] |
+| Active function body | 1.881585 s | 1.790403 s | 0.9610 [0.9253, 0.9672] |
+| Application lives value | 2.249134 s | 2.181439 s | 0.9659 [0.9619, 0.9676] |
+| Shared type | 2.328697 s | 2.212862 s | 0.9541 [0.9406, 0.9735] |
+
+The complete eight-case matrix has 180 rows and passes executable/diagnostic
+parity against both compilers and clean diagnostic builds. Fast paths have
+15 pairs each; no new wording-only performance claim is made. Eleven additional
+cache-disabled cold pairs give CPU medians 5.404107 to 5.388814 s, paired ratio
+1.0045 [0.9915, 1.0096], so neither a cold gain nor regression is established.
+For the unused edit, median payload loading falls from 51.911 to 24.546 ms and
+cache writing from 49.171 to 31.052 ms. Semantic work counters retain the same
+stage boundaries: this improves the cost of reuse, not its coverage.
+
+The candidate passes 329 required checks uncached in 111.020 s, including the
+native codec fidelity check. The native helper is part of the ordinary C++ build,
+so its compilation is outside the post-build suite budget. All 464 integration checks pass in 823.759 s including the recording driver
+(compiler and source hashes unchanged). Accept the implementation. Merge to local
+master, rebuild there, rerun the uncached required gate, and verify archived replay
+after disposing the owned worktree before publishing the snapshot.
+
+Evidence: `i010-comparison.json`, `i010-cold-11-comparison.json`,
+`i010-required.json`, `i010-integration.json`, `i010-focused.log`, and `i010-compiler-data/manifest.json`
+under the structured evidence directory. The archive retains the six I009/I010
+compiler identities and their shared original source-data path for replay after
+worktree disposal. Compiler-specific cache namespaces isolate the current format;
+all affected artifact readers use CBOR directly without format guessing.
