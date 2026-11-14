@@ -121,6 +121,7 @@ static void generateClassPropertyPatterns(ParseContext &context) {
 		ClassDefinition *classDefinition = classSection->classDefinition;
 		for (const FieldDefinition &field : classDefinition->fields) {
 			auto *accessorSection = new FunctionSection(context.mainSection);
+			accessorSection->declarationProducer = classSection;
 			accessorSection->isFlex = true;
 			accessorSection->isLocal = classSection->isLocal;
 			createClassPropertyPatternDefinition(

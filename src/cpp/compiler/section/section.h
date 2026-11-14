@@ -182,6 +182,9 @@ struct Section {
 	virtual ~Section() = default;
 	SectionType type;
 	Section *parent{};
+	// Source declaration/body which produces this compiler-generated declaration.
+	// Authored declarations have no producer; generated producers can form a chain.
+	Section *declarationProducer{};
 	std::vector<PatternDefinition *> patternDefinitions;
 	std::vector<PatternReference *> patternReferences;
 	std::unordered_map<std::string, std::vector<VariableReference *>> variableReferences;

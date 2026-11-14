@@ -38,6 +38,7 @@ bool prepareDeferredSectionBodies(ParseContext &context) {
 		requireCompilerInvariant(position != parent->children.end(), "deferred section has no parent slot");
 		size_t slot = position - parent->children.begin();
 		auto *function = new FunctionSection(parent);
+		function->declarationProducer = parent;
 		parent->children[slot] = function;
 		parent->children.pop_back();
 		function->startLineIndex = source->startLineIndex;

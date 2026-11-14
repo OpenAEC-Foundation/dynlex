@@ -30,7 +30,8 @@ class IncrementalClassification {
 		Environment,
 		Export,
 		BodyInput,
-		SourceLocality
+		SourceLocality,
+		SourceUnit
 	};
 	struct Unit {
 		std::string path, input, queries, provides, outputs, exportKey, bodyInput;
@@ -41,6 +42,7 @@ class IncrementalClassification {
 		bool selected = false;
 		bool headerOnly = false;
 		std::optional<bool> sourceLocality;
+		const Section *sourceUnit = nullptr;
 		std::vector<PatternReference *> references;
 		std::vector<size_t> edges;
 	};
@@ -172,7 +174,8 @@ class IncrementalClassification {
 				Json::array(
 					{unit.path, unit.input, unit.queries, unit.provides, unit.outputs, unit.edges, unit.hasCandidates,
 					 unit.environment, unit.exportKey, unit.bodyInput,
-					 unit.sourceLocality ? Json(*unit.sourceLocality) : Json(nullptr)}
+					 unit.sourceLocality ? Json(*unit.sourceLocality) : Json(nullptr),
+					 unit.sourceUnit ? Json(sectionUnits.at(unit.sourceUnit)) : Json(nullptr)}
 				)
 			);
 		}

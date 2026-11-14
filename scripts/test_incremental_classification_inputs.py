@@ -82,6 +82,28 @@ def check_declaration_input_units(root, build):
     assert ancestor[1:] == build(False, entry=main)[1:]
     assert ancestor[0]["classification_input_units_built"] == 2, ancestor[0]
     assert ancestor[0]["classification_input_units_reused"] == 1, ancestor[0]
+    check_generated_input_units(root, build)
+
+
+def check_generated_input_units(root, build):
+    main = root / "classification_generated_inputs.dl"
+    source = ('class sample:\n    members:\n        value\n'
+              'to idle: @intrinsic("discard", 0)\n'
+              '@intrinsic("discard", 0)\n')
+    main.write_text(source)
+    build(entry=main)
+    changed = source.replace('to idle: @intrinsic("discard", 0)',
+                             'to idle: @intrinsic("discard", 1)')
+    main.write_text(changed)
+    unrelated = build(entry=main)
+    assert unrelated[1:] == build(False, entry=main)[1:]
+    assert unrelated[0]["classification_input_units_built"] == 1, unrelated[0]
+    assert unrelated[0]["classification_input_units_reused"] == 2, unrelated[0]
+    main.write_text(changed.replace('        value\n', '        item\n'))
+    producer = build(entry=main)
+    assert producer[1:] == build(False, entry=main)[1:]
+    assert producer[0]["classification_input_units_built"] == 2, producer[0]
+    assert producer[0]["classification_input_units_reused"] == 1, producer[0]
 
 
 def check_reference_only_inputs(root, build):

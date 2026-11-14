@@ -30,6 +30,10 @@ class InitialParameterCounts {
 		return bodyDigests;
 	}
 	const Json &snapshot() const { return recorded; }
+	const std::string &path(const Section &section) {
+		prepare();
+		return paths.at(&section);
+	}
 
   private:
 	void prepare() {
@@ -52,14 +56,13 @@ class InitialParameterCounts {
 			return false;
 		prepare();
 		const std::string &path = paths.at(&section);
-		if (!prior || !prior->contains(path) || !priorBodies->contains(path) ||
-			priorBodies->at(path) != bodyDigests.at(path))
+		if (!prior || !prior->contains(path) || !priorBodies->contains(path) || priorBodies->at(path) != bodyDigests.at(path))
 			return false;
 		const Json &counts = prior->at(path);
 		if (counts.size() != section.variableLikeCounts.size() ||
 			!std::ranges::all_of(section.variableLikeCounts, [&](const auto &candidate) {
-				return counts.contains(candidate.first);
-			}))
+			return counts.contains(candidate.first);
+		}))
 			return false;
 		for (auto &[name, count] : section.variableLikeCounts)
 			count = counts.at(name).get<int>();

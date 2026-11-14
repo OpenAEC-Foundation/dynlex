@@ -50,6 +50,7 @@ struct BodySection : MetadataSection {
 	BodySection(ParseContext &context, Section *parent, DataSectionDefinition &definition, Range declarationRange)
 		: MetadataSection(parent), definition(definition) {
 		auto *record = new ClassSection(context.mainSection, declarationRange);
+		record->declarationProducer = parent;
 		definition.bodyClass = record->classDefinition;
 		record->classDefinition->patternNames.push_back("section body");
 		record->classDefinition->displayPatternNames.push_back("section body");
@@ -217,6 +218,7 @@ void prepareDataSectionDefinitions(ParseContext &context) {
 	for (Section *definition : definitions) {
 		for (const auto &field : definition->dataSection->fields) {
 			auto *header = new SectionSection(context.mainSection);
+			header->declarationProducer = definition;
 			header->dataFieldOwner = definition;
 			header->dataField = field.get();
 			header->patternDefinitions.push_back(new PatternDefinition(field->range, header));

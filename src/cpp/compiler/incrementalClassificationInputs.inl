@@ -3,18 +3,21 @@
 // Locality can be supplied by a rule outside those bodies, so retain it as an
 // explicit input. Generated signatures still consume their semantic producer.
 bool IncrementalClassification::unchangedSourceInputs(const Unit &unit) const {
-	if (!unit.old || !unit.sourceLocality || unit.old->at(SourceLocality) != *unit.sourceLocality ||
-		unit.old->at(HasCandidates) != unit.hasCandidates || !sameBody(unit.path))
+	if (!unit.old || !unit.sourceUnit || unit.old->at(SourceUnit).is_null() ||
+		unit.old->at(SourceLocality) != *unit.sourceLocality || unit.old->at(HasCandidates) != unit.hasCandidates ||
+		!sameBody(unit.path))
 		return false;
-	for (const Section *ancestor = unit.section->parent; ancestor && ancestor != context.mainSection;
-		 ancestor = ancestor->parent)
-		if (!ancestor->patternDefinitions.empty()) {
-			auto identity = sectionUnits.find(ancestor);
-			requireCompilerInvariant(identity != sectionUnits.end(), "classification scope has no section identity");
-			if (!sameBody(units.at(identity->second).path))
+	const std::string &sourcePath = counts.path(*unit.sourceUnit);
+	if (prior->at("units").at(unit.old->at(SourceUnit).get<size_t>()).at(Path) != sourcePath ||
+		(unit.sourceUnit != unit.section && !sameBody(sourcePath)))
+		return false;
+	auto sameEnclosingBodies = [&](const Section *scope) {
+		for (const Section *ancestor = scope->parent; ancestor && ancestor != context.mainSection; ancestor = ancestor->parent)
+			if (!ancestor->patternDefinitions.empty() && !sameBody(counts.path(*ancestor)))
 				return false;
-		}
-	return true;
+		return true;
+	};
+	return sameEnclosingBodies(unit.section) && (unit.sourceUnit == unit.section || sameEnclosingBodies(unit.sourceUnit));
 }
 
 // Classification reads pattern references and lexical bindings, not literal-only

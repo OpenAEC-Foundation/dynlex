@@ -46,11 +46,17 @@ void IncrementalClassification::prepare() {
 					self(self, child);
 		};
 		collect(collect, section);
-		if (section->openingLine && !section->openingLine->synthetic && !section->dataFieldOwner &&
-			std::ranges::none_of(section->patternDefinitions, [](const PatternDefinition *definition) {
+		const Section *source = section;
+		while (source->declarationProducer)
+			source = source->declarationProducer;
+		if (source->openingLine && !source->openingLine->synthetic && !source->patternDefinitions.empty() &&
+			!source->dataFieldOwner &&
+			std::ranges::none_of(source->patternDefinitions, [](const PatternDefinition *definition) {
 			return definition->hasPrebuiltPatternElements;
-		}))
+		})) {
 			unit.sourceLocality = section->isLocal;
+			unit.sourceUnit = source;
+		}
 		for (const Section *ancestor = section; ancestor; ancestor = ancestor->parent)
 			unit.hasCandidates |= std::ranges::any_of(ancestor->variableLikeCounts, [](const auto &candidate) {
 				return candidate.second != 0;
