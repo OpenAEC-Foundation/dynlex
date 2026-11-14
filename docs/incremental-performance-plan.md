@@ -1628,3 +1628,22 @@ their assertions. Outputs are read from the real classification topology and
 its CBOR matcher units. In that schema whitespace is a leaf, so `value` is
 element 2 in `alpha value`; the minimal probe verifies that position against
 the baseline's full declaration before removing it.
+
+I021 first screen completes against frozen source `bef73008`, compiler
+`2d89d8a28b72d4cc5d164581256e9a42f48fbcee945e45951e9d583cc8a76936`.
+All 50 rows pass artifact/diagnostic parity. Seven unused-edit pairs give CPU
+ratio 0.957637 [0.914705, 0.984821], medians 0.644339 to 0.603837 s.
+Active-body ratio is 0.984203 [0.942355, 0.993631]; cold is 0.997839
+[0.972706, 1.006951], with no established cold change. Wall time for unused
+edits remains noisy. Cache payload load medians fall 26.77 to 20.51 ms for
+unused edits and 74.62 to 63.28 ms for active edits; writing falls 35.38
+to 30.24 ms and 104.20 to 98.67 ms respectively. These scoped timings nest;
+do not sum them. Active edits still audit one declaration input and retain
+1,750 fingerprints.
+
+Use the single additional iteration, ending 18:45 UTC, to confirm the near-
+threshold unused gain with 31 independent pairs and finish LLVM parity plus
+uncached required/integration qualification. The ordinary source change is
+closed; no unrelated optimization extends this iteration. UI resource sharing
+and the cold C++ build consumed much of the first timebox. Record any failed
+gate without relabeling it as a pass. The full incremental goal remains active.
