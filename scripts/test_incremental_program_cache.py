@@ -84,7 +84,7 @@ def check_cache_eviction(root, build):
     unrelated = namespace / "notes.entry"
     unrelated.write_text("user file")
     old_entries = []
-    for prefix, digit in (("object-", "f"), ("parser-", "e"),
+    for prefix, digit in (("object-", "f"), ("parser-", "e"), ("parser-index-", "9"),
                           ("optimization-input-", "d"), ("optimization-", "c"),
                           ("inference-summary-", "b"), ("matcher-segment-", "a")):
         old = namespace / (prefix + digit * 64 + ".entry")

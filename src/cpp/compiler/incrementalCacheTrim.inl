@@ -16,11 +16,23 @@ CacheTrimWork trimCache(const fs::path &directory) {
 	};
 	std::vector<Entry> entries;
 	uintmax_t size = 0;
-	constexpr std::array<std::string_view, 14> prefixes{"object-",		   "program-",		   "payload-",
-														"matcher-paths-",  "matcher-segment-", "matcher-",
-														"parser-",		   "errors-",		   "optimization-input-",
-														"optimization-",   "native-unit-",	   "inference-summary-",
-														"inference-body-", "inference-class-"};
+	constexpr std::array<std::string_view, 15> prefixes{
+		"object-",
+		"program-",
+		"payload-",
+		"matcher-paths-",
+		"matcher-segment-",
+		"matcher-",
+		parserIndexPrefix,
+		"parser-",
+		"errors-",
+		"optimization-input-",
+		"optimization-",
+		"native-unit-",
+		"inference-summary-",
+		"inference-body-",
+		"inference-class-"
+	};
 	const std::u8string utf8Directory = directory.u8string();
 	const llvm::StringRef directoryBytes(reinterpret_cast<const char *>(utf8Directory.data()), utf8Directory.size());
 	std::error_code iterationError;

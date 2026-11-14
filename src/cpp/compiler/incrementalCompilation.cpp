@@ -92,6 +92,7 @@ namespace {
 using Json = nlohmann::json;
 namespace fs = std::filesystem;
 constexpr std::string_view cacheHeader = "DynLex incremental cache v1\n";
+constexpr std::string_view parserIndexPrefix = "parser-index-";
 constexpr uintmax_t maximumEntryBytes = 256 * 1024 * 1024;
 constexpr uintmax_t maximumCacheBytes = 512 * 1024 * 1024;
 using Clock = std::chrono::steady_clock;
@@ -382,6 +383,7 @@ bool compileIncrementally(
 		std::string programKey = digest(compilerIdentity + options.dump());
 		fs::path programEntry = directory / ("program-" + programKey + ".entry");
 		fs::path failedEntry = directory / ("errors-" + programKey + ".entry");
+		fs::path parserIndexEntry = directory / (std::string(parserIndexPrefix) + programKey + ".entry");
 		auto files = std::make_unique<RecordingFileSystem>();
 		RecordingFileSystem *recording = files.get();
 		context.fileSystem = std::move(files);
@@ -389,7 +391,7 @@ bool compileIncrementally(
 		InferenceSummaryStore summaryStore(directory, statistics);
 		statistics.cacheDirectory = directory.string();
 		statistics.cacheEntry = programEntry.string();
-		statistics.parserIndexEntry = (directory / ("parser-index-" + programKey + ".entry")).string();
+		statistics.parserIndexEntry = parserIndexEntry.string();
 		bool success = false;
 		std::optional<Json> previous;
 		std::optional<Json> previousFailure;
@@ -486,7 +488,7 @@ bool compileIncrementally(
 					previousMatches = std::move(*cached);
 				}
 			}
-			ParserProductIndex parserIndex(directory, statistics.parserIndexEntry);
+			ParserProductIndex parserIndex(directory, parserIndexEntry);
 			std::string previousParsedExpressions = parserIndex.load();
 			IncrementalParsedExpressionCache parserCache(context, previousParsedExpressions);
 			IncrementalSourcePreparation sourcePreparation(context, parserCache, *recording);
