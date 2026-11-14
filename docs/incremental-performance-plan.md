@@ -1785,3 +1785,17 @@ unmatched-variable wakeup cannot run again. Keep this distinct from the
 remaining named-global dependency and diagnostic-flow fixes on that branch.
 Then resume source-owner deferral across classification and body replay; a
 header-only cache and a lazy token vector remain rejected hypotheses.
+
+
+## I023: reopen unmatched-variable eligibility after reclassification
+
+Started 14 November 2026 at 19:55 UTC; first deadline 20:40 UTC.
+One correctness goal: when cached function activation reopens definition
+resolution, retry unmatched local-variable references each time definitions
+finish again. Port the UI agent's six-line, import-free regression first, prove
+fresh success and cached failure on the published baseline, then import only
+the two-file resolver state-transition fix from `b265ca5f`. Repeated activation,
+changed input and deactivation must agree with clean builds. Run the focused
+body/classification regressions, uncached required suite and relevant integration
+coverage before publication. This does not change the rejected I022 format or
+complete source-owner deferral. Other UI inference/diagnostic fixes stay separate.
