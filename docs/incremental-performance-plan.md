@@ -175,7 +175,7 @@ remaining measured costs, not by table order alone.
 
 | I013 | P06: reuse source-proven classification declaration inputs | Complete: keep, merged and verified | 04:57–06:26 UTC on 14 November; one extension used, before the 06:27 deadline. Final source `d77c79cd` / compiler `06ecae56...` follows explicit producers for generated declarations. Real unused/active edits evaluate one input and reuse 1,747. Independent 31-pair unused CPU ratio 0.98479 [0.96568, 0.99350] clears the 1% gate; medians 0.811005 to 0.791013 s. Input preparation falls 27.944 to 8.304 ms. Active-body, other common and cold gains remain unproven; their intervals show no established regression. All 196 current eight-case rows plus the 66-row control pass the stated artifact/diagnostic checks. Candidate: 329 required uncached in 111.728 s, 464 integration in 830.955 s. Merged source/docs `f3c07fd6`; root compiler `4bff53b6...` passes 329 required uncached in 110.554 s. The merged worktree is removed and archived replay passes afterward, cleaning its temporary data path. Full goal incomplete. |
 
-| I014 | P03/P06: demand-driven generated body products | Keep; merged-root verification pending | Started 06:27 UTC on 14 November; first deadline 07:12 UTC, extended deadline 07:57 UTC; one extension used. Baseline `40b94d06` / compiler `4bff53b6...`, final production code `e9a82d20` / compiler `7b01bbee...`. Unused edits index 551 expressions instead of 4,267, deferring all 929 generated property bodies; active edits index 937 instead of 4,601. The independent 31-pair unused CPU ratio is 0.97355 [0.95838, 0.99494], clearing the predeclared 1% gate. All 292 final comparison rows pass their artifact/diagnostic checks; common and cold controls establish no regression. All 329 required checks pass uncached in 119.241 s. The integration run passes 463 checks and exposes three unmigrated C++ ownership-test doubles; after implementing their new ownership interface, the remaining check rebuilds and passes with the production compiler unchanged. Preserve the original failed full run. Root rebuild/required, cleanup/replay and publication remain pending; full semantic section/reference reuse and clean-IR parity remain incomplete. |
+| I014 | P03/P06: demand-driven generated body products | Complete: keep, merged and verified | Started 06:27 UTC on 14 November; first deadline 07:12 UTC, extended deadline 07:57 UTC; one extension used. Baseline `40b94d06` / compiler `4bff53b6...`, final production code `e9a82d20` / compiler `7b01bbee...`. Unused edits index 551 expressions instead of 4,267, deferring all 929 generated property bodies; active edits index 937 instead of 4,601. The independent 31-pair unused CPU ratio is 0.97355 [0.95838, 0.99494], clearing the predeclared 1% gate. All 292 final comparison rows pass their artifact/diagnostic checks; common and cold controls establish no regression. All 329 required checks pass uncached in 119.241 s. The integration run passes 463 checks and exposes three unmigrated C++ ownership-test doubles; after implementing their new ownership interface, the remaining check rebuilds and passes with the production compiler unchanged. Preserve the original failed full run. Root compiler `092562a6...` passes 329 required uncached in 117.219 s; merged worktree removal and actual archived replay pass. Verification overruns the 07:57 deadline; no additional optimization is added. Full semantic section/reference reuse and clean-IR parity remain incomplete. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -997,3 +997,28 @@ integration checks and this corrected check cover all 464 checks; do not relabel
 the original full run as passing. Evidence: `i014-integration.json`, its full log,
 and `i014-ownership-migration.log`. No compiler source changed after the matrix or
 required run. Accept the measured optimization and proceed to root verification.
+
+Merged source/tests `4d835526` is rebuilt in the root repository in 701.796 s,
+using one job and a measured peak child RSS of 2,259,208 KiB. Root compiler
+`092562a6131d285b70f5dddbf3845ecf12849f6601c6e1768a3e19b3be670c7b`
+passes all 329 required checks uncached in 117.219 s (118.531 s including the
+observation driver), with unchanged sources and executable. The worktree was
+removed after verifying it was clean, fully merged, archived and unused by live
+processes. Its 105 data files and all three compiler identities are preserved.
+The actual archived replay passes all six rows after removal and cleans its temporary data root. This single pair verifies reproducibility, not another performance claim. Evidence: `i014-post-cleanup-replay.json`.
+
+The 07:57:24 UTC deadline was exceeded during merged-root verification. Record
+the overrun rather than treating verification as another optimization extension;
+no additional optimization or repeated benchmark was added. Root build and gate
+evidence are `i014-root-build.json` and `i014-root-required.json`; cleanup evidence
+is `i014-worktree-cleanup.json`. The full incremental compiler goal remains active
+and incomplete, including semantic section/reference reuse, tooling and other
+output modes, and clean graphical IR/rendered parity.
+
+I014 closes at 07:59 UTC, roughly two minutes past the extended deadline.
+The remaining requirement audit is `i014-full-goal-audit.json`. The next named
+consumer boundary is P03/P06: unchanged resolved-reference products. Its
+implementation must skip reconstruction of unaffected match/binding state, retain
+positive and failed lookup dependencies and body-driven parameter changes, and
+be consumed by the existing compiler stages. Another unconsumed snapshot or
+codec change does not satisfy that goal. Define its work/time gates before code.
