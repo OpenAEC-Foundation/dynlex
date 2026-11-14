@@ -68,7 +68,7 @@ Json scopeRuleBodyPaths(const std::map<std::string, Section *> &sections) {
 Json captureAllFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
 	ResolvedDeclarationUnits &declarationUnits, IncrementalMatcherCache &matcherCache, std::string_view initialMatcherTree,
-	std::string_view finalMatcherTree, const Json *previous, SourceProjectionWork *projectionWork
+	std::string_view finalMatcherTree, const Json *previous, SourceProjectionWork *projectionWork, bool compatibleSyntax
 ) {
 	auto phaseStart = Clock::now();
 	const Json *prior =
@@ -112,7 +112,8 @@ Json captureAllFunctionProjection(
 	if (prior)
 		declarationUnits.retainSourceUnits(
 			*prior, bodyDigests, currentScopeRuleBodies, currentGlobalResolution,
-			selected == prior->at("inactive") && sourceProjectionsEqual(maskedSources, prior->at("sources")),
+			compatibleSyntax && selected == prior->at("inactive") &&
+				sourceProjectionsEqual(maskedSources, prior->at("sources")),
 			initialMatcherTree, finalMatcherTree
 		);
 	std::string resolvedDeclarations = declarationUnits.digest();

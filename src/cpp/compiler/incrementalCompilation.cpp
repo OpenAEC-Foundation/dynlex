@@ -583,6 +583,8 @@ bool compileIncrementally(
 				compiled ? captureCachedDiagnostics(context, frontendDiagnosticText, frontendDiagnosticSources) : Json::array();
 			Json frontendDiagnosticUnits = captureFrontendDiagnosticUnits(context);
 			Json inactiveProjection;
+			const bool compatibleFrontendSyntax =
+				compiled && frontendState && compatibleObservations(*frontendState, recording->observations, context);
 			ResolvedDeclarationUnits declarationUnits(
 				sections, frontendState ? &frontendState->at("all_function_projection") : nullptr,
 				statistics.declarationProjection
@@ -605,8 +607,7 @@ bool compileIncrementally(
 						statistics.inactiveProjectionMatchesRechecked, statistics.sourceProjectionWork.matchEntriesReused
 					);
 			}
-			if (compiled && !refreshedProjection && frontendState &&
-				compatibleObservations(*frontendState, recording->observations, context))
+			if (compiled && !refreshedProjection && compatibleFrontendSyntax)
 				refreshedProjection = refreshTopLevelExecutionProjection(
 					context, recording->observations, sections, declarationUnits, matcherCache, initialMatcherTree,
 					frontendState->at("all_function_projection"), &statistics.sourceProjectionWork,
@@ -618,7 +619,7 @@ bool compileIncrementally(
 			else if (compiled)
 				resolvedFunctionProjection = captureAllFunctionProjection(
 					context, recording->observations, sections, declarationUnits, matcherCache, initialMatcherTree,
-					finalMatcherTree, frontendState, &statistics.sourceProjectionWork
+					finalMatcherTree, frontendState, &statistics.sourceProjectionWork, compatibleFrontendSyntax
 				);
 			if (compiled) {
 				auto projectionStart = Clock::now();

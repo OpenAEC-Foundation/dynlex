@@ -1514,3 +1514,20 @@ passes the exact focused cascade/failure checks. A minimal body edit now audits
 one declaration input; the preceding eager binary fails that assertion. Retain
 that red evidence and the new check. No performance acceptance is claimed until
 the refined binary repeats the paired screen and qualification gates.
+
+The refined screen has unused CPU ratio 0.920070 [0.903976, 0.923334],
+0.664523 to 0.608756 s medians. Real active-body edits now audit one input,
+retain 1,750 summaries and build no records. The independent 31-pair controls
+(128 total rows) show active-body CPU ratio 0.994811
+[0.989778, 0.997006] and cold 1.003667 [0.996719, 1.016764]; no cold
+regression is established. All artifact/diagnostic comparisons pass.
+
+The configuration audit adds an explicit syntax-profile dependency to the
+source-only proof. A minimal long-form function remains semantically equal
+when an unused action shorthand is renamed in config.dl, but the prior binary
+incorrectly skips checking its declaration input under that changed parser
+profile. The new regression reproduces that omitted input. Reuse the existing
+compatible-observations result for this proof; current resolved fingerprints can
+still preserve the unchanged output record after auditing. Wording-only edits
+remain on the existing no-frontend fast path. This is the final source change
+before full qualification; no further optimization extends this iteration.

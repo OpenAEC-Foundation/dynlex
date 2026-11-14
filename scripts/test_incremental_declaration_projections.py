@@ -32,6 +32,7 @@ def check_declaration_projection_units(root, build):
     assert "pattern_declarations" not in after
     assert after["declaration_fingerprints"]
     check_failed_declaration_projection_units(root, build)
+    check_declaration_syntax_profile(root, build)
 
 
 def check_failed_declaration_projection_units(root, build):
@@ -46,3 +47,19 @@ def check_failed_declaration_projection_units(root, build):
     assert edited[1:] == build(False, entry=main, success=False)[1:]
     assert edited[0]["declaration_projection_units_built"] == 0
     assert edited[0]["declaration_projection_units_reused"] >= 1
+
+
+def check_declaration_syntax_profile(root, build):
+    folder = root / "declaration_syntax_profile"
+    folder.mkdir()
+    main, config = folder / "main.dl", folder / "config.dl"
+    main.write_text('function stable:\n    execute:\n        @intrinsic("discard", 0)\nstable\n')
+    config.write_text('dynlex options:\n    shorthand definitions:\n        action: "to"\n')
+    build(entry=main)
+    config.write_text('dynlex options:\n    shorthand definitions:\n        action: "perform"\n')
+    edited = build(entry=main)
+    assert edited[1:] == build(False, entry=main)[1:]
+    assert edited[0]["declaration_input_units_checked"] >= 1, \
+        "changed syntax reused a source-only declaration proof"
+    assert edited[0]["declaration_projection_units_reused"] >= 1
+    assert edited[0]["declaration_records_built"] == 0
