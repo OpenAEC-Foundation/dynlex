@@ -14,7 +14,7 @@ Build and serve from the compiler checkout:
 
 ```bash
 python3 scripts/build_site.py
-python3 -m http.server 7000 --directory build/site
+./scripts/view_web.sh 7000
 ```
 
 Open `http://localhost:7000/` in a browser. The host prefers WebGPU and also
@@ -146,11 +146,10 @@ The background interaction test requires Chrome and Xvfb:
 env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET DYNLEX_BACKGROUND_BROWSER=1 XDG_SESSION_TYPE=x11 xvfb-run -a -s '-screen 0 1400x1000x24' node tests/web/site_river_browser.mjs build/site webgpu
 ```
 
-Migration is in progress. The current build contains the homepage, eleven
-documentation pages, downloads, an explicit missing page and the initial IDE,
-including live diagnostics, semantic colors and editable shader previews.
-River playback and saves, account/profile isolation, cloud progress and recovery
-are implemented in DynLex. Farm's controller and scene are connected in source;
-its browser integration is under verification. Farm execution annotations and
-route/weather overlays, accessibility and deployment migration remain.
-The existing deployment has not been replaced.
+Migration is in progress. DynLex source defines the homepage, documentation,
+downloads, missing page, Studio, River and Farm. Shared source tools provide
+editing, language features, execution annotations and themes. Farm's retained
+person labels, routes and rain, and River's character inspection page are also
+implemented in source. Their final packaged browser verification is pending.
+The retired HTML/Monaco source and tests still require cleanup after verification.
+The deployed website has not been replaced by this worktree.

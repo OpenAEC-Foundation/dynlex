@@ -68,7 +68,9 @@ still apply through `compile_timeout_seconds.txt`.
 
 ## Browser Compiler
 
-DynLex can be built as a browser-hosted compiler module (`dynlex_web.js/.wasm`) with a Monaco-based web UI.
+DynLex can be built as a browser-hosted compiler module (`dynlex_web.js/.wasm`).
+The website and its editor are written in DynLex and rendered by the shared UI
+library. Browser JavaScript supplies the graphics and compiler-worker adapters.
 This target requires Emscripten (`emcmake`, `emcc`). The build compiles and
 caches a WebAssembly version of the same pinned LLVM fork with the WebAssembly
 and SPIR-V targets.
@@ -101,7 +103,7 @@ Run the compiler WASM smoke test:
 Build the DynLex website with its pinned UI source package:
 
 ```bash
-python3 scripts/build_site.py
+./scripts/build_web_root.sh
 ```
 
 Serve the generated `build/site` directory:
