@@ -27,13 +27,12 @@ std::optional<Json> refreshTopLevelExecutionProjection(
 			selectedSections.insert(section);
 		}
 		if (reusableCodegenSection(*section)) {
-			if (!prior.at("function_declarations").contains(path) || !prior.at("matches").contains(path) ||
-				!prior.at("match_entries").contains(path))
+			if (!prior.at("matches").contains(path) || !prior.at("match_entries").contains(path))
 				return std::nullopt;
 			reusable.insert(section);
 		}
 	}
-	if (selected != prior.at("inactive") || reusable.size() != prior.at("function_declarations").size())
+	if (selected != prior.at("inactive") || reusable.size() != prior.at("matches").size())
 		return std::nullopt;
 	Json nonexecution =
 		sourceProjection(context, observations, reusable, true, true, true, &prior.at("ambient_nonexecution_sources"), work);

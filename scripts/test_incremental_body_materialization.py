@@ -188,8 +188,8 @@ def check_nested_diagnostic_body_eviction(root, build):
         return read_payload(manifest_path / ('payload-' + manifest['payload_keys'][field] + '.entry'))
 
     projection = payload('all_function_projection')
-    section, = [path for path, declaration in projection['function_declarations'].items()
-                if declaration['identity']['header'] == 'the tested form of value:']
+    section, = [path for path, declaration in projection['inactive'].items()
+                if declaration['header'] == 'the tested form of value:']
     bodies = {reference['body']['payload'] for reference in payload('inference_summaries')[section].values()
               if reference['body'] is not None}
     assert len(bodies) == 1
@@ -271,8 +271,8 @@ def check_managed_runtime_effects(root, build):
             result = build(entry=main)
             assert result[1:] == build(False, entry=main)[1:]
             program = read_program(root / 'cache', main)
-            section, = [path for path, item in program['all_function_projection']['function_declarations'].items()
-                        if item['identity']['header'] == 'act {value}:']
+            section, = [path for path, item in program['all_function_projection']['inactive'].items()
+                        if item['header'] == 'act {value}:']
             summaries = program['inference_summaries'][section]
             assert summaries and all(summary['purity'] == int(managed) for summary in summaries.values()), \
                 'implicit lifecycle calls were absent from the function effect product'

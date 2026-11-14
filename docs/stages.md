@@ -265,12 +265,14 @@ report fingerprint work separately from matcher executions.
 Lexical scope is fingerprinted again for every lookup, so a new declaration can invalidate the previous match.
 Resolved declaration projections audit settled signature inputs once at the frontend boundary. A shared value
 stream describes identities, pattern elements, choices, implicit promotions, locality, conversions, return contracts
-and precedence metadata to both a lightweight fingerprint writer and a structured-record writer. The aggregate
-consumes ordered section/fingerprint pairs. An unchanged signature retains its stored declaration record even when
+and precedence metadata to both a lightweight fingerprint writer and the structured writer used by semantic consumers.
+Persistent function projections retain only the fingerprints: no consumer needs their full declaration values.
+The aggregate consumes ordered section/fingerprint pairs. An unchanged signature retains its fingerprint even when
 its executable body changed; a changed implicit parameter or external scope rule changes the settled fingerprint.
-`declaration_fingerprints` covers pattern providers and lifecycle codegen records. Input auditing remains work:
-statistics report its time and checked unit count separately from changed/reused projection units and actual
-structured records built/reused. These products describe resolved declarations, not inferred body behavior; matcher,
+`declaration_fingerprints` covers pattern providers and lifecycle units. Reusable function/lifecycle membership is
+the existing `matches` key set, which excludes flex and nested-definition owners. Input auditing remains work:
+statistics report its time and checked unit count separately from changed/reused projection units.
+These products describe resolved declarations, not inferred body behavior; matcher,
 inference, diagnostic and backend dependencies still govern those later results.
 Source, syntax-profile, matcher-tree, scope-rule and global-binding proofs can retain unchanged declaration inputs without
 auditing them again. Changed bodies still audit their settled signatures before this proof may stop propagation.

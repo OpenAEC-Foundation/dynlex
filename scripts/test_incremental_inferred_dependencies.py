@@ -24,9 +24,9 @@ def check_inferred_section_dependencies(root, build):
     main.write_text(source)
     assert build(entry=main)[2] == b"4\n"
     program = read_program(root / "cache", main)
-    declarations = program["all_function_projection"]["function_declarations"]
-    callback = next(path for path, entry in declarations.items() if entry["identity"]["header"] == "callback value:")
-    wrapper = next(path for path, entry in declarations.items() if entry["identity"]["header"] == "use wrapper:")
+    declarations = program["all_function_projection"]["inactive"]
+    callback = next(path for path, entry in declarations.items() if entry["header"] == "callback value:")
+    wrapper = next(path for path, entry in declarations.items() if entry["header"] == "use wrapper:")
     assert wrapper in program["function_sections"].values()
     main.write_text(source.replace('"return", 1)', '"return", 1.0)'))
     edited = build(entry=main)

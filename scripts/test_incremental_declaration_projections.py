@@ -5,20 +5,22 @@ from test_incremental_program_cache import read_program
 
 def check_declaration_projection_units(root, build):
     main = root / "declaration_projection_units.dl"
-    source = ('to keep value: @intrinsic("discard", value)\n'
+    source = ('hidden means: 7\n'
+              'to keep value: @intrinsic("discard", value)\n'
               'to touch: @intrinsic("discard", 0)\ntouch\n')
     main.write_text(source)
     cold = build(entry=main)
     assert cold[0]["declaration_projection_units_built"] >= 2
-    assert cold[0]["declaration_records_built"] >= 2
     before = read_program(root / "cache", main)["all_function_projection"]
+    assert "function_declarations" not in before, "persisted full declarations have no semantic consumer"
+    assert set(before["matches"]) < set(before["declaration_fingerprints"]), \
+        "flex declarations must not enter the reusable-body membership set"
 
     main.write_text(source.replace('"discard", 0', '"discard", 1'))
     body = build(entry=main)
     assert body[1:] == build(False, entry=main)[1:]
     assert body[0]["declaration_projection_units_built"] == 0
     assert body[0]["declaration_projection_units_reused"] >= 2
-    assert body[0]["declaration_records_built"] == 0
     assert body[0]["declaration_input_units_checked"] == 1, \
         "a body edit audited an unchanged declaration input"
 
@@ -62,4 +64,3 @@ def check_declaration_syntax_profile(root, build):
     assert edited[0]["declaration_input_units_checked"] >= 1, \
         "changed syntax reused a source-only declaration proof"
     assert edited[0]["declaration_projection_units_reused"] >= 1
-    assert edited[0]["declaration_records_built"] == 0

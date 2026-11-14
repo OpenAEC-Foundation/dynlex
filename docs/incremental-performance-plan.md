@@ -1588,3 +1588,103 @@ unchanged, and the temporary compiler-data path is absent afterward. This is
 a reproducibility check, not a new performance estimate. Root proof and replay
 evidence are `i020-root-build.json`, `i020-root-required.json`, and
 `i020-archived-replay.json`. The full objective remains active and incomplete.
+
+## I021: consume resolved declaration fingerprints without full records
+
+Start: 2026-11-14 17:15 UTC. First deadline: 18:00 UTC; no extension
+used. Baseline `cf78161d`, published compiler `33a30814...`. The shared
+heavy-job slot belongs to the UI cache-fix rebuild; prepare without a concurrent
+C++ build or benchmark and record any verified wait separately.
+
+Verified consumer audit: runtime readers of `function_declarations` use only
+key membership, counts, equality, and a hash input. Settled declaration values
+already have complete typed fingerprints. `matches` records precisely the
+reusable-section membership; `declaration_fingerprints` also includes flex and
+lifecycle declarations, so substituting that larger key set alone is incorrect.
+Keep membership checks tied to reusable units and preserve all existing
+source, matching, inference and backend dependencies.
+
+Hypothesis: removing unused full declaration records from persistent function
+projections reduces decoding, copying and serialization on ordinary small edits.
+Use fingerprints as the equality/input product and existing match membership as
+the reusable-unit set. Remove the unconsumed record registry/counters and migrate
+all test inspectors before running them; inspect classification's actual output
+units for promotion assertions. Do not add a second metadata table solely for
+tests or retain a compatibility field. Compiler-build identities isolate cache
+schemas. Other semantic uses of structured section declarations remain.
+
+Keep only with at least 3% paired CPU gain in active or unused real edits,
+seven ordinary pairs (31 if uncertain), fresh full-LLVM/diagnostic parity,
+no established ordinary/cold regression, all required checks uncached under
+120 seconds, and affected integration coverage. First add a minimal persistence
+regression and retain its baseline failure. If migrating inspectors reveals a
+real semantic consumer, reassess before changing the schema.
+
+The baseline fails the new persistence regression as expected (`i021-red.log`).
+All migrated classification inspectors pass independently on that same published
+compiler (`i021-inspectors-baseline.log`): recursive parameter retraction,
+transitive propagation, nested lookups and file-local definition moves retain
+their assertions. Outputs are read from the real classification topology and
+its CBOR matcher units. In that schema whitespace is a leaf, so `value` is
+element 2 in `alpha value`; the minimal probe verifies that position against
+the baseline's full declaration before removing it.
+
+I021 first screen completes against frozen source `bef73008`, compiler
+`2d89d8a28b72d4cc5d164581256e9a42f48fbcee945e45951e9d583cc8a76936`.
+All 50 rows pass artifact/diagnostic parity. Seven unused-edit pairs give CPU
+ratio 0.957637 [0.914705, 0.984821], medians 0.644339 to 0.603837 s.
+Active-body ratio is 0.984203 [0.942355, 0.993631]; cold is 0.997839
+[0.972706, 1.006951], with no established cold change. Wall time for unused
+edits remains noisy. Cache payload load medians fall 26.77 to 20.51 ms for
+unused edits and 74.62 to 63.28 ms for active edits; writing falls 35.38
+to 30.24 ms and 104.20 to 98.67 ms respectively. These scoped timings nest;
+do not sum them. Active edits still audit one declaration input and retain
+1,750 fingerprints.
+
+Use the single additional iteration, ending 18:45 UTC, to confirm the near-
+threshold unused gain with 31 independent pairs and finish LLVM parity plus
+uncached required/integration qualification. The ordinary source change is
+closed; no unrelated optimization extends this iteration. UI resource sharing
+and the cold C++ build consumed much of the first timebox. Record any failed
+gate without relabeling it as a pass. The full incremental goal remains active.
+
+The independent 31-pair confirmation (66 rows) clears the 3% target across
+the interval: CPU ratio 0.955410 [0.946650, 0.969349], medians
+0.654363 to 0.623757 s. Wall ratio is 0.958225
+[0.932984, 0.977585]. All executable and diagnostic comparisons pass;
+compiler hashes remain unchanged. No extra performance run is needed.
+
+Full fresh/incremental LLVM text and diagnostics match in all nine builds
+covering unused/body/lives edits; fresh reuse counters are zero. All 329
+required checks pass uncached in 105.395 s suite / 105.870 s observer, with
+compiler and test sources unchanged. The six completed parity caches were
+removed after a live-process audit; .bc/.ll files, application sources and
+reports remain. Integration and merged-root qualification are still pending.
+
+Evidence: `i021-comparison.json`, `i021-confirmation.json`,
+`i021-stage-comparison.json`, `i021-ir-parity-final/report.json`,
+`i021-focused.log`, `i021-inspectors-candidate.log`, `i021-required.json`.
+The full incremental compiler objective remains active and incomplete.
+
+I021 qualification: accept the fingerprint-only persistence/consumer change.
+The full integration retry passes all 464 checks in 789.208 s suite /
+790.495 s observer, with compiler and test sources unchanged. The earlier
+integration command ended with external SIGTERM/143 before its observer could
+write a report. It is preserved as incomplete (`i021-integration-interrupted.*`)
+and is not counted as passing. Available logs did not identify that sender.
+The retry observer records signal senders; it received no termination signal.
+No compiler code, test expectation or timeout changed for the retry.
+
+The performance gate is met by the independent 31 pairs; required and full
+integration gates pass on the exact frozen compiler. This closes implementation
+and candidate qualification within the single extension. Merged-root rebuild,
+required verification and archive replay remain publication work. No further
+optimization extends I021. Full-goal gaps remain: semantic section construction,
+broad matching/binding/validation setup, debug/trace reuse and tooling/other
+output modes. Next return to P03's immutable parser products, auditing factory
+effects before caching them: definition header dispatch mutates owner flags,
+and PatternDefinition construction itself does not parse its element syntax.
+
+Final candidate evidence: `i021-integration-retry.json`,
+`i021-integration-retry.log`, `i021-confirmation.json`,
+`i021-required.json`, `i021-ir-parity-final/report.json`.

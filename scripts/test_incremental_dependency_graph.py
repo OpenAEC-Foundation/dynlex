@@ -278,8 +278,8 @@ def check_reused_ir_dependency_graph_variants(root, build):
     main.write_text(source)
     build(entry=main)
     projection = projection_for(root / "cache", main)
-    leaf_path = next(path for path, declaration in projection["function_declarations"].items()
-                     if declaration["identity"]["header"] == "leaf:")
+    leaf_path = next(path for path, declaration in projection["inactive"].items()
+                     if declaration["header"] == "leaf:")
     prior = graph_for(root / "cache", main)
     assert prior["instantiations"][leaf_path]
     main.write_text(source.replace('"discard", 1', '"discard", 2'))
@@ -409,14 +409,14 @@ def check_resolved_declaration_snapshot_reuse(root, build):
     main.write_text(source.replace('"discard", 1', '"discard", 2'))
     edited = build(entry=main)
     current = projection_for(root / "cache", main)
-    assert edited[0]["projection_declaration_sections_reused"] >= 1, \
+    assert edited[0]["declaration_projection_units_reused"] >= 1, \
         "an active body edit reserialized an independent resolved declaration"
     assert current["declarations"] == prior["declarations"]
     assert edited[1:] == build(False, entry=main)[1:]
     main.write_text(main.read_text() + 'to addition: @intrinsic("discard", 4)\n')
     added = build(entry=main)
     addition_projection = projection_for(root / "cache", main)
-    assert added[0]["projection_declaration_sections_reused"] >= 1, \
+    assert added[0]["declaration_projection_units_reused"] >= 1, \
         "a new declaration rebuilt independent resolved declarations"
     assert addition_projection["declarations"] != current["declarations"], \
         "a new declaration retained the old whole-program declaration snapshot"
@@ -435,7 +435,7 @@ def check_resolved_declaration_snapshot_reuse(root, build):
     after_import_edit = projection_for(root / "cache", imported_main)
     assert before_import_edit["global_resolution"] == after_import_edit["global_resolution"], \
         "import insertion changed an unchanged global declaration identity"
-    assert shifted[0]["projection_declaration_sections_reused"] >= 1, \
+    assert shifted[0]["declaration_projection_units_reused"] >= 1, \
         "an imported definition rebuilt an unrelated function declaration"
     assert shifted[1:] == build(False, entry=imported_main)[1:]
 
@@ -984,7 +984,7 @@ def check_precedence_match_key_replay(root, build):
     distant = build(entry=main)
     assert distant[0]["precedence_match_keys_replayed"] + distant[0]["body_resolution_units_deferred"] >= 1, \
         "unrelated pattern-tree addition recomputed precedence-sensitive matches"
-    assert distant[0]["projection_declaration_sections_reused"] >= 1, \
+    assert distant[0]["declaration_projection_units_reused"] >= 1, \
         "unrelated pattern-tree addition rebuilt an unchanged function declaration"
     assert distant[0]["precedence_signature_reused"] >= 1 and distant[0]["precedence_signature_ms"] == 0, \
         "unrelated pattern-tree addition recomputed unchanged precedence matches"

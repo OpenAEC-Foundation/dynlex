@@ -1,17 +1,15 @@
 struct DeclarationProjectionWork {
-	size_t inputsChecked = 0, unitsBuilt = 0, unitsReused = 0, recordsBuilt = 0, recordsReused = 0;
+	size_t inputsChecked = 0, unitsBuilt = 0, unitsReused = 0;
 	double inputMilliseconds = 0;
 };
 
-// Audit resolved inputs once at the immutable frontend boundary. Structured
-// declaration records remain cached until a consumer actually needs them.
+// Audit resolved inputs once at the immutable frontend boundary. Consumers need
+// the semantic fingerprint, not a second structured copy of every declaration.
 class ResolvedDeclarationUnits {
 	struct Unit {
 		std::string fingerprint;
 		const std::string *priorFingerprint = nullptr;
-		const Json *priorRecord = nullptr;
-		std::optional<Json> record;
-		bool ready = false, recordReused = false;
+		bool ready = false;
 	};
 	const std::map<std::string, Section *> &sections;
 	const Json *prior;
@@ -31,10 +29,8 @@ class ResolvedDeclarationUnits {
 		work.inputsChecked++;
 		if (unit.priorFingerprint && unit.fingerprint == *unit.priorFingerprint)
 			work.unitsReused++;
-		else {
+		else
 			work.unitsBuilt++;
-			unit.priorRecord = nullptr;
-		}
 		work.inputMilliseconds += elapsedMilliseconds(started);
 	}
 
@@ -47,12 +43,8 @@ class ResolvedDeclarationUnits {
 			if (section->patternDefinitions.empty() && !reusableCodegenSection(*section))
 				continue;
 			Unit &unit = units[section];
-			if (prior && prior->at("declaration_fingerprints").contains(path)) {
+			if (prior && prior->at("declaration_fingerprints").contains(path))
 				unit.priorFingerprint = &prior->at("declaration_fingerprints").at(path).get_ref<const std::string &>();
-				if (auto record = prior->at("function_declarations").find(path);
-					record != prior->at("function_declarations").end())
-					unit.priorRecord = &*record;
-			}
 		}
 	}
 
@@ -94,21 +86,6 @@ class ResolvedDeclarationUnits {
 				work.unitsReused++;
 			}
 		return true;
-	}
-	size_t reusedRecords() const { return work.recordsReused; }
-	const Json &record(const Section &section) {
-		audit(section);
-		Unit &unit = units.at(&section);
-		if (unit.priorRecord) {
-			if (!std::exchange(unit.recordReused, true))
-				work.recordsReused++;
-			return *unit.priorRecord;
-		}
-		if (!unit.record) {
-			unit.record = sectionDeclaration(section);
-			work.recordsBuilt++;
-		}
-		return *unit.record;
 	}
 	Json fingerprints() const {
 		Json result = Json::object();

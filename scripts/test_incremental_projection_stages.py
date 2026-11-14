@@ -23,8 +23,8 @@ def check_comment_inactive_active_sequence(root, build):
     projection = read_program(root / "cache", main)["all_function_projection"]
     for field in ("constraint_probe_schedule", "class_instantiations"):
         assert projection[field] == prior[field], "a frontend-only edit discarded inferred stage data"
-    compute = next(path for path, entry in prior["function_declarations"].items()
-                   if "compute {integer:item}:" in entry["identity"]["header"])
+    compute = next(path for path, entry in prior["inactive"].items()
+                   if "compute {integer:item}:" in entry["header"])
     assert projection["bodies"][compute] == prior["bodies"][compute], \
         "a comment changed an executable function's body fingerprint"
     main.write_text(main.read_text().replace('"add", item, 10', '"add", item, 20'))
