@@ -5,6 +5,13 @@ Owner: this compiler task. Established 13 November 2026.
 
 ## Current state after I023
 
+I023 is published: cached-function reactivation now retries names after each
+definition-completion transition. All 329 required checks pass uncached on the
+merged compiler in 108.502 seconds, all 464 integration checks pass, and three
+real-program edit cases match fresh LLVM text and diagnostics. The full goal
+remains incomplete. A named-global initializer dependency bug is verified next;
+source/section construction and tooling/output-mode reuse still need work.
+
 I022 does not change the published compiler: its sorted matcher-directory
 experiment failed the independent 31-pair CPU gate and remains unmerged.
 
@@ -200,7 +207,7 @@ remaining measured costs, not by table order alone.
 | I020 | P14: resolved declaration input/output units | Complete: kept and published | Active edits audit one of 1,750 inputs. Unused CPU improves 10.1%; ordinary/cold controls and LLVM parity pass. Required: 329, root 103.048 s; integration: 464. Published `cf78161d`. |
 | I021 | P14: consume fingerprints without redundant full records | Complete: kept, merged and qualified | Independent 31-pair unused CPU gain 4.46% [3.07%, 5.33%]; active gain 1.58% in seven pairs; no established cold change. Required: 329, root 107.682 s; full integration: 464 in 789.208 s; three LLVM parity cases. Measured and root archives replay after worktree removal. |
 | I022 | P03/P06 screening, then P14 sorted matcher record directories | Complete: rejected | Eager tokenization and binding-proof hypotheses were screened out. Sorted directories pass focused replay/eviction/corruption checks, but independent 31 pairs give unused-edit CPU ratio 1.002023 [0.972789, 1.011769], failing the predeclared 2% gate. No experimental C++ or inspector change reaches master. |
-| I023 | Resolver completion transitions after cached-body reactivation | Complete: qualified and merged | Baseline fresh success/cached failure and debugger states false/true/true verified. Two-file state-transition fix passes repeated activation/value/deactivation, cached-syntax and classification assertions, broader body/cascade checks, and 329 required checks uncached in 108.166 s. Three real-program LLVM/diagnostic edit cases and all 464 integration checks pass. Merged root a49ebcf0 passes all 329 required checks uncached in 108.502 s; final publication/archive cleanup follows. |
+| I023 | Resolver completion transitions after cached-body reactivation | Complete: published and verified | Baseline fresh success/cached failure and debugger states false/true/true verified. Two-file state-transition fix passes repeated activation/value/deactivation, cached-syntax and classification assertions, broader body/cascade checks, and 329 required checks uncached in 108.166 s. Three real-program LLVM/diagnostic edit cases and all 464 integration checks pass. Merged root a49ebcf0 passes all 329 required checks uncached in 108.502 s; snapshot 5f11c2aa is pushed; worktree/branch removed and archived replay passes after removal. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -1858,3 +1865,14 @@ worktree/branch, then prove replay from the archived binary and data paths.
 Evidence: `i023-root-build.json`, `i023-root-required.json` and their logs.
 The global-initializer screen remains an unresolved next correctness task;
 this iteration does not complete source-unit deferral or the full goal.
+
+
+I023 publication closes at 20:39 UTC, within its first 45-minute timebox.
+Snapshot `5f11c2aa` is pushed to origin/master. The merged worktree and its
+branch are removed. An actual six-build archived replay passes after removal,
+comparing frozen development compiler `322cd31d...` with published root compiler
+`d7ca3497...`; executables and diagnostics agree, both binary hashes stay fixed,
+and the temporary 105-file compiler data root is removed. This replay proves
+reproducibility, not a new performance estimate. No runtime code or test changes
+are added after root qualification. Evidence: `i023-archived-replay.{json,log}`.
+The full compiler-wide goal remains active and incomplete.
