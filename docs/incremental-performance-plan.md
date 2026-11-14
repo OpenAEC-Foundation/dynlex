@@ -1227,3 +1227,28 @@ is parked unmerged, with performance and required gates passed but full
 integration qualification still live. Preserve the existing test process and
 frozen candidate; no further implementation refinement is authorized by this
 iteration. A terminal passing integration result is required before acceptance.
+
+
+I017 qualification subsequently completed against the same frozen compiler:
+all 464 integration checks pass in 824.700 s (825.901 s observer), with unchanged
+compiler and test sources. The candidate remains unchanged after the timebox;
+only verification continued. A stronger real-application parity check compares
+unused-library, active-function and game-state edits with separate empty-cache
+native builds of the exact same sources. All fresh-build reuse counters are
+zero. Complete LLVM 23 printed modules match in all three cases after removing
+only the inspector's input-filename ModuleID comment. Raw bitcode already matches
+for the unused edit; active edits differ in binary encoding while their entire
+printed IR agrees. The graphical application is never launched.
+
+Decision: accept I017 after the pending qualification is resolved. Both measured
+edit cases exceed the predeclared 5% gain; correctness, work counters, cold control,
+required budget and integration gates pass. This accepts the bounded optimization,
+not the full incremental-compilation objective. Merge to local master, rebuild
+there with one job, run the uncached required gate, then push and dispose the owned
+worktree after validating the archived compiler replay.
+
+Additional evidence: `i017-integration.json`, `i017-ir-parity-final/report.json`
+and its paired `.bc`/`.ll` files. The small inspection utility links the installed
+pinned LLVM 23 library; no mismatched external LLVM reader is used. The verifier
+uses archived repository cache readers. Its original wrong-checksum inspector
+failure is retained separately and did not affect compiler or test source.
