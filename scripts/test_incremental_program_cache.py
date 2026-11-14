@@ -1,6 +1,8 @@
 """Focused checks for the native program cache manifest and payload entries."""
 
 import json
+
+from cache_payloads import decode_cbor, read_payload
 import os
 
 
@@ -232,7 +234,7 @@ def read_program(cache, entry):
             if field == "generated_ir":
                 program[field] = payload
             elif field == "section_dependency_graph":
-                program[field] = decode_graph(json.loads(payload))
+                program[field] = decode_graph(decode_cbor(payload))
             elif field == "inference_summaries":
                 program[field] = {
                     section: {
@@ -241,10 +243,10 @@ def read_program(cache, entry):
                             .read_bytes().split(b"\n", 2)[2]))
                         for variant, reference in variants.items()
                     }
-                    for section, variants in json.loads(payload).items()
+                    for section, variants in decode_cbor(payload).items()
                 }
             else:
-                program[field] = json.loads(payload)
+                program[field] = decode_cbor(payload)
         matches.append(program)
     assert len(matches) == 1, "expected one cached program"
     return matches[0]
@@ -267,7 +269,7 @@ def check_program_payloads(root, build):
     }
     assert all(field not in manifest for field in manifest["payload_keys"])
     summary_blob = directory / f"payload-{manifest['payload_keys']['inference_summaries']}.entry"
-    references = json.loads(summary_blob.read_bytes().split(b"\n", 2)[2])
+    references = read_payload(summary_blob)
     encoded = [json.loads((directory / f"inference-summary-{reference['payload']}.entry")
                          .read_bytes().split(b"\n", 2)[2])
                for variants in references.values() for reference in variants.values()]
@@ -310,7 +312,7 @@ def check_program_payloads(root, build):
             "function match records were embedded instead of carrying reusable unit keys"
     updated = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
     graph_blob = directory / f"payload-{updated['payload_keys']['section_dependency_graph']}.entry"
-    assert isinstance(json.loads(graph_blob.read_bytes().split(b"\n", 2)[2])["forward"], list)
+    assert isinstance(read_payload(graph_blob)["forward"], list)
     graph_blob.unlink()
     main.write_text("# comment\n" + source.replace('"first"', '"third"'))
     evicted = build(entry=main)

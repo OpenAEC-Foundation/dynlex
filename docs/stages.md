@@ -891,6 +891,15 @@ function-local storage. The entry-point checker validates emitted shader modules
 
 # Incremental Native Builds
 
+Structured native program payloads use definite-length CBOR emitted by the
+existing JSON library. Their cache reader copies bounded string spans, reserves
+array storage and builds containers with an explicit stack. Sorted object keys
+benefit from insertion hints; malformed lengths, duplicate keys and trailing data
+are rejected. The matcher classification payloads use this same reader. Executable
+manifests and individual inference-summary records retain their own JSON formats;
+module payloads retain raw LLVM bitcode. All readers select the format from the
+artifact contract. Compiler identity keeps incompatible derived snapshots separate.
+
 Native executable file builds use incremental compilation automatically. The default
 cache lives under `dynlex/compiler` in the operating system's user cache directory:
 XDG cache storage on Unix, Darwin user cache storage on macOS, and LocalAppData

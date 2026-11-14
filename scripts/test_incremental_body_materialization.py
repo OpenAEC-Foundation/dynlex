@@ -2,6 +2,8 @@
 
 
 import json
+
+from cache_payloads import read_payload
 from pathlib import Path
 
 
@@ -148,8 +150,7 @@ def check_nested_diagnostic_body_eviction(root, build):
     manifest = json.loads(Path(first[0]['cache_entry']).read_bytes().split(b'\n', 2)[2])
 
     def payload(field):
-        return json.loads((manifest_path / ('payload-' + manifest['payload_keys'][field] + '.entry'))
-                          .read_bytes().split(b'\n', 2)[2])
+        return read_payload(manifest_path / ('payload-' + manifest['payload_keys'][field] + '.entry'))
 
     projection = payload('all_function_projection')
     section, = [path for path, declaration in projection['function_declarations'].items()

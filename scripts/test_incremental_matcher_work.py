@@ -1,6 +1,8 @@
 """Fingerprint each matcher request once and visit increasing literal paths."""
 
 import json
+
+from cache_payloads import read_payload
 from pathlib import Path
 
 
@@ -128,8 +130,7 @@ def check_classification_segment_eviction(root, build):
     manifest_path = Path(cold[0]["cache_entry"])
     directory = manifest_path.parent
     manifest = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
-    projection = json.loads((directory / f"payload-{manifest['payload_keys']['all_function_projection']}.entry")
-                            .read_bytes().split(b"\n", 2)[2])
+    projection = read_payload(directory / f"payload-{manifest['payload_keys']['all_function_projection']}.entry")
     topology = projection["matcher_projection"]["classifications"]
     index = json.loads((directory / f"matcher-{manifest['matcher_key']}.entry")
                        .read_bytes().split(b"\n", 2)[2])

@@ -1,6 +1,8 @@
 """A failed constraint keeps completed, failed and unvisited query products distinct."""
 
 import json
+
+from cache_payloads import read_payload
 from pathlib import Path
 
 
@@ -18,7 +20,7 @@ def check_blocked_constraint_storage(root, build):
     manifest = json.loads(path.with_name(path.name.replace("program-", "errors-", 1))
                           .read_bytes().split(b"\n", 2)[2])
     key = manifest["constraint_state"]["payload_keys"]["all_function_projection"]
-    projection = json.loads((path.parent / f"payload-{key}.entry").read_bytes().split(b"\n", 2)[2])
+    projection = read_payload(path.parent / f"payload-{key}.entry")
     schedule = projection["constraint_probe_schedule"]
     assert len(schedule["items"]) == count
     assert sum(len(roots) for roots in schedule["roots"]) <= 3 * count, \

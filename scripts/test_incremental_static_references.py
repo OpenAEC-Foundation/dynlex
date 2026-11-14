@@ -1,6 +1,8 @@
 """Static objects retain identity when cached functions are imported in a new order."""
 
 import json
+
+from cache_payloads import read_payload
 from pathlib import Path
 
 
@@ -21,7 +23,7 @@ def check_static_reference_identities(root, build):
         entry = Path(stats["cache_entry"])
         program = json.loads(entry.read_bytes().split(b"\n", 2)[2])
         payload = entry.parent / f"payload-{program['payload_keys']['native_units']}.entry"
-        units = json.loads(payload.read_bytes().split(b"\n", 2)[2])
+        units = read_payload(payload)
         return {name: value for name, value in units["symbols"].items()
                 if "section.data" in name or ".dynlex.static." in name}
 

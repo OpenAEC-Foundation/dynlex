@@ -1,4 +1,5 @@
 #include "incrementalMatcherCache.h"
+#include "cachedCbor.h"
 #include "compilerUtils.h"
 #include "dataSections.h"
 #include "lsp/sourceFile.h"

@@ -1,5 +1,6 @@
 #include "incrementalCompilation.h"
 #include "bindingResolution.h"
+#include "cachedCbor.h"
 #include "classInstantiationRequest.h"
 #include "codegen/codegen.h"
 #include "codegen/native.h"

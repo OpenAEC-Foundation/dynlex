@@ -22,7 +22,7 @@ from test_incremental_body_activation import check_inactive_body_activation
 from test_incremental_storage_origins import check_storage_origin_reuse
 from test_incremental_conversions import check_conversion_reuse
 from test_incremental_matcher_work import check_matcher_fingerprint_work
-from test_incremental_source_observations import check_source_observation_reuse
+from test_incremental_source_observations import check_source_observation_reuse, check_configured_source_comments
 from test_incremental_static_references import check_static_reference_identities
 from test_incremental_partition_closures import check_partition_closure_work
 from test_incremental_validation import check_capture_note_wording, check_validation_units, check_failed_validation_units, check_capture_scope_queries, check_validation_flow, check_validation_bound_parameters, check_diagnostic_stage_reuse
@@ -945,18 +945,7 @@ function left times right:
                                       capture_output=True, text=True, timeout=30)
             assert verified.returncode == 0, verified.stdout + verified.stderr
 
-    config = root / "config.dl"
-    config.write_text('dynlex options:\n    comment: "//"\n')
-    configured = build()
-    assert not configured[0]["frontend_reused"], "new syntax config was ignored"
-    assert configured[1:] == build(False)[1:]
-    configured_source = main.read_text()
-    main.write_text("// A comment with the configured prefix.\n" + configured_source)
-    assert build()[0]["frontend_reused"], "configured comment syntax rebuilt the frontend"
-    main.write_text(configured_source)
-    assert build()[0]["frontend_reused"], "removing a configured comment rebuilt the frontend"
-    config.unlink()
-    assert not build()[0]["frontend_reused"], "deleted syntax config was ignored"
+    check_configured_source_comments(root, main, build)
 
     original_time = main.stat().st_mtime_ns
     main.write_text("this is an undefined expression\n")

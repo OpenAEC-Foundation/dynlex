@@ -196,9 +196,9 @@ bool hydrateProgramField(Json &program, const fs::path &directory, const char *f
 	if (isModulePayload(field))
 		program[field] = std::move(*payload);
 	else if (std::string_view(field) == "section_dependency_graph")
-		program[field] = decodeSectionGraph(Json::parse(*payload));
+		program[field] = decodeSectionGraph(parseCachedCbor(*payload));
 	else
-		program[field] = Json::parse(*payload);
+		program[field] = parseCachedCbor(*payload);
 	return true;
 }
 
@@ -233,10 +233,16 @@ void storeSnapshotPayloads(const fs::path &directory, Json &program, const Field
 				prior->at("payload_keys").contains(field)) {
 				keys[field] = prior->at("payload_keys").at(field);
 			} else {
-				std::string payload = isModulePayload(field) ? program.at(field).get<std::string>()
-									  : std::string_view(field) == "section_dependency_graph"
-										  ? encodeSectionGraph(program.at(field)).dump()
-										  : program.at(field).dump();
+				std::vector<uint8_t> encoded;
+				std::string_view payload;
+				if (isModulePayload(field)) {
+					payload = program.at(field).get_ref<const std::string &>();
+				} else {
+					encoded = std::string_view(field) == "section_dependency_graph"
+								  ? Json::to_cbor(encodeSectionGraph(program.at(field)))
+								  : Json::to_cbor(program.at(field));
+					payload = {reinterpret_cast<const char *>(encoded.data()), encoded.size()};
+				}
 				std::string key = digest(payload);
 				writeEntry(programPayloadPath(directory, key), payload);
 				keys[field] = std::move(key);

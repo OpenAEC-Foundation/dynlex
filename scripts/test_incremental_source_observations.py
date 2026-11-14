@@ -114,3 +114,18 @@ def check_configuration_observations(root, build):
     assert not changed[0]['frontend_reused']
     assert changed[1:] == build(False, entry=main)[1:]
     assert changed[2] != first[2]
+
+
+def check_configured_source_comments(root, main, build):
+    config = root / "config.dl"
+    config.write_text('dynlex options:\n    comment: "//"\n')
+    configured = build()
+    assert not configured[0]["frontend_reused"], "new syntax config was ignored"
+    assert configured[1:] == build(False)[1:]
+    configured_source = main.read_text()
+    main.write_text("// A comment with the configured prefix.\n" + configured_source)
+    assert build()[0]["frontend_reused"], "configured comment syntax rebuilt the frontend"
+    main.write_text(configured_source)
+    assert build()[0]["frontend_reused"], "removing a configured comment rebuilt the frontend"
+    config.unlink()
+    assert not build()[0]["frontend_reused"], "deleted syntax config was ignored"

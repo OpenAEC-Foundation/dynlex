@@ -16,7 +16,7 @@ std::optional<IncrementalMatcherCache::Json> IncrementalMatcherCache::restoreCla
 	std::string_view packed = entry->second;
 	if (packed.empty() || packed.front() != '\5')
 		throw std::runtime_error("invalid classification cache kind");
-	Json value = Json::from_cbor(packed.begin() + 1, packed.end());
+	Json value = parseCachedCbor(packed.substr(1));
 	retain(key);
 	return value;
 }

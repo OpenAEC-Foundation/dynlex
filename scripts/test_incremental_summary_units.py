@@ -2,6 +2,8 @@
 
 import json
 
+from cache_payloads import read_payload
+
 from test_incremental_program_cache import read_program
 
 
@@ -11,7 +13,7 @@ def summary_manifest(root, entry):
                     for path in directory.glob("program-*.entry")
                     if str(entry) in json.loads(path.read_bytes().split(b"\n", 2)[2])["files"])
     key = manifest["payload_keys"]["inference_summaries"]
-    return json.loads((directory / f"payload-{key}.entry").read_bytes().split(b"\n", 2)[2])
+    return read_payload(directory / f"payload-{key}.entry")
 
 
 def check_summary_unit_reuse(root, build):
