@@ -50,6 +50,8 @@ struct InferenceContext;
 struct InferenceProductHooks;
 
 struct VariableBindingHooks;
+struct SourcePreparationHooks;
+struct SourceTransformHooks;
 
 struct ParseContext {
 	enum class InferenceReuseUse { RuntimeCall, ConstantCall, Callable, SymbolicReference };
@@ -423,6 +425,8 @@ struct ParseContext {
 	SyntaxConfig projectSyntax;
 	std::string builtinSyntaxConfigPath;
 	std::string projectSyntaxConfigPath;
+	SourcePreparationHooks *sourcePreparationHooks = nullptr;
+	SourceTransformHooks *sourceTransformHooks = nullptr;
 	// prohibit copies
 	ParseContext(ParseContext &) = delete;
 	ParseContext();
@@ -463,6 +467,8 @@ struct ParseContext {
 	CodeLine *createCodeLine(
 		lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string text, std::vector<SourceSlice> sourceSlices
 	);
+	// The caller owns immutable source text for this context's lifetime.
+	CodeLine *createBorrowedSourceLine(lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string_view text);
 	void addSourceToken(Range range, SourceTokenKind kind, SectionType referencedPatternType = SectionType::Function) {
 		sourceTokenAnnotations.push_back({range, kind, referencedPatternType});
 	}

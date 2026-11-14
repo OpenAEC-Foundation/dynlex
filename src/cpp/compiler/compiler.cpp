@@ -7,9 +7,7 @@
 #include "dataSections.h"
 #include "expression.h"
 #include "intrinsicInfo.h"
-#include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
-#include "pathUtils.h"
 #include "pattern/patternDefinition.h"
 #include "pattern/patternReference.h"
 #include "pattern/pattern_tree/patternElement.h"
@@ -19,6 +17,8 @@
 #include "section/parseUtils.h"
 #include "section/scopeRulesSection.h"
 #include "section/variable.h"
+#include "sourcePreprocessing.h"
+#include "sourceSyntax.h"
 #include "sourceTransform.h"
 #include "stringFunctions.h"
 #include "syntaxConfig.h"
@@ -28,107 +28,7 @@
 #include <chrono>
 #include <climits>
 #include <cmath>
-#include <filesystem>
 using namespace std::literals;
-
-// A resolved import: the path to load plus the resolution root the file was
-// found under. Nested imports of that file first try the same root, so one
-// import graph never mixes files from different library locations.
-struct ResolvedImport {
-	std::string path;
-	std::string root;
-};
-
-static std::string currentResolutionRoot() {
-	std::error_code error;
-	std::filesystem::path current = std::filesystem::current_path(error);
-	return error ? std::string{} : current.lexically_normal().string();
-}
-
-static std::string importPathUnder(std::string_view root, std::string_view path) {
-	return (std::filesystem::path(pathutil::toFilesystemPath(root)) / std::filesystem::path(pathutil::toFilesystemPath(path)))
-		.lexically_normal()
-		.string();
-}
-
-// Search paths for library imports (e.g., "lib/std.dl")
-// Tries: the importing file's directory, the importing file's resolution root,
-// the working directory, then the source tree and installed locations.
-static ResolvedImport resolveImportPath(
-	const std::string &path, const std::string &importingFileDir, const std::string &importingFileRoot,
-	lsp::FileSystem *fileSystem
-) {
-	auto resolveCandidate = [fileSystem](const std::string &candidate, std::string &resolved) -> bool {
-		if (candidate.empty())
-			return false;
-		std::string normalized = std::filesystem::path(pathutil::toFilesystemPath(candidate)).lexically_normal().string();
-		if (!fileSystem->getFile(normalized))
-			return false;
-		resolved = std::move(normalized);
-		return true;
-	};
-
-	std::string resolvedPath;
-
-	// Try relative to the importing file's directory first; the sibling stays
-	// within the importer's resolution root.
-	if (!importingFileDir.empty()) {
-		std::string relativePath = importPathUnder(importingFileDir, path);
-		if (resolveCandidate(relativePath, resolvedPath))
-			return {resolvedPath, importingFileRoot};
-	}
-
-	// Try the importing file's resolution root, keeping the import graph on
-	// one consistent tree even when it differs from the working directory.
-	if (!importingFileRoot.empty()) {
-		std::string rootPath = importPathUnder(importingFileRoot, path);
-		if (resolveCandidate(rootPath, resolvedPath))
-			return {resolvedPath, importingFileRoot};
-	}
-
-	// Try the path as-is (relative to CWD)
-	if (resolveCandidate(path, resolvedPath)) {
-		std::filesystem::path requestedPath = pathutil::toFilesystemPath(path);
-		std::string foundRoot =
-			requestedPath.is_absolute() ? requestedPath.parent_path().lexically_normal().string() : currentResolutionRoot();
-		return {resolvedPath, foundRoot};
-	}
-
-#ifdef DYNLEX_WEB
-	// Browser mode uses a virtual root. Keep imports deterministic for in-memory and preloaded files.
-	if (!path.empty() && path[0] != '/') {
-		if (resolveCandidate(importPathUnder("/", path), resolvedPath))
-			return {resolvedPath, "/"};
-		if (resolveCandidate(importPathUnder("/workspace", path), resolvedPath))
-			return {resolvedPath, "/workspace"};
-		if (resolveCandidate(importPathUnder("/lib", path), resolvedPath))
-			return {resolvedPath, "/"};
-	}
-#endif
-
-	// Try relative to the project source directory (for development builds)
-	// These come before system paths so dev builds use the source tree's libraries
-	std::string devPath = importPathUnder(PROJECT_SOURCE_DIR, path);
-	if (resolveCandidate(devPath, resolvedPath))
-		return {resolvedPath, std::string(PROJECT_SOURCE_DIR)};
-
-	// Try project lib directory (e.g., "std.dl" → "<project>/lib/std.dl")
-	std::string devLibPath = importPathUnder(importPathUnder(PROJECT_SOURCE_DIR, "lib"), path);
-	if (resolveCandidate(devLibPath, resolvedPath))
-		return {resolvedPath, std::string(PROJECT_SOURCE_DIR)};
-
-	// Try installed system path
-	std::string systemPath = importPathUnder("/usr/share/dynlex", path);
-	if (resolveCandidate(systemPath, resolvedPath))
-		return {resolvedPath, "/usr/share/dynlex"};
-
-	// Try installed library path (e.g., "std.dl" → "/usr/share/dynlex/lib/std.dl")
-	std::string systemLibPath = importPathUnder("/usr/share/dynlex/lib", path);
-	if (resolveCandidate(systemLibPath, resolvedPath))
-		return {resolvedPath, "/usr/share/dynlex"};
-
-	return {path, importingFileRoot}; // Return original path (will fail with proper error)
-}
 
 static void collectSectionsPreorder(Section *section, std::vector<Section *> &outSections) {
 	if (!section)
@@ -241,284 +141,6 @@ std::string renderPurityReport(ParseContext &context) {
 	return report;
 }
 
-static void updateLineTrimming(CodeLine *line, const SyntaxConfig &syntax) {
-	size_t commentPos = findCommentStart(line->fullText, syntax.commentPrefix);
-	std::string_view withoutComment =
-		(commentPos != std::string_view::npos) ? line->fullText.substr(0, commentPos) : line->fullText;
-	size_t trimmedEnd = withoutComment.size();
-	while (trimmedEnd > 0 && std::isspace(static_cast<unsigned char>(withoutComment[trimmedEnd - 1])) != 0)
-		trimmedEnd--;
-	line->rightTrimmedText = withoutComment.substr(0, trimmedEnd);
-}
-
-static CodeLine *
-createSourceLine(ParseContext &context, lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string_view text) {
-	CodeLine *line = context.createCodeLine(
-		sourceFile, sourceFileLineIndex, std::string(text),
-		{{0, static_cast<int>(text.size()), sourceFile, sourceFileLineIndex, 0}}
-	);
-	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, sourceFile);
-	line = expandFormattedStringLine(context, *line);
-	if (!line)
-		return nullptr;
-	updateLineTrimming(line, syntax);
-	return line;
-}
-
-static bool validateSourceCharacters(ParseContext &context, CodeLine *line, const SyntaxConfig &syntax) {
-	bool insideString = false;
-	size_t commentStart = findCommentStart(line->fullText, syntax.commentPrefix);
-	std::vector<size_t> pendingStringArgumentCharacters;
-	for (size_t index = 0; index < line->fullText.size(); index++) {
-		char character = line->fullText[index];
-		if (index < commentStart && character == '"' && !isEscapedCharacter(line->fullText, index)) {
-			insideString = !insideString;
-			if (!insideString)
-				pendingStringArgumentCharacters.clear();
-			continue;
-		}
-		if (character != argumentChar)
-			continue;
-		if (index < commentStart && insideString) {
-			pendingStringArgumentCharacters.push_back(index);
-			continue;
-		}
-
-		context.addDiagnostic(Diagnostic(
-			context, Diagnostic::Level::Error, "disallowed character", Range(line, index, index + 1), "character", "U+0007"
-		));
-		return false;
-	}
-	if (!pendingStringArgumentCharacters.empty()) {
-		size_t index = pendingStringArgumentCharacters.front();
-		context.addDiagnostic(Diagnostic(
-			context, Diagnostic::Level::Error, "disallowed character", Range(line, index, index + 1), "character", "U+0007"
-		));
-		return false;
-	}
-	return true;
-}
-
-struct InlineBodySplit {
-	size_t openerOffset{};
-	size_t bodyOffset{};
-};
-
-static std::string extractLeadingIndent(std::string_view text) {
-	size_t indentLength = 0;
-	while (indentLength < text.size() && std::isspace(static_cast<unsigned char>(text[indentLength])))
-		indentLength++;
-	return std::string(text.substr(0, indentLength));
-}
-
-static std::optional<InlineBodySplit> findTopLevelInlineBodySplit(std::string_view text, const SyntaxConfig &syntax) {
-	std::optional<TopLevelSectionOpener> opener = findTopLevelSectionOpener(text, syntax.sectionOpener);
-	if (!opener || opener->bodyOffset >= text.size())
-		return std::nullopt;
-	return InlineBodySplit{opener->offset, opener->bodyOffset};
-}
-
-static CodeLine *createLogicalInlineLine(
-	ParseContext &context, CodeLine *sourceLine, std::string_view indent, std::string_view text, int sourceColumnStart,
-	int logicalIndentOffset, bool inlineBodyFollows
-) {
-	std::string logicalText;
-	logicalText.reserve(indent.size() + text.size());
-	logicalText += indent;
-	logicalText += text;
-
-	std::vector<SourceSlice> sourceSlices;
-	sourceLine->appendSourceSlices(sourceSlices, 0, indent.size(), 0);
-	sourceLine->appendSourceSlices(
-		sourceSlices, sourceColumnStart, sourceColumnStart + text.size(), static_cast<int>(indent.size())
-	);
-
-	CodeLine *logicalLine = context.createCodeLine(
-		sourceLine->sourceFile, sourceLine->sourceFileLineIndex, std::move(logicalText), std::move(sourceSlices)
-	);
-	logicalLine->rightTrimmedText = logicalLine->fullText;
-	logicalLine->logicalIndentOffset = logicalIndentOffset;
-	logicalLine->inlineBodyFollows = inlineBodyFollows;
-	logicalLine->hasIndentOverride = !indent.empty();
-	logicalLine->indentOverride = std::string(indent);
-	return logicalLine;
-}
-
-static void expandOneLineSections(ParseContext &context) {
-	std::vector<CodeLine *> transformedLines;
-	transformedLines.reserve(context.codeLines.size());
-
-	for (CodeLine *line : context.codeLines) {
-		if (line->rightTrimmedText.empty()) {
-			transformedLines.push_back(line);
-			continue;
-		}
-
-		const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
-		std::string indent = extractLeadingIndent(line->rightTrimmedText);
-		std::string_view remaining = line->rightTrimmedText.substr(indent.size());
-		size_t remainingSourceColumn = indent.size();
-		int logicalIndentOffset = line->logicalIndentOffset;
-		bool expanded = false;
-
-		while (std::optional<InlineBodySplit> split = findTopLevelInlineBodySplit(remaining, syntax)) {
-			size_t openerEnd = split->openerOffset + syntax.sectionOpener.size();
-			transformedLines.push_back(createLogicalInlineLine(
-				context, line, indent, remaining.substr(0, openerEnd), static_cast<int>(remainingSourceColumn),
-				logicalIndentOffset, true
-			));
-			remainingSourceColumn += split->bodyOffset;
-			remaining = remaining.substr(split->bodyOffset);
-			logicalIndentOffset++;
-			expanded = true;
-		}
-
-		if (!expanded) {
-			transformedLines.push_back(line);
-			continue;
-		}
-
-		transformedLines.push_back(createLogicalInlineLine(
-			context, line, indent, remaining, static_cast<int>(remainingSourceColumn), logicalIndentOffset, false
-		));
-	}
-
-	context.codeLines = std::move(transformedLines);
-}
-
-struct BracketContinuationState {
-	int parentheses = 0;
-	int brackets = 0;
-	bool inString = false;
-	bool escaped = false;
-};
-
-static void advanceContinuationState(std::string_view text, BracketContinuationState &state) {
-	for (char ch : text) {
-		if (state.inString) {
-			if (state.escaped) {
-				state.escaped = false;
-				continue;
-			}
-			if (ch == '\\') {
-				state.escaped = true;
-			} else if (ch == '"') {
-				state.inString = false;
-			}
-			continue;
-		}
-		if (ch == '"') {
-			state.inString = true;
-		} else if (ch == '(') {
-			state.parentheses++;
-		} else if (ch == ')' && state.parentheses > 0) {
-			state.parentheses--;
-		} else if (ch == '[') {
-			state.brackets++;
-		} else if (ch == ']' && state.brackets > 0) {
-			state.brackets--;
-		}
-	}
-}
-
-static bool needsContinuation(const BracketContinuationState &state) {
-	return state.inString || state.parentheses > 0 || state.brackets > 0;
-}
-
-static std::string_view trimLeadingWhitespace(std::string_view text) {
-	size_t first = text.find_first_not_of(" \t");
-	return first == std::string_view::npos ? std::string_view{} : text.substr(first);
-}
-
-static CodeLine *mergeContinuationLines(ParseContext &context, const std::vector<CodeLine *> &lines) {
-	if (lines.empty())
-		return nullptr;
-	if (lines.size() == 1)
-		return lines.front();
-
-	std::string mergedText;
-	std::vector<SourceSlice> slices;
-	for (size_t i = 0; i < lines.size(); i++) {
-		std::string_view piece = lines[i]->rightTrimmedText;
-		int sourceColumnStart = 0;
-		if (i > 0) {
-			piece = trimLeadingWhitespace(piece);
-			sourceColumnStart = static_cast<int>(piece.begin() - lines[i]->fullText.begin());
-			if (!mergedText.empty() && !std::isspace(static_cast<unsigned char>(mergedText.back())) && !piece.empty()) {
-				mergedText += ' ';
-			}
-		}
-		if (i == 0)
-			sourceColumnStart = static_cast<int>(piece.begin() - lines[i]->fullText.begin());
-		int transformedStart = static_cast<int>(mergedText.size());
-		mergedText += piece;
-		slices.push_back({
-			transformedStart,
-			static_cast<int>(mergedText.size()),
-			lines[i]->sourceFile,
-			lines[i]->sourceFileLineIndex,
-			sourceColumnStart,
-		});
-	}
-
-	CodeLine *merged = context.createCodeLine(
-		lines.front()->sourceFile, lines.front()->sourceFileLineIndex, std::move(mergedText), std::move(slices)
-	);
-	merged->rightTrimmedText = merged->fullText;
-	return merged;
-}
-
-static void applyBracketContinuations(ParseContext &context) {
-	std::vector<CodeLine *> transformedLines;
-	for (size_t i = 0; i < context.codeLines.size(); i++) {
-		CodeLine *line = context.codeLines[i];
-		if (line->rightTrimmedText.empty()) {
-			transformedLines.push_back(line);
-			continue;
-		}
-
-		BracketContinuationState state;
-		advanceContinuationState(line->rightTrimmedText, state);
-		if (!needsContinuation(state)) {
-			transformedLines.push_back(line);
-			continue;
-		}
-
-		std::vector<CodeLine *> mergedLines = {line};
-		while (needsContinuation(state) && i + 1 < context.codeLines.size()) {
-			CodeLine *next = context.codeLines[++i];
-			mergedLines.push_back(next);
-			advanceContinuationState(next->rightTrimmedText, state);
-		}
-		transformedLines.push_back(mergeContinuationLines(context, mergedLines));
-	}
-	context.codeLines = std::move(transformedLines);
-}
-
-static std::string canonicalSourceKey(std::string_view path) {
-	std::filesystem::path fsPath = pathutil::toFilesystemPath(path);
-	std::error_code ec;
-	std::filesystem::path canonical = std::filesystem::weakly_canonical(fsPath, ec);
-	if (ec) {
-		canonical = std::filesystem::absolute(fsPath, ec);
-		if (ec)
-			return fsPath.lexically_normal().string();
-	}
-	return canonical.lexically_normal().string();
-}
-
-bool isInternalSourcePath(std::string_view path) {
-	if (path.empty())
-		return false;
-
-	std::string normalized = canonicalSourceKey(path);
-	std::replace(normalized.begin(), normalized.end(), '\\', '/');
-
-	const std::string projectLibPrefix = std::string(PROJECT_SOURCE_DIR) + "/lib/";
-	return normalized.starts_with("lib/") || normalized.starts_with("/lib/") ||
-		   normalized.starts_with("/usr/share/dynlex/lib/") || normalized.starts_with(projectLibPrefix);
-}
-
 #include "callableFunctionLookup.inl"
 
 PatternDefinition *findDefinitionBySignature(
@@ -619,9 +241,7 @@ bool compileBeforeTypeInference(const std::string &path, ParseContext &context, 
 	context.compilationStage = ParseContext::CompilationStage::NotStarted;
 	if (!loadSourceFiles(path, context))
 		return false;
-	applyBracketContinuations(context);
-	expandOneLineSections(context);
-	if (!expandDefinitionShorthands(context))
+	if (!preprocessSourceLines(context))
 		return false;
 	context.compilationStage = ParseContext::CompilationStage::ImportedFiles;
 	finishStage();
@@ -669,104 +289,12 @@ bool compile(const std::string &path, ParseContext &context) {
 	return compileBeforeTypeInference(path, context) && finishTypeInference(context);
 }
 
-// resolutionRoot keeps nested imports in the tree selected by their importer.
-static bool
-importSourceFile(const std::string &path, ParseContext &context, const std::string &resolutionRoot, SourceLoadPurpose purpose) {
-	lsp::SourceFile *sourceFile = context.fileSystem->getFile(path);
-	if (!sourceFile) {
-		if (context.importedFiles.empty()) {
-			// If this is the main file, report error
-			context.addDiagnostic(
-				Diagnostic(context, Diagnostic::Level::Error, "could not import main file", Range(), "path", path)
-			);
-		}
-		return false;
-	}
-	// Canonicalize path to prevent duplicate imports via different path strings
-	std::string canonicalPath = canonicalSourceKey(sourceFile->uri.empty() ? path : sourceFile->uri);
-	if (context.importedFiles.contains(canonicalPath)) {
-		return true; // Already processed, skip
-	}
-
-	context.importedFiles[canonicalPath] = sourceFile;
-	// The first file imported is the main source file
-	bool isMainSourceFile = !context.mainSourceFile;
-	if (isMainSourceFile)
-		context.mainSourceFile = sourceFile;
-	std::string activeResolutionRoot = resolutionRoot;
-	if (isMainSourceFile && activeResolutionRoot.empty()) {
-		std::filesystem::path mainPath =
-			std::filesystem::absolute(pathutil::toFilesystemPath(sourceFile->uri.empty() ? path : sourceFile->uri));
-		activeResolutionRoot = mainPath.parent_path().lexically_normal().string();
-	}
-
-	// Iterate over lines, preserving line terminators for exact source mapping.
-	std::string_view fileView{sourceFile->content};
-	const SyntaxConfig &syntax =
-		sourceFile->uri.empty() ? syntaxConfigForSourcePath(context, path) : syntaxConfigForSourceFile(context, sourceFile);
-
-	int sourceFileLineIndex = 0;
-	size_t lineStart = 0;
-	while (lineStart < fileView.size()) {
-		size_t contentEnd = lineStart;
-		while (contentEnd < fileView.size() && fileView[contentEnd] != '\r' && fileView[contentEnd] != '\n')
-			contentEnd++;
-		size_t lineEnd = contentEnd;
-		if (lineEnd < fileView.size()) {
-			if (fileView[lineEnd] == '\r' && lineEnd + 1 < fileView.size() && fileView[lineEnd + 1] == '\n')
-				lineEnd += 2;
-			else
-				lineEnd += 1;
-		}
-
-		std::string_view lineString = fileView.substr(lineStart, lineEnd - lineStart);
-		CodeLine *line = createSourceLine(context, sourceFile, sourceFileLineIndex, lineString);
-		if (!line)
-			return false;
-		// Dependency inspection reads the complete import graph even for programs
-		// intentionally containing lexical errors, such as diagnostic fixtures.
-		if (purpose == SourceLoadPurpose::Compilation && !validateSourceCharacters(context, line, syntax))
-			return false;
-
-		// check if the line is an import statement
-		std::string_view importText = trimLeadingWhitespace(line->rightTrimmedText);
-		if (std::optional<std::string_view> importPathView = extractDirectiveArgument(importText, syntax.importKeyword)) {
-			// recursively import the file, replacing this line with the imported content
-			std::string importingDir =
-				std::filesystem::path(pathutil::toFilesystemPath(sourceFile->uri.empty() ? path : sourceFile->uri))
-					.parent_path()
-					.string();
-			ResolvedImport resolvedImport =
-				resolveImportPath(std::string(*importPathView), importingDir, activeResolutionRoot, context.fileSystem.get());
-			const std::string &importPath = resolvedImport.path;
-			if (!importSourceFile(importPath, context, resolvedImport.root, purpose)) {
-				context.addDiagnostic(Diagnostic(
-					context, Diagnostic::Level::Error, "failed to import source file",
-					Range(
-						line,
-						static_cast<int>(importText.data() - line->rightTrimmedText.data() + syntax.importKeyword.length()),
-						line->rightTrimmedText.length()
-					),
-					"path", importPath
-				));
-				return false;
-			}
-			// Fall through to add import line to codeLines (tokenized during section analysis)
-		}
-		line->mergedLineIndex = context.codeLines.size();
-		context.codeLines.push_back(line);
-		lineStart = lineEnd;
-		sourceFileLineIndex++;
-	}
-	return true;
-}
-
-bool loadSourceFiles(const std::string &path, ParseContext &context, SourceLoadPurpose purpose) {
-	return initializeSyntaxConfigs(context, path) && importSourceFile(path, context, "", purpose);
-}
-
 // step 2: analyze sections
 bool analyzeSections(ParseContext &context) {
+	requireCompilerInvariant(
+		!context.sourceTransformHooks || context.sourceTransformHooks->sectionLines.size() == context.codeLines.size(),
+		"section analysis requires the complete source-product stream"
+	);
 	IndentData data{};
 	Section *currentSection = context.mainSection = new Section(SectionType::Custom);
 	int compiledLineIndex = 0;
@@ -791,16 +319,11 @@ bool analyzeSections(ParseContext &context) {
 
 		int oldIndentLevel = data.indentLevel;
 		// check indent level
-		std::string indentString;
-		if (line->hasIndentOverride) {
-			indentString = line->indentOverride;
-		} else {
-			size_t indentLength = 0;
-			while (indentLength < line->rightTrimmedText.size() &&
-				   std::isspace(static_cast<unsigned char>(line->rightTrimmedText[indentLength])) != 0)
-				indentLength++;
-			indentString = std::string(line->rightTrimmedText.substr(0, indentLength));
-		}
+		SectionLineSyntax lexical = context.sourceTransformHooks
+										? context.sourceTransformHooks->sectionLines.at(compiledLineIndex)
+										: sectionLineSyntax(*line, syntax);
+		std::string_view indentString = line->hasIndentOverride ? std::string_view(line->indentOverride)
+																: line->rightTrimmedText.substr(0, lexical.patternStart);
 		IndentMeasurement indentation = measureIndent(data, indentString);
 		if (!indentation.validAmount) {
 			// check amount of indents
@@ -850,11 +373,10 @@ bool analyzeSections(ParseContext &context) {
 		line->section = currentSection;
 		currentSection->codeLines.push_back(line);
 
-		std::string_view trimmedText = line->rightTrimmedText.substr(indentString.length());
+		line->patternText = line->rightTrimmedText.substr(lexical.patternStart, lexical.patternLength);
 
 		// check if this line starts a section
-		if (trimmedText.ends_with(syntax.sectionOpener)) {
-			line->patternText = trimmedText.substr(0, trimmedText.length() - syntax.sectionOpener.length());
+		if (lexical.opensSection) {
 
 			// set the current section to the new section for the next line
 			currentSection = currentSection->createSection(context, line);
@@ -865,8 +387,7 @@ bool analyzeSections(ParseContext &context) {
 			line->sectionOpening = currentSection;
 			data.indentLevel++;
 		} else {
-			line->patternText = trimmedText;
-			if (extractDirectiveArgument(line->patternText, syntax.importKeyword)) {
+			if (lexical.importDirective) {
 				// Import lines are already processed during importSourceFile;
 				// tokenize "import" as a keyword and the path as a string
 				line->resolved = true;

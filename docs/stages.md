@@ -32,6 +32,15 @@ report incomplete; selected configuration paths remain available for diagnosing 
 
 Sections are analyzed. We do basic parsing **WITHOUT hardcoding**.
 
+Native incremental builds retain file preparation and merged-stream source chunks.
+File products depend on current content and the lexical configuration they read;
+import lookup remains live, including missing and shadowing candidates. Chunk
+products include their incoming indentation/shorthand state and source membership,
+so bracket continuations can still cross imports. A compact parallel stream holds
+section-line offsets and opener/import decisions for the ordinary section analyzer.
+These descriptors contain no owned strings and do not enlarge mutable code lines.
+Semantic section objects are still constructed against the current program.
+
 Native incremental builds retain unresolved expression syntax with a reference
 outline. An unchanged function body registers its current-source pattern and
 variable references from that outline without constructing its expression tree.

@@ -29,6 +29,8 @@
 #include "section/classSection.h"
 #include "section/variable.h"
 #include "sectionIdentity.h"
+#include "sourcePreparation.h"
+#include "sourcePreprocessing.h"
 #include "syntaxConfig.h"
 #include "validation.h"
 #include "variableBindings.h"
@@ -188,6 +190,9 @@ void writeEntry(const fs::path &path, std::string_view payload) {
 
 #include "incrementalDiagnosticCache.inl"
 #include "incrementalParsedExpressionCache.inl"
+#include "incrementalSourceLineCodec.inl"
+#include "incrementalSourcePreparation.inl"
+#include "incrementalSourceTransforms.inl"
 
 void recordSemanticSources(Json &result, RecordingFileSystem &files, const ParseContext &context) {
 	result["comment_prefixes"] =
@@ -494,6 +499,8 @@ bool compileIncrementally(
 				}
 			}
 			IncrementalParsedExpressionCache parserCache(context, previousParsedExpressions);
+			IncrementalSourcePreparation sourcePreparation(context, parserCache, *recording);
+			IncrementalSourceTransforms sourceTransforms(context, parserCache, *recording);
 			context.deferParsedLine = [&](Section *section, CodeLine *line, SectionType type) {
 				return parserCache.defer(section, line, type);
 			};
@@ -927,6 +934,8 @@ bool compileIncrementally(
 			statistics.bodySyntaxUnitsParsed = parserCache.bodyAssemblyCount();
 			statistics.bodySyntaxUnitsRestored = parserCache.bodyRestorationCount();
 			statistics.bodySyntaxUnitsSkipped = parserCache.bodySkippedCount();
+			statistics.sourcePreparation = sourcePreparation.work;
+			statistics.sourceTransforms = sourceTransforms.work;
 		}
 		auto finalizeStart = Clock::now();
 		if (success)

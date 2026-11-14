@@ -32,6 +32,9 @@ class RecordingFileSystem : public lsp::FileSystem {
 	size_t observationRequests() const { return requests; }
 	size_t observationsComputed() const { return computed; }
 	size_t observationsReused() const { return reused; }
+	const std::string &sourceContentDigest(const lsp::SourceFile &file) const {
+		return sourceObservations.at(&file).at("content").get_ref<const std::string &>();
+	}
 	Json observations = Json::object();
 	Json configurationObservations = Json::object();
 

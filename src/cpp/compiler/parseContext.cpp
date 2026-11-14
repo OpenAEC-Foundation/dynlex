@@ -292,6 +292,15 @@ ParseContext::cloneExpressionTree(Expression *expression, ExpressionStorage &sto
 	);
 }
 
+CodeLine *ParseContext::createBorrowedSourceLine(lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string_view text) {
+	auto line = std::make_unique<CodeLine>(text, sourceFile);
+	line->sourceFileLineIndex = sourceFileLineIndex;
+	line->sourceSlices.push_back({0, static_cast<int>(text.size()), sourceFile, sourceFileLineIndex, 0});
+	CodeLine *result = line.get();
+	ownedCodeLines.push_back(std::move(line));
+	return result;
+}
+
 CodeLine *ParseContext::createCodeLine(
 	lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string text, std::vector<SourceSlice> sourceSlices
 ) {

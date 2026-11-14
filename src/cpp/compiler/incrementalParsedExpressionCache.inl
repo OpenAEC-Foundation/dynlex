@@ -1,4 +1,4 @@
-constexpr std::string_view parsedExpressionCacheHeader = "DynLex parsed expressions v3\n";
+constexpr std::string_view parsedExpressionCacheHeader = "DynLex parsed expressions v5\n";
 
 void appendParseLength(std::string &output, std::uint64_t value) {
 	do {
@@ -263,7 +263,7 @@ class IncrementalParsedExpressionCache {
 			if (previous.size() - position < 65)
 				throw std::runtime_error("truncated parsed expression cache key");
 			std::string_view key = previous.substr(position, 65);
-			if (key.front() != 'R' && key.front() != 'T' && key.front() != 'D')
+			if (key.front() != 'R' && key.front() != 'T' && key.front() != 'D' && key.front() != 'S' && key.front() != 'P')
 				throw std::runtime_error("invalid parsed expression cache key kind");
 			position += 65;
 			std::uint64_t length = readParseLength(previous, position);
@@ -382,6 +382,27 @@ class IncrementalParsedExpressionCache {
 		for (const DefinitionPatternElement &element : elements)
 			appendParsedDefinitionElement(payload, range, element);
 		current.insert_or_assign(definitionKey(range), std::move(payload));
+	}
+
+	std::optional<std::string_view> priorSourceProduct(const std::string &key) const {
+		auto found = prior.find(key);
+		if (found == prior.end())
+			return std::nullopt;
+		if (found->second.size() < 64)
+			throw std::runtime_error("truncated source product input fingerprint");
+		return found->second;
+	}
+	void retainSourceProduct(const std::string &key, std::string_view value) { current.emplace(key, value); }
+	std::optional<std::string_view> sourceProduct(const std::string &key, std::string_view inputs) {
+		auto value = priorSourceProduct(key);
+		if (!value || value->substr(0, 64) != inputs)
+			return std::nullopt;
+		retainSourceProduct(key, *value);
+		return value->substr(64);
+	}
+	void recordSourceProduct(std::string key, std::string inputs, std::string payload) {
+		inputs += payload;
+		current.insert_or_assign(std::move(key), std::move(inputs));
 	}
 
 	std::string snapshot(SnapshotScope scope) const {

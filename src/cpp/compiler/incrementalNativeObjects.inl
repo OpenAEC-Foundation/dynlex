@@ -119,6 +119,8 @@ struct BuildStatistics {
 	size_t expressionParseHits = 0;
 	size_t temporaryExpressionParseHits = 0;
 	size_t expressionParseMisses = 0;
+	SourcePreparationWork sourcePreparation;
+	SourceTransformWork sourceTransforms;
 	size_t definitionParseHits = 0;
 	size_t definitionParseMisses = 0;
 	size_t bodySyntaxUnitsParsed = 0, bodySyntaxUnitsRestored = 0, bodySyntaxUnitsSkipped = 0;
