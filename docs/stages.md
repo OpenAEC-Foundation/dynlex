@@ -225,6 +225,9 @@ Failed body matches wait on the specific trie edges and endpoints inspected by t
 Adding a definition wakes a waiting reference only when one of those conditions changes;
 deadlock recovery still sees all waiting references. This avoids rescanning every failed
 reference on each resolution pass.
+Unmatched variable-like references become eligible for lexical binding after definition
+resolution completes. Reclassification can reopen that stage; eligibility is withdrawn
+while definitions are pending, then waiting references are woken again when it completes.
 An expression reference that cannot mention a live implicit parameter candidate waits
 until definitions are indexed, even when another reference in the same definition must
 classify that candidate. This also applies to section replacements and class lifecycle

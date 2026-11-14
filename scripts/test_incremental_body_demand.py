@@ -86,7 +86,11 @@ def check_reactivated_local_variables(root, build):
         main.write_text(active)
         clean = build(False, entry=main)
         assert clean[1:] == ("", b"")
-        assert build(entry=main)[1:] == clean[1:], \
+        edited = build(entry=main)
+        assert edited[1:] == clean[1:], \
             "reopened definitions left their local variables blocked"
+        assert edited[0]['expression_parse_hits'] > 0
+        if value == 1:
+            assert edited[0]['classification_units_reactivated'] > 0
     main.write_text(source)
     assert build(entry=main)[1:] == build(False, entry=main)[1:] == ("", b"")
