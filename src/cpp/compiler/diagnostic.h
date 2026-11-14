@@ -73,7 +73,7 @@ struct Diagnostic {
 	DiagnosticEmission &editEmission() {
 		if (!emission)
 			emission = std::make_shared<DiagnosticEmission>();
-		else if (!emission.unique())
+		else if (emission.use_count() > 1)
 			emission = std::make_shared<DiagnosticEmission>(*emission);
 		return *emission;
 	}

@@ -60,17 +60,17 @@ class IncrementalInferenceReads {
 		return entry->second;
 	}
 
-	void recordDependency(const InferenceReadOwner &owner, const Section &dependency, const Scope &calleeScope) {
+	void recordDependency(const InferenceReadOwner &owner, const Section &dependency, const std::optional<Scope> &calleeScope) {
 		const std::string &path = sectionPaths.at(&dependency);
 		if (calleeScope)
-			ensureScope(calleeScope, &dependency);
+			ensureScope(*calleeScope, &dependency);
 		if (owner.section) {
 			if (owner.section != &dependency)
 				sectionDependencies[sectionPaths.at(owner.section)].insert(path);
 			if (owner.direct) {
 				auto &node = ensureScope(owner.scope, owner.section);
 				if (calleeScope)
-					node.callees.insert(calleeScope);
+					node.callees.insert(*calleeScope);
 				else
 					node.sources.insert(path);
 			}

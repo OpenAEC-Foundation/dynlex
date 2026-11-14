@@ -450,7 +450,9 @@ struct InferenceContext {
 		// Stage-level requests (for example exposed-function validation) are
 		// not reads by entry-point execution. Root execution installs its owner.
 	}
-	void recordBodyRead(const Section &dependency, const std::shared_ptr<const VariableStorageScope> &calleeScope = {}) const {
+	void recordBodyRead(
+		const Section &dependency, const std::optional<std::shared_ptr<const VariableStorageScope>> &calleeScope = {}
+	) const {
 		if (const auto &record = parseContext.recordInferenceDependency)
 			recordDependencyRead([&](const InferenceReadOwner &owner) {
 				record(owner, dependency, calleeScope);

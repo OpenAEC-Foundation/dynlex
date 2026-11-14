@@ -1806,6 +1806,13 @@ different input contexts are not merged. A repeated
 known-argument call can use that value without reinferring the body; a new
 argument evaluates the retained typed body normally. Nested callee
 body reads remain dependencies of the observed value.
+Reading a named global declaration also records its initializing entry execution.
+This happens before pure evaluation can discover a constant value, so provider
+calls, declaration arguments and compile-time control flow remain dependencies
+when the reader's source and the global's structural type stay unchanged.
+An absent execution scope means a source read; an engaged scope with a null
+storage identity means entry execution. Pure evaluation preserves that distinction
+when forwarding dependency reads.
 Summaries record return address provenance and storage-parameter relationships, plus
 writes, known constants, address provenance, and address escapes for global variables.
 Storage origins retain their lexical declaration and logical invocation across compiler

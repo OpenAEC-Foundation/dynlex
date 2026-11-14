@@ -3,14 +3,15 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state after I023
+## Current state after I024 candidate qualification
 
-I023 is published: cached-function reactivation now retries names after each
-definition-completion transition. All 329 required checks pass uncached on the
-merged compiler in 108.502 seconds, all 464 integration checks pass, and three
-real-program edit cases match fresh LLVM text and diagnostics. The full goal
-remains incomplete. A named-global initializer dependency bug is verified next;
-source/section construction and tooling/output-mode reuse still need work.
+I024 fixes stale folded values read from named global initializers. The required
+O0/O2 regression fails on published master (cached 42 versus clean 43), then
+passes with an explicit dependency on entry execution. All 329 required checks
+pass uncached in 111.734 seconds; all 464 integration checks pass in 845.712
+seconds. Three real-program edit cases match complete normalized LLVM text and
+diagnostics. Root merge/rebuild/publication remains pending. The full goal is
+incomplete: source/section construction and tooling/output-mode reuse need work.
 
 I022 does not change the published compiler: its sorted matcher-directory
 experiment failed the independent 31-pair CPU gate and remains unmerged.
@@ -21,8 +22,8 @@ cases. I021 removes an unconsumed full declaration table; it does not complete t
 compiler-wide goal. Semantic section construction and broad matching/binding,
 validation and persistence work still need finer reuse. Debug/trace builds disable
 major reuse paths; LSP and other output modes still need the shared frontend.
-Next: P03, immutable parser-boundary products, with explicit factory input/effect
-audits and a minimal work-count regression before implementation.
+Next: finish I024 root qualification/publication, then resume P03 source-owner
+deferral using the completed factory/consumer audit.
 
 ## Objective and constraints
 
@@ -208,6 +209,8 @@ remaining measured costs, not by table order alone.
 | I021 | P14: consume fingerprints without redundant full records | Complete: kept, merged and qualified | Independent 31-pair unused CPU gain 4.46% [3.07%, 5.33%]; active gain 1.58% in seven pairs; no established cold change. Required: 329, root 107.682 s; full integration: 464 in 789.208 s; three LLVM parity cases. Measured and root archives replay after worktree removal. |
 | I022 | P03/P06 screening, then P14 sorted matcher record directories | Complete: rejected | Eager tokenization and binding-proof hypotheses were screened out. Sorted directories pass focused replay/eviction/corruption checks, but independent 31 pairs give unused-edit CPU ratio 1.002023 [0.972789, 1.011769], failing the predeclared 2% gate. No experimental C++ or inspector change reaches master. |
 | I023 | Resolver completion transitions after cached-body reactivation | Complete: published and verified | Baseline fresh success/cached failure and debugger states false/true/true verified. Two-file state-transition fix passes repeated activation/value/deactivation, cached-syntax and classification assertions, broader body/cascade checks, and 329 required checks uncached in 108.166 s. Three real-program LLVM/diagnostic edit cases and all 464 integration checks pass. Merged root a49ebcf0 passes all 329 required checks uncached in 108.502 s; snapshot 5f11c2aa is pushed; worktree/branch removed and archived replay passes after removal. |
+
+| I024 | Named global initializer producer execution dependencies | Correctness candidate qualified; root publication pending | Red O0 cached 42/fresh 43; O0/O2 provider, argument, rename, repeat and revert cases pass. Required: 329 uncached in 111.734 s; integration: 464 in 845.712 s. Complete LLVM parity for three real-program edits; seven paired samples each for unused/body/game-data/cold controls. Full goal remains incomplete. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -1876,3 +1879,88 @@ and the temporary 105-file compiler data root is removed. This replay proves
 reproducibility, not a new performance estimate. No runtime code or test changes
 are added after root qualification. Evidence: `i023-archived-replay.{json,log}`.
 The full compiler-wide goal remains active and incomplete.
+
+
+## I024: named global initializer execution dependencies
+
+The first read-only screen began 14 November 2026 at 20:22 UTC during I023's
+integration wait. Count that preflight in this iteration: first deadline 21:07
+UTC, with one extension available only after concrete progress. Implementation
+starts from published master `ec8fab93`, compiler `d7ca3497...`, in a fresh
+project worktree.
+
+One correctness goal: a cached reader of named global data must retain the
+execution that initialized its value, including values known only during pure
+execution. A provider-body edit currently prints 42 incrementally and 43 fresh;
+the reader's stored unit reads itself and a global type, with no producer
+execution/value dependency. Add a minimal no-library required regression before
+the fix, covering repeated provider edits, changed initializer arguments, rename,
+unchanged repetition and reversion at O0/O2. Confirm red on the published root.
+
+Port the relevant producer-read and optional-scope API changes from UI commits
+`10872562` and `b265ca5f`, preserving the distinction between source-only reads,
+function execution and entry execution through pure forwarding. Migrate every
+producer/consumer of that API. Do not include unrelated UI behavior or add a
+compatibility reader. The separately found C++23 shared-ownership API removal
+will be corrected with its standard equivalent and reported explicitly.
+
+Acceptance: every edited result and diagnostic matches clean builds; repeated
+input still bypasses semantic/code generation/link work; existing independent
+unit and configuration tests continue to pass; all required checks remain
+uncached within 120 seconds. Run relevant integration and complete real-program
+LLVM parity, recording any measured cost rather than calling a correctness
+repair a performance gain. Then qualify/publish root and remove the worktree.
+Preflight evidence is in `i024-global-initializer-screen/`; no optimization is
+claimed from its single observations.
+
+
+I024's one extension is reserved through 21:52 UTC. Concrete progress: the
+minimal required O0 test fails on published root with cached 42 versus clean 43;
+source/graph inspection identifies the missing producer execution, and commit
+`e5a24ee4` migrates every dependency callback and pure forwarding site. Ordinary
+instantiations allocate storage identities; entry execution alone uses an
+engaged null identity. The candidate is not yet built or accepted. The UI
+browser compiler's live CMake/Ninja job (453043/453044) and wasm-opt child
+454233 occupy the shared heavy slot. Queue the native build without overlapping
+it; use the extension only to finish this correctness goal and its qualification.
+
+
+I024 candidate qualification: source `1534c226`, compiler `27ed6070...`, passes
+all focused and broader dependency/diagnostic regressions, 329 required checks
+uncached in 111.734 s (112.669 s observer), and all 464 integration checks in
+845.712 s (846.808 s observer), with source/executable unchanged. Three real
+LEXI8 edits agree with fresh builds in complete LLVM text after removing only
+the inspector-input ModuleID comment. Completed caches were pruned; source,
+LLVM output and reports remain. Unchanged repeated initializer input still skips
+frontend work, object generation and linking. The optional scope API now
+separates source-only reads from entry/function execution through pure forwarding.
+The related C++23 ownership API correction uses `use_count() > 1` in place of the
+removed `shared_ptr::unique()` operation.
+
+Seven alternating pairs per case compare frozen baseline `d7ca3497...` with
+candidate `27ed6070...` on the same LEXI8 revision `d913a7db`:
+
+| Case | Baseline wall median (s) | Candidate wall median (s) | Baseline CPU median (s) | Candidate CPU median (s) |
+| --- | ---: | ---: | ---: | ---: |
+| unused | 0.644041 | 0.625829 | 0.638440 | 0.623093 |
+| body | 1.550299 | 1.547546 | 1.522657 | 1.535157 |
+| lives | 1.938324 | 1.946674 | 1.932282 | 1.941752 |
+| cold | 5.491110 | 5.487169 | 5.487950 | 5.483971 |
+
+All 68 comparison rows complete with executable and diagnostic parity. This is
+a necessary correctness repair, not a claimed performance optimization. Paired
+CPU ratio intervals for active-body, game-data and cold controls include 1;
+raw samples and intervals are retained in `i024-cost-*.json`. The native build
+used one nice-10 job: 760.240 CPU seconds and 941.475 wall seconds, including
+175 seconds with our process tree suspended for a peer website compilation.
+That delay is not DynLex compilation time. Frozen executables and the 105-file
+compiler data bundle permit replay after worktree removal. Root qualification
+and publication are the remaining steps of this bounded iteration; its one
+extension still ends at 21:52 UTC. P03's coupled consumer audit now records the
+classification/matcher/header/promotion identities that must avoid concrete
+reference reconstruction; no parser-only allocation shortcut is accepted.
+
+Evidence: `i024-{build,required,integration}.json`, focused/regression logs,
+`i024-ir-parity/report.json`, `i024-cost-summary.json`, individual raw comparison
+reports, and `i024-native-object-cleanup.json`. The full compiler-wide goal
+remains active and incomplete.
