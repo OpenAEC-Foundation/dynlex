@@ -1298,3 +1298,51 @@ cache before implementation and select the actual remaining source consumer.
 Stage observability and accurate failed-stage accounting are separately required
 correctness evidence; do not describe them as a speedup. No serialized-only
 product, duplicated syntax recognition or unconditional profiling overhead.
+
+The published baseline fails the work test because scoped counters are absent;
+the independent two-line unknown-section fixture confirms `parse_ms == 0`.
+The candidate adds scoped, statistics-only measurement and records the unfinished
+frontend stage on return without advancing its validity boundary. LLVM 23's
+deprecated helper was replaced by its documented direct scope-exit constructor.
+
+Use the single additional iteration, ending 14:43:43 UTC, to finish measurement
+and the keep/reject decision. The implementation and reduced failure have been
+verified against source; core C++ units compile. The shared heavy-job slot was
+unavailable during the other chat's build and focused checks (13:27–13:42).
+The 1% construction-cache gate is unchanged; observability is not a speedup claim.
+
+
+I018 decision: reject the header-only construction cache before implementation.
+The seven-pair real unused-edit profile evaluates 2,360 headers in 2.728638 ms,
+dispatches 4,174 body lines in 9.603195 ms, finalizes in 0.044050 ms and applies
+localities in 0.420277 ms. Total section analysis is 13.744796 ms. Nested outline
+restoration takes 4.506968 ms and creates 12,007 nodes, 6,308 pattern references
+and 85 explicit variable references. Even perfect header elimination is only
+about 0.4% of the roughly 0.67-second edited build, below the predeclared 1% gate.
+A new serialized header layer cannot justify its cost on this evidence.
+
+Retain accurate stage observability and the independently reproduced failed-stage
+timing correction only after qualification. No new cache or speedup is claimed.
+The initial three-pair cold screen appeared slower; a separate seven-pair control
+has CPU ratio 1.002413 [0.991015, 1.006523], so that regression is not reproduced.
+All 42 screen rows and 14 independent cold rows pass native artifact and clean
+diagnostic comparisons. The scoped probes are enabled only by requested statistics.
+
+The focused work and two-line failure tests pass. All 329 required checks pass
+uncached in 102.843 s (103.807 s observer), with unchanged compiler and test
+sources. Full integration qualification is running on frozen source `0f555c31`,
+compiler `85694129419a6fa68c51eea23c15cb28284d98285bdab1e51ebfd31af041eed6`.
+
+Evidence: `i018-red.log`, `i018-red-failure.log`, `i018-focused.log`,
+`i018-section-profile.json`, `i018-profile-comparison.json`,
+`i018-cold-control.json` and `i018-required.json` in the structured evidence
+folder. Next inspect section-identity/index preparation and the actual consumers
+of cached source outlines; do not repeat the disproved assumption that adding
+another header descriptor alone will provide a material whole-build gain.
+
+Full I018 integration qualification passes: 464 checks, zero failures,
+820.408 s suite / 821.297 s observer, with unchanged compiler and test sources.
+Accept the scoped observability and independently verified failed-stage timing
+correction. The header-cache hypothesis remains rejected; this is not a claimed
+incremental speedup. Publish only after the merged root build and uncached required
+gate pass. No additional implementation or investigation extends this iteration.
