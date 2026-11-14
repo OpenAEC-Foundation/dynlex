@@ -170,7 +170,7 @@ remaining measured costs, not by table order alone.
 | I009 | P06: reusable function-body input queries | Parked; not accepted | Closed 01:00 UTC on 14 November, before the extended 01:32 deadline; one extension used. Baseline `4c73c053` / `a3c07989...`; final prototype `15850647` / `ff21b137...`. First candidate `3278ce18` / `e591d597...` still rehashes 51 bodies after a one-line edit because of whole-file input keys. Per-file physical-line products fix the same-file regression: one changed body is hashed, zero bodies are hashed after code is inserted above them, and the real edit hashes one body while reusing 789 results. All nine focused groups pass, all eight artifact/diagnostic comparisons pass, and 328 required checks pass uncached in 100.421 s. Decisive 31-pair CPU ratios fail the predeclared 2% whole-build gain: unused 1.00782 [0.98712, 1.01979], active-body 1.00714 [1.00127, 1.01901]. Full integration was not run for this rejected optimization. Retain the prototype separately; do not merge its extra cache records. |
 
 | I010 | P00/P14/P22: reduce structured-payload codec costs | Complete: keep, merged and verified | 01:03–02:25 UTC on 14 November, one extension used, before the 02:33 deadline. Candidate source `3dcc89a5` / compiler `c3c0252a...` clears the 25% codec gate (ratio 0.3415) and the 2% ordinary-edit gate: unused CPU ratio 0.9322 [0.9183, 0.9487], active body 0.9610 [0.9253, 0.9672]. Eight-case executable/diagnostic parity passes. Candidate: 329 required checks uncached in 111.020 s and 464 integration checks in 822.425 s. Merged source/docs `73eca64c`; root compiler `cfbeec1f...` passes 329 required checks uncached in 101.873 s. Eleven cold pairs establish no change. The merged worktree is removed; an actual archived-compiler benchmark replay passes after removal and cleans its temporary data root. This reduces persistence costs, not source/section reuse coverage. |
-| I011 | P02/P03: source chunks with a compact section-line consumer | Active | Started 02:31 UTC on 14 November; first deadline 03:16 UTC. Baseline `aec8ca12`, compiler `cfbeec1f...`. Reuse I008's tested file preparation/cross-file transformation protocol, but move retained section-line descriptors out of every mutable CodeLine into one aligned compact stream owned by the source producer. The real section analyzer consumes that stream. Require counters proving unchanged file preparation, transformed chunks and section lexical decisions are skipped, focused error/config/source-location parity, at least 2% repeatable paired ordinary-edit CPU improvement, no unexplained repeatable common/cold regression, and 329+ required checks uncached within 120 seconds plus affected integration. No inference/body-input cache layer is added. Semantic Section objects still need further unit reuse; do not describe lexical decision reuse as completion of P03. |
+| I011 | P02/P03: source chunks with a compact section-line consumer | Complete: keep; merged-root verification pending | Started 02:31 UTC on 14 November; one extension to 04:01 UTC after measured progress. Source `c4907513`, compiler `111070f3...`: seven paired unused-body edits have CPU ratio 0.97037 [0.96212, 0.98083], active-body 0.96685 [0.95092, 0.99687]. All eight-case 180-row executable/diagnostic comparisons pass; eleven cold pairs establish no change. The unused edit reuses 44 files, 79 chunks and 7,087 section-line products; CodeLine layout is unchanged. All 329 required checks pass uncached in 103.073 s and all 464 integration checks in 899.856 s, with unchanged source/compiler hashes. Keep the source-unit implementation; finish local-master rebuild/gate, archived replay, cleanup and publication. Semantic section reconstruction and early-failure source publication remain incomplete. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -690,3 +690,78 @@ order. Avoid an independently serialized product that merely moves the scan into
 loading and reconstruction. The next iteration must declare its specific product,
 consumer, work-count test and performance gate before changing compiler code.
 No frontend milestone is marked complete by I010.
+
+
+### I011 screening: source units reach their section-line consumer
+
+Source `c4907513`, compiler `111070f39138ac63bd051fae465192e3fc7314e8a4c8a7029c6eb58acdc36e24`,
+passes the focused source/configuration/import/error-order tests. The immutable
+baseline is source `aec8ca12`, compiler `cfbeec1f...`. Seven paired ordinary edits
+produce identical executables and diagnostics in all 36 rows. CPU medians are
+0.789763 to 0.770632 s for unused-body edits (paired ratio 0.97037,
+95% interval [0.96212, 0.98083]) and 1.690405 to 1.642350 s for active-body edits
+(ratio 0.96685 [0.95092, 0.99687]). These clear the declared screening gate;
+remaining cases and full validation still decide acceptance.
+
+For the unused edit, 44 files, 79 transformation chunks and 7,087 section-line
+products are reused; one file, two chunks and 427 section-line products are
+processed. The active-body edit reuses 44 files, 75 chunks and 7,357 section-line
+products, processing 157 products. The CodeLine layout matches the baseline
+exactly. This is not proof that I008's layout caused its measured regression.
+The compact stream's consumer is ordinary section analysis; semantic Section
+objects are still constructed. No semantic section-unit milestone is claimed.
+
+Evidence: `i011-red.log`, `i011-build.log`, `i011-focused.log`,
+`i011-first-comparison.json`, and `i011-compilers/manifest.json` in the structured
+evidence directory. Extend once to finish the remaining matrix, uncached required
+suite, affected integration and merged-root verification; do not add another
+optimization during validation. The extended deadline is 04:01 UTC.
+
+
+### Verified remaining boundary: source products before import failure
+
+A three-line local-import probe on exact compiler `111070f3...` loads a healthy
+helper, then fails on a missing import. Creating only that missing file causes all
+three source files to be prepared again; the healthy helper is not reused. The
+source product is computed, but native failure publication is gated on
+`compilationStage >= ImportedFiles`. Import failure returns while the stage is
+NotStarted, so the completed parser/source product has no published index.
+This is a remaining P13 incremental boundary, not a wrong program output or a
+change to the validated successful-edit claim. Publish parser/source products at
+their actual completion boundary independently of completed semantic program
+state. Do not advance the stage or invent bindings/inference results after failure.
+
+The minimal sources, compiler hash, diagnostics and before/after counters are in
+`i011-source-failure-probe.json`. Address this small publication boundary in its
+own iteration, then continue semantic section-unit reuse. The full objective
+remains incomplete while either boundary is missing.
+
+
+### I011 decision: keep; verify the merged compiler next
+
+The remaining six-case comparison passes all 144 rows, completing the eight-case
+180-row matrix with the earlier ordinary-edit comparison. Fifteen-pair unchanged,
+comment and wording checks show no established CPU regression. Seven-pair lives
+and shared-type edits likewise show no established change. Eleven independent
+cache-disabled cold pairs give CPU medians 5.360796 to 5.344953 s, paired ratio
+0.99872 [0.98152, 1.00886]. Do not claim a cold improvement from this result.
+
+The exact source/binary passes all 329 required checks uncached in 103.073 s
+(104.034 s with its recording driver), and all 464 integration checks in
+899.856 s (901.859 s with its driver). Source and compiler hashes are unchanged.
+The implementation clears the declared whole-build and correctness gates.
+Accept it, then rebuild and run the required gate after the merge to local master.
+The prepared data bundle preserves six I008/I011 archived compiler identities;
+verify an actual benchmark replay after removing the merged worktree.
+
+For unused edits, import/preprocessing median elapsed time falls 15.576 to
+7.414 ms, section analysis stays 14.913 to 14.488 ms, and parser snapshot writing
+increases 3.357 to 4.557 ms. These explain the measured work boundary, not the
+entire CPU change. The next larger representation cost is visible in the same
+samples: only 38 body references are revisited, but 7,342 results are restored;
+resolution setup takes a median 140.319 ms. The source-unit change does not
+complete semantic section reuse or eliminate that reconstruction.
+
+Evidence: `i011-first-comparison.json`, `i011-remaining-comparison.json`,
+`i011-cold-11-comparison.json`, `i011-required.json`, `i011-integration.json`,
+and `i011-compiler-data/manifest.json` under the structured evidence directory.
