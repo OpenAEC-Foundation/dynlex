@@ -38,10 +38,14 @@ class FailedReferenceWorklist {
 			notify({endpoint, MatchDependency::Kind::Endpoint, ""});
 	}
 
-	void wakeUnmatchedVariables() {
-		if (unmatchedVariablesWoken)
+	void setUnmatchedVariablesAllowed(bool allowed) {
+		if (unmatchedVariablesAllowed == allowed)
 			return;
-		unmatchedVariablesWoken = true;
+		unmatchedVariablesAllowed = allowed;
+		if (!allowed)
+			return;
+		// Reclassification can reopen definition resolution. References parked
+		// while names were provisional become eligible each time it completes.
 		for (PatternReference *reference : blocked) {
 			if (!waiting.contains(reference) || reference->patternElements.size() != 1 ||
 				reference->patternElements.front().type != PatternElement::Type::VariableLike)
@@ -106,5 +110,5 @@ class FailedReferenceWorklist {
 	std::unordered_set<PatternReference *> waiting;
 	std::vector<PatternReference *> blocked;
 	std::vector<PatternReference *> pending;
-	bool unmatchedVariablesWoken = false;
+	bool unmatchedVariablesAllowed = false;
 };
