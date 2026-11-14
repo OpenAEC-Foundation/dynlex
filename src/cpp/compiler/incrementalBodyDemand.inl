@@ -23,7 +23,7 @@ class IncrementalBodyDemand {
 			section->type != SectionType::Function || section->isFlex || section->parent != context.mainSection ||
 			!hasNoGlobalAccess(section) || unit.deferredIndices.size() != unit.references.size() ||
 			std::ranges::any_of(unit.references, [](const PatternReference *reference) {
-			return reference->expression.materialized() != nullptr;
+			return !reference->expression.deferred() || reference->expression.materialized() != nullptr;
 		}))
 			return false;
 		if (!checked) {
