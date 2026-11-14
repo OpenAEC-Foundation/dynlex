@@ -29,6 +29,8 @@ to get [the Farm label test center of] {a pointer to UI floating control:name}:
 
 to get [a Farm label test destination for] {a pointer to website farm actor:actor} [in] {a pointer to website state:state}:
     set world to state's farm's document's world
+    set name to the website Farm name for (actor's id) in (state's farm's names)
+    set origin to the Farm label test center of name
     loop y from (actor's y - 2) to (actor's y + 3):
         loop x from (actor's x - 2) to (actor's x + 3):
             if (x != actor's x) or (y != actor's y):
@@ -36,7 +38,11 @@ to get [a Farm label test destination for] {a pointer to website farm actor:acto
                     set point to the website Farm scene point at x y in world
                     set projection to the UI scene projection for point through (state's farm's renderer's camera's orbit's camera) in (state's farm's viewport)
                     if projection's visible:
-                        return website farm point x y
+                        set dx to projection's screen's x - origin's x
+                        set dy to projection's screen's y - origin's y
+                        # Move far enough to exercise a drag instead of a click.
+                        if ((dx * dx) + (dy * dy)) >= 144.0:
+                            return website farm point x y
     require condition false reporting "The Farm label test has no visible free drop square"
     return a new website farm point
 
@@ -77,12 +83,16 @@ loop while name != (0 as a pointer to UI floating control):
     set name to name's next
 require condition (count = (the length of world's workers) + 1) reporting "Farm labels did not include every person"
 set player to the website Farm name for (world's player's id) in names
+set actor to the item at 0 in (world's workers)
+set worker to the website Farm name for (actor's id) in names
+set point to the Farm label test center of worker
+press Farm label test at point in (the address of view)
+release Farm label test at point in (the address of view)
+require condition (document's selected = actor's id) reporting "A worker name click did not select that person"
 set point to the Farm label test center of player
 press Farm label test at point in (the address of view)
 release Farm label test at point in (the address of view)
 require condition ((document's selected = "player") and (world's player's target's present = false)) reporting "A name click also clicked the terrain below it"
-set actor to the item at 0 in (world's workers)
-set worker to the website Farm name for (actor's id) in names
 set identity to the address of (worker's node)
 set actor's name to "Ada 🌻"
 refresh website Farm controls in (the address of state)
