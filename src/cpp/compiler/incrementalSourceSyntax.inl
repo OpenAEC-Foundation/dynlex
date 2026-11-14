@@ -70,7 +70,7 @@ class CachedSourceSyntax : public BodySyntaxProduct, public DeferredExpressionSo
   public:
 	CachedSourceSyntax(
 		ParseContext &context, Section *section, Section *owner, Range root, std::string_view payload,
-		std::shared_ptr<SourceSyntaxWork> work
+		std::shared_ptr<SourceSyntaxWork> work, SectionAnalysisWork *analysis
 	)
 		: context(context), owner(owner), root(root), payload(payload), work(std::move(work)) {
 		size_t position = 0;
@@ -79,6 +79,8 @@ class CachedSourceSyntax : public BodySyntaxProduct, public DeferredExpressionSo
 		if (!count || count > this->payload.size())
 			throw std::runtime_error("invalid source syntax outline size");
 		nodes.resize(count);
+		if (analysis)
+			analysis->outlineNodes += count;
 		replay.references.resize(count);
 		replay.variables.resize(count);
 		replay.expressions.resize(count);
@@ -99,6 +101,8 @@ class CachedSourceSyntax : public BodySyntaxProduct, public DeferredExpressionSo
 			case 0:
 				break;
 			case 1: {
+				if (analysis)
+					analysis->outlinePatternReferences++;
 				auto type = static_cast<SectionType>(readParseByte(this->payload, position));
 				if (type >= SectionType::Count)
 					throw std::runtime_error("invalid source syntax pattern type");
@@ -116,6 +120,8 @@ class CachedSourceSyntax : public BodySyntaxProduct, public DeferredExpressionSo
 				break;
 			}
 			case 2: {
+				if (analysis)
+					analysis->outlineVariables++;
 				Range nameRange = readParseRange(this->payload, position, root);
 				std::string name(readParseString(this->payload, position));
 				auto *variable = context.createVariableReference(nameRange, name);
