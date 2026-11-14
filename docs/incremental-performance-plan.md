@@ -169,7 +169,7 @@ remaining measured costs, not by table order alone.
 
 | I009 | P06: reusable function-body input queries | Parked; not accepted | Closed 01:00 UTC on 14 November, before the extended 01:32 deadline; one extension used. Baseline `4c73c053` / `a3c07989...`; final prototype `15850647` / `ff21b137...`. First candidate `3278ce18` / `e591d597...` still rehashes 51 bodies after a one-line edit because of whole-file input keys. Per-file physical-line products fix the same-file regression: one changed body is hashed, zero bodies are hashed after code is inserted above them, and the real edit hashes one body while reusing 789 results. All nine focused groups pass, all eight artifact/diagnostic comparisons pass, and 328 required checks pass uncached in 100.421 s. Decisive 31-pair CPU ratios fail the predeclared 2% whole-build gain: unused 1.00782 [0.98712, 1.01979], active-body 1.00714 [1.00127, 1.01901]. Full integration was not run for this rejected optimization. Retain the prototype separately; do not merge its extra cache records. |
 
-| I010 | P00/P14/P22: reduce structured-payload codec costs | Complete: keep; local-master verification pending | Started 01:03 UTC on 14 November; first deadline 01:48 UTC, extended deadline 02:33 UTC; one extension used after the real-payload codec probe and 1,000 randomized value round trips passed. Baseline source `20e3a323`, compiler `a3c07989...`. First retain real application payloads and benchmark JSON versus the existing nlohmann binary codecs in a small standalone tool. Do not implement a format change unless codec encode/decode CPU improves by at least 25%. A proposed compiler change must then show at least 2% repeatable whole-build CPU gain on an ordinary real-program edit, clean-build parity, no unexplained repeatable common/cold regression, all affected artifact readers migrated, and the uncached required gate within 120 seconds. This measures persistence cost; it does not complete source/section unit reuse. |
+| I010 | P00/P14/P22: reduce structured-payload codec costs | Complete: keep, merged and verified | 01:03–02:25 UTC on 14 November, one extension used, before the 02:33 deadline. Candidate source `3dcc89a5` / compiler `c3c0252a...` clears the 25% codec gate (ratio 0.3415) and the 2% ordinary-edit gate: unused CPU ratio 0.9322 [0.9183, 0.9487], active body 0.9610 [0.9253, 0.9672]. Eight-case executable/diagnostic parity passes. Candidate: 329 required checks uncached in 111.020 s and 464 integration checks in 822.425 s. Merged source/docs `73eca64c`; root compiler `cfbeec1f...` passes 329 required checks uncached in 101.873 s. Eleven cold pairs establish no change. The merged worktree is removed; an actual archived-compiler benchmark replay passes after removal and cleans its temporary data root. This reduces persistence costs, not source/section reuse coverage. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -656,10 +656,15 @@ stage boundaries: this improves the cost of reuse, not its coverage.
 
 The candidate passes 329 required checks uncached in 111.020 s, including the
 native codec fidelity check. The native helper is part of the ordinary C++ build,
-so its compilation is outside the post-build suite budget. All 464 integration checks pass in 823.759 s including the recording driver
-(compiler and source hashes unchanged). Accept the implementation. Merge to local
-master, rebuild there, rerun the uncached required gate, and verify archived replay
-after disposing the owned worktree before publishing the snapshot.
+so its compilation is outside the post-build suite budget. All 464 integration checks pass in 822.425 s (823.759 s including the recording
+driver); compiler and source hashes remain unchanged. The implementation is
+merged to local master as source/docs `73eca64c`. Rebuilt root compiler
+`cfbeec1f6763f47d44dee85d948b61e10155ea8214fda74a3e0cd074846e93e8`
+passes all 329 required checks uncached in 101.873 s (102.787 s including its
+driver), with unchanged source and binary hashes. The merged owned worktree is
+removed. An actual archived-compiler benchmark replay passes after removal,
+with identical executable/diagnostic results and unchanged compiler hashes;
+its temporary original data path is removed on exit.
 
 Evidence: `i010-comparison.json`, `i010-cold-11-comparison.json`,
 `i010-required.json`, `i010-integration.json`, `i010-focused.log`, and `i010-compiler-data/manifest.json`
@@ -667,3 +672,20 @@ under the structured evidence directory. The archive retains the six I009/I010
 compiler identities and their shared original source-data path for replay after
 worktree disposal. Compiler-specific cache namespaces isolate the current format;
 all affected artifact readers use CBOR directly without format guessing.
+
+
+### Next selected boundary: P02/P03 source and section units
+
+Unchanged source preparation and semantic section construction remain incomplete.
+In the I010 real unused-body edit, a measured sample still spends 16.632 ms in
+import/preprocessing and 17.017 ms in section analysis. I008 reduced median import
+work from 16.584 to 7.950 ms, while section analysis stayed at 14.800 to 15.626 ms;
+its complete-build CPU gate failed. Those stage measurements are elapsed times,
+not proof of the cause of the CPU regression.
+
+Resume this boundary with the consuming section/body-input paths in scope. Retain
+cross-file continuation, syntax, indentation, source identities and error-demand
+order. Avoid an independently serialized product that merely moves the scan into
+loading and reconstruction. The next iteration must declare its specific product,
+consumer, work-count test and performance gate before changing compiler code.
+No frontend milestone is marked complete by I010.
