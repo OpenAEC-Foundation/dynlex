@@ -847,9 +847,10 @@ bool compileIncrementally(
 						result.at("section_dependency_graph"), retainedActivePaths
 					);
 					result["inactive_projection"] = captureInactiveProjection(
-						result.at("all_function_projection").at("declarations"), compiled, recording->observations, nullptr,
-						&generatedFunctionPaths, &sections, priorInactiveSources, &statistics.sourceProjectionWork, nullptr,
-						&retainedActivePaths
+						[&]() {
+						return result.at("all_function_projection").at("declarations");
+					}, compiled, recording->observations, nullptr, &generatedFunctionPaths, &sections, priorInactiveSources,
+						&statistics.sourceProjectionWork, nullptr, &retainedActivePaths
 					);
 					recordSemanticSources(result, *recording, compiled);
 					statistics.snapshotMilliseconds = elapsedMilliseconds(snapshotStart);

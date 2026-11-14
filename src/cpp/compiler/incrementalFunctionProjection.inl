@@ -108,6 +108,13 @@ Json captureAllFunctionProjection(
 	Json maskedSources = sourceProjection(
 		context, observations, selectedSections, false, false, false, prior ? &prior->at("sources") : nullptr, projectionWork
 	);
+	Json currentGlobalResolution = globalResolutionIdentity(*context.mainSection);
+	if (prior)
+		declarationUnits.retainSourceUnits(
+			*prior, bodyDigests, currentScopeRuleBodies, currentGlobalResolution,
+			selected == prior->at("inactive") && sourceProjectionsEqual(maskedSources, prior->at("sources")),
+			initialMatcherTree, finalMatcherTree
+		);
 	std::string resolvedDeclarations = declarationUnits.digest();
 	bool reuseDeclarations = prior && resolvedDeclarations == prior->at("declarations").get_ref<const std::string &>() &&
 							 reusable.size() == prior->at("function_declarations").size();
@@ -120,7 +127,6 @@ Json captureAllFunctionProjection(
 		}
 	}
 	Json declarations = Json::object();
-	Json currentGlobalResolution = globalResolutionIdentity(*context.mainSection);
 	if (reuseDeclarations) {
 		declarations = prior->at("function_declarations");
 		if (projectionWork)

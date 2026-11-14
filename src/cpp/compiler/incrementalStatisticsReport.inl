@@ -284,7 +284,7 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"projection_ms", statistics.projectionMilliseconds},
 					  {"inactive_projection_ms", statistics.inactiveProjectionMilliseconds},
 					  {"declaration_projection_units_built", statistics.declarationProjection.unitsBuilt},
-					  {"declaration_input_units_checked", statistics.declarationProjection.unitsBuilt + statistics.declarationProjection.unitsReused},
+					  {"declaration_input_units_checked", statistics.declarationProjection.inputsChecked},
 					  {"declaration_projection_units_reused", statistics.declarationProjection.unitsReused},
 					  {"declaration_records_built", statistics.declarationProjection.recordsBuilt},
 					  {"declaration_records_reused", statistics.declarationProjection.recordsReused},

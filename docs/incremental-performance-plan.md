@@ -1489,3 +1489,22 @@ Migrate that assertion to require exactly the affected declaration to rebuild,
 keeping every semantic assertion. This strengthens unit isolation rather than
 weakening the cascade. The prematurely started timing screen was interrupted
 and excluded; focused validation must pass before a replacement screen starts.
+
+The 50-row identified screen passes artifact/diagnostic parity and meets the
+unused-edit gate: seven paired CPU ratio 0.917397 [0.911704, 0.946414],
+medians 0.680592 to 0.622536 s. Active body ratio 1.004385
+[1.001633, 1.010395] shows a small slowdown; cold 1.008166
+[0.992690, 1.018085] is inconclusive. Stage analysis identifies 13.921 ms of
+eager declaration input auditing even when the ordinary eligibility guard
+rejects inactive reuse in 0.094 ms. The unused path instead replaces 78.848 ms
+with 14.571 ms input work plus 2.859 ms inactive checking.
+
+Use the single additional iteration, ending 16:48:00 UTC, for demand-driven
+input auditing and qualification. Delay the declaration provider until inactive
+source eligibility succeeds. A source-proof path may retain unaudited inputs
+only with identical unit membership, unchanged initial/final matcher trees,
+scope rules and global bindings, unchanged sources outside function bodies,
+and explicit settled-signature checks for each changed ordinary body. Other
+cases audit current resolved inputs normally. Counters distinguish actually
+checked inputs from retained units. Keep the original 5% gate and ordinary/cold
+controls; do not add unrelated optimizations or a second extension.

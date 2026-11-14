@@ -272,6 +272,10 @@ its executable body changed; a changed implicit parameter or external scope rule
 statistics report its time and checked unit count separately from changed/reused projection units and actual
 structured records built/reused. These products describe resolved declarations, not inferred body behavior; matcher,
 inference, diagnostic and backend dependencies still govern those later results.
+Source, matcher-tree, scope-rule and global-binding proofs can retain unchanged declaration inputs without
+auditing them again. Changed bodies still audit their settled signatures before this proof may stop propagation.
+Inactive-source eligibility is checked before requesting its declaration aggregate, so an ineligible source edit
+does not force an unused whole-program input audit.
 
 We discover what is a variable based on these principles:
 

@@ -105,8 +105,10 @@ bool canReuseInactiveBodies(
 	}
 	const Json &priorProjection = previous.at("inactive_projection");
 	currentProjection = captureInactiveProjection(
-		declarations.digest(), context, observations, &priorProjection.at("inactive"), nullptr, &sections,
-		&priorProjection.at("sources"), projectionWork, &priorProjection.at("sources")
+		[&]() {
+		return declarations.digest();
+	}, context, observations, &priorProjection.at("inactive"), nullptr, &sections, &priorProjection.at("sources"),
+		projectionWork, &priorProjection.at("sources")
 	);
 	return currentProjection.is_object() && currentProjection.at("declarations") == priorProjection.at("declarations");
 }
