@@ -188,6 +188,11 @@ void registerManagedStorage(ParseContext &context, llvm::Value *address, const D
 	registerManagedStorage(context, address, type, ownerSection, false);
 }
 
+void registerManagedTemporaryStorage(ParseContext &context, llvm::Value *address, const DataType &type, Section *ownerSection) {
+	registerManagedStorage(context, address, type, ownerSection, false);
+	context.managedLocalStorage.back().temporary = true;
+}
+
 void registerManagedGlobalStorage(ParseContext &context, llvm::Value *address, const DataType &type) {
 	registerManagedStorage(context, address, type, nullptr, true);
 }
@@ -241,12 +246,12 @@ bool releaseManagedTemporaryStorage(ParseContext &context, llvm::Value *address)
 bool releaseManagedStorageForSection(ParseContext &context, Section *ownerSection) {
 	requireCompilerInvariant(ownerSection != nullptr, "managed storage cleanup requires an owning source section");
 	for (size_t index = context.managedLocalStorage.size(); index-- > 0;) {
-		if (context.managedLocalStorage[index].ownerSection == ownerSection &&
+		if (context.managedLocalStorage[index].ownerSection == ownerSection && !context.managedLocalStorage[index].temporary &&
 			!releaseInitializedStorage(context, context.managedLocalStorage[index]))
 			return false;
 	}
 	std::erase_if(context.managedLocalStorage, [ownerSection](const ParseContext::ManagedStorageState &storage) {
-		return storage.ownerSection == ownerSection;
+		return storage.ownerSection == ownerSection && !storage.temporary;
 	});
 	return true;
 }

@@ -108,6 +108,8 @@ struct ParseContext {
 		llvm::Value *initializedAddress{};
 		DataType type;
 		Section *ownerSection{};
+		// Call temporaries are released by their call site, not by the cleanup of their owning section.
+		bool temporary{};
 	};
 
 	enum class ShaderStage { Fragment, Vertex, Compute };

@@ -734,7 +734,7 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 					requireCompilerInvariant(ownerSection != nullptr, "managed call temporary has no owning section");
 					if (!managedExpressionResultIsOwned(context, argExpr) && !retainManagedValue(context, argumentType, argVal))
 						return CodegenResult::failure();
-					registerManagedStorage(context, tempAlloca, argumentType, ownerSection);
+					registerManagedTemporaryStorage(context, tempAlloca, argumentType, ownerSection);
 					initializeManagedStorage(context, tempAlloca, argumentType, argVal);
 					managedTemporaryArguments.push_back(tempAlloca);
 				} else {
