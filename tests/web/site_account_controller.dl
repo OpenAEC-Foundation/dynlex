@@ -23,6 +23,7 @@ function [check account controller case] {integer:scenario}:
             set configuration to a JSON object containing [JSON text "projectId" is "demo-dynlex-games"]
         open website account with configuration in stateptr
         if scenario = 0:
+            require condition ((the value of "Game account actions" in (the address of instance)) = -1) reporting "Disabled accounts exposed account actions"
             edit account test plan (the string form of "guest only") in stateptr
             require condition ((account's phase = 0) and (state's requests = @intrinsic("construct", a pointer to website request))) reporting "Disabled accounts loaded a cloud provider"
         else:
@@ -30,6 +31,7 @@ function [check account controller case] {integer:scenario}:
             deliver account test reply (a new JSON value of kind the JSON null kind) to request (account's connect request) in stateptr
             identify account test user (the string form of "") in stateptr
             require condition ((account's phase = 4) and (state's progress's profile = "guest")) reporting "Initial signed-out identity did not retain the guest game"
+            require condition ((the value of "Game account actions" in (the address of instance)) = 0) reporting "A guest was not offered sign-in"
             set the text of "IDE source" in (the address of instance) to "keep this unsaved IDE draft"
             set (state's programs + 2)'s phase to 3
             ignore follow website account action (the string form of "action:account-sign-in") in stateptr
@@ -42,6 +44,8 @@ function [check account controller case] {integer:scenario}:
             require condition ((account's phase = 3) and (account's auth request = 0)) reporting "A late sign-in reply changed the auth generation"
             read account test cloud (the string form of "cloud alice") in stateptr
             require condition ((account's phase = 4) and (account's dirty = false)) reporting "An unchanged cloud account was rewritten"
+            require condition ((the value of "Game account actions" in (the address of instance)) = 1) reporting "A signed-in account was not offered sign-out"
+            require condition ((the value of "Game save conflict" in (the address of instance)) = -1) reporting "A synchronized account retained an empty conflict panel"
             require condition ((state's progress's profile = "user:alice") and ((the UI value for (the control labeled "River source" in (the address of instance)) in (the address of instance))'s text = "cloud alice")) reporting "Signing in did not restore this account's source"
             require condition (((the UI value for (the control labeled "IDE source" in (the address of instance)) in (the address of instance))'s text = "keep this unsaved IDE draft") and ((state's programs + 2)'s phase = 3)) reporting "Switching game profiles discarded the IDE"
             if scenario = 1:
@@ -73,6 +77,7 @@ function [check account controller case] {integer:scenario}:
                 flush website account save in stateptr
                 deliver account test reply (a JSON object containing [JSON flag "matched" is false]) to request (account's write request) in stateptr
                 require condition ((account's conflict) and (account's deadline = 0)) reporting "A compare mismatch retried without an explicit choice"
+                require condition ((the value of "Game save conflict" in (the address of instance)) = 0) reporting "A save conflict did not expose its choice panel"
                 ignore follow website account action (the string form of "action:account-load") in stateptr
                 read account test cloud (the string form of "another device") in stateptr
                 require condition ((account's conflict = false) and (account's dirty = false)) reporting "Loading the account save did not resolve the conflict"

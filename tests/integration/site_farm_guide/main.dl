@@ -1,0 +1,10 @@
+import ../../../site/games/farm/vocabulary_guide.dl
+
+print line "ACTIONS"
+print line the website Farm action guide
+print line "CONDITIONS"
+print line the website Farm condition guide
+print line "PLACES"
+print line the website Farm destination guide
+print line "SUPPLIES"
+print line the website Farm supply guide

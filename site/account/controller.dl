@@ -26,6 +26,8 @@ to [open website account with] {a pointer to JSON value:configuration} in {a poi
         connect website account in state
         request "connectivity" containing (a new JSON value of kind the JSON null kind) for purpose 20 indexed 0 in state
         set account's connectivity request to state's requests' id
+    else:
+        refresh website account controls in state
 
 to [use website account identity] {string:user} in {a pointer to website state:state}:
     set account to the address of (state's account)

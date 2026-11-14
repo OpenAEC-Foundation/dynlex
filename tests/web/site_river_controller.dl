@@ -14,6 +14,7 @@ set state's view to the address of view
 set instance's state to (the address of state) as a pointer
 prepare website fixture editors in (the address of state)
 initialize the website river in (the address of state)
+require condition ((the value of "River rescue hint" in (the address of instance)) = -1) reporting "A coding hint was visible before it was requested"
 set state's river's artwork to 1
 set state's river's audio's status to 2
 require condition ((the UI element (the control labeled "River play" in (the address of instance)) is enabled in (the address of instance)) = false) reporting "A game without a trace allowed Replay"
@@ -70,7 +71,9 @@ advance website river playback (the address of (state's river)) by 0.625
 refresh website river controls in (the address of state)
 require condition ((the UI value for (the control labeled "River diagnostics" in (the address of instance)) in (the address of instance))'s text = "The wolf ate the sheep.") reporting "A failed game did not show its diagnostic after the danger animation"
 ignore follow website river action (the string form of "action:river-hint-rescue") in (the address of state)
-require condition ((the value of "River rescue hint" in (the address of instance)) = 1) reporting "A coding hint did not open"
+require condition ((the value of "River rescue hint" in (the address of instance)) = 0) reporting "A coding hint did not open"
+ignore follow website river action (the string form of "action:river-hint-rescue") in (the address of state)
+require condition ((the value of "River rescue hint" in (the address of instance)) = -1) reporting "A coding hint did not close"
 notice website river source edit (the address of instance)
 require condition ((state's river's trace's count = 0) and (state's river's playing = false)) reporting "Editing retained a stale replay"
 free website river trace the address of (state's river's trace)

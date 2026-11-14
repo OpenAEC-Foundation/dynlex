@@ -1,0 +1,80 @@
+ACTIONS
+step forward
+turn left
+walk to the barn
+chop the tree in front of me down
+plow the ground
+plant carrots
+water the crops
+harvest the crops
+fertilize the ground
+fill a bucket
+store everything
+give logs to a nearby worker
+put down everything
+grab everything
+dig a channel
+feed the cow
+add scraps to the compost heap
+wait
+CONDITIONS
+if it's still there:
+if i can reach it:
+if everything is full:
+if everything is empty:
+if it's raining:
+if it is dry:
+if it is ripe:
+if it is empty:
+if it needs plowing:
+if it is ready:
+if it is hungry:
+if i am carrying an axe:
+if i am not carrying an axe:
+if i am a lumberjack:
+if i can step forward:
+if there are at least 2 logs in the barn:
+if there are fewer than 2 logs in the barn:
+PLACES
+walk to the barn
+walk to the pond
+walk to the red flag
+walk to the blue flag
+walk to the green flag
+walk to the nearest tree
+walk to the nearest empty plot
+walk to the nearest thirsty crop
+walk to the nearest ripe crop
+walk to the cow
+walk to the nearest chicken
+walk to the compost heap
+walk to the nearest item pile
+walk to the nearest egg
+walk to the yellow flag
+walk to the purple flag
+walk to the orange flag
+walk to the pink flag
+walk to the white flag
+walk to the black flag
+walk to the ground
+walk to the crops
+walk to the tree in front of me
+walk to a tree in front of me
+walk to the chickens
+walk to items nearby
+walk to a nearby worker
+walk to the farmer
+SUPPLIES
+grab an axe
+grab a hoe
+grab a bucket
+grab a shovel
+grab seeds
+grab logs
+grab carrots
+grab wheat
+grab hay
+grab eggs
+grab milk
+grab scraps
+grab fertilizer

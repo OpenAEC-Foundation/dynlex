@@ -1,0 +1,38 @@
+# Help uses the same pattern templates and operand tables as the Farm language.
+import examples.dl
+
+to get [the website Farm guide examples of] {a value:entries} [as conditions] {boolean:conditions}:
+    set result to the string form of ""
+    for each entry in entries:
+        if entry's instant = false:
+            set example to the website farm example of entry selecting (entry's guide argument) amount (entry's amount) at (entry's target) explicitly targeted false with spelling (entry's guide spelling)
+            if conditions:
+                set example to "if " + example + ":"
+            if result is not empty:
+                add "\n" to result
+            add example to result
+    return result
+
+to get the website Farm action guide:
+    return the website Farm guide examples of (the website farm actions) as conditions false
+
+to get the website Farm condition guide:
+    return the website Farm guide examples of (the website farm conditions) as conditions true
+
+to get the website Farm destination guide:
+    set result to the string form of ""
+    set entry to the website farm action named "walk"
+    loop index from 0 to (the length of (the website farm destinations)):
+        if result is not empty:
+            add "\n" to result
+        add (the website farm example of entry selecting (entry's argument) amount (entry's amount) at index explicitly targeted true) to result
+    return result
+
+to get the website Farm supply guide:
+    set result to the string form of ""
+    set entry to the website farm action named "collect"
+    loop index from 0 to (the length of (the website farm items)):
+        if result is not empty:
+            add "\n" to result
+        add (the website farm example of entry selecting index amount (entry's amount) at (entry's target) explicitly targeted false) to result
+    return result

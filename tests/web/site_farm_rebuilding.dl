@@ -52,6 +52,8 @@ receive website compilation reply for 0 in (the address of state)
 free reply
 prepare website Farm saved roles in (the address of state)
 require condition (session's rebuilding and (program's source = applied)) reporting "Opening saved Farm roles did not compile their applied snapshot"
+require condition ((the value of "Farm preparation notices" in (the address of instance)) = 0) reporting "Saved-role preparation did not show its notice"
+require condition ((the value of "Farm preparation retry" in (the address of instance)) = -1) reporting "Running preparation exposed an unnecessary retry control"
 require condition ((the UI element (the control labeled "One turn" in (the address of instance)) is enabled in (the address of instance)) = false) reporting "Saved instructions could run before their source migration finished"
 
 # Editing or switching a visible draft must not cancel another applied snapshot.
@@ -67,6 +69,7 @@ require condition ((role's needs rebuilding = false) and (session's rebuilding a
 require condition (program's source = second's applied) reporting "Preparing another role compiled the visible draft instead of its applied source"
 finish a Farm rebuilding fixture with protocol in (the address of state)
 require condition ((session's rebuilding = false) and (second's needs rebuilding = false)) reporting "The saved-role queue did not finish"
+require condition ((the value of "Farm preparation notices" in (the address of instance)) = -1) reporting "Ready roles retained an empty preparation panel"
 require condition ((document's world's tick = 37) and ((actor's routine's position = 2) and ((the item at 0 in (actor's routine's loops)) = 3))) reporting "Rebuilding restarted the world or its saved loop frame"
 require condition ((actor's paused) and ((actor's direction = 1) and (actor's routine's traced = false))) reporting "Rebuilding reset worker controls or retained obsolete source ranges"
 require condition ((role's source = "# Editing during preparation 🌽\nturn left") and (role's applied = applied)) reporting "Rebuilding replaced a newer role draft"
@@ -83,6 +86,7 @@ free reply
 require condition ((session's rebuild failed) and ((program's phase = 0) and (role's needs rebuilding))) reporting "A failed saved-role compilation was retried or accepted silently"
 require condition ((the UI value for (the control labeled "Farm preparation status" in (the address of instance)) in (the address of instance))'s text = "An error occurred. Check the log.") reporting "A saved-role failure exposed internal details to the page"
 require condition (the UI element (the control labeled "Retry saved roles" in (the address of instance)) is enabled in (the address of instance)) reporting "A failed saved-role compilation has no retry"
+require condition ((the value of "Farm preparation retry" in (the address of instance)) = 0) reporting "A failed saved-role compilation hid its retry control"
 ignore follow website Farm action (the string form of "action:farm-retry-roles") in (the address of state)
 finish a Farm rebuilding fixture with (the string form of "LOOP|4\nDO|1|3|-1|-2|\nEND") in (the address of state)
 require condition (session's rebuild failed and ((the item at 0 in (role's program's code))'s count = 3)) reporting "A changed compiled control flow replaced the saved routine"

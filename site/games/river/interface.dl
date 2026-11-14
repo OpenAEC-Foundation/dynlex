@@ -108,21 +108,18 @@ document river challenge using river panel appearance:
             paragraph "River passenger count" containing "0 / 1" using river signal appearance
             link "Passenger hint" to "action:river-hint-passenger" using river action appearance
             view group "River passenger hint" using no UI appearance:
-                region "Passenger hint closed" using no UI appearance:
                 paragraph "The boat has room for one passenger. Who cannot be left with either of the others?" using river hint appearance
         region "Deliveries goal" using river card appearance:
             paragraph "Meet the far shore" using river text appearance
             paragraph "River delivery count" containing "0 / 3" using river signal appearance
             link "Delivery hint" to "action:river-hint-deliveries" using river action appearance
             view group "River delivery hint" using no UI appearance:
-                region "Delivery hint closed" using no UI appearance:
                 paragraph "Rowing moves the boat. Let your passenger out. Sometimes someone needs to come back to keep everyone safe." using river hint appearance
         region "Together goal" using river card appearance:
             paragraph "Everyone together" using river text appearance
             paragraph "River rescue count" containing "0 / 1" using river signal appearance
             link "Rescue hint" to "action:river-hint-rescue" using river action appearance
             view group "River rescue hint" using no UI appearance:
-                region "Rescue hint closed" using no UI appearance:
                 paragraph "Step through your plan. After each crossing, check who is alone on each shore. Name repeated commands with a function beginning with to." using river hint appearance
     paragraph "PAINTED FOR DYNLEX / ORIGINAL GAME ART" using river signal appearance
     link "MUSIC / SOUNOVAMUSIC · PIXABAY ↗" to "https://pixabay.com/music/happy-childrens-tunes-puzzle-amp-casual-game-music-460543/" using river signal appearance

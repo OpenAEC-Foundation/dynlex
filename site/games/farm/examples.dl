@@ -48,9 +48,10 @@ to get [the website farm example word] {string:name} selecting {integer:argument
     require condition false reporting "Unknown operand in a Farm example."
     return the string form of ""
 
-to get the website farm example of {website farm command description:entry} selecting {integer:argument} amount {integer:amount} at {integer:target} explicitly targeted {boolean:targeted}:
+to get the website farm example of {website farm command description:entry} selecting {integer:argument} amount {integer:amount} at {integer:target} explicitly targeted {boolean:targeted} with spelling {integer:spelling}:
     set spellings to entry's patterns split at "\n"
-    set pattern to the item at 0 in spellings
+    require condition (0 <= spelling < the length of spellings) reporting "Invalid spelling in a Farm example."
+    set pattern to the item at spelling in spellings
     if targeted:
         set index to 0
         set found to false
@@ -87,6 +88,9 @@ to get the website farm example of {website farm command description:entry} sele
             increment cursor
     add (the substring of pattern from start spanning (cursor - start) bytes) to result
     return result
+
+to get the website farm example of {website farm command description:entry} selecting {integer:argument} amount {integer:amount} at {integer:target} explicitly targeted {boolean:targeted}:
+    return the website farm example of entry selecting argument amount amount at target explicitly targeted targeted with spelling 0
 
 to get the website farm default example of {website farm command description:entry}:
     return the website farm example of entry selecting (entry's argument) amount (entry's amount) at (entry's target) explicitly targeted false

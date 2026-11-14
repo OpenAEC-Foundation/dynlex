@@ -7,9 +7,37 @@ export async function verifyFarmPage({ command, evaluate, waitFor, controls, cap
   await controls.clickText('Whole farm');
   await waitFor('window.siteProbe.farmFrames.length > 1');
   await waitFor('!window.siteProbe.visible.includes("Preparing the Farm…")');
+  assert(!(await evaluate('window.siteProbe.visible')).includes('Retry Farm view'),
+    'Loaded graphics retained an irrelevant retry button.');
   const scene = await evaluate('window.siteProbe.farmDraws.at(-1)');
   assert(scene.count > 0, 'The Farm must draw the actual scene mesh instances.');
   await capture('farm-scene');
+
+  await controls.clickText('Show Farm vocabulary');
+  await controls.clickText('Checks');
+  await waitFor(`window.siteProbe.visible.includes(${JSON.stringify("if it's still there:")})`);
+  await capture('farm-vocabulary');
+  await controls.clickText('Places');
+  await waitFor('window.siteProbe.visible.includes("walk to the barn")');
+  await controls.clickText('Items');
+  await waitFor('window.siteProbe.visible.includes("grab an axe")');
+  await controls.clickText('Hide Farm vocabulary');
+  await waitFor('window.siteProbe.visible.includes("Show Farm vocabulary")');
+  assert(!(await evaluate('window.siteProbe.visible')).includes('grab an axe'),
+    'Collapsing the guide retained its selected content.');
+
+  const viewport = await evaluate('({width:innerWidth,height:innerHeight,deviceScaleFactor:devicePixelRatio,mobile:false})');
+  await command('Emulation.setDeviceMetricsOverride', {...viewport,width:320,height:900});
+  await controls.clickText('Show Farm vocabulary');
+  await controls.clickText('Actions');
+  await waitFor('window.siteProbe.visible.includes("step forward")');
+  await controls.clickText('Checks');
+  await waitFor(`window.siteProbe.visible.includes(${JSON.stringify("if it's still there:")})`);
+  await controls.clickText('Items');
+  await waitFor('window.siteProbe.visible.includes("grab an axe")');
+  await capture('farm-vocabulary-mobile');
+  await controls.clickText('Hide Farm vocabulary');
+  await command('Emulation.setDeviceMetricsOverride', viewport);
 
   const turnPoint=await controls.clickText('One turn');
   console.log('Farm turn input:',JSON.stringify({point:turnPoint,after:await evaluate('window.colorProbe.find(item => item.text === "One turn")')}));

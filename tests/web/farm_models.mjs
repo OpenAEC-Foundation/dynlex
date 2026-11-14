@@ -11,6 +11,7 @@ const compiler=path.resolve(process.argv[2]??path.join(root,'build/dynlex'));
 const directory=await fs.mkdtemp(path.join(os.tmpdir(),'dynlex-farm-models-'));
 const models=[
   {name:'catalog',entry:'site/games/farm/export_vocabulary.dl',fixture:'farm-vocabulary.json'},
+  {name:'guide',entry:'tests/integration/site_farm_guide/main.dl',expected:'tests/integration/site_farm_guide/expected.txt'},
   {name:'plans',entry:'tests/web/farm_plan_model.dl',fixture:'farm-plans.json'},
   {name:'routines',entry:'tests/web/farm_routine_model.dl',fixture:'farm-routines.json'},
   {name:'world',entry:'tests/web/farm_world_model.dl',fixture:'farm-world-cases.json'},

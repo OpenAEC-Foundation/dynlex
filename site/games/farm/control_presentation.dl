@@ -41,8 +41,10 @@ to [refresh website Farm controls in] {a pointer to website state:state}:
     set program to state's programs + (the website program for source "Farm source")
     set busy to (program's phase = 1) or (program's phase = 2)
     set pending to the website Farm has pending saved roles in state
-    set the value of "Farm preparation notices" in instance to (1 if pending, else 0)
-    set the "Retry saved roles" control in instance enabled (pending and (busy = false))
+    set the value of "Farm preparation notices" in instance to (0 if pending, else -1)
+    set retry to (pending and (busy = false)) and (session's rebuild failed or session's rebuild stopped)
+    set the value of "Farm preparation retry" in instance to (0 if retry, else -1)
+    set the "Retry saved roles" control in instance enabled retry
     set the "Give this role to Ada" control in instance enabled ((code and (busy = false)) and (actor's id != "player"))
     set the text of "Give this role to Ada" in instance to ((the string form of "Apply to everyone in this role") if (role != (0 as a pointer to website farm role)) and (actor's role = document's role id), else ("Give this role to " + actor's name))
     set the "Farm source" control in instance enabled (role != (0 as a pointer to website farm role))
@@ -98,6 +100,12 @@ to [refresh website Farm controls in] {a pointer to website state:state}:
         set the label control in instance enabled (session's selected area is not empty)
     set the "Cancel drawing" control in instance enabled (session's drawing != 0)
     set the "Retry Farm view" control in instance enabled (session's graphics phase = 4)
+    set notice to -1
+    if (session's graphics phase = 1) or (session's graphics phase = 2):
+        set notice to 0
+    if session's graphics phase = 4:
+        set notice to 1
+    set the value of "Farm view notices" in instance to notice
     set the "Whole farm" control in instance enabled (session's renderer != (0 as a pointer to website Farm renderer))
     set the "View selection" control in instance enabled (session's renderer != (0 as a pointer to website Farm renderer))
     set count to the minimum of 4 and (the website coding count of "watering" in (world's coding))

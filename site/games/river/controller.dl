@@ -101,6 +101,8 @@ function [notice website river finish] {integer:index} in {a pointer to website 
         refresh website river controls in state
 
 to [initialize the website river in] {a pointer to website state:state}:
+    for each label in ["River passenger hint", "River delivery hint", "River rescue hint"]:
+        set the value of label in (state's view's instance) to -1
     set state's river's coding to new website coding progress for "river"
     set state's river's scene to the initial website river scene
     set state's river's speed to 1
@@ -200,7 +202,7 @@ to get [follow website river action] {string:destination} in {a pointer to websi
     loop while cursor < the length of actions:
         if destination = (the item at cursor in actions):
             set label to the item at cursor in groups
-            set the value of label in instance to (1 - (the value of label in instance))
+            set the value of label in instance to (0 if (the value of label in instance) = -1, else -1)
             return true
         increment cursor
     return false

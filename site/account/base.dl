@@ -7,14 +7,14 @@ to [refresh website account controls in] {a pointer to website state:state}:
     set enabled to account's configuration != (0 as a pointer to JSON value)
     if enabled:
         set enabled to account's configuration is not JSON null
-    set actions to 0
+    set actions to -1
     if account's connected:
-        set actions to 1 if (account's user's length = 0), else 2
+        set actions to 0 if (account's user's length = 0), else 1
     set the value of "Game account actions" in instance to actions
     set busy to (account's auth request != 0) or account's signing out
     set the "Sign in with Google" control in instance enabled (busy = false)
     set the "Sign out" control in instance enabled (((busy = false) and (account's phase = 4)) and (account's conflict = false))
-    set the value of "Game save conflict" in instance to (1 if (account's conflict), else 0)
+    set the value of "Game save conflict" in instance to (0 if (account's conflict), else -1)
     set choosing to account's read request != 0
     set the "Load account save" control in instance enabled (choosing = false)
     set the "Keep this game" control in instance enabled (choosing = false)

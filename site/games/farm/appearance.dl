@@ -83,3 +83,16 @@ appearance farm controls appearance:
 appearance farm diagnostics appearance:
     use farm signal appearance
     text is UI ink 255 189 157
+
+appearance farm vocabulary tabs appearance:
+    text is UI ink 235 240 221
+    font size is 13
+    gap is 8
+    when viewport is below 700:
+        font size is 12
+        gap is 4
+
+appearance farm example appearance:
+    use farm signal appearance
+    font size is 12
+    line spacing is 1.8

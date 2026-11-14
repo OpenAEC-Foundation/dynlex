@@ -18,12 +18,28 @@ set state's route to "/index.html"
 set instance's state to (the address of state) as a pointer
 prepare website fixture editors in (the address of state)
 initialize the website Farm in (the address of state)
+require condition ((the value of "Farm view notices" in (the address of instance)) = -1) reporting "A closed Farm exposed its graphics notices"
+require condition ((the value of "Farm vocabulary panel" in (the address of instance)) = -1) reporting "The Farm vocabulary must start collapsed"
 set instance's event target to the control labeled "Open the farm challenge →" in (the address of instance)
 follow website link (the address of instance)
 require condition ((the value of "Challenge views" in (the address of instance)) = 2) reporting "The production Farm link did not select the declarative challenge"
 set document to state's farm's document
 require condition ((document != (0 as a pointer to website farm document)) and (document's selected = "worker-1")) reporting "Opening Farm did not initialize its live document"
 require condition (state's farm's graphics phase = 1) reporting "Opening Farm did not request the actual DynLex scene graph"
+require condition ((the value of "Farm view notices" in (the address of instance)) = 0) reporting "Loading Farm did not show its preparation notice"
+set state's farm's graphics phase to 4
+refresh website Farm controls in (the address of state)
+require condition ((the value of "Farm view notices" in (the address of instance)) = 1) reporting "Failed graphics did not expose their retry panel"
+set state's farm's graphics phase to 3
+refresh website Farm controls in (the address of state)
+require condition ((the value of "Farm view notices" in (the address of instance)) = -1) reporting "Ready graphics retained a preparation or retry panel"
+set state's farm's graphics phase to 1
+set instance's event target to the control labeled "Show Farm vocabulary" in (the address of instance)
+follow website link (the address of instance)
+require condition ((the value of "Farm vocabulary panel" in (the address of instance)) = 0) reporting "The language guide did not open"
+require condition ((the UI value for (the control labeled "Farm condition examples" in (the address of instance)) in (the address of instance))'s text contains "if it's still there:") reporting "The Farm guide did not use its preferred natural example"
+follow website link (the address of instance)
+require condition ((the value of "Farm vocabulary panel" in (the address of instance)) = -1) reporting "The language guide did not collapse"
 set editor to the UI source editor labeled "Farm source" in (state's language)
 require condition ((the UI main source of editor in (state's language) at 0.0 seconds) = (the string form of (the website farm lumberjack source))) reporting "The Farm editor must load the selected role through the shared source workspace"
 set flags to the length of document's world's flags

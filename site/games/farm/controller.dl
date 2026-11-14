@@ -56,6 +56,12 @@ to [initialize the website Farm in] {a pointer to website state:state}:
     set program's finished to (the function named "notice website Farm finish $ in $") as a pointer
     set instance to state's view's instance
     set the "Give this role to Ada" control in instance enabled false
+    for each label in ["Farm view notices", "Farm preparation notices", "Farm preparation retry", "Farm vocabulary panel"]:
+        set the value of label in instance to -1
+    set the text of "Farm action examples" in instance to (the website Farm action guide)
+    set the text of "Farm condition examples" in instance to (the website Farm condition guide)
+    set the text of "Farm destination examples" in instance to (the website Farm destination guide)
+    set the text of "Farm supply examples" in instance to (the website Farm supply guide)
     set the "Retry Farm view" control in instance enabled false
     set the "Retry saved roles" control in instance enabled false
     bind (the control labeled "Farm source" in instance) in instance to (the function named "notice website Farm source edit $") for event 0
@@ -102,6 +108,12 @@ to get [follow website Farm action] {string:destination} [in] {a pointer to webs
         return true
     set document to session's document
     set world to document's world
+    if destination = "action:farm-vocabulary":
+        set instance to state's view's instance
+        set shown to (the value of "Farm vocabulary panel" in instance) = -1
+        set the value of "Farm vocabulary panel" in instance to (0 if shown, else -1)
+        set the text of "Show Farm vocabulary" in instance to ("Hide Farm vocabulary" if shown, else "Show Farm vocabulary")
+        return true
     if destination = "action:farm-retry-roles":
         set session's rebuild failed to false
         set session's rebuild stopped to false

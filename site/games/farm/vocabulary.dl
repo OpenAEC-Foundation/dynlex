@@ -34,6 +34,8 @@ class:
         target as an integer
         subject as a C string
         instant as a boolean
+        guide spelling as an integer
+        guide argument as an integer
 
 class:
     patterns:
@@ -64,7 +66,8 @@ class:
 
 [farm item] {C string:key} [is] {C string:phrase} [labeled] {C string:label} [with capacity] {integer:capacity} [selecting] {integer:quantity} [and aliases] {C string:aliases} means: @intrinsic("construct", website farm item description, key, phrase, label, capacity, quantity, aliases)
 [farm destination] {C string:key} [is] {C string:literal} [of kind] {C string:kind} means: @intrinsic("construct", website farm destination description, key, literal, kind)
-[farm command] {C string:key} [written] {C string:patterns} [taking] {C string:operands} [with argument] {integer:argument} [amount] {integer:amount} [target] {integer:target} [remembering] {C string:subject} [instantly] {boolean:instant} means: @intrinsic("construct", website farm command description, key, patterns, operands, argument, amount, target, subject, instant)
+[farm command] {C string:key} [written] {C string:patterns} [taking] {C string:operands} [with argument] {integer:argument} [amount] {integer:amount} [target] {integer:target} [remembering] {C string:subject} [instantly] {boolean:instant} means: @intrinsic("construct", website farm command description, key, patterns, operands, argument, amount, target, subject, instant, 0, argument)
+{website farm command description:entry} [illustrated with spelling] {integer:spelling} [and argument] {integer:argument} means: @intrinsic("construct", website farm command description, entry's key, entry's patterns, entry's operands, entry's argument, entry's amount, entry's target, entry's subject, entry's instant, spelling, argument)
 [farm flag] {C string:key} [is] {C string:color} means: @intrinsic("construct", website farm flag description, key, color)
 [farm item alias] {C string:phrase} [selects] {integer:identifier} [with amount] {integer:amount} means: @intrinsic("construct", website farm item alias, phrase, identifier, amount)
 [farm target alias] {C string:phrase} [selects] {C string:key} means: @intrinsic("construct", website farm target alias, phrase, key)
@@ -191,7 +194,7 @@ the website farm actions means: [
 ]
 
 the website farm conditions means: [
-    farm command "exists" written "there [is|are] {farm target:target}\nthere's {farm target:target}\n{farm target:target} [is|are] [still|] there\n{farm target:target}'s still there" taking "target" with argument (0) amount (-1) target (-2) remembering "target" instantly false,
+    farm command "exists" written "there [is|are] {farm target:target}\nthere's {farm target:target}\n{farm target:target} [is|are] [still|] there\n{farm target:target}'s still there" taking "target" with argument (0) amount (-1) target (-2) remembering "target" instantly false illustrated with spelling 3 and argument 0,
     farm command "reach" written "i can reach {farm target:target}" taking "target" with argument (0) amount (-1) target (-2) remembering "target" instantly false,
     farm command "full" written "{farm item:items} [is|are] full" taking "items" with argument (-1) amount (-1) target (-2) remembering "items" instantly false,
     farm command "empty" written "{farm item:items} [is|are] empty" taking "items" with argument (-1) amount (-1) target (-2) remembering "items" instantly false,
@@ -206,8 +209,8 @@ the website farm conditions means: [
     farm command "notCarrying" written "i am not carrying {farm item:items}" taking "items" with argument (0) amount (-1) target (-2) remembering "items" instantly false,
     farm command "role" written "i am a {farm role:role}" taking "role" with argument (0) amount (-1) target (-2) remembering "" instantly false,
     farm command "canStep" written "i can step {farm direction:direction}" taking "direction" with argument (0) amount (-1) target (-2) remembering "" instantly false,
-    farm command "stockAtLeast" written "there are at least {a farm number:count} {farm item:items} in {farm target:target}" taking "stock" with argument (0) amount (-1) target (0) remembering "" instantly false,
-    farm command "stockFewer" written "there are fewer than {a farm number:count} {farm item:items} in {farm target:target}" taking "stock" with argument (0) amount (-1) target (0) remembering "" instantly false
+    farm command "stockAtLeast" written "there are at least {a farm number:count} {farm item:items} in {farm target:target}" taking "stock" with argument (0) amount (-1) target (0) remembering "" instantly false illustrated with spelling 0 and argument 5,
+    farm command "stockFewer" written "there are fewer than {a farm number:count} {farm item:items} in {farm target:target}" taking "stock" with argument (0) amount (-1) target (0) remembering "" instantly false illustrated with spelling 0 and argument 5
 ]
 
 

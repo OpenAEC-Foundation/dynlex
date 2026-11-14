@@ -30,7 +30,7 @@ function [check the progress fixture] {integer:scenario}:
             visit UI source document helper selecting 0 through 1 in editor in (the address of view)
             save website river progress in (the address of state)
             require condition ((the website coding count of "passenger" in (state's river's coding)) = 1) reporting "A repeated event was counted twice"
-            require condition ((the value of "Game resume" in (the address of instance)) = 1) reporting "A saved game did not offer Continue"
+            require condition ((the value of "Game resume" in (the address of instance)) = 0) reporting "A saved game did not offer Continue"
             set first to the compact JSON form of (state's progress's document)
             save website river progress in (the address of state)
             require condition ((the compact JSON form of (state's progress's document)) = first) reporting "An unchanged save received a new revision"

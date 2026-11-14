@@ -30,7 +30,7 @@ to [refresh website progress controls in] {a pointer to website state:state}:
     set resume to false
     if store's status = 1:
         set resume to (the JSON member named "lastGame" in (store's document)) is not JSON null
-    set the value of "Game resume" in (state's view's instance) to (1 if resume, else 0)
+    set the value of "Game resume" in (state's view's instance) to (0 if resume, else -1)
 
 to [apply website progress to the games in] {a pointer to website state:state}:
     set games to the JSON member named "games" in (state's progress's document)
@@ -53,6 +53,7 @@ to [apply website progress to the games in] {a pointer to website state:state}:
 to [open website progress in] {a pointer to website state:state}:
     set store to the address of (state's progress)
     require condition (store's status = 0) reporting "The website progress store was opened twice"
+    refresh website progress controls in state
     set keys to call website progress service "storage" with (a JSON object containing [JSON text "action" is "keys"]) in state
     if keys = (0 as a pointer to JSON value):
         return nothing
