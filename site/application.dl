@@ -187,6 +187,7 @@ to close the website {a pointer to UI view:view}:
 function open the DynLex website using {a pointer to UI driver:driver} with {a pointer to UI service provider:services}:
     globals:
         dynlex website
+        river character page
     execute:
         set instance to storage for one slot initialized with (an instance of dynlex website)
         set state to storage for one slot initialized with (a new website state)
