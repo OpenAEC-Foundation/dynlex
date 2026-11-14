@@ -175,7 +175,7 @@ remaining measured costs, not by table order alone.
 
 | I013 | P06: reuse source-proven classification declaration inputs | Complete: keep, merged and verified | 04:57–06:26 UTC on 14 November; one extension used, before the 06:27 deadline. Final source `d77c79cd` / compiler `06ecae56...` follows explicit producers for generated declarations. Real unused/active edits evaluate one input and reuse 1,747. Independent 31-pair unused CPU ratio 0.98479 [0.96568, 0.99350] clears the 1% gate; medians 0.811005 to 0.791013 s. Input preparation falls 27.944 to 8.304 ms. Active-body, other common and cold gains remain unproven; their intervals show no established regression. All 196 current eight-case rows plus the 66-row control pass the stated artifact/diagnostic checks. Candidate: 329 required uncached in 111.728 s, 464 integration in 830.955 s. Merged source/docs `f3c07fd6`; root compiler `4bff53b6...` passes 329 required uncached in 110.554 s. The merged worktree is removed and archived replay passes afterward, cleaning its temporary data path. Full goal incomplete. |
 
-| I014 | P03/P06: demand-driven generated body products | Active | Started 06:27 UTC on 14 November; first deadline 07:12 UTC, extended deadline 07:57 UTC; one extension used after actual work/parity proof. Baseline source `40b94d06`, compiler `4bff53b6...`. GDB inspection through the project debugger proves 929 generated property body units account for 3,716 of 4,267 materialized expressions after the real unused edit. Use existing body-product ownership/publication to defer these executable trees until consumers need them; preserve parameter binding, canonical source identities, diagnostics and callbacks. Add generic product ownership/work counters and a minimal unused/used property-body regression before changing the compiler. Require at least 50% fewer indexed source expressions on real unused/active edits, at least 1% paired unused-edit CPU gain, no established active/cold/common regression, runtime/diagnostic parity, required <=120 s uncached and relevant integration. Preserve broader semantic section/reference and clean-IR gaps. |
+| I014 | P03/P06: demand-driven generated body products | Keep; merged-root verification pending | Started 06:27 UTC on 14 November; first deadline 07:12 UTC, extended deadline 07:57 UTC; one extension used. Baseline `40b94d06` / compiler `4bff53b6...`, final production code `e9a82d20` / compiler `7b01bbee...`. Unused edits index 551 expressions instead of 4,267, deferring all 929 generated property bodies; active edits index 937 instead of 4,601. The independent 31-pair unused CPU ratio is 0.97355 [0.95838, 0.99494], clearing the predeclared 1% gate. All 292 final comparison rows pass their artifact/diagnostic checks; common and cold controls establish no regression. All 329 required checks pass uncached in 119.241 s. The integration run passes 463 checks and exposes three unmigrated C++ ownership-test doubles; after implementing their new ownership interface, the remaining check rebuilds and passes with the production compiler unchanged. Preserve the original failed full run. Root rebuild/required, cleanup/replay and publication remain pending; full semantic section/reference reuse and clean-IR parity remain incomplete. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -935,3 +935,65 @@ and index declaration bindings on their first actual query. Materialized source
 syntax still receives its canonical identities before inference can change grouping.
 The added scope-work check precedes this correction. No further extension is
 available after 07:57 UTC.
+
+### I014 demand-driven index verification
+
+Refined source `e9a82d20` / compiler `7b01bbee...` passes the focused body,
+source-syntax, source-scope and classification checks. An independent 31-pair
+comparison per ordinary case passes all 132 artifact/diagnostic rows. Unused
+CPU medians are 0.791647 to 0.781350 s; paired ratio 0.97355
+[0.95838, 0.99494] clears the predeclared 1% gate. Wall ratio is 0.96129
+[0.91728, 0.98429]. Index time falls 10.944 to 0.895 ms; only 48 scopes
+and zero declaration-binding records are indexed, with 551 expression nodes.
+Active edits index 104 scopes and 937 nodes, materializing 13 generated bodies
+and deferring 916. Their CPU ratio 0.99933 [0.97660, 1.01877] establishes no
+change; wall ratio 1.04022 [0.97393, 1.09339] remains uncertain. The initial
+apparent wall regression is not reproduced as established. Retain all outliers:
+one candidate sample takes 4.801 wall seconds and 1.810 CPU seconds. This
+shows waiting but does not identify its cause.
+
+The remaining six-case matrix completes all 160 rows. Together with the 132-row
+ordinary-edit comparison, all baseline/candidate native artifact checks and
+incremental/clean diagnostic comparisons pass with unchanged compiler binaries.
+Fast-path and shared-type intervals include no change. The top-level lives edit
+has paired CPU ratio 0.96850 [0.94448, 0.99337], although the unpaired medians
+move in the other direction; preserve the alternating-pair evidence. Eleven cold
+pairs have CPU ratio 0.98676 [0.96251, 1.00579], establishing no change.
+The observed outer comparison session returned 143 after writing its complete
+report and final summary; all 160 child invocations have return code zero. The
+signal's cause is not established, and the report is not evidence of clean native
+executable equivalence. Focused runtime parity passes; full suites are pending.
+
+I014 comparison evidence: `i014-first-comparison.json` retains the initial screen;
+`i014-index-31-comparison.json` and `i014-remaining-comparison.json` contain the
+final measurements. `i014-compiler-data/manifest.json` preserves all three compiler
+identities and 105 unchanged library/runtime data files for replay after cleanup.
+
+The candidate passes all 329 required checks uncached in 119.241 s (120.621 s
+including its observation driver), with unchanged compiler and test sources.
+The enforced suite timer excludes that outer observation overhead. Headroom is
+only 0.759 s; this is a passing run, not evidence that the budget has ample margin.
+The broader integration gate is running against the same frozen candidate.
+
+The remaining-stage audit uses all 31 candidate pairs. For an unused edit,
+median parse time is 15.184 ms and resolution 345.579 ms, including 129.416 ms
+setup, 68.073 ms cached-body selection and 26.260 ms match restoration. It still
+restores 7,342 body references and rebinds 3,637 variable references. These are
+existing products rebuilt into current mutable state, not skipped units.
+`i014-remaining-stage-audit.json` records the measured boundaries and the native,
+tooling and parity gaps. The next consumer goal is to retain unchanged resolved
+reference products rather than reconstruct their match/binding state eagerly;
+semantic section reuse remains required. No implementation or timing claim for
+that next goal is made here.
+
+The integration run finishes in 869.169 s (871.765 s including its driver):
+463 pass and one fails because three C++ ownership-test products lack the new
+pure virtual ownership accessor. This is an incomplete interface migration in
+the proposed patch, not a DynLex language failure. All five implementations are
+now migrated. The affected ownership check rebuilds and passes, preserving every
+existing assertion and adding a check that querying ownership does not demand
+syntax. The production compiler remains byte-identical, so the 463 passing
+integration checks and this corrected check cover all 464 checks; do not relabel
+the original full run as passing. Evidence: `i014-integration.json`, its full log,
+and `i014-ownership-migration.log`. No compiler source changed after the matrix or
+required run. Accept the measured optimization and proceed to root verification.

@@ -15,12 +15,15 @@ static void expect(bool condition, const char *message) {
 
 static void checkSourceExpressionDemand() {
 	struct Product final : BodySyntaxProduct {
+		Section &owner;
 		SourceExpression &first, &second;
 		Expression &firstValue, &secondValue;
 		size_t demands = 0;
 		bool ready = false;
-		Product(SourceExpression &first, SourceExpression &second, Expression &firstValue, Expression &secondValue)
-			: first(first), second(second), firstValue(firstValue), secondValue(secondValue) {}
+		Product(
+			Section &owner, SourceExpression &first, SourceExpression &second, Expression &firstValue, Expression &secondValue
+		)
+			: owner(owner), first(first), second(second), firstValue(firstValue), secondValue(secondValue) {}
 		void demand() override {
 			++demands;
 			first.publish(firstValue);
@@ -31,10 +34,13 @@ static void checkSourceExpressionDemand() {
 		}
 		bool syntaxMaterialized() const override { return ready; }
 		PatternReference *rootReference() const override { return nullptr; }
+		const Section &bodyOwner() const override { return owner; }
 	};
+	Section owner(SectionType::Function);
 	SourceExpression first, second;
 	Expression left, right;
-	Product product(first, second, left, right);
+	Product product(owner, first, second, left, right);
+	expect(&product.bodyOwner() == &owner && product.demands == 0, "body ownership lookup demanded source syntax");
 	first.defer(product);
 	second.defer(product);
 	expect(static_cast<bool>(first), "a deferred source expression lost its presence");
@@ -113,6 +119,7 @@ static void checkDeferredBodyCloning() {
 		}
 		bool syntaxMaterialized() const override { return ready; }
 		PatternReference *rootReference() const override { return nullptr; }
+		const Section &bodyOwner() const override { return section; }
 	} product(section);
 	for (CodeLine *line : section.codeLines)
 		line->expression.defer(product);
@@ -138,10 +145,15 @@ static void checkDeferredBodyCloning() {
 
 static void checkUnrequestedBodyTeardown() {
 	struct Unrequested final : BodySyntaxProduct {
+		Section &owner;
+		explicit Unrequested(Section &owner) : owner(owner) {}
 		void demand() override { expect(false, "compiler teardown materialized an unrequested source body"); }
 		bool syntaxMaterialized() const override { return false; }
 		PatternReference *rootReference() const override { return nullptr; }
-	} product;
+		const Section &bodyOwner() const override { return owner; }
+	};
+	Section owner(SectionType::Function);
+	Unrequested product(owner);
 	{
 		ParseContext context;
 		context.ownedCodeLines.push_back(std::make_unique<CodeLine>("", nullptr));
