@@ -1478,3 +1478,14 @@ healthy declaration results from a newer failed typed build. The existing
 frontend-state selector already preserves and hydrates that state. Connect the
 registry to that selected state; retain the old native snapshot separately for
 IR validation. The new three-line typed-failure regression precedes this fix.
+
+Focused semantic verification finds an obsolete work-counter assertion: the
+older parameter-cascade test required zero reused declaration records whenever
+one provider changed. A private inspection retained every original declaration,
+caller-match, runtime and diagnostic assertion and passed them all: exactly one
+provider record changes, while the caller's declaration record remains equal
+and its match changes. Counters confirm one built and one reused record.
+Migrate that assertion to require exactly the affected declaration to rebuild,
+keeping every semantic assertion. This strengthens unit isolation rather than
+weakening the cascade. The prematurely started timing screen was interrupted
+and excluded; focused validation must pass before a replacement screen starts.
