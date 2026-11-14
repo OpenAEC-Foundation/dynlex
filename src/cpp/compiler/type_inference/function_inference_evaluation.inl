@@ -100,7 +100,8 @@ struct PureExecutionState {
 
 	PureExecutionState(ParseContext &context, InferenceContext &inference)
 		: parseContext(context), inferenceContext(inference) {}
-	void recordValueRead(const Section &section, const std::shared_ptr<const VariableStorageScope> &scope) const {
+	void
+	recordValueRead(const Section &section, const std::optional<std::shared_ptr<const VariableStorageScope>> &scope) const {
 		if (valueReadOwners.empty()) {
 			inferenceContext.recordBodyRead(section, scope);
 			return;

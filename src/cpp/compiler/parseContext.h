@@ -153,7 +153,8 @@ struct ParseContext {
 	std::function<
 		void(const InferenceReadOwner &, const lsp::SourceFile &, std::string_view, const std::vector<CallableFunctionMatch> &)>
 		recordCallableLookup;
-	std::function<void(const InferenceReadOwner &, const Section &, const std::shared_ptr<const VariableStorageScope> &)>
+	std::function<
+		void(const InferenceReadOwner &, const Section &, const std::optional<std::shared_ptr<const VariableStorageScope>> &)>
 		recordInferenceDependency;
 	std::function<void(
 		const InferenceReadOwner &, const Section &, const std::shared_ptr<const VariableStorageScope> &,
