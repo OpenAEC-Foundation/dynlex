@@ -25,6 +25,7 @@ class IncrementalMatcherCache {
 	using LoadSegment = std::function<std::optional<std::string>(std::string_view)>;
 	IncrementalMatcherCache(ParseContext &context, std::string_view previous, LoadSegment loadSegment);
 	std::optional<PatternMatch *> reuse(PatternReference *reference, MatchOptions options, MatchDependencies *dependencies);
+	PatternMatch *restoreBodyMatch(PatternReference &reference, std::string_view key);
 	void
 	record(PatternReference *reference, MatchOptions options, const PatternMatch *match, const MatchDependencies *dependencies);
 	struct Snapshot {
@@ -106,6 +107,10 @@ class IncrementalMatcherCache {
 	size_t signatureLookupCount = 0;
 
 	bool available(MatchOptions options);
+	std::optional<PatternMatch *> restoreResult(
+		PatternReference &reference, std::string cacheKey, std::string_view value, bool prevalidated,
+		MatchDependencies *dependencies
+	);
 	std::string key(PatternReference &reference, bool trackDependencies);
 	std::string precedenceDigest();
 	void appendNode(std::string &output, const PatternTreeNode *node) const;

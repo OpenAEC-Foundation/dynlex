@@ -147,11 +147,7 @@ class IncrementalBodyDemand {
 					cache.retain(saved.matchKey);
 				result.variable = std::move(saved.variable);
 			} else {
-				reference->prevalidatedMatcherKey = saved.matchKey;
-				MatchDependencies dependencies;
-				auto match = cache.reuse(reference, {}, &dependencies);
-				requireCompilerInvariant(match && *match, "validated deferred body lost a matching result");
-				result.match.reset(*match);
+				result.match.reset(cache.restoreBodyMatch(*reference, saved.matchKey));
 			}
 			context.restoreBodyReference(std::move(result));
 		}
