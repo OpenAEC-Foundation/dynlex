@@ -176,6 +176,7 @@ remaining measured costs, not by table order alone.
 | I013 | P06: reuse source-proven classification declaration inputs | Complete: keep, merged and verified | 04:57–06:26 UTC on 14 November; one extension used, before the 06:27 deadline. Final source `d77c79cd` / compiler `06ecae56...` follows explicit producers for generated declarations. Real unused/active edits evaluate one input and reuse 1,747. Independent 31-pair unused CPU ratio 0.98479 [0.96568, 0.99350] clears the 1% gate; medians 0.811005 to 0.791013 s. Input preparation falls 27.944 to 8.304 ms. Active-body, other common and cold gains remain unproven; their intervals show no established regression. All 196 current eight-case rows plus the 66-row control pass the stated artifact/diagnostic checks. Candidate: 329 required uncached in 111.728 s, 464 integration in 830.955 s. Merged source/docs `f3c07fd6`; root compiler `4bff53b6...` passes 329 required uncached in 110.554 s. The merged worktree is removed and archived replay passes afterward, cleaning its temporary data path. Full goal incomplete. |
 
 | I014 | P03/P06: demand-driven generated body products | Complete: keep, merged and verified | Started 06:27 UTC on 14 November; first deadline 07:12 UTC, extended deadline 07:57 UTC; one extension used. Baseline `40b94d06` / compiler `4bff53b6...`, final production code `e9a82d20` / compiler `7b01bbee...`. Unused edits index 551 expressions instead of 4,267, deferring all 929 generated property bodies; active edits index 937 instead of 4,601. The independent 31-pair unused CPU ratio is 0.97355 [0.95838, 0.99494], clearing the predeclared 1% gate. All 292 final comparison rows pass their artifact/diagnostic checks; common and cold controls establish no regression. All 329 required checks pass uncached in 119.241 s. The integration run passes 463 checks and exposes three unmigrated C++ ownership-test doubles; after implementing their new ownership interface, the remaining check rebuilds and passes with the production compiler unchanged. Preserve the original failed full run. Root compiler `092562a6...` passes 329 required uncached in 117.219 s; merged worktree removal and actual archived replay pass. Verification overruns the 07:57 deadline; no additional optimization is added. Full semantic section/reference reuse and clean-IR parity remain incomplete. |
+| I015 | P03/P06: resolved match products with independently reusable effects | Parked; not accepted | 08:08–09:20 UTC on 14 November; one extension used, closed before its 09:38 deadline. Source `54692e8e`, refined compiler `8cb03cbc...`. Match construction falls sharply, but the independent first-candidate 31-pair CPU gain is only 1%, and the refined screen does not demonstrate the original 2% gate. All focused/parity checks pass; 329 required checks pass uncached in 106.732 s. Integration was not rerun for the rejected candidate. Preserve the unmerged branch and three compiler snapshots; owned worktree removed. Published compiler code remains `9cbdc95a`; full goal incomplete. |
 
 Carry-in evidence is under `.cache/incremental-evidence/global-callers-20261113/`.
 The pre-linear snapshot `01eb1c6a` passed 328 required checks in 104.9 seconds and
@@ -1022,3 +1023,66 @@ implementation must skip reconstruction of unaffected match/binding state, retai
 positive and failed lookup dependencies and body-driven parameter changes, and
 be consumed by the existing compiler stages. Another unconsumed snapshot or
 codec change does not satisfy that goal. Define its work/time gates before code.
+
+### I015: resolved match products and independently reusable effects
+
+Started 08:08 UTC on 14 November; first deadline 08:53 UTC. Baseline is published
+`9cbdc95a`, root compiler `092562a6131d285b70f5dddbf3845ecf12849f6601c6e1768a3e19b3be670c7b`.
+The previous turn made progress: I014 is merged, measured, validated and cleaned.
+
+P03/P06 hypothesis: an unchanged reference can reuse its resolved match product
+without rebuilding the detailed match tree. Binding effects and definition reads
+are separate consumers and must remain correct before later inference demands
+the detailed match. Existing cache keys and classification/tree proofs determine
+eligibility; no new persisted metadata or syntax-specific shortcut is needed.
+An equal initial/final cached precedence result can also stop propagation before
+another match tree is reconstructed. Persisted products must outlive cache hooks;
+destruction and presence checks must never demand unrequested matches.
+
+Add minimal work/runtime regressions before implementation. Require at least 50%
+fewer detailed cached match trees materialized on real unused/active edits and a
+repeatable 2% paired unused-edit CPU improvement. Keep the common/cold controls,
+cross-process clean runtime/diagnostic parity, last-parameter-use removal, overload
+and precedence changes, missing products, indirect body activation and ownership
+checks. The required suite remains uncached and limited to 120 seconds. One
+extension is available only after an implemented, verified reduction; otherwise
+park this hypothesis. Binding-group hydration, reference-outline construction,
+semantic section reuse and non-native/tooling coverage remain subsequent work;
+this iteration does not claim to complete those boundaries.
+
+The first seven-pair screen passes all 36 artifact/diagnostic rows but establishes
+no whole-build gain. The independent 31-pair control passes all 132 rows: unused
+CPU ratio 0.99007 [0.97795, 0.99917] is below the predeclared 2% gain; active CPU
+0.99253 [0.98232, 1.00933] remains inconclusive. Do not accept the candidate yet.
+Unused edits defer 6,862 match products and materialize 137, restoring 387 detailed
+trees overall; active edits defer 6,819 and materialize 156. Binding/reference
+hydration remains broad. Candidate matching falls 12.930 to 1.550 ms in the first
+screen, but replay setup rises 7.978 to 13.276 ms. Detailed trie identities are
+still validated and captured for every deferred result.
+
+Use the single extension, ending 09:38 UTC, to profile that remaining capture/replay
+work and make one measured refinement. Keep the original 2% CPU and work gates;
+if the refinement cannot meet them, park the implementation. Preserve both initial
+comparisons and do not treat fewer constructed objects as a timing result.
+
+I015 decision: park; do not merge. Refined compiler `8cb03cbc...`, source
+`bc520731` with test commit `1287d8cd`, passes all 36 refined parity rows and all
+focused body, syntax, classification, precedence-rule and ownership checks.
+Seven paired unused-edit samples have CPU ratio 1.00429 [0.97801, 1.03721]; active
+CPU ratio 1.00005 [0.99279, 1.02211]. The 2% gate is not demonstrated. Retaining
+2,310 precedence equality results and reducing detailed-tree construction does
+not establish a sufficient whole-build benefit. No further refinement is added.
+All 329 required checks pass uncached in 106.732 s (107.817 s with the observer),
+with unchanged compiler and test sources. The full integration suite was not run
+for this rejected optimization. Preserve the branch and three compiler identities;
+remove its owned worktree after archival verification. Published compiler code
+remains `9cbdc95a`. The full goal remains active and incomplete.
+
+Evidence: `i015-first-comparison.json`, `i015-31-comparison.json`,
+`i015-refined-comparison.json`, `i015-first-stage-comparison.json`,
+`i015-product-profile.json`, `i015-refined-focused.log`,
+`i015-refined-full-focused.log`, `i015-refined-ownership.log`, and
+`i015-required.json` in the structured evidence directory. The next independent
+inspection is classification dependency preparation: 12,015 edges and a global
+candidate index are processed after one input/query unit changes. Measure the
+actual preparation and invalidation path before selecting that implementation.
