@@ -1252,3 +1252,24 @@ and its paired `.bc`/`.ll` files. The small inspection utility links the install
 pinned LLVM 23 library; no mismatched external LLVM reader is used. The verifier
 uses archived repository cache readers. Its original wrong-checksum inspector
 failure is retained separately and did not affect compiler or test source.
+
+
+I017 is merged as `42e18e4e`. The root compiler
+`e1bead02c8b1606834b2aa7ef3b8821cef2dd8d3f591d4b776397eaa40aca3b7`
+builds with one job; all 329 required checks pass uncached in 101.113 s
+(102.842 s observer), with unchanged compiler and source hashes. The owned
+worktree is removed. A real six-row archived-compiler replay passes after
+removal, and its temporary compiler data root is removed on exit. The archive
+also fingerprints the live external compiler data so future source changes
+cannot silently alter a preserved comparison.
+
+Next selected area: P03 section construction, before further low-level tuning.
+The 31-pair unused-edit baseline reuses 44/45 source preparations, 79/81 transform
+chunks and 7,087 lexical lines. It evaluates 427 lexical lines; it does not lex
+all files again. Import work is 6.863 ms and section analysis 14.219 ms, while
+resolution remains 275.363 ms. Section analysis still visits the merged line
+stream and reconstructs current section objects. Audit a reusable construction
+product together with its consumer, distinguishing necessary object rehydration
+from repeated source/header decisions. Do not add another serialized-only cache.
+Freeze a named hypothesis, minimal tests and an end-to-end gain gate before the
+next implementation. The full cross-process incremental objective stays active.
