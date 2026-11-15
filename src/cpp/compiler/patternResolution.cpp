@@ -8,6 +8,7 @@
 #include "patternElement.h"
 #include "patternTreeNode.h"
 #include "replacementSection.h"
+#include "sourceReferenceOrder.h"
 #include "transformedPattern.h"
 #include "type.h"
 #include "variable.h"

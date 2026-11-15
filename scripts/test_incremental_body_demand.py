@@ -1,7 +1,10 @@
 """Whole cached body results survive non-use and become usable on later demand."""
 
+from test_incremental_unresolved_order import check_unresolved_diagnostic_order
+
 
 def check_body_resolution_demand(root, build):
+    check_unresolved_diagnostic_order(root, build)
     check_negative_body_dependency(root, build)
     check_reactivated_local_variables(root, build)
     main = root / "body_resolution_demand.dl"
