@@ -2389,3 +2389,37 @@ Otherwise park the candidate. Start its 45-minute clock when work begins; allow
 only the contract's single evidence-backed extension. Full-goal audit and the
 unimplemented consumer audit are `i030-full-goal-audit.json` and
 `i030-next-opportunity-audit.json`. I030 completes publication, not the full goal.
+
+## I031: topology retention screened out by subphase measurements
+
+Started 15 November at 05:01:19 UTC, first deadline 05:46:19. Published source
+02b07805 / compiler dcf46435 is unchanged. The comparison reuses frozen 0e3135e3,
+whose tracked compiler/runtime/library sources are verified byte-identical to
+02b07805. Its compiler-data replay and a fixed installed runtime preserve the
+real LEXI8 source and native-output comparison. The probe compiler is 7fa0dfbf;
+its normal single-job build takes 769.590 seconds, peak RSS 2,381,384 KiB.
+
+Seven paired unused edits pass artifact/diagnostic and compiler-identity checks.
+Dependency-phase medians are: edges 3.506 ms, reverse construction 0.888,
+frontier 0.092, eager-provider traversal 0.327, SCC traversal 0.316, and body
+eligibility 10.543. The complete non-eligibility graph subtotal is 5.128 ms:
+even eliminating all of it would save only 1.05% of the 489.173 ms measured build,
+before any cache-load/persistence cost. This cannot meet the predeclared >=2%
+whole-build gate. Do not implement or merge topology retention on this evidence.
+
+Decision: reject this performance hypothesis early. Preserve the timing probes,
+compiled evidence and minimal future topology work-count specification on the
+unmerged branch. The new test reaches the intended assertion on the published
+compiler; topology retention itself is not implemented. Required/full integration
+are not rerun for this unaccepted probe; the published compiler remains the fully
+qualified I030 snapshot. No optimization or speedup is claimed from this screen.
+Evidence: `i031-probe-build.json`, `i031-probe-unused.json`,
+`i031-screen-decision.json`, and the unimplemented `i031-design-audit.json`.
+
+Next selected goal, I032: isolate and reduce cached classification eligibility
+and related matcher-product proof work. Separate scope/diagnostic/input checks,
+reference-metadata restoration and match-key availability before changing any
+reuse requirement. Preserve independent eviction/corruption and reactivation
+proofs; a faster stage obtained by moving its work later is not an improvement.
+Write the actual start/deadline and gain gate before implementation. The broader
+topology boundary and test-classification policy issue remain unfinished.
