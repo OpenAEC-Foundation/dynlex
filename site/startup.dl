@@ -1,0 +1,11 @@
+import navigation.dl
+
+to request website environment in {a pointer to website state:state}:
+    request "environment" containing (a new JSON value of kind the JSON null kind) for purpose 1 indexed 0 in state
+
+to receive website environment {a pointer to JSON value:response} in {a pointer to website state:state}:
+    set state's environment to response
+    set state's view's instance's reduced motion to the JSON boolean named "reducedMotion" in response
+    apply location (the JSON member named "location" in response) to state
+    request "location" containing (a JSON object containing [JSON text "action" is "watch"]) for purpose 0 indexed 0 in state
+    request "fetch" containing (a JSON object containing [JSON text "url" is "assets/shaders/index.json"]) for purpose 3 indexed 0 in state

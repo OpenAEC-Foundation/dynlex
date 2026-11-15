@@ -14,8 +14,8 @@ from source_package import SourcePackage
 
 
 def compilation_budget(name):
-    # The production dispatcher links both the source workspace and 3D scene.
-    return 600 if name in ['site_farm_controller', 'site_farm_profiles', 'site_farm_rebuilding', 'site_farm_labels', 'site_reply_ownership'] else 180
+    # Dispatch and initial-route fixtures link the source workspace and 3D scene.
+    return 600 if name in ['site_farm_controller', 'site_farm_profiles', 'site_farm_rebuilding', 'site_farm_labels', 'site_reply_ownership', 'site_startup'] else 180
 
 
 def main():
@@ -26,6 +26,7 @@ def main():
     cases = ['site_controllers', 'site_language', 'site_entry', 'site_shader', 'site_shader_buffers', 'site_program_events', 'site_river_controller', 'site_river_audio', 'site_progress_controller', 'site_account_profiles', 'site_account_controller', 'site_account_recovery', 'site_reply_ownership']
     cases.append('site_program_commands')
     cases.append('site_program_deadlines')
+    cases.append('site_startup')
     cases.append('site_theme_controller')
     cases.append('site_farm_controller')
     cases.append('site_farm_profiles')

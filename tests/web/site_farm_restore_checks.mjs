@@ -54,6 +54,8 @@ export async function verifyFarmRestore({command, evaluate, waitFor, controls, c
   await waitFor(`document.querySelector('textarea').value===${JSON.stringify(runaway)}`);
   await controls.clickText('Apply to everyone in this role');
   await waitFor('window.siteProbe.visible.includes("Execution limit reached. Edit the program and try again.")');
+  assert.equal(await evaluate('window.siteProbe.nonPrintingBudgetPrograms'),1,
+    'The execution-budget scenario must compile one non-printing module.');
   assert.equal(await evaluate(`JSON.parse(localStorage.getItem('dynlex.games.guest')).games.farm.data.roles.find(role=>role.id===${JSON.stringify(saved.role.id)}).applied`),saved.role.applied,
     'An unbounded program replaced the previously applied role.');
   await capture('farm-execution-limit');

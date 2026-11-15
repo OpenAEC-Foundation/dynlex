@@ -1,0 +1,44 @@
+import ../../site/startup.dl
+import site_fixture.dl
+import ../../site/pages/river_characters.dl
+import ../../site/packages/dynlex-ui/testing/driver.dl
+
+the site's pages means: [home page, IDE page, river character page]
+
+document startup fixture:
+    code:
+        use UI palette (the website colors for false) in this window
+    home page
+    IDE page
+    river character page
+
+set instance to an instance of startup fixture
+set driver to the value at (the test UI driver)
+set view to a UI view of (the address of instance) sized 1280 by 900 using font "regular" with (the address of driver)
+set state to a new website state
+set state's services to the browser UI service provider
+set state's view to the address of view
+set state's route to "/index.html"
+set instance's state to (the address of state) as a pointer
+connect website river inspection (the address of (state's river inspection)) within (river character page's content) in (the address of view)
+
+request website environment in (the address of state)
+require condition ((state's requests' purpose = 1) and (state's requests' next = (0 as a pointer to website request))) reporting "Startup registered a service before its environment was available"
+require condition (state's river inspection's opened = false) reporting "The initial location opened before motion preferences were known"
+set location to a JSON object containing [JSON text "path" is "/river-character-sheet.html", JSON text "hash" is "", JSON child "search" is (a new JSON value of kind the JSON object kind)]
+set response to a JSON object containing [JSON flag "reducedMotion" is true, JSON child "location" is location]
+receive website environment response in (the address of state)
+require condition (instance's reduced motion) reporting "The environment did not reach the shared UI instance"
+require condition ((state's river inspection's opened) and (state's river inspection's clock's playing = false)) reporting "The initial inspection route ignored reduced motion"
+require condition (instance's page = river character page's content) reporting "Startup did not open the requested route"
+require condition ((the UI value for (the control labeled "Pause loops" in (the address of instance)) in (the address of instance))'s text = "Play loops") reporting "The initial pause control disagreed with the reduced-motion clock"
+
+set pending to state's requests
+loop while pending != (0 as a pointer to website request):
+    set next to pending's next
+    deallocate pending
+    set pending to next
+free state's environment
+close the address of view
+close the address of instance
+print line "Website startup applies environment preferences before the initial route, navigation watch and graphics loading."

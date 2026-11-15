@@ -5,15 +5,15 @@ import ../../packages/dynlex-ui/ui/outlines.dl
 to [paint website river sprite] {integer:index} in {UI bounds:box} flipped {boolean:flipped} opacity {integer:opacity} on {UI frame:frame}:
     set path to the string form of (the item at index in (the website river artwork))
     set image to UI image from path in (frame's view)
-    set sample to UI box at (1.0 if flipped, else 0.0) 0.0 sized (-1.0 if flipped, else 1.0) 1.0
+    set sample to UI box at (1.0 if flipped, else 0.0) 0.0 sized ((-1.0) if flipped, else 1.0) 1.0
     draw UI texture (image's texture) in box rounded by 0.0 sampling sample in (UI ink 255 255 255) with opacity opacity on frame
 
 to [paint website river blink] {integer:index} across {UI bounds:box} flipped {boolean:flipped} centered {floating-point number:x} {floating-point number:y} radius {floating-point number:rx} {floating-point number:ry} solid {floating-point number:solid} opacity {integer:opacity} outlining {boolean:outlining} on {UI frame:frame}:
-    set center to 1.0 - x if flipped, else x
+    set center to (1.0 - x) if flipped, else x
     set mask to UI box at (box's x + box's width * (center - rx)) (box's y + box's height * (y - ry)) sized (box's width * rx * 2.0) (box's height * ry * 2.0)
     if opacity > 0:
         set image to UI image from (the string form of (the item at index in (the website river artwork))) in (frame's view)
-        set sample to UI box at (1.0 if flipped, else 0.0) 0.0 sized (-1.0 if flipped, else 1.0) 1.0
+        set sample to UI box at (1.0 if flipped, else 0.0) 0.0 sized ((-1.0) if flipped, else 1.0) 1.0
         draw UI texture (image's texture) across box sampling sample masked by mask opaque through solid with opacity opacity on frame
     if outlining:
         draw a rounded UI outline mask with radius 0.0 width 1.0 in (UI ink 33 197 210) on frame

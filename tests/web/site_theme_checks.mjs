@@ -6,8 +6,8 @@ export async function verifyIdeTheme({command,evaluate,waitFor,controls,key,capt
   const savedSource=async()=>{
     const count=await evaluate('window.siteProbe.downloads.length');
     await controls.clickText('Save source ↓');
-    await waitFor(`window.siteProbe.downloads.length > ${count}`);
-    return evaluate('window.siteProbe.downloads.at(-1).content');
+    await waitFor(`window.siteProbe.downloads.length > ${count} && window.siteProbe.downloads[${count}].content !== undefined`);
+    return evaluate(`window.siteProbe.downloads[${count}].content`);
   };
   await controls.clickText('Switch to light');
   await waitFor('localStorage.getItem("dynlex-web-theme") === "light"');

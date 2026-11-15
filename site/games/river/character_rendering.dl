@@ -52,6 +52,6 @@ to [paint website river expressions for] {integer:subject} in {UI bounds:actor} 
 to begin website river scuffle in {UI bounds:box} at {floating-point number:seconds} on {UI frame:frame}:
     save the model transform in frame
     set wave to 0.0 - (the cosine of (seconds * 20.9439510239))
-    move the model in frame by x (box's x + box's width / 2.0 + wave * 4.0), y (box's y + box's height / 2.0 - 0.5 - wave * 2.5) and z 0.0
+    move the model in frame by x ((box's x + box's width / 2.0) + wave * 4.0), y (((box's y + box's height / 2.0) - 0.5) - wave * 2.5) and z 0.0
     rotate the model in frame by (0.5 + wave * 8.5) degrees around x 0.0, y 0.0 and z 1.0
-    move the model in frame by x (0.0 - box's x - box's width / 2.0), y (0.0 - box's y - box's height / 2.0) and z 0.0
+    move the model in frame by x ((0.0 - box's x) - box's width / 2.0), y ((0.0 - box's y) - box's height / 2.0) and z 0.0

@@ -3,13 +3,12 @@ import actions.dl
 import programs/commands.dl
 import games/river/rendering.dl
 import games/river/inspection/controller.dl
+import startup.dl
 
 # Replies have explicit owners and purposes. Platform services do not decide UI state.
 to get receive website reply {a pointer to JSON value:response} for {integer:job} indexed {integer:index} in {a pointer to website state:state}:
     if job = 1:
-        set state's environment to response
-        set state's view's instance's reduced motion to the JSON boolean named "reducedMotion" in response
-        apply location (the JSON member named "location" in response) to state
+        receive website environment response in state
         return true
     if job = 2:
         if response is not JSON null:
@@ -219,7 +218,5 @@ function open the DynLex website using {a pointer to UI driver:driver} with {a p
         bind (the control labeled "Live shader" in instance) in instance to (the function named "paint the website shader $") for event 1
         watch UI input in view using (the function named "read website input $")
         update UI frames in view using (the function named "advance the website frame $")
-        request "environment" containing (a new JSON value of kind the JSON null kind) for purpose 1 indexed 0 in state
-        request "location" containing (a JSON object containing [JSON text "action" is "watch"]) for purpose 0 indexed 0 in state
-        request "fetch" containing (a JSON object containing [JSON text "url" is "assets/shaders/index.json"]) for purpose 3 indexed 0 in state
+        request website environment in state
         run view

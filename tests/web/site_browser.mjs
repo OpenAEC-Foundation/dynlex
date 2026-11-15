@@ -137,7 +137,7 @@ try {
   });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: await fs.readFile(new URL('./fixtures/ui-color-probe.js', import.meta.url), 'utf8') });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], completions: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], farmDraws: [], farmFrames: [], farmClouds: [], farmWeather: [], farmMeshUploads: 0 };
+    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], completions: [], compilations: [], builds: [], downloads: [], programOutput: '', pictures: [], farmDraws: [], farmFrames: [], farmClouds: [], farmWeather: [], farmMeshUploads: 0, nonPrintingBudgetPrograms: 0 };
     const instantiate = WebAssembly.instantiate.bind(WebAssembly);
     WebAssembly.instantiate = function(bytes, imports, ...args) {
       const env = imports?.env;
@@ -217,6 +217,12 @@ try {
     window.Worker = class extends BrowserWorker {
       postMessage(message, ...args) {
         if (message.type === 'compile') window.siteProbe.compilations.push(message.payload.entry);
+        // A traced loop reaches the output cap first. Compile this synthetic
+        // non-printing program without tracing to exercise the real UI deadline.
+        if (message.type === 'compile' && message.payload.sources[message.payload.entry].includes('# Execution budget test')) {
+          window.siteProbe.nonPrintingBudgetPrograms++;
+          message = {...message, payload: {...message.payload, traced: false}};
+        }
         return super.postMessage(message, ...args);
       }
       constructor(...args) {
@@ -295,7 +301,7 @@ try {
   await waitFor('location.pathname === "/ide/index.html" && document.title === "DynLex Studio"');
   await waitFor('window.siteProbe.texts.includes("No problems found.")');
   await pause(500); await capture('ide');
-  await click(237,287);
+  await clickText('Run program ▶');
   await waitFor('window.siteProbe.texts.includes("Hello from DynLex.")');
   await click(120,480);
   await verifySourceCompletion({command,evaluate,waitFor,key,capture,
@@ -317,7 +323,7 @@ try {
   await waitFor('window.siteProbe.visible.some(text => text.includes("とうきょう"))');
   await command('Input.insertText', { text:'東京' });
   await evaluate('window.siteProbe.programOutput = ""');
-  await click(237,287);
+  await clickText('Run program ▶');
   await waitFor('window.siteProbe.programOutput.includes("東京\\n")');
   await capture('ide-executed');
   await click(120,480); await key('KeyA','a',65,2);
@@ -340,10 +346,10 @@ try {
   await command('Input.insertText',{text:'import lib/std.dl\nloop while true:\n    ignore 1'});
   await clickText('Run program ▶'); await pause(1800); await clickText('Stop program ■');
   await waitFor('window.siteProbe.texts.includes("Stopped.")');
-  await click(480,363);
+  await clickText('Shader');
   await waitFor('window.siteProbe.texts.some(text => text.startsWith("Shader compiled in"))');
   await capture('shader-default');
-  await click(190,363);
+  await clickText('Program');
   await click(1115,22);
   await waitFor('location.pathname === "/wiki/index.html"');
   await evaluate('history.back()'); await waitFor('location.pathname === "/ide/index.html"');
@@ -389,7 +395,7 @@ try {
   await evaluate(`history.pushState(null, '', ${JSON.stringify(renamedUrl)}); dispatchEvent(new PopStateEvent('popstate'))`);
   await waitFor('window.siteProbe.texts.includes("Renamed source ran.")');
   await waitFor('window.siteProbe.diagnostics.some(result => result.uri.endsWith("/renamed.dl") && result.diagnostics.length === 0)');
-  await click(1000,287);
+  await clickText('Save source ↓');
   await waitFor('window.siteProbe.downloads.some(item => item.name === "renamed.dl" && item.href.startsWith("blob:"))');
   await capture('ide-linked');
   await click(120,480); await key('KeyA','a',65,2);
@@ -419,11 +425,11 @@ try {
   await pause(500);
   assert.equal(await evaluate('window.siteProbe.paints'), staticPaints,
     'A shader without a time input kept repainting');
-  await click(190,363);
+  await clickText('Program');
   await click(120,480); await key('KeyA','a',65,2);
   await command('Input.insertText', { text: 'import lib/std.dl\nprint line "Retained program tab"' });
-  await click(480,363);
-  await click(1000,287);
+  await clickText('Shader');
+  await clickText('Save source ↓');
   await waitFor('window.siteProbe.downloads.some(item => item.name === "preview.dl" && item.content !== undefined)');
   assert.equal(await evaluate('window.siteProbe.downloads.at(-1).content'), shaderSource,
     'Switching editor tabs replaced the shader source');
@@ -433,18 +439,18 @@ try {
   await evaluate('window.siteProbe.texts.length = 0');
   await click(120,480); await key('KeyA','a',65,2);
   await command('Input.insertText', { text: 'unknown shader instruction' });
-  await click(237,287);
+  await clickText('Recompile shader ↻');
   await waitFor('window.siteProbe.texts.includes("Compilation failed.")');
   await capture('shader-failed-edit');
   assert.equal(await previewImage(), successfulPreview, 'A failed shader edit replaced the last successful preview');
   await evaluate('window.siteProbe.texts.length = 0');
   await click(120,480); await key('KeyA','a',65,2);
   await command('Input.insertText', { text: shaderSource });
-  await click(237,287);
-  await click(750,783);
+  await clickText('Recompile shader ↻');
   await waitFor('window.siteProbe.texts.some(text => text.startsWith("Shader compiled in"))');
+  await clickText('Pause preview');
   await waitFor('window.siteProbe.visible.includes("Resume preview")');
-  await click(750,783);
+  await clickText('Resume preview');
   await waitFor('window.siteProbe.visible.includes("Pause preview")');
   for (const scene of ['event-horizon', 'endless-terrain', 'nano-choreography']) {
     const url = '/ide/index.html?' + new URLSearchParams({ mode: 'shader', scene });
