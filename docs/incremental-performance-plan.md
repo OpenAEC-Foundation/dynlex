@@ -2,12 +2,20 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Latest experiment: I049 source units remain isolated
+## Latest experiment: I050 execution products remain isolated
 
-The scoped unit candidate passes the complete correctness suites and improves its
-primary unused-value edit by 17.3%. Its declared comment/active-body performance
-controls fail, so no source optimization is merged. Required remains 333 checks
-uncached in 102.378 seconds; production remains I040. The full goal is incomplete.
+Parsed ordinary execution regions now retain topology and lazy syntax products.
+The real active edit leaves 2,642 detailed source products unallocated. A verified
+source-complete retention defect is fixed, including repeated inactive/active
+edits and removed-owner pruning. Corrected source f2c4a0c0 passes all 333 required
+checks in 105.195 seconds and all 461 integration checks in
+690.694 seconds. Four complete LLVM/diagnostic comparisons agree.
+
+Both measured performance variants fail their original gates; the lifecycle
+correction has no new acceptance benchmark. No compiler optimization is merged.
+Production remains I040; the full incremental goal is incomplete. The next
+measured target is selective graph persistence, currently encoding unchanged
+entries, alongside a separately scoped startup-cost investigation.
 
 ## Current state: I040 unread-flex inference verified on master
 
@@ -3104,3 +3112,143 @@ Correctness: 46 focused builds, 159 matcher/classification contracts and 278 bro
 The complete objective remains active: semantic sections still rebuild on active edits, the global scope-set input overinvalidates source units on declarations, and resolution setup, persistence, tooling and other output paths still have broad work. Next investigate shared source/semantic catalog products and the separately measured process/configuration setup cost; do not add another whole-program proof cache or waive failed gates. Production remains I040.
 
 Evidence: i049-unit-owner-{red,root-cause}.json/report, i049-scoped-unit-{focused,contracts,regressions}/report.json, i049-scoped-unit-{primary,controls,fast-analysis,ordinary-fast,version-profile}.json, i049-scoped-unit-observed-{required,integration}.json/log, i049-scoped-unit-ir-parity/report.json and i049-unit-final-state.json.
+
+## I050: reusable semantic execution-section products
+
+Started 2026-11-15 18:20 UTC; first deadline 19:05 UTC. Previous goal turn
+answered a direct question and made no implementation progress. Current source
+starts at 56ced37a on codex/incremental-execution-products; the production compiler
+and all rejected I049 gates remain unchanged.
+
+Complete one producer/consumer boundary: persist parsed execution-section topology
+with its exact source, configuration, enclosing-scope and indentation inputs. An
+active edit must retain unchanged execution regions without evaluating their
+headers, dispatching their statements or repeating their finalization. Consumers
+receive real current-source sections and deferred syntax products. Counters must
+distinguish restored metadata from unevaluated semantic work. Start with regions
+whose parse effects consist of ordinary execution/custom sections and expression
+products; declarations, scope-rule effects and parse diagnostics still require
+their actual producer until their effects have persistent representations. This
+is one stage goal, not completion of the cross-stage objective.
+
+Before code, add minimal active-edit, nested-section, import-reparenting, trailing
+blank/boundary, diagnostic/error-repair and last-parameter-use parity tests. Verify
+against clean builds across separate compiler processes. Benchmark the existing
+real Breakout application with frozen I049 compiler 7d686114 as baseline: 12 paired
+active-body edits, seven paired uncached builds, and 15 paired unchanged/comment/
+wording controls. Keep only with correctness parity, substantial skipped section
+work (at least half of eligible unchanged headers/body dispatch), a measured active
+CPU improvement whose paired interval excludes parity, no established unrelated
+regression, and the uncached required suite <=120 seconds. Affected integration
+coverage is required before publication. No timing retry replaces a failed gate.
+If the stage does not improve the real workload, preserve it isolated and move to
+the next plan item; do not turn this into another global proof cache. At most one
+45-minute extension is allowed for substantial concrete implementation progress.
+
+### I050 first measured product: correct, not accepted
+
+Source 1ec03b4e / compiler 4c1f093d passes 21 new builds, 159 matcher/classification
+checks and 299 broader builds. The fixed original matrix completes. Active body
+CPU medians are 1.4494055 -> 1.4425745 seconds; paired ratio .997149 with interval
+[.988274, 1.017502], so no established gain. Unchanged paired CPU ratio 1.085259
+[1.004969, 1.108567] fails the unrelated control. Other controls do not establish
+a regression. No timing retry or selection replaces this candidate's failure.
+
+An active edit reuses 372 regions/785 section records/3393 source lines, reducing
+header evaluations 2360 -> 1947 and statement dispatch 4174 -> 1671. Nevertheless
+parse medians increase 12.722 -> 16.629 ms. The old and new source-outline scoped
+times remain about 3 ms: replay still constructs the same per-line deferred
+products. New work also hashes every reused source line's identity again and
+decodes another per-line metadata layer. Much of the apparent dispatch saving
+is work moved into restoration, not eliminated work. Unchanged total compiler
+wall scopes are about 20.6 -> 20.5 ms, versus process CPU 26.3 -> 28.2 ms; the
+process-setup component is confirmed by the later compilation-free version
+probe, but comparing whole-process CPU to an internal wall scope does not by
+itself attribute the entire difference. Its underlying code cause is not established.
+
+One fixed follow-up variant is authorized by the bounded iteration: share source
+line fingerprints with persisted preprocessing products, and retain syntax as
+whole execution-region products with lightweight stable line handles. Only a
+consumer needing references/syntax should allocate the corresponding detailed
+product. Keep the original deadline 19:05 UTC and all original gates/matrix sizes.
+Preserve the original failed candidate and evidence. No additional variant or
+timing retry is planned. This work does not complete the full incremental goal.
+
+### I050 lifecycle correction and single deadline extension
+
+At 19:00 UTC a four-build minimal repro confirms an omitted product-lifetime
+rule: after a source-only inactive edit, the next active edit reuses zero
+execution products; another active edit reuses one. The SourceComplete snapshot
+preserves unvisited definition/temporary products but not the new execution
+products, whose producer was also skipped. Correct that phase-publication rule,
+add the failing edit sequence before the fix, and verify the exact corrected
+compiler. Do not attach extra semantic dependencies to source input units or
+change those units' immutable input/output contract.
+
+Use the one allowed deadline extension, ending 19:50 UTC on 15 November. This
+repairs a verified lifecycle defect; it is not another optimization variant or
+a timing retry. Both original performance matrices remain failed, and no new
+acceptance attempt is authorized in this correction. Preserve the completed
+first/lazy artifacts and integration result. Rerun focused, matcher/classification,
+broader, required and integration correctness on the correction; required remains
+120 seconds. Then close and move to the measured persistence opportunity. The
+full objective remains active and incomplete.
+
+### I050 closed: lifecycle verified, performance unqualified
+
+Compiler work closed 2026-11-15T19:25:58.840498+00:00, within the single extension ending
+19:50 UTC. Final source f2c4a0c0 / compiler 712a2005 remains isolated on
+codex/incremental-execution-products. Production C++ is unchanged.
+
+The first candidate and the whole-region follow-up both fail the declared
+performance gates. The latter's 12-pair active-edit CPU medians are 1.446475 ->
+1.434477 seconds; paired ratio .992278, interval [.987646, 1.012614], establishing
+no gain. Unchanged ratio 1.046545 [1.034051, 1.065242] and wording 1.050842
+[1.014474, 1.090213] establish regressions. Comment 1.044538 [.973497, 1.076449]
+and cache-disabled cold .992591 [.963883, 1.000759] are inconclusive. Keep both
+original complete matrices; no retry or selection replaces them.
+
+The correction changes the SourceComplete publication rule to preserve the new
+execution products when their producer is skipped. The minimal red test and
+intermediate inspection confirm the omission; three repeated inactive/active
+pairs now preserve reuse. A separate removal probe confirms Complete publication
+prunes the removed owner while retaining/reusing the untouched one. No extra
+semantic dependency was attached to the immutable source input units.
+
+Exact corrected-source verification: 36 focused, 159 matcher/classification and
+314 broader builds pass (the latter include focused cases). Required: 333 / 0 / 0
+in 105.195s (106.176s observer), uncached and within 120 seconds.
+Integration: 461 / 0 / 0 in 690.694s (691.994s observer).
+Source/compiler identities remain unchanged. Twelve real builds establish full
+normalized LLVM/diagnostic parity for four edits. The corrected artifact restores
+372 execution regions / 785 metadata records / 3393 source lines; 2916 line handles
+need only 274 detailed products. Declaration headers and global setup still run.
+
+A compilation-free 61-pair version probe on the measured follow-up costs 4.889 ->
+5.453 ms CPU, paired ratio 1.103487 [1.022046, 1.180388]. Minor-fault medians rise
+949 -> 1002. A separate 31-pair loader-instrumented probe records loader phase
+cycles. This confirms a startup component; it does not establish the exact
+underlying code/link-layout cause or attribute the entire fast-build difference.
+The corrected artifact was not remeasured for acceptance.
+
+Next bounded work should begin from production, preserving these isolated
+experiments: persistent graph units shared by capture and encoding. On the
+measured follow-up, graph encoding is 32.102 ms and capture 50.801 ms; snapshot
+construction is 132.798 ms, cache writing 95.874 ms, resolution setup 115.039 ms.
+These scopes overlap their parent stages and must not be added to those parents.
+Graph persistence still encodes the entire graph even when graph entries reuse.
+Avoid thousands of loose cache files, another global proof cache, and an isolated
+header cache. Startup attribution remains a separate task. A preference question
+about future small startup tradeoffs is pending; existing gates are unchanged.
+
+The full objective is active/incomplete. Remaining work includes semantic
+declaration catalog reuse, finer source/config dependencies (including the global
+scope-set input), global resolution setup, graph/persistence units, broader parse
+effects, and non-native/tooling paths. Required-suite timing does not establish
+that all compiler regressions are correctly placed in that suite.
+
+Evidence: i050-{performance,lazy-performance,startup-profile,final-state,completion-audit}.json,
+i050-{red,lazy-red,lifetime-red}/report.json, i050-lifetime-repro.json,
+i050-product-pruning.json, i050-retained-{focused,contracts,regressions}/report.json,
+i050-retained-observed-{required,integration}.json/log,
+i050-retained-ir-parity/report.json and i050-retained-test-support/manifest.json.
