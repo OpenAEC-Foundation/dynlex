@@ -2697,3 +2697,23 @@ Evidence: i039-worker-regression-red.log, i039-auxiliary-status-red.log,
 i039-join-regression-red.log, i039-observed-required.json (preserved failed
 status-contract run), i039-fixed-observed-required.json,
 i039-cold-cpp-unit-inputs.json and i039-root-required.json.
+
+## I041: source deferral screened out by whole-build measurements
+
+The isolated experiment retains 206 more flex owners and 417 more references,
+but fails its predeclared 2% whole-build CPU gate. All 31 alternating real LEXI8
+pairs and clean executable/diagnostic comparisons complete: paired CPU ratio
+1.010983, 95% interval [0.988419, 1.031893]; wall ratio 1.005272
+[0.967034, 1.029590]. No performance change is established. The candidate
+55ed7be8 passes 30 focused, 38 independent contract and 237 broader builds.
+Full required/integration qualification is not claimed for this rejected candidate.
+Preserve its branch and evidence; do not merge it or retry its timing.
+
+Outline restoration saves only about 0.33 ms and matcher restoration about
+0.97 ms; cached-body selection rises about 2.6 ms and projection about 4.1 ms.
+The timers overlap. Proof and selection work remain the larger opportunity;
+fewer allocated references alone do not justify another cache domain. The next
+iteration profiles eligibility/dependency and match-payload availability checks
+before changing those contracts. The published I040 compiler and its verified
+102.778-second required gate remain unchanged. Evidence is
+i041-primary-stage-analysis.json and i041-binding-facts-cost-unused-flex-31.json.
