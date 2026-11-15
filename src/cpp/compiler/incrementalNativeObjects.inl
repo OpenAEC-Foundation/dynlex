@@ -146,6 +146,7 @@ struct BuildStatistics {
 	double cachedBodySelectionMilliseconds = 0;
 	double parameterCountCacheMilliseconds = 0;
 	double matcherProjectionMilliseconds = 0;
+	MatcherProjectionWork matcherProjection;
 	size_t matcherDeclarationsReused = 0;
 	size_t matcherPathSnapshotsBuilt = 0;
 	size_t matcherPathSnapshotsLoaded = 0;
