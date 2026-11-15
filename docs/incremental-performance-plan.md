@@ -3,7 +3,7 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state: I036 required unit coverage qualified
+## Current state: I036 required unit coverage published
 
 I036 moves the focused numeric-literal and class-layout C++ checks into required.
 The routing regression fails in both directions before the fix and passes afterward;
@@ -12,8 +12,10 @@ byte-identical to the accepted corrected baseline (926a3eeb). After removing bot
 test executables and their four dedicated objects, all 333 required checks pass in
 112.015 seconds (113.319 seconds observed), including their compilation. Required
 DynLex fixtures still disable incremental caching and the 120-second limit is
-unchanged. The source tree and compiler remain unchanged during the run. Master
-verification/publication is pending. This fixes two known misclassifications;
+unchanged. Merged master 42665c68 / executable a900532f also passes all 333 checks
+in 102.379 seconds (103.665 seconds observed). The source tree and compiler remain
+unchanged during both runs. The merged worktree and branch are removed; validated
+build objects are retained separately. This fixes two known misclassifications;
 the broader compiler-versus-library test boundary still needs auditing.
 
 ### I033 correctness repair published
