@@ -1,21 +1,7 @@
 struct MatcherProjectionWork {
 	double outputs = 0, tree = 0, initial = 0, selection = 0, sources = 0, declarations = 0;
 	double initialBodies = 0, final = 0, headers = 0, referenceTables = 0;
-	struct Timer {
-		double *counter;
-		Clock::time_point started{};
-		explicit Timer(double *counter) : counter(counter) {
-			if (counter)
-				started = Clock::now();
-		}
-		void stop() {
-			if (counter) {
-				*counter += elapsedMilliseconds(started);
-				counter = nullptr;
-			}
-		}
-		~Timer() { stop(); }
-	};
+	double bindings = 0, classifications = 0, inactiveCopy = 0, publishCopy = 0;
 };
 
 // Preserve the matcher boundary before receiver bodies become generated functions.
@@ -23,8 +9,8 @@ struct MatcherProjectionWork {
 struct InitialMatcherProjection {
 	MatcherProjectionWork *work;
 	explicit InitialMatcherProjection(MatcherProjectionWork *work = nullptr) : work(work) {}
-	MatcherProjectionWork::Timer measure(double MatcherProjectionWork::*counter) const {
-		return MatcherProjectionWork::Timer(work ? &(work->*counter) : nullptr);
+	IncrementalWorkTimer measure(double MatcherProjectionWork::*counter) const {
+		return IncrementalWorkTimer(work ? &(work->*counter) : nullptr);
 	}
 	struct Owner {
 		std::string path;
