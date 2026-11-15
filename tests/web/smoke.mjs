@@ -652,12 +652,17 @@ for (const fixture of ['recursive_inline_pointer_layout', 'recursive_inline_arra
 }
 assert.equal(await compileAndRun(await readFile(new URL('../required/data_section_result_probes/main.dl', import.meta.url), 'utf8')), '',
   'Independent data-section result probes must preserve compile-time type values.');
-for (const fixture of ['recursive_inline_storage_invalid', 'recursive_array_storage_invalid']) {
+for (const [fixture, message] of [
+  ['recursive_inline_storage_invalid', /recursive inline storage; use a pointer to break the cycle/],
+  ['recursive_array_storage_invalid', /recursive inline storage; use a pointer to break the cycle/],
+  ['lifecycle_missing_release', /managed class requires both retain and release sections/],
+  ['lifecycle_missing_retain', /managed class requires both retain and release sections/]
+]) {
   const source = await readFile(new URL(`../required/${fixture}/main.dl`, import.meta.url), 'utf8');
   moduleInstance.ccall('dynlex_web_set_main_source', null, ['string'], [source]);
   assert.notEqual(moduleInstance.ccall('dynlex_web_compile_and_emit_wasm', 'number', [], []), 0, fixture);
   const diagnostics = moduleInstance.ccall('dynlex_web_get_diagnostics_json', 'string', [], []);
-  assert.match(diagnostics, /recursive inline storage; use a pointer to break the cycle/, fixture);
+  assert.match(diagnostics, message, fixture);
 }
 
 // Exercise the rebuilt compiler and its embedded standard library with the

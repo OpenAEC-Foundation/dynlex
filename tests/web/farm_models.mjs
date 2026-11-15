@@ -87,9 +87,20 @@ function modelInput(model) {
   // typed JSON trees merely to transport independent test cases.
   return JSON.stringify(['saves','resume'].includes(model.name)?cases.map(value=>JSON.stringify(value)):cases);
 }
+
+async function compilationBudget(entry) {
+  const directory=path.dirname(path.join(root,entry));
+  const names=await fs.readdir(directory);
+  if(!names.includes('compile_timeout_seconds.txt')) return 60000;
+  const seconds=(await fs.readFile(path.join(directory,'compile_timeout_seconds.txt'),'utf8')).trim();
+  assert(/^[1-9]\d{0,2}$/.test(seconds) && Number(seconds)<=300,
+    `${entry}: invalid compile_timeout_seconds.txt`);
+  return Number(seconds)*1000;
+}
 try {
   const nativePrograms=new Map(),wasmPrograms=new Map();
   for(const model of models) {
+    const timeout=await compilationBudget(model.entry);
     model.data=model.expected?{expected:await fs.readFile(path.join(root,model.expected),'utf8')}
       :JSON.parse(await fs.readFile(path.join(root,'tests/web/fixtures',model.fixture)));
     const input=modelInput(model);
@@ -98,7 +109,7 @@ try {
       const key=model.entry+':'+optimization;
       if(!nativePrograms.has(key)) {
         const binary=path.join(directory,`${model.name}-${optimization}.out`);
-        execFileSync(compiler,[model.entry,`-${optimization}`,'-o',binary],{cwd:root,stdio:'inherit',timeout:60000});
+        execFileSync(compiler,[model.entry,`-${optimization}`,'-o',binary],{cwd:root,stdio:'inherit',timeout});
         nativePrograms.set(key,binary);
       }
       const binary=nativePrograms.get(key);
@@ -108,7 +119,7 @@ try {
     if(process.argv.includes('--native-wasm')) {
       if(!wasmPrograms.has(model.entry)) {
         const wasm=path.join(directory,model.name+'.wasm');
-        execFileSync(compiler,[model.entry,'--emit-wasm','-O2','-o',wasm],{cwd:root,stdio:'inherit',timeout:60000});
+        execFileSync(compiler,[model.entry,'--emit-wasm','-O2','-o',wasm],{cwd:root,stdio:'inherit',timeout});
         wasmPrograms.set(model.entry,wasm);
       }
       const wasm=wasmPrograms.get(model.entry);

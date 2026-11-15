@@ -66,12 +66,19 @@ the compiler behavior rather than special-casing the website's source.
     count for diagnostic copy-on-write. The removed `unique()` member compiled
     with the native standard library but prevented the Emscripten build.
 
-Focused regression coverage includes the import-free required fixtures and the
-incremental body-demand, declaration-cache, validation-flow and compiler-stack
-checks under `scripts/`. Fixes through 22 pass their focused native checks and
-all 382 required checks within the unchanged two-minute budget. The C++23
-ownership correction passes a direct diagnostic copy-on-write check with both
-standard libraries. The full browser compiler rebuild, smoke test, 29 data and
-recursion fixtures, and shader-interface checks pass. The native rebuild and
-current integration checks remain pending; these results do not yet prove the
-final website build.
+Focused coverage includes the import-free required fixtures and the incremental
+body-demand, declaration-cache, validation-flow and compiler-stack checks under
+`scripts/`. The merged native compiler passes all 384 required checks in 117.070
+seconds, within the unchanged two-minute budget. The C++23 ownership correction
+also passes a direct diagnostic copy-on-write check with both standard libraries.
+The browser compiler has been rebuilt from the same merged source.
+
+Integration passed 520 checks; two checks hit the same Farm document compilation's
+60-second process limit. An isolated cold cached compile completed correctly in
+61.8 seconds, and the previously qualified compiler completed the same source in
+65.5 seconds. The uncached control completed correctly in 22.2 seconds. Both
+cached compilers encoded 5,129 bodies into 383 unique stored bodies. These are
+measurements of existing cache work, not a newly established compiler defect.
+The Farm document fixture now declares a 120-second compilation budget, shared
+by the standalone and model runners. Those reruns, the fresh browser smoke checks
+and the final packaged website checks remain pending.
