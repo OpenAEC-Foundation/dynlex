@@ -3281,3 +3281,22 @@ fresh inference. Calls already register direct callee reads before inference or
 replay; retain direct section reads and follow those callee edges instead of
 publishing a cache-history-dependent transitive view. Constraint-probe closure
 tracking is unchanged. Both cases remain exact warm/fresh graph parity checks.
+
+### I052: include failed constraint snapshots; one bounded extension
+
+At 21:02 UTC the completed e50e191a / df9f4483 checks are 24 focused,
+159 matcher/classification and 207 broader compilations, all 333 required checks
+in 97.883 observer seconds, and four complete normalized LLVM/diagnostic edit
+comparisons. The library run is live and will finish on its unchanged inputs.
+These results do not qualify publication yet: inspecting every consumer found
+that captureConstraintGraph still collects only materialized references. A
+six-line failed-constraint repro and a separate red regression confirm that it
+loses the unchanged second owner's source edges after editing the first owner.
+
+Migrate this last consumer to the same versioned match facts. Retain them in
+failed constraint snapshots, and allow native/inference graph capture to consume
+the newer failed-stage match producer independently of its older typed graph.
+Add failed/fresh graph parity and repair tests before changing the compiler.
+Use the single additional iteration, ending 21:53 UTC on 15 November. Complete
+exact-source verification and measure correctness-repair costs; do not claim a
+speedup or merge the partial fix. No second extension or timing retry is planned.

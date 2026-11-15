@@ -61,6 +61,8 @@ def check_deferred_graph(root, build):
     compare_current()
     check_selected_dependencies(root, build)
     check_deferred_producer_version(root, build)
+    from test_incremental_constraint_graph import check_constraint_graph
+    check_constraint_graph(root, build)
 
 
 def check_deferred_producer_version(root, build):

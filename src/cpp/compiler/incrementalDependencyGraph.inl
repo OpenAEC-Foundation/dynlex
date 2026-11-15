@@ -26,7 +26,7 @@ Json captureSectionDependencyGraph(
 	IncrementalInferenceReads &inferenceReads, const Json &probeLookups, BuildStatistics &statistics,
 	std::map<std::string, std::string> &fingerprints, InferenceGlobalInputs &globalInputs, Json *previous = nullptr,
 	const std::unordered_set<const Section *> &stable = {}, const RetainedGraphVariants &retained = {},
-	const IncrementalInferenceProducts *products = nullptr
+	const IncrementalInferenceProducts *products = nullptr, const Json *previousMatched = nullptr
 ) {
 	const bool hadPrevious = previous != nullptr;
 	Json graph =
@@ -38,7 +38,8 @@ Json captureSectionDependencyGraph(
 	Json &reverse = graph.at("reverse");
 	Json &instantiations = graph.at("instantiations");
 	MatchedDependencyFacts matchedFacts(
-		context, program.at("all_function_projection"), paths, std::move(graph.at("matched")), statistics
+		context, program.at("all_function_projection"), paths,
+		previousMatched ? *previousMatched : std::move(graph.at("matched")), statistics
 	);
 	const Json &priorLookups = graph.at("callable_lookups");
 	InferenceUnitInputs lookupInputs(context, program.at("all_function_projection"), paths, statistics, fingerprints);

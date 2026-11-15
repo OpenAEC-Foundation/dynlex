@@ -1575,6 +1575,9 @@ Source-match edges are separate products from inferred selections and reads. The
 producer version includes the owning definition's body layout and resolved-match
 identity. An unchanged encoded body retains these edges without constructing its
 references; a missing or changed product demands only that owner's match result.
+Failed constraint snapshots retain the same source-match products independently
+of ordinary typed inference. Repairing a constraint can consume those newer
+matches without reconstructing unrelated bodies from an older native snapshot.
 Section reads record direct dependencies. Trial ancestors follow the recorded
 callee edges, so fresh and retained callee inference produce the same section
 dependency view. Constraint-probe observations retain their own read closure.

@@ -692,7 +692,7 @@ bool compileIncrementally(
 			auto constraintSnapshotStart = Clock::now();
 			Json constraintState = captureCurrentConstraintState(
 				context, *recording, resolvedFunctionProjection, sectionPaths, inferenceReads, frontendDiagnosticUnits,
-				priorConstraints, compiled, reuseTypeInference, previous ? &*previous : nullptr
+				priorConstraints, compiled, reuseTypeInference, previous ? &*previous : nullptr, statistics
 			);
 			statistics.constraintSnapshotMilliseconds += elapsedMilliseconds(constraintSnapshotStart);
 			statistics.expressionParseHits = parserCache.hits();
@@ -870,7 +870,8 @@ bool compileIncrementally(
 						result.at("all_function_projection").at("constraint_probe_schedule").at("callable_lookups"), statistics,
 						inferenceInputFingerprints, products.globalInputs(),
 						priorInference ? &priorInference->at("section_dependency_graph") : nullptr, graphStable,
-						retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr), &products
+						retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr), &products,
+						priorMatchedDependencies(priorConstraints, priorInference)
 					);
 					statistics.dependencyGraphMilliseconds = elapsedMilliseconds(graphStart);
 					retainInferenceInputPaths(
@@ -944,7 +945,8 @@ bool compileIncrementally(
 						directory, captureFailedInferenceState(
 									   context, *recording, resolvedFunctionProjection, sectionPaths, inferenceReads,
 									   inferenceReuse.get(), summaryStore, statistics, inferenceInputFingerprints,
-									   priorInference, graphStable, previous ? &*previous : nullptr, products
+									   priorInference, graphStable, previous ? &*previous : nullptr, products,
+									   priorMatchedDependencies(priorConstraints, priorInference)
 								   )
 					);
 					statistics.snapshotMilliseconds += elapsedMilliseconds(snapshotStart);
