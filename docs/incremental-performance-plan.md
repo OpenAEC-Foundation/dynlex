@@ -3,7 +3,13 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state after I026
+## Current state after I027
+
+I027 is unaccepted: source-owner retention skips most reference allocations,
+but the 31-pair unused-edit CPU comparison failed its >=2% improvement gate.
+Its correctness checks pass; its compiler code remains isolated and unmerged.
+Published compiler behavior remains the qualified I026 version. Next is an
+independent P14 projection-metadata iteration from master.
 
 I026 fixes an independently reproduced compiler assertion for a called function
 constructing a class with one missing lifecycle section. Pair validation now
@@ -2069,3 +2075,94 @@ restoration 5.235 ms. It still evaluates 2,360 section headers and dispatches
 4,174 body lines; classification reuses 1,747 inputs but handles 12,015 edges.
 Outline skipping alone cannot establish compiler-wide incrementality. Detailed
 counters and timing-scope caveats are in `next-frontend-cost-evidence.json`.
+
+## I027: source-owner retention rejected by the measured acceptance gate
+
+The candidate remains isolated on `codex/source-owner-qualification`, source
+`43337883` (compiler built from `134c941a`; the later commit only migrates three
+ownership-test implementations). Executable SHA-256:
+`fbef84fe75ea718de4923b4ab4cc46e1cf9c5fe2eaeb4def9161adedcc394446`.
+Baseline is published compiler `1b4056412848c1159440be3222419af63147f214d8ec8f7a79c95f5bbf0d745e`.
+No compiler code from this experiment is merged. The complete incremental goal
+remains active and incomplete.
+
+The experiment retains source outlines/references through classification and
+initial/final matching until demand. It also fixes the global-precedence reuse
+proof when no concrete reference replay keys exist. All 198 focused builds pass,
+including activation, parameter retraction, failed lookup and lifecycle cascades.
+The C++ ownership products are fully migrated to the changed interface. Three
+real-program edits match complete normalized fresh/incremental LLVM text and
+diagnostics. Required **331/0/0 in 106.816 seconds**; integration **463/0/0 in
+796.920 seconds**, on unchanged compiler bytes.
+
+On frozen LEXI8 Breakout, the unused edit creates 889 pattern references instead
+of 6,308, and restores 1,892 outline nodes instead of 12,007. This is actual work
+avoided, but does not by itself meet the performance criterion. The initial
+seven pairs suggested a 3.2% median paired CPU gain. The subsequent 31-pair
+comparison did not confirm it: ratio **1.0115**, interval **0.9875–1.0199**.
+The predeclared >=2% unused-edit CPU improvement with confidence excluding parity
+therefore failed. Do not publish the favorable seven-pair estimate as the result.
+
+All cases below use identical frozen application sources, paired alternating
+execution, matching diagnostics/executable artifacts, and no GUI launch. Times
+are median child CPU seconds. The ratio is the median of per-pair candidate /
+baseline ratios; it differs from the ratio of the two medians.
+
+| Case | Pairs | Baseline CPU s | Candidate CPU s | Paired ratio | 95% interval |
+| --- | ---: | ---: | ---: | ---: | --- |
+| unused | 31 | 0.617899 | 0.618058 | 1.0115 | 0.9875–1.0199 |
+| body | 7 | 1.518385 | 1.504107 | 0.9895 | 0.9746–0.9987 |
+| lives | 7 | 1.932733 | 1.878451 | 0.9933 | 0.9531–0.9937 |
+| cold | 7 | 5.513669 | 5.522594 | 0.9998 | 0.9897–1.0150 |
+| unchanged | 15 | 0.031879 | 0.031478 | 1.0285 | 0.9438–1.0491 |
+| comment | 15 | 0.031826 | 0.031503 | 0.9843 | 0.9488–1.0871 |
+| wording | 15 | 0.035817 | 0.037346 | 1.0203 | 0.9781–1.0661 |
+
+The larger comparison shows where the saving was consumed: median parsing
+16.092→11.100 ms and resolution 296.677→293.746 ms, but matcher projection
+43.554→49.666 ms and cache writing 28.243→31.173 ms. Total reported time is
+553.431→557.793 ms. These are nested wall timers; do not sum them. Earlier owner
+preparation also moves metadata loading ahead of the classification timer, so
+the lower classification/load figures are not equivalent end-to-end savings.
+
+The first required run timed out at 120 seconds. It is preserved, not counted as
+a pass. Standalone per-check profiles and paired small-program diagnostics
+followed. The paired small-program child-CPU ratio was 0.9978, with interval
+0.9832–1.0228. Its parent wall timing was invalidated by a diagnostic writer
+repeatedly serializing a growing report; the harness finished and is not reused
+for acceptance. A later process sample traced >3 cores of CPU use to the peer's
+automated software-rendered browser test. After coordination, the unchanged
+required gate passed at 106.816 s. The original timeout had pressure evidence
+but no per-process attribution; do not assign those later PIDs retroactively.
+
+Started 00:24:24 UTC on 15 November; first deadline 01:09:24. One allowed
+progress-based extension ends 01:54:24. Its recording was 26 seconds late after
+a diagnostic-report read failed during a write; this overrun is recorded in
+external state. No further extension is taken.
+
+Raw evidence: `.cache/incremental-evidence/structured-20261113/` contains
+`i027-start-state.json`, `i027-cost-summary.json`, individual paired reports,
+`i027-projection-consumer-audit.json`, both required reports, standalone profiles,
+`i027-ir-parity/report.json`, and `i027-integration.json/log`. Archived compiler
+paths and hashes remain reproducible; duplicate archived baseline bytes were
+hard-linked only after verifying equality, reclaiming 784 MiB.
+
+### Next independent goal: I028 / P14 owner projection metadata
+
+Start from current local master, not the unaccepted source-owner branch. Scope
+and measure projection selection, source views, numeric input contexts, header
+products and reference-table capture separately. Current code reconstructs or
+copies broad JSON products and repacks reference tables even when many owners
+are unchanged. Use the existing content-addressed matcher store to retain
+unchanged products; preserve positive/negative lookup inputs, numeric spellings,
+source visibility, and initial/final matching boundaries. Do not introduce a
+general storage engine or accept work merely because timers/counters moved.
+
+Record a new start/deadline and immutable baseline before changing code. Choose
+an implementation only after measured avoidable capture/persistence work supports
+a >=3% unused-edit CPU improvement. Acceptance requires 31 paired primary
+samples with confidence excluding parity, no established common/cold regression,
+complete fresh LLVM/diagnostic parity, the uncached <=120-second required gate
+and relevant integration checks. A rejected hypothesis stays isolated. Retest
+the source-owner candidate only after an independently accepted metadata change
+provides a reason; its present failed gate is not waived.
