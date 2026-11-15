@@ -3081,7 +3081,7 @@ fix, not a reason to waive their failed fast/active performance controls.
 
 ### I049 continuation closed: correct source units, rejected performance gate
 
-Closed 2026-11-15T17:51:17.481131+00:00, before the final 17:51:06 UTC deadline. One extension used. Source 07f406e1 / compiler 7d686114 remains isolated on codex/incremental-section-input-units. No compiler optimization is merged.
+Closed 2026-11-15T17:51:17.481131+00:00. Evidence publication overran the final 17:51:06 UTC deadline by 11.5 seconds; compiler work and benchmark jobs were already terminal. One extension used. Source 07f406e1 / compiler 7d686114 remains isolated on codex/incremental-section-input-units. No compiler optimization is merged.
 
 Source inputs now reuse preprocessing chunks and their exact successful-stage references. Active minimal edits capture one of twelve input lines; inactive application edits reuse 80 units and inspect one expression with zero section evaluations. Independent parser-product eviction leaves a validated executable usable. The import-reparenting bug in the first unit candidate is fixed with consuming-scope sequence dependencies and a regression that checks runtime and clean parity. All prior failed reports remain.
 
