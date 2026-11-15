@@ -2846,3 +2846,77 @@ i046-controls.json, i046-corrected-ir-parity/report.json,
 i046-verified-observed-required.json, i046-verified-observed-integration.json,
 i046-source-input-test-support/manifest.json and
 i046-next-lazy-manifest-audit.json.
+
+## I047: lazy semantic-only native metadata
+
+Started 2026-11-15T15:02:26.737827+00:00; first deadline 2026-11-15T15:47:26.737827+00:00.
+Persist function ownership, function-instantiation identities and inactive-source
+proofs in the existing lazy payload framework. Unchanged/comment/wording builds
+should not decode them. Require no-import artifact/work tests, full dependency/
+error/eviction parity, at least 10% paired CPU improvement for all three fast
+cases over I046 across 31 pairs each, plus the complete production-baseline
+comparison matrix. Ordinary CLI timing, first-default builds, full LLVM parity,
+required uncached within 120 seconds and affected integration precede publication.
+Use one 45-minute extension only after concrete progress. I046 remains unmerged;
+its failed gate is not waived. The full incremental objective remains active.
+
+### I047 qualification and disposition
+
+Candidate 212f4697 / compiler 6cdfa6d7 moves function_sections,
+function_instantiations and inactive_projection into existing CBOR payloads.
+Code edits hydrate the inactive-source proof; only inference hydrates function
+ownership and instantiation identities. New work counters distinguish those loads.
+The no-import red test first rejects the old inline-table manifest, then covers
+exact hits, unused/active edits, failure recovery, eviction and demanded corruption.
+
+The first 31-pair matrix against I046 has paired CPU ratios 0.911415 for
+unchanged, 0.917586 for comments and 0.854417 for wording. All intervals exclude
+parity, but unchanged/comments miss the predeclared 10% minimum. Preserve this
+failed gate. One bounded extension investigates another instance of the same
+metadata issue: inference availability maps were constructed before inference was
+known to be necessary.
+
+Revision e9877232 / compiler 4c0aaeda retains availability observations and
+artifact access times without allocating semantic lookup maps on fast hits.
+The inference boundary materializes those maps. Borrowed key views remain owned
+by native/failure snapshots, and the native snapshot moves into stable ownership
+before observation. Counters show observed records with zero materializations
+on exact and unused-value hits, and materialization when inference runs.
+
+The revised matrix again completes 31 alternating pairs per fast case, with
+executable/diagnostic clean parity. CPU ratios are 0.944510 [0.932283, 0.959408]
+for unchanged, 0.942019 [0.918978, 0.975239] for comments and
+0.843000 [0.834567, 0.866386] for wording. These are approximately 6%, 6% and
+16% improvements; the first two still miss 10%. No third optimization or timing
+retry is attempted. Both matrices remain authoritative; this candidate is parked
+on codex/incremental-lazy-semantic-payloads and no source optimization is merged.
+
+Exact compiler 4c0aaeda and test source 3bdcfb2f pass 35 focused,
+159 matcher/classification and 232 broader compilations. All 333 required checks
+pass uncached in 101.845 seconds; all 461 integration checks pass in 784.328
+seconds. Source/compiler hashes remain unchanged. An earlier required run exposed
+one unmigrated payload-count assertion: an active edit now consumes nine payloads,
+including one inactive proof and two native function tables. The test now checks
+those roles explicitly. All modified code files remain below 1,000 lines.
+Matching pre/post-schema test support is preserved for historical replay.
+
+The production-baseline matrix, ordinary CLI, first-default and full LLVM
+comparison were prepared but not run because the attribution gate failed. No
+claims are made for them. Root compiler I040 stays unchanged. This closure uses
+one extension and is before its 16:32:26 UTC deadline. The full incremental
+compiler goal remains active, with semantic section construction and other broad
+stage work still incomplete.
+
+Next perform a bounded same-compiler A/A calibration. The present fast protocol
+has one randomly located application and fixed separate cache directories; warm
+samples share those directory populations. Baseline timings differed between
+experiments. That is not proof of a compiler or directory cause, but it warrants
+checking independent cache populations before attributing sub-millisecond changes.
+Output validation also repeats a digest on an exact hit; its cost is unmeasured.
+No failed gate is waived by these unimplemented follow-up hypotheses.
+
+Evidence: i047-final-state.json, i047-fast-attribution.json,
+i047-availability-fast-attribution.json, i047-availability-focused/report.json,
+i047-verified-observed-required.json, i047-verified-observed-integration.json,
+i047-lazy-metadata-test-support/manifest.json and
+i047-next-measurement-audit.json.
