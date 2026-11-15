@@ -2770,3 +2770,79 @@ Evidence: i044-screen-decision.json, i045-candidate-unused-flex.json,
 i045-controls.json, i045-first-default.json, i045-ir-parity/report.json,
 i045-observed-required.json, i045-observed-integration.json and
 i045-next-source-interface-audit.json.
+
+## I046: resolution-input products at the source boundary
+
+Started 15 November at 13:42:18 UTC; first deadline 14:27:18 UTC.
+Persist source inputs consumed by resolution before matching. Reuse the resolution
+result only when the source interface and the established inactive-source/inference
+reader proof both remain equal. Stage APIs must expose analyzed source without
+falsely advancing the live context's resolved validity. No spelling-specific edit
+handler, no unproved ignoring of numeric lookup operands, names or metadata.
+Require minimal counters, dependency/error/config/import/activation parity, at least
+10% paired CPU gain over 31 alternating real LEXI8 pairs with a 95% interval
+excluding parity, common/cold controls, full LLVM parity, required uncached within
+120 seconds and affected integration before publication. Preserve I045's failed
+strict gate; the optional fast-tolerance question does not block this work.
+The full compiler objective remains incomplete.
+
+### I046 qualification and disposition
+
+The source-boundary product records scope structure, ordered source provenance,
+metadata and lookup-bearing execution inputs. Lookup-free scalar execution values
+are separate inference inputs. Equal resolution inputs and the existing complete
+inactive-reader proof allow native-result reuse before classification, matching,
+binding and validation. Source preparation/section checks still run; the live
+context remains at AnalyzedSections. Changed inputs use the ordinary per-unit
+resolution/inference products. No pattern spelling or imported-library name is
+special-cased.
+
+Candidate source core 0a85c3b9 / frozen compiler 1f2ccc42 passes 38 focused,
+159 matcher/classification, 232 broader and 40 tail-replay compilations. A red
+counter test exposed parser-cache hits omitted by the early return; collection
+now runs on both paths. Component fixtures keep the edited function active so
+they still verify resolution/classification replay. Separate no-import tests
+verify whole-stage skipping, repeated edits, subsequent activation, last-parameter
+retraction, imported edits and failed/numeric lookups. All modified code files
+remain below 1,000 lines.
+
+On the same frozen LEXI8 program, 31 alternating pairs give CPU medians
+0.533958 to 0.155132 seconds; paired ratio 0.292624 [0.284283, 0.296316],
+about 71% less CPU. Elapsed medians are 0.536362 to 0.159590 seconds.
+Resolution, inference, object building and linking do no work on this unused
+flex-value edit. Source work still evaluates 2,360 headers and 4,174 body-line
+dispatches, reusing 44 prepared files and retaining 678 body syntax units.
+These are instrumented builds; ordinary CLI and first-default timing are unmeasured.
+
+Full normalized LLVM text and diagnostics match fresh builds for unused flex,
+unused body, active body and game-state edits. Exact compiler 1f2ccc42 and test
+source 9892d58c pass all 333 required checks uncached in 97.392 seconds
+(97.685 observed) and all 461 integration checks in 787.016 seconds
+(787.788 observed). Compiler and test-source hashes stay unchanged. Earlier
+failed runs are retained: they exposed old work-count expectations, which were
+migrated while preserving component behavior and clean-build parity.
+
+The original fd22a838 candidate's eight controls complete with output/diagnostic
+parity. Active-edit and cold CPU changes are inconclusive. Unchanged CPU ratio
+1.021492 [1.009684, 1.035221] and comment ratio
+1.058492 [1.010933, 1.104469] fail the strict gate, with median CPU differences
+of 0.666 and 0.730 ms. Their cause is unverified. Preserve those failed gates;
+no fast timing retry of the corrected executable is used to override them.
+The implementation stays on codex/incremental-resolution-inputs, unmerged.
+Root compiler I040 remains unchanged. One extension covers qualification;
+closure is before the extended 15:12:18 UTC deadline.
+
+A read-only next-step audit finds semantic-only function ownership, instantiation
+and inactive-source tables occupying about 305 KB of one 395 KB default-cache
+manifest. They are parsed on fast builds. Next evaluate lazy payloads for these
+three products using the existing storage framework; inspect every consumer,
+add red reuse/eviction/diagnostic tests and benchmark before keeping a change.
+This audit is not an implementation and does not establish the fast regression's
+cause. Section reconstruction, active-edit frontend setup and other broad stage
+work remain; the full incremental objective is active and incomplete.
+
+Evidence: i046-final-state.json, i046-corrected-unused-flex.json,
+i046-controls.json, i046-corrected-ir-parity/report.json,
+i046-verified-observed-required.json, i046-verified-observed-integration.json,
+i046-source-input-test-support/manifest.json and
+i046-next-lazy-manifest-audit.json.
