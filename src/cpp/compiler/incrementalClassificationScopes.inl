@@ -27,6 +27,7 @@ void IncrementalClassification::prepareEnvironments() {
 			for (PatternReference *reference : section->patternReferences) {
 				Unit query;
 				query.references.push_back(reference);
+				query.referenceCount = 1;
 				Json literals = queried(query);
 				if (std::ranges::none_of(declaring, [&](size_t target) {
 					return couldReadQueries(literals, query, units[target]);
@@ -41,6 +42,7 @@ void IncrementalClassification::prepareEnvironments() {
 					)
 				);
 			}
+		environment.referenceCount = environment.references.size();
 		environment.input = digest(inputs.dump());
 		if (environment.old && environment.old->at(Input) == environment.input) {
 			environment.queries = environment.old->at(Queries).get<std::string>();

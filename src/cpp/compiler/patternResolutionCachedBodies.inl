@@ -1,7 +1,7 @@
 static void restoreDeferredBodyReferences(ParseContext &context, std::list<PatternReference *> &references) {
 	if (!context.restoreDeferredBodyUnits)
 		return;
-	std::vector<ParseContext::RestoredBodyReference> restored = context.restoreDeferredBodyUnits();
+	std::vector<ParseContext::RestoredBodyReference> restored = context.restoreDeferredBodyUnits(references);
 	std::unordered_set<PatternReference *> restoredReferences;
 	for (auto &result : restored) {
 		PatternReference *reference = result.reference;

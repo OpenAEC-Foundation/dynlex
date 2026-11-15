@@ -137,8 +137,10 @@ static void computeVariableLikeCounts(ParseContext &context, std::list<Section *
 		}
 		if (initial && context.reuseInitialVariableLikeCounts && context.reuseInitialVariableLikeCounts(*section)) {
 			context.variableLikeCountUnitsReused++;
-		} else if (!section->variableLikeCounts.empty())
+		} else if (!section->variableLikeCounts.empty()) {
+			context.materializeSourceOwnerReferences(section);
 			pending.insert(section);
+		}
 	}
 	std::vector<Section *> ancestors;
 	std::function<void(Section *)> visit = [&](Section *owner) {

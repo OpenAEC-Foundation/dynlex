@@ -41,7 +41,8 @@ class GeneratedPropertyBody : public BodySyntaxProduct {
 			context.sourceExpressionPublished(&line, intrinsic);
 	}
 	bool syntaxMaterialized() const override { return materialized; }
-	PatternReference *rootReference() const override { return nullptr; }
+	void prepareReferences() override {}
+	PatternReference *rootReference() override { return nullptr; }
 	const Section &bodyOwner() const override { return owner; }
 
   private:

@@ -1,6 +1,8 @@
 """Expose actual section work and time spent before a section-stage error."""
 
 from test_incremental_declaration_projections import check_declaration_projection_units
+from test_incremental_source_owners import check_source_owner_outline_reuse
+from test_incremental_precedence_products import check_precedence_product_reuse
 
 
 def check_section_analysis_work(root, build):
@@ -18,13 +20,15 @@ def check_section_analysis_work(root, build):
     assert stats["section_header_units_evaluated"] > 0
     assert stats["section_body_lines_dispatched"] > 0
     assert stats["section_finalizations"] > 0
-    assert stats["source_outline_nodes_restored"] > 0
-    assert stats["source_outline_pattern_references_created"] > 0
-    assert stats["source_outline_variables_created"] > 0
+    assert stats["source_outline_nodes_restored"] == 0
+    assert stats["source_outline_pattern_references_created"] == 0
+    assert stats["source_outline_variables_created"] == 0
     phases = ("section_header_ms", "section_body_dispatch_ms", "section_finalize_ms", "section_locality_ms")
     assert all(stats[name] >= 0 for name in phases)
     assert sum(stats[name] for name in phases) <= stats["parse_ms"]
-    assert stats["source_outline_restore_ms"] <= stats["parse_ms"]
+    assert stats["source_outline_restore_ms"] <= stats["total_ms"]
+    check_source_owner_outline_reuse(root, build)
+    check_precedence_product_reuse(root, build)
     check_section_failure_work(root, build)
     check_declaration_projection_units(root, build)
 

@@ -44,8 +44,9 @@ Semantic section objects are still constructed against the current program.
 With `--incremental-stats`, section analysis reports header evaluations, body-line
 dispatches, finalizations and locality passes with separate scoped timings. Cached
 source-outline restoration reports actual node, pattern-reference and explicit
-variable-reference creation. Its time is nested within section dispatch operations
-and must not be added to those timings. These probes perform no clock reads on
+variable-reference creation. Restoration can also be demanded by later stages;
+its time overlaps the stage that demands it and must not be added to that stage.
+These probes perform no clock reads on
 ordinary builds without statistics. Frontend stage timings also include work done
 before an error; recording time never advances the stage's validity boundary.
 
@@ -67,6 +68,15 @@ the native incremental driver to tooling or other output modes.
 Native incremental builds retain unresolved expression syntax with a reference
 outline. An unchanged function body registers its current-source pattern and
 variable references from that outline without constructing its expression tree.
+Eligible ordinary owners can retain the outline itself before creating any
+concrete source nodes or references. Classification and the initial/final matcher
+stages validate their saved products against changed providers and lookup inputs.
+Header queries consume retained logical source-line identities; semantic demand
+or a relevant invalidation materializes the owner and publishes its references
+before downstream consumers use them. Cache reference slots follow canonical
+source order, independently of whether individual statements were parsed or
+restored first. `source_owner_units_retained` and
+`source_owner_references_retained` count domains still encoded in this process.
 Classification and matcher replay consume source identities and numeric spellings;
 their dependency checks still run when providers or bindings change. A consumer
 which needs the body materializes its syntax, reattaches the existing references,

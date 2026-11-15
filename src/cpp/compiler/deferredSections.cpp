@@ -14,10 +14,9 @@ bool prepareDeferredSectionBodies(ParseContext &context) {
 	std::vector<CodeLine *> candidates = context.codeLines;
 	size_t serial = 0;
 	for (CodeLine *line : candidates) {
-		if (!line->sectionOpening || !line->expression.rootReference())
+		if (!line->sectionOpening || !line->expression)
 			continue;
-		PatternReference *reference = line->expression.rootReference();
-		auto definitions = context.sourceDefinitions(reference);
+		auto definitions = context.sourceDefinitions(line);
 		if (definitions.size() != 1)
 			continue;
 		Section *definition = definitions.front()->section;

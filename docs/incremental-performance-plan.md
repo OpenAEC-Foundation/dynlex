@@ -2069,3 +2069,33 @@ restoration 5.235 ms. It still evaluates 2,360 section headers and dispatches
 4,174 body lines; classification reuses 1,747 inputs but handles 12,015 edges.
 Outline skipping alone cannot establish compiler-wide incrementality. Detailed
 counters and timing-scope caveats are in `next-frontend-cost-evidence.json`.
+
+## I027: qualify retained source-owner domains
+
+Started 2026-11-15T00:24:24.541994+00:00 from published `f3651078`, compiler
+`1b4056412848c1159440be3222419af63147f214d8ec8f7a79c95f5bbf0d745e`; first deadline
+2026-11-15T01:09:24.541994+00:00, with one progress-based extension available.
+The previous turn completed I026; the compiler-wide objective remains active.
+
+Restore I025's source-owner changes without its now-published lifecycle fix.
+Unchanged eligible ordinary owners must keep source outlines, classifications
+and initial/final match products encoded until actual semantic demand or a
+relevant invalidation. The existing precedence replay regression stays unchanged:
+its saved global fingerprint must remain reusable even when a retained body
+creates no concrete reference replay keys. Preserve the current tree/rule proof,
+including rejection after a precedence rule changes.
+
+Acceptance remains zero unused-owner outline allocation in the minimal case,
+activation/classification/positive+failed lookup cascades, complete normalized
+LLVM and diagnostic parity, >=2% paired real-program unused-edit CPU gain with
+confidence excluding no improvement, no established active/value/cold regression,
+and required checks uncached within 120 seconds plus relevant integration.
+Use at least seven ordinary paired samples; investigate uncertain results with
+more samples. No graphical application is launched. Section construction and
+remaining owner classes/tooling/output modes still belong to the full goal.
+
+Peer website Node PID 611122 is live at the initial resource audit. Source
+preparation and evidence freezing can proceed; heavy compiler/benchmark/test
+work waits for its actual terminal state and a fresh process inventory.
+Evidence: `i027-start-state.json`, `i027-source-owner-port.patch`; the immutable
+baseline executable is `i027-compilers/bin/baseline` in the structured folder.

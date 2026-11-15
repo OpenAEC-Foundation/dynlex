@@ -44,6 +44,7 @@ class IncrementalClassification {
 		std::optional<bool> sourceLocality;
 		const Section *sourceUnit = nullptr;
 		std::vector<PatternReference *> references;
+		size_t referenceCount = 0;
 		std::vector<size_t> edges;
 	};
 	struct Timer {
@@ -82,12 +83,17 @@ class IncrementalClassification {
 			for (const Json &output : outputs) {
 				PatternDefinition *definition = section.patternDefinitions.at(output.at(0).get<size_t>());
 				size_t wanted = output.at(1).get<size_t>(), index = 0;
-				PatternReference &reference = *unit.references.at(output.at(2).get<size_t>());
-				const Range &range = reference.range();
-				Range use(
-					range.line, range.start() + static_cast<int>(reference.pattern.getLinePos(output.at(3).get<size_t>())),
-					range.start() + static_cast<int>(reference.pattern.getLinePos(output.at(4).get<size_t>()))
-				);
+				const auto lines = sourceOwnerLines(section);
+				Range use = [&]() {
+					if (!unit.headerOnly)
+						return Range(lines.at(output.at(2).get<size_t>()), output.at(3).get<int>(), output.at(4).get<int>());
+					PatternReference &reference = *unit.references.at(output.at(5).get<size_t>());
+					const Range &range = reference.range();
+					return Range(
+						range.line, range.start() + static_cast<int>(reference.pattern.getLinePos(output.at(6).get<size_t>())),
+						range.start() + static_cast<int>(reference.pattern.getLinePos(output.at(7).get<size_t>()))
+					);
+				}();
 				forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
 					if (index++ != wanted)
 						return;
@@ -109,8 +115,21 @@ class IncrementalClassification {
 			else
 				result.push_back(&section);
 		}
+		for (Unit &unit : units)
+			if (!unit.selected && context.retainedSourceOwners.contains(unit.section))
+				context.materializeSourceOwnerReferences(unit.section);
 		work.restoreMilliseconds += elapsedMilliseconds(restoreStarted);
 		return result;
+	}
+
+	void sourceReferencesPublished(Section *section, const std::vector<PatternReference *> &references) {
+		// Before preparation, the input collector will observe these references
+		// directly. Reactivation afterward publishes into its existing unit.
+		if (!prepared)
+			return;
+		Unit &unit = units.at(sectionUnits.at(section));
+		requireCompilerInvariant(references.size() == unit.referenceCount, "classification source reference count changed");
+		unit.references = references;
 	}
 
 	std::vector<Section *> invalidated();
@@ -137,19 +156,23 @@ class IncrementalClassification {
 							!counts.snapshot().at(unit.path).contains(element.text))
 							return;
 						const Range &use = element.firstImplicitPromotionUseRange;
+						const auto lines = sourceOwnerLines(*unit.section);
+						auto line = std::ranges::find(lines, use.line);
+						requireCompilerInvariant(line != lines.end(), "parameter promotion has no owner source anchor");
 						auto reference = std::ranges::find_if(unit.references, [&](const PatternReference *candidate) {
 							const Range &range = candidate->range();
 							return range.line == use.line && range.start() <= use.start() && range.end() >= use.end();
 						});
 						requireCompilerInvariant(
-							reference != unit.references.end(), "parameter promotion has no owning reference"
+							reference != unit.references.end(), "parameter promotion has no source expression"
 						);
-						PatternReference &owner = **reference;
+						PatternReference &expression = **reference;
 						outputs.push_back(
 							Json::array(
-								{definitionIndex, index, reference - unit.references.begin(),
-								 owner.pattern.getPatternPos(use.start() - owner.range().start()),
-								 owner.pattern.getPatternPos(use.end() - owner.range().start())}
+								{definitionIndex, index, line - lines.begin(), use.start(), use.end(),
+								 reference - unit.references.begin(),
+								 expression.pattern.getPatternPos(use.start() - expression.range().start()),
+								 expression.pattern.getPatternPos(use.end() - expression.range().start())}
 							)
 						);
 					});
@@ -276,11 +299,14 @@ class IncrementalClassification {
 		std::unordered_set<std::string_view> literals;
 		std::set<std::string> result;
 		std::set<int> types;
+		Json sources = Json::object();
 		size_t capacity = 0;
 		for (const PatternReference *reference : unit.references) {
 			size_t referenceCapacity = matcherTokenCount(reference->patternElements);
-			for (SectionType type : queryTrees(*reference))
+			for (SectionType type : queryTrees(*reference)) {
 				types.insert(static_cast<int>(type));
+				sources[reference->range().line->sourceFile->uri][std::to_string(static_cast<int>(type))] = true;
+			}
 			addMatcherStartLiterals(reference->pattern.text, literals);
 			if (reference->expression)
 				for (size_t index = 0; index < reference->expression.argumentCount(); index++)
@@ -299,13 +325,14 @@ class IncrementalClassification {
 			result.insert(encoded(literal));
 		return Json{
 			{"types", std::move(types)},
+			{"sources", std::move(sources)},
 			{"literals", std::move(result)},
 			{"capacity", capacity},
 			{"unbounded", zeroWidthFunctions}
 		};
 	}
 	bool couldReadQueries(const Json &queries, const Unit &reader, const Unit &target) {
-		if (reader.references.empty())
+		if (reader.referenceCount == 0)
 			return false;
 		SectionType treeType = definitionPatternTreeType(target.section);
 		const Json &types = queries.at("types");
@@ -321,14 +348,22 @@ class IncrementalClassification {
 			})) {
 				if (!target.section->isLocal)
 					return true;
-				return std::ranges::any_of(reader.references, [&](const PatternReference *reference) {
-					auto trees = queryTrees(*reference);
-					if (std::ranges::find(trees, treeType) == trees.end())
-						return false;
-					return std::ranges::any_of(target.section->patternDefinitions, [&](const PatternDefinition *definition) {
-						return isPatternDefinitionVisibleFromSource(*definition, *reference->range().line->sourceFile);
-					});
-				});
+				for (const auto &[sourceUri, sourceTypes] : queries.at("sources").items()) {
+					if (!sourceTypes.contains(std::to_string(static_cast<int>(treeType))))
+						continue;
+					const lsp::SourceFile *source = nullptr;
+					for (const auto &[_, file] : context.importedFiles)
+						if (file->uri == sourceUri) {
+							source = file;
+							break;
+						}
+					requireCompilerInvariant(source, "classification query lost its imported source");
+					if (std::ranges::any_of(target.section->patternDefinitions, [&](const PatternDefinition *definition) {
+						return isPatternDefinitionVisibleFromSource(*definition, *source);
+					}))
+						return true;
+				}
+				return false;
 			}
 		return false;
 	}

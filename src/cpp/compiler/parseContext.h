@@ -8,6 +8,7 @@
 #include "patternMatch.h"
 #include "patternTreeNode.h"
 #include "section.h"
+#include "sourceOwner.h"
 #include "syntaxConfig.h"
 #include "variableStorage.h"
 #include <algorithm>
@@ -121,16 +122,22 @@ struct ParseContext {
 	// Installed by native incremental builds while the frontend is being compiled.
 	std::function<std::optional<PatternMatch *>(PatternReference *, MatchOptions, MatchDependencies *)> reuseMatcherResult;
 	std::function<void(PatternReference *, MatchOptions, const PatternMatch *, const MatchDependencies *)> recordMatcherResult;
-	std::function<void(const std::list<PatternReference *> &)> prepareDeferredMatcherReplay;
-	std::function<std::vector<RestoredBodyReference>()> restoreDeferredBodyUnits;
+	std::function<void(std::list<PatternReference *> &)> prepareDeferredMatcherReplay;
+	std::function<std::vector<RestoredBodyReference>(std::list<PatternReference *> &)> restoreDeferredBodyUnits;
 	std::function<bool(const Section *)> deferredBodyResolution;
 	std::function<void(Section *)> demandBodyResolution;
-	std::function<std::vector<PatternDefinition *>(PatternReference *)> deferredHeaderDefinitions;
+	std::function<std::optional<std::vector<PatternDefinition *>>(CodeLine *)> deferredHeaderDefinitions;
 	std::function<void(PatternReference *)> restoredBodyReference;
 	std::function<void(PatternDefinition &)> demandBodiesForDefinition;
 	std::map<const void *, std::function<void(Section &)>> bodyBindingObservers;
 	void restoreBodyReference(RestoredBodyReference result);
-	std::vector<PatternDefinition *> sourceDefinitions(PatternReference *reference);
+	std::vector<PatternDefinition *> sourceDefinitions(CodeLine *line);
+	std::function<void()> prepareSourceOutlines;
+	std::unordered_map<const Section *, RetainedSourceOwner> retainedSourceOwners;
+	bool sourceReferencesReady = false;
+	std::function<void(Section *, std::vector<PatternReference *>)> sourceOwnerReferencesPublished;
+	void publishSourceVariableReferences();
+	void materializeSourceOwnerReferences(Section *owner);
 	std::function<void(const std::vector<PatternReference *> &)> preparePrecedenceMatcherReplay;
 	std::function<std::vector<Section *>()> selectCachedBodiesForResolutionReuse;
 	std::function<std::vector<Section *>()> invalidateCachedClassifications;

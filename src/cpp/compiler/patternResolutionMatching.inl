@@ -404,6 +404,8 @@ bool resolvePatterns(ParseContext &context) {
 	auto setupStart = ResolutionClock::now();
 	prepareDataSectionDefinitions(context);
 	generateClassPropertyPatterns(context);
+	if (context.prepareSourceOutlines)
+		context.prepareSourceOutlines();
 	std::list<PatternReference *> bodyReferences;
 	std::list<PatternReference *> globalReferences;
 	std::list<Section *> unResolvedSections;
@@ -440,14 +442,8 @@ bool resolvePatterns(ParseContext &context) {
 	}
 	if (hadPatternParseError)
 		return false;
-	for (VariableReference *reference : context.pendingExplicitVariableReferences) {
-		requireCompilerInvariant(reference && reference->range.section(), "explicit variable reference has no source section");
-		Section *section = reference->range.section();
-		section->addVariableReference(context, reference);
-		if (!reference->declaredTypeConstraintName.empty() && !reference->definition)
-			section->registerExplicitVariableName(reference->name, reference->range);
-	}
-	context.pendingExplicitVariableReferences.clear();
+	context.sourceReferencesReady = true;
+	context.publishSourceVariableReferences();
 	for (Section *section : unResolvedSections) {
 		if (section->type == SectionType::Class)
 			populateClassPatternNames(section);
@@ -458,9 +454,13 @@ bool resolvePatterns(ParseContext &context) {
 		ref->patternElements = getPatternElements(ref->pattern.text);
 	// Compute initial VL counts before resolution
 	computeVariableLikeCounts(context, unResolvedSections, true);
+	bodyReferences.clear();
+	globalReferences.clear();
+	unResolvedSections.clear();
+	context.mainSection->collectPatternReferencesAndSections(bodyReferences, globalReferences, unResolvedSections);
 	std::vector<PatternReference *> definitionReferences(bodyReferences.begin(), bodyReferences.end());
 	SkippedCachedBodies skippedCachedBodies;
-	skipCachedBodyReferences(context, bodyReferences, skippedCachedBodies);
+	skipCachedBodyReferences(context, bodyReferences, skippedCachedBodies, definitionReferences);
 	std::list<PatternReference *> deferredBodyReferences;
 	for (auto reference = bodyReferences.begin(); reference != bodyReferences.end();) {
 		if (!bodyReferenceCanWaitForDefinitions(*reference)) {
@@ -753,7 +753,7 @@ bool resolvePatterns(ParseContext &context) {
 			if (unResolvedSections.empty() && bodyReferences.empty() && !failedBodyWorklist.hasWaiting()) {
 				if (reactivateCachedClassifications(
 						context, skippedCachedBodies, bodyReferences, unResolvedSections, definitionToReferences,
-						queueReferenceForRematch
+						queueReferenceForRematch, definitionReferences
 					)) {
 					appendRequeuedReferences();
 					continue;

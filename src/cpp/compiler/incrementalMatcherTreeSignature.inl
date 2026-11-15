@@ -76,7 +76,7 @@ struct MatcherTreeChanges {
 		}
 	}
 
-	bool mayAffect(const Section &section) const {
+	bool mayAffect(const Section &section, const Json *numeric = nullptr) const {
 		if (wildcard)
 			return true;
 		const auto contains = [&](auto &&self, const Section &body, std::string_view literal) -> bool {
@@ -105,7 +105,12 @@ struct MatcherTreeChanges {
 			if (std::ranges::all_of(path, [&](const std::string &literal) {
 				auto [entry, inserted] = present.try_emplace(literal);
 				if (inserted)
-					entry->second = contains(contains, section, literal);
+					entry->second = contains(contains, section, literal) ||
+									(numeric && std::ranges::any_of(*numeric, [&](const Json &spelling) {
+						return std::ranges::any_of(spelling, [&](const Json &value) {
+							return value.get_ref<const std::string &>().find(literal) != std::string::npos;
+						});
+					}));
 				return entry->second;
 			}))
 				return true;

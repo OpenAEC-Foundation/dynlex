@@ -72,7 +72,14 @@ class CachedSourceSyntax : public BodySyntaxProduct, public DeferredExpressionSo
 		ParseContext &context, Section *section, Section *owner, Range root, std::string_view payload,
 		std::shared_ptr<SourceSyntaxWork> work, SectionAnalysisWork *analysis
 	)
-		: context(context), owner(owner), root(root), payload(payload), work(std::move(work)) {
+		: context(context), owner(owner), section(section), analysis(analysis), root(root), payload(payload),
+		  work(std::move(work)) {}
+
+	void prepareReferences() override {
+		if (outlineReady)
+			return;
+		outlineReady = true;
+		SectionAnalysisTimer timer(analysis ? &analysis->outlineRestoreMilliseconds : nullptr);
 		size_t position = 0;
 		syntax = readParseString(this->payload, position);
 		size_t count = readParseLength(this->payload, position);
@@ -109,6 +116,7 @@ class CachedSourceSyntax : public BodySyntaxProduct, public DeferredExpressionSo
 				auto *reference = new PatternReference(SourceExpressionSite(*this, id), type);
 				reference->matchingScope = section;
 				reference->pattern.text = readParseString(this->payload, position);
+				reference->patternElements = getPatternElements(reference->pattern.text);
 				size_t frames = readParseLength(this->payload, position);
 				if (frames > this->payload.size() - position)
 					throw std::runtime_error("invalid source syntax keyframe count");
@@ -158,6 +166,7 @@ class CachedSourceSyntax : public BodySyntaxProduct, public DeferredExpressionSo
 		requireCompilerInvariant(!materializing, "recursive source syntax demand before publication");
 		if (context.demandBodyResolution)
 			context.demandBodyResolution(owner);
+		prepareReferences();
 		materializing = true;
 		size_t position = 0;
 		Expression *expression = restoreParsedExpression(syntax, position, context, root.section(), root, false, &replay);
@@ -175,7 +184,10 @@ class CachedSourceSyntax : public BodySyntaxProduct, public DeferredExpressionSo
 			context.sourceExpressionPublished(root.line, expression);
 	}
 	bool syntaxMaterialized() const override { return materialized; }
-	PatternReference *rootReference() const override { return replay.references.at(0); }
+	PatternReference *rootReference() override {
+		prepareReferences();
+		return replay.references.at(0);
+	}
 	const Section &bodyOwner() const override { return *owner; }
 	Expression *expression(size_t node) override {
 		if (!replay.expressions.at(node))
@@ -198,6 +210,9 @@ class CachedSourceSyntax : public BodySyntaxProduct, public DeferredExpressionSo
 	};
 	ParseContext &context;
 	Section *owner;
+	Section *section;
+	SectionAnalysisWork *analysis;
+	bool outlineReady = false;
 	Range root;
 	std::string payload;
 	std::string_view syntax;
