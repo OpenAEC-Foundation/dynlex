@@ -224,15 +224,24 @@ void recordInferencePayloadKeys(Json &program) {
 	}
 }
 
+using PayloadWriteWork = std::map<std::string, std::array<double, 3>>;
 template <typename Fields>
-void storeSnapshotPayloads(const fs::path &directory, Json &program, const Fields &fields, const Json *prior = nullptr) {
+void storeSnapshotPayloads(
+	const fs::path &directory, Json &program, const Fields &fields, const Json *prior = nullptr,
+	PayloadWriteWork *work = nullptr
+) {
 	Json keys = program.contains("payload_keys") ? program.at("payload_keys") : Json::object();
 	for (const char *field : fields) {
 		if (program.contains(field)) {
-			if (prior && prior->contains(field) && prior->at(field) == program.at(field) &&
-				prior->at("payload_keys").contains(field)) {
+			auto *timings = work ? &(*work)[field] : nullptr;
+			IncrementalWorkTimer compareTimer(timings ? &timings->at(0) : nullptr);
+			bool unchanged = prior && prior->contains(field) && prior->at(field) == program.at(field) &&
+							 prior->at("payload_keys").contains(field);
+			compareTimer.stop();
+			if (unchanged) {
 				keys[field] = prior->at("payload_keys").at(field);
 			} else {
+				IncrementalWorkTimer encodeTimer(timings ? &timings->at(1) : nullptr);
 				std::vector<uint8_t> encoded;
 				std::string_view payload;
 				if (isModulePayload(field)) {
@@ -243,6 +252,8 @@ void storeSnapshotPayloads(const fs::path &directory, Json &program, const Field
 								  : Json::to_cbor(program.at(field));
 					payload = {reinterpret_cast<const char *>(encoded.data()), encoded.size()};
 				}
+				encodeTimer.stop();
+				IncrementalWorkTimer writeTimer(timings ? &timings->at(2) : nullptr);
 				std::string key = digest(payload);
 				writeEntry(programPayloadPath(directory, key), payload);
 				keys[field] = std::move(key);
@@ -254,8 +265,8 @@ void storeSnapshotPayloads(const fs::path &directory, Json &program, const Field
 	program["payload_keys"] = std::move(keys);
 }
 
-void writeProgramEntry(const fs::path &path, Json program, const Json *prior = nullptr) {
+void writeProgramEntry(const fs::path &path, Json program, const Json *prior = nullptr, PayloadWriteWork *work = nullptr) {
 	recordInferencePayloadKeys(program);
-	storeSnapshotPayloads(path.parent_path(), program, programPayloadFields, prior);
+	storeSnapshotPayloads(path.parent_path(), program, programPayloadFields, prior, work);
 	writeEntry(path, program.dump());
 }

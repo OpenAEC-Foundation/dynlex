@@ -258,6 +258,18 @@ Unchanged functions carry these keys forward without copying or serializing thei
 individual reference records. A changed function decodes only its previous tables
 and retains matching references' identities through string views. The matcher index
 retains unchanged segments without repackaging their units. `matcher_projection_ms` reports capture cost.
+Projection refresh and program publication copy only prior fields that will be
+retained. Matcher, binding and initial-parameter products are published from the
+current frontend without first copying their obsolete values. The counters
+`projection_fields_copied` and `projection_fields_copy_skipped` count these
+top-level field copies, not compiler functions or semantic units.
+With `--incremental-stats`, `matcher_projection_detail_ms` separates owner
+selection, source views, declarations, body products, headers and reference tables;
+`projection_snapshot_detail_ms` separates binding/classification snapshots and
+projection copies. `payload_write_detail_ms` records comparison, encoding and
+writing times, in that order, for each stored payload. These are nested probes,
+not additive stage totals; initial body capture occurs at the earlier resolution
+boundary. Disabled probes perform no clock reads.
 An unchanged tree and surrounding declarations let unchanged bodies retain their
 matcher declaration digests. `matcher_declarations_reused` counts those retained
 without serializing the declaration again; edits inside scope rules invalidate this proof.

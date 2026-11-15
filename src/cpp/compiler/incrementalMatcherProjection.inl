@@ -1,6 +1,18 @@
+struct MatcherProjectionWork {
+	double outputs = 0, tree = 0, initial = 0, selection = 0, sources = 0, declarations = 0;
+	double initialBodies = 0, final = 0, headers = 0, referenceTables = 0;
+	double bindings = 0, classifications = 0, inactiveCopy = 0, publishCopy = 0;
+	double ownerContexts = 0, sourceOwnerSelection = 0;
+};
+
 // Preserve the matcher boundary before receiver bodies become generated functions.
 // Later projections describe expanded sections and cannot identify this stage.
 struct InitialMatcherProjection {
+	MatcherProjectionWork *work;
+	explicit InitialMatcherProjection(MatcherProjectionWork *work = nullptr) : work(work) {}
+	IncrementalWorkTimer measure(double MatcherProjectionWork::*counter) const {
+		return IncrementalWorkTimer(work ? &(work->*counter) : nullptr);
+	}
 	struct Owner {
 		std::string path;
 		const Section *section;
@@ -21,6 +33,8 @@ struct InitialMatcherProjection {
 		const ParseContext &context, const Json &observations, const std::list<PatternReference *> &deferredReferences,
 		const Json *previous, const Json &bodyDigests, const std::map<std::string, Section *> &sections, std::string_view tree
 	) {
+		auto initialTimer = measure(&MatcherProjectionWork::initial);
+		auto selectionTimer = measure(&MatcherProjectionWork::selection);
 		const Json *prior = previous ? &previous->at("matcher_projection") : nullptr;
 		priorUnits = prior;
 		declarationsReused = 0;
@@ -57,6 +71,13 @@ struct InitialMatcherProjection {
 					owner.deferredReferences.emplace_back(index, owner.references[index]);
 			owners.push_back(std::move(owner));
 		}
+		selectionTimer.stop();
+		auto sourceView = [&](const char *field, const auto &masked, bool openings, bool runs, bool execution) {
+			auto timer = measure(&MatcherProjectionWork::sources);
+			return sourceProjection(
+				context, observations, masked, openings, runs, execution, prior ? &prior->at(field) : nullptr
+			);
+		};
 		value = Json{
 			{"selected_digest", digest(selected.dump())},
 			{"declaration_digests", Json::object()},
@@ -70,18 +91,11 @@ struct InitialMatcherProjection {
 			{"reference_sources", Json::object()},
 			{"scope_rule_bodies", scopeRuleBodyPaths(sections)},
 			{"global_resolution", globalResolutionIdentity(*context.mainSection)},
-			{"sources", sourceProjection(
-							context, observations, functionBodies, false, false, false, prior ? &prior->at("sources") : nullptr
-						)},
-			{"ambient_sources",
-			 sourceProjection(
-				 context, observations, reusable, true, true, false, prior ? &prior->at("ambient_sources") : nullptr
-			 )},
-			{"ambient_nonexecution_sources",
-			 sourceProjection(
-				 context, observations, reusable, true, true, true, prior ? &prior->at("ambient_nonexecution_sources") : nullptr
-			 )}
+			{"sources", sourceView("sources", functionBodies, false, false, false)},
+			{"ambient_sources", sourceView("ambient_sources", reusable, true, true, false)},
+			{"ambient_nonexecution_sources", sourceView("ambient_nonexecution_sources", reusable, true, true, true)}
 		};
+		auto declarationTimer = measure(&MatcherProjectionWork::declarations);
 		bool stableDeclarations =
 			prior && previous->at("initial_matcher_tree") == tree &&
 			value.at("scope_rule_bodies") == prior->at("scope_rule_bodies") &&
@@ -94,6 +108,7 @@ struct InitialMatcherProjection {
 				}
 		for (const Owner &owner : owners) {
 			const std::string &path = owner.path;
+			auto contextTimer = measure(&MatcherProjectionWork::ownerContexts);
 			if (context.retainedSourceOwners.contains(owner.section)) {
 				for (const char *field : {"numeric_spellings", "reference_sources"})
 					value.at(field)[path] = prior->at(field).at(path);
@@ -118,6 +133,7 @@ struct InitialMatcherProjection {
 				value.at("numeric_spellings")[path] = std::move(numbers);
 				value.at("reference_sources")[path] = std::move(sources);
 			}
+			contextTimer.stop();
 			if (stableDeclarations && prior->at("declaration_digests").contains(path) && prior->at("bodies").contains(path) &&
 				bodyDigests.at(path) == prior->at("bodies").at(path)) {
 				value.at("declaration_digests")[path] = prior->at("declaration_digests").at(path);
@@ -127,7 +143,8 @@ struct InitialMatcherProjection {
 		}
 	}
 
-	static Json headerDefinitions(const Owner &owner, const std::map<const Section *, std::string> &paths) {
+	Json headerDefinitions(const Owner &owner, const std::map<const Section *, std::string> &paths) const {
+		auto timer = measure(&MatcherProjectionWork::headers);
 		Json headers = Json::array();
 		for (size_t index = 0; index < owner.references.size(); index++) {
 			PatternReference *reference = owner.references[index];
@@ -157,6 +174,7 @@ struct InitialMatcherProjection {
 	) {
 		if (unitsCaptured)
 			return;
+		auto timer = measure(&MatcherProjectionWork::initialBodies);
 		std::map<const Section *, std::string> paths;
 		for (const auto &[path, section] : sections)
 			paths.emplace(section, path);
@@ -189,6 +207,7 @@ struct InitialMatcherProjection {
 		const ParseContext &context, const Json &expanded, IncrementalMatcherCache &matcherCache,
 		const std::map<std::string, Section *> &sections
 	) {
+		auto timer = measure(&MatcherProjectionWork::final);
 		requireCompilerInvariant(value.is_object(), "successful frontend has no initial matcher projection");
 		requireCompilerInvariant(unitsCaptured, "successful frontend has no initial body-resolution boundary");
 		for (const char *field : {"matches", "match_entries"})
@@ -224,7 +243,9 @@ struct InitialMatcherProjection {
 			// Most bodies retain their references through expansion. Store only
 			// overrides for bodies whose earlier matcher boundary differs.
 			const Json &finalEntries = expanded.at("match_entries");
+			auto referenceTimer = measure(&MatcherProjectionWork::referenceTables);
 			std::string key = matcherCache.recordReferenceKeys(owner.references);
+			referenceTimer.stop();
 			if (!finalEntries.contains(owner.path) || finalEntries.at(owner.path).get_ref<const std::string &>() != key)
 				value.at("match_overrides")[owner.path] = std::move(key);
 		}

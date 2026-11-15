@@ -2,6 +2,7 @@
 // the resolver collects concrete references. Dependency proofs remain owned by
 // classification and the initial/final matcher stages below.
 context.prepareSourceOutlines = [&]() {
+	auto timer = initialMatcherProjection.measure(&MatcherProjectionWork::sourceOwnerSelection);
 	std::unordered_map<Section *, std::vector<BodySyntaxProduct *>> owners;
 	for (const auto &product : context.sourceSyntaxProducts)
 		owners[const_cast<Section *>(&product->bodyOwner())].push_back(product.get());

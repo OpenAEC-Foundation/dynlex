@@ -3,7 +3,23 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state after I026
+## Current state after I028
+
+I028 eliminates obsolete projection-field copies without changing cache formats
+or invalidation. On the frozen LEXI8 program, 31 unused-edit pairs improve median
+paired CPU time by 4.3%; 31 active-body pairs are consistent with parity. Common,
+cold and fast controls show no established regression. All 331 required checks
+pass uncached in 105.689 seconds, relevant native-cache integration passes, and
+three complete normalized LLVM/diagnostic comparisons agree with fresh builds.
+Local master is rebuilt and verified: all 331 required checks pass uncached in
+105.088 seconds (106.041 seconds observed), with unchanged source and compiler
+hashes. The published executable is 27d4d98e; source changes are merged.
+
+I027 is unaccepted: source-owner retention skips most reference allocations,
+but the 31-pair unused-edit CPU comparison failed its >=2% improvement gate.
+Its correctness checks pass; its compiler code remains isolated and unmerged.
+I028 is based independently on qualified I026; it does not merge the rejected
+source-owner code or waive that experiment's failed performance gate.
 
 I026 fixes an independently reproduced compiler assertion for a called function
 constructing a class with one missing lifecycle section. Pair validation now
@@ -32,9 +48,9 @@ cases. I021 removes an unconsumed full declaration table; it does not complete t
 compiler-wide goal. Semantic section construction and broad matching/binding,
 validation and persistence work still need finer reuse. Debug/trace builds disable
 major reuse paths; LSP and other output modes still need the shared frontend.
-Next: P03 source-owner deferral using the completed factory/consumer audit.
-Select unchanged owners before reconstructing outlines, with counters proving
-the work skipped and full activation/classification/lookup parity.
+Next: requalify the isolated P03 source-owner experiment on the accepted metadata
+change. Retain its allocation and activation/classification/lookup proofs, then
+make a new independent performance decision against the newly published baseline.
 
 ## Objective and constraints
 
@@ -2191,3 +2207,73 @@ complete fresh LLVM/diagnostic parity, the uncached <=120-second required gate
 and relevant integration checks. A rejected hypothesis stays isolated. Retest
 the source-owner candidate only after an independently accepted metadata change
 provides a reason; its present failed gate is not waived.
+
+### I028 / P14: qualified obsolete-projection copy elimination
+
+Started 15 November at 02:00 UTC, first deadline 02:45. The permitted single
+extension was recorded at 02:39 after a concrete implementation, 31-pair primary
+gain and 31-pair common-edit confirmation; it covers qualification/publication,
+not another optimization. Baseline source d8df9914 / executable 1b405641;
+candidate source 276fbf06 / executable fb80c834. Frozen application is d913a7db.
+
+Scoped probes rule out header capture (~0.02 ms) and reference-table packing
+(~1.3 ms) as substantial warm-edit targets. Initial selection/source views each
+cost ~6–7 ms. A previous function projection copy costs ~8 ms and the next program
+snapshot copies it again for ~11 ms, before replacing its fields. An actual
+snapshot microprobe measures copy/discard at 18.240 ms versus 0.526 ms retaining
+other fields. The implementation omits only explicitly replaced stage products;
+all current products are still published and inferred stage data remain intact.
+The primary candidate copies 42 top-level fields and skips six obsolete copies.
+This is metadata-copy work, not a claim that six compiler functions were skipped.
+
+Paired CPU results (medians, seconds; ratios are medians of per-pair ratios):
+
+| Case | Pairs | Baseline | Candidate | Paired ratio | 95% interval |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Unused function body | 31 | 0.584749 | 0.562692 | 0.956981 | 0.948728–0.971688 |
+| Active body | 31 | 1.436991 | 1.436959 | 0.994673 | 0.989732–1.004880 |
+| Gameplay state | 7 | 1.817870 | 1.798597 | 0.991300 | 0.979361–1.014668 |
+| Cache-disabled build | 7 | 5.302093 | 5.340269 | 1.008253 | 0.994081–1.028553 |
+| Unchanged | 15 | 0.028904 | 0.028681 | 0.988410 | 0.972927–1.006248 |
+| Comment | 15 | 0.029780 | 0.029485 | 0.993527 | 0.961850–1.006859 |
+| Config wording | 15 | 0.037387 | 0.035951 | 0.960653 | 0.899995–1.066496 |
+
+An initial seven-pair active-body estimate suggested a slowdown; the complete
+31-pair confirmation is consistent with parity. Its first attempt failed on
+baseline sample 22 with ENOSPC and is retained as incomplete, excluded from
+acceptance. Verified compression of owned parked build objects and removal of
+a byte-identical parked executable reclaimed 395 MiB without removing source or
+historical compiler evidence; the successful retry started with 841 MiB free.
+
+Qualification: ten focused stage-retention builds, 331 required checks uncached
+in 105.689 seconds, and all five relevant native-cache fixtures pass. Three real
+edits match complete LLVM text and diagnostics after removing only the inspector's
+input-path ModuleID comment. No full 463-check integration run is claimed here.
+Evidence under `.cache/incremental-evidence/structured-20261113`: `i028-cost-summary.json`,
+`i028-{projection-probe,projection-detail,focused,ir-parity}/report.json`,
+`i028-observed-{required,relevant-integration}.json`, `i028-copy-cost.json`, and
+`i028-parked-build-compaction.json`. Local-master publication is recorded below.
+The full compiler-wide incremental goal is active and incomplete.
+
+
+I028 local-master verification: source 00243667, executable 27d4d98e, all 331
+required checks uncached in 105.088 seconds (106.041 seconds observed). Source and
+executable hashes remain unchanged across that run. The executable is archived
+read-only as `i028-compilers/bin/published`; root build/required reports are
+`i028-root-{build,required}.json`. No complete-incremental claim is made.
+
+Next selected goal, I029/P03: requalify the isolated source-owner retention code
+against I028. Restore its verified compressed native objects, merge local master
+into that worktree, record a new start/deadline and immutable baseline, and use
+new scoped probes to account for numeric/source-context and persistence costs.
+Require a fresh 31-pair gain with confidence excluding parity, actual zero-allocation
+work counters, full activation/classification/lookup and LLVM parity, the uncached
+120-second required gate and relevant integration. Retain the existing >=2%
+source-owner performance threshold. If it still fails, park it and select the
+next independent measured hotspot; do not waive the gate. The integration-suite
+classification audit and shared frontend/debug/tooling coverage remain open.
+
+I028 is published on master. Its merged worktree/branch are removed. A six-build
+archived baseline/candidate replay passes after removal, with identical executable
+output and unchanged compiler/data hashes; the temporary data-root restoration
+cleans up afterward. Evidence: `i028-archived-replay.json/log`.

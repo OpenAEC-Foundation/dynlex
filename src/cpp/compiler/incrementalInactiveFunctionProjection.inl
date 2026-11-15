@@ -5,7 +5,7 @@
 std::optional<Json> refreshInactiveFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
 	IncrementalMatcherCache &matcherCache, const Json &prior, const Json &priorInactive, size_t &matchesRechecked,
-	size_t &matchEntriesReused
+	size_t &matchEntriesReused, ProjectionCopyWork &copyWork, double *copyMilliseconds = nullptr
 ) {
 	Json selected = Json::object();
 	std::map<const Section *, std::string> paths;
@@ -30,7 +30,9 @@ std::optional<Json> refreshInactiveFunctionProjection(
 	for (const auto &[path, _] : bodies.items())
 		if (!oldBodies.contains(path))
 			return std::nullopt;
-	Json refreshed = prior;
+	IncrementalWorkTimer copyTimer(copyMilliseconds);
+	Json refreshed = copyProjectionFields(prior, {"binding_units", "initial_parameter_counts", "matcher_projection"}, copyWork);
+	copyTimer.stop();
 	refreshed["scope_rule_bodies"] = scopeRuleBodyPaths(sections);
 	refreshed["precedence_rules"] = precedenceRulesSignature(*context.mainSection);
 	for (const auto &[path, body] : bodies.items()) {

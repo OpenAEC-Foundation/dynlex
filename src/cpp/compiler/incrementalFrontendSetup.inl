@@ -15,7 +15,7 @@ context.invalidateCachedClassifications = [&]() {
 };
 std::string initialMatcherTree;
 MatcherPathSnapshots matcherPaths(directory, compilerIdentity);
-InitialMatcherProjection initialMatcherProjection;
+InitialMatcherProjection initialMatcherProjection(showStatistics ? &statistics.matcherProjection : nullptr);
 PriorMatchKeys precedenceKeys;
 std::vector<BodyResolutionUnit> bodyUnits;
 IncrementalBodyDemand bodyDemand(context, matcherCache, frontendState, matcherPaths, initialParameterCounts);
@@ -26,11 +26,17 @@ context.reuseMatcherResult = std::bind_front(&IncrementalMatcherCache::reuse, &m
 context.recordMatcherResult = std::bind_front(&IncrementalMatcherCache::record, &matcherCache);
 context.prepareDeferredMatcherReplay = [&](std::list<PatternReference *> &references) {
 	auto projectionStart = Clock::now();
-	classification.recordOutputs();
+	{
+		auto timer = initialMatcherProjection.measure(&MatcherProjectionWork::outputs);
+		classification.recordOutputs();
+	}
 	const Json *prior = frontendState && compatibleObservations(*frontendState, recording->observations, context)
 							? &frontendState->at("all_function_projection")
 							: nullptr;
-	initialMatcherTree = matcherTreeSignature(context);
+	{
+		auto timer = initialMatcherProjection.measure(&MatcherProjectionWork::tree);
+		initialMatcherTree = matcherTreeSignature(context);
+	}
 	initialMatcherProjection.capture(
 		context, recording->observations, references, prior, initialParameterCounts.bodies(), initialParameterCounts.sections(),
 		initialMatcherTree

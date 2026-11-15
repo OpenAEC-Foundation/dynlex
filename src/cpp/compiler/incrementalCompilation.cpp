@@ -78,6 +78,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <iostream>
 #include <mutex>
 #include <nlohmann/json.hpp>
@@ -102,6 +103,9 @@ using Clock = std::chrono::steady_clock;
 double elapsedMilliseconds(Clock::time_point start) {
 	return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
 }
+
+#include "incrementalProjectionFields.inl"
+#include "incrementalWorkTimer.inl"
 
 double processCPUMilliseconds() {
 	llvm::sys::TimePoint<> elapsed;
@@ -605,14 +609,15 @@ bool compileIncrementally(
 					finalMatcherTree == prior.at("final_matcher_tree").get_ref<const std::string &>())
 					refreshedProjection = refreshInactiveFunctionProjection(
 						context, recording->observations, sections, matcherCache, prior, previous->at("inactive_projection"),
-						statistics.inactiveProjectionMatchesRechecked, statistics.sourceProjectionWork.matchEntriesReused
+						statistics.inactiveProjectionMatchesRechecked, statistics.sourceProjectionWork.matchEntriesReused,
+						statistics.projectionCopy, showStatistics ? &statistics.matcherProjection.inactiveCopy : nullptr
 					);
 			}
 			if (compiled && !refreshedProjection && compatibleFrontendSyntax)
 				refreshedProjection = refreshTopLevelExecutionProjection(
 					context, recording->observations, sections, declarationUnits, matcherCache, initialMatcherTree,
 					frontendState->at("all_function_projection"), &statistics.sourceProjectionWork,
-					statistics.topLevelProjectionSectionsReused
+					statistics.topLevelProjectionSectionsReused, statistics.projectionCopy
 				);
 			Json resolvedFunctionProjection = nullptr;
 			if (compiled && refreshedProjection)
@@ -624,12 +629,18 @@ bool compileIncrementally(
 				);
 			if (compiled) {
 				auto projectionStart = Clock::now();
-				resolvedFunctionProjection["binding_units"] = bindings.snapshot();
-				resolvedFunctionProjection["initial_parameter_counts"] = initialParameterCounts.snapshot();
+				{
+					auto timer = initialMatcherProjection.measure(&MatcherProjectionWork::bindings);
+					resolvedFunctionProjection["binding_units"] = bindings.snapshot();
+					resolvedFunctionProjection["initial_parameter_counts"] = initialParameterCounts.snapshot();
+				}
 				resolvedFunctionProjection["matcher_projection"] =
 					initialMatcherProjection.finish(context, resolvedFunctionProjection, matcherCache, sections);
 				initialMatcherProjection.published = &resolvedFunctionProjection["matcher_projection"];
-				resolvedFunctionProjection["matcher_projection"]["classifications"] = classification.snapshot();
+				{
+					auto timer = initialMatcherProjection.measure(&MatcherProjectionWork::classifications);
+					resolvedFunctionProjection["matcher_projection"]["classifications"] = classification.snapshot();
+				}
 				statistics.matcherProjectionMilliseconds += elapsedMilliseconds(projectionStart);
 			}
 			statistics.projectionMilliseconds = elapsedMilliseconds(stageStart);
@@ -735,7 +746,12 @@ bool compileIncrementally(
 					std::cerr << *diagnostics;
 					context.diagnostics.clear();
 					statistics.reusedDiagnosticRecords = previous->at("diagnostic_records").size();
-					Json result = *previous;
+					auto copyTimer = initialMatcherProjection.measure(&MatcherProjectionWork::publishCopy);
+					Json result = copyProjectionFields(
+						*previous, {"all_function_projection", "validation_units", "inactive_projection"},
+						statistics.projectionCopy
+					);
+					copyTimer.stop();
 					result["diagnostics"] = std::move(*diagnostics);
 					result["validation_units"] = validation.snapshot();
 					result["files"] = recording->observations;
@@ -749,7 +765,9 @@ bool compileIncrementally(
 					recordSemanticSources(result, *recording, context);
 					result["linked_output"] = linkedOutputIdentity(context);
 					auto writeStart = Clock::now();
-					writeProgramEntry(programEntry, std::move(result), &*previous);
+					writeProgramEntry(
+						programEntry, std::move(result), &*previous, showStatistics ? &statistics.payloadWrite : nullptr
+					);
 					statistics.cacheWriteMilliseconds = elapsedMilliseconds(writeStart);
 				}
 			} else if (compiled) {
@@ -878,7 +896,10 @@ bool compileIncrementally(
 					recordNativeOutput(result, statistics, previous ? &*previous : nullptr);
 					result["linked_output"] = linkedOutputIdentity(compiled);
 					auto writeStart = Clock::now();
-					writeProgramEntry(programEntry, std::move(result), previous ? &*previous : nullptr);
+					writeProgramEntry(
+						programEntry, std::move(result), previous ? &*previous : nullptr,
+						showStatistics ? &statistics.payloadWrite : nullptr
+					);
 					statistics.cacheWriteMilliseconds = elapsedMilliseconds(writeStart);
 					return true;
 				});
