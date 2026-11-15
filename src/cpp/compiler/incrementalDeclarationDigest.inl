@@ -75,8 +75,9 @@ class ResolvedDeclarationUnits {
 			if (body == *old)
 				continue;
 			const Section &section = *sections.at(path);
-			if (!reusableCodegenSection(section) || rules.contains(path) ||
-				fingerprint(section) != *units.at(&section).priorFingerprint)
+			// Declaration equivalence is independent of native-body eligibility.
+			// Flex expansions still invalidate through their separate body inputs.
+			if (rules.contains(path) || fingerprint(section) != *units.at(&section).priorFingerprint)
 				return false;
 		}
 		for (auto &[_, unit] : units)
