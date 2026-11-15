@@ -232,9 +232,11 @@ bool containsNestedDefinition(const Section &section) {
 Json inactiveFunctionSections(const std::map<std::string, Section *> &sections) {
 	Json inactive = Json::object();
 	for (const auto &[path, section] : sections) {
-		if (section->type != SectionType::Function || section->patternDefinitions.empty() || section->isFlex ||
-			section->isExposed || !section->instantiations.empty() || containsNestedDefinition(*section))
+		if (section->type != SectionType::Function || section->patternDefinitions.empty() || section->isExposed ||
+			!section->instantiations.empty() || containsNestedDefinition(*section))
 			continue;
+		// Snapshot capture removes owners consumed by inference, constraint
+		// probes or retained IR, including flexes with no native instantiation.
 		inactive[path] = sectionIdentity(*section);
 	}
 	return inactive;
