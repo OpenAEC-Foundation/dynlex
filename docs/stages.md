@@ -1571,6 +1571,15 @@ that propagation. Inference variants restored from cache carry their prior call
 dependencies forward, while newly inferred variants capture current calls.
 Imported LLVM functions retain their prior variant dependencies when their bodies
 were not re-inferred.
+Source-match edges are separate products from inferred selections and reads. Their
+producer version includes the owning definition's body layout and resolved-match
+identity. An unchanged encoded body retains these edges without constructing its
+references; a missing or changed product demands only that owner's match result.
+Section reads record direct dependencies. Trial ancestors follow the recorded
+callee edges, so fresh and retained callee inference produce the same section
+dependency view. Constraint-probe observations retain their own read closure.
+`matched_dependency_facts_reused`, `matched_dependency_facts_captured`, and
+`matched_dependency_owners_demanded` report this graph work separately.
 
 When a body edit preserves its inferred interface, the compiler can reuse the
 entry point's inference and IR. This checks the top-level execution source,

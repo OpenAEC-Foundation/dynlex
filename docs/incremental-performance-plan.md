@@ -3252,3 +3252,32 @@ i050-{red,lazy-red,lifetime-red}/report.json, i050-lifetime-repro.json,
 i050-product-pruning.json, i050-retained-{focused,contracts,regressions}/report.json,
 i050-retained-observed-{required,integration}.json/log,
 i050-retained-ir-parity/report.json and i050-retained-test-support/manifest.json.
+
+## I052: preserve dependency facts for deferred source matches
+
+Started 15 November 2026 at 20:23 UTC; first deadline 21:08 UTC. This bounded
+correctness goal starts from production f004339f. Preserve the failed I051 graph
+packet experiment on codex/incremental-graph-products; no performance retry or
+gate waiver. Its active-edit CPU regression and ENOSPC report are recorded there
+and in i051-edges-partial-analysis.json.
+
+Persist matched-source dependency facts independently of aggregate forward and
+inferred edges. A retained matching producer must carry its body-layout and
+resolved-match product identity. Graph capture reuses facts only for that exact
+producer version; a changed/missing fact product demands that owner's current
+match result. Do not force unaffected source materialization, copy old inferred
+edges, or change the parity test to hide the difference. Migrate the compact
+graph codec and inspection helper together. Add minimal warm/fresh parity tests
+first, including edits to other owners and changing call/inference demands.
+Verify runtime, diagnostics, graph parity, dependency cascades, required uncached
+<=120 seconds and affected integration. This repairs actual dependency state;
+it does not complete incremental graph persistence or the full compiler goal.
+
+The initial production repro is red: editing one called owner removes a source
+edge from another owner's deferred execute scope. The first candidate fixes that
+edit while retaining the unrelated body. Adding an unused declaration then shows
+a second, distinct issue: section-level reads flatten trial ancestors only during
+fresh inference. Calls already register direct callee reads before inference or
+replay; retain direct section reads and follow those callee edges instead of
+publishing a cache-history-dependent transitive view. Constraint-probe closure
+tracking is unchanged. Both cases remain exact warm/fresh graph parity checks.

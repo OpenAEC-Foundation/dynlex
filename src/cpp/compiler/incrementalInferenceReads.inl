@@ -51,9 +51,10 @@ class IncrementalInferenceReads {
 			entry->second = std::move(query);
 		}
 		if (owner.section) {
-			bySection[sectionPaths.at(owner.section)].insert(key);
-			if (owner.direct)
+			if (owner.direct) {
+				bySection[sectionPaths.at(owner.section)].insert(key);
 				ensureScope(owner.scope, owner.section).lookups.insert(key);
+			}
 		}
 		if (owner.constraintProbe)
 			byProbe[*owner.constraintProbe].insert(std::move(key));
@@ -65,7 +66,10 @@ class IncrementalInferenceReads {
 		if (calleeScope)
 			ensureScope(*calleeScope, &dependency);
 		if (owner.section) {
-			if (owner.section != &dependency)
+			// The caller records its callee before inference or cache replay.
+			// Keep this view direct as well: flattening trial ancestors here
+			// made the graph depend on whether a callee was freshly inferred.
+			if (owner.direct && owner.section != &dependency)
 				sectionDependencies[sectionPaths.at(owner.section)].insert(path);
 			if (owner.direct) {
 				auto &node = ensureScope(owner.scope, owner.section);

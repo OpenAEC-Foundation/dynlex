@@ -104,6 +104,9 @@ struct BuildStatistics {
 	size_t dependencyGraphSectionsReused = 0;
 	size_t preinferDependencyGraphSectionsChecked = 0;
 	size_t dependencyGraphEntriesReused = 0;
+	size_t matchedDependencyFactsReused = 0;
+	size_t matchedDependencyFactsCaptured = 0;
+	size_t matchedDependencyOwnersDemanded = 0;
 	size_t dependencyGraphReverseNodesUpdated = 0;
 	size_t inactiveProjectionMatchesRechecked = 0;
 	size_t reusedDiagnosticRecords = 0;

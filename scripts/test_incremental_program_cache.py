@@ -40,6 +40,8 @@ def check_recent_cache_entries(root, build):
         assert repeated[0]["frontend_reused"], f"eviction removed retained dependencies after {case} edit"
         assert repeated[1:] == edited[1:] and not filler.exists()
     check_cache_metadata(root, build)
+    from test_incremental_deferred_graph import check_deferred_graph
+    check_deferred_graph(root, build)
 
 
 def check_cache_metadata(root, build):
@@ -121,6 +123,8 @@ def decode_graph(encoded):
     unit_keys, unit_sources = encoded["inference_unit_keys"], encoded["inference_unit_sources"]
     assert len(paths) == len(encoded["forward"]) == len(encoded["instantiations"])
     return {
+        "matched": {path: {"input": item[0], "dependencies": [paths[index] for index in item[1]]}
+                    for path, item in zip(paths, encoded["matched"])},
         "forward": {path: [paths[index] for index in edges]
                     for path, edges in zip(paths, encoded["forward"])},
         "reverse": {paths[index]: [paths[caller] for caller in callers]

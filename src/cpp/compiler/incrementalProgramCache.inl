@@ -35,6 +35,7 @@ Json encodeSectionGraph(const Json &graph) {
 		return encoded;
 	};
 	Json encodedForward = Json::array();
+	Json encodedMatched = Json::array();
 	Json encodedInstantiations = Json::array();
 	Json encodedUnits = Json::array();
 	Json unitKeys = Json::array(), unitSources = Json::array();
@@ -49,6 +50,8 @@ Json encodeSectionGraph(const Json &graph) {
 	for (const Json &path : paths) {
 		const std::string &name = path.get_ref<const std::string &>();
 		encodedForward.push_back(encodeEdges(forward.at(name)));
+		const Json &matched = graph.at("matched").at(name);
+		encodedMatched.push_back(Json::array({matched.at("input"), encodeEdges(matched.at("dependencies"))}));
 		Json variants = Json::object();
 		for (const auto &[key, edges] : graph.at("instantiations").at(name).items())
 			variants[key] = encodeEdges(edges);
@@ -97,6 +100,7 @@ Json encodeSectionGraph(const Json &graph) {
 	return Json{
 		{"paths", std::move(paths)},
 		{"forward", std::move(encodedForward)},
+		{"matched", std::move(encodedMatched)},
 		{"reverse", std::move(encodedReverse)},
 		{"instantiations", std::move(encodedInstantiations)},
 		{"inference_units", std::move(encodedUnits)},
@@ -121,11 +125,14 @@ Json decodeSectionGraph(const Json &encoded) {
 			result.push_back(paths.at(id.get<size_t>()));
 		return result;
 	};
-	Json graph{{"forward", Json::object()},			 {"reverse", Json::object()},		  {"instantiations", Json::object()},
-			   {"callable_lookups", Json::object()}, {"inference_reads", Json::object()}, {"inference_units", Json::object()}};
+	Json graph{{"forward", Json::object()},		   {"reverse", Json::object()},			 {"instantiations", Json::object()},
+			   {"matched", Json::object()},		   {"callable_lookups", Json::object()}, {"inference_reads", Json::object()},
+			   {"inference_units", Json::object()}};
 	for (size_t index = 0; index < paths.size(); index++) {
 		const std::string &path = paths.at(index).get_ref<const std::string &>();
 		graph["forward"][path] = decodeEdges(forward.at(index));
+		const Json &matched = encoded.at("matched").at(index);
+		graph["matched"][path] = Json{{"input", matched.at(0)}, {"dependencies", decodeEdges(matched.at(1))}};
 		Json variants = Json::object();
 		for (const auto &[key, edges] : instantiations.at(index).items())
 			variants[key] = decodeEdges(edges);

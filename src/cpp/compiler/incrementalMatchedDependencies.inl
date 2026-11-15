@@ -1,0 +1,55 @@
+// Matching and inference are independent producers. An encoded source owner
+// still has match dependencies, even when no concrete references exist here.
+class MatchedDependencyFacts {
+  public:
+	MatchedDependencyFacts(
+		const ParseContext &context, const Json &projection, const std::map<const Section *, std::string> &paths, Json previous,
+		BuildStatistics &statistics
+	)
+		: context(context), projection(projection), paths(paths), previous(std::move(previous)), statistics(statistics) {}
+
+	const Json &dependencies(const Section *section) {
+		const Section *owner = section;
+		while (owner->patternDefinitions.empty() && owner->parent)
+			owner = owner->parent;
+		auto [version, inserted] = versions.try_emplace(owner, nullptr);
+		if (inserted) {
+			const std::string &path = paths.at(owner);
+			if (projection.at("matches").contains(path))
+				version->second = digest(
+					projection.at("bodies").at(path).get<std::string>() + ':' +
+					projection.at("matches").at(path).get<std::string>()
+				);
+		}
+		const Json &input = version->second;
+		const std::string &path = paths.at(section);
+		if (!input.is_null() && previous.contains(path) && previous.at(path).at("input") == input) {
+			current[path] = std::move(previous.at(path));
+			statistics.matchedDependencyFactsReused++;
+		} else {
+			if (context.deferredBodyResolution && context.deferredBodyResolution(owner)) {
+				requireCompilerInvariant(!input.is_null(), "deferred match producer has no version");
+				context.demandBodyResolution(const_cast<Section *>(owner));
+				statistics.matchedDependencyOwnersDemanded++;
+			}
+			std::vector<Section *> matched;
+			collectMatchedSectionDependencies(section, matched);
+			std::set<std::string> selected;
+			for (const Section *dependency : matched)
+				selected.insert(paths.at(dependency));
+			current[path] = Json{{"input", input}, {"dependencies", std::move(selected)}};
+			statistics.matchedDependencyFactsCaptured++;
+		}
+		return current.at(path).at("dependencies");
+	}
+
+	Json snapshot() { return std::move(current); }
+
+  private:
+	const ParseContext &context;
+	const Json &projection;
+	const std::map<const Section *, std::string> &paths;
+	Json previous, current = Json::object();
+	BuildStatistics &statistics;
+	std::unordered_map<const Section *, Json> versions;
+};
