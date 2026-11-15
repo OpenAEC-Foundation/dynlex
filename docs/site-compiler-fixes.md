@@ -75,7 +75,7 @@ the compiler behavior rather than special-casing the website's source.
 
 Focused coverage includes the import-free required fixtures and the incremental
 body-demand, declaration-cache, validation-flow and compiler-stack checks under
-`scripts/`. The merged native compiler passes all 386 required checks in 107.387
+`scripts/`. The merged native compiler passes all 386 required checks in 108.093
 seconds, within the unchanged two-minute budget. The C++23 ownership correction
 also passes a direct diagnostic copy-on-write check with both standard libraries.
 
@@ -103,6 +103,14 @@ recorded save scenarios. The unchanged model now resides beside the Farm
 document fixture and uses its existing budget. Its rerun exposed the separate
 inference-product lifetime bug described above.
 
-The latest cache fix passes the native build, snapshot tests and deterministic
-eviction reproducer. Fresh required, integration, browser-compiler and packaged
-website qualification remain pending for that fix.
+The latest cache fix passes the native build, snapshot tests, deterministic
+eviction reproducer, all 386 required checks and all 520 integration checks.
+The browser build also passes: the native-only cache files are excluded from
+that target, so its validated Wasm binary is unchanged. Shipped-compiler
+regressions, shader-input checks and the startup-order fixture pass. Packaged
+website and shared-UI qualification also pass: 20 selected native UI checks,
+shared source/control checks through both compiler frontends, and the general
+site, River, character inspection and Farm flows across WebGPU and both WebGL
+capability configurations. Browser checks cover syntax colors, hover, navigation,
+quick fixes, undo, themes, downloads, gameplay, persistence and deadline recovery.
+The tested candidate is served by the local preview.
