@@ -323,6 +323,9 @@ These products describe resolved declarations, not inferred body behavior; match
 inference, diagnostic and backend dependencies still govern those later results.
 Source, syntax-profile, matcher-tree, scope-rule and global-binding proofs can retain unchanged declaration inputs without
 auditing them again. Changed bodies still audit their settled signatures before this proof may stop propagation.
+Declaration retention is independent of native-body eligibility: a flex body edit audits its own signature and
+can retain unrelated declaration inputs when that signature is unchanged. Its expansion, inference, diagnostics
+and generated code still follow their separate body dependencies. Scope-rule edits remain outside this proof.
 Inactive-source eligibility is checked before requesting its declaration aggregate, so an ineligible source edit
 does not force an unused whole-program input audit.
 

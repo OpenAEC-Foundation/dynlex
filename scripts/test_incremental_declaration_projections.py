@@ -1,6 +1,7 @@
 """Resolved declaration projections follow semantic changes, not body text."""
 
 from test_incremental_program_cache import read_program
+from test_incremental_flex_declarations import check_flex_declaration_retention
 
 
 def check_declaration_projection_units(root, build):
@@ -35,6 +36,7 @@ def check_declaration_projection_units(root, build):
     assert after["declaration_fingerprints"]
     check_failed_declaration_projection_units(root, build)
     check_declaration_syntax_profile(root, build)
+    check_flex_declaration_retention(root, build)
 
 
 def check_failed_declaration_projection_units(root, build):
