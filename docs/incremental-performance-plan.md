@@ -2,7 +2,52 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Latest experiment: I050 execution products remain isolated
+## Latest iteration: I052 dependency correctness qualified on the work branch
+
+Source-match dependency facts now have body-layout and resolved-match producer
+versions, separate from inferred calls and reads. Native and failed constraint
+snapshots share the same collector. A repaired build can consume newer failed-stage
+matches without restoring unrelated bodies. Section reads retain direct callee
+edges instead of flattening trial ancestors differently on fresh and reused paths.
+
+Source 60d457cd / compiler dbc70f43 passes 30 focused, 159 matcher/classification
+and 207 broader compilations. All 333 required checks pass uncached in 96.449s
+(98.197s observed); four complete fresh/incremental LLVM and diagnostic comparisons
+agree. The exact corrected compiler passes all 461 library/runtime/tooling checks
+in 774.665 runner seconds. Production remains I040 until merged checks pass.
+
+This necessary correctness repair has measured costs; it is not an optimization
+acceptance. The frozen real application comparison gives these CPU medians:
+
+| Case | Production seconds | Corrected seconds | Median paired ratio, 95% interval |
+| --- | ---: | ---: | --- |
+| Active body edit, 15 pairs | 1.427087 | 1.508617 | 1.059222 [1.049230, 1.075357] |
+| Unchanged, 31 pairs | 0.029215 | 0.030222 | 1.048158 [1.029151, 1.071753] |
+| Comment, 31 pairs | 0.029526 | 0.030868 | 1.045451 [1.016039, 1.060121] |
+| Wording, 31 pairs | 0.034853 | 0.036156 | 1.034086 [1.014315, 1.050711] |
+| Cache-disabled cold, 3 pairs | 5.333248 | 5.344466 | 0.993667 [0.963765, 1.032428] |
+
+All executable and diagnostic comparisons pass. Active-edit graph capture grows
+46.701 -> 83.259 ms; graph encoding grows 32.065 -> 48.647 ms. Payload loading
+grows 62.382 -> 82.212 ms. These nested scopes are not additive with their parent
+stages. Both artifacts lower one native function and reuse 367 functions.
+The representation currently constructs records even for unversioned producers;
+sharing or omitting those non-reusable products is a measured next opportunity.
+
+A separate 61-pair compilation-free version probe establishes a startup component:
+4.391 -> 5.253 ms CPU, paired ratio 1.192209 [1.159777, 1.240166], minor faults
+867 -> 1004. The ELF dependencies, relocation-section size, writable segments and
+initializer-array size are unchanged; text grows 12,096 bytes and later segments
+move three pages. The exact loader/kernel/layout cause is not established. This
+probe is not an acceptance retry or a waiver of the existing optimization gates.
+
+The full goal remains active. Semantic section construction, broad resolution
+setup, finer source/configuration dependencies, persistence, tooling and other
+output paths still need dependency-driven reuse. Evidence: i052-cost-analysis.json,
+i052-complete-{focused,contracts,regressions,ir-parity}/report.json,
+i052-complete-observed-required.json and i052-startup-profile.json.
+
+## Previous experiment: I050 execution products remain isolated
 
 Parsed ordinary execution regions now retain topology and lazy syntax products.
 The real active edit leaves 2,642 detailed source products unallocated. A verified
