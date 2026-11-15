@@ -3,7 +3,20 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state: I033 correctness repair published
+## Current state: I036 required unit coverage qualified
+
+I036 moves the focused numeric-literal and class-layout C++ checks into required.
+The routing regression fails in both directions before the fix and passes afterward;
+the two checks no longer run only under integration. The compiler rebuild is
+byte-identical to the accepted corrected baseline (926a3eeb). After removing both
+test executables and their four dedicated objects, all 333 required checks pass in
+112.015 seconds (113.319 seconds observed), including their compilation. Required
+DynLex fixtures still disable incremental caching and the 120-second limit is
+unchanged. The source tree and compiler remain unchanged during the run. Master
+verification/publication is pending. This fixes two known misclassifications;
+the broader compiler-versus-library test boundary still needs auditing.
+
+### I033 correctness repair published
 
 I033 fixes a pre-existing incremental diagnostic-order mismatch. A four-line
 provider-removal edit mixed a live edited body with an earlier reactivated cached
@@ -45,11 +58,17 @@ and measured evidence without adding it to master or running full suites for it.
 P03 needs larger semantic section products shared with their consumers; caching
 keyword parsing alone adds bookkeeping without a demonstrated compilation gain.
 
-Next: repair the required-suite boundary for focused C++ numeric-literal and
-class-layout checks, then investigate complete semantic section products.
-The required/integration boundary also needs repair: focused numeric-literal and
-class-layout checks currently run only in integration. The current 331-check gate
-must not be described as all compiler regression coverage.
+Next: investigate semantic owner products shared with resolution, rather than
+adding another header-only cache. In the I034 real-program baseline, median
+resolution is 301.919 ms of 542.060 ms total, while section/header preparation is
+a small fraction. An owner product must carry its source/scope layout, declaration
+metadata and stable input identity into its consumers, so they can reuse that
+result without rebuilding it or independently fingerprinting the same body.
+The minimal regression must change a body in the same physical file, prove other
+owners skip section/declaration preparation, and cover last-parameter removal,
+new/removed overloads, syntax changes and diagnostic recovery with clean parity.
+Measure the combined producer/consumer cost and persistence before accepting it.
+The current required gate must not be described as all compiler regression coverage.
 
 ### Previously published I030
 
