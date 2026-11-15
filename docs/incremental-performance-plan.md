@@ -2,6 +2,16 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## Latest experiment: I049 remains isolated
+
+I049 proves that an irrelevant inactive-value edit can skip all semantic section
+construction. Its compact candidate improves that fixed real-program case by
+18.3%, but fast controls regress about 5% and active-body edits about 1.2%.
+The unchanged acceptance gate therefore fails; no I049 compiler code is merged.
+All 333 required checks pass uncached in 104.468 seconds. Production remains I040.
+The next source-stage work must reuse smaller file/chunk inputs, including on
+active edits, rather than recapturing a whole-program source-input product.
+
 ## Current state: I040 unread-flex inference verified on master
 
 Started 15 November at 10:02:10 UTC, first deadline 10:47:10. Production
@@ -2920,3 +2930,116 @@ i047-availability-fast-attribution.json, i047-availability-focused/report.json,
 i047-verified-observed-required.json, i047-verified-observed-integration.json,
 i047-lazy-metadata-test-support/manifest.json and
 i047-next-measurement-audit.json.
+
+## I048: fast-path benchmark A/A calibration
+
+Started 2026-11-15T16:00:17.005956+00:00; first deadline 2026-11-15T16:45:17.005956+00:00.
+Run the exact frozen I046 compiler as both benchmark labels on the original
+frozen LEXI8 inputs. Seven independent workspace/cache populations each run
+16 alternating pairs for unchanged, comment and wording cases. Preserve every
+original result, source/executable/diagnostic parity and fast work counters.
+Report between-population variation separately from warm repetition; do not
+select a favorable population, change compiler code, attribute a cause without
+evidence, or waive old gates. The full compiler objective remains active.
+
+### I048 result and disposition
+
+All seven populations completed without a semantic or measurement failure:
+112 alternating pairs per case, 672 measured invocations. Compiler, paired
+source, executable and diagnostic identities agree, and every measured row
+has frontend reuse, zero payload loads, zero objects and zero linking.
+Median population CPU ratios are 1.004731 for unchanged, 0.999005 for comments
+and 0.999664 for wording. Whole-population resampling intervals are respectively
+[0.995743, 1.009981], [0.989906, 1.006712] and [0.993550, 1.009498].
+None of the 21 original population CPU intervals excludes parity. This control
+finds no demonstrated label bias or false positive. It does not prove interval
+coverage, identify a directory cause, or waive the I046/I047 failed gates.
+No compiler source changed. Close this calibration before its first deadline;
+the next work returns to P03 source-section reuse rather than extending timing
+calibration. The complete incremental compiler objective remains active.
+
+Evidence: i048-aa-progress.json, i048-aa-population-{0..6}.json,
+i048-aa-analysis.json and analyze-i048-aa.py.
+
+## I049: reuse analyzed-source inputs before constructing sections
+
+Started 2026-11-15T16:21:06.391826+00:00; first deadline 2026-11-15T17:06:06.391826+00:00.
+P03 hypothesis: a retained ordered source-section input product can prove that
+an inactive body edit preserves section layout and all resolution interfaces
+before reconstructing the semantic section tree. Parse only changed execution
+inputs; any changed declaration, lookup, indentation, import membership, active
+reader or diagnostic input invalidates the proof and runs the ordinary stages.
+Persist current body/source identities rather than leaving stale snapshots.
+Expose reused source-line inputs, checked changed expressions and avoided section
+construction. No language/library spelling is special-cased.
+
+Baseline is frozen I047 compiler 4c0aaeda (source e9877232), with root I040
+2e567cdc retained as the production reference. First add a minimal no-import
+work-count/clean-parity regression. Acceptance requires at least 15% median
+whole-build CPU reduction for the fixed real LEXI8 unused-body case over I047,
+with an interval excluding parity, zero header/body section evaluations on
+eligible edits, and no established unrelated fast/cold regression. Keep all
+existing failed gates. Run focused invalidation/error/recovery tests, LLVM parity,
+required uncached within 120 seconds and affected integration before publication.
+Use one 45-minute extension only after concrete progress. Otherwise preserve
+and park the experiment. The full compiler objective remains active.
+
+### I049 first candidate: measured regression
+
+Source 1a6e5ca5 / test correction d36f7e81 / compiler 179c9e73 passes 33
+new focused builds. The 15-pair fixed application comparison against I047 fails:
+CPU medians 151.797 -> 169.532 ms; paired ratio 1.140292 [1.080273, 1.173510].
+Section headers fall from 2360 to zero, but saved parse/resolution-input times
+(11.708/12.650 ms) are offset by source-product checking/copying (13.872 ms),
+additional payload loading (8.668 ms) and writing (7.074 ms). Preserve this failed
+matrix. One revision replaces the per-line JSON materialization/copies with a
+compact immutable byte product, retains existing parser entries without constructing
+outlines, and refreshes only changed body identities. The original 15% gain and
+correctness/control gates remain unchanged. No source optimization is merged.
+
+### I049 compact candidate: disposition
+
+Source 91c8edd6 / compiler bd4eff4a uses an immutable byte product, preserves
+parser keys without restoring outlines, moves products rather than copying them,
+and recomputes body fingerprints only for changed owners. The framing of source
+body inputs is shared with the existing producer. A formatter-induced include
+ordering build error was fixed before this candidate; its failed build remains.
+
+The fixed 15-pair unused-flex comparison against I047 improves CPU medians
+151.220 -> 125.415 ms, paired ratio 0.817355 [0.793625, 0.834402]. Wall medians
+153.013 -> 126.791 ms, paired ratio 0.829661 [0.814746, 0.906328]. Every measured
+candidate checks one expression and evaluates zero section headers/body lines;
+2360 baseline section headers are avoided. Executable and diagnostic comparisons
+agree. This clears the primary 15% threshold, but does not clear the whole gate.
+
+All fixed unrelated controls complete. Unchanged CPU ratio is 1.050837
+[1.007880, 1.117872], comments 1.050208 [1.027529, 1.074680], wording 0.999238
+[0.986547, 1.037459], active body 1.011574 [1.005603, 1.023826], and cache-disabled
+cold 1.009914 [0.991941, 1.015488]. The first, second and fourth establish
+regressions under the declared protocol. No retries or exemptions replace them.
+Fast overhead is measured mostly in cache scanning; the cause of that difference
+is not established. The active path also recaptures the global source input:
+section_input_ms is 33.746 ms including 12.836 ms of ordinary section analysis.
+Its new producer is therefore still broad work after an active edit.
+
+The final source/compiler pass 33 focused builds, 159 matcher/classification
+contracts and 265 broader builds (the latter include the 33 new checks). All
+333 required checks pass uncached in 104.468 seconds (105.429 observer), with
+source/compiler identities unchanged. Full integration, ordinary-CLI/first-default
+qualification and the complete LLVM comparison are not claimed for this rejected
+experiment. Preserve both candidates and all failed gates on
+codex/incremental-section-inputs. No compiler optimization is merged.
+
+Close this iteration before its first deadline, without using its extension.
+The next bounded P03 investigation must use file/chunk source units shared with
+their consumers: unchanged source units stay encoded on active as well as inactive
+edits. An additional global proof cache is ruled out by this measurement. Any
+continuation of this same experiment gets only the one remaining 45-minute
+extension, ending no later than 17:51:06 UTC; it must otherwise park. Required
+checks stay uncached and capped at 120 seconds. The complete incremental compiler
+objective remains active and incomplete.
+
+Evidence: i049-{primary,first-candidate-stage-analysis}.json,
+i049-compact-{primary,controls,control-stage-analysis}.json,
+i049-compact-{focused,contracts,regressions}/report.json,
+i049-observed-required.json/log and i049-final-state.json.
