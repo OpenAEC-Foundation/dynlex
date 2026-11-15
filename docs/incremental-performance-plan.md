@@ -26,10 +26,15 @@ uncovered this ordering defect, also reproduced on the published baseline.
 The combined fixed artifact has not passed the complete final qualification matrix.
 Do not describe the parked optimization as published or accepted.
 
-Next: I034 independently requalifies the parked lookup change against the corrected
-baseline, with identical frozen application and compiler-data inputs. The acceptance
-gate remains at least 2% median paired CPU improvement over 31 pairs, confidence
-excluding parity, clean-output parity, controls and full correctness verification.
+I034 independently requalified the parked lookup change against the corrected
+baseline on identical frozen application and compiler-data inputs. It fails the
+predeclared 2% gate: 31 pairs give CPU ratio 0.990556, 95% interval
+[0.977194, 1.003183], and wall ratio 1.003687, interval [0.988755, 1.035332].
+CPU medians are 0.586047 and 0.585912 seconds. All executable/diagnostic comparisons
+pass, but the improvement is unproven. Reject this optimization for publication;
+preserve the isolated branch and evidence without running unnecessary full suites.
+Next: return to P03 semantic section-header products, using actual stage cost and
+a minimal skipped-work regression to select the implementation boundary.
 The required/integration boundary also needs repair: focused numeric-literal and
 class-layout checks currently run only in integration. The current 331-check gate
 must not be described as all compiler regression coverage.
