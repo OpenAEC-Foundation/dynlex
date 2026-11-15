@@ -2,15 +2,12 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Latest experiment: I049 remains isolated
+## Latest experiment: I049 source units remain isolated
 
-I049 proves that an irrelevant inactive-value edit can skip all semantic section
-construction. Its compact candidate improves that fixed real-program case by
-18.3%, but fast controls regress about 5% and active-body edits about 1.2%.
-The unchanged acceptance gate therefore fails; no I049 compiler code is merged.
-All 333 required checks pass uncached in 104.468 seconds. Production remains I040.
-The next source-stage work must reuse smaller file/chunk inputs, including on
-active edits, rather than recapturing a whole-program source-input product.
+The scoped unit candidate passes the complete correctness suites and improves its
+primary unused-value edit by 17.3%. Its declared comment/active-body performance
+controls fail, so no source optimization is merged. Required remains 333 checks
+uncached in 102.378 seconds; production remains I040. The full goal is incomplete.
 
 ## Current state: I040 unread-flex inference verified on master
 
@@ -3043,3 +3040,67 @@ Evidence: i049-{primary,first-candidate-stage-analysis}.json,
 i049-compact-{primary,controls,control-stage-analysis}.json,
 i049-compact-{focused,contracts,regressions}/report.json,
 i049-observed-required.json/log and i049-final-state.json.
+
+### I049 bounded continuation: source-input units
+
+Started 2026-11-15T16:54:09.568898+00:00. Use the one remaining extension; absolute deadline
+17:51:06 UTC on 15 November, without another timing reset. Baseline remains
+frozen I047 compiler 4c0aaeda; retain both failed I049 matrices. Attach immutable
+analyzed-source inputs to the existing preprocessing chunks. On active edits,
+reuse unchanged chunks' encoded input products; capture only invalidated units.
+On eligible inactive edits, inspect only changed units and skip section objects.
+Keep source products in the independent parser index, with small successful-stage
+references in the existing lazy projection; remove the standalone native payload.
+Missing parser products must not invalidate an otherwise valid native hit.
+
+First add a minimal two-file active/inactive edit regression with unit capture/reuse
+counters and clean parity. Retain last-parameter retraction, lookup, diagnostics,
+import-layout and error recovery tests. The original >=15% unused-flex CPU gain,
+no established unrelated control regression, uncached required <=120 seconds and
+publication parity/integration requirements remain unchanged. If the deadline or
+gates fail, park this whole source-input experiment. The overall goal is incomplete.
+
+Before measuring the unit candidate, predeclare three independent original-harness
+workspaces for unchanged/comment/wording controls (15 alternating pairs per case
+per workspace). Report all original summaries and the median population ratios;
+resample entire populations for an aggregate interval. This extends the I048
+calibration's independence check to the new compiler; it does not replace or
+waive a previous candidate's failed result. Primary unused-flex uses 15 pairs;
+active-body and cache-disabled controls use seven pairs in their fixed workspace.
+No favorable-population selection or additional timing retry is allowed.
+
+The first unit candidate f8f9c543 / 05767edf passes its original focused/contracts
+but a new minimal import-reparenting regression fails: moving an imported body
+from an inactive to an active function preserves preprocessing input/global scope
+set; a later literal edit reuses the stale executable. Intermediate inspection
+confirms its cached owner is still function spare while the live consumer is
+runner. Fix unit dependencies to include the actual consuming-scope sequence;
+record that successful-stage contract and validate edited units in source order.
+Retain the failing report and first unit timing matrices; this is a correctness
+fix, not a reason to waive their failed fast/active performance controls.
+
+### I049 continuation closed: correct source units, rejected performance gate
+
+Closed 2026-11-15T17:51:17.481131+00:00, before the final 17:51:06 UTC deadline. One extension used. Source 07f406e1 / compiler 7d686114 remains isolated on codex/incremental-section-input-units. No compiler optimization is merged.
+
+Source inputs now reuse preprocessing chunks and their exact successful-stage references. Active minimal edits capture one of twelve input lines; inactive application edits reuse 80 units and inspect one expression with zero section evaluations. Independent parser-product eviction leaves a validated executable usable. The import-reparenting bug in the first unit candidate is fixed with consuming-scope sequence dependencies and a regression that checks runtime and clean parity. All prior failed reports remain.
+
+Primary 15-pair CPU medians 155.578 -> 126.843 ms; paired ratio 0.827305, interval [0.7906130686858094, 0.8648123704853585]. This clears 15%, but not the overall gate.
+
+Instrumented fast control unchanged: population ratios [0.9850897877744902, 0.9993161285678935, 1.0027881722796965], median 0.999316, descriptive whole-population interval [0.9850897877744902, 1.0027881722796965].
+
+Instrumented fast control comment: population ratios [1.0177618033988531, 1.002333882481869, 1.0094190960534322], median 1.009419, descriptive whole-population interval [1.002333882481869, 1.0177618033988531].
+
+Instrumented fast control wording: population ratios [0.9418825985510446, 0.9305856832964974, 1.0187474050660963], median 0.941883, descriptive whole-population interval [0.9305856832964974, 1.0187474050660963].
+
+Control body: CPU {'baseline_median': 1.445338999999997, 'candidate_median': 1.4690290000000061, 'paired_ratio_median': 1.0135800085504252, 'paired_ratio_interval_95': [1.0025251495917977, 1.0359052337959898]}.
+
+Control cold: CPU {'baseline_median': 5.256510000000006, 'candidate_median': 5.307757000000002, 'paired_ratio_median': 1.003559411506635, 'paired_ratio_interval_95': [0.9897159295488864, 1.0363121158335076]}.
+
+The declared screen rejects comment and active-body regressions. The three-group interval is descriptive and is not a coverage guarantee; retain every original within-population interval. No selection or retry replaces these failed results. Ordinary CLI without statistics establishes no regression for its three fast cases; it does not waive the instrumented failure. A 61-pair --version probe, which compiles nothing, costs 5.294 -> 6.050 ms CPU. This localizes part of the fast difference outside compilation, without establishing its underlying cause.
+
+Correctness: 46 focused builds, 159 matcher/classification contracts and 278 broader builds (the latter include focused cases) pass. All 333 required checks pass uncached in 102.378 seconds; all 461 integration checks pass in 773.366 seconds. Exact source/compiler identities remain unchanged. Twelve real-program builds establish complete normalized LLVM and diagnostic parity for four cases. The required limit stays 120 seconds.
+
+The complete objective remains active: semantic sections still rebuild on active edits, the global scope-set input overinvalidates source units on declarations, and resolution setup, persistence, tooling and other output paths still have broad work. Next investigate shared source/semantic catalog products and the separately measured process/configuration setup cost; do not add another whole-program proof cache or waive failed gates. Production remains I040.
+
+Evidence: i049-unit-owner-{red,root-cause}.json/report, i049-scoped-unit-{focused,contracts,regressions}/report.json, i049-scoped-unit-{primary,controls,fast-analysis,ordinary-fast,version-profile}.json, i049-scoped-unit-observed-{required,integration}.json/log, i049-scoped-unit-ir-parity/report.json and i049-unit-final-state.json.
