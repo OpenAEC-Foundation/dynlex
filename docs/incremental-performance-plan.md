@@ -3,7 +3,25 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state after I030
+## Current state: I033 correctness qualification
+
+I033 fixes a pre-existing incremental diagnostic-order mismatch. A four-line
+provider-removal edit mixed a live edited body with an earlier reactivated cached
+body; error emission exposed scheduler-queue order instead of source order.
+Unresolved definitions, body references (including waiting references), and global
+references now each report in source order within their existing phases.
+The correctness-only candidate 6d9b70d9 / executable 926a3eeb passes the new order
+and repair regression, 132 broader regression builds, three complete LLVM/diagnostic
+comparisons, 331 required checks uncached in 106.938 seconds, and all 463 integration
+checks in 800.626 seconds. Master publication remains pending. No speedup is claimed.
+
+I032's lookup optimization remains unqualified and unmerged on its preserved
+branch. Its original 31-pair CPU result improves 2.49%, but broader qualification
+uncovered this ordering defect, also reproduced on the published baseline.
+The combined fixed artifact has not passed the complete final qualification matrix.
+Do not describe the parked optimization as published or accepted.
+
+### Previously published I030
 
 The I029 source-owner candidate is qualified and merged into local master in
 I030. I029 itself closed incomplete at its 04:22:54 UTC extended deadline.
@@ -2423,3 +2441,48 @@ reuse requirement. Preserve independent eviction/corruption and reactivation
 proofs; a faster stage obtained by moving its work later is not an improvement.
 Write the actual start/deadline and gain gate before implementation. The broader
 topology boundary and test-classification policy issue remain unfinished.
+
+## I032 outcome and I033 correctness repair
+
+I032 began 15 November at 05:27:10 UTC; first deadline 06:12:10, extended deadline
+06:57:10. Its single extension was recorded before the first deadline after the
+31-pair CPU gate passed. Eligibility subphase probes identify 13,724 match-key
+reads; the matcher lookup revalidates all 64 hex characters even for entries already
+validated during segment loading. The proposed change reuses a proven index hit,
+preserving the existing full validation on misses and newly loaded segments.
+Focused native output and direct C++ valid-miss/invalid-key/malformed-segment checks
+pass. The initial 31-pair CPU ratio is 0.975149 [0.968770, 0.998603]; elapsed-time
+ratio 0.977776 [0.965220, 1.031855] does not establish an elapsed-time gain.
+Common/cold/fast controls establish no regression. These measurements belong to
+617f35b8 / executable f378fc85, not to a later artifact.
+
+Broader testing stops on cached errors at lines 7, 5, 9 versus clean 5, 7, 9.
+An independent four-line repro confirms the same defect on published 0e3135e3:
+renaming a provider and editing a later body reports cached lines 3, 2, 4 versus
+clean 2, 3, 4. The emitter consumes internal body/waiting queues directly; cached
+reactivation legitimately changes that queue order. This is a pre-existing error
+reporting defect, not a changed lookup result. The original failed gate is retained.
+
+Decision: park I032 unqualified at 18de3ca8, combined artifact ac2e6ca3. Its diagnostic
+repair and 132 broader rows pass, but its complete final-artifact qualification
+cannot fit the remaining timebox. Preserve the lookup experiment and its initial
+artifact f378fc85; do not merge its optimization, new counters, or eligibility probes.
+Evidence: `i032-final-state.json`, `i032-cost-unused-31.json`,
+`i032-qualification-regressions.log`, `i032-order-live-and-retained.json`,
+`i032-red-order.log` and `i032-fixed-regressions/report.json`.
+
+I033 began at 06:43:42 UTC, first deadline 07:28:42. This independent correctness
+goal isolates only the diagnostic emitter and its minimal regression. It does not
+contain the lookup optimization or the profiling fields. Source 6d9b70d9 / compiler
+926a3eeb builds normally with one job; its order/repair and broader 132-build checks
+pass. Three complete LLVM/diagnostic comparisons pass. Required is 331 / 0 / 0 in
+106.938 seconds (107.861 observed); full integration is 463 / 0 / 0 in 800.626 seconds.
+Both source/compiler identity checks pass. Master rebuild/required, push, merged
+worktree disposal and actual archived replay remain the publication gates.
+
+Resource cleanup is separate from performance claims: 310 obsolete root object
+files absent from both current Ninja targets and commands are archived and byte
+verified before removal, reclaiming about 523 MiB net. The current root target
+still reports no missing work. Completed duplicate candidate/test executables are
+removed only after their suites pass; the frozen compiler and rebuildable objects
+remain. The complete incremental compiler objective is still unfinished.

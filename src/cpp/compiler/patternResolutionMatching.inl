@@ -830,7 +830,9 @@ bool resolvePatterns(ParseContext &context) {
 				"failed sections=" + std::to_string(unResolvedSections.size()) + " body_refs=" +
 				std::to_string(bodyReferences.size()) + " global_refs=" + std::to_string(globalReferences.size())
 			);
-			for (Section *sec : unResolvedSections) {
+			std::vector<Section *> sections(unResolvedSections.begin(), unResolvedSections.end());
+			std::sort(sections.begin(), sections.end(), sectionComesBefore);
+			for (Section *sec : sections) {
 				for (PatternDefinition *def : sec->patternDefinitions) {
 					context.diagnostics.push_back(Diagnostic(
 						context, Diagnostic::Level::Error, "unresolved pattern definition", def->range, "pattern",
@@ -846,13 +848,16 @@ bool resolvePatterns(ParseContext &context) {
 				appendUnusedLiteralParameterNotes(context, reference, diagnostic);
 				context.diagnostics.push_back(std::move(diagnostic));
 			};
-			for (PatternReference *reference : bodyReferences) {
-				emitReferenceDiagnostic(reference);
-			}
+			std::vector<PatternReference *> unresolvedBody(bodyReferences.begin(), bodyReferences.end());
 			for (PatternReference *reference : failedBodyWorklist.blockedReferences())
 				if (failedBodyWorklist.isWaiting(reference))
-					emitReferenceDiagnostic(reference);
-			for (PatternReference *reference : globalReferences) {
+					unresolvedBody.push_back(reference);
+			orderSourceReferences(unresolvedBody);
+			for (PatternReference *reference : unresolvedBody)
+				emitReferenceDiagnostic(reference);
+			std::vector<PatternReference *> unresolvedGlobals(globalReferences.begin(), globalReferences.end());
+			orderSourceReferences(unresolvedGlobals);
+			for (PatternReference *reference : unresolvedGlobals) {
 				emitReferenceDiagnostic(reference);
 			}
 		};
