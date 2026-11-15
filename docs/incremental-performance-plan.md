@@ -2,7 +2,7 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Latest iteration: I052 dependency correctness qualified on the work branch
+## Latest iteration: I052 dependency correctness qualified on master
 
 Source-match dependency facts now have body-layout and resolved-match producer
 versions, separate from inferred calls and reads. Native and failed constraint
@@ -14,7 +14,12 @@ Source 60d457cd / compiler dbc70f43 passes 30 focused, 159 matcher/classificatio
 and 207 broader compilations. All 333 required checks pass uncached in 96.449s
 (98.197s observed); four complete fresh/incremental LLVM and diagnostic comparisons
 agree. The exact corrected compiler passes all 461 library/runtime/tooling checks
-in 774.665 runner seconds. Production remains I040 until merged checks pass.
+in 774.665 runner seconds (775.789 observed), with source/compiler hashes unchanged.
+The fix is merged to local master; its rebuilt compiler is 19f9b48d. All 333
+required checks pass uncached there in 97.466 runner seconds. Thirty focused
+compilations pass on that executable. The merged worktree and branch are removed;
+another 30 focused compilations pass using the frozen compiler and archived data
+after removal, and the replay cleans up its temporary data root.
 
 This necessary correctness repair has measured costs; it is not an optimization
 acceptance. The frozen real application comparison gives these CPU medians:
