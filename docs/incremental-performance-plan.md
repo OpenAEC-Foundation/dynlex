@@ -3,7 +3,30 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state after I028
+## Current state: I030 qualification and publication
+
+The I029 source-owner candidate is qualified in I030; local-master publication
+is pending. I029 itself closed incomplete at its 04:22:54 UTC extended deadline.
+Its performance and LLVM checks passed, but the required retry had not run.
+The original failed gate is retained; acceptance is not backdated.
+
+On unchanged eligible ordinary function owners, concrete reference and variable
+outlines now stay unallocated until a semantic consumer demands them. The real
+unused-edit case retains 342 owners and 5,419 references: created references fall
+from 6,308 to 889. Across 31 pairs against I028, median paired CPU improves 2.54%
+(ratio 0.974586, 95% interval [0.967525, 0.987269]). Active-body edits improve
+1.89% across seven pairs; the game-data, cold and fast controls establish no change.
+These are paired comparisons, not comparisons of unrelated historical medians.
+
+Candidate 8d4c1a5b / executable 0e3135e3 passes 13 focused rows, 127 broader
+regression rows, precedence replay and three full normalized LLVM/diagnostic
+comparisons. In I030 all 331 required checks pass uncached in 108.322 seconds,
+the relevant native-cache integration passes, and both C++ ownership/provenance
+executables rebuild and pass. The full compiler-wide incremental goal remains
+incomplete: section objects, broad classification/matching/binding and other
+output modes still require finer dependency-driven reuse.
+
+### Previously published I028
 
 I028 eliminates obsolete projection-field copies without changing cache formats
 or invalidation. On the frozen LEXI8 program, 31 unused-edit pairs improve median
@@ -2302,3 +2325,29 @@ the two-step build (incrementalCompilation.cpp and link), while changed inputs
 still invalidate the object. Evidence: `i029-object-timestamp-restoration.json`.
 An independent classification-interface/topology opportunity is audited, not
 implemented or claimed as a speedup, in `i029-classification-opportunity-audit.json`.
+
+## I029 outcome and I030 publication
+
+I029 used its single extension and closed incomplete at the 04:22:54 UTC deadline
+on 15 November. Its independent primary comparison met the >=2% CPU gate;
+common/cold controls, focused and broader regressions, and complete LLVM parity
+passed. Required initially reported 330 passed / 1 failed because restoring the
+live compiler with `copy2` preserved the frozen archive's read-only mode. The
+compiler-identity test legitimately modifies its own metadata-preserving copy.
+This was an artifact-restoration error, not a compiler or test expectation change.
+Retain `i029-observed-required.json` and its failure log.
+
+I030 started 04:24:11 UTC, first deadline 05:09:11 UTC. Its sole goal is completing
+the unchanged candidate's qualification and publication: restore normal mutable
+executable permissions, rerun required, run relevant integration and the C++
+ownership checks, merge into local master, rebuild serially, verify root required,
+push, dispose the merged worktree, and actually replay the archived compilers.
+No additional optimization belongs to this iteration.
+
+The candidate required retry passes 331 / 0 / 0 in 108.322 seconds (109.204 observed),
+with unchanged compiler/source identities. Relevant native-cache integration
+passes in 5.494 seconds; both C++ ownership/provenance executables rebuild and pass
+in 21.486 seconds. Frozen archives remain read-only; the live compiler is writable.
+Evidence is under `.cache/incremental-evidence/structured-20261113/`, specifically
+`i030-observed-required.json`, `i030-observed-relevant-integration.json` and
+`i030-cpp-ownership.json`. Local-master verification remains pending.
