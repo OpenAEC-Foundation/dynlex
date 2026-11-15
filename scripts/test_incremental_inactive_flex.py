@@ -14,7 +14,8 @@ def check_inactive_flex_inference(root, build):
     edited = build(entry=main)
     assert edited[1:] == build(False, entry=main)[1:]
     assert edited[0]["type_inference_reused"], "an unread flex edit reran inference"
-    assert edited[0]["inference_ms"] == 0
+    assert edited[0]["function_body_inference_passes"] == 0
+    assert edited[0]["preinferred_instantiations"] == 0
     assert edited[0]["objects_built"] == 0 and edited[0]["link_ms"] == 0
 
     main.write_text(changed.replace('"ready"', '"changed"'))
