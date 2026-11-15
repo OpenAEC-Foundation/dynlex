@@ -148,6 +148,7 @@ struct BuildStatistics {
 	double matcherProjectionMilliseconds = 0;
 	MatcherProjectionWork matcherProjection;
 	PayloadWriteWork payloadWrite;
+	ProjectionCopyWork projectionCopy;
 	size_t matcherDeclarationsReused = 0;
 	size_t matcherPathSnapshotsBuilt = 0;
 	size_t matcherPathSnapshotsLoaded = 0;

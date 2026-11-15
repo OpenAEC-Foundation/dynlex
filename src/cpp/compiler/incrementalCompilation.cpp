@@ -77,6 +77,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <iostream>
 #include <mutex>
 #include <nlohmann/json.hpp>
@@ -102,6 +103,7 @@ double elapsedMilliseconds(Clock::time_point start) {
 	return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
 }
 
+#include "incrementalProjectionFields.inl"
 #include "incrementalWorkTimer.inl"
 
 double processCPUMilliseconds() {
@@ -607,14 +609,14 @@ bool compileIncrementally(
 					refreshedProjection = refreshInactiveFunctionProjection(
 						context, recording->observations, sections, matcherCache, prior, previous->at("inactive_projection"),
 						statistics.inactiveProjectionMatchesRechecked, statistics.sourceProjectionWork.matchEntriesReused,
-						showStatistics ? &statistics.matcherProjection.inactiveCopy : nullptr
+						statistics.projectionCopy, showStatistics ? &statistics.matcherProjection.inactiveCopy : nullptr
 					);
 			}
 			if (compiled && !refreshedProjection && compatibleFrontendSyntax)
 				refreshedProjection = refreshTopLevelExecutionProjection(
 					context, recording->observations, sections, declarationUnits, matcherCache, initialMatcherTree,
 					frontendState->at("all_function_projection"), &statistics.sourceProjectionWork,
-					statistics.topLevelProjectionSectionsReused
+					statistics.topLevelProjectionSectionsReused, statistics.projectionCopy
 				);
 			Json resolvedFunctionProjection = nullptr;
 			if (compiled && refreshedProjection)
@@ -742,7 +744,10 @@ bool compileIncrementally(
 					context.diagnostics.clear();
 					statistics.reusedDiagnosticRecords = previous->at("diagnostic_records").size();
 					auto copyTimer = initialMatcherProjection.measure(&MatcherProjectionWork::publishCopy);
-					Json result = *previous;
+					Json result = copyProjectionFields(
+						*previous, {"all_function_projection", "validation_units", "inactive_projection"},
+						statistics.projectionCopy
+					);
 					copyTimer.stop();
 					result["diagnostics"] = std::move(*diagnostics);
 					result["validation_units"] = validation.snapshot();

@@ -210,6 +210,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 						{"inactive_copy", statistics.matcherProjection.inactiveCopy},
 						{"publish_copy", statistics.matcherProjection.publishCopy}}},
 					  {"payload_write_detail_ms", statistics.payloadWrite},
+					  {"projection_fields_copied", statistics.projectionCopy.copied},
+					  {"projection_fields_copy_skipped", statistics.projectionCopy.skipped},
 					  {"matcher_declarations_reused", statistics.matcherDeclarationsReused},
 					  {"matcher_path_snapshots_built", statistics.matcherPathSnapshotsBuilt},
 					  {"matcher_path_snapshots_loaded", statistics.matcherPathSnapshotsLoaded},
