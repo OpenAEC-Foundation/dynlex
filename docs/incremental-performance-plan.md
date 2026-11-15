@@ -3,7 +3,16 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state after I024
+## Current state after I026
+
+I026 fixes an independently reproduced compiler assertion for a called function
+constructing a class with one missing lifecycle section. Pair validation now
+runs at class finalization; the obsolete inference-time full-tree scan is gone.
+Its 331 required checks pass uncached in 104.677 seconds. All 463 intended
+integration checks pass across the full run and a targeted retry; the original
+run had two infrastructure/cleanup failures, documented below. I025 source-owner
+deferral is parked unqualified on its isolated branch, not published. The full
+incremental goal remains incomplete.
 
 I024 is merged and qualified: named global readers now retain their initializer
 execution, fixing cached 42 versus clean 43 after a provider edit. All 329
@@ -2022,3 +2031,41 @@ fixture to the minimal required reproduction, adding the symmetric missing-retai
 case. Incremental tests cover cached diagnostics, adding the missing section,
 removing it again, unused declarations, and clean-build parity. The obsolete
 late whole-tree pairing scan and duplicate integration fixture are removed.
+
+### I026 qualification and publication
+
+Candidate source `d5e6eae3`, executable
+`5c60b49f1a95c631952c527840e12b4fc41e25f8919b7ca8792c90e008b9a053`:
+46 targeted lifecycle builds pass; required **331/0/0 in 104.677 s**.
+The unchanged-source full integration run reports **462/2/0 in 796.128 s**.
+One failure was an untracked empty directory left after moving the library-based
+missing-release fixture to required; removing it leaves 406 valid integration
+fixture directories. The other was ENOSPC while linking the ownership auxiliary.
+After removing a passed disposable test executable and compressing the parked
+I025 executable, the exact ownership command passes (242 reachable clones,
+peak 256). No compiler or test source changed between these runs. Thus all
+463 intended checks passed across runs; a single green full run is not claimed.
+Raw failures and retry evidence remain intact in `i026-integration*.json/log`
+and `i026-ownership-retry.log`.
+
+The seven-line crash fixtures are minimal in the relevant behavior: replacing
+the called function with direct top-level construction reports the old source
+diagnostic instead of reproducing the assertion. Both actual regressions abort
+on published master and emit one diagnostic on this candidate. Cache tests also
+cover section addition/removal, unused declarations and clean-build parity.
+This is a correctness repair with no measured performance claim.
+
+Next selected goal, I027/P03: return to the parked source-owner boundary after
+this independent correctness fix. Complete global precedence-signature reuse
+when concrete reference keys are absent, then qualify the combined owner path
+against immutable real-program builds. Preserve the original zero-allocation,
+activation/classification/lookup parity, >=2% paired unused-edit CPU, common/cold
+regression, complete LLVM/diagnostic parity and required-suite gates. The next
+iteration gets a fresh recorded start/deadline; this is not another I025 extension.
+
+The saved real-program unused-edit evidence identifies the remaining cost:
+median total 547.896 ms, resolution 286.853 ms, parsing 15.709 ms, outline
+restoration 5.235 ms. It still evaluates 2,360 section headers and dispatches
+4,174 body lines; classification reuses 1,747 inputs but handles 12,015 edges.
+Outline skipping alone cannot establish compiler-wide incrementality. Detailed
+counters and timing-scope caveats are in `next-frontend-cost-evidence.json`.
