@@ -2,6 +2,73 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## I055: independently qualify owned-input transfer with normalized images
+
+Started 15 November 2026 at 22:38 UTC; first deadline 23:23 UTC. No new compiler
+implementation or artifact is introduced: source b0178244 / compiler bc022690
+is compared with correctness baseline dbc70f43. I053's complete failed hard-link
+matrix remains failed; its conditional confirmation is not run. I054 independently
+establishes executable-file state sensitivity using identical bytes and validates
+fresh, independent image preparation on a real-program A/A comparison.
+
+This qualification uses that recorded preparation for both archived compilers.
+Predeclare one complete comparison: 63 alternating active-body pairs must show
+>=1% median paired CPU gain with a 95% interval excluding parity. Unchanged,
+comment and wording controls use 31 pairs; cache-disabled cold uses three.
+No control may establish a regression. Preserve this matrix under a separate
+protocol/iteration name and make no further confirmation attempt if it fails.
+Run each case in its own workspace, release owned input images after independent
+staging, and compact inactive build objects before the larger comparison.
+
+If the matrix passes, verify focused/matcher/cascade behavior, complete LLVM and
+diagnostic parity, required <=120 seconds uncached, affected integration and
+merged checks on the unchanged compiler artifact. The checkout's C++ bytes match
+b0178244; its benchmark/tooling changes come from current local master. Overall
+incremental compiler goal remains active and incomplete.
+
+### I055 capacity failure: preserve the incomplete first attempt
+
+The first normalized body run terminates at sample 55 with an explicit ENOSPC
+cache-write error. Its 113 rows include the failed invocation, and the report
+remains incomplete. No acceptance statistic is inferred from it. The compiler
+keeps each cache within 512 MiB, but two independent caches, two staged compiler
+images and transactional writes exceed the old executable-only space guard.
+The temporary workspace is removed by the runner; the original report and log
+remain unchanged under i055-performance-body.*.
+
+Before a complete attempt, losslessly archive twelve inactive owned compiler
+images, verify decompressed hashes and publish their explicit restoration records.
+The normalized runner now requires space for three compiler images plus 2 GiB
+for caches and transactional writes. Preserve the complete attempt separately as
+i055-complete-performance-*. The compiler artifacts, sample counts, preparation,
+acceptance threshold and controls remain unchanged. This repairs a verified
+capacity failure, not a failed timing gate; there is no extra confirmation after
+the completed matrix. No C++ implementation change is introduced.
+
+### I055 result: reject the ownership candidate under the normalized protocol
+
+The complete independent-copy matrix uses the same frozen b0178244/bc022690
+candidate and dbc70f43 baseline. Active-body CPU medians are 1.513573 -> 1.491991s;
+63-pair ratio .984640 [.978471, .990208] clears the 1% edit gate. Graph capture
+falls 83.115 -> 68.519ms, and the candidate moves 4,219 match-input records without
+copying them. All executable/diagnostic comparisons in the complete matrix pass.
+
+The 31-pair unchanged and comment controls establish no difference: CPU ratios
+.991954 [.975978, 1.025092] and .999624 [.983419, 1.016740]. Wording establishes a
+regression: .034260 -> .034862s, paired ratio 1.021611 [1.007316, 1.035619]. Three
+cold pairs also regress: 1.014942 [1.002995, 1.019665]. The full declared gate fails.
+Do not merge this candidate, run another confirmation, or claim acceptance from
+its successful body case. Required/integration suites are not rerun for this
+rejected optimization. The original I053 rejection and first I055 capacity-failed
+report remain separate and unchanged.
+
+Evidence: i055-complete-performance-{body,unchanged,comment,wording,cold}.json and
+staging receipts; i055-complete-performance-analysis.json. Twelve inactive compiler
+images were archived losslessly with verified restore records, freeing ~1.47 GiB.
+The full goal remains active. The next selected investigation returns to the
+retained-source consumer: metadata queries currently share storage segments with
+full matcher outcomes, so proving reuse can load unrelated resolution products.
+
 ## I054: calibrate startup across identical executable file copies
 
 Started 15 November 2026 at 22:06 UTC; first deadline 22:51 UTC. I053 is rejected
