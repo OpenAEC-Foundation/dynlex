@@ -229,11 +229,18 @@ bool containsNestedDefinition(const Section &section) {
 	return false;
 }
 
-Json inactiveFunctionSections(const std::map<std::string, Section *> &sections) {
+Json inactiveFunctionSections(const ParseContext &context, const std::map<std::string, Section *> &sections) {
+	// Generated bodies outside the merged source stream cannot mask any input.
+	std::unordered_set<const Section *> sourceOwners;
+	for (const CodeLine *line : context.codeLines) {
+		const Section *owner = line->section;
+		while (owner && sourceOwners.insert(owner).second)
+			owner = owner->parent;
+	}
 	Json inactive = Json::object();
 	for (const auto &[path, section] : sections) {
 		if (section->type != SectionType::Function || section->patternDefinitions.empty() || section->isExposed ||
-			!section->instantiations.empty() || containsNestedDefinition(*section))
+			!section->instantiations.empty() || containsNestedDefinition(*section) || !sourceOwners.contains(section))
 			continue;
 		// Snapshot capture removes owners consumed by inference, constraint
 		// probes or retained IR, including flexes with no native instantiation.

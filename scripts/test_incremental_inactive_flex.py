@@ -1,5 +1,7 @@
 """Only unread flex bodies may be masked from inference input validation."""
 
+from test_incremental_program_cache import read_program
+
 
 def check_inactive_flex_inference(root, build):
     main = root / "inactive_flex_inference.dl"
@@ -44,13 +46,15 @@ def check_inactive_flex_dependencies(root, build):
     # property accessor is called by entry-point execution.
     main = root / "inactive_flex_class_fields.dl"
     source = ('word means: @intrinsic("type", "int", 8)\n'
-              'class:\n    patterns:\n        box\n    members:\n        payload as word\n'
-              '@intrinsic("store", {item}, @intrinsic("construct", box, 1))\n'
+              'class:\n    patterns:\n        box\n    members:\n        payload as word\n        spare as word\n'
+              '@intrinsic("store", {item}, @intrinsic("construct", box, 1, 1))\n'
               '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", '
               '@intrinsic("type", "int"), 1, "%lld\\n", @intrinsic("size of", '
               '@intrinsic("type of", item\'s payload))))\n')
     main.write_text(source)
     assert build(entry=main)[2] == b"1\n"
+    inactive = read_program(root / "cache", main)["inactive_projection"]["inactive"]
+    assert not inactive, "a generated accessor with no source body entered the source-mask set"
     main.write_text(source.replace('"int", 8', '"int", 64'))
     field = build(entry=main)
     assert field[1:] == build(False, entry=main)[1:]
