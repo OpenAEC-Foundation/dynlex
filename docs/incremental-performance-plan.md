@@ -3,7 +3,42 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state: I036 required unit coverage published
+## Current state: I037 declaration retention qualified
+
+I037 removes native-body eligibility from resolved declaration retention. A flex
+body can change without changing its declaration; after checking the changed
+signature and the existing source/syntax/matcher/scope/binding proofs, unrelated
+declaration fingerprints now stay unexamined. Native-body reuse eligibility is
+unchanged, and body-dependent expansion, inference and IR retain their own inputs.
+
+The import-free regression reduces four declaration audits to one, observes the
+changed active flex output, and still detects removal of the last implicit
+parameter use. On the frozen real LEXI8 application, an imported unused key-constant
+edit reduces 1,750 declaration audits to one, about 13 ms to 0.014 ms of input work.
+The first 31 pairs are inconclusive. The single independent 63-pair confirmation
+meets the unchanged 1% acceptance gate: CPU medians 1.306061 to 1.282953 seconds,
+paired ratio 0.981015, 95% interval [0.968829, 0.993757]. Wall ratio is 0.984064,
+interval [0.966413, 0.997543]. Do not substitute ratios of unrelated medians for
+these paired results. Eight common/cold/fast controls establish no regression;
+cold-build improvement remains unproven.
+
+Candidate bbc66c69 / executable ebd0d7f6 passes 137 broader regression builds,
+four complete normalized LLVM/diagnostic comparisons, all 333 required checks
+uncached in 112.841 seconds, and all 461 integration checks in 794.781 seconds.
+An initial controls attempt stopped before shared-type compilation because the
+wrapper omitted that allowed case. Its failed evidence is retained; after fixing
+the wrapper, completed measurements were preserved and remaining cases resumed.
+Master rebuild, required verification and publication remain pending.
+
+The full goal remains incomplete. The next measured gap is inference after an
+unread flex edit: about 260 ms still runs although 368 emitted functions reuse IR
+and no objects are built. Audit actual inference reads before replacing the blanket
+flex exclusion from inactive-body eligibility. The minimal read graph correctly
+records root -> report -> active label; type providers, rejected trials, callbacks,
+compile-time-only callees and generated property owners need the same proof.
+Complete semantic section products and tooling/other output modes also remain open.
+
+### I036 required unit coverage published
 
 I036 moves the focused numeric-literal and class-layout C++ checks into required.
 The routing regression fails in both directions before the fix and passes afterward;
