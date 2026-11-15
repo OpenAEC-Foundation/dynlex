@@ -2,7 +2,7 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## I040: corrected unread-flex artifact qualified; publication pending
+## Current state: I040 unread-flex inference verified on master
 
 Started 15 November at 10:02:10 UTC, first deadline 10:47:10. Production
 source remains byte-identical to 7b75ab49 and frozen compiler 2e567cdc after
@@ -15,8 +15,10 @@ The 16 focused and 207 broader regression builds remain valid for that artifact.
 With the final runner, all 333 required checks pass uncached within 120 seconds,
 and all 461 integration checks pass in 806.603 seconds (808.098 observed), with
 source/compiler identities unchanged. I038's two failed required attempts and
-I039's initial worker-status failure remain preserved. Local-master merge,
-serial rebuild, required gate, push and archived replay are still pending.
+I039's initial worker-status failure remain preserved. Local master 5773d151 / compiler be68739a rebuilds in 143.699 seconds with one
+job, peak RSS 2,284,356 KiB. All 333 required checks pass uncached in 102.778
+seconds (103.758 observed); source/compiler hashes remain unchanged. Publication
+and archived replay are being finalized.
 The full compiler goal remains incomplete; the next-opportunity audit is
 i040-next-opportunity-audit.json, an unimplemented source/resolution-product
 hypothesis.
