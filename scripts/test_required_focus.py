@@ -22,8 +22,7 @@ elapsed_ms_since() { printf '0\\n'; }
 run_with_timeout() { return 0; }
 append_test_result() { :; }
 execution_timeout_scale=1
-# Keep arithmetic commands successful in these isolated routing probes.
-passed=1
+passed=0
 failed=0
 '''
     failures = []
