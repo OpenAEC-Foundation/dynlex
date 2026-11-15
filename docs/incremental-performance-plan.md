@@ -2737,3 +2737,36 @@ compiler I040 and its 102.778-second required qualification remain unchanged.
 The full incremental compilation objective remains incomplete.
 Evidence: i042-screen-decision.json, i043-candidate-stage-analysis.json and
 i043-candidate-unused-flex.json.
+
+## I044–I045: typed records validated, strict fast-control gate failed
+
+I044's seven complete phase probes measure matcher segment reads 14.990 ms,
+verification 2.724 ms and indexing 3.908 ms. No flat-map prototype is implemented;
+the measured larger metadata decode/publication path becomes I045.
+
+I045 retains typed classification frames and re-encodes only changed units.
+Source 3e449a4b / compiler d39b20a1 passes 7 focused, 166 matcher/classification
+and 207 broader builds, four full normalized LLVM/diagnostic comparisons, all
+333 required checks uncached in 83.440 seconds (84.452 observed), and all 461
+integration checks in 684.045 seconds (685.007 observed). Source/compiler hashes
+remain unchanged. Matching pre/post-schema test readers are archived explicitly.
+
+The instrumented real-program benchmark has 63 alternating pairs: CPU ratio
+0.977505 [0.972189, 0.982590], 2.25% faster; all 1,749 classification records are
+retained. All eight controls complete and outputs agree. However, wording-only
+CPU ratio 1.038636 [1.000696, 1.063553] fails the strict no-regression gate,
+with medians 36.081 to 37.340 ms; wall change is inconclusive. That path does
+not execute classification, so its cause is unverified. First-default builds
+show no established change across seven pairs. No ordinary non-statistics timing
+is claimed. Preserve the failed gate and branch codex/incremental-classification-records
+(1b1af858); no timing retries or production merge. An optional absolute-tolerance
+question is pending; no approval or preference is assumed.
+
+The next larger source-interface audit distinguishes inputs consumed by resolution
+from literal execution data, while retaining negative lookup, binding, metadata,
+configuration and active-reader proofs. No shortcut is implemented yet. Main
+compiler I040 remains unchanged; the full incremental objective is still active.
+Evidence: i044-screen-decision.json, i045-candidate-unused-flex.json,
+i045-controls.json, i045-first-default.json, i045-ir-parity/report.json,
+i045-observed-required.json, i045-observed-integration.json and
+i045-next-source-interface-audit.json.
