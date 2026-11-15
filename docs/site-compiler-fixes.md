@@ -68,10 +68,17 @@ the compiler behavior rather than special-casing the website's source.
 
 Focused coverage includes the import-free required fixtures and the incremental
 body-demand, declaration-cache, validation-flow and compiler-stack checks under
-`scripts/`. The merged native compiler passes all 384 required checks in 117.070
+`scripts/`. The merged native compiler passes all 386 required checks in 107.387
 seconds, within the unchanged two-minute budget. The C++23 ownership correction
 also passes a direct diagnostic copy-on-write check with both standard libraries.
-The browser compiler has been rebuilt from the same merged source.
+
+The required runner overlaps its independent fixture, incremental-compilation and
+short auxiliary groups. Previously, the 104-second cache check ran before another
+16 seconds of auxiliary checks; all 386 functional checks passed, but their full
+run took 120.122 seconds. The group regression checks concurrent execution,
+isolated counters, lossless output and failure collection, and worker crash
+propagation. The checks and their deadlines are unchanged. Integration retains
+its existing single-group memory budget.
 
 Integration passed 520 checks; two checks hit the same Farm document compilation's
 60-second process limit. An isolated cold cached compile completed correctly in
@@ -80,5 +87,5 @@ Integration passed 520 checks; two checks hit the same Farm document compilation
 cached compilers encoded 5,129 bodies into 383 unique stored bodies. These are
 measurements of existing cache work, not a newly established compiler defect.
 The Farm document fixture now declares a 120-second compilation budget, shared
-by the standalone and model runners. Those reruns, the fresh browser smoke checks
-and the final packaged website checks remain pending.
+by the standalone and model runners. Those reruns, the merged browser compiler
+build, its smoke checks and the final packaged website checks remain pending.
