@@ -6,7 +6,7 @@ struct SectionAnalysisWork {
 	size_t headersEvaluated = 0, bodyLinesDispatched = 0, finalizations = 0, localityPasses = 0;
 	size_t outlineNodes = 0, outlinePatternReferences = 0, outlineVariables = 0;
 	double headerMilliseconds = 0, bodyDispatchMilliseconds = 0, finalizeMilliseconds = 0, localityMilliseconds = 0;
-	// Nested within header/line dispatch; do not add this to the disjoint stage operations.
+	// Outline restoration can be demanded by later stages and overlaps their stage timers.
 	double outlineRestoreMilliseconds = 0;
 };
 

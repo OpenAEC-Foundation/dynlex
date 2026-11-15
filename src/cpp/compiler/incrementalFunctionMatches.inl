@@ -58,14 +58,7 @@ ResolvedFunctionMatches resolvedFunctionMatches(
 	const Section *section, const std::map<const Section *, std::string> &paths, IncrementalMatcherCache &matcherCache,
 	const Json *priorEntries, const Json *priorFingerprint, size_t *reused
 ) {
-	std::vector<PatternReference *> references;
-	std::function<void(const Section *)> visit = [&](const Section *body) {
-		references.insert(references.end(), body->patternReferences.begin(), body->patternReferences.end());
-		for (const Section *child : body->children)
-			if (child->patternDefinitions.empty())
-				visit(child);
-	};
-	visit(section);
+	std::vector<PatternReference *> references = sourceOwnerReferences(*section);
 	auto oldEntries = priorEntries ? matcherCache.restoreReferenceKeys(priorEntries->get_ref<const std::string &>()) : nullptr;
 	auto oldIdentities =
 		priorFingerprint ? matcherCache.restoreMatchIdentities(priorFingerprint->get_ref<const std::string &>()) : std::nullopt;

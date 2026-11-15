@@ -2,6 +2,7 @@ struct MatcherProjectionWork {
 	double outputs = 0, tree = 0, initial = 0, selection = 0, sources = 0, declarations = 0;
 	double initialBodies = 0, final = 0, headers = 0, referenceTables = 0;
 	double bindings = 0, classifications = 0, inactiveCopy = 0, publishCopy = 0;
+	double ownerContexts = 0, sourceOwnerSelection = 0;
 };
 
 // Preserve the matcher boundary before receiver bodies become generated functions.
@@ -17,6 +18,8 @@ struct InitialMatcherProjection {
 		const Section *section;
 		bool topLevel, demandEligible;
 		std::vector<PatternReference *> references;
+		size_t referenceCount = 0;
+		std::vector<CodeLine *> lines;
 		std::vector<std::pair<size_t, PatternReference *>> deferredReferences;
 	};
 	Json value = nullptr;
@@ -53,16 +56,15 @@ struct InitialMatcherProjection {
 			Owner owner{
 				path,	  section,
 				topLevel, topLevel && section->type == SectionType::Function && !section->isFlex && hasNoGlobalAccess(section),
+				{},		  0,
 				{},		  {}
 			};
-			const auto collect = [&](auto &&self, Section *body) -> void {
-				owner.references.insert(owner.references.end(), body->patternReferences.begin(), body->patternReferences.end());
-				for (Section *child : body->children)
-					if (child->patternDefinitions.empty())
-						self(self, child);
-			};
-			collect(collect, section);
-			if (owner.references.empty())
+			owner.references = sourceOwnerReferences(*section);
+			owner.lines = sourceOwnerLines(*section);
+			owner.referenceCount = context.retainedSourceOwners.contains(section)
+									   ? context.retainedSourceOwners.at(section).referenceCount
+									   : owner.references.size();
+			if (owner.referenceCount == 0)
 				continue;
 			for (size_t index = 0; index < owner.references.size(); index++)
 				if (deferred.contains(owner.references[index]))
@@ -85,6 +87,8 @@ struct InitialMatcherProjection {
 			{"header_definitions", Json::object()},
 			{"initial_header_definitions", Json::object()},
 			{"bodies", bodyDigests},
+			{"numeric_spellings", Json::object()},
+			{"reference_sources", Json::object()},
 			{"scope_rule_bodies", scopeRuleBodyPaths(sections)},
 			{"global_resolution", globalResolutionIdentity(*context.mainSection)},
 			{"sources", sourceView("sources", functionBodies, false, false, false)},
@@ -104,6 +108,32 @@ struct InitialMatcherProjection {
 				}
 		for (const Owner &owner : owners) {
 			const std::string &path = owner.path;
+			auto contextTimer = measure(&MatcherProjectionWork::ownerContexts);
+			if (context.retainedSourceOwners.contains(owner.section)) {
+				for (const char *field : {"numeric_spellings", "reference_sources"})
+					value.at(field)[path] = prior->at(field).at(path);
+			} else {
+				Json numbers = Json::object(), sources = Json::array();
+				const lsp::SourceFile *last = nullptr;
+				for (size_t index = 0; index < owner.references.size(); index++) {
+					PatternReference *reference = owner.references[index];
+					const lsp::SourceFile *source = reference->range().line->sourceFile;
+					if (source != last) {
+						sources.push_back(Json::array({index, source->uri}));
+						last = source;
+					}
+					std::set<std::string> spellings;
+					if (reference->expression)
+						for (size_t argument = 0; argument < reference->expression.argumentCount(); argument++)
+							if (auto spelling = numericPatternArgumentSpelling(reference, argument))
+								spellings.insert(*spelling);
+					if (!spellings.empty())
+						numbers[std::to_string(index)] = spellings;
+				}
+				value.at("numeric_spellings")[path] = std::move(numbers);
+				value.at("reference_sources")[path] = std::move(sources);
+			}
+			contextTimer.stop();
 			if (stableDeclarations && prior->at("declaration_digests").contains(path) && prior->at("bodies").contains(path) &&
 				bodyDigests.at(path) == prior->at("bodies").at(path)) {
 				value.at("declaration_digests")[path] = prior->at("declaration_digests").at(path);
@@ -118,7 +148,8 @@ struct InitialMatcherProjection {
 		Json headers = Json::array();
 		for (size_t index = 0; index < owner.references.size(); index++) {
 			PatternReference *reference = owner.references[index];
-			if (!reference->range().line->sectionOpening || !reference->match)
+			if (!reference->range().line->sectionOpening || !reference->match ||
+				reference->range().line->expression.rootReference() != reference)
 				continue;
 			Json definitions = Json::array();
 			for (PatternDefinition *definition : reference->match->matchingDefinitions) {
@@ -130,7 +161,10 @@ struct InitialMatcherProjection {
 				}
 				definitions.push_back(Json::array({paths.at(definition->section), definition->toString(), occurrence}));
 			}
-			headers.push_back(Json::array({index, std::move(definitions)}));
+			const auto &lines = owner.lines;
+			auto line = std::ranges::find(lines, reference->range().line);
+			requireCompilerInvariant(line != lines.end(), "header definition has no source-owner anchor");
+			headers.push_back(Json::array({line - lines.begin(), std::move(definitions)}));
 		}
 		return headers;
 	}
@@ -144,10 +178,13 @@ struct InitialMatcherProjection {
 		std::map<const Section *, std::string> paths;
 		for (const auto &[path, section] : sections)
 			paths.emplace(section, path);
-		for (const Owner &owner : owners) {
+		for (Owner &owner : owners) {
+			if (owner.references.empty() && !context.retainedSourceOwners.contains(owner.section))
+				owner.references = sourceOwnerReferences(*owner.section);
 			if (!owner.topLevel)
 				continue;
-			if (context.deferredBodyResolution && context.deferredBodyResolution(owner.section)) {
+			if (context.retainedSourceOwners.contains(owner.section) ||
+				(context.deferredBodyResolution && context.deferredBodyResolution(owner.section))) {
 				value.at("body_units")[owner.path] = priorUnits->at("body_units").at(owner.path);
 				value.at("initial_header_definitions")[owner.path] =
 					priorUnits->at("initial_header_definitions").at(owner.path);
@@ -182,8 +219,11 @@ struct InitialMatcherProjection {
 		std::map<const Section *, std::string> paths;
 		for (const auto &[path, section] : sections)
 			paths.emplace(section, path);
-		for (const Owner &owner : owners) {
-			if (context.deferredBodyResolution && context.deferredBodyResolution(owner.section)) {
+		for (Owner &owner : owners) {
+			if (owner.references.empty() && !context.retainedSourceOwners.contains(owner.section))
+				owner.references = sourceOwnerReferences(*owner.section);
+			if (context.retainedSourceOwners.contains(owner.section) ||
+				(context.deferredBodyResolution && context.deferredBodyResolution(owner.section))) {
 				for (const char *field : {"final_body_units", "header_definitions"})
 					value.at(field)[owner.path] = priorUnits->at(field).at(owner.path);
 				matcherCache.retain(value.at("final_body_units").at(owner.path).get_ref<const std::string &>());

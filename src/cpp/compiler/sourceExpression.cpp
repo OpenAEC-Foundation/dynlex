@@ -1,6 +1,10 @@
 #include "sourceExpression.h"
 #include "compilerUtils.h"
 #include "expression.h"
+#include "parseContext.h"
+#include "section/variable.h"
+#include "sourceOwner.h"
+#include "sourceReferenceOrder.h"
 #include <utility>
 
 SourceExpression::SourceExpression(SourceExpression &&other) noexcept
@@ -41,4 +45,57 @@ void SourceExpression::finish() {
 		"body product finished before publishing its source expression"
 	);
 	product = nullptr;
+}
+
+std::vector<CodeLine *> sourceOwnerLines(const Section &owner) {
+	std::vector<CodeLine *> result;
+	auto collect = [&](auto &&self, const Section &scope) -> void {
+		for (CodeLine *line : scope.codeLines)
+			if (!line->rightTrimmedText.empty())
+				result.push_back(line);
+		for (Section *child : scope.children)
+			if (child->patternDefinitions.empty())
+				self(self, *child);
+	};
+	collect(collect, owner);
+	std::ranges::sort(result, {}, &CodeLine::mergedLineIndex);
+	return result;
+}
+
+std::vector<PatternReference *> sourceOwnerReferences(const Section &owner) {
+	std::vector<PatternReference *> result;
+	auto collect = [&](auto &&self, const Section &scope) -> void {
+		result.insert(result.end(), scope.patternReferences.begin(), scope.patternReferences.end());
+		for (Section *child : scope.children)
+			if (child->patternDefinitions.empty())
+				self(self, *child);
+	};
+	collect(collect, owner);
+	orderSourceReferences(result);
+	return result;
+}
+
+void ParseContext::publishSourceVariableReferences() {
+	for (VariableReference *reference : pendingExplicitVariableReferences) {
+		Section *section = reference->range.section();
+		requireCompilerInvariant(section, "explicit variable reference has no source section");
+		section->addVariableReference(*this, reference);
+		if (!reference->declaredTypeConstraintName.empty() && !reference->definition)
+			section->registerExplicitVariableName(reference->name, reference->range);
+	}
+	pendingExplicitVariableReferences.clear();
+}
+
+void ParseContext::materializeSourceOwnerReferences(Section *owner) {
+	auto found = retainedSourceOwners.find(owner);
+	if (found == retainedSourceOwners.end())
+		return;
+	auto products = std::move(found->second.products);
+	retainedSourceOwners.erase(found);
+	for (BodySyntaxProduct *product : products)
+		product->prepareReferences();
+	if (sourceReferencesReady)
+		publishSourceVariableReferences();
+	if (sourceOwnerReferencesPublished)
+		sourceOwnerReferencesPublished(owner, sourceOwnerReferences(*owner));
 }

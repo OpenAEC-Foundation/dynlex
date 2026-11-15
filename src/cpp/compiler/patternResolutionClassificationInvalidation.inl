@@ -5,7 +5,7 @@ static bool reactivateCachedClassifications(
 	ParseContext &context, SkippedCachedBodies &skipped, std::list<PatternReference *> &bodyReferences,
 	std::list<Section *> &unresolvedSections,
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> &definitionToReferences,
-	QueueReference queueReference
+	QueueReference queueReference, std::vector<PatternReference *> &definitionReferences
 ) {
 	if (!context.invalidateCachedClassifications)
 		return false;
@@ -34,7 +34,11 @@ static bool reactivateCachedClassifications(
 		});
 		unresolvedSections.push_back(section);
 	}
-	deferSkippedBodyReferences(bodyReferences, skipped, sections);
+	deferSkippedBodyReferences(context, bodyReferences, skipped, sections);
+	for (Section *section : sections)
+		for (PatternReference *reference : sourceOwnerReferences(*section))
+			if (std::ranges::find(definitionReferences, reference) == definitionReferences.end())
+				definitionReferences.push_back(reference);
 	std::list<Section *> countSections(sections.begin(), sections.end());
 	computeVariableLikeCounts(context, countSections, true);
 	return true;

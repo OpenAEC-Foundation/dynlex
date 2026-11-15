@@ -35,7 +35,9 @@ std::string IncrementalClassification::classificationBodyInput(const Unit &unit)
 	};
 	auto scopeInput = [&](auto &&self, const Section &scope) -> Json {
 		Json references = Json::array();
-		for (const PatternReference *reference : scope.patternReferences) {
+		auto ordered = scope.patternReferences;
+		orderSourceReferences(ordered);
+		for (const PatternReference *reference : ordered) {
 			const Range &range = reference->range();
 			Json matchingScope = nullptr;
 			if (reference->matchingScope)

@@ -404,6 +404,8 @@ bool resolvePatterns(ParseContext &context) {
 	auto setupStart = ResolutionClock::now();
 	prepareDataSectionDefinitions(context);
 	generateClassPropertyPatterns(context);
+	if (context.prepareSourceOutlines)
+		context.prepareSourceOutlines();
 	std::list<PatternReference *> bodyReferences;
 	std::list<PatternReference *> globalReferences;
 	std::list<Section *> unResolvedSections;
@@ -440,14 +442,8 @@ bool resolvePatterns(ParseContext &context) {
 	}
 	if (hadPatternParseError)
 		return false;
-	for (VariableReference *reference : context.pendingExplicitVariableReferences) {
-		requireCompilerInvariant(reference && reference->range.section(), "explicit variable reference has no source section");
-		Section *section = reference->range.section();
-		section->addVariableReference(context, reference);
-		if (!reference->declaredTypeConstraintName.empty() && !reference->definition)
-			section->registerExplicitVariableName(reference->name, reference->range);
-	}
-	context.pendingExplicitVariableReferences.clear();
+	context.sourceReferencesReady = true;
+	context.publishSourceVariableReferences();
 	for (Section *section : unResolvedSections) {
 		if (section->type == SectionType::Class)
 			populateClassPatternNames(section);
@@ -462,9 +458,13 @@ bool resolvePatterns(ParseContext &context) {
 
 	// Compute initial VL counts before resolution
 	computeVariableLikeCounts(context, unResolvedSections, true);
+	bodyReferences.clear();
+	globalReferences.clear();
+	unResolvedSections.clear();
+	context.mainSection->collectPatternReferencesAndSections(bodyReferences, globalReferences, unResolvedSections);
 	std::vector<PatternReference *> definitionReferences(bodyReferences.begin(), bodyReferences.end());
 	SkippedCachedBodies skippedCachedBodies;
-	skipCachedBodyReferences(context, bodyReferences, skippedCachedBodies);
+	skipCachedBodyReferences(context, bodyReferences, skippedCachedBodies, definitionReferences);
 	std::list<PatternReference *> deferredBodyReferences;
 	for (auto reference = bodyReferences.begin(); reference != bodyReferences.end();) {
 		if (!bodyReferenceCanWaitForDefinitions(*reference)) {
@@ -756,7 +756,7 @@ bool resolvePatterns(ParseContext &context) {
 			if (unResolvedSections.empty() && bodyReferences.empty() && !failedBodyWorklist.hasWaiting()) {
 				if (reactivateCachedClassifications(
 						context, skippedCachedBodies, bodyReferences, unResolvedSections, definitionToReferences,
-						queueReferenceForRematch
+						queueReferenceForRematch, definitionReferences
 					)) {
 					appendRequeuedReferences();
 					continue;
@@ -833,7 +833,9 @@ bool resolvePatterns(ParseContext &context) {
 				"failed sections=" + std::to_string(unResolvedSections.size()) + " body_refs=" +
 				std::to_string(bodyReferences.size()) + " global_refs=" + std::to_string(globalReferences.size())
 			);
-			for (Section *sec : unResolvedSections) {
+			std::vector<Section *> sections(unResolvedSections.begin(), unResolvedSections.end());
+			std::sort(sections.begin(), sections.end(), sectionComesBefore);
+			for (Section *sec : sections) {
 				for (PatternDefinition *def : sec->patternDefinitions) {
 					context.diagnostics.push_back(Diagnostic(
 						context, Diagnostic::Level::Error, "unresolved pattern definition", def->range, "pattern",
@@ -849,13 +851,16 @@ bool resolvePatterns(ParseContext &context) {
 				appendUnusedLiteralParameterNotes(context, reference, diagnostic);
 				context.diagnostics.push_back(std::move(diagnostic));
 			};
-			for (PatternReference *reference : bodyReferences) {
-				emitReferenceDiagnostic(reference);
-			}
+			std::vector<PatternReference *> unresolvedBody(bodyReferences.begin(), bodyReferences.end());
 			for (PatternReference *reference : failedBodyWorklist.blockedReferences())
 				if (failedBodyWorklist.isWaiting(reference))
-					emitReferenceDiagnostic(reference);
-			for (PatternReference *reference : globalReferences) {
+					unresolvedBody.push_back(reference);
+			orderSourceReferences(unresolvedBody);
+			for (PatternReference *reference : unresolvedBody)
+				emitReferenceDiagnostic(reference);
+			std::vector<PatternReference *> unresolvedGlobals(globalReferences.begin(), globalReferences.end());
+			orderSourceReferences(unresolvedGlobals);
+			for (PatternReference *reference : unresolvedGlobals) {
 				emitReferenceDiagnostic(reference);
 			}
 		};

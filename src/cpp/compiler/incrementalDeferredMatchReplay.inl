@@ -12,6 +12,10 @@ struct BodyResolutionUnit {
 	std::vector<PatternReference *> references;
 	std::vector<size_t> deferredIndices;
 	std::string key;
+	size_t referenceCount = 0;
+	std::vector<CodeLine *> lines;
+	std::vector<const lsp::SourceFile *> referenceSources;
+	std::vector<std::vector<PatternElement>> referenceTokens;
 };
 
 void prepareDeferredMatchReplay(
@@ -59,7 +63,8 @@ void prepareDeferredMatchReplay(
 		const std::string &path = owner.path;
 		const Section *section = owner.section;
 		if (!priorDeclarations.contains(path) || current.at("declaration_digests").at(path) != priorDeclarations.at(path) ||
-			(treeChanges && (section->parent != context.mainSection || treeChanges->mayAffect(*section))) ||
+			(treeChanges && (section->parent != context.mainSection ||
+							 treeChanges->mayAffect(*section, &current.at("numeric_spellings").at(path)))) ||
 			(!stableBindings && !hasNoGlobalAccess(section)) || !prior.at("bodies").contains(path) || !bodies.contains(path) ||
 			bodies.at(path) != prior.at("bodies").at(path))
 			continue;
@@ -68,7 +73,7 @@ void prepareDeferredMatchReplay(
 			continue;
 		const auto &entries = *savedEntries;
 		const std::vector<PatternReference *> &references = owner.references;
-		if (references.size() != entries.size())
+		if (owner.referenceCount != entries.size())
 			continue;
 		bool sameShapes = true;
 		for (size_t index = 0; index < references.size(); index++) {
@@ -85,6 +90,8 @@ void prepareDeferredMatchReplay(
 		BodyResolutionUnit unit;
 		unit.section = const_cast<Section *>(section);
 		unit.path = path;
+		unit.referenceCount = owner.referenceCount;
+		unit.lines = owner.lines;
 		bool restoreUnit = section->parent == context.mainSection &&
 						   (diagnosticUnits.empty() || !diagnosticUnits.contains(digest(sectionIdentity(*section).dump()))) &&
 						   prior.at("body_units").contains(path);
@@ -106,7 +113,7 @@ void prepareDeferredMatchReplay(
 			if (!entry.finalKey.empty() && entry.finalKey != entry.initialKey)
 				precedenceKeys.emplace(reference, PriorMatchKey{entry.initialKey, entry.finalKey, section});
 		}
-		if (restoreUnit && !unit.deferredIndices.empty()) {
+		if (restoreUnit && (!unit.deferredIndices.empty() || context.retainedSourceOwners.contains(section))) {
 			unit.references = references;
 			unit.key = prior.at("body_units").at(path).get<std::string>();
 			bodyUnits.push_back(std::move(unit));
@@ -175,7 +182,8 @@ void preparePrecedenceMatchReplay(
 	MatcherPathSnapshots &matcherPaths, const std::vector<PatternReference *> &candidates, double &treeMilliseconds,
 	double &precedenceMilliseconds, double &ruleMilliseconds, size_t &signaturesReused
 ) {
-	if (precedenceKeys.empty() || context.patternPrecedenceRevision != 1)
+	// The projection also consumes this global product when no reference replays a key.
+	if (context.patternPrecedenceRevision != 1)
 		return;
 	auto started = Clock::now();
 	std::string tree = matcherTreeSignature(context);

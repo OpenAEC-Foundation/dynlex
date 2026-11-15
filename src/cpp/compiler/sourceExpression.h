@@ -9,8 +9,9 @@ struct Section;
 struct BodySyntaxProduct {
 	virtual ~BodySyntaxProduct() = default;
 	virtual void demand() = 0;
+	virtual void prepareReferences() = 0;
 	virtual bool syntaxMaterialized() const = 0;
-	virtual PatternReference *rootReference() const = 0;
+	virtual PatternReference *rootReference() = 0;
 	virtual const Section &bodyOwner() const = 0;
 };
 

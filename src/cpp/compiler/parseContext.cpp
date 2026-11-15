@@ -549,8 +549,10 @@ ParseContext::~ParseContext() {
 	llvmContext = nullptr;
 }
 
-std::vector<PatternDefinition *> ParseContext::sourceDefinitions(PatternReference *reference) {
-	if (reference->match)
-		return reference->match->matchingDefinitions;
-	return deferredHeaderDefinitions ? deferredHeaderDefinitions(reference) : std::vector<PatternDefinition *>{};
+std::vector<PatternDefinition *> ParseContext::sourceDefinitions(CodeLine *line) {
+	if (deferredHeaderDefinitions)
+		if (auto definitions = deferredHeaderDefinitions(line))
+			return *definitions;
+	PatternReference *reference = line->expression.rootReference();
+	return reference && reference->match ? reference->match->matchingDefinitions : std::vector<PatternDefinition *>{};
 }

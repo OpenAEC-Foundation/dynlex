@@ -34,6 +34,9 @@ BodyReferenceOwnership bodyReferenceOwnership(const Section *root) {
 
 template <typename Statistics> void emitIncrementalStatistics(const ParseContext &context, const Statistics &statistics) {
 	BodyReferenceOwnership bodyReferences = bodyReferenceOwnership(context.mainSection);
+	size_t retainedReferences = 0;
+	for (const auto &[_, owner] : context.retainedSourceOwners)
+		retainedReferences += owner.referenceCount;
 	std::unordered_set<const Section *> generatedBodies, generatedMaterialized;
 	for (const auto &product : context.sourceSyntaxProducts) {
 		const Section &owner = product->bodyOwner();
@@ -75,6 +78,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"body_syntax_units_parsed", statistics.bodySyntaxUnitsParsed},
 					  {"body_syntax_units_restored", statistics.bodySyntaxUnitsRestored},
 					  {"body_syntax_units_skipped", statistics.bodySyntaxUnitsSkipped},
+					  {"source_owner_units_retained", context.retainedSourceOwners.size()},
+					  {"source_owner_references_retained", retainedReferences},
 					  {"generated_body_units_materialized", generatedMaterialized.size()},
 					  {"generated_body_units_deferred", generatedBodies.size() - generatedMaterialized.size()},
 					  {"source_function_body_clones", context.sourceFunctionBodyClones},
@@ -200,6 +205,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 						{"selection", statistics.matcherProjection.selection},
 						{"sources", statistics.matcherProjection.sources},
 						{"declarations", statistics.matcherProjection.declarations},
+						{"owner_contexts", statistics.matcherProjection.ownerContexts},
+						{"source_owner_selection", statistics.matcherProjection.sourceOwnerSelection},
 						{"initial_bodies", statistics.matcherProjection.initialBodies},
 						{"final", statistics.matcherProjection.final},
 						{"headers", statistics.matcherProjection.headers},

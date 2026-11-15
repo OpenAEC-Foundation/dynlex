@@ -157,9 +157,9 @@ std::optional<Section *> createDataSectionMetadata(ParseContext &context, CodeLi
 
 bool prepareDataSectionCalls(ParseContext &context) {
 	for (CodeLine *line : context.codeLines) {
-		if (!line->sectionOpening || !line->expression.rootReference())
+		if (!line->sectionOpening || !line->expression)
 			continue;
-		auto definitions = context.sourceDefinitions(line->expression.rootReference());
+		auto definitions = context.sourceDefinitions(line);
 		DataSectionDefinition *data = nullptr;
 		for (PatternDefinition *definition : definitions) {
 			if (definition->section->dataSection) {
