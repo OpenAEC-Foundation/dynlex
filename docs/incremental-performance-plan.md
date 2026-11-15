@@ -33,8 +33,20 @@ predeclared 2% gate: 31 pairs give CPU ratio 0.990556, 95% interval
 CPU medians are 0.586047 and 0.585912 seconds. All executable/diagnostic comparisons
 pass, but the improvement is unproven. Reject this optimization for publication;
 preserve the isolated branch and evidence without running unnecessary full suites.
-Next: return to P03 semantic section-header products, using actual stage cost and
-a minimal skipped-work regression to select the implementation boundary.
+I035 tested P03 ordinary declaration/custom header descriptions independently.
+The prototype reuses all 1,283 eligible descriptions after a body edit, including
+unchanged headers within the edited file. Fifteen focused builds cover header
+renaming, configuration-only invalidation, diagnostics and recovery with fresh
+parity. However, header factory work increases from 2.362516 to 3.628028 ms.
+Across 31 pairs, CPU ratio is 1.004471, interval [0.993178, 1.007916]; wall ratio
+is 1.004605, interval [0.971648, 1.015455]. The predeclared 0.25% gain excluding
+parity is not established. Reject this separate cache, preserving the prototype
+and measured evidence without adding it to master or running full suites for it.
+P03 needs larger semantic section products shared with their consumers; caching
+keyword parsing alone adds bookkeeping without a demonstrated compilation gain.
+
+Next: repair the required-suite boundary for focused C++ numeric-literal and
+class-layout checks, then investigate complete semantic section products.
 The required/integration boundary also needs repair: focused numeric-literal and
 class-layout checks currently run only in integration. The current 331-check gate
 must not be described as all compiler regression coverage.
