@@ -3,7 +3,7 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state: I033 correctness qualification
+## Current state: I033 correctness repair published
 
 I033 fixes a pre-existing incremental diagnostic-order mismatch. A four-line
 provider-removal edit mixed a live edited body with an earlier reactivated cached
@@ -13,13 +13,26 @@ references now each report in source order within their existing phases.
 The correctness-only candidate 6d9b70d9 / executable 926a3eeb passes the new order
 and repair regression, 132 broader regression builds, three complete LLVM/diagnostic
 comparisons, 331 required checks uncached in 106.938 seconds, and all 463 integration
-checks in 800.626 seconds. Master publication remains pending. No speedup is claimed.
+checks in 800.626 seconds. Merged master faf35f5a / executable a900532f passes
+all 331 required checks uncached in 104.703 seconds (105.931 seconds observed).
+Compiler and source identities remained unchanged during verification. The merged
+worktree and branch are removed; its derived build objects are retained separately.
+The frozen compiler also passes five order/repair builds after worktree removal,
+using the verified archived source/runtime data. No speedup is claimed.
 
 I032's lookup optimization remains unqualified and unmerged on its preserved
 branch. Its original 31-pair CPU result improves 2.49%, but broader qualification
 uncovered this ordering defect, also reproduced on the published baseline.
 The combined fixed artifact has not passed the complete final qualification matrix.
 Do not describe the parked optimization as published or accepted.
+
+Next: I034 independently requalifies the parked lookup change against the corrected
+baseline, with identical frozen application and compiler-data inputs. The acceptance
+gate remains at least 2% median paired CPU improvement over 31 pairs, confidence
+excluding parity, clean-output parity, controls and full correctness verification.
+The required/integration boundary also needs repair: focused numeric-literal and
+class-layout checks currently run only in integration. The current 331-check gate
+must not be described as all compiler regression coverage.
 
 ### Previously published I030
 
