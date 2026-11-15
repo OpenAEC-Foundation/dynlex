@@ -2,6 +2,54 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## I054: calibrate startup across identical executable file copies
+
+Started 15 November 2026 at 22:06 UTC; first deadline 22:51 UTC. I053 is rejected
+on its preserved branch: its complete matrix establishes unchanged/comment
+regressions, so its conditional confirmation is not run. Master remains I052.
+This is an independent measurement audit with no compiler changes and no new
+acceptance run of I053.
+
+Compare the byte-identical dbc70f43 executable as two hard links to one inode,
+as an original versus a fresh copied file, as two independently copied files,
+and with original/copy path slots reversed. Use 61 alternating pairs per mode,
+check hashes/inodes/permissions, and capture CPU, elapsed time and minor/major
+faults. A copied-file difference >=0.5 ms or >=5% with an interval excluding
+parity would be relevant to the repeated ~1 ms fast-control gap. Preserve every
+mode and do not flush global caches. Bound owned temporary files and memory use.
+If copies do not explain the gap, record that negative result instead of blaming
+file state. Overall incremental compiler goal remains active and incomplete.
+
+### I054 result: file-state sensitivity established; independent staging validated
+
+The 61-pair A/A audit uses identical dbc70f43 bytes in every mode. Two paths to
+one inode give CPU ratio 1.001012 [.973956, 1.026356]. Original versus a fresh
+copy gives .922138 [.901112, .971429]; reversing path slots gives .904535
+[.879656, .942005]. Two independently copied files give .983156
+[.964844, 1.032276]. This establishes a preparation/file-state effect without
+any code change, but not its exact kernel mechanism or the whole cause of I053.
+
+The repository benchmark already copies executables. The preserved runner's
+hard-link shortcut did not implement that preparation contract. New comparisons
+materialize explicit archived inputs, copy both into independent executable files
+with identical preparation, and release owned intermediate inputs before caches
+are populated. The benchmark now rejects hard-linked staging and verifies the
+staged images it actually executes instead of the original input paths.
+Three focused filesystem/protocol tests fail before those fixes and pass after;
+the check belongs to the tooling integration group, not the required compiler gate.
+
+A real-program A/A calibration of the normalized protocol completes all 31
+unchanged pairs with identical output and independent staged inodes. CPU ratio
+1.009493 [.990582, 1.016076] establishes no difference. The source archives and
+staged images match the same ELF hash; temporary source materializations are
+removed. Preserve all old timing matrices and reject decisions. Any I053
+requalification must be a separate declared comparison under this validated
+preparation, not an overwrite or relabeling of its failed matrix.
+
+Evidence: i054-startup-inodes.json, i054-staging-red.log,
+i054-normalized-aa.json/.staging.json, and normalized_archive_benchmark.py.
+No C++ compiler source is changed by this measurement repair.
+
 ## Latest iteration: I052 dependency correctness qualified on master
 
 Source-match dependency facts now have body-layout and resolved-match producer

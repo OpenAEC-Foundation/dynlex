@@ -805,6 +805,7 @@ run_auxiliary_test "process_error_mode" 10 python3 -B "$SCRIPT_DIR/test_process_
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
 run_auxiliary_test "runtime_feature_macros" 10 python3 -B "$SCRIPT_DIR/test_runtime_feature_macros.py"
 run_auxiliary_test "vulkan_test_environment" 10 python3 -B "$SCRIPT_DIR/test_vulkan_test_environment.py"
+run_auxiliary_test "benchmark_staging" 10 python3 -B "$SCRIPT_DIR/test_benchmark_staging.py" "$PROJECT_DIR"
 if [[ "$is_windows" == "true" ]]; then
     run_auxiliary_test \
         "windows_dependency_installer" 10 \
