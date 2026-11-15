@@ -3,7 +3,7 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state after I028 candidate qualification
+## Current state after I028
 
 I028 eliminates obsolete projection-field copies without changing cache formats
 or invalidation. On the frozen LEXI8 program, 31 unused-edit pairs improve median
@@ -11,7 +11,9 @@ paired CPU time by 4.3%; 31 active-body pairs are consistent with parity. Common
 cold and fast controls show no established regression. All 331 required checks
 pass uncached in 105.689 seconds, relevant native-cache integration passes, and
 three complete normalized LLVM/diagnostic comparisons agree with fresh builds.
-Local-master rebuild, required verification and publication remain pending.
+Local master is rebuilt and verified: all 331 required checks pass uncached in
+105.088 seconds (106.041 seconds observed), with unchanged source and compiler
+hashes. The published executable is 27d4d98e; source changes are merged.
 
 I027 is unaccepted: source-owner retention skips most reference allocations,
 but the 31-pair unused-edit CPU comparison failed its >=2% improvement gate.
@@ -2219,5 +2221,23 @@ input-path ModuleID comment. No full 463-check integration run is claimed here.
 Evidence under `.cache/incremental-evidence/structured-20261113`: `i028-cost-summary.json`,
 `i028-{projection-probe,projection-detail,focused,ir-parity}/report.json`,
 `i028-observed-{required,relevant-integration}.json`, `i028-copy-cost.json`, and
-`i028-parked-build-compaction.json`. Local-master publication remains pending.
+`i028-parked-build-compaction.json`. Local-master publication is recorded below.
 The full compiler-wide incremental goal is active and incomplete.
+
+
+I028 local-master verification: source 00243667, executable 27d4d98e, all 331
+required checks uncached in 105.088 seconds (106.041 seconds observed). Source and
+executable hashes remain unchanged across that run. The executable is archived
+read-only as `i028-compilers/bin/published`; root build/required reports are
+`i028-root-{build,required}.json`. No complete-incremental claim is made.
+
+Next selected goal, I029/P03: requalify the isolated source-owner retention code
+against I028. Restore its verified compressed native objects, merge local master
+into that worktree, record a new start/deadline and immutable baseline, and use
+new scoped probes to account for numeric/source-context and persistence costs.
+Require a fresh 31-pair gain with confidence excluding parity, actual zero-allocation
+work counters, full activation/classification/lookup and LLVM parity, the uncached
+120-second required gate and relevant integration. Retain the existing >=2%
+source-owner performance threshold. If it still fails, park it and select the
+next independent measured hotspot; do not waive the gate. The integration-suite
+classification audit and shared frontend/debug/tooling coverage remain open.
