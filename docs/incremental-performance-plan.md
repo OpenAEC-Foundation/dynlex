@@ -2241,3 +2241,8 @@ work counters, full activation/classification/lookup and LLVM parity, the uncach
 source-owner performance threshold. If it still fails, park it and select the
 next independent measured hotspot; do not waive the gate. The integration-suite
 classification audit and shared frontend/debug/tooling coverage remain open.
+
+I028 is published on master. Its merged worktree/branch are removed. A six-build
+archived baseline/candidate replay passes after removal, with identical executable
+output and unchanged compiler/data hashes; the temporary data-root restoration
+cleans up afterward. Evidence: `i028-archived-replay.json/log`.
