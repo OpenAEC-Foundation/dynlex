@@ -50,6 +50,12 @@ Evidence: i054-startup-inodes.json, i054-staging-red.log,
 i054-normalized-aa.json/.staging.json, and normalized_archive_benchmark.py.
 No C++ compiler source is changed by this measurement repair.
 
+The measurement repair is merged on master. All three staging tests and the
+required-routing policy check pass. All 333 required checks pass uncached in
+92.190s (93.124s observed), with source/compiler identities unchanged. The compiler
+remains byte-identical to 19f9b48d; no C++ rebuild or library behavior change is
+claimed. I053's failed comparisons remain rejected and preserved separately.
+
 ## Latest iteration: I052 dependency correctness qualified on master
 
 Source-match dependency facts now have body-layout and resolved-match producer
