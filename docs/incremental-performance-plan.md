@@ -2630,3 +2630,35 @@ verified before removal, reclaiming about 523 MiB net. The current root target
 still reports no missing work. Completed duplicate candidate/test executables are
 removed only after their suites pass; the frozen compiler and rebuildable objects
 remain. The complete incremental compiler objective is still unfinished.
+
+## I039: independent required test groups
+
+Started 15 November at 09:50:42 UTC, first deadline 10:35:42. The required
+runner now overlaps its long incremental check with the other independent
+auxiliary checks and fixture worker. Every group has isolated counters and
+result storage; the parent joins both workers even after a crash. The unchanged
+120-second outer watchdog covers the entire post-build suite. Required DynLex
+fixtures still disable incremental caching; no checks or assertions were removed.
+
+Red-before-green regressions cover concurrent worker rendezvous, counter
+isolation, whitespace-bearing failure names, output aggregation, worker crashes,
+success/failure status recording and joining a surviving worker after a crash.
+A successful first auxiliary check previously returned the arithmetic increment's
+status 1; the helper now explicitly returns after recording its test result.
+The obsolete passed=1 test stub is removed. The initial real grouped run failed
+on that status contract; its evidence remains preserved.
+
+With frozen unqualified I038 compiler 2e567cdc, all 333 required checks pass
+uncached in 103.988 seconds (105.092 observed). The harness-only cherry-pick
+799e743c on master leaves its existing compiler 0ca41928 unchanged. After removing
+both focused C++ unit executables and their four dedicated objects, all 333
+checks pass in 113.370 seconds (115.233 observed), including those rebuilds.
+Compiler and tracked source hashes remain unchanged during each run. These
+passes establish the budget; censored earlier failures do not establish a paired
+percentage speedup. This qualifies only the runner change. I038's compiler
+optimization remains unmerged pending its remaining full qualification.
+
+Evidence: i039-worker-regression-red.log, i039-auxiliary-status-red.log,
+i039-join-regression-red.log, i039-observed-required.json (preserved failed
+status-contract run), i039-fixed-observed-required.json,
+i039-cold-cpp-unit-inputs.json and i039-root-required.json.
