@@ -1449,8 +1449,15 @@ the cache compares the changed paths' required literals against each
 owning function before replay; a potentially affected function rematches.
 Changes that alter precedence rules or participating families also rematch. A precedence
 rebuild never carries replay keys into a later pass.
-An edit confined to the bodies of ordinary functions that had no inferred
-instantiation in the prior build can stop after pattern resolution and validation.
+An edit confined to eligible unread function bodies can stop after pattern
+resolution and validation. This includes flex bodies: absence of a native
+instantiation alone does not prove that inference did not consume a body.
+Recorded inference reads, constraint probes, callable queries and the dependency
+closure of retained IR keep consumed bodies active, including reads from rejected
+trials and compile-time-only calls. Only owners represented in the logical source
+stream enter the inactive source mask; a generated accessor with no source body
+cannot mask an input. Exposed functions and owners containing nested definitions
+remain outside this path.
 An unchanged inactive body with no remaining implicit-parameter candidates can
 skip resolution even when its pattern begins with a word used by other calls;
 its declaration cannot change through body-driven parameter promotion.
@@ -1463,6 +1470,10 @@ the declaration on the same physical line.
 It refreshes body and resolved-match fingerprints for edited inactive functions,
 then reuses the prior inferred result and linked objects. Active function edits
 traverse type inference again; eligible unchanged instantiations reuse cached summaries.
+`type_inference_reused` reports whole-result reuse; `function_body_inference_passes`,
+`preinferred_instantiations`, `inference_source_definitions_indexed`,
+`ir_generation_ms`, `objects_built` and `link_ms` expose remaining work rather than
+counting inherited products as newly restored functions.
 Blank and comment-only logical lines do not contribute to function-body fingerprints.
 When inference is reused, the saved constraint-probe schedule and class instantiations
 remain attached to the next snapshot even if its frontend projection was rebuilt.

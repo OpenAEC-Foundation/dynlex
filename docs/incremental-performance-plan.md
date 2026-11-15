@@ -2,6 +2,58 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## I038 unread flex inference dependencies: unqualified
+
+Started 15 November at 08:33:57 UTC; first deadline 09:18:57. The single
+evidence-backed extension ends at 10:03:57. Published baseline remains I037.
+An unread flex body must not invalidate executable inference merely because it
+can expand at compile time. Actual inference reads, constraint probes, callable
+queries and the dependency closure of retained IR must still protect consumers.
+Generated bodies absent from the logical source stream cannot mask source input.
+
+Candidate `7b75ab49` / compiler `2e567cdc` passes 16 focused and 207 broader
+incremental-versus-clean builds. Qualification is incomplete. The first candidate
+halved the target's CPU cost but established a 2.9% ordinary-edit regression;
+those measurements do not qualify the corrected candidate. Its first 31-pair
+ordinary control is inconclusive. The independent 63-pair confirmation stopped
+after 101 rows on an explicit disk-full cache-write error. Preserve that failed
+report. After losslessly archiving completed historical cache states, the same
+artifact and workload complete all 63 pairs: CPU ratio 1.006978, 95% interval
+[0.991847, 1.011317]. No ordinary-edit change is established. The incomplete
+disk-full attempt supplies no timing result.
+
+The corrected target completes 31 alternating pairs on the frozen real LEXI8
+application. CPU medians are 1.274596 to 0.631553 seconds; median paired ratio
+0.499821, 95% interval [0.490039, 0.508746]. Elapsed medians are 1.303100 to
+0.645313 seconds; paired ratio 0.498825 [0.480363, 0.515351]. Inference processing
+falls from 255.768 ms to effectively zero, and code generation processing from
+324.413 ms to zero. The baseline already performs zero function-body inference
+passes and builds zero objects: the saved work includes validation/restoration
+of cached inference products, their dependency snapshot and IR processing.
+Candidate inference definitions indexed are zero instead of 2,145. Both variants
+skip linking. Source/pattern frontend work still runs, about 348 ms in the
+candidate; this does not establish complete frontend incrementality.
+
+The predeclared target gate (at least 10% median paired CPU gain, 95% interval
+excluding parity) passes. All eight common/cold/fast controls establish no
+regression, and four full LLVM/diagnostic comparisons agree with clean builds.
+Two complete required attempts hit the unchanged 120-second limit. The full
+incremental driver independently passes in 107.845 seconds with profiling, but
+the second required attempt reaches only the subsequent pattern-precedence
+check before timing out. The runner serializes the long incremental auxiliary
+check with the other independent auxiliary checks. Concurrent external web
+tests are observed; their exact contribution to elapsed time is unproven.
+Preserve both failures and park I038 without merging it. Integration has not run.
+
+I039 is a separate test-runner goal: overlap that independent long check with
+the other auxiliary checks, preserving every assertion, result, failure, fixture
+cache policy and the 120-second post-build budget. Prove worker concurrency and
+failure propagation before running the complete uncached required suite. This
+change must qualify independently on master before I038 resumes qualification;
+it is not another extension of the compiler optimization.
+Complete semantic section products and tooling/other output modes remain
+separate unfinished parts of the full goal.
+
 
 ## Current state: I037 declaration retention verified on master
 
