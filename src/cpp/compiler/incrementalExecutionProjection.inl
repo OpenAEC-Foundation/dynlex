@@ -4,7 +4,8 @@
 std::optional<Json> refreshTopLevelExecutionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
 	const ResolvedDeclarationUnits &declarationUnits, IncrementalMatcherCache &matcherCache,
-	std::string_view initialMatcherTree, const Json &prior, SourceProjectionWork *work, size_t &reusedSections
+	std::string_view initialMatcherTree, const Json &prior, SourceProjectionWork *work, size_t &reusedSections,
+	ProjectionCopyWork &copyWork
 ) {
 	Json bodies = definitionBodyDigests(context, sections);
 	if (bodies != prior.at("bodies"))
@@ -27,19 +28,18 @@ std::optional<Json> refreshTopLevelExecutionProjection(
 			selectedSections.insert(section);
 		}
 		if (reusableCodegenSection(*section)) {
-			if (!prior.at("function_declarations").contains(path) || !prior.at("matches").contains(path) ||
-				!prior.at("match_entries").contains(path))
+			if (!prior.at("matches").contains(path) || !prior.at("match_entries").contains(path))
 				return std::nullopt;
 			reusable.insert(section);
 		}
 	}
-	if (selected != prior.at("inactive") || reusable.size() != prior.at("function_declarations").size())
+	if (selected != prior.at("inactive") || reusable.size() != prior.at("matches").size())
 		return std::nullopt;
 	Json nonexecution =
 		sourceProjection(context, observations, reusable, true, true, true, &prior.at("ambient_nonexecution_sources"), work);
 	if (!sourceProjectionsEqual(nonexecution, prior.at("ambient_nonexecution_sources")))
 		return std::nullopt;
-	Json refreshed = prior;
+	Json refreshed = copyProjectionFields(prior, {"binding_units", "initial_parameter_counts", "matcher_projection"}, copyWork);
 	refreshed["sources"] =
 		sourceProjection(context, observations, selectedSections, false, false, false, &prior.at("sources"), work);
 	refreshed["ambient_sources"] =

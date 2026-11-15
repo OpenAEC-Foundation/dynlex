@@ -1,0 +1,7 @@
+class:
+    patterns:
+        token
+    release:
+        @intrinsic("discard", 0)
+to use managed: @intrinsic("discard", @intrinsic("construct", token))
+use managed

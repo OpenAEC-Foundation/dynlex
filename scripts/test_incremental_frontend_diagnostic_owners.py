@@ -50,8 +50,8 @@ def check_frontend_diagnostic_units(root, build):
     assert "Ambiguous single-word reference" in restored[1], restored[1]
     program = read_program(root / "cache", main)
     projection = program["all_function_projection"]
-    healthy_path = next(path for path, unit in projection["function_declarations"].items()
-                        if unit["identity"]["header"] == "consume item:")
+    healthy_path = next(path for path, unit in projection["inactive"].items()
+                        if unit["header"] == "consume item:")
     healthy_key = projection["matcher_projection"]["body_units"][healthy_path].encode()
     manifest_path = Path(restored[0]["cache_entry"])
 

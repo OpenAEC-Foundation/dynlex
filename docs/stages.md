@@ -247,6 +247,9 @@ Failed body matches wait on the specific trie edges and endpoints inspected by t
 Adding a definition wakes a waiting reference only when one of those conditions changes;
 deadlock recovery still sees all waiting references. This avoids rescanning every failed
 reference on each resolution pass.
+Unmatched variable-like references become eligible for lexical binding after definition
+resolution completes. Reclassification can reopen that stage; eligibility is withdrawn
+while definitions are pending, then waiting references are woken again when it completes.
 An expression reference that cannot mention a live implicit parameter candidate waits
 until definitions are indexed, even when another reference in the same definition must
 classify that candidate. This also applies to section replacements and class lifecycle
@@ -267,6 +270,18 @@ Unchanged functions carry these keys forward without copying or serializing thei
 individual reference records. A changed function decodes only its previous tables
 and retains matching references' identities through string views. The matcher index
 retains unchanged segments without repackaging their units. `matcher_projection_ms` reports capture cost.
+Projection refresh and program publication copy only prior fields that will be
+retained. Matcher, binding and initial-parameter products are published from the
+current frontend without first copying their obsolete values. The counters
+`projection_fields_copied` and `projection_fields_copy_skipped` count these
+top-level field copies, not compiler functions or semantic units.
+With `--incremental-stats`, `matcher_projection_detail_ms` separates owner
+selection, source views, declarations, body products, headers and reference tables;
+`projection_snapshot_detail_ms` separates binding/classification snapshots and
+projection copies. `payload_write_detail_ms` records comparison, encoding and
+writing times, in that order, for each stored payload. These are nested probes,
+not additive stage totals; initial body capture occurs at the earlier resolution
+boundary. Disabled probes perform no clock reads.
 An unchanged tree and surrounding declarations let unchanged bodies retain their
 matcher declaration digests. `matcher_declarations_reused` counts those retained
 without serializing the declaration again; edits inside scope rules invalidate this proof.
@@ -287,12 +302,14 @@ report fingerprint work separately from matcher executions.
 Lexical scope is fingerprinted again for every lookup, so a new declaration can invalidate the previous match.
 Resolved declaration projections audit settled signature inputs once at the frontend boundary. A shared value
 stream describes identities, pattern elements, choices, implicit promotions, locality, conversions, return contracts
-and precedence metadata to both a lightweight fingerprint writer and a structured-record writer. The aggregate
-consumes ordered section/fingerprint pairs. An unchanged signature retains its stored declaration record even when
+and precedence metadata to both a lightweight fingerprint writer and the structured writer used by semantic consumers.
+Persistent function projections retain only the fingerprints: no consumer needs their full declaration values.
+The aggregate consumes ordered section/fingerprint pairs. An unchanged signature retains its fingerprint even when
 its executable body changed; a changed implicit parameter or external scope rule changes the settled fingerprint.
-`declaration_fingerprints` covers pattern providers and lifecycle codegen records. Input auditing remains work:
-statistics report its time and checked unit count separately from changed/reused projection units and actual
-structured records built/reused. These products describe resolved declarations, not inferred body behavior; matcher,
+`declaration_fingerprints` covers pattern providers and lifecycle units. Reusable function/lifecycle membership is
+the existing `matches` key set, which excludes flex and nested-definition owners. Input auditing remains work:
+statistics report its time and checked unit count separately from changed/reused projection units.
+These products describe resolved declarations, not inferred body behavior; matcher,
 inference, diagnostic and backend dependencies still govern those later results.
 Source, syntax-profile, matcher-tree, scope-rule and global-binding proofs can retain unchanged declaration inputs without
 auditing them again. Changed bodies still audit their settled signatures before this proof may stop propagation.
@@ -967,6 +984,7 @@ order and release them in reverse order; pointer copies, arguments, returns, and
 Lifecycle inference follows runtime expressions from main, exposed functions and their selected callees. Type-only
 operands do not make their class lifecycle bodies reachable. Runtime owning values, nested owning fields and explicit
 destruction do; lifecycle bodies can in turn require more runtime types. Retain/release declaration pairing is validated
+when the class section is finalized, before any type consumer can inspect its lifecycle,
 independently of runtime use. Intrinsic type-only operand classification is shared with memory diagnostics.
 Resolved data-field values and symbolic callable constants participate in this graph:
 their generated arrays and callbacks can own managed values even when the containing
@@ -1991,15 +2009,13 @@ different input contexts are not merged. A repeated
 known-argument call can use that value without reinferring the body; a new
 argument evaluates the retained typed body normally. Nested callee
 body reads remain dependencies of the observed value.
-Reading a named global declaration also records its initializing entry
-execution as a concrete query dependency. Its provider calls, declaration
-arguments and compile-time control flow therefore remain inputs of a folded
-reader even when the reader's source and the global's structural type are unchanged.
-The read is recorded during inference even if its value becomes known only in
-later pure execution.
-Source-only dependencies and execution dependencies are distinct: an absent
-execution scope denotes a source read, while an explicitly selected null scope
-identifies entry execution.
+Reading a named global declaration also records its initializing entry execution.
+This happens before pure evaluation can discover a constant value, so provider
+calls, declaration arguments and compile-time control flow remain dependencies
+when the reader's source and the global's structural type stay unchanged.
+An absent execution scope means a source read; an engaged scope with a null
+storage identity means entry execution. Pure evaluation preserves that distinction
+when forwarding dependency reads.
 Summaries record return address provenance and storage-parameter relationships, plus
 writes, known constants, address provenance, and address escapes for global variables.
 Storage origins retain their lexical declaration and logical invocation across compiler

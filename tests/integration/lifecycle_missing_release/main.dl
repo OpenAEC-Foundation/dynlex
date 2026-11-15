@@ -1,9 +1,0 @@
-import lib/std.dl
-
-class:
-    patterns:
-        [an|] incomplete managed value
-    members:
-        number as an integer
-    retain:
-        ignore @intrinsic("lifecycle value")

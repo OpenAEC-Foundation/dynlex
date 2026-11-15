@@ -564,29 +564,6 @@ static bool inferSection(
 #include "runtime_lifecycle_uses.inl"
 
 static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceContext &callerContext) {
-	std::vector<ClassSection *> classes;
-	std::function<void(Section *)> collectClasses = [&](Section *section) {
-		if (!section)
-			return;
-		if (section->type == SectionType::Class)
-			classes.push_back(static_cast<ClassSection *>(section));
-		for (Section *child : section->children)
-			collectClasses(child);
-	};
-	collectClasses(parseContext.mainSection);
-
-	for (ClassSection *classSection : classes) {
-		ClassDefinition *definition = classSection->classDefinition;
-		requireCompilerInvariant(definition != nullptr, "class section is missing its class definition");
-		if (static_cast<bool>(definition->retainSection) != static_cast<bool>(definition->releaseSection)) {
-			parseContext.diagnostics.push_back(Diagnostic(
-				parseContext, Diagnostic::Level::Error, "managed class requires both retain and release sections",
-				classSection->openingLine ? Range(classSection->openingLine, classSection->openingLine->patternText) : Range()
-			));
-			return false;
-		}
-	}
-
 	RuntimeLifecycleUses uses(callerContext);
 	uses.collectSection(parseContext.mainSection);
 	uses.collectExposedFunctions(parseContext.mainSection);

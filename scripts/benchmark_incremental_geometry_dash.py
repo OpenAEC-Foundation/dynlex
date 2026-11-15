@@ -109,7 +109,7 @@ for name, samples in results.items():
                          "matcher_key_ms", "matcher_restore_ms", "matcher_snapshot_ms", "matcher_projection_ms",
                          "projection_ms", "projection_setup_ms", "projection_body_ms",
                          "projection_declarations_ms", "projection_matches_ms",
-                         "projection_declaration_sections_reused",
+                         "declaration_projection_units_reused",
                          "projection_inactive_ms", "projection_ambient_ms",
                          "source_projection_mask_ms", "source_projection_files_ms",
                          "preinference_ms", "inference_ms", "ir_generation_ms", "snapshot_ms",

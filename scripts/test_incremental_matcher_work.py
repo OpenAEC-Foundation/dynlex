@@ -6,13 +6,13 @@ from cache_payloads import read_payload
 from pathlib import Path
 
 
-def matcher_record_keys(segment, kinds=None):
+def matcher_records(segment, kinds=None):
     """Inspect selected matcher records without reconstructing compiler objects."""
     packed = segment.read_bytes().split(b"\n", 2)[2]
     header = b"DynLex matcher results v6\n"
     assert packed.startswith(header)
     position = len(header)
-    result = set()
+    result = {}
     while position < len(packed):
         key = packed[position:position + 64]
         position += 64
@@ -28,9 +28,13 @@ def matcher_record_keys(segment, kinds=None):
         position += length
         assert value
         if kinds is None or value[0] in kinds:
-            result.add(key)
+            result[key] = value
     assert position == len(packed)
     return result
+
+
+def matcher_record_keys(segment, kinds=None):
+    return set(matcher_records(segment, kinds))
 
 
 def matcher_result_keys(segment):

@@ -10,6 +10,7 @@ struct ClassSection : public DefinitionSection {
 
 	ClassDefinition *classDefinition;
 
+	bool finalize(ParseContext &context) override;
 	virtual bool processLine(ParseContext &context, CodeLine *line) override;
 	virtual Section *createSection(ParseContext &context, CodeLine *line) override;
 };

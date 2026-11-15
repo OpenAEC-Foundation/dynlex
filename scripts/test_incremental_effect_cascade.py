@@ -4,8 +4,8 @@ from test_incremental_program_cache import read_program
 
 
 def summary(program, header):
-    path = next(path for path, entry in program["all_function_projection"]["function_declarations"].items()
-                if entry["identity"]["header"] == header)
+    path = next(path for path, entry in program["all_function_projection"]["inactive"].items()
+                if entry["header"] == header)
     variants = program["inference_summaries"][path]
     assert len(variants) == 1
     return next(iter(variants.values()))

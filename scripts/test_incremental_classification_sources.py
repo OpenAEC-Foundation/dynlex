@@ -1,6 +1,6 @@
 """File-local definition origins participate in incremental classification."""
 
-from test_incremental_program_cache import read_program
+from test_incremental_program_cache import classification_promotions, read_program
 
 
 def check_local_pattern_source_move(root, build):
@@ -13,14 +13,14 @@ def check_local_pattern_source_move(root, build):
     local = header + '        [value]\n' + f'        import {helper.name}\n' + body + tail
 
     def parameters():
-        declarations = read_program(root / "cache", main)["all_function_projection"]["function_declarations"]
-        return [element[1] for unit in declarations.values() for definition in unit["definitions"]
-                if definition["spelling"] == "outer value"
-                for element in definition["elements"] if element[4]]
+        program = read_program(root / "cache", main)
+        path, = [path for path, identity in program["all_function_projection"]["inactive"].items()
+                 if identity["header"] == "outer value:"]
+        return classification_promotions(root / "cache", program)[path]
 
-    for source, patterns, expected in ((imported, '        [value]\n', ["value"]),
-                                       (local, '', []),
-                                       (imported, '        [value]\n', ["value"])):
+    for source, patterns, expected in ((imported, '        [value]\n', {(0, 2)}),
+                                       (local, '', set()),
+                                       (imported, '        [value]\n', {(0, 2)})):
         main.write_text(source)
         helper.write_text(patterns)
         edited = build(entry=main)

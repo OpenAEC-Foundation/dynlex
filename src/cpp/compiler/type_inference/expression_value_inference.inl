@@ -155,9 +155,8 @@ bool ExpressionInferenceSupport::inferVariable() {
 		if (var->isGlobal)
 			context.noteAccessedGlobalReference(var->definition);
 		if (var->isGlobal && var->dataInitializer && !expressionIsLValueOnlyUse(context, expr)) {
-			// The declaration's value may become known only during pure execution.
-			// Retain its producer before that execution can publish folded results.
-			// An engaged null scope identifies entry execution; no scope is a source read.
+			// Pure execution may discover the value after inference visits this read.
+			// An engaged null scope retains entry execution, rather than only source.
 			context.recordBodyRead(*context.parseContext.mainSection, std::shared_ptr<const VariableStorageScope>{});
 		}
 		if (context.currentInstantiation && var->isGlobal && !var->dataInitializer && !expressionIsLValueOnlyUse(context, expr))
