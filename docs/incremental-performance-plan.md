@@ -2277,3 +2277,28 @@ I028 is published on master. Its merged worktree/branch are removed. A six-build
 archived baseline/candidate replay passes after removal, with identical executable
 output and unchanged compiler/data hashes; the temporary data-root restoration
 cleans up afterward. Evidence: `i028-archived-replay.json/log`.
+
+## I029: requalify source-owner retention against I028
+
+Started 15 November at 02:52:54 UTC, first deadline 03:37:54. Baseline is published
+master 0fd33835, executable 27d4d98e. The source-owner branch merges local master
+at d80fa557; I027's failed performance decision is preserved. New scoped probes
+separate owner numeric/source-context capture and early source-owner selection.
+Their times overlap declaration capture/resolution respectively and are not
+additional stage totals. No new performance result is claimed before rebuilding.
+
+Accept only a new >=2% median paired unused-edit CPU gain over 31 pairs, confidence
+excluding parity, no established common/cold regression, actual allocation-skipping
+counters, activation/classification/lookup and full LLVM/diagnostic parity, the
+uncached required gate <=120 seconds, and relevant integration. Otherwise park
+again and select an independent measured hotspot.
+
+The UI thread has priority for the heavy-job slot released after I028. Its native
+build and replacement ownership-test build were confirmed live during preparation;
+this candidate's C++ build remains queued. Archived objects have verified bytes.
+Restoring their floating-point timestamps initially made Ninja schedule 42 needless
+recompiles; exact recorded timestamps from its existing dependency database restore
+the two-step build (incrementalCompilation.cpp and link), while changed inputs
+still invalidate the object. Evidence: `i029-object-timestamp-restoration.json`.
+An independent classification-interface/topology opportunity is audited, not
+implemented or claimed as a speedup, in `i029-classification-opportunity-audit.json`.
