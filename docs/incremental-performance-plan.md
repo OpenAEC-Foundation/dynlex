@@ -2717,3 +2717,23 @@ iteration profiles eligibility/dependency and match-payload availability checks
 before changing those contracts. The published I040 compiler and its verified
 102.778-second required gate remain unchanged. Evidence is
 i041-primary-stage-analysis.json and i041-binding-facts-cost-unused-flex-31.json.
+
+## I042–I043: proof work screened and measured, unmerged
+
+I042 measures 14,706 classification payload availability checks at 7.194 ms of
+652.123 ms total. Even eliminating that work cannot meet its 2% gate, so no
+optimization is implemented. Its probes and red independence contract stay on
+branch codex/incremental-resolution-proofs.
+
+I043 shares unchanged scope indexes and makes function binding proofs follow
+actual query demand. Its isolated candidate passes 27 focused and 207 broader
+builds, shares 4,219 scope entries and builds 10 proofs instead of 375. Binding
+falls 24.526 to 11.426 ms, but all 31 real-program pairs fail the whole-build
+gate: CPU ratio 0.991796 [0.976988, 1.005733], wall 0.982140
+[0.970746, 1.014730]. No overall speedup is established. Preserve branch
+codex/incremental-binding-inputs; no further timing retries or full qualification.
+The next audit targets the larger matcher-store load/index cost. Production
+compiler I040 and its 102.778-second required qualification remain unchanged.
+The full incremental compilation objective remains incomplete.
+Evidence: i042-screen-decision.json, i043-candidate-stage-analysis.json and
+i043-candidate-unused-flex.json.
