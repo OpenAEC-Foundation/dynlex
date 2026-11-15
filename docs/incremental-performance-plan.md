@@ -2,6 +2,25 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## I040: corrected unread-flex artifact qualified; publication pending
+
+Started 15 November at 10:02:10 UTC, first deadline 10:47:10. Production
+source remains byte-identical to 7b75ab49 and frozen compiler 2e567cdc after
+merging the independently verified I039 runner. No new compiler optimization
+or timing retry is part of this qualification. The fixed artifact's 31-pair
+unread-flex result is a 50.02% median paired CPU reduction; all eight controls
+establish no regression, and four complete LLVM/diagnostic comparisons agree.
+The 16 focused and 207 broader regression builds remain valid for that artifact.
+
+With the final runner, all 333 required checks pass uncached within 120 seconds,
+and all 461 integration checks pass in 806.603 seconds (808.098 observed), with
+source/compiler identities unchanged. I038's two failed required attempts and
+I039's initial worker-status failure remain preserved. Local-master merge,
+serial rebuild, required gate, push and archived replay are still pending.
+The full compiler goal remains incomplete; the next-opportunity audit is
+i040-next-opportunity-audit.json, an unimplemented source/resolution-product
+hypothesis.
+
 ## I038 unread flex inference dependencies: unqualified
 
 Started 15 November at 08:33:57 UTC; first deadline 09:18:57. The single
