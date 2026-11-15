@@ -28,8 +28,8 @@ failed=0
 '''
     failures = []
     for suite in ("required", "integration"):
-        for name, expected_suite in (("numeric_literals", "integration"),
-                                     ("class_layout", "integration"),
+        for name, expected_suite in (("numeric_literals", "required"),
+                                     ("class_layout", "required"),
                                      ("compiler_stack", "required"),
                                      ("timeout_output", "required")):
             result = subprocess.run(
