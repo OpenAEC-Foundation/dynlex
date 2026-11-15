@@ -65,6 +65,13 @@ the compiler behavior rather than special-casing the website's source.
 23. **C++23 diagnostic ownership.** Use the supported shared-pointer ownership
     count for diagnostic copy-on-write. The removed `unique()` member compiled
     with the native standard library but prevented the Emscripten build.
+24. **Inference-product lifetimes.** Retain immutable snapshots of observed and
+    newly produced inference summaries, bodies and classes. Recording only that
+    a path existed allowed another build's cache eviction to remove it before a
+    later read. A 12-line import-free program reproduces the failure when GDB
+    evicts its summary at the read boundary; after the fix it compiles and prints
+    the expected value. Snapshot tests cover eviction, replacement and ownership
+    of newly produced bytes.
 
 Focused coverage includes the import-free required fixtures and the incremental
 body-demand, declaration-cache, validation-flow and compiler-stack checks under
@@ -86,6 +93,16 @@ Integration passed 520 checks; two checks hit the same Farm document compilation
 65.5 seconds. The uncached control completed correctly in 22.2 seconds. Both
 cached compilers encoded 5,129 bodies into 383 unique stored bodies. These are
 measurements of existing cache work, not a newly established compiler defect.
-The Farm document fixture now declares a 120-second compilation budget, shared
-by the standalone and model runners. Those reruns, the merged browser compiler
-build, its smoke checks and the final packaged website checks remain pending.
+The Farm document fixture declares a 120-second compilation budget, shared by
+the standalone and model runners. The next full run passed 519 integration
+checks, including both previously failing ownership checks. The saved-state
+model then exceeded its separate default 60-second guard. Isolated optimized
+compiles completed correctly in 81.3 seconds with the current compiler and
+61.6 seconds with the previously qualified compiler; both matched all 145
+recorded save scenarios. The unchanged model now resides beside the Farm
+document fixture and uses its existing budget. Its rerun exposed the separate
+inference-product lifetime bug described above.
+
+The latest cache fix passes the native build, snapshot tests and deterministic
+eviction reproducer. Fresh required, integration, browser-compiler and packaged
+website qualification remain pending for that fix.

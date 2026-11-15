@@ -19,8 +19,8 @@ const models=[
   {name:'simulation',entry:'tests/web/farm_world_model.dl',fixture:'farm-simulation.json'},
   {name:'goals',entry:'tests/integration/site_coding_goals/main.dl',expected:'tests/integration/site_coding_goals/expected.txt'},
   {name:'roles',entry:'tests/integration/site_farm_roles/main.dl',expected:'tests/integration/site_farm_roles/expected.txt'},
-  {name:'saves',group:'state',entry:'tests/web/farm_save_model.dl',fixture:'farm-saves.json'},
-  {name:'resume',group:'state',entry:'tests/web/farm_save_model.dl',fixture:'farm-resume.json'},
+  {name:'saves',group:'state',entry:'tests/integration/site_farm_document/saved_state_model.dl',fixture:'farm-saves.json'},
+  {name:'resume',group:'state',entry:'tests/integration/site_farm_document/saved_state_model.dl',fixture:'farm-resume.json'},
   {name:'documents',group:'ownership',entry:'tests/integration/site_farm_document/main.dl',expected:'tests/integration/site_farm_document/expected.txt'},
   {name:'preparation',group:'ownership',entry:'tests/integration/site_farm_preparation/main.dl',expected:'tests/integration/site_farm_preparation/expected.txt'},
 ];

@@ -37,15 +37,15 @@ class InferenceSummaryStore {
 	void observe(const Json &keys, const Json &bodies, const Json &classes) {
 		for (const Json &key : keys) {
 			const std::string &identity = key.get_ref<const std::string &>();
-			available[identity] = recordCacheAccess(inferenceSummaryPath(directory, identity));
+			observeEntry(inferenceSummaryPath(directory, identity));
 		}
 		for (const Json &key : bodies) {
 			const std::string &identity = key.get_ref<const std::string &>();
-			availableBodies[identity] = recordCacheAccess(bodyPath(identity));
+			observeEntry(bodyPath(identity));
 		}
 		for (const Json &key : classes) {
 			const auto &identity = key.get_ref<const std::string &>();
-			availableClasses[identity] = recordCacheAccess(classPath(identity));
+			observeEntry(classPath(identity));
 		}
 	}
 	Json saveBody(Json body, size_t valueReferences, size_t instantiationReferences, double captureMilliseconds) {
@@ -61,7 +61,7 @@ class InferenceSummaryStore {
 			writeEntry(bodyPath(key), payload);
 			statistics.inferenceBodiesWritten++;
 		}
-		availableBodies[key] = true;
+		snapshots.retainProduced(bodyPath(key), payload);
 		statistics.inferenceBodyCaptureMilliseconds += captureMilliseconds;
 		statistics.inferenceBodyEncodeMilliseconds += captureMilliseconds + elapsedMilliseconds(start);
 		Json reference = Json::object();
@@ -87,15 +87,13 @@ class InferenceSummaryStore {
 				return std::nullopt;
 			const auto &reference = references.at(path);
 			const auto &key = reference.at("payload").get_ref<const std::string &>();
-			if (!availableClasses.at(key))
+			if (!snapshots.available(classPath(key)))
 				return std::nullopt;
 			if (!loadedClasses.contains(key)) {
-				auto payload = readEntry(classPath(key));
-				if (!payload)
-					throw std::runtime_error("inferred class disappeared: " + key);
-				if (digest(*payload) != key)
+				auto payload = snapshots.payload(classPath(key));
+				if (digest(payload) != key)
 					throw std::runtime_error("corrupt inferred class: " + key);
-				loadedClasses[key] = Json::parse(*payload);
+				loadedClasses[key] = Json::parse(payload);
 				statistics.inferenceClassesLoaded++;
 			}
 			result[path] = loadedClasses.at(key);
@@ -110,7 +108,7 @@ class InferenceSummaryStore {
 		if (reference.is_null())
 			return std::nullopt;
 		const auto &key = reference.at("payload").get_ref<const std::string &>();
-		if (!availableBodies.at(key))
+		if (!snapshots.available(bodyPath(key)))
 			return std::nullopt;
 		auto replacement = replacementBodies.extract(key);
 		if (!replacement.empty()) {
@@ -124,33 +122,31 @@ class InferenceSummaryStore {
 				return std::move(product.mapped());
 			}
 		}
-		auto payload = readEntry(bodyPath(key));
-		if (!payload)
-			throw std::runtime_error("inferred body disappeared: " + key);
-		if (digest(*payload) != key)
+		auto payload = snapshots.payload(bodyPath(key));
+		if (digest(payload) != key)
 			throw std::runtime_error("corrupt inferred body: " + key);
-		return Json::parse(*payload);
+		return Json::parse(payload);
 	}
 
 	const Json *load(const Json &reference) {
 		const std::string &key = reference.at("payload").get_ref<const std::string &>();
 		if (auto found = loaded.find(key); found != loaded.end())
 			return &found->second;
-		if (!available.at(key))
+		if (!snapshots.available(inferenceSummaryPath(directory, key)))
 			return nullptr;
 		auto start = Clock::now();
-		auto payload = readEntry(inferenceSummaryPath(directory, key));
-		if (!payload)
-			throw std::runtime_error("inference summary disappeared: " + key);
-		if (digest(*payload) != key)
+		auto payload = snapshots.payload(inferenceSummaryPath(directory, key));
+		if (digest(payload) != key)
 			throw std::runtime_error("corrupt inference summary: " + key);
-		Json summary = decodeInferenceSummary(Json::parse(*payload));
+		Json summary = decodeInferenceSummary(Json::parse(payload));
 		statistics.inferenceSummaryUnitsLoaded++;
 		statistics.inferenceSummaryLoadMilliseconds += elapsedMilliseconds(start);
 		return &loaded.emplace(key, std::move(summary)).first->second;
 	}
 
-	bool retain(const Json &reference) const { return available.at(reference.at("payload").get_ref<const std::string &>()); }
+	bool retain(const Json &reference) const {
+		return snapshots.available(inferenceSummaryPath(directory, reference.at("payload").get_ref<const std::string &>()));
+	}
 
 	Json save(const Json &summary, Json body, Json classes, Json diagnostics) {
 		auto start = Clock::now();
@@ -162,7 +158,7 @@ class InferenceSummaryStore {
 			writeEntry(path, payload);
 			statistics.inferenceSummaryUnitsWritten++;
 		}
-		available[key] = true;
+		snapshots.retainProduced(path, payload);
 		statistics.inferenceSummaryEncodeMilliseconds += elapsedMilliseconds(start);
 		SymbolicInferenceUnits dependencies;
 		for (const Json &target : captureSymbolicInferenceDependencies(summary))
@@ -208,7 +204,7 @@ class InferenceSummaryStore {
 			writeEntry(classPath(key), payload);
 			statistics.inferenceClassesWritten++;
 		}
-		availableClasses[key] = true;
+		snapshots.retainProduced(classPath(key), payload);
 		Json reference{{"payload", key}, {"dependencies", dependencies}, {"symbolic_dependencies", symbolic}};
 		classReferences.emplace(state, reference);
 		statistics.inferenceClassRecordMilliseconds += elapsedMilliseconds(started);
@@ -216,6 +212,10 @@ class InferenceSummaryStore {
 	}
 
   private:
+	void observeEntry(const fs::path &path) {
+		if (snapshots.observe(path))
+			(void)recordCacheAccess(path);
+	}
 	fs::path classPath(const std::string &key) const { return directory / ("inference-class-" + key + ".entry"); }
 	fs::path bodyPath(const std::string &key) const { return directory / ("inference-body-" + key + ".entry"); }
 	const fs::path &directory;
@@ -223,9 +223,7 @@ class InferenceSummaryStore {
 	BodyTransferWindow *bodyTransfers = nullptr;
 	std::map<std::string, Json> replacementBodies;
 	std::map<std::string, Json> loaded;
-	std::map<std::string, bool> available;
-	std::map<std::string, bool> availableBodies;
-	std::map<std::string, bool> availableClasses;
+	IncrementalCacheSnapshots snapshots;
 	std::map<std::string, Json> loadedClasses;
 	std::map<Json, Json> classReferences;
 };

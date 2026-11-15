@@ -38,19 +38,42 @@ int main(int argc, char **argv) {
 	for (const std::string &payload : {std::string("a\0b", 3), std::string(128 * 1024, 'x')}) {
 		writeEntry(path, payload);
 		auto retained = IncrementalCacheEntry::open(path);
+		IncrementalCacheSnapshots snapshots;
+		expect(snapshots.observe(path), "The snapshot set missed an existing entry");
 		expect(bool(retained), "The fixture was not opened");
 		expect(!llvm::sys::fs::remove(utf8Path(path)), "Could not evict the retained file");
 		expect(retained->payload() == payload, "Eviction invalidated a retained payload");
+		expect(snapshots.available(path) && snapshots.payload(path) == payload,
+			   "The snapshot set reopened an evicted pathname");
 		expect(!IncrementalCacheEntry::open(path), "A new lookup reused an evicted pathname");
+		IncrementalCacheSnapshots missing;
+		expect(!missing.observe(path) && !missing.available(path), "An initially absent entry must remain a cache miss");
+		missing.retainProduced(path, payload);
+		expect(missing.available(path) && missing.payload(path) == payload,
+			   "A newly produced payload still depended on a file's lifetime");
+	}
+	{
+		IncrementalCacheSnapshots produced;
+		std::string payload = "owned bytes";
+		produced.retainProduced(path, payload);
+		payload.assign("overwritten");
+		expect(produced.payload(path) == "owned bytes", "The produced snapshot borrowed its producer's buffer");
 	}
 	writeEntry(path, "first");
 	auto first = IncrementalCacheEntry::open(path);
+	IncrementalCacheSnapshots snapshots;
+	(void)snapshots.observe(path);
 	const fs::path replacement = directory / "replacement.entry";
 	writeEntry(replacement, "second");
 	expect(!llvm::sys::fs::rename(utf8Path(replacement), utf8Path(path)), "Could not atomically replace an entry");
 	auto second = IncrementalCacheEntry::open(path);
 	expect(first->payload() == "first", "Replacement changed an existing snapshot");
 	expect(second->payload() == "second", "A fresh snapshot missed the replacement");
+	(void)snapshots.observe(path);
+	IncrementalCacheSnapshots fresh;
+	(void)fresh.observe(path);
+	expect(snapshots.payload(path) == "first" && fresh.payload(path) == "second",
+		   "Atomic replacement changed the snapshot set's observed identity");
 	expect(!llvm::sys::fs::remove(utf8Path(path)), "Could not remove the replaced entry");
 	first.reset();
 	second.reset();
