@@ -3,10 +3,10 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state: I030 qualification and publication
+## Current state after I030
 
-The I029 source-owner candidate is qualified in I030; local-master publication
-is pending. I029 itself closed incomplete at its 04:22:54 UTC extended deadline.
+The I029 source-owner candidate is qualified and merged into local master in
+I030. I029 itself closed incomplete at its 04:22:54 UTC extended deadline.
 Its performance and LLVM checks passed, but the required retry had not run.
 The original failed gate is retained; acceptance is not backdated.
 
@@ -15,14 +15,19 @@ outlines now stay unallocated until a semantic consumer demands them. The real
 unused-edit case retains 342 owners and 5,419 references: created references fall
 from 6,308 to 889. Across 31 pairs against I028, median paired CPU improves 2.54%
 (ratio 0.974586, 95% interval [0.967525, 0.987269]). Active-body edits improve
-1.89% across seven pairs; the game-data, cold and fast controls establish no change.
+1.89% across seven pairs; game-data, cold and fast controls are consistent with parity.
 These are paired comparisons, not comparisons of unrelated historical medians.
 
 Candidate 8d4c1a5b / executable 0e3135e3 passes 13 focused rows, 127 broader
 regression rows, precedence replay and three full normalized LLVM/diagnostic
 comparisons. In I030 all 331 required checks pass uncached in 108.322 seconds,
 the relevant native-cache integration passes, and both C++ ownership/provenance
-executables rebuild and pass. The full compiler-wide incremental goal remains
+executables rebuild and pass. Merged source 1d40cf7f / executable dcf46435 passes
+all 331 required checks uncached in 113.238 seconds and all 463 integration
+checks in 801.393 seconds, with unchanged compiler/source identities. The merged
+worktree/branch are removed and actual six-build archived replay passes afterward.
+An expanded 63-pair comment control has CPU ratio 1.01814 [0.99128, 1.03116]; it
+establishes neither a regression nor an improvement. The full goal remains
 incomplete: section objects, broad classification/matching/binding and other
 output modes still require finer dependency-driven reuse.
 
@@ -2350,4 +2355,37 @@ passes in 5.494 seconds; both C++ ownership/provenance executables rebuild and p
 in 21.486 seconds. Frozen archives remain read-only; the live compiler is writable.
 Evidence is under `.cache/incremental-evidence/structured-20261113/`, specifically
 `i030-observed-required.json`, `i030-observed-relevant-integration.json` and
-`i030-cpp-ownership.json`. Local-master verification remains pending.
+`i030-cpp-ownership.json`.
+
+Local master is now verified at source 1d40cf7f, executable dcf46435. The serial
+C++ rebuild took 660.537 seconds, with 2,239,736 KiB peak RSS. Required passes
+331 / 0 / 0 in 113.238 seconds (114.077 observed); full integration passes
+463 / 0 / 0 in 801.393 seconds (802.733 observed). Both source/compiler identity
+checks pass. The merged worktree and branch are removed; the six-build archived
+comparison succeeds after removal and removes its reconstructed compiler-data
+path. A separate 63-pair comment control also passes its artifact/identity gates;
+median CPU is 0.029702 to 0.030252 seconds, paired ratio 1.01814 with interval
+[0.99128, 1.03116]. This is an uncertain small difference, not proof of parity.
+No cold-build improvement is claimed. Evidence: `i030-root-build.json`,
+`i030-root-required.json`, `i030-root-integration.json`,
+`i030-archived-replay.json`, `i030-cost-comment-63.json`.
+
+The separate suite-classification audit verifies that `test_required_focus.py`
+explicitly forces the focused C++ `numeric_literals` and `class_layout` checks
+into integration. They test compiler behavior without application-library imports.
+Correct that policy and audit/minimize imported compiler fixtures without weakening
+the 120-second required gate. The current 331-check required pass does not mean
+all compiler regression coverage has already been routed into that gate.
+
+Next selected incremental goal, I031/P06: make classification dependency topology
+a reusable product of its actual provider/query and scope inputs. The measured
+unused edit still remaps 12,015 edges and rebuilds SCC propagation, taking about
+17.117 ms. First measure the subphases and add a minimal work-count regression;
+then retain unchanged topology and evaluate only the affected frontier. Require
+the existing last-parameter-use, failed-lookup, provider/locality/source-movement
+and cycle proofs, complete LLVM/diagnostic parity, an independent 31-pair >=2%
+whole-build CPU gain, no established control regression, and required <=120s.
+Otherwise park the candidate. Start its 45-minute clock when work begins; allow
+only the contract's single evidence-backed extension. Full-goal audit and the
+unimplemented consumer audit are `i030-full-goal-audit.json` and
+`i030-next-opportunity-audit.json`. I030 completes publication, not the full goal.
