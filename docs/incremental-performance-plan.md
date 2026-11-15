@@ -15,15 +15,29 @@ The 16 focused and 207 broader regression builds remain valid for that artifact.
 With the final runner, all 333 required checks pass uncached within 120 seconds,
 and all 461 integration checks pass in 806.603 seconds (808.098 observed), with
 source/compiler identities unchanged. I038's two failed required attempts and
-I039's initial worker-status failure remain preserved. Local master 5773d151 / compiler be68739a rebuilds in 143.699 seconds with one
-job, peak RSS 2,284,356 KiB. All 333 required checks pass uncached in 102.778
-seconds (103.758 observed); source/compiler hashes remain unchanged. Publication
-and archived replay are being finalized.
+I039's initial worker-status failure remain preserved. Local master 5773d151 /
+compiler be68739a rebuilds in 143.699 seconds with one job, peak RSS 2,284,356 KiB.
+All 333 required checks pass uncached in 102.778 seconds (103.758 observed);
+source/compiler hashes remain unchanged. The snapshot is pushed. Its merged
+worktree and three owned branches are removed; all 16 focused builds pass after
+removal using the frozen compiler and archived data, and the temporary data root
+is removed afterward. Derived build objects are retained for the next iteration.
+
+Completed historical artifacts caused the disk-capacity failure. Thirty-seven
+inactive compiler executables are now losslessly compressed, recovering
+4,943,092,979 bytes. Every archive was decompressed and hashed before removing
+its original. An explicit restore tool recreates the exact paths expected by
+preserved benchmark manifests; one historical compiler was restored, verified
+against its original hash and executed. Current artifacts, source, reports and
+failure evidence remain available. The archive and restore manifest is
+`compiler-artifact-archive.json`; replay preparation is
+`python3 restore_compiler_artifacts.py --manifest COMPILER_DATA_MANIFEST.json -- ORIGINAL_REPLAY_COMMAND`.
+
 The full compiler goal remains incomplete; the next-opportunity audit is
 i040-next-opportunity-audit.json, an unimplemented source/resolution-product
 hypothesis.
 
-## I038 unread flex inference dependencies: unqualified
+## I038 unread flex inference dependencies: parked at closure, qualified in I040
 
 Started 15 November at 08:33:57 UTC; first deadline 09:18:57. The single
 evidence-backed extension ends at 10:03:57. Published baseline remains I037.
@@ -32,8 +46,8 @@ can expand at compile time. Actual inference reads, constraint probes, callable
 queries and the dependency closure of retained IR must still protect consumers.
 Generated bodies absent from the logical source stream cannot mask source input.
 
-Candidate `7b75ab49` / compiler `2e567cdc` passes 16 focused and 207 broader
-incremental-versus-clean builds. Qualification is incomplete. The first candidate
+Candidate `7b75ab49` / compiler `2e567cdc` passed 16 focused and 207 broader
+incremental-versus-clean builds. Qualification was incomplete at I038 closure. The first candidate
 halved the target's CPU cost but established a 2.9% ordinary-edit regression;
 those measurements do not qualify the corrected candidate. Its first 31-pair
 ordinary control is inconclusive. The independent 63-pair confirmation stopped
@@ -76,7 +90,7 @@ Complete semantic section products and tooling/other output modes remain
 separate unfinished parts of the full goal.
 
 
-## Current state: I037 declaration retention verified on master
+## Previously published I037 declaration retention
 
 I037 removes native-body eligibility from resolved declaration retention. A flex
 body can change without changing its declaration; after checking the changed
