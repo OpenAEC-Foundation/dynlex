@@ -3,7 +3,7 @@
 Owner: this compiler task. Established 13 November 2026.
 
 
-## Current state: I037 declaration retention qualified
+## Current state: I037 declaration retention verified on master
 
 I037 removes native-body eligibility from resolved declaration retention. A flex
 body can change without changing its declaration; after checking the changed
@@ -28,7 +28,13 @@ uncached in 112.841 seconds, and all 461 integration checks in 794.781 seconds.
 An initial controls attempt stopped before shared-type compilation because the
 wrapper omitted that allowed case. Its failed evidence is retained; after fixing
 the wrapper, completed measurements were preserved and remaining cases resumed.
-Master rebuild, required verification and publication remain pending.
+Merged master 6ba8ae03 / executable 0ca41928 passes all 333 required checks
+uncached in 107.152 seconds (108.107 seconds observed), with source/compiler
+identities unchanged. The merged worktree and branch are removed; the frozen
+compiler passes five focused declaration/cascade builds after removal, using its
+verified archived library/runtime data and cleaning the temporary data root.
+Derived build objects are retained separately. This closes I037 within its one
+recorded extension; it does not complete the full compiler goal.
 
 The full goal remains incomplete. The next measured gap is inference after an
 unread flex edit: about 260 ms still runs although 368 emitted functions reuse IR
