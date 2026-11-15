@@ -2,6 +2,70 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## I058: demand class match products at their semantic consumers
+
+Started 15 November 2026 at 23:46 UTC; first deadline 00:31 UTC on 16 November.
+Baseline is production source bb0eb48b / compiler 19f9b48d. I056's catalogue and
+record-family changes are excluded. Class units already have checked source,
+provider, shape and match products, but always replay them before semantic demand.
+
+Allow eligible top-level class match units to remain encoded with their concrete
+expression templates. Keep existing input proofs and complete-reference coverage.
+Demand their matches before cloning or consuming a pending type-expression root,
+and expand newly restored concrete expressions at the completed matcher boundary.
+Do not create another storage format or general lazy-pointer wrapper. Add a minimal
+class edit/activation/constraint-change regression before the implementation; cover
+class layout, typed accessors, errors and provider invalidation using fresh parity.
+
+Require >=2% paired CPU improvement in the real unused edit (15 pairs, 95% interval
+below parity). Active body (15), unchanged/comment/wording (31 each) and cold (11)
+controls must establish no regression. Keep frozen normalized images and full
+executable/diagnostic comparisons. If performance qualifies, run focused/cascade,
+complete LLVM parity, required <=120s uncached and affected/full integration before
+merging. One heavy job; at most one 45-minute extension after concrete progress.
+The compiler-wide incremental goal remains active and incomplete.
+
+## I057: attribute unchanged matcher-outcome demand before another optimization
+
+Started 15 November 2026 at 23:32 UTC; first deadline 00:17 UTC on 16 November.
+Production remains I052 / compiler 19f9b48d. I055 and I056 are rejected and their
+branches/artifacts are preserved. Reuse the existing worktree/build directory for
+future source changes, but do not treat its old 6ed70847 executable as production.
+
+On the real LEXI8 unused-function edit, use the production compiler and project
+GDB wrapper to count actual restoreResult requests by compiler boundary, source
+owner type, flex/generated ownership and reference purpose. Capture representative
+call stacks and headers without mutating compiler code. Debugger timings are not
+performance samples. Explain why all outcome buckets are still demanded and select
+a concrete producer/consumer boundary from the counts. If optimized debug values
+prevent attribution, use a narrowly scoped stats probe rather than guessing.
+This iteration completes when the demand is attributed with authoritative evidence
+and the next implementation goal is declared; it does not complete the compiler-wide
+goal. Do not add another storage format or caching layer without that evidence.
+
+### I057 result: class units dominate eager replay
+
+Two complete GDB observations of production compiler 19f9b48d each count 2,239
+restoreResult requests on the real unused edit. The first attributes 1,730 to the
+AnalyzedSections boundary, 92 to ResolvedFunctionPatterns and 417 to precedence.
+The second observes the actual containing BodyResolutionUnit, not just the lookup
+scope: 1,028 requests replay class units, 437 ordinary function units, 195 flex
+function units and 19 flex section units; 560 requests are direct matches.
+Of the class requests, 868 are type constraints and 160 are other references.
+
+Representative stacks lead through restoreBodyResolutionUnits and
+IncrementalBodyDemand::restore. The existing selector rejects every class unit by
+kind and requires deferred expression sites, although those class units already
+passed source/provider/shape checks. Their concrete type-expression templates lack
+the ordinary function source-product demand boundary. Metadata-only storage cannot
+remove these consumer requests. Debugger timings are explicitly excluded from
+performance claims. Evidence: i057-restore-demand.json, i057-restore-unit-demand.json,
+the two source manifests and GDB logs. No production compiler code was changed.
+
+The next implementation targets class resolution products and the real consumers
+of their concrete type-expression templates, using existing body-demand APIs.
+The broader global-function, flex and tooling boundaries remain unfinished.
+
 ## I056: retain matcher products from a lightweight catalogue
 
 Started 15 November 2026 at 23:05 UTC; first deadline 23:50 UTC. Baseline is
