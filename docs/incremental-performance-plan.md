@@ -2,6 +2,61 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## I056: retain matcher products from a lightweight catalogue
+
+Started 15 November 2026 at 23:05 UTC; first deadline 23:50 UTC. Baseline is
+production source d9f94175 / compiler 19f9b48d. I055 is closed and rejected;
+its compiler changes are excluded. Hypothesis: reference/classification metadata
+shares hash buckets with full lookup outcomes, and contains/retain currently load
+those outcomes just to prove availability. A retained source owner therefore
+loads unrelated semantic products before any consumer demands them.
+
+Separate metadata record families in the existing segmented store and persist a
+compact membership catalogue per segment. Availability/retention should use that
+catalogue and actual producer-file presence; detailed outcomes load on semantic
+demand. Unchanged complete segments can be republished without decoding their
+records. Partial builds retain the prior closure, and missing/corrupt demanded
+products must preserve existing explicit behavior. Migrate every writer/reader
+and inspector together; no old-format fallback. Add a minimal cross-process work
+test before implementation and expose actual unloaded outcome-segment reuse.
+
+One complete normalized comparison: 15 alternating pairs each of real unused and
+active body edits; require >=3% median paired CPU gain in at least one, with its
+95% interval excluding parity. The other edit, unchanged/comment/wording controls
+(31 pairs each), and cold control (eleven pairs) must establish no regression.
+Require executable/diagnostic parity, the focused matcher/cascade checks, complete
+LLVM parity, and required <=120s uncached before keeping the change. Run affected
+integration if performance qualifies. Use one heavy job and the corrected disk
+guard; preserve every failed attempt. Before any I056 timing, raise the cold
+control from three to eleven pairs: three pairs only screen an expensive case
+and give a weak small-sample interval. Full incremental goal remains incomplete.
+
+### I056 result: reject; metadata isolation does not remove real outcome demand
+
+Source 525b8134 / compiler 6ed70847 passes the seven-build retention/activation
+reproducer and all 166 matcher, eviction, corruption and classification builds.
+The minimal case retains two outcome segments without reading them, across two
+edits, then demands the activated body correctly. The baseline research probe
+observes all four unchanged outcome segments being read despite three deferred
+owners. Its portable regression uses actual load counters; access-time observation
+is confined to the external Linux research probe.
+
+The complete six-case normalized matrix rejects the candidate. Fifteen-pair unused
+CPU is .533620 -> .545914s, ratio 1.025512 [1.013514, 1.043546]; active-body CPU is
+1.497784 -> 1.513486s, ratio 1.009700 [1.001571, 1.026784]. The real application
+retains zero outcome segments without loading them: later lookup consumers still
+load all outcome buckets. Loaded bytes fall only 9.10 -> 8.80 MB, while the unused
+edit's snapshot grows 1.42 -> 3.16 MB and snapshot time 5.89 -> 13.98ms. Separating
+availability from demand works, but this workload still demands the outcomes and
+pays for the new catalogue. Do not keep this optimization or run a confirmation.
+
+The unchanged control also regresses (1.023582 [1.011120, 1.040095]); comment,
+wording and eleven-pair cold controls establish no difference. All matrix
+executable/diagnostic comparisons pass. Required, full integration and whole-IR
+qualification are not run for this rejected candidate. Preserve the branch,
+frozen compiler/data and i056-performance-analysis.json; production C++ remains
+I052. The full goal is active and incomplete.
+
 ## I055: independently qualify owned-input transfer with normalized images
 
 Started 15 November 2026 at 22:38 UTC; first deadline 23:23 UTC. No new compiler
