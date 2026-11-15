@@ -31,6 +31,7 @@
 #include "sectionIdentity.h"
 #include "sourcePreparation.h"
 #include "sourcePreprocessing.h"
+#include "sourceReferenceOrder.h"
 #include "syntaxConfig.h"
 #include "validation.h"
 #include "variableBindings.h"
@@ -690,6 +691,8 @@ bool compileIncrementally(
 			statistics.expressionParseMisses = parserCache.missCount();
 			statistics.definitionParseHits = parserCache.definitionHitCount();
 			statistics.definitionParseMisses = parserCache.definitionMissCount();
+			context.sourceOwnerReferencesPublished = {};
+			context.prepareSourceOutlines = {};
 			context.deferParsedLine = {};
 			context.reuseParsedExpression = {};
 			context.recordParsedExpression = {};

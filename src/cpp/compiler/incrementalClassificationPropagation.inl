@@ -1,6 +1,6 @@
 bool IncrementalClassification::canReuse(Unit &unit) {
 	if (!prior || unit.environment || !unit.old || context.options.emitDebugInfo || context.options.traceExecution ||
-		unit.section->parent != context.mainSection || !reusableResolutionSection(*unit.section) || unit.references.empty())
+		unit.section->parent != context.mainSection || !reusableResolutionSection(*unit.section) || unit.referenceCount == 0)
 		return false;
 	const Json &diagnosticUnits = previous->at("frontend_diagnostic_units");
 	if (!diagnosticUnits.empty() && diagnosticUnits.contains(digest(sectionIdentity(*unit.section).dump())))
@@ -17,7 +17,7 @@ bool IncrementalClassification::canReuse(Unit &unit) {
 		!cache.contains(matcher.at("body_units").at(unit.path).get_ref<const std::string &>()))
 		return false;
 	auto references = savedReferenceKeys(projection, cache, unit.path);
-	if (!references || references->size() != unit.references.size())
+	if (!references || references->size() != unit.referenceCount)
 		return false;
 	for (const auto &reference : *references)
 		for (std::string_view key : {reference.initialKey, reference.finalKey})

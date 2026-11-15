@@ -39,13 +39,10 @@ void IncrementalClassification::prepare() {
 		unit.section = section;
 		if (auto old = oldUnits.find(path); old != oldUnits.end())
 			unit.old = old->second;
-		const auto collect = [&](auto &&self, Section *body) -> void {
-			unit.references.insert(unit.references.end(), body->patternReferences.begin(), body->patternReferences.end());
-			for (Section *child : body->children)
-				if (child->patternDefinitions.empty())
-					self(self, child);
-		};
-		collect(collect, section);
+		unit.references = sourceOwnerReferences(*section);
+		unit.referenceCount = context.retainedSourceOwners.contains(section)
+								  ? context.retainedSourceOwners.at(section).referenceCount
+								  : unit.references.size();
 		const Section *source = section;
 		while (source->declarationProducer)
 			source = source->declarationProducer;
@@ -66,6 +63,8 @@ void IncrementalClassification::prepare() {
 			unit.bodyInput = unit.old->at(BodyInput).get<std::string>();
 			work.inputUnitsReused++;
 		} else {
+			context.materializeSourceOwnerReferences(section);
+			unit.references = sourceOwnerReferences(*section);
 			std::string input = declarationInput(unit);
 			input += unit.hasCandidates ? '1' : '0';
 			if (unit.hasCandidates) {
@@ -166,7 +165,7 @@ void IncrementalClassification::dependencies() {
 	std::unordered_map<std::string_view, size_t> frequencies;
 	bool hasNewQueries = false;
 	for (const Unit &unit : units)
-		if (unit.hasCandidates && !unit.references.empty() && (!unit.old || unit.old->at(Queries) != unit.queries)) {
+		if (unit.hasCandidates && unit.referenceCount != 0 && (!unit.old || unit.old->at(Queries) != unit.queries)) {
 			hasNewQueries = true;
 			for (const Json &literal : data(unit.queries).at("literals"))
 				frequencies[literal.get_ref<const std::string &>()]++;
@@ -221,7 +220,7 @@ void IncrementalClassification::dependencies() {
 					unit.edges.push_back(target);
 			}
 			work.dependencyUnitsReused++;
-		} else if (!unit.references.empty()) {
+		} else if (unit.referenceCount != 0) {
 			std::vector<size_t> candidates = wildcardTargets;
 			for (const Json &literal : data(unit.queries).at("literals"))
 				if (auto found = targetsByLiteral.find(literal.get_ref<const std::string &>()); found != targetsByLiteral.end())

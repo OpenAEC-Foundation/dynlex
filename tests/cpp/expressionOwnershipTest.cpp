@@ -24,6 +24,7 @@ static void checkSourceExpressionDemand() {
 			Section &owner, SourceExpression &first, SourceExpression &second, Expression &firstValue, Expression &secondValue
 		)
 			: owner(owner), first(first), second(second), firstValue(firstValue), secondValue(secondValue) {}
+		void prepareReferences() override {}
 		void demand() override {
 			++demands;
 			first.publish(firstValue);
@@ -33,7 +34,7 @@ static void checkSourceExpressionDemand() {
 			second.finish();
 		}
 		bool syntaxMaterialized() const override { return ready; }
-		PatternReference *rootReference() const override { return nullptr; }
+		PatternReference *rootReference() override { return nullptr; }
 		const Section &bodyOwner() const override { return owner; }
 	};
 	Section owner(SectionType::Function);
@@ -105,6 +106,7 @@ static void checkDeferredBodyCloning() {
 		size_t demands = 0;
 		bool ready = false;
 		explicit Product(Section &section) : section(section) {}
+		void prepareReferences() override {}
 		void demand() override {
 			++demands;
 			for (size_t index = 0; index < section.codeLines.size(); index++) {
@@ -118,7 +120,7 @@ static void checkDeferredBodyCloning() {
 				line->expression.finish();
 		}
 		bool syntaxMaterialized() const override { return ready; }
-		PatternReference *rootReference() const override { return nullptr; }
+		PatternReference *rootReference() override { return nullptr; }
 		const Section &bodyOwner() const override { return section; }
 	} product(section);
 	for (CodeLine *line : section.codeLines)
@@ -147,9 +149,10 @@ static void checkUnrequestedBodyTeardown() {
 	struct Unrequested final : BodySyntaxProduct {
 		Section &owner;
 		explicit Unrequested(Section &owner) : owner(owner) {}
+		void prepareReferences() override {}
 		void demand() override { expect(false, "compiler teardown materialized an unrequested source body"); }
 		bool syntaxMaterialized() const override { return false; }
-		PatternReference *rootReference() const override { return nullptr; }
+		PatternReference *rootReference() override { return nullptr; }
 		const Section &bodyOwner() const override { return owner; }
 	};
 	Section owner(SectionType::Function);
