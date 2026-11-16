@@ -80,7 +80,9 @@ authored header. Signature lookup inputs remain separate from local-body inputs.
 `body_resolution_units_demanded` counts units restored on semantic demand, and
 `body_resolution_references_restored` counts actual replayed reference outcomes.
 Debug builds reuse these source-resolution products against current source ranges;
-inference and IR still regenerate their debug metadata. This whole-unit path
+validated inference facts and typed bodies can also be restored using current
+source anchors. Debug builds retain runtime bodies even when native IR exists,
+because native debug IR is regenerated to reflect current locations. This whole-unit path
 currently excludes tracing and does not extend the native incremental driver to
 tooling or other output modes.
 

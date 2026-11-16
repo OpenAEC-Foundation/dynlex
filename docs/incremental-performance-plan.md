@@ -2,7 +2,17 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I076 qualified shared binding-domain indexing; full goal incomplete
+## Current state: I077 debug semantic inference replay in progress; full goal incomplete
+
+I077 starts 16 November 2026 at 17:22:04 UTC, first deadline 18:07:04 UTC.
+Separate debug semantic replay from native IR import: unchanged inference facts
+and typed bodies may be restored with current source anchors, while debug IR
+regenerates. Preserve trace exclusions and all existing query/dependency proofs.
+Test independent body reuse, changed bodies, moved lines and failures/repair before
+the implementation. Require a real debug-edit CPU benefit, no established
+regression in the original native controls, required uncached <=120s, affected
+integration and full native/debug LLVM/DWARF parity. One heavy job, 45 minutes
+plus at most one extension after concrete progress; no failed matrix retries.
 
 I076 starts 16 November 2026 at 16:10:48 UTC, first deadline 16:55:48 UTC.
 Read-only debugger counts on the published I075 compiler confirm native body

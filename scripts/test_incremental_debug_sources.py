@@ -1,6 +1,8 @@
 """Debug builds reuse source resolution and regenerate current source locations."""
 
 def check_debug_source_units(root, build):
+    from test_incremental_debug_inference import check_debug_inference_units
+    check_debug_inference_units(root, build)
     main = root / "debug_source_units.dl"
     source = ('to get next value:\n'
               '    @intrinsic("return", @intrinsic("add", value, 1))\n'
