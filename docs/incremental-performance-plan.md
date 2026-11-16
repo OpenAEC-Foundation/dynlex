@@ -52,6 +52,38 @@ integration, complete LLVM/diagnostic parity after two edits in four real-progra
 cases, and root qualification before publication. One heavy job and at most one
 45-minute extension after concrete progress. Keep the full all-stage objective.
 
+### I071 candidate and measured repair cost
+
+Frozen source f29a2002 / compiler 7d9989b8 passes 45 focused compilations each at
+O0 and O2. The resolver now propagates completed classification exports after
+each resolution pass, independently of unrelated unresolved calls. Definition
+exports wait for their own definition boundary; visible-name environments wait
+for definition completion, matching declaration-name indexing rather than call
+execution. Deeper removal/repair chains retain unrelated classifications, and
+named-declaration edits agree with clean builds. The named-declaration case also
+passed baseline; it covers the readiness boundary, not a newly discovered bug.
+
+All 333 required checks pass uncached in 105.933s. The original eight-case
+independent-image CPU cost matrix is complete, with executable/diagnostic parity.
+No case establishes a gain or regression: body 1.467350 -> 1.474279s, unused-flex
+.532457 -> .525427s, top-level 1.850979 -> 1.853460s, unused .533905 -> .533772s,
+unchanged .028668 -> .028591s, comment .029166 -> .029282s, wording
+.034690 -> .034540s, cache-disabled cold 5.302783 -> 5.223361s. The paired 95%
+ratio interval contains one in every case. All 186 measured unchanged/comment/
+wording builds perform zero object builds, code generation and linking.
+
+One extension through 13:15:48 UTC is recorded for full integration, complete
+LLVM parity, root qualification and publication. No new variant or acceptance
+timing retry is authorized by this extension. I070 remains isolated and unqualified;
+the full compiler-wide goal remains incomplete.
+
+Full qualification completes at 12:39 UTC: all 462 integration checks pass in
+764.083s, and all twenty real-program builds pass complete LLVM text and diagnostic
+parity after two edits in each of four cases. The source/ELF audit verifies all
+462 C++ and 22 C inputs, excludes I070 changes and checks that transient graph
+encoding provenance is absent from persisted data. Root qualification and publication
+remain; this does not complete the full objective.
+
 ## I070: attribute and reduce classification setup work
 
 Started 16 November 2026 at 11:13:14 UTC; first deadline 11:58:14 UTC.
