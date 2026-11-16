@@ -321,6 +321,16 @@ def check_graph_encoding(root, build):
         graph = read_program(root / "cache", main)["section_dependency_graph"]
         assert all(target in graph["forward"] for edges in graph["forward"].values()
                    for target in edges)
+    main = root / "graph_early_error.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              '@intrinsic("store", {integer:value}, 1)\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('integer means:', 'other means:'))
+    for _ in range(2):
+        assert build(entry=main, success=False)[1:] == build(False, entry=main, success=False)[1:]
+    main.write_text(source)
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]
 
 
 def check_program_payloads(root, build):

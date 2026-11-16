@@ -304,10 +304,6 @@ Json captureSectionDependencyGraph(
 		callableLookups[key] = std::move(lookup);
 	}
 	graph["callable_lookups"] = std::move(callableLookups);
-	graph["encoding_reuse"] = Json{
-		{"forward", hadPrevious && changes.empty()},
-		{"reverse", hadPrevious && changes.empty()},
-		{"instantiations", hadPrevious && !variantsChanged}
-	};
+	graph["encoding_reuse"] = graphEncodingReuse(hadPrevious && changes.empty(), hadPrevious && !variantsChanged);
 	return graph;
 }

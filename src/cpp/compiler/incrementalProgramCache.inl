@@ -19,6 +19,10 @@ struct GraphEncodingWork {
 	size_t columnsReused = 0, columnsBuilt = 0, recordsBuilt = 0;
 };
 
+Json graphEncodingReuse(bool edges, bool variants) {
+	return Json{{"forward", edges}, {"reverse", edges}, {"instantiations", variants}};
+}
+
 Json encodeSectionGraph(Json &graph, GraphEncodingWork *work) {
 	const Json &forward = graph.at("forward");
 	requireCompilerInvariant(
@@ -204,6 +208,7 @@ Json decodeSectionGraph(Json encoded) {
 	for (const Json &entry : encoded.at("inference_reads"))
 		graph["inference_reads"][paths.at(entry.at(0).get<size_t>()).get<std::string>()] = decodeEdges(entry.at(1));
 	graph["cached_encoding"] = std::move(encoded);
+	graph["encoding_reuse"] = graphEncodingReuse(true, true);
 	return graph;
 }
 
