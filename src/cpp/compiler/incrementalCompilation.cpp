@@ -908,7 +908,8 @@ bool compileIncrementally(
 					auto writeStart = Clock::now();
 					writeProgramEntry(
 						programEntry, std::move(result), previous ? &*previous : nullptr,
-						showStatistics ? &statistics.payloadWrite : nullptr
+						showStatistics ? &statistics.payloadWrite : nullptr,
+						showStatistics ? &statistics.graphEncoding : nullptr
 					);
 					statistics.cacheWriteMilliseconds = elapsedMilliseconds(writeStart);
 					return true;

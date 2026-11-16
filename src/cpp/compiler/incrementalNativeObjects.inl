@@ -157,6 +157,7 @@ struct BuildStatistics {
 	double matcherProjectionMilliseconds = 0;
 	MatcherProjectionWork matcherProjection;
 	PayloadWriteWork payloadWrite;
+	GraphEncodingWork graphEncoding;
 	ProjectionCopyWork projectionCopy;
 	size_t matcherDeclarationsReused = 0;
 	size_t matcherPathSnapshotsBuilt = 0;

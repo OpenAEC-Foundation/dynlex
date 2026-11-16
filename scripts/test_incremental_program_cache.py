@@ -276,6 +276,63 @@ def classification_promotions(cache, program):
     return {unit[0]: {(output[0], output[1]) for output in read(unit[4])} for unit in topology["units"]}
 
 
+def check_graph_encoding(root, build):
+    main = root / "graph_encoding.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'to alpha: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\n'
+              'to beta: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))\n'
+              'alpha\nbeta\n')
+    main.write_text(source)
+    cold = build(entry=main)
+    assert cold[0]["graph_encoding_columns_built"] > 0
+    assert cold[0]["graph_encoding_columns_reused"] == 0
+    previous = read_program(root / "cache", main)["section_dependency_graph"]
+    for word in ("second", "third"):
+        main.write_text(source.replace('"first"', f'"{word}"'))
+        edited = build(entry=main)
+        assert edited[1:] == build(False, entry=main)[1:]
+        current = read_program(root / "cache", main)["section_dependency_graph"]
+        assert all(current[field] == previous[field]
+                   for field in ("forward", "reverse", "instantiations"))
+        assert edited[0]["graph_encoding_columns_reused"] >= 4, \
+            "a body edit re-encoded unchanged graph paths and edge columns"
+        assert edited[0]["graph_encoding_columns_built"] > 0
+        previous = current
+    with_call = source.replace('to alpha: ', 'to alpha:\n    beta\n    ')
+    for text in (with_call, source):
+        main.write_text(text)
+        changed = build(entry=main)
+        assert changed[1:] == build(False, entry=main)[1:]
+        current = read_program(root / "cache", main)["section_dependency_graph"]
+        assert set(current["forward"]) == set(previous["forward"])
+        assert current["forward"] != previous["forward"]
+        assert current["reverse"] != previous["reverse"]
+        assert 1 <= changed[0]["graph_encoding_columns_reused"] < 4, \
+            "an added or removed call retained changed edge columns"
+        previous = current
+    added = (source.replace('alpha\nbeta\n', 'aardvark\nalpha\nbeta\n') +
+             'to aardvark: @intrinsic("discard", 1)\n')
+    for text in (added, source):
+        main.write_text(text)
+        changed = build(entry=main)
+        assert changed[1:] == build(False, entry=main)[1:]
+        assert changed[0]["graph_encoding_columns_reused"] == 0, \
+            "changed path IDs retained an encoded edge column"
+        graph = read_program(root / "cache", main)["section_dependency_graph"]
+        assert all(target in graph["forward"] for edges in graph["forward"].values()
+                   for target in edges)
+    main = root / "graph_early_error.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              '@intrinsic("store", {integer:value}, 1)\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('integer means:', 'other means:'))
+    for _ in range(2):
+        assert build(entry=main, success=False)[1:] == build(False, entry=main, success=False)[1:]
+    main.write_text(source)
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]
+
+
 def check_program_payloads(root, build):
     main = root / "program_payloads.dl"
     source = ('integer means: @intrinsic("type", "int")\n'

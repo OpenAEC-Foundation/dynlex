@@ -15,19 +15,49 @@ fs::path inferenceSummaryPath(const fs::path &directory, const std::string &key)
 	return directory / ("inference-summary-" + key + ".entry");
 }
 
-Json encodeSectionGraph(const Json &graph) {
+struct GraphEncodingWork {
+	size_t columnsReused = 0, columnsBuilt = 0, recordsBuilt = 0;
+};
+
+Json graphEncodingReuse(bool edges, bool variants) {
+	return Json{{"forward", edges}, {"reverse", edges}, {"instantiations", variants}};
+}
+
+Json encodeSectionGraph(Json &graph, GraphEncodingWork *work) {
 	const Json &forward = graph.at("forward");
 	requireCompilerInvariant(
 		graph.at("instantiations").size() == forward.size(),
 		"section dependency graph has unequal forward and instantiation entries"
 	);
-	Json paths = Json::array();
-	std::unordered_map<std::string, size_t> ids;
-	ids.reserve(forward.size());
-	for (const auto &[path, _] : forward.items()) {
-		ids.emplace(path, paths.size());
-		paths.push_back(path);
+	Json encoded = graph.contains("cached_encoding") ? std::move(graph.at("cached_encoding")) : Json::object();
+	bool samePaths = encoded.contains("paths") && encoded.at("paths").size() == forward.size();
+	size_t pathIndex = 0;
+	for (const auto &[path, _] : forward.items())
+		if (samePaths)
+			samePaths = encoded.at("paths").at(pathIndex++).get_ref<const std::string &>() == path;
+	if (!samePaths) {
+		encoded["paths"] = Json::array();
+		for (const auto &[path, _] : forward.items())
+			encoded["paths"].push_back(path);
 	}
+	auto recordColumn = [&](bool reused, size_t records) {
+		if (work) {
+			(reused ? work->columnsReused : work->columnsBuilt)++;
+			if (!reused)
+				work->recordsBuilt += records;
+		}
+	};
+	recordColumn(samePaths, forward.size());
+	auto reuseColumn = [&](const char *name) {
+		return samePaths && graph.at("encoding_reuse").at(name).get<bool>();
+	};
+	bool reuseForward = reuseColumn("forward"), reuseReverse = reuseColumn("reverse"),
+		 reuseInstantiations = reuseColumn("instantiations");
+	const Json &paths = encoded.at("paths");
+	std::unordered_map<std::string_view, size_t> ids;
+	ids.reserve(forward.size());
+	for (size_t index = 0; index < paths.size(); index++)
+		ids.emplace(paths.at(index).get_ref<const std::string &>(), index);
 	auto encodeEdges = [&](const Json &edges) {
 		Json encoded = Json::array();
 		for (const Json &edge : edges)
@@ -49,13 +79,16 @@ Json encodeSectionGraph(const Json &graph) {
 	};
 	for (const Json &path : paths) {
 		const std::string &name = path.get_ref<const std::string &>();
-		encodedForward.push_back(encodeEdges(forward.at(name)));
+		if (!reuseForward)
+			encodedForward.push_back(encodeEdges(forward.at(name)));
 		const Json &matched = graph.at("matched").at(name);
 		encodedMatched.push_back(Json::array({matched.at("input"), encodeEdges(matched.at("dependencies"))}));
-		Json variants = Json::object();
-		for (const auto &[key, edges] : graph.at("instantiations").at(name).items())
-			variants[key] = encodeEdges(edges);
-		encodedInstantiations.push_back(std::move(variants));
+		if (!reuseInstantiations) {
+			Json variants = Json::object();
+			for (const auto &[key, edges] : graph.at("instantiations").at(name).items())
+				variants[key] = encodeEdges(edges);
+			encodedInstantiations.push_back(std::move(variants));
+		}
 		Json units = Json::array();
 		for (const auto &[key, unit] : graph.at("inference_units").at(name).items()) {
 			Json sources = Json::array(), callees = Json::array(), values = Json::array();
@@ -87,8 +120,9 @@ Json encodeSectionGraph(const Json &graph) {
 		encodedUnits.push_back(std::move(units));
 	}
 	Json encodedReverse = Json::array();
-	for (const auto &[path, callers] : graph.at("reverse").items())
-		encodedReverse.push_back(Json::array({ids.at(path), encodeEdges(callers)}));
+	if (!reuseReverse)
+		for (const auto &[path, callers] : graph.at("reverse").items())
+			encodedReverse.push_back(Json::array({ids.at(path), encodeEdges(callers)}));
 	Json encodedLookups = Json::object();
 	for (const auto &[key, lookup] : graph.at("callable_lookups").items()) {
 		encodedLookups[key] = lookup;
@@ -97,21 +131,28 @@ Json encodeSectionGraph(const Json &graph) {
 	Json encodedReads = Json::array();
 	for (const auto &[owner, reads] : graph.at("inference_reads").items())
 		encodedReads.push_back(Json::array({ids.at(owner), encodeEdges(reads)}));
-	return Json{
-		{"paths", std::move(paths)},
-		{"forward", std::move(encodedForward)},
-		{"matched", std::move(encodedMatched)},
-		{"reverse", std::move(encodedReverse)},
-		{"instantiations", std::move(encodedInstantiations)},
-		{"inference_units", std::move(encodedUnits)},
-		{"inference_unit_keys", std::move(unitKeys)},
-		{"inference_unit_sources", std::move(unitSources)},
-		{"callable_lookups", std::move(encodedLookups)},
-		{"inference_reads", std::move(encodedReads)}
-	};
+	if (!reuseForward)
+		encoded["forward"] = std::move(encodedForward);
+	if (!reuseReverse)
+		encoded["reverse"] = std::move(encodedReverse);
+	if (!reuseInstantiations)
+		encoded["instantiations"] = std::move(encodedInstantiations);
+	recordColumn(reuseForward, forward.size());
+	recordColumn(reuseReverse, graph.at("reverse").size());
+	recordColumn(reuseInstantiations, forward.size());
+	encoded["matched"] = std::move(encodedMatched);
+	encoded["inference_units"] = std::move(encodedUnits);
+	encoded["inference_unit_keys"] = std::move(unitKeys);
+	encoded["inference_unit_sources"] = std::move(unitSources);
+	encoded["callable_lookups"] = std::move(encodedLookups);
+	encoded["inference_reads"] = std::move(encodedReads);
+	for (const char *name :
+		 {"matched", "inference_units", "inference_unit_keys", "inference_unit_sources", "callable_lookups", "inference_reads"})
+		recordColumn(false, encoded.at(name).size());
+	return encoded;
 }
 
-Json decodeSectionGraph(const Json &encoded) {
+Json decodeSectionGraph(Json encoded) {
 	const Json &paths = encoded.at("paths");
 	const Json &forward = encoded.at("forward");
 	const Json &instantiations = encoded.at("instantiations");
@@ -166,6 +207,8 @@ Json decodeSectionGraph(const Json &encoded) {
 	}
 	for (const Json &entry : encoded.at("inference_reads"))
 		graph["inference_reads"][paths.at(entry.at(0).get<size_t>()).get<std::string>()] = decodeEdges(entry.at(1));
+	graph["cached_encoding"] = std::move(encoded);
+	graph["encoding_reuse"] = graphEncodingReuse(true, true);
 	return graph;
 }
 
@@ -235,7 +278,7 @@ using PayloadWriteWork = std::map<std::string, std::array<double, 3>>;
 template <typename Fields>
 void storeSnapshotPayloads(
 	const fs::path &directory, Json &program, const Fields &fields, const Json *prior = nullptr,
-	PayloadWriteWork *work = nullptr
+	PayloadWriteWork *work = nullptr, GraphEncodingWork *graphWork = nullptr
 ) {
 	Json keys = program.contains("payload_keys") ? program.at("payload_keys") : Json::object();
 	for (const char *field : fields) {
@@ -255,7 +298,7 @@ void storeSnapshotPayloads(
 					payload = program.at(field).get_ref<const std::string &>();
 				} else {
 					encoded = std::string_view(field) == "section_dependency_graph"
-								  ? Json::to_cbor(encodeSectionGraph(program.at(field)))
+								  ? Json::to_cbor(encodeSectionGraph(program.at(field), graphWork))
 								  : Json::to_cbor(program.at(field));
 					payload = {reinterpret_cast<const char *>(encoded.data()), encoded.size()};
 				}
@@ -272,8 +315,11 @@ void storeSnapshotPayloads(
 	program["payload_keys"] = std::move(keys);
 }
 
-void writeProgramEntry(const fs::path &path, Json program, const Json *prior = nullptr, PayloadWriteWork *work = nullptr) {
+void writeProgramEntry(
+	const fs::path &path, Json program, const Json *prior = nullptr, PayloadWriteWork *work = nullptr,
+	GraphEncodingWork *graphWork = nullptr
+) {
 	recordInferencePayloadKeys(program);
-	storeSnapshotPayloads(path.parent_path(), program, programPayloadFields, prior, work);
+	storeSnapshotPayloads(path.parent_path(), program, programPayloadFields, prior, work, graphWork);
 	writeEntry(path, program.dump());
 }
