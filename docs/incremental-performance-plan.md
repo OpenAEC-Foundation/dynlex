@@ -2,12 +2,13 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I061 qualified; publication in progress; full goal incomplete
+## Current state: I061 merged and root-verified; full incremental goal incomplete
 
-Production includes the I060 dependency-publication probes. I061's source-only
-dependency products pass complete qualification: 333 required checks uncached in
-80.172s, 462 integration checks in 791.276s and full LLVM parity after two edits
-in each of four real-program cases. Publication and root verification are next.
+Production includes I061 source-only dependency products. Complete qualification
+passes: 333 required checks uncached in 80.172s, 462 integration checks in 791.276s
+and full LLVM parity after two edits in each of four real-program cases. The rebuilt
+root compiler passes all 333 required checks uncached in 99.640s. The merged
+worktree is removed and actual archived-compiler replay passes afterward.
 The measured active-edit CPU gain is 0.67%; section publication improves 29.5%.
 The original agent-chosen 1% whole-build target remains recorded as missed.
 I058/I059 class-demand experiments remain parked.
@@ -302,6 +303,24 @@ deferred probing; these scopes overlap and are not additive. Section constructio
 is 8.266ms. Graph payload encoding separately costs 38.427ms and remains another
 candidate. See i061-next-stage-screen.json. No next optimization is accepted from
 these coarse timings alone. The compiler-wide objective remains active/incomplete.
+
+### I061 publication and closure
+
+Merge 3ad95fdb contains the qualified C++ inputs. Root compiler 9956166d matches
+all 436 qualified C++ input hashes and passes 333 required checks uncached in
+99.640s (100.651s including its recording driver). No source/compiler changes
+occurred during that run. The worktree and merged branch are removed; its checked
+build objects are retained separately under an explicit byte-identical-input and
+identical-source-path contract. A six-compilation archived replay passes after
+removal and removes its temporary compiler data root. The independent-copy receipt
+and both exact archived images remain usable. See i061-final-state.json.
+
+Close this iteration before its extended 03:37 UTC deadline. Keep the small proven
+stage improvement with its missed original numeric target visible; no rejected
+class-demand code is merged. The full incremental compiler goal stays active and
+incomplete. Next is the bounded P10 query-proof invalidation attribution described
+above, with its start/deadline recorded before new experiments. There is no further
+I061 refinement or confirmation timing.
 
 ## I057: attribute unchanged matcher-outcome demand before another optimization
 
