@@ -28,6 +28,26 @@ validation, graph/payload persistence, debug/trace, LSP and other output modes s
 have broad or missing incremental paths. The complete objective covers every
 .dl/configuration edit and every compiler stage; it remains active and incomplete.
 
+## I074: qualify the concurrent folded-call repair on shared master
+
+Started 16 November 2026 at 14:37:35 UTC; first deadline
+15:22:35 UTC. I073 closes unqualified before its final deadline,
+with the source branch preserved and its owned worktree removed. A push of the
+report is rejected because another agent published ae127948 / merge 3efb5854.
+Inspect and merge those changes; do not overwrite remote work or claim the old
+I071 executable represents the new source.
+
+The concurrent repair keeps folded calls out of runtime-body visitation, so a
+later real call can collect dependencies from a restored instantiation. It also
+explicitly constructs the optional storage definition. Its intrinsic-only test
+covers failure/repair and folded-before-runtime uses at O0 and O2. This is the
+other agent's repair, not an accepted optimization from I073. Rebuild one job,
+verify the complete current C/C++ input identity, run required uncached <=120s
+and the affected integration suite, then push the combined shared baseline and
+reports. No old failed performance matrix is retried. The full compiler-wide
+incremental goal remains active and incomplete; resolver work remains the next
+optimization boundary after synchronization.
+
 ## I073: share incremental products with LLVM text output
 
 Started 16 November 2026 at 13:05:05 UTC; first deadline
