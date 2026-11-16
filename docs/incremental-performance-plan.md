@@ -27,6 +27,28 @@ validation, graph/payload persistence, debug/trace, LSP and other output modes s
 have broad or missing incremental paths. The complete objective covers every
 .dl/configuration edit and every compiler stage; it remains active and incomplete.
 
+## I072: qualify shared classification vertex mapping after baseline repair
+
+Started 16 November 2026 at 12:46:29 UTC; first deadline
+13:31:29 UTC. I071 is published at 642f81e1, with ROOT required
+333/0/0 in 103.798s, merged worktree/branch removed and six independent archived
+replay builds passing after disposal. Its final receipt verifies all 484 C/C++
+inputs and the remote head. The preceding direct-question turn answered the user
+without implementation; this continuation completed I071 qualification/publication.
+The complete all-stage goal remains active and incomplete.
+
+Resume the isolated I070 mapping candidate, whose first fixed CPU matrix has never
+run. Native attribution found 11,876 reused-edge path lookups plus a separately
+constructed 1,749-entry old-to-current map. Share that map with both consumers;
+preserve deleted vertices for reverse invalidation and current reordered IDs.
+Run the existing minimal insertion/removal/classification tests at O0 and O2,
+including the newly repaired failed-classification cascade. Keep only with the
+original independent-image eight-case CPU gate: established active-body or unused-
+flex gain and no unrelated established regression. A failed completed matrix is
+final; do not retry it or waive the gate. Required uncached <=120s, affected full
+integration and complete LLVM/diagnostic parity remain publication requirements.
+One heavy job, 45 minutes plus at most one extension after concrete progress.
+
 ## I071: propagate classification changes before unresolved diagnostics
 
 Started 16 November 2026 at 11:45:48 UTC; first deadline 12:30:48 UTC.
