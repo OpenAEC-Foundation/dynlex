@@ -21,6 +21,68 @@ broad work. Debug/trace, LSP and other output modes do not yet share complete na
 incremental coverage. The objective still covers all .dl/configuration edits and
 all stages; none of those remaining requirements is dropped.
 
+## I064: attribute broad frontend setup at its consumers
+
+Started 16 November 2026 at 05:32 UTC; first deadline 06:17 UTC. The previous
+iteration completed with a measured rejection, not a published optimization.
+Production C++ remains I062; 127be110 publishes only the I063 report. Use the
+unchanged production compiler 738252dd for this read-only investigation.
+
+Record two consecutive active body edits in the real LEXI8 application. Capture
+ordinary compiler statistics separately from debugger observations. Through the
+project GDB wrapper, attribute first matcher-segment loads and actual deferred
+source-outline preparation to their calling boundary, owner and source identity.
+Count work rather than treating debugger elapsed time as a benchmark. Verify the
+two sources differ and that compilation succeeds with the same compiler bytes.
+The investigation completes with an identified consumer and concrete next skip
+proof, or evidence rejecting that boundary. No compiler behavior changes in this
+iteration. Consult I031/I032/I057 results before selecting another hypothesis;
+do not recreate their already rejected catalog/topology variants. Full semantic
+source/section reuse and the complete compiler-wide objective remain unfinished.
+
+### I064 result: early consumers and remaining eligibility gaps identified
+
+Closed 16 November at 05:39 UTC without changing compiler behavior. Two complete
+production GDB traces each attribute 248 first matcher-segment loads to source-owner
+eligibility and eight to classification. A second trace, recording owner globals,
+observes 249/seven in its different absolute application directory. Both repeat
+exactly within their own directory and load all 256 segments. Preserve the research
+audit failure which initially assumed source-dependent bucket assignments would be
+identical across those directories; no compiler assertion or expectation was changed.
+
+On each edit, 710 source outlines prepare during source-owner selection: 409 belong
+to 306 flex functions, 281 to 30 ordinary functions with directly declared globals,
+and 20 to two other ordinary functions. Another 23 outlines prepare on later body
+demand. These are product calls and authored-header groups, not counts of unique
+semantic compiler units. The edited rendering function is among the global users;
+many of the other rejected owners are unchanged. Both source-owner and later body
+selectors explicitly exclude flex functions and global access. Source inspection
+confirms these guards; merely removing them is not a proved implementation.
+
+Separate ordinary compilations of two consecutive edits measure resolution setup
+123.583/115.995ms, cached-body selection 45.116/41.139ms, and source-owner selection
+47.962/42.810ms. Only 2.935/2.225ms restores 1,937 outline nodes. Therefore avoiding
+outline decoding alone cannot explain or eliminate the complete selection cost.
+Do not add another metadata catalogue whose downstream consumers still load every
+segment. Evidence is i064-attribution-audit.json, both complete six/three-build
+driver reports, original GDB stacks and input manifests. Compiler bytes stay
+738252dd; the real application is compiled, never launched.
+
+Next implementation goal, I065: couple lazy source products with lazy resolution
+products for eligible unchanged flex functions. Existing cloneSectionBody and
+ScopedSectionLocalVariableState consumers already call demandBodyResolution before
+reading bodies/bindings; verify the remaining expansion/type-probe consumers before
+changing eligibility. Preserve current source, classification, lexical environment,
+initial/final candidate-tree and scope-rule proofs. Global functions require their
+own binding proof and remain a separate boundary. Tests must precede behavior changes
+and cover untouched/activated flexes, changed and removed providers, newly specific
+overloads, parameter demotion, nested callers, failed lookups and repaired diagnostics.
+Keep only with actual avoided downstream work, fresh output/diagnostic/full LLVM
+parity and a significant whole-build CPU gain in the fixed real-program matrix,
+without established control regressions. Required remains uncached <=120s; full
+affected integration and root qualification precede publication. Record the actual
+start/deadline before beginning I065, with at most one progress-based extension.
+
 ## I063: reuse concrete dependency-record serialization
 
 Started 16 November 2026 at 04:32 UTC; first deadline 05:17 UTC.
