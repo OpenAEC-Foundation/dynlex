@@ -2,7 +2,38 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I080 merged and qualified; full goal incomplete
+## Current state: I081 rejected; I080 remains qualified
+
+The bounded declaration-preparation investigation found mixed matcher-product
+loading, not declaration decoding, dominated early setup. Its resulting isolated
+layout passed required333/0/0 in107.861s and cache eviction/corruption checks, but
+failed the first fixed CPU comparison. Production compiler code stays I080.
+
+### I081 closed: early read savings do not repay persistence overhead
+
+The fixed31-pair active-body primary rejects source68c316f9 / compiler491670dd:
+CPU medians1.469013 ->1.492362s, paired ratio1.016424, interval[1.008217,1.021076].
+Exact executable/diagnostic parity passes. Stop the remaining eight cases; do not
+retry this variant, run integration/LLVM qualification, or merge its compiler code.
+Required333/0/0 in107.861s and the focused eviction/corruption checks remain valid
+correctness evidence, not performance qualification.
+
+Source-owner selection improves44.727 ->25.955ms, but full-build matcher reads fall
+only9.124 ->8.828MB. Changed segments load retained entries again during capture.
+The layout changed256 digest buckets to16 buckets per kind, making update units
+coarser:28 newly encoded segments total6.341MB, versus39 segments /2.000MB before.
+The new complete-key inventory also parses/allocates all keys at restoration:
+that scope rises2.752 ->15.496ms; snapshot156.941 ->169.942ms. These timing scopes
+overlap their parents and are not an additive explanation of total CPU.
+
+Preserve the branch and archived image, retain one identified build, dispose the
+worktree, and leave qualified shared I080 unchanged. No deadline extension was
+used. The next storage attempt must keep producer update granularity and avoid a
+whole-index reconstruction; metadata isolation alone does not satisfy that rule.
+Continue with an independent missing compiler path after closing this experiment.
+Evidence: i081-body-regression-analysis.json and i081-final-state.json.
+
+## Last qualified snapshot: I080 debug IR reuse
 
 I080 implements native debug IR reuse with per-function source-location inputs.
 Unchanged semantic inputs alone do not admit old debug locations: declarations,
