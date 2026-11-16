@@ -2,7 +2,18 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I074 qualified shared baseline; full goal incomplete
+## Current state: I075 debug source-resolution reuse in progress; full goal incomplete
+
+I075 starts 16 November 2026 at 15:13:02 UTC, first deadline 15:58:02 UTC.
+Measure the real LEXI8 program under `-g`, then permit validated source-owner,
+classification and whole-body matcher products in debug builds. Keep inference
+and IR regeneration so current source ranges produce fresh debug metadata.
+Test code edits, shifted lines, failed lookups and classification cascades before
+changing production eligibility. Require a measured debug-build benefit, no
+established regression in the original native controls, complete fresh-output
+parity and required uncached <=120s. One heavy job; at most one extension after
+concrete progress. Trace replay and debug inference/IR remain separate missing
+boundaries, not a redefinition of the full objective.
 
 The shared baseline now contains the published I071 transitive parameter-classification
 repair plus the other agent's folded-before-runtime dependency repair (ae127948).

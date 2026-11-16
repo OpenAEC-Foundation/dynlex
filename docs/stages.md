@@ -72,8 +72,10 @@ authored header. Signature lookup inputs remain separate from local-body inputs.
 `body_resolution_units_deferred` counts units still encoded at reporting time,
 `body_resolution_units_demanded` counts units restored on semantic demand, and
 `body_resolution_references_restored` counts actual replayed reference outcomes.
-This whole-unit path currently excludes debug/trace builds and does not extend
-the native incremental driver to tooling or other output modes.
+Debug builds reuse these source-resolution products against current source ranges;
+inference and IR still regenerate their debug metadata. This whole-unit path
+currently excludes tracing and does not extend the native incremental driver to
+tooling or other output modes.
 
 Native incremental builds retain unresolved expression syntax with a reference
 outline. An unchanged function body registers its current-source pattern and

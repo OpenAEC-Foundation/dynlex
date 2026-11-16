@@ -70,7 +70,7 @@ class IncrementalClassification {
 		Timer timer{work};
 		prepare();
 		std::vector<Section *> result;
-		if (!prior || context.options.emitDebugInfo || context.options.traceExecution)
+		if (!prior || context.options.traceExecution)
 			return result;
 		auto restoreStarted = Clock::now();
 		for (size_t index = 0; index < units.size(); index++) {
