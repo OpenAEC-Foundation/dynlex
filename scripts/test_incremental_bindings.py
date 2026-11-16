@@ -2,6 +2,8 @@
 
 
 def check_variable_binding_units(root, build):
+    from test_incremental_binding_domains import check_binding_domain_index
+    check_binding_domain_index(root, build)
     main = root / 'binding_units.dl'
     source = ('to get alpha {seed}:\n'
               '    @intrinsic("store", item, @intrinsic("add", seed, 0))\n'

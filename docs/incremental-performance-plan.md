@@ -2,7 +2,25 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I075 qualified shared debug source reuse; full goal incomplete
+## Current state: I076 binding-domain producer index in progress; full goal incomplete
+
+I076 starts 16 November 2026 at 16:10:48 UTC, first deadline 16:55:48 UTC.
+Read-only debugger counts on the published I075 compiler confirm native body
+edits make 3 binding calls / 216 name visits / 2,444 reference visits, while
+debug edits make 187 calls / 29,026 names / 292,946 references. Of the latter,
+186 request one domain. Index those requests from reference publication/removal;
+build only after deferred-body reparenting has finished. Preserve whole-program
+global-domain joins and the existing persisted binding queries. Tests precede
+the implementation. Require real debug-edit CPU improvement and no established
+regression in the original eight native controls, required uncached <=120s,
+affected integration and complete native/debug parity. One heavy job, 45 minutes
+plus at most one extension after concrete progress; do not retry failed matrices.
+
+The stage audit proves the only binding-domain consumer runs after
+sourceSyntaxResolutionComplete, while the sole source reparenting operation runs
+earlier in the first resolution pass. Build the index at that stable boundary;
+no structural-invalidation callback or defensive rebuild is necessary. Both
+reference registrations and the one removal producer maintain the live index.
 
 I075 enables validated source-owner, parameter-classification and whole-body
 matcher reuse in native debug builds. Source 50f532a3 / compiler 804e1c59 matches

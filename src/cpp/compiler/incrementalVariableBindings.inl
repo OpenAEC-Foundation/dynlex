@@ -1,3 +1,5 @@
+#include "incrementalBindingDomains.inl"
+
 // Logical binding products contain ownership decisions, never process pointers.
 // Scope identities describe the current tree after receiver lowering.
 class IncrementalVariableBindings {
@@ -5,6 +7,7 @@ class IncrementalVariableBindings {
 	IncrementalMatcherCache &cache;
 	BuildStatistics &statistics;
 	VariableBindingHooks hooks;
+	IncrementalBindingDomains domains;
 	Json records, current = Json::object();
 	const Json empty = Json::object();
 	IncrementalSourceScopes &sourceScopes;
@@ -155,13 +158,20 @@ class IncrementalVariableBindings {
 		IncrementalSourceScopes &sourceScopes, const InitialMatcherProjection &matcher, const Json *previous,
 		const Json *failure
 	)
-		: context(context), cache(cache), statistics(statistics), hooks{{}, {}, statistics.bindings, {}},
+		: context(context), cache(cache), statistics(statistics), hooks{{}, {}, statistics.bindings, {}, {}, {}},
+		  domains(context, statistics.bindings),
 		  records(previous ? previous->at("all_function_projection").at("binding_units") : Json::object()),
 		  sourceScopes(sourceScopes), matcher(matcher) {
 		if (failure)
 			for (const auto &[domain, entries] : failure->at("binding_units").items())
 				for (const auto &[id, key] : entries.items())
 					records[domain][id] = key;
+		hooks.selectDomain = [&](Section *domain) {
+			return domains.select(domain);
+		};
+		hooks.referenceChanged = [&](VariableReference &reference, bool added) {
+			domains.changed(reference, added);
+		};
 		hooks.prepareConstraints = [&](Section *scope) {
 			if (matcher.constraintSourceOwners.contains(scope) && context.deferredBodyResolution(scope)) {
 				context.demandBodyResolution(scope);

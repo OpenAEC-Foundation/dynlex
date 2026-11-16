@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -24,15 +25,23 @@ struct VariableBindingGroup {
 struct VariableBindingWork {
 	size_t evaluated = 0, reused = 0, referencesClassified = 0, referencesRebound = 0, groupsMaterialized = 0;
 	size_t constraintDemands = 0;
+	size_t nameVisits = 0, referenceVisits = 0;
+	size_t domainSelections = 0, domainIndexBuilds = 0, domainIndexReferenceVisits = 0, domainIndexUpdates = 0;
 	double milliseconds = 0;
 };
 
 struct VariableBindingHooks {
 	using Groups = std::vector<VariableBindingGroup>;
+	using References = std::map<std::string, std::vector<VariableReference *>>;
 	std::function<Groups(const VariableBindingUnit &, const std::function<Groups()> &)> unit;
 	std::function<void(Section *)> complete;
 	VariableBindingWork &work;
 	std::function<void(Section *)> prepareConstraints;
+	std::function<References(Section *)> selectDomain;
+	std::function<void(VariableReference &, bool)> referenceChanged;
 };
 
+Section *variableBindingDomain(const ParseContext &context, const VariableReference &reference);
+void registerUnresolvedVariableReference(ParseContext &context, VariableReference &reference);
+void removeUnresolvedVariableReference(ParseContext &context, VariableReference &reference);
 void materializeVariableGroups(ParseContext &context, Section *domain = nullptr);
