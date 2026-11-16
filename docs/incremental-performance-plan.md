@@ -25,6 +25,73 @@ complete LLVM parity, required <=120s uncached and affected/full integration bef
 merging. One heavy job; at most one 45-minute extension after concrete progress.
 The compiler-wide incremental goal remains active and incomplete.
 
+### I058 single verification extension
+
+The class work-count regression and 13 activation/provider builds pass. The final
+composite-producer build also passes 30 graph, 159 matcher/classification and 220
+broader compilations. Parameterized class size changes pass. Lifecycle testing
+then exposes overlapping ownership: class reference collectors include retain and
+release bodies while matcher projection treats them as separate units. The exact
+reproducer and project-wrapper GDB trace locate the missing child product at
+InitialMatcherProjection::finish, not in the class layout or runtime.
+
+Align source reference collection, deferred-owner lookup and dependency/query
+ownership on the existing resolution-unit boundary, including lifecycle scopes.
+Use the one allowed 45-minute extension to complete that migration and qualification;
+the extended deadline is 01:16 UTC on 16 November. No second extension is allowed.
+The first deadline remains 00:31. The full compiler goal remains incomplete.
+
+### I058 result: reject; classification proof migration is incomplete
+
+Final source f6e1686c / compiler 77e61ce0 passes 494 focused compilations
+(71 class/lifecycle, 30 graph, 159 matcher/classification and 234 broader checks).
+The complete normalized six-case matrix nevertheless rejects it. Unused CPU is
+.537981 -> .583379s, paired ratio 1.087667 [1.067538, 1.107354]; active-body CPU is
+1.503137 -> 1.547681s, ratio 1.033764 [1.022176, 1.041029]. Unchanged, comment,
+wording and eleven-pair cold controls establish no difference. All executable and
+diagnostic comparisons pass. Do not merge this artifact or run a confirmation.
+Required, full integration and complete IR qualification are not run for it.
+
+Measured unused body resolution rises 27.217 -> 50.937ms and matcher key work
+2.631 -> 11.404ms, although grouped restorations fall 1,923 -> 1,010. Normal
+body-resolution visits rise 38 -> 943 and fingerprints 171 -> 1,067. A complete
+steady-edit GDB trace counts 2,477 restore requests, matching the measured counter;
+class replay is avoided but direct matches and ordinary function replay increase.
+A separate trace locates 75 ordinary source-owner materializations in
+IncrementalClassification::select. The proof trace observes 705 checks, including
+one class with 16 lexical references but three resolution-owned references.
+canReuse still compares those different domains after lifecycle ownership was
+split. That rejects a valid class proof and broadens classification evaluation.
+The failed combined key probe and relocated source-line probes are preserved;
+relocated line hits are boundary observations, not rejection counts.
+
+Preserve i058-performance-analysis.json, i058-stage-deltas.json,
+i058-steady-restore-unit-demand.json, i058-owner-materialization.json and
+i058-classification-domains.json with source/data/image manifests. Production C++
+remains I052. The compiler-wide goal remains active and incomplete.
+
+## I059: prove lexical classification from its resolution domains
+
+Started 16 November 2026 at 01:07 UTC; first deadline 01:52 UTC. Baseline remains
+production compiler 19f9b48d. I058's frozen failed artifact remains rejected. This
+iteration corrects the identified proof-domain migration before assessing a new
+artifact; it is not another timing of the rejected artifact.
+
+Classification includes enclosing parameter uses in lifecycle bodies. Validate its
+complete lexical reference set against the independent resolution-owner products,
+including every lifecycle domain. Keep source, provider and lookup proofs and
+missing/corrupt product behavior. Add a minimal no-library regression before the
+change, asserting that an unrelated edit does not reject the unchanged class and
+its dependent classification units; exercise lifecycle edits and parameter
+retraction against fresh builds. Do not merge a partial migration.
+
+Require >=2% paired CPU improvement over production in the real unused edit (15
+pairs, 95% interval below parity), with active-body (15), unchanged/comment/wording
+(31 each) and cold (11) controls showing no established regression. If qualified,
+run focused/cascade, complete LLVM parity, required <=120s uncached and affected
+full integration before merging. One heavy job at a time. At most one 45-minute
+extension after concrete progress. Full compiler goal remains incomplete.
+
 ## I057: attribute unchanged matcher-outcome demand before another optimization
 
 Started 15 November 2026 at 23:32 UTC; first deadline 00:17 UTC on 16 November.
