@@ -2,32 +2,52 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I080 qualified debug IR reuse; shared verification pending
+## Current state: I080 merged and qualified; full goal incomplete
 
-I080 starts 16 November 2026 at20:08:43 UTC, first deadline20:53:43 UTC.
-The fixed corrected-image matrix passes. Debug body edits improve3.764891 ->
-1.748279 CPU seconds (31 pairs; ratio interval[.462290,.467659]), a53.6% reduction.
-All eight original native controls establish no regression. Typed-body loading
-falls387 ->1;367 functions reuse IR, with9,045 location checks. Inference phase
-wall medians fall2146.816 ->379.739ms; body loading1477.159 ->4.647ms.
-The source-origin repairs require semantic LLVM parity against old I077, while
-candidate-vs-clean validation retains every debug record. Native controls retain
-exact executable equality. Comment/wording/unchanged cases perform zero object
-builds and zero linking in186 measured builds.
+I080 implements native debug IR reuse with per-function source-location inputs.
+Unchanged semantic inputs alone do not admit old debug locations: declarations,
+statements, variables, classes, members and referenced globals must still match.
+Imported metadata belongs to the current compilation unit. Compiler-private type
+products are removed before backend partitioning and optimization. Native builds
+hydrate no debug payload; the existing six-payload regression remains unchanged.
 
-Use the single allowed extension, ending21:38:43 UTC, for affected integration,
-complete native/debug LLVM parity, publication and shared-compiler checks.
-All40 native/debug real-program builds pass complete LLVM/diagnostic parity,
-including every debug record, on the same frozen executable.
-The exact corrected image already passes333 required checks in108.576s,
-596 focused compilations and full DWARF; do not rerun those worktree checks.
-The source is frozen at2a8f1dfc / compiler cba27e0a. Integration passes462/0/0
-in761.727s, with all compiler/source hashes unchanged. Worktree qualification
-is complete. Merge the source, rebuild shared master, then verify the required
-suite, focused cases, DWARF and native/debug builds after worktree disposal.
-Shared master remains4150d708 / compiler cf8248da until qualification succeeds.
-The full goal remains active; semantic section construction, broader persistence,
-tracing, tooling and non-native output paths are still incomplete.
+The fixed 31-pair debug edit comparison improves 3.764891 -> 1.748279 CPU seconds,
+a 53.6% reduction (paired ratio interval [.462290, .467659]). It restores one typed
+body instead of 387 and reuses 367 functions' IR after 9,045 location checks.
+Inference wall medians fall 2146.816 -> 379.739ms; body loading 1477.159 -> 4.647ms.
+All eight native controls establish no regression. Cache-disabled native cold
+medians are 5.224184 -> 5.261480 CPU seconds, interval [.992555, 1.017783]; this
+iteration establishes no cold-build gain. The 186 measured unchanged/comment/
+wording builds perform zero object builds and zero linking.
+
+Source 2a8f1dfc / compiler cba27e0a passes required 333/0/0 uncached in 108.576s,
+596 focused O0/O2 builds, complete DWARF, integration 462/0/0 in 761.727s and
+40 complete real-program native/debug LLVM comparisons. Candidate-vs-clean
+comparisons retain all debug metadata. The verified source-origin bug fixes
+change old I077 debug records; old-vs-new debug timing therefore uses semantic
+LLVM equality, while all native controls retain exact executable equality.
+
+Shared source 44f9b51c / compiler b29d658c matches all 469 C++ and 22 C inputs.
+It passes required 333/0/0 uncached in 108.925s, another 596 focused builds,
+complete DWARF and nine native/debug real-program builds after worktree disposal.
+Both merged branches and the worktree are removed. One exact build is retained,
+and both compiler images are archived with verified hashes. Work began at
+20:08:43 UTC on 16 November; the sole extension ends at 21:38:43 UTC.
+
+The full goal remains active. Semantic section construction, broader persistence,
+tracing, tooling and non-native output paths still require work. The next screen
+records current debug-edit medians: parse 10.364ms, resolution setup 117.353ms,
+classification 54.003ms, snapshot 250.524ms. File preparation already reuses 44
+files / 6,870 lines; section dispatch still visits 2,360 headers / 4,174 body lines.
+Select a reusable declaration/section producer and its downstream consumer before
+adding storage; merely replaying construction has already failed prior gates.
+Keep the same benchmark-driven acceptance and one-goal iteration boundaries.
+
+Evidence under structured-20261113: i080-performance-analysis.json,
+i080-debug-stage-analysis.json, i080-qualification-audit.json,
+i080-root-qualification-audit.json and i080-next-frontend-screen.json.
+
+### Preceding I079 and I078 experiments
 
 I079 passes its fixed debug primary (53.2%CPU gain;3.769174->1.761183s,
 ratio interval[.464736,.470245]) and all eight native controls without established
