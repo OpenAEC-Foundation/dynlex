@@ -74,15 +74,15 @@ void adoptQueries() {
 			}
 		verifiedValues[key] = std::move(values);
 	}
-	queryCheck().interfacesChanged();
+	queryCheck().interfacesChanged(accepted);
 	if (nativePrevious) {
-		nativeQueryCheck().interfacesChanged();
+		nativeQueryCheck().interfacesChanged(accepted);
 		for (const auto &key : accepted)
 			if (nativeInterfaceReplacements->contains(inferenceReuse->section(key), key.second) &&
 				nativeQueryCheck().unchanged(key) &&
 				inferenceReuse->nativeInputsUnchanged(inferenceReuse->section(key), key.second))
 				nativeInterfaceReplacements->erase(inferenceReuse->section(key), key.second);
-		nativeQueryCheck().interfacesChanged();
+		nativeQueryCheck().interfacesChanged(accepted);
 	}
 	for (const auto &key : accepted)
 		updateEligibility(key);

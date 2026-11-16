@@ -2,15 +2,16 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I061 merged and root-verified; full incremental goal incomplete
+## Current state: I062 qualified; publication in progress; full goal incomplete
 
-Production includes I061 source-only dependency products. Complete qualification
-passes: 333 required checks uncached in 80.172s, 462 integration checks in 791.276s
-and full LLVM parity after two edits in each of four real-program cases. The rebuilt
-root compiler passes all 333 required checks uncached in 99.640s. The merged
-worktree is removed and actual archived-compiler replay passes afterward.
-The measured active-edit CPU gain is 0.67%; section publication improves 29.5%.
-The original agent-chosen 1% whole-build target remains recorded as missed.
+Production includes I061 source-only dependency products. I062 selective inference
+proof invalidation passes 20 focused compilations, 333 required checks uncached in
+100.928s, 462 integration checks in 773.683s and complete LLVM parity after two edits
+in each of four real-program cases. Root publication and verification are next.
+The fixed paired CPU gains are 1.17% for active body and 0.99% for game-data edits;
+the unused-edit estimate is slower and uncertain, as recorded below. No control
+establishes a regression under the declared gate. I061's original 1% whole-build
+target remains recorded as missed; its stage improvement is already published.
 I058/I059 class-demand experiments remain parked.
 
 Semantic section construction and broad setup still visit unchanged source units;
@@ -18,6 +19,112 @@ dependency publication, some inference validation and module persistence also do
 broad work. Debug/trace, LSP and other output modes do not yet share complete native
 incremental coverage. The objective still covers all .dl/configuration edits and
 all stages; none of those remaining requirements is dropped.
+
+## I062: invalidate only affected inference-query proofs
+
+Started 16 November 2026 at 03:33 UTC; first deadline 04:18 UTC.
+The previous goal turn made concrete progress: I061 was fully qualified, merged,
+root-verified and pushed as 8f5574d0. Its measured source-only stage improvement
+and missed original whole-build target remain recorded. Baseline C++ is that
+production revision; the exact-path restored worktree executable ad939de7 has the
+same qualified C++ inputs as production 9956166d.
+
+First attribute interfacesChanged calls, proof-set sizes and subsequent work on
+two consecutive real active edits using the project debugger wrapper. Debugger
+elapsed time is not a benchmark. A whole-set reset is present in source, but its
+cost and number of unrelated retained proofs are not established yet. If material,
+retain positive query proofs outside the changed query's transitive consumer set.
+Both interface calls and observed-value edges, cycles, failures and native/semantic
+eligibility changes must participate. Do not replace invalidation with a new global
+proof on every query. Add minimal no-library work/cascade regressions before code.
+
+Keep only if actual work counters show unaffected proofs retained and affected
+consumers rechecked, fresh diagnostics/executables/full LLVM agree, and the fixed
+normalized real-program comparison establishes a CPU reduction with a 95% paired
+interval below parity. No arbitrary minimum percentage: code size and avoided work
+must justify a measured gain. Compare active body (31 pairs), game-data (15), unused
+(15), unchanged/comment/wording (31 each), and cold (11); no established unrelated
+regression. Run the required suite uncached within 120s and full affected integration
+before publication. One heavy job. At most one additional 45-minute iteration after
+concrete progress; otherwise reject/park and move to another measured boundary.
+The full compiler-wide goal remains active and incomplete.
+
+### I062 attribution and first implementation
+
+Two consecutive real active edits on baseline ad939de7 each call unchanged 2,800
+times and visit 2,158 dependency units. The three clear sites discard 538 semantic
+proofs, 538 native proofs, then zero proofs. Exact project-wrapper GDB records are
+in i062-proof-work; debugger timing is not used for performance. Probe-only compiler
+1a0e66f9 then measures a median 42.597ms checking cost over five real active edits,
+with 1,076 proofs invalidated each time. This makes the repeated proof work material.
+The probe-only artifact and source 0f3d1857 are preserved before implementation.
+
+Share direct-input and positive state in stable per-query nodes; register consumers
+when checking callee-interface and observed-value edges. Acceptance walks only that
+recorded reverse closure. Positive cycles still commit only after the whole query
+succeeds. No persistent format changes or eager whole-graph reverse index is added.
+Twenty minimal compilations pass, including runtime output, mutual recursion,
+an unrelated edit, recursive-body edits, provider removal/repair, changing known
+pure values and skipped-work counters. The simple edit retains three proofs and
+invalidates zero; baseline discarded two. This is work evidence, not a speedup claim.
+
+Preserve the initial authored-fixture failures separately: unsupported inline
+value-body syntax, an undiscarded printf result, and an expectation that counted
+the executable name as a user argument. The actual compiler implementation and
+clean/incremental output establish zero user arguments in these runs; the corrected
+fixture also executes both sides of its recursion. No compiler failure was masked
+or expected diagnostic changed. Full suite/IR/performance qualification is next.
+
+### I062 fixed matrix result and single verification extension
+
+Source 75171e41 / compiler 007891a9 passes all 333 required checks uncached in
+100.928s, with source/compiler hashes unchanged. The fixed complete normalized
+matrix passes executable/diagnostic parity. Body CPU is 1.502352 -> 1.484659s,
+paired ratio .988326 [.981961, .997919], a 1.17% gain. Game-data ratio is .990097
+[.982835, .997699], a 0.99% gain. Inference is 328.535 -> 318.735ms, paired ratio
+.969400 [.946321, .981222]. Dependency-unit checks fall 2,158 -> 1,085; inferred
+function bodies, inference restorations and retained IR counts are unchanged.
+The candidate reports 31.192ms query checks and .004533ms invalidation. Retention
+counts are per event, not distinct units; the 1,614 count includes repeated retention.
+
+The unused-edit point estimate is slower: ratio 1.024162 [.999970, 1.034981]. This
+interval narrowly includes parity; it does not establish either equality or a
+regression. Preserve that uncertainty rather than claiming every control is flat.
+Unchanged, comment, wording and eleven-pair cold controls also establish no
+regression. The predeclared gate passes; no confirmation timing will replace this
+complete first matrix. Evidence is i062-performance-analysis.json and all seven
+original reports/independent-copy receipts.
+
+Use the one allowed 45-minute extension through 05:03 UTC for full LLVM parity,
+full integration and root qualification/publication. The original deadline remains
+04:18. This is verification after concrete implementation and measured progress;
+there is no additional optimization variant. The full compiler goal remains active
+and incomplete.
+
+### I062 complete qualification
+
+Compiler 007891a9 and all qualified C++ inputs remain unchanged through all runs.
+Twenty focused builds pass, including independent fresh output/diagnostic checks,
+mutual recursion, provider removal/repair, value-dependent branching and actual
+work retention. All 333 required checks pass uncached in 100.928s. All 462
+integration checks pass in 773.683s (775.055s including the recording driver),
+with no failures or skips. Complete LLVM and diagnostics agree after two consecutive
+edits in unused-flex, unused, active-body and game-data cases: 20 compilations and
+eight comparisons against independent fresh caches. Each pair of edited sources
+has different content hashes; these are actual edits, not unchanged invocations.
+Formatting and whitespace checks pass; every modified code file stays below 1,000
+lines. i062-qualification-audit.json rechecks hashes and concrete artifacts and
+records full_goal_complete=false. Preserve the uncertain unused-edit control.
+
+Next bounded producer/consumer goal is P14's section-graph serialization. Actual
+active-edit evidence still shows whole-graph encoding despite nearly unchanged
+records (I061 measured 38.427ms). Inspect current encoding/decoding and retained
+record identities before choosing the product boundary; avoid another catalogue
+whose consumers still demand every detailed record. Aim to preserve unchanged
+serialization products and rewrite only changed records, with exact codec/fresh
+parity, real-program CPU evidence and the same correctness/budget controls. Record
+its start/deadline before new experiments. This remaining broad persistence work,
+semantic section construction and tooling/output modes keep the overall goal open.
 
 ## I058: demand class match products at their semantic consumers
 

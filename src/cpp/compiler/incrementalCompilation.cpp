@@ -406,6 +406,7 @@ bool compileIncrementally(
 		context.fileSystem = std::move(files);
 		BuildStatistics statistics;
 		statistics.measureDependencyGraph = showStatistics;
+		statistics.measureInferenceQueries = showStatistics;
 		InferenceSummaryStore summaryStore(directory, statistics);
 		statistics.cacheDirectory = directory.string();
 		statistics.cacheEntry = programEntry.string();
