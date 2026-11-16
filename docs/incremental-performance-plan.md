@@ -13,7 +13,10 @@ eight-case matrix establishes no CPU gain or regression; correctness is the reas
 for the change. Matching-dependency captures fall 2,978 -> 2,103 on active edits,
 while one function is inferred and 367 IR bodies remain reused. Rebuilt master
 matches all 462 qualified C++ inputs and passes 333 required checks uncached in
-100.488s. Archive replay and worktree disposal close this iteration. I063's
+100.488s. Master is pushed at 2e811a7b. Worktree/merged-branch disposal and six
+post-disposal archived replay compilations pass, including independent executable
+parity. The final closure record followed the intervening user question; no new
+optimization or timing retry was added after the deadline. I063's
 timing-rejected codec and I065's unqualified lazy-flex
 binding changes remain isolated; no optimization gate was waived for them.
 
