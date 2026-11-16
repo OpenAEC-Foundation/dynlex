@@ -2,12 +2,15 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I060 probes published; full incremental goal incomplete
+## Current state: I061 qualified; publication in progress; full goal incomplete
 
-Production includes the I060 dependency-publication probes and corrected failure
-accounting. Required checks pass uncached in 82.956s on the root build. No whole-build
-speedup is claimed for this instrumentation. I058/I059 class-demand experiments
-remain parked. Next: I061 source-only dependency section products.
+Production includes the I060 dependency-publication probes. I061's source-only
+dependency products pass complete qualification: 333 required checks uncached in
+80.172s, 462 integration checks in 791.276s and full LLVM parity after two edits
+in each of four real-program cases. Publication and root verification are next.
+The measured active-edit CPU gain is 0.67%; section publication improves 29.5%.
+The original agent-chosen 1% whole-build target remains recorded as missed.
+I058/I059 class-demand experiments remain parked.
 
 Semantic section construction and broad setup still visit unchanged source units;
 dependency publication, some inference validation and module persistence also do
@@ -202,10 +205,10 @@ identical-path checkout; timestamp reuse requires exact input hashes and ordinar
 CMake/Ninja flag/dependency validation. No rejected class compiler code is merged.
 I060 is complete as an analysis/instrumentation iteration; the full goal is active.
 
-## I061 next: reuse unchanged source-only dependency section products
+## I061: reuse unchanged source-only dependency section products
 
-Begin after I060 is published; set the start/deadline before implementation.
-Use the new production probes. Persisted section outputs already exist, but the
+Started 16 November 2026 at 02:07 UTC; first deadline 02:52 UTC.
+Baseline is published I060 source 8e6746e7 / root compiler d9098025. Use its probes. Persisted section outputs already exist, but the
 current reuse selector covers mostly native/inference-selected owners. Reuse a
 source-only section's prior graph record when its freshly validated matched
 references produce the same edges and it has no new or retained inferred variants,
@@ -223,6 +226,82 @@ job, a 45-minute first deadline and at most one 45-minute extension after concre
 progress. Park a failed candidate rather than moving its acceptance gate.
 The class lifecycle semantics question remains pending; its dependent work and
 failing regression remain on the separate parked branch.
+
+### I061 first result and single refinement/verification extension
+
+Source 241248ba / compiler 953114b2 passes 17 focused and 30 dependency-graph
+builds. The complete comparison shows active paired CPU ratio .986680
+[.983958, .997897], satisfying the 1% gate. Unused, unchanged, comment, wording
+and eleven-pair cold controls establish no regression; executable/diagnostic
+comparisons pass. Sections fall 33.419 -> 25.414ms (ratio .760459), missing the
+25% stage gate. The first artifact is not accepted; preserve its full matrix.
+
+The source-only proof repeats ordered-map searches. The dense graph encoder and
+decoder guarantee identical forward/instantiation paths, so a found forward entry
+needs one variant lookup. Old read/lookup-owner indexes are rebuilt independently;
+when this section contributes no current inferred facts, retaining equal edge and
+empty-variant outputs does not require retaining its old read ownership.
+Perform one refinement to remove those redundant proof lookups, with the original
+31/15/31/31/31/11 comparison and gates unchanged. This is a new source artifact,
+not a confirmation of 953114b2. No further refinement is allowed this iteration.
+The first deadline remains 02:52 UTC. Use the single allowed 45-minute extension
+through 03:37 UTC for this concrete refinement and full qualification if it passes.
+The full compiler goal remains active and incomplete.
+
+### I061 refined measurement and engineering disposition
+
+Refined source ef2d8a49 / compiler ad939de7 passes the same 17 focused and 30 graph
+builds. Its complete comparison retains 4,002 extra section records. Sections fall
+33.455 -> 23.587ms (29.50%); active CPU medians are 1.245937 -> 1.236240s. The
+paired CPU ratio is .993318 [.989016, .996411]: a measured 0.67% reduction, with
+no established control regression. Artifact/diagnostic comparisons pass.
+The 25% stage target passes; the agent-chosen 1% whole-build target does not.
+The preserved analysis continues to report gate_passes=false. No further timing
+or code refinement will be used to obtain a passing number.
+
+The user's objective prioritizes correct incremental units and a speedup, explicitly
+without a fixed minimum percentage. Treating the arbitrary 1% screening target as
+a reason to discard this small, proven unit-reuse implementation would work against
+that objective. This explicitly changes the engineering disposition, not the
+measurement or its failed target: qualify the change against complete correctness,
+LLVM parity, required <=120s uncached and full integration before publication.
+If those pass, publish it as a 29.5% stage / 0.67% whole-build improvement. This is
+not a claim that the original numeric gate passed or that the overall goal is done.
+
+The refined run's first attempt was stopped by the capacity guard before samples.
+Its files remain unchanged. Hash-verified inactive images were archived to provide
+4.6 GiB free, and the separately named complete matrix then ran once. The original
+02:52 deadline and single extension through 03:37 remain recorded; no second
+extension or further optimization refinement is allowed this iteration.
+
+### I061 complete qualification
+
+The previous conversational turn answered the user's question about integration
+tests; it made no compiler implementation progress. This continuation revalidated
+the frozen artifact and completed the outstanding suite instead of restarting work.
+Source ef2d8a49 / compiler ad939de7 passes all 333 required checks uncached in
+80.172s and all 462 integration checks in 791.276s, without source/compiler changes.
+The 17 focused and 30 graph compilations pass. Complete normalized LLVM and
+diagnostics agree after two consecutive edits in each of unused-flex, unused,
+active-body and game-data cases: 20 compilations, eight edit comparisons. The
+normalizer removes only the first ModuleID comment naming the inspection input.
+The frozen C++ input hashes are checked again by i061-qualification-audit.json;
+its full_goal_complete field is false. Formatting and git diff checks pass.
+
+Also correct the README's stale suite description: numeric parsing and class-layout
+unit checks run in required, and integration has no overall 120-second limit.
+No test selection, expectation or timeout changes are made in this iteration.
+
+Next screened hypothesis is P10 query-proof invalidation. Current
+InferenceUnitCheck::interfacesChanged clears every positive dependency proof after
+accepting any query; semantic and native checkers repeat this. Record the call
+counts, proof-set sizes and actual cost before implementing selective invalidation
+through callee-interface and observed-value consumers, including cycles. The 31-pair
+active-edit evidence measures 272.276ms inference, 55.721ms preinference and 73.066ms
+deferred probing; these scopes overlap and are not additive. Section construction
+is 8.266ms. Graph payload encoding separately costs 38.427ms and remains another
+candidate. See i061-next-stage-screen.json. No next optimization is accepted from
+these coarse timings alone. The compiler-wide objective remains active/incomplete.
 
 ## I057: attribute unchanged matcher-outcome demand before another optimization
 

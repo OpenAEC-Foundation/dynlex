@@ -2,6 +2,8 @@
 
 
 def check_dependency_graph_work(root, build):
+    from test_incremental_source_graph import check_source_only_graph_reuse
+    check_source_only_graph_reuse(root, build)
     main = root / "dependency_graph_work.dl"
     source = ('to get leaf {item}:\n'
               '    @intrinsic("return", @intrinsic("add", item, 1))\n'
