@@ -1,3 +1,5 @@
+#include "variableBindings.h"
+
 static bool typeContainsSymbolicClassInstantiation(const DataType &type) {
 	return (type.classDefinition && type.classInstIndex < -1) ||
 		   (type.arrayElementType && typeContainsSymbolicClassInstantiation(*type.arrayElementType));
@@ -203,6 +205,8 @@ static bool collectDeclaredTypeConstraintWorkItems(
 	ParseContext &parseContext, Section *section, std::vector<DeclaredTypeConstraintWorkItem> &items,
 	DeclaredConstraintIdentities &identities
 ) {
+	if (parseContext.variableBindingHooks)
+		parseContext.variableBindingHooks->prepareConstraints(section);
 	if (auto *rulesSection = dynamic_cast<ScopeRulesSection *>(section)) {
 		for (CodeLine *line : section->codeLines) {
 			if (!line->expression)

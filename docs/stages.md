@@ -59,6 +59,16 @@ inference, cloning and relevant provider mutations demand a unit before consumin
 its matches or bindings. Reusing a typed body can leave its original resolution
 product encoded for the entire build. Binding snapshots retain untouched domains;
 late demands publish new source bindings to live inference identity indexes.
+Each reusable body also retains whether its source contains declared variable
+constraints, including typed references bound directly to pattern parameters.
+The constraint collector demands such an owner before collecting its declarations;
+otherwise a cached body would conceal validation queries. Summaries reuse the
+same source/matching proof as their body unit. Statistics report summary units
+reused/scanned, source references scanned and `binding_constraint_demands`.
+Concrete inference inputs include resolved fixed local constraints and their
+declared types within that source unit's scope boundaries. A provider change can
+therefore invalidate cached successes or failures without changing a function's
+authored header. Signature lookup inputs remain separate from local-body inputs.
 `body_resolution_units_deferred` counts units still encoded at reporting time,
 `body_resolution_units_demanded` counts units restored on semantic demand, and
 `body_resolution_references_restored` counts actual replayed reference outcomes.

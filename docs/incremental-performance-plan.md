@@ -34,6 +34,72 @@ broad work. Debug/trace, LSP and other output modes do not yet share complete na
 incremental coverage. The objective still covers all .dl/configuration edits and
 all stages; none of those remaining requirements is dropped.
 
+## I068: demand recorded declared-constraint source products
+
+Started 16 November 2026 at 08:53:16 UTC; first deadline 09:38:16 UTC.
+I067 is closed unqualified and preserved on its branch, with the fixed matrix and
+GDB attribution complete. Start from published production 8b15515e; exclude all
+lazy-flex eligibility and binding-domain changes. The same worktree path is reused
+for build/data-root comparability; its executable still belongs to I067 until rebuilt.
+
+The five-line production ordinary-function repro crashes after integer -> float
+where clean reports a type error. Retain a compact per-owner declared-constraint
+source summary at the matcher/binding boundary. The actual constraint collector
+demands a recorded deferred owner before reading its variable declarations. Include
+all typed source references, including direct parameter bindings, and preserve
+unvisited summaries through cached and failed builds. Keep existing binding storage
+and partitioning. Expose summary reuse/scans and actual consumer-demand counts.
+
+Add minimal local/parameter declaration, inactive edit, provider change, invalid
+argument, diagnostic and repair checks first at O0/O2. Require required uncached
+<=120s, full affected integration, and complete LLVM/diagnostic parity after two
+edits in four real-program cases. Measure the original eight-case independent-image
+CPU matrix to report correctness-repair cost; no optimization is accepted by waiving
+I067's failed gate. Qualify root before publication. One heavy job; at most one
+45-minute extension after concrete progress. The full all-stage incremental goal,
+including efficient shared binding products and non-native/tooling paths, is incomplete.
+
+### I068 source demand and dependent inference inputs
+
+The production ROOT compiler reproduces the five-line crash. Per-owner
+`constraint_sources` summaries now retain typed source-reference presence under
+the existing validated body/matcher product. The constraint collector demands a
+recorded owner before reading its variables. Reuse/scanning/reference counters
+show that unchanged declaration summaries do not traverse source references.
+No flex eligibility, lexical binding partition or binding-record shape changes.
+
+The first candidate repairs source demand but a provider edit exposes a further
+verified edge: one constraint probe recomputes the new float constraint, while
+inference reuses an old failed getter with zero body passes and an integer error.
+Inference unit inputs covered signatures but omitted fixed local constraint values.
+Include those portable constraint/type results only in their owning source unit's
+body input, using the existing semantic scope traversal and encoding. Callable
+signature inputs remain independent. The provider edit now reaches inference.
+
+Compiler a6907d7f passes 37 focused compilations at O0 and 37 at O2: valid/invalid
+arguments, local and direct-parameter annotations, provider body edits, missing
+providers, unused declaration validation, final-annotation removal and repair.
+No full qualification or timing claim is made yet. Required and the original
+cost matrix must use frozen source/ELF artifacts. I067 stays unmerged.
+
+### I068 complete required/cost qualification; one extension
+
+Frozen source b7b4e9ee / compiler a6907d7f passes all 333 required checks uncached
+in 101.178s (102.092s driver), with every compiled/test input unchanged. All eight
+original cost cases complete with independent executable-image receipts and
+executable/diagnostic parity. Active-body CPU interval [.996992, 1.008607] and
+cache-disabled cold [.998595, 1.024612] establish no change. Unused-body interval
+[1.001766, 1.014477] establishes a small cost. Unused-flex improves in this run;
+this correctness repair makes no general optimization claim. No timing samples
+are repeated. All 186 measured unchanged/comment/wording builds have zero objects
+built, code-generation/link time and link time.
+
+Use the single extension through 10:23:16 UTC, keeping the original 09:38:16 UTC
+deadline. The two verified stage-consumer repairs, 74 focused compilations,
+required pass and original matrix establish concrete progress. Full integration
+is running; complete LLVM comparisons and root qualification/publication remain.
+This does not qualify a lazy-flex optimization or finish the compiler-wide goal.
+
 ### I068 worktree qualified; root verification remains
 
 Frozen source b7b4e9ee / compiler a6907d7f passes the complete affected integration

@@ -23,6 +23,7 @@ struct VariableBindingGroup {
 
 struct VariableBindingWork {
 	size_t evaluated = 0, reused = 0, referencesClassified = 0, referencesRebound = 0, groupsMaterialized = 0;
+	size_t constraintDemands = 0;
 	double milliseconds = 0;
 };
 
@@ -31,6 +32,7 @@ struct VariableBindingHooks {
 	std::function<Groups(const VariableBindingUnit &, const std::function<Groups()> &)> unit;
 	std::function<void(Section *)> complete;
 	VariableBindingWork &work;
+	std::function<void(Section *)> prepareConstraints;
 };
 
 void materializeVariableGroups(ParseContext &context, Section *domain = nullptr);

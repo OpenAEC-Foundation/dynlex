@@ -155,13 +155,19 @@ class IncrementalVariableBindings {
 		IncrementalSourceScopes &sourceScopes, const InitialMatcherProjection &matcher, const Json *previous,
 		const Json *failure
 	)
-		: context(context), cache(cache), statistics(statistics), hooks{{}, {}, statistics.bindings},
+		: context(context), cache(cache), statistics(statistics), hooks{{}, {}, statistics.bindings, {}},
 		  records(previous ? previous->at("all_function_projection").at("binding_units") : Json::object()),
 		  sourceScopes(sourceScopes), matcher(matcher) {
 		if (failure)
 			for (const auto &[domain, entries] : failure->at("binding_units").items())
 				for (const auto &[id, key] : entries.items())
 					records[domain][id] = key;
+		hooks.prepareConstraints = [&](Section *scope) {
+			if (matcher.constraintSourceOwners.contains(scope) && context.deferredBodyResolution(scope)) {
+				context.demandBodyResolution(scope);
+				hooks.work.constraintDemands++;
+			}
+		};
 		hooks.unit = [&](const VariableBindingUnit &query, const std::function<VariableBindingHooks::Groups()> &evaluate) {
 			return unit(query, evaluate);
 		};

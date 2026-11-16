@@ -3,6 +3,8 @@ struct MatcherProjectionWork {
 	double initialBodies = 0, final = 0, headers = 0, referenceTables = 0;
 	double bindings = 0, classifications = 0, inactiveCopy = 0, publishCopy = 0;
 	double ownerContexts = 0, sourceOwnerSelection = 0;
+	double constraintSources = 0;
+	size_t constraintSourceUnitsReused = 0, constraintSourceUnitsScanned = 0, constraintSourceReferencesScanned = 0;
 };
 
 // Preserve the matcher boundary before receiver bodies become generated functions.
@@ -24,6 +26,7 @@ struct InitialMatcherProjection {
 	};
 	Json value = nullptr;
 	std::vector<Owner> owners;
+	std::unordered_set<const Section *> constraintSourceOwners;
 	bool unitsCaptured = false;
 	const Json *priorUnits = nullptr, *published = nullptr;
 	const Json &projection() const { return published ? *published : value; }
@@ -39,6 +42,7 @@ struct InitialMatcherProjection {
 		priorUnits = prior;
 		declarationsReused = 0;
 		owners.clear();
+		constraintSourceOwners.clear();
 		unitsCaptured = false;
 		std::unordered_set<const PatternReference *> deferred(deferredReferences.begin(), deferredReferences.end());
 		std::unordered_set<const Section *> functionBodies, reusable;
@@ -83,6 +87,7 @@ struct InitialMatcherProjection {
 			{"declaration_digests", Json::object()},
 			{"match_overrides", Json::object()},
 			{"source_match_units", Json::object()},
+			{"constraint_sources", Json::object()},
 			{"body_units", Json::object()},
 			{"final_body_units", Json::object()},
 			{"header_definitions", Json::object()},
@@ -204,6 +209,40 @@ struct InitialMatcherProjection {
 		unitsCaptured = true;
 	}
 
+	void captureConstraintSources(const Owner &owner, const ParseContext &context) {
+		if (!owner.demandEligible)
+			return;
+		auto timer = measure(&MatcherProjectionWork::constraintSources);
+		bool declared = false;
+		if (context.retainedSourceOwners.contains(owner.section) ||
+			(context.deferredBodyResolution && context.deferredBodyResolution(owner.section))) {
+			declared = priorUnits->at("constraint_sources").contains(owner.path);
+			if (work)
+				work->constraintSourceUnitsReused++;
+		} else {
+			if (work)
+				work->constraintSourceUnitsScanned++;
+			auto visit = [&](auto &&self, const Section &scope) -> bool {
+				for (const auto &[_, references] : scope.variableReferences)
+					for (const VariableReference *reference : references) {
+						if (work)
+							work->constraintSourceReferencesScanned++;
+						if (!reference->declaredTypeConstraintName.empty())
+							return true;
+					}
+				for (const Section *child : scope.children)
+					if (child->patternDefinitions.empty() && self(self, *child))
+						return true;
+				return false;
+			};
+			declared = visit(visit, *owner.section);
+		}
+		if (declared) {
+			value.at("constraint_sources")[owner.path] = true;
+			constraintSourceOwners.insert(owner.section);
+		}
+	}
+
 	Json finish(
 		const ParseContext &context, const Json &expanded, IncrementalMatcherCache &matcherCache,
 		const std::map<std::string, Section *> &sections
@@ -221,6 +260,7 @@ struct InitialMatcherProjection {
 		for (const auto &[path, section] : sections)
 			paths.emplace(section, path);
 		for (Owner &owner : owners) {
+			captureConstraintSources(owner, context);
 			if (owner.references.empty() && !context.retainedSourceOwners.contains(owner.section))
 				owner.references = sourceOwnerReferences(*owner.section);
 			if (context.retainedSourceOwners.contains(owner.section) ||
