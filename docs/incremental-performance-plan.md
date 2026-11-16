@@ -2,7 +2,7 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I066 qualified; root publication pending; full goal incomplete
+## Current state: I066 merged and root-verified; full goal incomplete
 
 I066 fixes stale native callers after an overload changes below a forwarding flex.
 The frozen candidate f567005e passes fourteen O0/O2 regression compilations,
@@ -11,8 +11,10 @@ all 462 integration checks in 778.959s, and twenty compilations checking complet
 fresh/incremental LLVM text after two edits in four real-program cases. The fixed
 eight-case matrix establishes no CPU gain or regression; correctness is the reason
 for the change. Matching-dependency captures fall 2,978 -> 2,103 on active edits,
-while one function is inferred and 367 IR bodies remain reused. Root rebuild and
-publication are next. I063's timing-rejected codec and I065's unqualified lazy-flex
+while one function is inferred and 367 IR bodies remain reused. Rebuilt master
+matches all 462 qualified C++ inputs and passes 333 required checks uncached in
+100.488s. Archive replay and worktree disposal close this iteration. I063's
+timing-rejected codec and I065's unqualified lazy-flex
 binding changes remain isolated; no optimization gate was waived for them.
 
 Semantic section construction and broad setup still visit unchanged source units;
@@ -122,6 +124,24 @@ An initial analysis divided by a skipped inference phase's zero timer; absolute
 timings are preserved and that phase's ratio is explicitly unavailable. Timing
 samples were not rerun. Evidence is i066-final-performance-analysis.json and
 i066-final-qualification-audit.json. The full compiler objective remains incomplete.
+
+### I066 root verification
+
+Local merge c0a220df rebuilds as compiler 260f5150 with all 462 C++ input hashes
+matching the qualified worktree. Both seven-build O0/O2 regressions pass at the
+root paths. Root required passes 333 / 0 / 0 uncached in 100.488s (101.406s driver),
+with source and compiler unchanged. The root binary's different hash reflects its
+recorded build/data paths; source equality is checked explicitly.
+
+Next investigate remaining matcher/declaration setup with the existing timers and
+actual consumer counts. The 85.597ms deferred-query total is one probe, so do not
+treat it as repeated unchanged-query work. First-cache IR observations show about
+3.1s frontend, 2.0s inference and 4.4s codegen/link work, but are not a paired cold
+performance comparison. Attribute recording versus semantic work before another
+optimization. The I065 shared lexical binding-domain product is still required;
+do not re-enable lazy flexes through a narrower eligibility rule. Semantic section
+construction, broader persistence, debug/trace, tooling and other output modes also
+remain in the full objective. Record the next actual start/deadline before work.
 
 ## I065: demand unchanged flex-function source and resolution products
 
