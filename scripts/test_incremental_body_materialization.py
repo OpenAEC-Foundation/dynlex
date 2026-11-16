@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 def check_body_materialization(root, build):
+    check_folded_before_restored_runtime_call(root, build)
     check_generated_body_products(root, build)
     main = root / 'body_materialization.dl'
     source = ('to emit {value}:\n'
@@ -276,3 +277,29 @@ def check_managed_runtime_effects(root, build):
             summaries = program['inference_summaries'][section]
             assert summaries and all(summary['purity'] == int(managed) for summary in summaries.values()), \
                 'implicit lifecycle calls were absent from the function effect product'
+
+
+def check_folded_before_restored_runtime_call(root, build):
+    """A folded use cannot hide the same callee in a restored runtime body."""
+    main = root / 'folded_before_restored_runtime.dl'
+    source = (
+        'integer means: @intrinsic("type", "int", 32)\n'
+        'wide means: @intrinsic("and", @intrinsic("type", "any", 64), @intrinsic("type", "integer"))\n'
+        'type means: @intrinsic("type", "type")\n'
+        'function return value:\n    replacement: @intrinsic("return", value)\n'
+        'function value as {type:destination}:\n'
+        '    execute: return @intrinsic("cast", value, destination)\n'
+        'function widened {integer:value}:\n    execute: return value as wide\n'
+        '@intrinsic("call", "libc", "printf", @intrinsic("type", "nothing"), "%lld\\n", 42 as wide)\n'
+        '@intrinsic("call", "libc", "printf", @intrinsic("type", "nothing"), "%lld\\n", '
+        'widened (@intrinsic("call", "libc", "atoi", integer, "42")))\n'
+        'to broken: @intrinsic("discard", missing)\n'
+    )
+    for flags in ((), ('-O2',)):
+        main.write_text(source + 'broken\n')
+        failed = build(entry=main, flags=flags, success=False)
+        assert failed[1:] == build(False, entry=main, flags=flags, success=False)[1:]
+        main.write_text(source)
+        repaired = build(entry=main, flags=flags)
+        assert repaired[2] == b'42\n42\n'
+        assert repaired[1:] == build(False, entry=main, flags=flags)[1:]

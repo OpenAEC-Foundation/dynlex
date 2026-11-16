@@ -62,7 +62,7 @@ class InferenceStorageIdentities {
 	std::optional<Json> encodeDefinition(VariableReference *reference) {
 		if (!reference)
 			return std::nullopt;
-		return sourceIndex.definition(reference);
+		return std::optional<Json>{std::in_place, sourceIndex.definition(reference)};
 	}
 
 	void indexScopeOrigins() {
