@@ -64,8 +64,11 @@ def check_default_cache(compiler, root):
         assert clean is None and manifest.read_bytes() == b"corrupt", "a clean build accessed the cache"
         failed, _ = invoke(success=False)
         assert "cache" in failed.stderr.lower(), "default cache corruption was hidden"
-        _, uncached_output = invoke("--emit-llvm")
-        assert uncached_output is None and manifest.read_bytes() == b"corrupt", "LLVM output accessed the native cache"
+        _, llvm_output = invoke("--emit-llvm", "--incremental-stats")
+        assert llvm_output["cache_entry"] != str(manifest)
+        assert manifest.read_bytes() == b"corrupt", "LLVM output accessed the native cache"
+        _, llvm_reused = invoke("--emit-llvm", "--incremental-stats")
+        assert llvm_reused["frontend_reused"]
     finally:
         manifest.write_bytes(original)
 
@@ -77,7 +80,8 @@ def check_default_cache(compiler, root):
     assert Path(reused["cache_directory"]).resolve() == (override / "native-v1").resolve()
     invoke("--no-incremental", "--cache-dir", str(override), success=False)
     invoke("--no-incremental", "--incremental-stats", success=False)
-    invoke("--emit-llvm", "--cache-dir", str(override), success=False)
+    _, llvm_override = invoke("--emit-llvm", "--cache-dir", str(override), "--incremental-stats")
+    assert Path(llvm_override["cache_directory"]).resolve() == (override / "native-v1").resolve()
 
     other = root / "other-project"
     other.mkdir()
@@ -97,3 +101,6 @@ def check_default_cache(compiler, root):
             _, stats = invoke("--incremental-stats", env=env)
             assert Path(stats["cache_directory"]).resolve() == (home / ".cache/dynlex/compiler/native-v1").resolve()
     check_compiler_identity(compiler, root / "compiler-identity")
+    from test_incremental_llvm_output import check_incremental_llvm_output, check_incremental_llvm_debug_output
+    check_incremental_llvm_output(root / "llvm-artifact", compiler)
+    check_incremental_llvm_debug_output(root / "llvm-debug", compiler)

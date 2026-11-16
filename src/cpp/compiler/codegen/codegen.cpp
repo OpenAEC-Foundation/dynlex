@@ -11,6 +11,7 @@
 #include "executionTrace.h"
 #include "expression.h"
 #include "intrinsicInfo.h"
+#include "llvmOutput.h"
 #include "native.h"
 #include "nativeScalarABI.h"
 #include "numberScopeRules.h"

@@ -3,6 +3,7 @@
 #include "cachedCbor.h"
 #include "classInstantiationRequest.h"
 #include "codegen/codegen.h"
+#include "codegen/llvmOutput.h"
 #include "codegen/native.h"
 #include "codegen/nativeLibraries.h"
 #include "codegen/targetOptions.h"
@@ -355,6 +356,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalInferenceIdentities.inl"
 #include "incrementalOptimizationInputs.inl"
 #include "incrementalOptimization.inl"
+#include "incrementalLLVMArtifact.inl"
 #include "incrementalOptimizedNativeUnits.inl"
 #include "incrementalInferenceValues.inl"
 #include "incrementalInferenceKeys.inl"
@@ -449,6 +451,8 @@ bool compileIncrementally(
 					previousMatcherKey = previous->at("matcher_key").get<std::string>();
 			}
 		}
+		if (previous && context.options.emitLLVM)
+			statistics.llvmOutputKey = previous->at("llvm_output_key").get<std::string>();
 		statistics.cacheLoadMilliseconds = elapsedMilliseconds(compileStart);
 		if (reuseFailedFrontend) {
 			statistics.reusedFrontend = true;
@@ -462,27 +466,21 @@ bool compileIncrementally(
 		} else if (reusePreviousFrontend) {
 			statistics.reusedFrontend = true;
 			std::cerr << cachedDiagnostics;
-			if (linkedOutputUnchanged(context, *previous)) {
+			if (compilerOutputUnchanged(context, *previous)) {
 				success = true;
 				statistics.objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 			} else {
-				context.llvmContext = new llvm::LLVMContext();
-				context.llvmModule = new llvm::Module("dynlex_cached_link", *context.llvmContext);
-				std::string error;
-				context.targetMachine = createNativeTargetMachine(context, error);
-				if (!context.targetMachine)
-					throw std::runtime_error(error);
 				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
 				context.requiredLibraries.insert(libraries.begin(), libraries.end());
-				success = linkOrRestoreNativeOutput(
-					context, directory, programEntry, compilerIdentity, options, libraries, statistics, *previous
+				success = restoreCompilerOutput(
+					context, directory, programEntry, compilerIdentity, options, libraries, statistics, *previous, false, true
 				);
 			}
 			if (success &&
-				(configOnlyChange || !statistics.nativeUnits.is_null() || !linkedOutputUnchanged(context, *previous))) {
+				(configOnlyChange || !statistics.nativeUnits.is_null() || !compilerOutputUnchanged(context, *previous))) {
 				Json result = *previous;
-				recordNativeOutput(result, statistics, &*previous);
-				result["linked_output"] = linkedOutputIdentity(context);
+				recordCompilerOutput(result, statistics, &*previous);
+				result["compiler_output"] = compilerOutputIdentity(context);
 				if (configOnlyChange) {
 					result["files"] = recording->observations;
 					result["diagnostics"] = cachedDiagnostics;
@@ -745,11 +743,11 @@ bool compileIncrementally(
 				statistics.reusedTypeInference = true;
 				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
 				context.requiredLibraries.insert(libraries.begin(), libraries.end());
-				if (linkedOutputUnchanged(context, *previous)) {
+				if (compilerOutputUnchanged(context, *previous)) {
 					success = true;
 					statistics.objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 				} else {
-					success = linkOrRestoreNativeOutput(
+					success = restoreCompilerOutput(
 						context, directory, programEntry, compilerIdentity, options, libraries, statistics, *previous
 					);
 				}
@@ -774,9 +772,9 @@ bool compileIncrementally(
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
 					result["frontend_diagnostic_units"] = std::move(frontendDiagnosticUnits);
 					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
-					recordNativeOutput(result, statistics, &*previous);
+					recordCompilerOutput(result, statistics, &*previous);
 					recordSemanticSources(result, *recording, context);
-					result["linked_output"] = linkedOutputIdentity(context);
+					result["compiler_output"] = compilerOutputIdentity(context);
 					auto writeStart = Clock::now();
 					writeProgramEntry(
 						programEntry, std::move(result), &*previous, showStatistics ? &statistics.payloadWrite : nullptr
@@ -891,23 +889,24 @@ bool compileIncrementally(
 					statistics.snapshotMilliseconds = elapsedMilliseconds(snapshotStart);
 					bool emitted;
 					if (previous && previous->at("generated_ir") == result.at("generated_ir")) {
-						if (previous->at("libraries") == libraries && linkedOutputUnchanged(compiled, *previous)) {
+						if (previous->at("libraries") == libraries && compilerOutputUnchanged(compiled, *previous)) {
 							statistics.objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 							emitted = true;
 						} else
-							emitted = linkOrRestoreNativeOutput(
+							emitted = restoreCompilerOutput(
 								compiled, directory, programEntry, compilerIdentity, options, libraries, statistics, *previous,
 								true
 							);
 					} else
-						emitted = buildNativeOutput(
+						emitted = buildCompilerOutput(
 							compiled, directory, compilerIdentity, options, libraries, statistics,
-							previous ? &*previous : nullptr, functionReuse.get()
+							result.at("generated_ir").get_ref<const std::string &>(), previous ? &*previous : nullptr,
+							functionReuse.get()
 						);
 					if (!emitted)
 						return false;
-					recordNativeOutput(result, statistics, previous ? &*previous : nullptr);
-					result["linked_output"] = linkedOutputIdentity(compiled);
+					recordCompilerOutput(result, statistics, previous ? &*previous : nullptr);
+					result["compiler_output"] = compilerOutputIdentity(compiled);
 					auto writeStart = Clock::now();
 					writeProgramEntry(
 						programEntry, std::move(result), previous ? &*previous : nullptr,

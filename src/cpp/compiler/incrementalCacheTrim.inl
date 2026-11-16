@@ -16,7 +16,7 @@ CacheTrimWork trimCache(const fs::path &directory) {
 	};
 	std::vector<Entry> entries;
 	uintmax_t size = 0;
-	constexpr std::array<std::string_view, 15> prefixes{
+	constexpr std::array<std::string_view, 16> prefixes{
 		"object-",
 		"program-",
 		"payload-",
@@ -31,7 +31,8 @@ CacheTrimWork trimCache(const fs::path &directory) {
 		"native-unit-",
 		"inference-summary-",
 		"inference-body-",
-		"inference-class-"
+		"inference-class-",
+		"llvm-output-"
 	};
 	const std::u8string utf8Directory = directory.u8string();
 	const llvm::StringRef directoryBytes(reinterpret_cast<const char *>(utf8Directory.data()), utf8Directory.size());

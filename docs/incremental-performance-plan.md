@@ -2,7 +2,46 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I081 rejected; I080 remains qualified
+## Current state: I082 LLVM output; full goal incomplete
+
+Started16 November2026 at21:36:17 UTC, first deadline22:21:17 UTC. The preceding
+turn made progress: I081 was implemented/tested, rejected by its fixed CPU gate,
+and its persistence regression explained; qualified I080 remained unchanged.
+
+Share persistent semantic and per-function IR products with LLVM text output.
+Use existing output producer/restore boundaries directly, rather than adding the
+I073 native-output wrapper layers. Keep mode-specific cache identity and LLVM
+artifacts, current output failure reporting, stdout/no-main behavior and automatic
+cache use. Remove compiler-private debug products before either backend consumes
+IR. Imported debug locations and global/class metadata must match clean output.
+
+The pre-existing LLVM artifact tests fail on the qualified compiler's cache-option
+rejection. Add debug metadata parity/capture exclusion tests and migrate default
+cache checks before testing. Require source/config changes to retain unaffected
+units, output repair without frontend work, full LLVM/diagnostic parity, a fixed
+real-program LLVM speedup and no established native-control regression. Required
+uncached remains<=120s. One heavy job;45 minutes plus at most one extension for
+concrete progress. I073 and I081 stay isolated; do not retry identical failures.
+
+### I082 candidate and fixed comparison protocol
+
+Compiler3918fcd7 passes LLVM artifact tests at O0/O2, complete minimal debug LLVM
+parity with moved class/global metadata, and required333/0/0 uncached in110.237s.
+The new output producer consumes private debug products before output, and a
+cached-text restore avoids initializing LLVM. Mode identity keeps native and LLVM
+results separate; all output-identity producers/consumers use compiler_output.
+
+Freeze this exact source/image before timing. The LLVM body primary uses7 pairs:
+qualified I080 has no incremental LLVM path, so its LLVM calls are cache-disabled;
+the candidate uses its incremental path. Require a CPU gain and complete LLVM
+parser/graph equality after symbol ordering and local-name alpha normalization.
+Types, globals, function names, attributes and metadata remain checked. Inspectors
+run outside the timed child-CPU interval. A7-pair cache-disabled LLVM control and
+the original eight native controls must establish no regression; native comparisons
+retain exact executable bytes. Do not retry a completed failed variant. Affected
+integration and full native/debug/LLVM parity follow only if this gate passes.
+
+## Prior rejected iteration: I081 matcher layout
 
 The bounded declaration-preparation investigation found mixed matcher-product
 loading, not declaration decoding, dominated early setup. Its resulting isolated

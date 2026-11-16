@@ -112,7 +112,7 @@ void optimizeLLVMModule(ParseContext &context, llvm::Module &module, bool prepar
 	mpm.run(module, mam);
 }
 
-bool generateCode(ParseContext &context, const std::function<bool(ParseContext &)> &nativeEmitter) {
+bool generateCode(ParseContext &context, const std::function<bool(ParseContext &)> &outputEmitter) {
 	requireCompilerInvariant(
 		context.llvmContext && context.llvmModule && !context.llvmBuilder,
 		"code generation requires one initialized target layout"
@@ -319,9 +319,9 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 		return false;
 	}
 
-	// The incremental native emitter owns optimization and object lowering.
-	if (nativeEmitter)
-		return nativeEmitter(context);
+	// The incremental output producer owns optimization and lowering.
+	if (outputEmitter)
+		return outputEmitter(context);
 	if (context.options.optimizationLevel > 0)
 		optimizeLLVMModule(context, *context.llvmModule);
 
@@ -337,18 +337,7 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 	}
 #else
 	} else if (context.options.emitLLVM) {
-		std::string outputPath = context.options.outputPath;
-		if (outputPath.empty())
-			outputPath = context.options.inputPath + ".ll";
-		std::error_code ec;
-		llvm::raw_fd_ostream out(outputPath, ec);
-		if (ec) {
-			context.addDiagnostic(
-				Diagnostic(context, Diagnostic::Level::Error, "failed to open output file", Range(), "error", ec.message())
-			);
-			return false;
-		}
-		context.llvmModule->print(out, nullptr);
+		return writeLLVMOutput(context, renderLLVMOutput(*context.llvmModule));
 	} else if (context.options.emitObject) {
 		if (!emitNativeObject(context))
 			return false;
