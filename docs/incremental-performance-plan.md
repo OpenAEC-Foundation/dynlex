@@ -2,6 +2,60 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## Latest attribution: I086 root-execution reuse boundary
+
+Started16 November2026 at23:43:44 UTC; first deadline00:28:44 UTC17 November.
+Previous goal turn made progress: coupled flex source/binding products were tested
+and rejected by their original CPU gate, with complete work/cost evidence and
+qualified shared I082 unchanged. The full compiler-wide goal remains active.
+
+The qualified real-program body comparison already exposes six inference stages.
+Their separate medians are constraints51.139ms, conflicts9.352, preinference69.757,
+root execution179.545, exposed/lifecycle5.728 and final validation .238ms. They
+are per-scope medians, not the sum of one sample. Only one function body normally
+infers,367 IR bodies reuse, but root execution is not reused and no changed
+instantiation is speculatively inferred. Attribute the exact root-input/query/
+constraint/global-layout blocker before changing eligibility. Use the project
+GDB wrapper on two distinct current body edits and preserve source/image evidence.
+
+If a missing per-unit proof is identified, write a minimal no-import clean-parity
+and skipped-work regression before implementation. Retain changed signatures,
+constraints, globals, class layouts, overloads, failed lookups and diagnostic
+ordering; no blanket relaxation or native-IR-only shortcut. State a fixed gain
+and unrelated-control gate before implementing. Required uncached remains<=120s,
+affected integration precedes sharing, one heavy job and at most one concrete-
+progress extension. Do not retry failed I084/I085 candidates.
+
+### I086 attribution complete: global readers block entry replay
+
+Qualified image d95dda4b is unchanged across494 C/C++ inputs. Two distinct real
+body edits have equal declaration, initial/final matcher, root-binding, scope-rule
+and semantic source-view inputs. The second debugger trace confirms the root-input
+branch is entered, but root eligibility is false before reusableRootExecution;
+its constraint/class-layout safety check is not reached. The optimized local
+rootInputsUnchanged is unavailable in DWARF, so no boolean observation is claimed
+from that missing local. All debugger inferiors exit normally.
+
+A seven-line no-import global-reader program prints1 before a literal body edit
+and2 after, matching clean output, but does not preinfer the changed function or
+reuse entry execution. The equivalent four-line parameter-reader program prints
+the same values, preinfers one changed function and reuses entry execution.
+Stored concrete products record one global type input versus zero. The selector
+explicitly excludes both declared-global readers and nonempty global-input units.
+This is a verified missing dependency boundary, not an error in existing output.
+
+Correct support needs type-producing global source/query products independent of
+the whole root execution unit. Saved global types or class layouts cannot be made
+valid merely by removing those guards: current producer and call/value inputs
+must first be checked, including changed return types and class construction.
+Root statement/block products are a related larger boundary. Keep both incomplete;
+do not claim this read-only attribution implements root reuse or a speedup.
+No compiler behavior or tests changed, so no new full-suite pass is claimed.
+Evidence: i086-attribution-audit.json, two full projection/debugger captures and
+i086-minimal-root-globals/report.json. The next independent measured scope is the
+existing declared-constraint stage (~51ms despite740 reused expression/value
+products), to identify which unchanged producers still run before changing code.
+
 ## Latest rejected iteration: I085 classification and flex demand
 
 Started16 November2026 at23:19:48 UTC; first deadline00:04:48 UTC17 November.
