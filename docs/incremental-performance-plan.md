@@ -92,6 +92,56 @@ run focused/cascade, complete LLVM parity, required <=120s uncached and affected
 full integration before merging. One heavy job at a time. At most one 45-minute
 extension after concrete progress. Full compiler goal remains incomplete.
 
+### I059 result: park; fewer replayed references, no whole-build gain
+
+Source 26eb3ae1 / compiler 1d334efe validates every resolution domain within the
+lexical classification owner. The minimal unrelated-edit assertion changes from
+one to two reused implicit parameters. On the real program all 342 ordinary
+owners remain retained, 456 resolution units remain encoded, and grouped reference
+restorations fall 1,923 -> 893. Body resolution falls 21.978 -> 19.975ms.
+
+The complete normalized comparison fails the declared gate. Unused CPU is
+.446459 -> .446274s, paired ratio .999564 [.990337, 1.014283]; active-body CPU is
+1.240544 -> 1.242862s, ratio 1.005111 [.994875, 1.013372]. Unchanged, comment and
+eleven-pair cold controls establish no difference. Wording has a small established
+regression, ratio 1.006568 [1.001283, 1.015218]. Matrix executable and diagnostic
+comparisons pass. Preserve this artifact and do not run a confirmation or merge it.
+The first regression's activation also exposes a pre-existing production crash;
+there is no full test pass, required/integration run or IR qualification claim.
+
+The reduced class uses a pattern parameter only in release. Neither production
+19f9b48d nor candidate 1d334efe binds that parameter into the runtime lifecycle.
+The variable remains Unresolved and reaches finalizedExpressionType through
+discard. Direct construction also fails; returning from a factory is unnecessary.
+Class requests record argument observations, but concrete layout identity contains
+field types, not a runtime parameter capture. A user question is pending on whether
+to require explicit fields, capture parameters, or allow only compile-time values.
+Keep the new regression and GDB/minimal evidence on the parked branch; do not
+change its expectation to claim success. See i059-lifecycle-bug.json and
+ i059-lifecycle-minimal/report.json. Production compiler source remains I052.
+
+## I060: attribute dependency-summary publication by real phase cost
+
+Started 16 November 2026 at 01:24 UTC; first deadline 02:09 UTC. The class experiments
+are parked, with their artifacts and failing new activation test preserved. While
+the lifecycle language decision is pending, use a production-based branch for an
+independent remaining stage. Do not carry the rejected class optimization into it.
+
+An active edit in the actual LEXI8 program infers one function but spends about
+65ms publishing the dependency graph, within a roughly 132ms snapshot. Add optional
+scoped timing and work counters for graph setup, section products, match facts,
+reverse edges, specialization-unit capture, normalization, global propagation and
+lookup publication. Disabled probes must perform no clock reads. Inspect repeated
+real active edits, and a minimal known graph, to identify the actual repeated work;
+request counts alone do not establish its cost. Preserve cold and fast-path controls
+and distinguish overlapping timings. Verify outputs/diagnostics against production.
+
+This analysis iteration completes only when the dominant subphase is measured and
+a concrete producer/consumer optimization is chosen. It is not a compiler-wide
+completion claim. If keeping the probes in production, focused checks and required
+<=120s uncached must pass. One heavy job, at most one 45-minute extension after
+concrete progress. The full incremental compiler objective remains active.
+
 ## I057: attribute unchanged matcher-outcome demand before another optimization
 
 Started 15 November 2026 at 23:32 UTC; first deadline 00:17 UTC on 16 November.
