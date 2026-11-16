@@ -185,6 +185,7 @@ struct BuildStatistics {
 	double dependencyGraphUnitCaptureMilliseconds = 0, dependencyGraphUnitNormalizeMilliseconds = 0,
 		   dependencyGraphUnitGlobalsMilliseconds = 0;
 	size_t dependencyGraphSectionsVisited = 0, dependencyGraphUnitsNormalized = 0, dependencyGraphGlobalEdgesVisited = 0;
+	size_t dependencyGraphSourceOnlySectionsReused = 0;
 	double preinferenceMilliseconds = 0;
 	double codegenMilliseconds = 0;
 	double irGenerationMilliseconds = 0;

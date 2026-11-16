@@ -349,6 +349,7 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"dependency_graph_unit_normalize_ms", statistics.dependencyGraphUnitNormalizeMilliseconds},
 					  {"dependency_graph_unit_globals_ms", statistics.dependencyGraphUnitGlobalsMilliseconds},
 					  {"dependency_graph_sections_visited", statistics.dependencyGraphSectionsVisited},
+					  {"dependency_graph_source_only_sections_reused", statistics.dependencyGraphSourceOnlySectionsReused},
 					  {"dependency_graph_units_normalized", statistics.dependencyGraphUnitsNormalized},
 					  {"dependency_graph_global_edges_visited", statistics.dependencyGraphGlobalEdgesVisited},
 					  {"preinference_ms", statistics.preinferenceMilliseconds},

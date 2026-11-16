@@ -1636,6 +1636,12 @@ unit capture, normalization and global propagation are nested within units.
 Section visits, normalized units and global dependency-edge visits count actual
 work, including repeated edge visits during propagation. Skipped publication
 reports zero work. These scoped probes read no clocks when statistics are disabled.
+Source-only section dependency records can retain their previous outputs when
+current matched edges are equal and no inferred variants, reads or lookups contribute.
+Main execution retains its separate inference proof. An unused edit can leave its
+producer pending until a consumer needs the graph; that consumer validates the new
+matches before considering record reuse. `dependency_graph_source_only_sections_reused`
+counts these retained records within `dependency_graph_entries_reused`.
 The interface comparison captures only the instantiation just preinferred.
 Other variants, including unchanged variants of that same function, retain their
 summaries and generated IR independently. The same encoder produces

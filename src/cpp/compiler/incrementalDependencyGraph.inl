@@ -108,6 +108,16 @@ Json captureSectionDependencyGraph(
 					retainedKeys.insert(key);
 		IncrementalInferenceReads::Keys sectionLookups = inferenceReads.readsOf(path);
 		IncrementalInferenceReads::Keys reads = inferenceReads.dependenciesOf(path);
+		// A source-only product has no inferred contributions. The matcher has
+		// already validated its current edges, so equal outputs stop propagation.
+		if (hadPrevious && section->parent && section->instantiations.empty() && instantiatedKeys.empty() &&
+			retainedKeys.empty() && sectionLookups.empty() && reads.empty() && forward.contains(path) &&
+			instantiations.contains(path) && instantiations.at(path).empty() && !priorReads.contains(path) &&
+			!priorLookupsByOwner.contains(path) && forward.at(path) == sourceMatches) {
+			statistics.dependencyGraphEntriesReused++;
+			statistics.dependencyGraphSourceOnlySectionsReused++;
+			continue;
+		}
 		bool reuseEntry = hadPrevious && stable.contains(section) && forward.contains(path) && instantiations.contains(path) &&
 						  sectionLookups.empty() && reads.empty();
 		std::set<std::string> currentKeys = retainedKeys;
