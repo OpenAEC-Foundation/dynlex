@@ -82,6 +82,39 @@ providers, unused declaration validation, final-annotation removal and repair.
 No full qualification or timing claim is made yet. Required and the original
 cost matrix must use frozen source/ELF artifacts. I067 stays unmerged.
 
+### I068 complete required/cost qualification; one extension
+
+Frozen source b7b4e9ee / compiler a6907d7f passes all 333 required checks uncached
+in 101.178s (102.092s driver), with every compiled/test input unchanged. All eight
+original cost cases complete with independent executable-image receipts and
+executable/diagnostic parity. Active-body CPU interval [.996992, 1.008607] and
+cache-disabled cold [.998595, 1.024612] establish no change. Unused-body interval
+[1.001766, 1.014477] establishes a small cost. Unused-flex improves in this run;
+this correctness repair makes no general optimization claim. No timing samples
+are repeated. All 186 measured unchanged/comment/wording builds have zero objects
+built, code-generation/link time and link time.
+
+Use the single extension through 10:23:16 UTC, keeping the original 09:38:16 UTC
+deadline. The two verified stage-consumer repairs, 74 focused compilations,
+required pass and original matrix establish concrete progress. Full integration
+is running; complete LLVM comparisons and root qualification/publication remain.
+This does not qualify a lazy-flex optimization or finish the compiler-wide goal.
+
+### I068 worktree qualified; root verification remains
+
+Frozen source b7b4e9ee / compiler a6907d7f passes the complete affected integration
+suite: 462 / 0 / 0 in 757.179s (758.546s driver), with source/ELF unchanged.
+Twenty real-program compilations establish complete normalized LLVM text and
+diagnostic parity after two edits in each of unused-flex, unused-body, active-body
+and game-data cases. Only the first ModuleID comment is removed; raw bitcode may
+differ in serialization order. No code changed after either suite or the matrix.
+
+The requirement-by-requirement worktree audit passes, including exclusion of every
+I067 lazy-flex/binding-partition change. Production baseline 260f5150 and all its
+462 C++ input hashes remain verified before local merge. Root build, focused checks,
+required uncached <=120s, publication and post-disposal replay remain. The complete
+compiler-wide goal is still active and incomplete.
+
 ## I067: shared lexical binding dependencies for deferred flex bodies
 
 Started 16 November at 07:48 UTC; first deadline 08:33 UTC. I066 is published
