@@ -2,28 +2,27 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I075 worktree qualified; shared verification pending; full goal incomplete
+## Current state: I075 qualified shared debug source reuse; full goal incomplete
 
 I075 enables validated source-owner, parameter-classification and whole-body
 matcher reuse in native debug builds. Source 50f532a3 / compiler 804e1c59 matches
 all 462 C++ and 22 C inputs. It passes 116 focused O0/O2 compilations, required
 333/0/0 uncached in 99.860s, integration 462/0/0 in 767.108s, complete DWARF
 comparisons after moved source lines, and forty real-program native/debug LLVM
-comparisons. Rebuild and qualify the shared compiler before publication.
+comparisons. The merged shared compiler cbd31826 / source 1469075e verifies the
+same 484 inputs, passes required 333/0/0 uncached in 111.404s, another 116 focused
+compilations and the complete DWARF checks. Six real-program builds pass after
+the merged worktree/branch are removed. Both compiler images are archived and
+verified; one build is retained with exact source hashes/mtimes for the next goal.
 
 The frozen LEXI8 debug body-edit comparison establishes a 1.2% whole-process CPU
 gain: 3.939730 -> 3.892195s over 31 pairs, ratio interval [.983047, .991137].
 All original eight native controls establish no regression. Debug inference and
 IR still regenerate; this closes the source-resolution boundary only.
 
-The shared baseline now contains the published I071 transitive parameter-classification
-repair plus the other agent's folded-before-runtime dependency repair (ae127948).
-Compiler db174898 / source 9a8f8f41 matches all 462 C++ and 22 C inputs. It passes
-eight focused folded-call failure/repair compilations at O0/O2, all 333 required
-checks uncached in 103.844s, all 462 integration checks in 763.404s, and twenty
-complete LLVM/diagnostic comparisons across four real-program edit cases with
-two edits each. The rebuilt executable is archived and verified before publication.
-No new general performance improvement is claimed for this necessary repair.
+I074's transitive parameter-classification and concurrent folded-before-runtime
+dependency repairs remain in the shared source. Its archived db174898 baseline
+and qualification evidence remain available; I075 builds on that qualified source.
 
 I069's qualified graph-column reuse and measured gain remain. I072's mapping
 candidate is rejected after neither required gain case establishes a benefit.
@@ -82,6 +81,21 @@ archived and its identity is checked. The full compiler-wide objective remains
 active and incomplete. Evidence: i075-performance-analysis.json,
 i075-debug-stage-work.json, i075-qualification-audit.json and
 i075-next-binding-boundary.json under the structured-20261113 evidence directory.
+
+### I075 shared verification completed
+
+The local-master merge is 1469075e and its compiler cbd31826 has identical C/C++
+inputs to the qualified worktree. Required passes 333/0/0 uncached in 111.404s;
+116 focused compilations and full DWARF checks also pass. Six frozen real-program
+builds succeed after worktree disposal: prime, two body edits, comment, wording
+and unchanged. Fast builds preserve executable bytes and mtime with no objects
+or linking. The body edits match the original fixed benchmark's work counts:
+two inference passes/366 reused IR functions on the first edit, then one/367,
+with one object built each time. The first smoke assertion incorrectly expected
+one pass immediately; both baseline and candidate already prove the two-pass
+initial behavior. Its incomplete report is preserved and no performance matrix
+is repeated. The shared executable's archive and all 484 input hashes are verified
+by i075-root-qualification-audit.json. The full objective remains incomplete.
 
 ## I074: qualify the concurrent folded-call repair on shared master
 
