@@ -5,12 +5,10 @@ void collectMatchedSectionDependencies(const Section *body, std::vector<Section 
 		for (const PatternMatch &child : match.subMatches)
 			visitMatch(child);
 	};
-	for (PatternReference *reference : body->patternReferences)
+	forEachInferenceSourceReference(*body, [&](PatternReference *reference) {
 		if (reference->match)
 			visitMatch(*reference->match);
-	for (const Section *child : body->children)
-		if (child->patternDefinitions.empty() && !hasCodegenSectionIdentity(*child))
-			collectMatchedSectionDependencies(child, dependencies);
+	});
 }
 
 class InferredSectionDependencies {

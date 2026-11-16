@@ -29,8 +29,9 @@ class InferenceUnitInputs {
 				? projection.at("bodies").at(path)
 				: Json(digest(sourceBody(section).dump()))
 		);
-		for (const char *field : {"matches", "declaration_fingerprints"})
-			input.push_back(projection.at("matches").contains(path) ? projection.at(field).at(path) : Json(nullptr));
+		input.push_back(sourceMatchInputs(projection, path));
+		const Json &declarationsByPath = projection.at("declaration_fingerprints");
+		input.push_back(declarationsByPath.contains(path) ? declarationsByPath.at(path) : Json(nullptr));
 		input.push_back(globalBindings(section));
 		input.push_back(context.builtinSyntax.nonMessageIdentity);
 		input.push_back(context.projectSyntax.nonMessageIdentity);

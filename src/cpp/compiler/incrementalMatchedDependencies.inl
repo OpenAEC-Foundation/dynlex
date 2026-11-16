@@ -10,16 +10,29 @@ class MatchedDependencyFacts {
 
 	const Json &dependencies(const Section *section) {
 		const Section *owner = section;
-		while (owner->patternDefinitions.empty() && owner->parent)
+		while (owner->patternDefinitions.empty() && owner->parent && !hasCodegenSectionIdentity(*owner))
 			owner = owner->parent;
 		auto [version, inserted] = versions.try_emplace(owner, nullptr);
 		if (inserted) {
 			const std::string &path = paths.at(owner);
-			if (projection.at("matches").contains(path))
-				version->second = digest(
-					projection.at("bodies").at(path).get<std::string>() + ':' +
-					projection.at("matches").at(path).get<std::string>()
-				);
+			std::string products = sourceMatchInputs(projection, path);
+			if (!products.empty()) {
+				std::string layout;
+				if (owner->parent)
+					layout = projection.at("bodies").at(path).get<std::string>();
+				else {
+					Json scopes = Json::array();
+					forEachInferenceSourceScope(*owner, [&](const Section &scope) {
+						Json lines = Json::array();
+						for (const CodeLine *line : scope.codeLines)
+							if (!line->rightTrimmedText.empty())
+								lines.push_back(Json::array({line->sourceFile->uri, line->rightTrimmedText}));
+						scopes.push_back(Json::array({paths.at(&scope), std::move(lines)}));
+					});
+					layout = digest(scopes.dump());
+				}
+				version->second = digest(layout + ':' + products);
+			}
 		}
 		const Json &input = version->second;
 		const std::string &path = paths.at(section);
