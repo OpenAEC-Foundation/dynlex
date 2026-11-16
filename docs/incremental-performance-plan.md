@@ -19,6 +19,35 @@ broad work. Debug/trace, LSP and other output modes do not yet share complete na
 incremental coverage. The objective still covers all .dl/configuration edits and
 all stages; none of those remaining requirements is dropped.
 
+## I062: invalidate only affected inference-query proofs
+
+Started 16 November 2026 at 03:33 UTC; first deadline 04:18 UTC.
+The previous goal turn made concrete progress: I061 was fully qualified, merged,
+root-verified and pushed as 8f5574d0. Its measured source-only stage improvement
+and missed original whole-build target remain recorded. Baseline C++ is that
+production revision; the exact-path restored worktree executable ad939de7 has the
+same qualified C++ inputs as production 9956166d.
+
+First attribute interfacesChanged calls, proof-set sizes and subsequent work on
+two consecutive real active edits using the project debugger wrapper. Debugger
+elapsed time is not a benchmark. A whole-set reset is present in source, but its
+cost and number of unrelated retained proofs are not established yet. If material,
+retain positive query proofs outside the changed query's transitive consumer set.
+Both interface calls and observed-value edges, cycles, failures and native/semantic
+eligibility changes must participate. Do not replace invalidation with a new global
+proof on every query. Add minimal no-library work/cascade regressions before code.
+
+Keep only if actual work counters show unaffected proofs retained and affected
+consumers rechecked, fresh diagnostics/executables/full LLVM agree, and the fixed
+normalized real-program comparison establishes a CPU reduction with a 95% paired
+interval below parity. No arbitrary minimum percentage: code size and avoided work
+must justify a measured gain. Compare active body (31 pairs), game-data (15), unused
+(15), unchanged/comment/wording (31 each), and cold (11); no established unrelated
+regression. Run the required suite uncached within 120s and full affected integration
+before publication. One heavy job. At most one additional 45-minute iteration after
+concrete progress; otherwise reject/park and move to another measured boundary.
+The full compiler-wide goal remains active and incomplete.
+
 ## I058: demand class match products at their semantic consumers
 
 Started 15 November 2026 at 23:46 UTC; first deadline 00:31 UTC on 16 November.

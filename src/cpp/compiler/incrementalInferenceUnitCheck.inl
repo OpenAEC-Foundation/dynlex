@@ -10,6 +10,8 @@ class InferenceUnitCheck {
 		  unavailableValues(unavailableValues), verifiedValues(verifiedValues), statistics(statistics) {}
 
 	bool unchanged(const InferenceUnitKey &root) {
+		statistics.inferenceQueryChecks++;
+		IncrementalWorkTimer timer(statistics.measureInferenceQueries ? &statistics.inferenceQueryCheckMilliseconds : nullptr);
 		const auto &units = graph.at("inference_units");
 		if (!units.contains(root.first) || !units.at(root.first).contains(root.second))
 			return false;
@@ -21,9 +23,15 @@ class InferenceUnitCheck {
 			pending.pop();
 			if (!inputs.contains(key.first))
 				return false;
-			if ((interfaceOnly && stable.contains(inputs.section(key.first), key.second)) || clean.contains(key) ||
-				!visited.insert(key).second)
+			if (interfaceOnly && stable.contains(inputs.section(key.first), key.second))
 				continue;
+			if (clean.contains(key)) {
+				statistics.inferenceQueryProofHits++;
+				continue;
+			}
+			if (!visited.insert(key).second)
+				continue;
+			statistics.inferenceQueryUnitsChecked++;
 			if (unavailableValues.contains(key))
 				return false;
 			const Json &unit = graph.at("inference_units").at(key.first).at(key.second);
@@ -66,7 +74,10 @@ class InferenceUnitCheck {
 		return direct->second;
 	}
 
-	void interfacesChanged() { clean.clear(); }
+	void interfacesChanged() {
+		statistics.inferenceQueryProofsInvalidated += clean.size();
+		clean.clear();
+	}
 
   private:
 	InferenceUnitInputs inputs;

@@ -18,6 +18,7 @@ struct TemporaryObjects {
 
 struct BuildStatistics {
 	bool measureDependencyGraph = false;
+	bool measureInferenceQueries = false;
 	ValidationWork validation;
 	VariableBindingWork bindings;
 	size_t bindingInputsReused = 0;
@@ -42,6 +43,9 @@ struct BuildStatistics {
 	size_t inferenceSummaryUnitsLoaded = 0;
 	size_t valueDependencyQueriesChecked = 0;
 	size_t valueDependencyQueriesReused = 0;
+	size_t inferenceQueryChecks = 0, inferenceQueryUnitsChecked = 0, inferenceQueryProofHits = 0;
+	size_t inferenceQueryProofsInvalidated = 0;
+	double inferenceQueryCheckMilliseconds = 0;
 	size_t inferenceSummaryUnitsEncoded = 0;
 	size_t inferenceSummaryUnitsWritten = 0;
 	size_t inferenceBodiesEncoded = 0;
