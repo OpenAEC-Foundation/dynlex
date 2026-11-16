@@ -34,6 +34,21 @@ broad work. Debug/trace, LSP and other output modes do not yet share complete na
 incremental coverage. The objective still covers all .dl/configuration edits and
 all stages; none of those remaining requirements is dropped.
 
+### I068 worktree qualified; root verification remains
+
+Frozen source b7b4e9ee / compiler a6907d7f passes the complete affected integration
+suite: 462 / 0 / 0 in 757.179s (758.546s driver), with source/ELF unchanged.
+Twenty real-program compilations establish complete normalized LLVM text and
+diagnostic parity after two edits in each of unused-flex, unused-body, active-body
+and game-data cases. Only the first ModuleID comment is removed; raw bitcode may
+differ in serialization order. No code changed after either suite or the matrix.
+
+The requirement-by-requirement worktree audit passes, including exclusion of every
+I067 lazy-flex/binding-partition change. Production baseline 260f5150 and all its
+462 C++ input hashes remain verified before local merge. Root build, focused checks,
+required uncached <=120s, publication and post-disposal replay remain. The complete
+compiler-wide goal is still active and incomplete.
+
 ## I067: shared lexical binding dependencies for deferred flex bodies
 
 Started 16 November at 07:48 UTC; first deadline 08:33 UTC. I066 is published
