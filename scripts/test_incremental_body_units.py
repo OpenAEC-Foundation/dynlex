@@ -1,6 +1,8 @@
 """Restore unchanged body resolution, including failed-lookups-as-variables."""
 
 def check_body_resolution_units(root, build):
+    from test_incremental_debug_sources import check_debug_source_units
+    check_debug_source_units(root, build)
     main = root / "body_units.dl"
     source = ('integer means: @intrinsic("type", "int")\n'
               'to alpha {message}: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, message))\n'
