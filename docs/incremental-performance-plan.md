@@ -74,6 +74,29 @@ with zero complete normalized LLVM graph differences. Freeze this corrected sour
 before its distinct fixed matrix. The earlier3918fcd7 comparison remains invalid
 for timing; its saved mismatch and debugger proofs are preserved separately.
 
+### I082 qualified candidate; shared publication in progress
+
+Corrected source9334759f / image7ecd998d passes the fixed11-case performance
+matrix. On the real Breakout program, LLVM body-edit CPU medians fall
+4.885286 ->2.248144s; paired ratio .466704,95% interval[.458220,.478002].
+One body is inferred,367 functions reuse IR and705 classification/resolution
+units are retained. Whole-module LLVM optimization still costs976.651ms;
+frontend306.853ms, inference312.038ms and snapshot153.450ms also remain.
+This does not complete the every-stage incremental objective.
+
+Native controls and the historical cache-disabled LLVM cold control establish
+no regression. Native cold medians5.190817 ->5.287781s have paired interval
+[.992173,1.037022], so no cold gain is claimed. First empty-cache population
+includes persistence overhead; warm-edit gains do not describe that first build.
+
+Qualification passes required333/0/0 uncached in109.523s and integration462/0/0
+in793.204s, with unchanged source/image identities. Eighty real-program native,
+debug-native, LLVM and debug-LLVM compilations pass complete same-version clean
+IR/diagnostic parity. Complete native DWARF checks pass. Shared rebuild, required,
+focused, DWARF and post-disposal replay remain before publication.
+Evidence: i082-fixed-performance-analysis.json, i082-fixed-llvm-stage-analysis.json,
+i082-fixed-qualification-audit.json and the four i082-real-*-ir/report.json files.
+
 ## Prior rejected iteration: I081 matcher layout
 
 The bounded declaration-preparation investigation found mixed matcher-product
