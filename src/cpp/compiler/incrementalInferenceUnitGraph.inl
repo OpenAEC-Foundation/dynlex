@@ -29,6 +29,9 @@ class InferenceUnitGraphCapture {
 	}
 
 	Json capture(const Json &summaries, const Json &functionSections, const Json &functionKeys) {
+		IncrementalWorkTimer captureTimer(
+			statistics.measureDependencyGraph ? &statistics.dependencyGraphUnitCaptureMilliseconds : nullptr
+		);
 		if (products)
 			for (const auto &[scope, key] : products->scopes())
 				mappedScopes.emplace(scope, key);
@@ -99,8 +102,13 @@ class InferenceUnitGraphCapture {
 					referenced.emplace_back(callee.at(0).get<std::string>(), callee.at(1).get<std::string>());
 		for (const auto &[path, key] : referenced)
 			retain(path, key);
+		captureTimer.stop();
+		IncrementalWorkTimer normalizeTimer(
+			statistics.measureDependencyGraph ? &statistics.dependencyGraphUnitNormalizeMilliseconds : nullptr
+		);
 		for (auto &[path, variants] : units.items())
 			for (auto &[key, unit] : variants.items()) {
+				statistics.dependencyGraphUnitsNormalized++;
 				std::set<InferenceUnitKey> unique;
 				for (const Json &callee : unit.at("callees"))
 					unique.emplace(callee.at(0).get<std::string>(), callee.at(1).get<std::string>());
@@ -108,6 +116,10 @@ class InferenceUnitGraphCapture {
 				std::set<Json> values(unit.at("values").begin(), unit.at("values").end());
 				unit["values"] = values;
 			}
+		normalizeTimer.stop();
+		IncrementalWorkTimer globalsTimer(
+			statistics.measureDependencyGraph ? &statistics.dependencyGraphUnitGlobalsMilliseconds : nullptr
+		);
 		propagateGlobalInputs();
 		return std::move(units);
 	}
@@ -121,10 +133,14 @@ class InferenceUnitGraphCapture {
 			for (auto &[key, unit] : variants.items()) {
 				unit["global_inputs"] = unit.at("direct_global_inputs");
 				InferenceUnitKey owner{path, key};
-				for (const auto &callee : unit.at("callees"))
+				for (const auto &callee : unit.at("callees")) {
+					statistics.dependencyGraphGlobalEdgesVisited++;
 					callers[{callee.at(0).get<std::string>(), callee.at(1).get<std::string>()}].insert(owner);
-				for (const auto &query : unit.at("values"))
+				}
+				for (const auto &query : unit.at("values")) {
+					statistics.dependencyGraphGlobalEdgesVisited++;
 					callers[{query.at(0).get<std::string>(), query.at(1).get<std::string>()}].insert(owner);
+				}
 				if (unit.at("global_inputs").is_null() || !unit.at("global_inputs").empty()) {
 					pending.push(owner);
 					queued.insert(owner);
@@ -136,6 +152,7 @@ class InferenceUnitGraphCapture {
 			queued.erase(dependency);
 			const Json &inputs = units.at(dependency.first).at(dependency.second).at("global_inputs");
 			for (const auto &caller : callers[dependency]) {
+				statistics.dependencyGraphGlobalEdgesVisited++;
 				Json &current = units.at(caller.first).at(caller.second).at("global_inputs");
 				if (mergeInferenceGlobalInputs(current, inputs) && queued.insert(caller).second)
 					pending.push(caller);

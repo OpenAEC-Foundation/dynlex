@@ -405,6 +405,7 @@ bool compileIncrementally(
 		RecordingFileSystem *recording = files.get();
 		context.fileSystem = std::move(files);
 		BuildStatistics statistics;
+		statistics.measureDependencyGraph = showStatistics;
 		InferenceSummaryStore summaryStore(directory, statistics);
 		statistics.cacheDirectory = directory.string();
 		statistics.cacheEntry = programEntry.string();
@@ -864,7 +865,6 @@ bool compileIncrementally(
 							  );
 					result["root_diagnostics"] =
 						captureRootInferenceDiagnostics(compiled, sectionPaths, products.sourceIndex());
-					auto graphStart = Clock::now();
 					result["section_dependency_graph"] = captureSectionDependencyGraph(
 						compiled, result, sectionPaths, inferenceReads,
 						result.at("all_function_projection").at("constraint_probe_schedule").at("callable_lookups"), statistics,
@@ -873,7 +873,6 @@ bool compileIncrementally(
 						retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr), &products,
 						priorMatchedDependencies(priorConstraints, priorInference)
 					);
-					statistics.dependencyGraphMilliseconds = elapsedMilliseconds(graphStart);
 					retainInferenceInputPaths(
 						result.at("all_function_projection").at("constraint_probe_schedule"),
 						result.at("section_dependency_graph"), retainedActivePaths

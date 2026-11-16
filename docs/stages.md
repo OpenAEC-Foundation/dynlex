@@ -1629,6 +1629,13 @@ and shared by reuse checks and persistence. `inference_unit_inputs_computed` and
 `inference_unit_input_ms` expose that work; `inference_units_captured`,
 `inference_units_reused`, `inference_aggregate_units_captured`, and
 `inference_aggregate_units_reused` distinguish new and retained dependency records.
+With `--incremental-stats`, `dependency_graph_ms` includes successful and failed
+dependency-product publication. The setup, sections, reverse, units and lookups
+subphase timings are disjoint. Matched-dependency timing overlaps sections;
+unit capture, normalization and global propagation are nested within units.
+Section visits, normalized units and global dependency-edge visits count actual
+work, including repeated edge visits during propagation. Skipped publication
+reports zero work. These scoped probes read no clocks when statistics are disabled.
 The interface comparison captures only the instantiation just preinferred.
 Other variants, including unchanged variants of that same function, retain their
 summaries and generated IR independently. The same encoder produces

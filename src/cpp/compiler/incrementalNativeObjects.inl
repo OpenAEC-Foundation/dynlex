@@ -17,6 +17,7 @@ struct TemporaryObjects {
 };
 
 struct BuildStatistics {
+	bool measureDependencyGraph = false;
 	ValidationWork validation;
 	VariableBindingWork bindings;
 	size_t bindingInputsReused = 0;
@@ -178,6 +179,12 @@ struct BuildStatistics {
 	double matcherStoreMilliseconds = 0;
 	double matcherStoreCPUMilliseconds = 0;
 	double dependencyGraphMilliseconds = 0;
+	double dependencyGraphSetupMilliseconds = 0, dependencyGraphSectionsMilliseconds = 0,
+		   dependencyGraphMatchedMilliseconds = 0, dependencyGraphReverseMilliseconds = 0, dependencyGraphUnitsMilliseconds = 0,
+		   dependencyGraphLookupsMilliseconds = 0;
+	double dependencyGraphUnitCaptureMilliseconds = 0, dependencyGraphUnitNormalizeMilliseconds = 0,
+		   dependencyGraphUnitGlobalsMilliseconds = 0;
+	size_t dependencyGraphSectionsVisited = 0, dependencyGraphUnitsNormalized = 0, dependencyGraphGlobalEdgesVisited = 0;
 	double preinferenceMilliseconds = 0;
 	double codegenMilliseconds = 0;
 	double irGenerationMilliseconds = 0;
