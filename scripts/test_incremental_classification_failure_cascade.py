@@ -41,3 +41,25 @@ def check_classification_failure_cascade(root, build):
         assert failed[1:] == build(False, entry=main, success=False)[1:]
         assert failed[0]["classification_units_reactivated"] >= depth
         assert failed[0]["classification_units_reused"] >= 1, "unrelated classification was discarded"
+
+    main = root / "classification_named_environment.dl"
+    source = '''integer means: @intrinsic("type", "int")
+section answer {name}:
+    declares: name
+    result: integer
+    value:
+        42
+[selected] {value} means: @intrinsic("add", value, 1)
+[read] selected name means: selected name
+@intrinsic("store", name, 7)
+answer unrelated name:
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", read selected name))
+'''
+    main.write_text(source)
+    assert build(entry=main)[2] == b"8\n"
+    for text, expected in ((source.replace("answer unrelated name:", "answer selected name:"), b"42\n"),
+                           (source, b"8\n")):
+        main.write_text(text)
+        edited = build(entry=main)
+        assert edited[2] == expected
+        assert edited[1:] == build(False, entry=main)[1:]
