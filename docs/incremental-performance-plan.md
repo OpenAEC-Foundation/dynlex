@@ -2,7 +2,92 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I082 LLVM output; full goal incomplete
+## Latest rejected iteration: I084 declaration proof at its early consumer
+
+Started16 November2026 at23:07:42 UTC; first deadline23:52:42 UTC.
+I083 completes read-only attribution on qualified image d95dda4b. All2360 headers,
+4174 body dispatches and2360 finalizations still run; parse8.45–13.00ms is small
+relative to resolution270.18–281.74ms. Do not recreate I050's per-line replay layer.
+The profiler identifies a different consumer gap: unused edits audit all1750
+resolved declarations, taking10.95/12.41ms, despite zero changed fingerprints.
+Active edits audit only one. Project-wrapper GDB attributes the eager aggregate
+to canReuseInactiveBodies' declaration callback, before captureAllFunctionProjection
+can run its source/tree/binding retention proof. A four-line no-import test
+fails on three audited declarations where only the changed owner needs auditing.
+Evidence: i083-attribution-audit.json, section producer counts, original debugger
+logs and the preserved minimal failing run. No compiler behavior changed in I083.
+
+Run the existing declaration-retention proof at that earlier demand boundary,
+only after the inactive source projection has matched. Preserve source/config,
+initial/final matcher trees, scope rules, root bindings, declaration membership
+and changed-owner signature checks. Do not weaken or duplicate the proof.
+An intervening failed frontend must not confuse previous executable and source
+projection identities. Existing failure, syntax, provider and parameter-demotion
+checks remain required. Keep all source/global pattern visibility semantics.
+
+Before implementation the minimal three-function test requires one audit after
+each of two inactive body edits and clean runtime/diagnostic parity. Keep only if
+31 fixed real-program unused-edit pairs show at least1% paired median CPU gain
+with95% interval excluding parity. Controls:15 pairs body/lives/unused-flex,
+31 unchanged/comment/wording,11 cache-disabled cold, plus7 LLVM-body and7 debug-body
+pairs. Preserve exact native bytes, diagnostics and complete clean LLVM graph
+parity. No retry replaces a completed failed variant. Required remains uncached
+<=120s; affected integration and shared qualification precede publication.
+One heavy job; one45-minute extension only after concrete implementation progress.
+The full cross-stage objective, including semantic section fragments, is incomplete.
+
+### I084 closed: changed declarations isolated, fixed gain gate missed
+
+Source8396d506 / image7c6824d8 passes the four-line regression,95 focused builds
+at O0 and95 at O2, and required333/0/0 uncached in111.571s. The original31-pair
+unused-edit comparison preserves exact executable and diagnostic parity. CPU
+medians .536615 ->.527605s have paired median ratio .991744735,95% interval
+[.977913028,.999638849]. The paired median gain is0.826%, below the predeclared1%
+minimum. Reject this variant; stop the remaining controls and do not run full
+integration/IR/shared qualification or retry the same source/image.
+
+Declaration input audits fall1750 ->1 and their nested wall scope12.765091 ->
+.011883ms. The complete inactive projection falls17.720176 ->8.840389ms; it also
+computes current body digests, scope-rule bodies and root-binding identities for
+the existing proof. Whole internal wall scope477.309901 ->469.799815ms is not an
+additive CPU explanation. The exact saved audit work therefore exceeds the
+end-to-end saving. No cold or unrelated-control qualification is claimed.
+
+Preserve the source/test branch, frozen image, full first comparison and required
+results. Keep qualified shared I082 compiler code unchanged. Retain one identified
+build and dispose only the owned worktree. The full incremental goal is active;
+semantic section fragments still do not skip their program-wide producer.
+The next boundary must couple section/source products to a consumer that avoids
+substantial downstream work. Profile current classification dependency preparation
+(about16–23ms here) separately from source-outline selection before choosing that
+skip proof; do not revive I031 topology retention without identifying a newly
+material consumer. Evidence: i083-attribution-audit.json, i084-stage-analysis.json,
+i084-performance-progress.json and i084-observed-required.json/log.
+
+## Completed attribution: I083 section-production attribution
+
+Started16 November2026 at23:00:04 UTC; first deadline23:45:04 UTC.
+Previous goal turn made progress: qualified/published I082 as6b01f00d, required
+333/0/0 uncached109.295s, and verified the shared build after worktree disposal.
+The full incremental goal remains active and incomplete.
+
+Use the qualified d95dda4b image without compiler behavior changes to measure
+section-production work on two consecutive real-program body edits and an
+unused-definition edit. Attribute headers, body dispatch, finalization, locality
+and deferred syntax separately; count the actual section producers through the
+project debugger wrapper. Read current producer/consumer boundaries and prior
+I050 failure before choosing a persisted fragment representation.
+
+This bounded attribution goal completes with a current identified cost, retained
+source/image/input evidence, and one concrete missing skip proof suitable for a
+minimal regression test. Do not implement another per-line replay layer or retry
+I050's failed execution-region codec. If the measured boundary cannot justify its
+restore/persistence cost, record that result and select the next relevant consumer.
+Any subsequent implementation requires its own fixed real-program gain gate and
+clean-build parity; a work-counter decrease alone does not prove a speedup.
+Required remains uncached<=120s; no new full-suite claim is made by read-only probes.
+
+## Previous qualified iteration: I082 LLVM output; full goal incomplete
 
 Started16 November2026 at21:36:17 UTC, first deadline22:21:17 UTC. The preceding
 turn made progress: I081 was implemented/tested, rejected by its fixed CPU gate,
