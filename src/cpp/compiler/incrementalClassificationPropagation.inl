@@ -137,6 +137,15 @@ std::vector<Section *> IncrementalClassification::invalidated() {
 	for (size_t index = 0; index < units.size(); index++) {
 		if (!evaluate[index] || !dirty.contains(units[index].path))
 			continue;
+		const Unit &unit = units[index];
+		if (unit.environment ? std::ranges::any_of(
+								   unit.references,
+								   [](const PatternReference *reference) {
+			return !reference->resolved;
+		}
+							   )
+							 : !unit.section->patternDefinitionsResolved)
+			continue;
 		std::string current = exported(units[index]);
 		if (current != observedExports[index]) {
 			observedExports[index] = std::move(current);
