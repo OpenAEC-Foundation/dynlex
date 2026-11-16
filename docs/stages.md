@@ -1634,6 +1634,8 @@ current inferred context. `inference_query_checks`, `inference_query_units_check
 `inference_query_proofs_retained` and `inference_query_consumer_edges_visited`
 count actual work. With statistics enabled, `inference_query_check_ms` and
 `inference_query_invalidation_ms` measure checking and invalidation separately.
+Retention is counted per invalidation event; successive events can retain the
+same proof again. Unit-check counts expose actual reevaluation separately.
 Disabled timing probes perform no clock reads.
 Aggregate dependency units are captured only when a retained output's dependency
 closure requests them. Unchanged units retain their records. Source input fingerprints
