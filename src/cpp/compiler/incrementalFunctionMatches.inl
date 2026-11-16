@@ -1,3 +1,16 @@
+std::string sourceMatchInputs(const Json &projection, const std::string &path) {
+	std::string products;
+	for (const auto &[kind, outputs] : std::array{
+			 std::pair{'M', &projection.at("matches")}, std::pair{'E', &projection.at("match_entries")},
+			 std::pair{'R', &projection.at("matcher_projection").at("match_overrides")}
+		 })
+		if (auto result = outputs->find(path); result != outputs->end()) {
+			products.push_back(kind);
+			products += result->get_ref<const std::string &>();
+		}
+	return products;
+}
+
 Json patternNodeIdentity(const PatternTreeNode *node) {
 	Json path = Json::array();
 	for (const PatternTreeNode *current = node; current && current->parentNode; current = current->parentNode)

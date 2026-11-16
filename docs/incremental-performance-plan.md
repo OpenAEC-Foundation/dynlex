@@ -21,6 +21,46 @@ broad work. Debug/trace, LSP and other output modes do not yet share complete na
 incremental coverage. The objective still covers all .dl/configuration edits and
 all stages; none of those remaining requirements is dropped.
 
+## I066: include every source-match producer in inference dependencies
+
+Started 16 November 2026 at 06:15 UTC; first deadline 07:00 UTC. The preceding
+iteration made concrete progress by implementing/probing I065 and reducing a
+pre-existing wrong-result bug, but the lazy-flex candidate remains unqualified
+because its shared lexical binding domain is unfinished. Production is 1a0dc752
+with unchanged I062 C++ / compiler 738252dd. Start this independent correctness
+repair from production and exclude all I065 eligibility/expansion changes.
+
+Isolate the seven-line regression for an ordinary cached caller through a flex.
+Adding a typed overload must change its runtime result from 3 to 0, editing that
+overload must produce 4, and removing it must restore 3, matching independent clean
+builds. Read existing native/expanded/source reference product identities for every
+inference source unit and compiled declaration fingerprints independently of native
+emission. Use the same source-match inputs to version persistent matching edges.
+No new persistent store or format, lazy-flex binding change, or compatibility path.
+
+Complete when the minimal regression, full required suite uncached <=120s, full
+affected integration and complete LLVM/diagnostic comparisons pass on frozen source
+and compiler artifacts, followed by root qualification/publication. Measure the
+fixed independent-image real-program matrix: body 31 pairs, unused-flex/game-data/
+unused-body 15 each, unchanged/comment/wording 31 each, cold 11. Record work reuse
+and any cost; correctness cannot preserve a stale executable to win a timing gate.
+No optimization is being accepted by this exception. One heavy job; at most one
+extra 45-minute iteration after concrete progress. The broad shared binding-domain
+and compiler-wide incremental requirements remain active and incomplete.
+
+### I066 implementation
+
+Share the existing native match, expanded reference-table and source override-table
+product keys between matching-edge versions and inference source fingerprints.
+Each contribution is identified independently; there is no old-format read path.
+Read compiled declaration fingerprints whenever the source unit publishes them,
+including units without native code. Keep source/binding/expansion eligibility at
+the production implementation. The isolated seven-line test fails on production
+with cached output 3 versus clean 0. Compiler cfe26d7b then passes seven compilations
+at O0 and seven at O2: overload addition produces 0, body edit 4, removal 3, each
+matching independent clean output and diagnostics. No lazy-flex work claim is made.
+Qualification uses the fixed uncached required run and eight-case timing matrix.
+
 ## I065: demand unchanged flex-function source and resolution products
 
 Started 16 November 2026 at 05:40 UTC; first deadline 06:25 UTC. The previous

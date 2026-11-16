@@ -15,11 +15,9 @@ class MatchedDependencyFacts {
 		auto [version, inserted] = versions.try_emplace(owner, nullptr);
 		if (inserted) {
 			const std::string &path = paths.at(owner);
-			if (projection.at("matches").contains(path))
-				version->second = digest(
-					projection.at("bodies").at(path).get<std::string>() + ':' +
-					projection.at("matches").at(path).get<std::string>()
-				);
+			std::string products = sourceMatchInputs(projection, path);
+			if (!products.empty())
+				version->second = digest(projection.at("bodies").at(path).get<std::string>() + ':' + products);
 		}
 		const Json &input = version->second;
 		const std::string &path = paths.at(section);

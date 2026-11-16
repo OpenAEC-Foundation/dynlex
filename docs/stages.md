@@ -1572,8 +1572,12 @@ dependencies forward, while newly inferred variants capture current calls.
 Imported LLVM functions retain their prior variant dependencies when their bodies
 were not re-inferred.
 Source-match edges are separate products from inferred selections and reads. Their
-producer version includes the owning definition's body layout and resolved-match
-identity. An unchanged encoded body retains these edges without constructing its
+producer version includes the owning definition's body layout and its native-match,
+expanded-reference and source-reference product identities. Inference fingerprints
+read these same matching products and compiled declarations independently of native
+emission. A flex or class source unit therefore retains its lookup dependencies,
+and adding an overload below an unchanged forwarding flex invalidates its cached
+native callers. An unchanged encoded body retains these edges without constructing its
 references; a missing or changed product demands only that owner's match result.
 Failed constraint snapshots retain the same source-match products independently
 of ordinary typed inference. Repairing a constraint can consume those newer
