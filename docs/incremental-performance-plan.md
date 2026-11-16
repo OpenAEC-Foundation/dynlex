@@ -224,6 +224,27 @@ progress. Park a failed candidate rather than moving its acceptance gate.
 The class lifecycle semantics question remains pending; its dependent work and
 failing regression remain on the separate parked branch.
 
+### I061 first result and single refinement/verification extension
+
+Source 241248ba / compiler 953114b2 passes 17 focused and 30 dependency-graph
+builds. The complete comparison shows active paired CPU ratio .986680
+[.983958, .997897], satisfying the 1% gate. Unused, unchanged, comment, wording
+and eleven-pair cold controls establish no regression; executable/diagnostic
+comparisons pass. Sections fall 33.419 -> 25.414ms (ratio .760459), missing the
+25% stage gate. The first artifact is not accepted; preserve its full matrix.
+
+The source-only proof repeats ordered-map searches. The dense graph encoder and
+decoder guarantee identical forward/instantiation paths, so a found forward entry
+needs one variant lookup. Old read/lookup-owner indexes are rebuilt independently;
+when this section contributes no current inferred facts, retaining equal edge and
+empty-variant outputs does not require retaining its old read ownership.
+Perform one refinement to remove those redundant proof lookups, with the original
+31/15/31/31/31/11 comparison and gates unchanged. This is a new source artifact,
+not a confirmation of 953114b2. No further refinement is allowed this iteration.
+The first deadline remains 02:52 UTC. Use the single allowed 45-minute extension
+through 03:37 UTC for this concrete refinement and full qualification if it passes.
+The full compiler goal remains active and incomplete.
+
 ## I057: attribute unchanged matcher-outcome demand before another optimization
 
 Started 15 November 2026 at 23:32 UTC; first deadline 00:17 UTC on 16 November.

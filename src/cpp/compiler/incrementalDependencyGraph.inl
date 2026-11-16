@@ -111,12 +111,14 @@ Json captureSectionDependencyGraph(
 		// A source-only product has no inferred contributions. The matcher has
 		// already validated its current edges, so equal outputs stop propagation.
 		if (hadPrevious && section->parent && section->instantiations.empty() && instantiatedKeys.empty() &&
-			retainedKeys.empty() && sectionLookups.empty() && reads.empty() && forward.contains(path) &&
-			instantiations.contains(path) && instantiations.at(path).empty() && !priorReads.contains(path) &&
-			!priorLookupsByOwner.contains(path) && forward.at(path) == sourceMatches) {
-			statistics.dependencyGraphEntriesReused++;
-			statistics.dependencyGraphSourceOnlySectionsReused++;
-			continue;
+			retainedKeys.empty() && sectionLookups.empty() && reads.empty()) {
+			auto oldEdges = forward.find(path);
+			// Decoded graph tables share paths. Read indexes are rebuilt below.
+			if (oldEdges != forward.end() && oldEdges.value() == sourceMatches && instantiations.at(path).empty()) {
+				statistics.dependencyGraphEntriesReused++;
+				statistics.dependencyGraphSourceOnlySectionsReused++;
+				continue;
+			}
 		}
 		bool reuseEntry = hadPrevious && stable.contains(section) && forward.contains(path) && instantiations.contains(path) &&
 						  sectionLookups.empty() && reads.empty();
