@@ -21,6 +21,102 @@ broad work. Debug/trace, LSP and other output modes do not yet share complete na
 incremental coverage. The objective still covers all .dl/configuration edits and
 all stages; none of those remaining requirements is dropped.
 
+## I063: reuse concrete dependency-record serialization
+
+Started 16 November 2026 at 04:32 UTC; first deadline 05:17 UTC.
+The previous turn made concrete progress: I062 was fully qualified, merged,
+root-verified and pushed as 237ccdeb. Baseline is that production C++ revision;
+the exact-path restored executable 007891a9 has the same qualified inputs as root
+738252dd. The full incremental compiler goal remains active and incomplete.
+
+Current active-edit evidence measures 50.439ms encoding the section graph. Its
+mutable logical graph remains needed by inference, but unchanged concrete records
+need not be compacted and serialized again. Retain the previous compact records
+and their exact CBOR byte spans. Rebuild current ID tables, validate reuse against
+current IDs and record contents, and copy only proven-equivalent record bytes into
+the output. Newly changed records use ordinary encoding. Keep the existing wire
+format, corruption behavior and all reader tools; do not add hundreds of artifact
+files or move unchanged encoding into the loader. Use an optional generic container
+range observer in the existing iterative CBOR reader to retain byte spans without
+a second parser. Pass codec state explicitly through graph hydration and snapshot
+writers; do not introduce ambient global state.
+
+Before implementation, add independent range-reader tests and minimal cross-process
+graph byte-equality/work regressions covering body edits, ID shifts, variant changes,
+errors and repair. Require actual record-encoding work avoided, exact fresh graph
+payload equality and LLVM/diagnostic/executable parity. Keep only with a CPU gain
+whose 95% paired interval excludes parity on real active edits (31 pairs); compare
+game-data and unused edits (15 each), unchanged/comment/wording (31 each), and cold
+(11). No established unrelated regression. Required remains uncached <=120s; full
+affected integration and root qualification are required before publication. One
+heavy job, at most one extra 45-minute iteration after concrete progress. If the
+producer/consumer boundary adds cost instead, preserve the evidence and move on.
+
+### I063 implementation and qualification extension
+
+The existing iterative CBOR reader now optionally reports selected container spans.
+The section graph codec retains those spans and validates old concrete records
+against the current dictionaries and logical dependencies before copying their
+bytes. Current dictionary ordering is part of that proof: a component regression
+remaps source IDs and verifies canonical fresh bytes, catching and fixing an initial
+unordered-source comparison. Unit encoding is avoided; dictionary construction,
+record validation and copying remain work. No persistent format change is needed.
+
+The codec interoperability tests and twenty minimal cross-process compilations pass.
+The body edit copies all three concrete records (33 bytes) without encoding them;
+adding a declaration changes IDs and encodes one record while reusing two. Fresh
+payload hashes, diagnostics and runtime output agree after body edits, declaration
+insertion/removal, a new concrete variant and error repair. Unchanged/comment builds
+perform no record encoding or copying. These counters describe serialization work,
+not avoided inference. Preserve the failed fixture and component attempts in i063
+evidence, including the canonical CBOR numeric-type correction in the range fixture.
+
+Use the single allowed extension through 06:02 UTC for the fixed performance matrix,
+uncached required checks, full affected integration, LLVM parity and publication if
+qualified. The original deadline remains 05:17. No second optimization variant or
+timing resampling is authorized by this extension. The full goal remains incomplete.
+
+### I063 result: reject; encoding work falls without a whole-build gain
+
+Closed 16 November at 05:29 UTC. Candidate bc83a0b8 / compiler eee36ccb passes
+codec interoperability and twenty focused compilations. Its fixed complete matrix
+copies 548 concrete records / 145,111 bytes on each real active body edit and
+encodes zero records. Graph encoding medians fall 50.404 -> 45.362ms; paired ratio
+.936782 [.873484, .986666]. Dictionary construction, validation and copying remain.
+This is an observed stage gain, not proof that the entire persistence stage or
+compilation improves. Other measured phases overlap; do not invent an additive
+root cause for the whole-build outcome from their median differences.
+
+| Case | Pairs | Baseline CPU seconds | Candidate CPU seconds | Paired ratio, 95% interval |
+| --- | ---: | ---: | ---: | --- |
+| Active body | 31 | 1.489938 | 1.487960 | 1.001645 [.997306, 1.008706] |
+| Game data | 15 | 1.858447 | 1.868614 | 1.004189 [.985953, 1.007780] |
+| Unused body | 15 | .540676 | .537577 | .990622 [.967878, 1.019983] |
+| Unchanged | 31 | .028852 | .028974 | 1.009385 [.990480, 1.033663] |
+| Comment | 31 | .029679 | .029349 | .991566 [.973698, 1.021798] |
+| Diagnostic wording | 31 | .034561 | .034293 | .997013 [.965337, 1.014915] |
+| Cold | 11 | 5.225271 | 5.255562 | 1.005055 [.998167, 1.020795] |
+
+The whole-build gate fails: the active-body CPU interval includes parity. All
+matrix executable/diagnostic comparisons pass. No control establishes a regression;
+that does not establish equality. Required passes 333 / 0 / 0 uncached in 96.490s,
+with compiler and source inputs unchanged. Full integration and whole-LLVM checks
+are not run after this performance rejection. Preserve all original reports and
+independent-copy receipts, i063-rejection-audit.json, frozen compiler/data and the
+isolated branch. Do not merge these compiler changes or rerun timings to seek a pass.
+Production C++ remains I062 / 237ccdeb. The single extension ends early on rejection.
+
+Next bounded goal: attribute the remaining broad resolution setup before choosing
+a coupled frontend producer/consumer change. Current production measurements already
+show source-owner selection around 44ms and cached-body selection around 44ms within
+roughly 120ms of resolution setup; these nested timings must not be added to their
+parent. Identify which unchanged units and products those consumers actually demand
+on two consecutive real edits. Reuse the earlier I031/I032 and I057 findings instead
+of repeating an already rejected metadata-only or topology hypothesis. Inspect the
+remaining semantic source/section boundary, not another serialization variant. Write
+the implementation's exact skip proof, minimal cascade cases and fixed acceptance
+gate before changing compiler behavior. The compiler-wide objective stays active.
+
 ## I062: invalidate only affected inference-query proofs
 
 Started 16 November 2026 at 03:33 UTC; first deadline 04:18 UTC.
