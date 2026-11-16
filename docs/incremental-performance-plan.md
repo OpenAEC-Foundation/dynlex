@@ -20,9 +20,10 @@ its earlier measured gain remain; I070's mapping optimization has never run its 
 matrix and remains isolated. I063/I067 timing-rejected and I065 unqualified changes
 also remain isolated.
 
-Resume the existing classification mapping candidate against this repaired baseline,
-with its first fixed CPU gate before any optimization acceptance. Then return to a
-measured remaining stage. Semantic section construction, broad setup, some inference
+I072 rejects the resumed classification mapping candidate: neither required gain
+case establishes a CPU benefit, so the remaining measurements stop and its code
+stays isolated. Audit the shared incremental entry point for uncovered output
+modes next, before selecting an implementation boundary. Semantic section construction, broad setup, some inference
 validation, graph/payload persistence, debug/trace, LSP and other output modes still
 have broad or missing incremental paths. The complete objective covers every
 .dl/configuration edit and every compiler stage; it remains active and incomplete.
@@ -48,6 +49,24 @@ flex gain and no unrelated established regression. A failed completed matrix is
 final; do not retry it or waive the gate. Required uncached <=120s, affected full
 integration and complete LLVM/diagnostic parity remain publication requirements.
 One heavy job, 45 minutes plus at most one extension after concrete progress.
+
+### I072 rejected after both mandatory gain cases completed
+
+Source d4a9ea12 / compiler c74126b4 passes 124 focused compilations and 333 required
+checks uncached in 104.454s. Both immutable-image gain cases pass diagnostic and
+executable parity, but neither establishes a gain: body 31 pairs 1.463372 ->
+1.472969 CPU seconds, ratio interval [.998171, 1.015463]; unused-flex 15 pairs
+.528396 -> .527662s, interval [.981202, 1.004864]. The real application replaces
+11,876 repeated edge path lookups with one 1,749-entry vertex map, but the required
+whole-process benefit is absent. The acceptance gate therefore cannot pass.
+
+Reject the candidate without retry. Stop the remaining matrix in its top-level
+case through its verified dedicated process group; that incomplete case supplies
+no timing claim. No full eight-case matrix, integration/LLVM qualification or
+optimization acceptance is claimed. Keep branch codex/incremental-classification-
+mapping-i072 and its immutable source/ELF/data, remove only its clean owned worktree,
+and retain one build for the next iteration. Production remains qualified I071.
+The full compiler-wide goal is active and incomplete.
 
 ## I071: propagate classification changes before unresolved diagnostics
 
