@@ -34,6 +34,54 @@ broad work. Debug/trace, LSP and other output modes do not yet share complete na
 incremental coverage. The objective still covers all .dl/configuration edits and
 all stages; none of those remaining requirements is dropped.
 
+## I068: demand recorded declared-constraint source products
+
+Started 16 November 2026 at 08:53:16 UTC; first deadline 09:38:16 UTC.
+I067 is closed unqualified and preserved on its branch, with the fixed matrix and
+GDB attribution complete. Start from published production 8b15515e; exclude all
+lazy-flex eligibility and binding-domain changes. The same worktree path is reused
+for build/data-root comparability; its executable still belongs to I067 until rebuilt.
+
+The five-line production ordinary-function repro crashes after integer -> float
+where clean reports a type error. Retain a compact per-owner declared-constraint
+source summary at the matcher/binding boundary. The actual constraint collector
+demands a recorded deferred owner before reading its variable declarations. Include
+all typed source references, including direct parameter bindings, and preserve
+unvisited summaries through cached and failed builds. Keep existing binding storage
+and partitioning. Expose summary reuse/scans and actual consumer-demand counts.
+
+Add minimal local/parameter declaration, inactive edit, provider change, invalid
+argument, diagnostic and repair checks first at O0/O2. Require required uncached
+<=120s, full affected integration, and complete LLVM/diagnostic parity after two
+edits in four real-program cases. Measure the original eight-case independent-image
+CPU matrix to report correctness-repair cost; no optimization is accepted by waiving
+I067's failed gate. Qualify root before publication. One heavy job; at most one
+45-minute extension after concrete progress. The full all-stage incremental goal,
+including efficient shared binding products and non-native/tooling paths, is incomplete.
+
+### I068 source demand and dependent inference inputs
+
+The production ROOT compiler reproduces the five-line crash. Per-owner
+`constraint_sources` summaries now retain typed source-reference presence under
+the existing validated body/matcher product. The constraint collector demands a
+recorded owner before reading its variables. Reuse/scanning/reference counters
+show that unchanged declaration summaries do not traverse source references.
+No flex eligibility, lexical binding partition or binding-record shape changes.
+
+The first candidate repairs source demand but a provider edit exposes a further
+verified edge: one constraint probe recomputes the new float constraint, while
+inference reuses an old failed getter with zero body passes and an integer error.
+Inference unit inputs covered signatures but omitted fixed local constraint values.
+Include those portable constraint/type results only in their owning source unit's
+body input, using the existing semantic scope traversal and encoding. Callable
+signature inputs remain independent. The provider edit now reaches inference.
+
+Compiler a6907d7f passes 37 focused compilations at O0 and 37 at O2: valid/invalid
+arguments, local and direct-parameter annotations, provider body edits, missing
+providers, unused declaration validation, final-annotation removal and repair.
+No full qualification or timing claim is made yet. Required and the original
+cost matrix must use frozen source/ELF artifacts. I067 stays unmerged.
+
 ## I067: shared lexical binding dependencies for deferred flex bodies
 
 Started 16 November at 07:48 UTC; first deadline 08:33 UTC. I066 is published

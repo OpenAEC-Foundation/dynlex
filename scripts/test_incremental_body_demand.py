@@ -2,9 +2,11 @@
 
 from test_incremental_unresolved_order import check_unresolved_diagnostic_order
 from test_incremental_transitive_overloads import check_transitive_flex_overload
+from test_incremental_declared_constraint_sources import check_declared_constraint_sources
 
 
 def check_body_resolution_demand(root, build):
+    check_declared_constraint_sources(root, build)
     check_transitive_flex_overload(root, build)
     check_unresolved_diagnostic_order(root, build)
     check_negative_body_dependency(root, build)

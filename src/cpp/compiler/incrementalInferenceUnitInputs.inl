@@ -6,7 +6,7 @@ class InferenceUnitInputs {
 		const ParseContext &context, const Json &projection, const std::map<const Section *, std::string> &paths,
 		BuildStatistics &statistics, std::map<std::string, std::string> &fingerprints
 	)
-		: context(context), projection(projection), classes(classIdentityPaths(paths)), declarations(classes),
+		: context(context), projection(projection), paths(paths), classes(classIdentityPaths(paths)), declarations(classes),
 		  statistics(statistics), fingerprints(fingerprints) {
 		for (const auto &[section, path] : paths)
 			sections.emplace(path, section);
@@ -38,6 +38,7 @@ class InferenceUnitInputs {
 		input.push_back(projection.at("precedence_signature"));
 		input.push_back(projection.at("precedence_rules"));
 		input.push_back(declarations.signatures(section));
+		input.push_back(localConstraints(section));
 		Json numbers = nullptr;
 		if (section.openingLine) {
 			bool pending = false;
@@ -73,6 +74,25 @@ class InferenceUnitInputs {
 	}
 
   private:
+	Json localConstraints(const Section &section) const {
+		Json result = Json::object();
+		forEachInferenceSourceScope(section, [&](const Section &scope) {
+			Json variables = Json::object();
+			for (const auto &[name, variable] : scope.variables) {
+				if (std::ranges::none_of(variable->declaredTypeConstraintReferences, [](const VariableReference *reference) {
+					return !reference->hasDependentTypeConstraint;
+				}))
+					continue;
+				auto value = encodePortableConstraintValue({variable->declaredTypeConstraint, variable->declaredType}, classes);
+				requireCompilerInvariant(value.has_value(), "declared variable constraint has no portable input identity");
+				variables[name] = std::move(*value);
+			}
+			if (!variables.empty())
+				result[paths.at(&scope)] = std::move(variables);
+		});
+		return result;
+	}
+
 	Json globalBindings(const Section &section) const {
 		std::set<std::string> names;
 		auto collect = [&](auto &&self, const Section &scope) -> void {
@@ -118,6 +138,7 @@ class InferenceUnitInputs {
 	Json constraint(const TypeConstraint &value) const { return declarations.constraint(value); }
 	const ParseContext &context;
 	const Json &projection;
+	const std::map<const Section *, std::string> &paths;
 	ClassIdentityPaths classes;
 	InferenceDeclarationInputs declarations;
 	BuildStatistics &statistics;
