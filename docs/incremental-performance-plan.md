@@ -2,7 +2,41 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I077 qualified shared debug semantic inference replay; full goal incomplete
+## Current state: I078 codec candidate rejected; shared I077 remains qualified
+
+I078 ran 16 November 2026 from 18:18:42 UTC with a 19:03:42 UTC first deadline.
+Scoped probes attribute the debug edit's 1,476ms body loading to payload loading
+and decoding (676ms), typed-tree restoration (588ms), classes (113ms), source
+restoration (73ms) and commit (26ms). Those timings do not separate payload I/O,
+hashing and parsing. There are 57,418 restored expressions. Test-only inspection
+and production storage were migrated together to the existing CBOR codec.
+
+The fixed debug primary establishes a 6.3% gain across 31 pairs: CPU medians
+3.749052 -> 3.508071s, paired ratio interval [.933189, .939867]. Body-load wall
+medians fall 1465.174 -> 1241.049ms with identical work counts. The 392 body
+payloads shrink 29,766,040 -> 14,648,175 bytes. Focused O0/O2 parity passes 552
+compilations plus complete DWARF checks. Native body and unused-flex controls
+establish no regression, but the lives control fails: paired ratio 1.009578,
+interval [1.002455, 1.014302], medians 1.842822 -> 1.846313 CPU seconds.
+Paired ratios differ from ratios of medians. Work counters are identical, and
+wall differences spread across optimization, codegen/link and snapshots; no
+source-level cause for this CPU regression is established.
+
+Reject the fixed candidate without retrying it. The remaining five controls,
+full suites and complete LLVM parity are not run after gate failure. Source
+45388172 / compiler 374d0a7e and attribution probes remain isolated on
+codex/incremental-body-restoration-i078 (final documentation 3c2a6fc1). One exact
+build is retained, the worktree disposed, and compiler/evidence images preserved.
+Master's qualified I077 C++ and cf8248da compiler remain unchanged. Evidence under
+structured-20261113: i078-body-phase-analysis.json, i078-debug-stage-analysis.json,
+i078-performance-progress.json and i078-lives-regression-analysis.json.
+
+Next independent boundary: debug IR still regenerates all functions. Its metadata
+reads function declarations, statements, variables, classes and member source
+locations. Runtime semantic IR dependencies alone do not prove those locations or
+compilation-unit ownership reusable. Audit and persist those producer products
+before enabling native debug IR reuse. Semantic section construction, persistence,
+tracing, LSP and other output modes also leave the full objective incomplete.
 
 I077 starts 16 November 2026 at 17:22:04 UTC, first deadline 18:07:04 UTC.
 Separate debug semantic replay from native IR import: unchanged inference facts
