@@ -2,18 +2,18 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I062 merged and root-verified; full incremental goal incomplete
+## Current state: I066 qualified; root publication pending; full goal incomplete
 
-Production includes I062 selective inference-proof invalidation. Qualification
-passes 20 focused compilations, 333 required checks uncached in 100.928s, 462
-integration checks in 773.683s and complete LLVM parity after two edits in each
-of four real-program cases. Rebuilt master passes all 333 required checks uncached
-in 100.539s. The merged worktree is removed and archived replay passes afterward.
-The fixed paired CPU gains are 1.17% for active body and 0.99% for game-data edits;
-the unused-edit estimate is slower and uncertain, as recorded below. No control
-establishes a regression under the declared gate. I061's original 1% whole-build
-target remains recorded as missed; its stage improvement is already published.
-I058/I059 class-demand experiments remain parked.
+I066 fixes stale native callers after an overload changes below a forwarding flex.
+The frozen candidate f567005e passes fourteen O0/O2 regression compilations,
+seventeen entry-metadata checks, all 333 required checks uncached in 100.699s,
+all 462 integration checks in 778.959s, and twenty compilations checking complete
+fresh/incremental LLVM text after two edits in four real-program cases. The fixed
+eight-case matrix establishes no CPU gain or regression; correctness is the reason
+for the change. Matching-dependency captures fall 2,978 -> 2,103 on active edits,
+while one function is inferred and 367 IR bodies remain reused. Root rebuild and
+publication are next. I063's timing-rejected codec and I065's unqualified lazy-flex
+binding changes remain isolated; no optimization gate was waived for them.
 
 Semantic section construction and broad setup still visit unchanged source units;
 dependency publication, some inference validation and module persistence also do
@@ -89,6 +89,39 @@ Use the single allowed extension through 07:45 UTC for complete required,
 fixed-matrix, full integration, LLVM and root qualification. The original deadline
 remains 07:00. Concrete correctness progress is established; no further optimization
 variant or confirmation timing is planned. The full compiler-wide goal is incomplete.
+
+### I066 complete candidate qualification
+
+Source 45dc0256 / compiler f567005e stays byte-identical throughout all checks.
+The corrected seven-line regression passes at O0 and O2; all seventeen managed/
+exposed entry checks preserve cleanup interface reuse, layout invalidation and
+fresh diagnostics. Required passes 333 / 0 / 0 uncached in 100.699s (101.611s driver).
+Full integration passes 462 / 0 / 0 in 778.959s (780.252s driver), with no skips.
+Complete normalized LLVM text and diagnostics agree after two distinct edits in
+unused-flex, unused-body, active-body and game-data cases: twenty compilations,
+eight independent fresh-cache comparisons. Raw bitcode hashes may differ because
+of serialization order; only the first ModuleID comment is removed from LLVM text.
+
+| Case | Pairs | Baseline CPU seconds | Candidate CPU seconds | Paired ratio, 95% interval |
+| --- | ---: | ---: | ---: | --- |
+| Active body | 31 | 1.477610 | 1.477755 | .999546 [.988931, 1.005174] |
+| Unused flex | 15 | .521924 | .523241 | 1.004197 [.987367, 1.014384] |
+| Game data | 15 | 1.856064 | 1.853802 | 1.003025 [.996439, 1.008917] |
+| Unused body | 15 | .532906 | .534592 | .999703 [.985118, 1.003164] |
+| Unchanged | 31 | .029004 | .029080 | 1.010337 [.979049, 1.014565] |
+| Comment | 31 | .029323 | .029570 | 1.006400 [.985528, 1.045871] |
+| Diagnostic wording | 31 | .034399 | .034647 | 1.005409 [.991646, 1.034984] |
+| Cold without incremental | 11 | 5.247687 | 5.256788 | .995354 [.986387, 1.011371] |
+
+All matrix executable/diagnostic comparisons and independent-image identity checks
+pass. No CPU interval establishes either a gain or a regression; do not claim
+equivalence. Active edits retain 2,116 matching records instead of 1,241, capturing
+2,103 instead of 2,978. Both infer one function and reuse 367 IR bodies. The observed
+85.597ms deferred-query cost is one probe, not a broad batch of unchanged probes.
+An initial analysis divided by a skipped inference phase's zero timer; absolute
+timings are preserved and that phase's ratio is explicitly unavailable. Timing
+samples were not rerun. Evidence is i066-final-performance-analysis.json and
+i066-final-qualification-audit.json. The full compiler objective remains incomplete.
 
 ## I065: demand unchanged flex-function source and resolution products
 
