@@ -27,6 +27,31 @@ output modes still have broad or missing incremental paths. The complete objecti
 covers every .dl/configuration edit and every compiler stage; it remains active
 and incomplete.
 
+## I071: propagate classification changes before unresolved diagnostics
+
+Started 16 November 2026 at 11:45:48 UTC; first deadline 12:30:48 UTC.
+I070 closes unqualified before its deadline. Its optimization and native attribution
+probes stay on codex/incremental-classification-setup-i070, with immutable source/ELF
+and compiler data archived. Start this repair from published I069 master, excluding
+all I070 compiler changes. The full compiler-wide objective remains incomplete.
+
+A seven-line program with a provider and two cached forwarding getters, followed
+by deletion of the two-line provider, reproduces missing diagnostic notes in the
+published compiler. GDB shows the middle parameter demoted to a literal while the
+outer parameter stays promoted; the clean build demotes both. The resolver checks
+classification reactivation only behind a global all-references-resolved barrier,
+which a missing provider prevents. Propagate committed producer changes through
+cached consumers before final unresolved diagnostics, without globally discarding
+unaffected products. Verify error, repeated error, repair, deeper chains and
+unrelated-error cases against clean builds, including diagnostic records and notes.
+
+This is a mandatory isolated correctness repair. Measure the original fixed
+independent-image eight-case CPU matrix to report its cost; no I070 optimization
+is accepted by waiving its gate. Require required uncached <=120s, full affected
+integration, complete LLVM/diagnostic parity after two edits in four real-program
+cases, and root qualification before publication. One heavy job and at most one
+45-minute extension after concrete progress. Keep the full all-stage objective.
+
 ## I070: attribute and reduce classification setup work
 
 Started 16 November 2026 at 11:13:14 UTC; first deadline 11:58:14 UTC.
@@ -48,6 +73,20 @@ progress. Close with actionable attribution and move to another producer if this
 boundary has no worthwhile candidate; no repeated failed matrix or speculative
 cache architecture. The full objective still covers every source/config edit and
 all compiler stages and output modes.
+
+### I070 attribution completed; optimization remains unqualified
+
+Native probes on two real-program edits split classification dependencies into
+7.6-7.8ms edge preparation, 8.1-9.2ms reuse eligibility, <1ms reverse mapping and
+<0.6ms components. There are 491 candidate checks, 11,876 prior edge mappings,
+24,030 reverse-edge visits, 1,749 eligibility checks and 13,638 match-key checks.
+The candidate shares the existing old-to-current vertex map before both consumers.
+It is not merged: the focused removal case finds a production bug before timing.
+The first fixture's invalid inline getter spelling was corrected before compiler
+assessment; both red attempts remain. The diagnostic discrepancy also occurs on
+published master. GDB and the minimized source are retained. No timing matrix is
+run and no performance claim is made. Source/ELF and data are archived under I070;
+the source branch remains isolated while I071 repairs the baseline.
 
 ## I069: attribute dependency persistence and remove repeated publication work
 
