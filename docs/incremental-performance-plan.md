@@ -2,18 +2,19 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I075 debug source-resolution reuse in progress; full goal incomplete
+## Current state: I075 worktree qualified; shared verification pending; full goal incomplete
 
-I075 starts 16 November 2026 at 15:13:02 UTC, first deadline 15:58:02 UTC.
-Measure the real LEXI8 program under `-g`, then permit validated source-owner,
-classification and whole-body matcher products in debug builds. Keep inference
-and IR regeneration so current source ranges produce fresh debug metadata.
-Test code edits, shifted lines, failed lookups and classification cascades before
-changing production eligibility. Require a measured debug-build benefit, no
-established regression in the original native controls, complete fresh-output
-parity and required uncached <=120s. One heavy job; at most one extension after
-concrete progress. Trace replay and debug inference/IR remain separate missing
-boundaries, not a redefinition of the full objective.
+I075 enables validated source-owner, parameter-classification and whole-body
+matcher reuse in native debug builds. Source 50f532a3 / compiler 804e1c59 matches
+all 462 C++ and 22 C inputs. It passes 116 focused O0/O2 compilations, required
+333/0/0 uncached in 99.860s, integration 462/0/0 in 767.108s, complete DWARF
+comparisons after moved source lines, and forty real-program native/debug LLVM
+comparisons. Rebuild and qualify the shared compiler before publication.
+
+The frozen LEXI8 debug body-edit comparison establishes a 1.2% whole-process CPU
+gain: 3.939730 -> 3.892195s over 31 pairs, ratio interval [.983047, .991137].
+All original eight native controls establish no regression. Debug inference and
+IR still regenerate; this closes the source-resolution boundary only.
 
 The shared baseline now contains the published I071 transitive parameter-classification
 repair plus the other agent's folded-before-runtime dependency repair (ae127948).
@@ -34,13 +35,53 @@ is not established, and no failed matrix is retried. Production still supports
 native executable incremental output; the LLVM prototype has not been merged.
 I063/I067 timing-rejected and I065 unqualified branches also remain isolated.
 
-Return to measured resolver work. Cold resolution is about 2.38s in the retained
-stage samples; edited-build resolver setup and metadata processing also remain
-broad. Select one real producer/consumer boundary from actual work counts before
-changing it. Semantic section construction, some inference validation, persistence,
-debug/trace, LSP and other output modes retain broad or missing incremental paths.
+Next count the selected-domain binding work before implementing a producer-owned
+index. The current helper scans all unresolved names and references before its
+domain filter; debug binding time rises even while fewer references are rebound.
+Do not attribute the entire timing difference without those counts. Cold resolution
+is about 2.38s in retained stage samples. Semantic section construction, some
+inference validation, persistence, debug inference/IR, tracing, LSP and other output
+modes retain broad or missing incremental paths.
 The complete objective covers every .dl/configuration edit and every compiler
 stage; it remains active and incomplete.
+
+## I075: reuse source-resolution products in debug native builds
+
+Started 16 November 2026 at 15:13:02 UTC, first deadline 15:58:02 UTC.
+Use the single extension through 16:43:02 UTC after the fixed CPU gate and both
+suites pass; finish immutable-image parity, shared verification and publication.
+No failed performance matrix is repeated. Keep trace eligibility and debug
+inference/IR guards until their own producer/consumer work is implemented.
+
+Remove the debug exclusions from source-owner retention, parameter-classification
+selection/propagation and whole-body resolution retention. Their existing source,
+matcher and dependency proofs still apply. Restored references use current source
+ranges; ordinary inference and code generation produce current debug metadata.
+Tests cover edits, shifted lines, failed lookups, parameter demotion and transitive
+failure/repair at O0/O2, without application-library imports. Complete DWARF agrees
+with independently empty-cache native builds after each edit. Those builds use
+the same object-partition strategy; cache-disabled builds also supply runtime and
+diagnostic parity. The initial comparison against monolithic ordinary output
+correctly exposed different physical compilation-unit layouts, not stale locations.
+
+On the frozen real application, classification reuse changes 0 -> 705 units and
+early reference visits skipped change 0 -> 7,299. Resolver medians are
+404.851 -> 275.475ms. Inference medians rise 1727.569 -> 1849.827ms, including
+binding 31.026 -> 110.854ms; 552 body inference passes remain in both images.
+These stage wall timings are not independent CPU attribution. The complete
+paired CPU result, 3.939730 -> 3.892195s, is the accepted benefit. The binding
+source audit supplies a concrete next boundary, not a claim that all its cost is
+already attributed. All eight native controls pass, including cache-disabled
+cold 5.236415 -> 5.269093s, interval [.986628, 1.024738]. All 186 measured fast
+unchanged/comment/wording builds reuse the frontend with zero object builds/linking.
+
+Worktree qualification verifies all 484 C/C++ inputs throughout both suites and
+twenty native plus twenty debug complete LLVM/diagnostic builds over four real
+edit cases, with two edits per case. Source 50f532a3 / executable 804e1c59 is
+archived and its identity is checked. The full compiler-wide objective remains
+active and incomplete. Evidence: i075-performance-analysis.json,
+i075-debug-stage-work.json, i075-qualification-audit.json and
+i075-next-binding-boundary.json under the structured-20261113 evidence directory.
 
 ## I074: qualify the concurrent folded-call repair on shared master
 
