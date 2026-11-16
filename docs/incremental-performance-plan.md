@@ -142,6 +142,64 @@ completion claim. If keeping the probes in production, focused checks and requir
 <=120s uncached must pass. One heavy job, at most one 45-minute extension after
 concrete progress. The full incremental compiler objective remains active.
 
+### I060 qualification: measured section publication dominates
+
+Source 1a5e9068 / compiler 10da2be5 adds optional graph phase/work probes and moves
+the total timer into the shared successful/failed capture boundary. Seven minimal
+cross-process builds pass, including a real type error; the original failed-build
+timer omission is reproduced before the fix. Disabled probes perform no clock
+reads. All 333 required checks pass uncached in 81.273s (82.112s including the
+recording driver), with unchanged compiler/source bytes. The five-fixture native
+integration comparison passes fifteen builds in 4.087s. The full unrelated library,
+LSP and backend integration suite is not rerun for these instrumentation-only changes.
+
+The complete six-case normalized profile compares native executables and diagnostics
+with production: five active-edit pairs and three pairs each of unused, unchanged,
+comment, wording and cold builds. All comparisons pass. These short controls qualify
+probe behavior and artifacts; they do not establish an optimization speedup.
+The first attempt is stopped by the storage guard before samples. Its report is
+preserved; two inactive compiler inode groups are hash-verified, archived and all
+four owned aliases removed before the separately named complete run.
+
+Active-edit median graph publication is 63.572ms. Disjoint phases: setup 5.899,
+sections 32.984, reverse 0.852, units 19.344 and lookup publication 0.544ms; remaining
+time includes scope cleanup. Matched facts cost 9.330ms within sections. Within
+units, capture costs 9.204, normalization 2.654 and global propagation 1.621ms.
+The process visits 4,219 sections, captures 2,978 match-fact records, reuses 1,241,
+normalizes 548 specialization units and visits 2,928 global dependency edges.
+Request counts alone had overemphasized class replay; its measured saving was 2ms.
+
+A preserved real-program graph sequence finds 4,002 source-only sections. On the
+second active edit, zero forward, reverse, instantiation, lookup or section-read
+records change; twelve match-fact records and one specialization record change.
+These counts identify candidates, not the cost of all 4,002 records. Evidence:
+i060-profile-analysis.json, i060-graph-analysis/report.json, the graph archives,
+i060-graph-work-green/report.json and suite receipts. The full compiler-wide goal
+remains incomplete. Merge/root verification and archived replay remain to finish
+this instrumentation snapshot.
+
+## I061 next: reuse unchanged source-only dependency section products
+
+Begin after I060 is published; set the start/deadline before implementation.
+Use the new production probes. Persisted section outputs already exist, but the
+current reuse selector covers mostly native/inference-selected owners. Reuse a
+source-only section's prior graph record when its freshly validated matched
+references produce the same edges and it has no new or retained inferred variants,
+reads or callable lookups. Preserve main execution, activation, newly selected
+providers, failed inference products, removals and canonical lookup ownership.
+Do not add another storage format or infer stability from a missing runtime body.
+
+First add a no-library cross-process work regression and activation/provider/edit
+parity cases. Require >=25% median reduction in dependency_graph_sections_ms and
+>=1% paired CPU reduction for real active edits (31 alternating pairs, 95% interval
+below parity). Unused (15), unchanged/comment/wording (31 each) and cold (11)
+controls must establish no regression. Complete artifact/diagnostic and LLVM parity,
+required <=120s uncached and full affected integration before keeping it. One heavy
+job, a 45-minute first deadline and at most one 45-minute extension after concrete
+progress. Park a failed candidate rather than moving its acceptance gate.
+The class lifecycle semantics question remains pending; its dependent work and
+failing regression remain on the separate parked branch.
+
 ## I057: attribute unchanged matcher-outcome demand before another optimization
 
 Started 15 November 2026 at 23:32 UTC; first deadline 00:17 UTC on 16 November.
