@@ -2,9 +2,33 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I080 lazy debug-input demand; full goal incomplete
+## Current state: I080 qualified debug IR reuse; shared verification pending
 
 I080 starts 16 November 2026 at20:08:43 UTC, first deadline20:53:43 UTC.
+The fixed corrected-image matrix passes. Debug body edits improve3.764891 ->
+1.748279 CPU seconds (31 pairs; ratio interval[.462290,.467659]), a53.6% reduction.
+All eight original native controls establish no regression. Typed-body loading
+falls387 ->1;367 functions reuse IR, with9,045 location checks. Inference phase
+wall medians fall2146.816 ->379.739ms; body loading1477.159 ->4.647ms.
+The source-origin repairs require semantic LLVM parity against old I077, while
+candidate-vs-clean validation retains every debug record. Native controls retain
+exact executable equality. Comment/wording/unchanged cases perform zero object
+builds and zero linking in186 measured builds.
+
+Use the single allowed extension, ending21:38:43 UTC, for affected integration,
+complete native/debug LLVM parity, publication and shared-compiler checks.
+All40 native/debug real-program builds pass complete LLVM/diagnostic parity,
+including every debug record, on the same frozen executable.
+The exact corrected image already passes333 required checks in108.576s,
+596 focused compilations and full DWARF; do not rerun those worktree checks.
+The source is frozen at2a8f1dfc / compiler cba27e0a. Integration passes462/0/0
+in761.727s, with all compiler/source hashes unchanged. Worktree qualification
+is complete. Merge the source, rebuild shared master, then verify the required
+suite, focused cases, DWARF and native/debug builds after worktree disposal.
+Shared master remains4150d708 / compiler cf8248da until qualification succeeds.
+The full goal remains active; semantic section construction, broader persistence,
+tracing, tooling and non-native output paths are still incomplete.
+
 I079 passes its fixed debug primary (53.2%CPU gain;3.769174->1.761183s,
 ratio interval[.464736,.470245]) and all eight native controls without established
 regression. Its required suite then finds one efficiency failure: a native edit
@@ -83,7 +107,7 @@ Master's qualified I077 C++ and cf8248da compiler remain unchanged. Evidence und
 structured-20261113: i078-body-phase-analysis.json, i078-debug-stage-analysis.json,
 i078-performance-progress.json and i078-lives-regression-analysis.json.
 
-Next independent boundary: debug IR still regenerates all functions. Its metadata
+I078 identified the next boundary: debug IR still regenerated all functions. Its metadata
 reads function declarations, statements, variables, classes and member source
 locations. Runtime semantic IR dependencies alone do not prove those locations or
 compilation-unit ownership reusable. Audit and persist those producer products
