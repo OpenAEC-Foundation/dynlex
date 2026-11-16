@@ -82,6 +82,7 @@ struct InitialMatcherProjection {
 			{"selected_digest", digest(selected.dump())},
 			{"declaration_digests", Json::object()},
 			{"match_overrides", Json::object()},
+			{"source_match_units", Json::object()},
 			{"body_units", Json::object()},
 			{"final_body_units", Json::object()},
 			{"header_definitions", Json::object()},
@@ -224,6 +225,7 @@ struct InitialMatcherProjection {
 				owner.references = sourceOwnerReferences(*owner.section);
 			if (context.retainedSourceOwners.contains(owner.section) ||
 				(context.deferredBodyResolution && context.deferredBodyResolution(owner.section))) {
+				value.at("source_match_units")[owner.path] = priorUnits->at("source_match_units").at(owner.path);
 				for (const char *field : {"final_body_units", "header_definitions"})
 					value.at(field)[owner.path] = priorUnits->at(field).at(owner.path);
 				matcherCache.retain(value.at("final_body_units").at(owner.path).get_ref<const std::string &>());
@@ -245,9 +247,30 @@ struct InitialMatcherProjection {
 			const Json &finalEntries = expanded.at("match_entries");
 			auto referenceTimer = measure(&MatcherProjectionWork::referenceTables);
 			std::string key = matcherCache.recordReferenceKeys(owner.references);
+			std::vector<PatternReference *> unitReferences;
+			forEachInferenceSourceReference(*owner.section, [&](PatternReference *reference) {
+				unitReferences.push_back(reference);
+			});
+			orderSourceReferences(unitReferences);
+			value.at("source_match_units")[owner.path] =
+				unitReferences == owner.references ? key : matcherCache.recordReferenceKeys(unitReferences);
 			referenceTimer.stop();
 			if (!finalEntries.contains(owner.path) || finalEntries.at(owner.path).get_ref<const std::string &>() != key)
 				value.at("match_overrides")[owner.path] = std::move(key);
+		}
+		auto referenceTimer = measure(&MatcherProjectionWork::referenceTables);
+		for (const auto &[path, section] : sections) {
+			if ((section->parent && section->patternDefinitions.empty() && !hasCodegenSectionIdentity(*section)) ||
+				value.at("source_match_units").contains(path))
+				continue;
+			std::vector<PatternReference *> references;
+			forEachInferenceSourceReference(*section, [&](PatternReference *reference) {
+				references.push_back(reference);
+			});
+			if (!references.empty()) {
+				orderSourceReferences(references);
+				value.at("source_match_units")[path] = matcherCache.recordReferenceKeys(references);
+			}
 		}
 		return std::move(value);
 	}

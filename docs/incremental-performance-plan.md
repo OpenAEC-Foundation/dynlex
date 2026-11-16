@@ -61,6 +61,35 @@ at O0 and seven at O2: overload addition produces 0, body edit 4, removal 3, eac
 matching independent clean output and diagnostics. No lazy-flex work claim is made.
 Qualification uses the fixed uncached required run and eight-case timing matrix.
 
+### I066 source-unit boundaries and single qualification extension
+
+The first required run passes 332 checks and fails one incremental work assertion
+in 50.932s: changing only a release body rebuilds its caller entry. Snapshot
+comparison proves the class declaration fingerprint stays equal, but its broad
+source-owner reference record includes that independent cleanup body. Keep every
+assertion. Publish `source_match_units` in the existing matcher projection using
+the same semantic scope traversal as matching-edge capture: exclude nested
+declarations and independently emitted bodies. Classification retains its broader
+source-owner inputs. Include semantic units ineligible for body reuse as well.
+This verified boundary requires one nested metadata field, revising the initial
+no-format-change assumption; there is no new store or compatibility read path.
+
+Extending coverage to the root exposes its lack of an authored definition-body
+record. Its match producer now uses a layout of its own source scopes. Matching
+dependency owners also stop at lifecycle boundaries. Preserve the failed root-key
+attempt and all earlier source snapshots; no performance comparison has run yet.
+
+Final compiler f567005e passes seven O0 and seven O2 overload compilations plus
+all seventeen entry-metadata checks. Cleanup edits preserve entry execution and
+rebuild only the cleanup body; layout changes still invalidate the entry. Exposed
+global diagnostics and repair remain identical to clean builds. These checks
+cover the new boundary before the full required run.
+
+Use the single allowed extension through 07:45 UTC for complete required,
+fixed-matrix, full integration, LLVM and root qualification. The original deadline
+remains 07:00. Concrete correctness progress is established; no further optimization
+variant or confirmation timing is planned. The full compiler-wide goal is incomplete.
+
 ## I065: demand unchanged flex-function source and resolution products
 
 Started 16 November 2026 at 05:40 UTC; first deadline 06:25 UTC. The previous

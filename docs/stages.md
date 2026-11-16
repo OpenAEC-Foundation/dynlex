@@ -1572,8 +1572,13 @@ dependencies forward, while newly inferred variants capture current calls.
 Imported LLVM functions retain their prior variant dependencies when their bodies
 were not re-inferred.
 Source-match edges are separate products from inferred selections and reads. Their
-producer version includes the owning definition's body layout and its native-match,
-expanded-reference and source-reference product identities. Inference fingerprints
+producer version includes the owning unit's body layout and its native-match,
+expanded-reference and scoped source-reference product identities. The root's layout
+covers its own scopes rather than requiring an authored definition-body record.
+Semantic source scopes stop at nested declarations and independently emitted bodies,
+including retain/release. The `source_match_units` map in the matcher projection
+publishes their reference products; classification retains its broader owner view.
+Inference fingerprints
 read these same matching products and compiled declarations independently of native
 emission. A flex or class source unit therefore retains its lookup dependencies,
 and adding an overload below an unchanged forwarding flex invalidates its cached
