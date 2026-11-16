@@ -18,12 +18,18 @@ def check_binding_domain_index(root, build):
     cold = build(entry=main, flags=("-g",))
     assert cold[2] == b"0 1 2\n"
     for value in (1, 2):
-        main.write_text(source.replace('"discard", 0', f'"discard", {value}'))
+        prefix = "# moved declarations\n" if value == 2 else ""
+        main.write_text(prefix + source.replace('"discard", 0', f'"discard", {value}'))
         edited = build(entry=main, flags=("-g",))
         assert edited[1:] == build(False, entry=main, flags=("-g",))[1:]
         work = edited[0]
-        assert work["binding_domain_selections"] >= 3, work
-        assert work["binding_domain_index_builds"] == 1, work
+        if prefix:
+            assert work["binding_domain_selections"] >= 3, work
+            assert work["binding_domain_index_builds"] == 1, work
+        else:
+            assert work["binding_domain_selections"] == 0, work
+            assert work["binding_domain_index_builds"] == 0, work
+            assert work["functions_ir_reused"] >= 3, work
         assert work["binding_reference_visits"] <= cold[0]["binding_reference_visits"], work
         assert work["binding_domain_index_reference_visits"] <= cold[0]["binding_reference_visits"], work
         assert work["binding_units_reused"] >= 3, work

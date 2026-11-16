@@ -73,6 +73,8 @@ void recordIRReuseStatistics(
 	statistics.reusedFunctionIR = reuse.reusedCount();
 	statistics.cachedIRDependencyScans = reuse.dependencyScans();
 	statistics.cachedIRDependencyHits = reuse.dependencyHits();
+	statistics.debugIRLocationQueries = reuse.debugLocationQueries();
+	statistics.debugIRLocationHits = reuse.debugLocationHits();
 	statistics.cachedIRGlobalInputChecks = reuse.globalInputChecks();
 	statistics.cachedIRGlobalInputHits = reuse.globalInputHits();
 	if (!reuse.rootReused())

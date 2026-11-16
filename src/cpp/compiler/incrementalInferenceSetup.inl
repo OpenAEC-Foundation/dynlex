@@ -1,6 +1,6 @@
 if (previous) {
 	auto payloadStart = Clock::now();
-	for (const char *field : {"section_dependency_graph", "inference_summaries", "generated_ir"})
+	for (const char *field : {"section_dependency_graph", "inference_summaries", "generated_ir", "debug_ir_inputs"})
 		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, field);
 	statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 }
@@ -26,9 +26,7 @@ if (priorConstraints.source && compatibleObservations(*priorConstraints.source, 
 }
 statistics.constraintPrepareMilliseconds += elapsedMilliseconds(constraintPrepareStart);
 if (priorInference) {
-	// Semantic bodies restore current source anchors. Native debug IR retains
-	// old locations, so debug builds regenerate it from those restored bodies.
-	const Json *nativePrevious = previous && !context.options.emitDebugInfo ? &*previous : nullptr;
+	const Json *nativePrevious = previous ? &*previous : nullptr;
 	auto controller = std::make_shared<IncrementalInferenceController>(
 		*priorInference, nativePrevious, recording->observations, resolvedFunctionProjection, sectionPaths, inferenceReads,
 		frontendDiagnosticRecords, statistics, functionReuse, inferenceReuse, graphStable, inferenceInputFingerprints,

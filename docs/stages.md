@@ -82,7 +82,15 @@ authored header. Signature lookup inputs remain separate from local-body inputs.
 Debug builds reuse these source-resolution products against current source ranges;
 validated inference facts and typed bodies can also be restored using current
 source anchors. Debug builds retain runtime bodies even when native IR exists,
-because native debug IR is regenerated to reflect current locations. This whole-unit path
+so changed debug locations can regenerate IR without repeating semantic inference.
+Native debug IR retains per-function queries for authored declaration and statement
+locations, variable/class/member locations and referenced global debug records.
+Logical source-line identities are shared with typed-body restoration. IR closure
+reuse requires those queries to retain their current physical locations; moved
+locations rebuild the affected IR while unchanged runtime facts remain reusable.
+Imported debug metadata belongs to the current compilation unit, including global
+declaration records. `debug_ir_location_queries` and `debug_ir_location_hits` expose
+location validation work. This whole-unit path
 currently excludes tracing and does not extend the native incremental driver to
 tooling or other output modes.
 

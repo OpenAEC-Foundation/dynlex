@@ -13,6 +13,7 @@
 #include "expression.h"
 #include "expressionCapture.h"
 #include "incrementalClassRestoration.h"
+#include "incrementalDebugIR.h"
 #include "incrementalIRReuse.h"
 #include "incrementalMatcherCache.h"
 #include "incrementalModuleBitcode.h"
@@ -29,6 +30,7 @@
 #include "section/classSection.h"
 #include "section/variable.h"
 #include "sectionIdentity.h"
+#include "sourceLineIdentity.h"
 #include "sourcePreparation.h"
 #include "sourcePreprocessing.h"
 #include "sourceReferenceOrder.h"
@@ -826,6 +828,7 @@ bool compileIncrementally(
 						{"diagnostic_records", diagnosticRecords},
 						{"diagnostic_sources", diagnosticSources}
 					};
+					result["debug_ir_inputs"] = captureDebugIRInputs(compiled, sectionPaths);
 					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
 					result["all_function_projection"]["binding_units"] = bindings.snapshot();

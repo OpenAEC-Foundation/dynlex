@@ -16,10 +16,10 @@ def check_debug_inference_units(root, build):
     main.write_text(source)
     assert build(entry=main, flags=("-g",))[2] == b"1 2\n"
     changed = source.replace('"discard", 0', '"discard", 1')
-    for text, expected, passes in (
-        (changed, b"1 2\n", 0),
-        (changed.replace('"add", seed, 1', '"add", seed, 3'), b"3 2\n", 1),
-        ("# moved source\n\n" + changed.replace('"add", seed, 1', '"add", seed, 3'), b"3 2\n", 0),
+    for text, expected, passes, reused_ir in (
+        (changed, b"1 2\n", 0, True),
+        (changed.replace('"add", seed, 1', '"add", seed, 3'), b"3 2\n", 1, True),
+        ("# moved source\n\n" + changed.replace('"add", seed, 1', '"add", seed, 3'), b"3 2\n", 0, False),
     ):
         main.write_text(text)
         edited = build(entry=main, flags=("-g",))
@@ -27,8 +27,12 @@ def check_debug_inference_units(root, build):
         assert edited[2] == expected
         assert edited[0]["function_body_inference_passes"] == passes, edited[0]
         assert edited[0]["inference_instantiations_reused"] > 0, edited[0]
-        assert edited[0]["inference_bodies_loaded"] > 0, edited[0]
-        assert not edited[0]["functions_ir_reused"], edited[0]
+        if reused_ir:
+            # A changed unit may load its newly published replacement body.
+            assert edited[0]["inference_bodies_loaded"] <= passes, edited[0]
+        else:
+            assert edited[0]["inference_bodies_loaded"] > 0, edited[0]
+        assert bool(edited[0]["functions_ir_reused"]) == reused_ir, edited[0]
 
     missing = source.replace('"return", local', '"return", absent')
     for text, success in ((missing, False), ("# shifted error\n" + missing, False), (source, True)):
@@ -53,5 +57,5 @@ def check_debug_effect_body(root, build):
         assert edited[1:] == build(False, entry=main, flags=("-g",))[1:]
         assert edited[0]["function_body_inference_passes"] == 0, edited[0]
         assert edited[0]["inference_instantiations_reused"] > 0, edited[0]
-        assert edited[0]["inference_bodies_loaded"] > 0, edited[0]
-        assert not edited[0]["functions_ir_reused"], edited[0]
+        assert edited[0]["inference_bodies_loaded"] == 0, edited[0]
+        assert edited[0]["functions_ir_reused"] > 0, edited[0]

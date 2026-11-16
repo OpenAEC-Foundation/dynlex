@@ -2,7 +2,42 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I078 codec candidate rejected; shared I077 remains qualified
+## Current state: I079 debug IR source dependencies in progress; full goal incomplete
+
+I079 starts 16 November 2026 at 18:50:58 UTC, first deadline 19:35:58 UTC.
+Persist per-function dependencies on authored source locations separately from
+runtime IR inputs. Share the existing logical line identity producer with typed
+bodies; metadata queries cover declarations, statements, variables, classes,
+members and debug records, including referenced globals. Validate those queries
+before admitting an IR closure. Reattach imported subprograms/globals to the
+current compilation unit. Minimal unrelated-edit/moved-location tests precede
+production changes, then require full LLVM/DWARF parity and the fixed CPU gate.
+Native controls must establish no regression; required uncached must stay <=120s.
+One heavy job, 45 minutes plus at most one extension after concrete progress.
+No completed failed matrix is retried. I078 remains isolated and unchanged.
+
+The first prototype passes 582 focused builds and complete DWARF, then exposes
+an existing metadata-origin bug in the real program: a local declaration's line
+584 is paired with the current function's 62-line file. LLVM inspection and a
+nine-line, two-file optional-binding repro prove the wrong file scope. The new
+metadata assertion fails on shared I077. Emit a lexical file scope for local
+locations, shared with ordinary statement-location emission; keep the source
+anchor invariant. The minimal regression passes after the fix. Also correct the
+existing global-debug call passing an expression pointer in the isDefined slot.
+Re-run affected correctness on the corrected image before its fixed CPU matrix.
+
+Resolve debug type graphs at the metadata producer boundary, map concrete class
+products during import, and attach globals/subprograms to the finalized current
+compilation unit. A named cache-product table initially reached optimizer units:
+cold optimization rose3.6->23s. Remove those records after the unoptimized cache
+snapshot, before backend partitioning/fingerprinting; ordinary noncached emission
+does not produce them. Optimization returns to3.54s and cold builds to13.17s.
+The final image passes596 focused compilations, full DWARF including imported
+optional declarations, class rename/recursion, and20 real-program complete LLVM
+comparisons. Freeze it before timing. The verified source-origin repair changes
+debug sections relative to I077; debug comparisons therefore require LLVM-stripped
+semantic IR parity and diagnostics, while all native controls retain executable
+byte equality. Candidate-vs-clean LLVM/DWARF checks retain all metadata.
 
 I078 ran 16 November 2026 from 18:18:42 UTC with a 19:03:42 UTC first deadline.
 Scoped probes attribute the debug edit's 1,476ms body loading to payload loading
