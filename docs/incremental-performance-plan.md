@@ -2,30 +2,30 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I069 qualified on master; full goal incomplete
+## Current state: I071 qualified on master; full goal incomplete
 
-I069 reuses unchanged compact dependency-graph columns under producer change
-proofs and exact ordered path identity. Frozen compiler 0b03ef77 / source e7bce926
-passes 114 focused compilations, all 333 required checks uncached in 103.716s,
-all 462 integration checks in 756.024s, and twenty complete LLVM/diagnostic
-comparisons across four real-program edit cases with two edits each. Rebuilt
-master 5830570b matches all 462 C++ and 22 C inputs, passes the same 114 focused
-compilations, and passes 333 required checks uncached in 103.055s.
+I071 repairs classification propagation while unresolved calls remain. A removed
+provider now retracts every affected cached forwarding parameter before diagnostics,
+while unrelated classifications remain reusable. Frozen compiler 7d9989b8 / code
+f29a2002 passes 90 focused compilations, all 333 required checks uncached in
+105.933s, all 462 integration checks in 764.083s, and twenty complete LLVM/diagnostic
+comparisons across four real-program edit cases with two edits each. Rebuilt master
+03e6cf76 matches all 462 C++ and 22 C inputs, passes the same 90 focused compilations,
+and passes 333 required checks uncached in 103.798s.
 
-The original eight-case CPU gate passes: active-body median 1.480902 -> 1.464755s,
-paired ratio interval [.982499, .990949], with no established regression in the
-other seven cases. Cache-disabled cold 5.262873 -> 5.234221s does not establish a
-change. All 186 unchanged/comment/wording controls perform zero object builds,
-code generation or linking. Publication/disposal receipts are recorded below.
-I063/I067 timing-rejected and I065 unqualified changes remain isolated.
+The complete original eight-case CPU cost matrix establishes no gain or regression
+from this necessary repair. All 186 unchanged/comment/wording controls perform zero
+object builds, code generation or linking. I069's qualified graph-column reuse and
+its earlier measured gain remain; I070's mapping optimization has never run its CPU
+matrix and remains isolated. I063/I067 timing-rejected and I065 unqualified changes
+also remain isolated.
 
-Next attribute producer scopes inside resolution setup. Its 117.377ms median
-contains 42.885ms of cached-body selection; section-header evaluation is 2.255ms.
-Do not add overlapping timings. Semantic section construction, broad setup,
-some inference validation, graph/payload persistence, debug/trace, LSP and other
-output modes still have broad or missing incremental paths. The complete objective
-covers every .dl/configuration edit and every compiler stage; it remains active
-and incomplete.
+Resume the existing classification mapping candidate against this repaired baseline,
+with its first fixed CPU gate before any optimization acceptance. Then return to a
+measured remaining stage. Semantic section construction, broad setup, some inference
+validation, graph/payload persistence, debug/trace, LSP and other output modes still
+have broad or missing incremental paths. The complete objective covers every
+.dl/configuration edit and every compiler stage; it remains active and incomplete.
 
 ## I071: propagate classification changes before unresolved diagnostics
 
@@ -83,6 +83,12 @@ parity after two edits in each of four cases. The source/ELF audit verifies all
 462 C++ and 22 C inputs, excludes I070 changes and checks that transient graph
 encoding provenance is absent from persisted data. Root qualification and publication
 remain; this does not complete the full objective.
+
+Root qualification completes at 12:44 UTC: compiler 03e6cf76 matches all 484
+qualified C/C++ inputs, passes 45 focused compilations at each optimization level,
+and passes all 333 required checks uncached in 103.798s. The ROOT executable is
+archived and verified before publication. This is a necessary correctness repair;
+no optimization gate is waived and the full goal remains incomplete.
 
 ## I070: attribute and reduce classification setup work
 
