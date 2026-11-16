@@ -2,6 +2,19 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## Current state: I060 probes published; full incremental goal incomplete
+
+Production includes the I060 dependency-publication probes and corrected failure
+accounting. Required checks pass uncached in 82.956s on the root build. No whole-build
+speedup is claimed for this instrumentation. I058/I059 class-demand experiments
+remain parked. Next: I061 source-only dependency section products.
+
+Semantic section construction and broad setup still visit unchanged source units;
+dependency publication, some inference validation and module persistence also do
+broad work. Debug/trace, LSP and other output modes do not yet share complete native
+incremental coverage. The objective still covers all .dl/configuration edits and
+all stages; none of those remaining requirements is dropped.
+
 ## I058: demand class match products at their semantic consumers
 
 Started 15 November 2026 at 23:46 UTC; first deadline 00:31 UTC on 16 November.
@@ -175,8 +188,19 @@ records change; twelve match-fact records and one specialization record change.
 These counts identify candidates, not the cost of all 4,002 records. Evidence:
 i060-profile-analysis.json, i060-graph-analysis/report.json, the graph archives,
 i060-graph-work-green/report.json and suite receipts. The full compiler-wide goal
-remains incomplete. Merge/root verification and archived replay remain to finish
-this instrumentation snapshot.
+remains incomplete. The instrumentation snapshot is published and root-verified
+as recorded below.
+
+### I060 publication: merged and root-verified before the first deadline
+
+Merge 054a1188 contains the qualified C++ bytes. Root compiler d9098025 passes all
+333 required checks uncached in 82.956s (83.806s including the recording driver),
+with source/compiler hashes unchanged. The merged worktree and branch are removed.
+A real archived-compiler comparison passes after removal and cleans its temporary
+data root. Verified C++ build inputs and objects are retained separately for an
+identical-path checkout; timestamp reuse requires exact input hashes and ordinary
+CMake/Ninja flag/dependency validation. No rejected class compiler code is merged.
+I060 is complete as an analysis/instrumentation iteration; the full goal is active.
 
 ## I061 next: reuse unchanged source-only dependency section products
 
@@ -482,7 +506,7 @@ Production remains I040; the full incremental goal is incomplete. The next
 measured target is selective graph persistence, currently encoding unchanged
 entries, alongside a separately scoped startup-cost investigation.
 
-## Current state: I040 unread-flex inference verified on master
+## I040 checkpoint: unread-flex inference verified on master
 
 Started 15 November at 10:02:10 UTC, first deadline 10:47:10. Production
 source remains byte-identical to 7b75ab49 and frozen compiler 2e567cdc after
