@@ -59,6 +59,42 @@ barriers already use definition identities, including enclosing owners and notes
 file-level diagnostic mechanism. The historical inventory below describes its start
 state; the stage documentation is corrected to describe present behavior.
 
+### I073 closed unqualified: cold native control fails
+
+The isolated LLVM prototype is implemented at ed35da01 / compiler a1479211. It
+passes 66 focused compiler invocations and two runtime checks, and all 333 required
+checks uncached in 104.474s. This covers imported code edits, comments, error/repair,
+artifact deletion/corruption/eviction, stdout, mode separation, definition-only
+output and wording-only configuration updates. Old default-cache expectations were
+migrated to test LLVM support while preserving object-output rejection.
+
+The real-program preflight first reports only temporary LLVM-name differences.
+The complete LLVM graphs are identical after removing argument/instruction/block
+names, preserving all instructions, operands, block order, attributes, metadata and
+global/function/type names. The original unstripped failure and graph-equivalence
+proof remain. No compiler workaround was added for cosmetic names.
+
+The first original eight native controls complete. Seven establish no regression;
+cache-disabled cold regresses 5.230720 -> 5.325425 CPU seconds, ratio interval
+[1.002775, 1.033884]. The gate fails. Do not merge or repeat that matrix. No full
+LLVM acceptance matrix, integration qualification or ROOT qualification is claimed.
+The source branch codex/incremental-llvm-output-i073 remains isolated, its clean
+worktree is removed, and one verified build is retained. Production stays I071.
+
+Read-only debugger attribution, not acceptance timing, captures three paired full
+stage observations. Resolution dominates at about 2.38s; both compilers infer 552
+bodies. Inference medians are 1.16 -> 1.19s and total codegen 1.52 -> 1.54s;
+optimization is 1.00s in both. These samples do not identify a source-level cause
+for the full 95ms increase. Do not claim code layout or additional compiler work
+as a verified cause. The broad initial debugger breakpoint also matched a standard
+library lambda; its failed probe is preserved and the complete scoped probe replaces
+it. One extension through 14:35:05 UTC was used; close before its deadline.
+
+Next select a measured resolver producer/consumer boundary, with actual work counts
+and a minimal test before changing it. Do not restart the failed LLVM variant or
+add a speculative fix for its unattributed cold cost. All source/configuration edits
+and every compiler stage remain in the full objective, which is active and incomplete.
+
 ## I072: qualify shared classification vertex mapping after baseline repair
 
 Started 16 November 2026 at 12:46:29 UTC; first deadline
