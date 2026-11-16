@@ -6,6 +6,8 @@ from test_incremental_precedence_products import check_precedence_product_reuse
 
 
 def check_section_analysis_work(root, build):
+    from test_incremental_graph_work import check_dependency_graph_work
+    check_dependency_graph_work(root, build)
     main = root / "section_analysis_work.dl"
     source = ('to saved {item}:\n'
               '    @intrinsic("store", {copy}, item)\n'

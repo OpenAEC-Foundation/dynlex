@@ -28,6 +28,8 @@ Json captureSectionDependencyGraph(
 	const std::unordered_set<const Section *> &stable = {}, const RetainedGraphVariants &retained = {},
 	const IncrementalInferenceProducts *products = nullptr, const Json *previousMatched = nullptr
 ) {
+	IncrementalWorkTimer totalTimer(statistics.measureDependencyGraph ? &statistics.dependencyGraphMilliseconds : nullptr);
+	IncrementalWorkTimer setupTimer(statistics.measureDependencyGraph ? &statistics.dependencyGraphSetupMilliseconds : nullptr);
 	const bool hadPrevious = previous != nullptr;
 	Json graph =
 		hadPrevious ? std::move(*previous) : Json{{"forward", Json::object()},			{"reverse", Json::object()},
@@ -72,9 +74,18 @@ Json captureSectionDependencyGraph(
 			result.insert(entry.get<std::string>());
 		return result;
 	};
+	setupTimer.stop();
+	IncrementalWorkTimer sectionsTimer(
+		statistics.measureDependencyGraph ? &statistics.dependencyGraphSectionsMilliseconds : nullptr
+	);
 	for (const auto &[section, path] : paths) {
+		statistics.dependencyGraphSectionsVisited++;
 		currentPaths.insert(path);
+		IncrementalWorkTimer matchedTimer(
+			statistics.measureDependencyGraph ? &statistics.dependencyGraphMatchedMilliseconds : nullptr
+		);
 		const Json &sourceMatches = matchedFacts.dependencies(section);
+		matchedTimer.stop();
 		std::set<std::string> retainedKeys;
 		if (auto keys = retained.keysByPath.find(path); keys != retained.keysByPath.end())
 			retainedKeys = keys->second;
@@ -210,6 +221,10 @@ Json captureSectionDependencyGraph(
 			lookupOwners.try_emplace(key.get<std::string>());
 	graph["inference_reads"] = std::move(sectionReads);
 	graph["matched"] = matchedFacts.snapshot();
+	sectionsTimer.stop();
+	IncrementalWorkTimer reverseTimer(
+		statistics.measureDependencyGraph ? &statistics.dependencyGraphReverseMilliseconds : nullptr
+	);
 	if (hadPrevious) {
 		for (auto entry = forward.begin(); entry != forward.end();) {
 			if (currentPaths.contains(entry.key())) {
@@ -251,12 +266,18 @@ Json captureSectionDependencyGraph(
 		for (const auto &[path, dependents] : callers)
 			reverse[path] = dependents;
 	}
+	reverseTimer.stop();
+	IncrementalWorkTimer unitsTimer(statistics.measureDependencyGraph ? &statistics.dependencyGraphUnitsMilliseconds : nullptr);
 	graph["inference_units"] =
 		InferenceUnitGraphCapture(
 			context, program.at("all_function_projection"), paths, inferenceReads, graph, priorUnits, lookupOwners, statistics,
 			fingerprints, products, globalInputs, retained.keysByPath
 		)
 			.capture(program.at("inference_summaries"), program.at("function_sections"), program.at("function_instantiations"));
+	unitsTimer.stop();
+	IncrementalWorkTimer lookupsTimer(
+		statistics.measureDependencyGraph ? &statistics.dependencyGraphLookupsMilliseconds : nullptr
+	);
 	for (const auto &[path, variants] : graph.at("inference_units").items())
 		for (const auto &[variant, unit] : variants.items())
 			for (const auto &[key, fingerprint] : unit.at("lookups").items())
