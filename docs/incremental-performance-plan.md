@@ -2,7 +2,24 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I079 debug IR source dependencies in progress; full goal incomplete
+## Current state: I080 lazy debug-input demand; full goal incomplete
+
+I080 starts 16 November 2026 at20:08:43 UTC, first deadline20:53:43 UTC.
+I079 passes its fixed debug primary (53.2%CPU gain;3.769174->1.761183s,
+ratio interval[.464736,.470245]) and all eight native controls without established
+regression. Its required suite then finds one efficiency failure: a native edit
+loads7 payloads instead of6 because debug_ir_inputs is hydrated unconditionally.
+Keep I079 f6b3d760/c77a0a1f unqualified and preserve its measurements separately.
+
+Repair the cache consumer: hydrate debug inputs only in debug mode, and express
+that product's absence in the non-debug IR importer. Keep the six-payload test;
+no schema fallback, dummy product or test-expectation increase. The targeted
+three-line fixture now passes; required passes333/0/0 uncached in108.576s,
+plus596 focused O0/O2 builds and complete DWARF. Freeze the revised executable,
+benchmark it once against qualified I077, then run affected integration and full
+native/debug LLVM comparisons. Reuse already completed checks only for the exact
+same executable/source image. One heavy job,45 minutes plus at most one extension
+after concrete progress; do not retry a failed completed fixed variant.
 
 I079 starts 16 November 2026 at 18:50:58 UTC, first deadline 19:35:58 UTC.
 Persist per-function dependencies on authored source locations separately from

@@ -26,7 +26,7 @@ class IncrementalIRReuse {
 	IncrementalIRReuse(
 		ParseContext &context, const std::string &previousIR, const nlohmann::json &previousFunctions,
 		const nlohmann::json &previousCallableFunctions, const nlohmann::json &previousFunctionInstantiations,
-		const nlohmann::json &previousDebugInputs, std::map<const Section *, std::string> sectionPaths,
+		const nlohmann::json *previousDebugInputs, std::map<const Section *, std::string> sectionPaths,
 		std::shared_ptr<IncrementalUnitSelection> eligible, std::shared_ptr<IncrementalUnitSelection> replacements,
 		GlobalInputCheck globalInputCheck
 	);
@@ -61,7 +61,7 @@ class IncrementalIRReuse {
 	const nlohmann::json &previousFunctions;
 	const nlohmann::json &previousCallableFunctions;
 	const nlohmann::json &previousFunctionInstantiations;
-	const nlohmann::json &previousDebugInputs;
+	const nlohmann::json *previousDebugInputs;
 	std::unique_ptr<IncrementalDebugIR> debugInputs;
 	mutable std::unordered_map<std::string, bool> debugLocationProofs;
 	std::map<const Section *, std::string> sectionPaths;

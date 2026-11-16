@@ -60,7 +60,7 @@ void collectDependencies(
 IncrementalIRReuse::IncrementalIRReuse(
 	ParseContext &context, const std::string &previousIR, const nlohmann::json &previousFunctions,
 	const nlohmann::json &previousCallableFunctions, const nlohmann::json &previousFunctionInstantiations,
-	const nlohmann::json &previousDebugInputs, std::map<const Section *, std::string> sectionPaths,
+	const nlohmann::json *previousDebugInputs, std::map<const Section *, std::string> sectionPaths,
 	std::shared_ptr<IncrementalUnitSelection> eligible, std::shared_ptr<IncrementalUnitSelection> replacements,
 	GlobalInputCheck globalInputCheck
 )
@@ -90,7 +90,7 @@ bool IncrementalIRReuse::debugLocationsUnchanged(const std::string &name) const 
 		return true;
 	auto [proof, inserted] = debugLocationProofs.try_emplace(name);
 	if (inserted)
-		proof->second = debugInputs->unchanged(previousDebugInputs.at(name));
+		proof->second = debugInputs->unchanged(previousDebugInputs->at(name));
 	return proof->second;
 }
 

@@ -86,7 +86,8 @@ class IncrementalInferenceController {
 			irReuse = std::make_unique<IncrementalIRReuse>(
 				context, nativePrevious->at("generated_ir").get_ref<const std::string &>(),
 				nativePrevious->at("function_sections"), nativePrevious->at("callable_functions"),
-				nativePrevious->at("function_instantiations"), nativePrevious->at("debug_ir_inputs"), paths, nativeEligible,
+				nativePrevious->at("function_instantiations"),
+				context.options.emitDebugInfo ? &nativePrevious->at("debug_ir_inputs") : nullptr, paths, nativeEligible,
 				nativeReplacements, [queries = &inferenceReuse](const Section *section, const std::string &key) {
 				return (*queries)->nativeInputsUnchanged(section, key);
 			}

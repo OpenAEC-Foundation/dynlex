@@ -1,7 +1,9 @@
 if (previous) {
 	auto payloadStart = Clock::now();
-	for (const char *field : {"section_dependency_graph", "inference_summaries", "generated_ir", "debug_ir_inputs"})
+	for (const char *field : {"section_dependency_graph", "inference_summaries", "generated_ir"})
 		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, field);
+	if (context.options.emitDebugInfo)
+		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "debug_ir_inputs");
 	statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 }
 priorInference =
