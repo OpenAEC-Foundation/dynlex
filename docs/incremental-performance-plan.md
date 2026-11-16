@@ -21,6 +21,109 @@ broad work. Debug/trace, LSP and other output modes do not yet share complete na
 incremental coverage. The objective still covers all .dl/configuration edits and
 all stages; none of those remaining requirements is dropped.
 
+## I065: demand unchanged flex-function source and resolution products
+
+Started 16 November 2026 at 05:40 UTC; first deadline 06:25 UTC. The previous
+goal turn completed I063's fixed-matrix rejection and I064's consumer attribution,
+changing the next action. Production is 78848fc0 with I062 C++ / compiler 738252dd.
+The rejected graph codec remains only on its preserved branch; this work starts
+from production in the existing worktree. Rebuild normally after the branch switch;
+the executable left by the previous branch is not a valid baseline until rebuilt.
+
+I064 identifies 409 early outlines in flex functions. Couple source retention with
+encoded initial/final body-resolution products, retaining all existing source,
+classification, lexical environment, candidate-tree and scope-rule proofs. Inspect
+expansion and type-probe consumers and require demand before body/binding reads.
+Do not enable global-access or nested-declaration units without their own proofs.
+Add minimal no-library tests before behavior changes: untouched/activated flexes,
+provider edits/removal/repair, new specific overloads, parameter demotion, nested
+callers, failed lookups and diagnostic repair. Work counters must prove unchanged
+products remain unmaterialized while demanded bodies still resolve correctly.
+
+Keep only with a whole-build CPU gain whose 95% paired interval excludes parity
+on active body (31 pairs) or unused-flex edits (15), and no established regression
+on the other measured cases. Compare game-data and unused-body edits (15 each),
+unchanged/comment/wording controls (31 each), and cold (11). Require executable,
+diagnostic and full LLVM parity, required uncached <=120s, full affected integration
+and root qualification before publication. Use independent normalized compiler
+images, a single heavy job and no confirmation reruns of a failed complete matrix.
+At most one additional 45-minute iteration after concrete progress. The full
+compiler-wide objective remains active and incomplete.
+
+### I065 implementation and required correctness repair
+
+The baseline passes the initial 32 behavior comparisons and fails the intended
+work assertion with zero deferred flex units. Enabling source and encoded-body
+eligibility also requires final body/header products for flex functions. The actual
+expansion consumer now demands before constructing parameter/constraint bindings.
+No new store, compatibility format or global-access eligibility is introduced.
+
+The first candidate exposes a four-line internal-stage inconsistency: source-match
+dependency versions use only native match identities, which flexes do not publish.
+Project-wrapper GDB confirms the failing producer. Source-match versions now read
+the native, expanded-reference and pre-expansion reference product identities.
+
+The next test reveals an independent pre-existing correctness bug on production
+738252dd: adding a typed overload below an unchanged forwarding flex leaves a cached
+native caller printing 3, while a clean build prints 0. The minimal source is seven
+lines before adding the two-line overload. Inference inputs gate both match and
+compiled-declaration reads on native emission, so flex dependencies omit matching
+changes. Share the complete source-match input reader between source-graph versions
+and inference fingerprints, and read declaration fingerprints independently.
+This correctness repair is required even if the performance optimization is later
+rejected; isolate it rather than discarding it with a failed optimization.
+
+Compiler 3abeabc3 passes all 39 focused compilations, including the minimal overload
+addition/body-edit/removal regression, runtime and constant nested expansion,
+provider removal/repair, parameter demotion and failed lookup repair. An inactive
+edit retains three flex source/resolution products, restores zero detailed body
+references, and retains them through another edit. Activating the caller demands
+all three. Preserve all initial failures and the activation-fixture correction:
+the original fixture also deleted a declaration; the focused demand fixture edits
+only the caller body. No expected behavior or demand assertion was relaxed.
+Evidence includes i065-producer-bug.json, i065-overload-repro/report.json and
+i065-input-green/report.json. Required and fixed-matrix qualification are next.
+
+The first required run stops at the precedence-product fixture's zero-deferred-body
+premise (332 pass / one fail in 48.516s). The fixture tests global precedence reuse
+without concrete replay keys, but its flex bodies contain parameter references.
+Make those operator parameters explicit and use literal replacement bodies, keeping
+every assertion unchanged. Both production and candidate pass the focused four-build
+check; its changed-rule case still requires the precedence product to rebuild.
+Preserve the original failed suite as i065-observed-required; the corrected run has
+a separate prefix. The frozen C++ artifact remains 3abeabc3.
+
+### I065 closed unqualified: flex binding domains are a required boundary
+
+Closed 16 November at 06:14 UTC before the first deadline; no extension used.
+The corrected required run passes 332 checks and fails incremental_compilation
+in 49.343s on storage-origin summary restoration. A seven-line no-library source
+returning a flex-local address reproduces it after adding one discarded literal.
+Project-wrapper GDB catches decodeDefinition's lookup of hidden after its demand
+hook returns. The hook asks materializeVariableGroups for unit.section, while that
+routine partitions flex references into their enclosing non-flex lexical domain.
+No variable group is selected, so the local declaration was never published.
+Both routines currently assume deferred owners are ordinary function domains.
+
+Do not enable the optimization with a narrower variable-free eligibility rule,
+silently ignore the missing definition, or alter flex binding semantics. Correct
+deferred flex bindings need a producer/consumer boundary for the shared lexical
+domain before this optimization can qualify. Preserve branch 3578d582, compiler
+3abeabc3, all failed runs and i065-origin-minimal/gdb.log. No timing matrix or full
+integration/LLVM qualification was run; do not claim a speedup or publish this
+candidate. The original precedence assertions remain unchanged and its independent
+focused baseline/candidate checks pass.
+
+Next independent required goal, I066: isolate the verified pre-existing typed-
+overload dependency repair from the unqualified lazy-flex eligibility changes.
+Read existing source/expanded matching products and declaration fingerprints for
+all inference source units, independently of native emission. Version source-match
+edges from those same products. Keep current eager flex binding behavior, run the
+minimal add/edit/remove regression and full affected checks, and measure the fixed
+real-program matrix. Correctness cannot retain a known stale caller to win a timing
+comparison; publish any measured cost honestly. Required stays uncached <=120s.
+The shared binding-domain work and full compiler-wide objective remain unfinished.
+
 ## I064: attribute broad frontend setup at its consumers
 
 Started 16 November 2026 at 05:32 UTC; first deadline 06:17 UTC. The previous
