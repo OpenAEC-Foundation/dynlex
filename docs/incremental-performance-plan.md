@@ -27,6 +27,28 @@ output modes still have broad or missing incremental paths. The complete objecti
 covers every .dl/configuration edit and every compiler stage; it remains active
 and incomplete.
 
+## I070: attribute and reduce classification setup work
+
+Started 16 November 2026 at 11:13:14 UTC; first deadline 11:58:14 UTC.
+I069 is published at a50c115b, with worktree/branch disposal and six independent
+archived replay compilations passing. Its complete fixed CPU gate and all source,
+required, integration and LLVM parity checks pass. Full goal remains incomplete.
+
+The next source boundary is classification selection inside resolution setup:
+42.885ms of the 117.377ms parent median on active-body edits. Attribute input,
+query/provider product loading, changed-target checks, edge reuse and propagation
+using actual work counts on the frozen real LEXI8 program after two distinct edits.
+Do not assume candidate matching dominates the existing dependency sub-timer.
+Select one measured repeated operation, add focused cascade/work checks before its
+implementation, and keep the change only with the original fixed eight-case CPU
+gate (gain on body or unused-flex, no established unrelated regression). Required
+uncached <=120s, full affected integration, LLVM/diagnostic parity and root checks
+remain mandatory. One heavy job, at most one 45-minute extension after concrete
+progress. Close with actionable attribution and move to another producer if this
+boundary has no worthwhile candidate; no repeated failed matrix or speculative
+cache architecture. The full objective still covers every source/config edit and
+all compiler stages and output modes.
+
 ## I069: attribute dependency persistence and remove repeated publication work
 
 Started 16 November 2026 at 10:10:44 UTC; first deadline 10:55:44 UTC.
@@ -100,6 +122,13 @@ uncached in 103.055s (103.946s driver), with source/ELF unchanged. The complete
 worktree audit, CPU gate and root audit pass. Archive and worktree-disposal replay
 receipts are retained in i069-final-state.json after publication. The complete
 compiler-wide objective remains active and incomplete.
+
+I069 publication/disposal completed at 11:12:17 UTC, before the extended deadline.
+Master and origin match a50c115b; the root compiler and all 484 C++/C inputs remain
+verified. Both merged worktree and branch are removed. Six post-disposal archived
+compilations pass, with independent executable copies and executable/diagnostic
+parity. One qualified build is retained at its exact source root with all 484
+input hashes/timestamps. Evidence: i069-final-state.json and replay staging receipt.
 
 ## I068: demand recorded declared-constraint source products
 
