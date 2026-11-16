@@ -28,6 +28,37 @@ validation, graph/payload persistence, debug/trace, LSP and other output modes s
 have broad or missing incremental paths. The complete objective covers every
 .dl/configuration edit and every compiler stage; it remains active and incomplete.
 
+## I073: share incremental products with LLVM text output
+
+Started 16 November 2026 at 13:05:05 UTC; first deadline
+13:50:05 UTC. Production is I071 compiler 03e6cf76; I072 is
+rejected after both mandatory gain cases fail to establish a CPU benefit, with
+its source branch isolated and worktree removed. No remaining interrupted sample
+is used as evidence. The full all-stage goal stays active and incomplete.
+
+The entry-point audit verifies that LLVM, object, WASM, SPIR-V and LSP modes bypass
+the incremental driver. Its emitter callback currently owns native executable
+emission, so removing a CLI guard alone would emit the wrong artifact. Implement
+one explicit host LLVM-output strategy sharing existing source, matcher, inference,
+diagnostic and function-IR products. Persist the emitted artifact independently of
+semantic state; distinguish output modes in keys. Keep native behavior and all
+existing dependency proofs. Expose output/reuse work and preserve explicit I/O errors.
+
+First capture the current minimal cache-option rejection and real-program LLVM cold/
+body-edit baseline. Add minimal cross-process edit, error/repair, wording-config,
+output-deletion and mode-isolation checks before code changes. Require complete
+LLVM/diagnostic parity and real-program fast-path/body-edit gains, plus no established
+regression in the original eight native controls. Required uncached <=120s, affected
+integration and full parity precede publication. One heavy job, 45 minutes plus at
+most one extension after concrete progress. Whole-module LLVM optimization remains
+a separately measured limitation until its own producer reuse is implemented.
+
+A current source audit also corrects the stale P07 description: frontend diagnostic
+barriers already use definition identities, including enclosing owners and notes
+(commit 13a3f819), with focused warning/failure/repair tests. Do not add a duplicate
+file-level diagnostic mechanism. The historical inventory below describes its start
+state; the stage documentation is corrected to describe present behavior.
+
 ## I072: qualify shared classification vertex mapping after baseline repair
 
 Started 16 November 2026 at 12:46:29 UTC; first deadline

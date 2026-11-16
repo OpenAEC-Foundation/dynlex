@@ -1326,9 +1326,12 @@ The existing binary matcher cache stores each unit's reference indices, direct
 variable outcomes, exact source spans and positive or failed lookup keys. The
 JSON projection stores only the unit's content key. Restored matches and variable
 references rejoin the ordinary expansion and precedence-invalidation machinery.
-Bodies in files with prior frontend diagnostics run the normal resolver. Typed
-inference diagnostics have their own retained products and do not exclude those
-files from body-resolution or declaration-classification reuse.
+Definition units associated with prior frontend diagnostics run the normal
+resolver. Their identities include enclosing definitions and note locations;
+unrelated bodies in the same file remain eligible for reuse. Failed snapshots
+retain completed matcher products for healthy units. Typed inference diagnostics
+have their own retained products and do not exclude those units from body-resolution
+or declaration-classification reuse.
 `body_resolution_units_reused` and `body_resolution_references_restored`
 count this restoration, separately from references evaluated by the resolver.
 File-local declaration inputs and exported classification signatures include each
