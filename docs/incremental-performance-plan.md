@@ -46,6 +46,30 @@ broad work. Debug/trace, LSP and other output modes do not yet share complete na
 incremental coverage. The objective still covers all .dl/configuration edits and
 all stages; none of those remaining requirements is dropped.
 
+## I069: attribute dependency persistence and remove repeated publication work
+
+Started 16 November 2026 at 10:10:44 UTC; first deadline 10:55:44 UTC.
+I068 is qualified, pushed at fe501029, and disposed with six archived replay
+compilations passing. The previous goal turn made publication/build progress;
+the intervening direct question was answered without implementation work.
+
+Use the frozen real LEXI8 application and two distinct active-body edits. Inspect
+encoded and semantic dependency graph field sizes and changed owner/variant counts;
+separate capture, encoding and payload-load costs without adding overlapping parent
+timings. The existing 31-pair candidate medians are 72.940ms graph capture,
+50.866ms graph encoding and 81.370ms total payload loading. IR generation is
+40.355ms; the 509.212ms codegen/link parent includes snapshots and publication.
+
+Select one producer/consumer boundary from that evidence. Add focused correctness
+and work-counter checks before changing it, then run the original fixed eight-case
+independent-image CPU matrix. Keep an optimization only with a paired CPU gain
+excluding parity in active-body or unused-flex and no established unrelated
+regression. A completed failed matrix is final for this variant. Full affected
+integration, LLVM/diagnostic parity and uncached required <=120s precede publication.
+One heavy job, at most one 45-minute extension after concrete progress; if attribution
+does not identify a worthwhile boundary, close it with evidence and move to another
+plan item. The complete all-stage objective remains active and incomplete.
+
 ## I068: demand recorded declared-constraint source products
 
 Started 16 November 2026 at 08:53:16 UTC; first deadline 09:38:16 UTC.
@@ -126,6 +150,19 @@ I067 lazy-flex/binding-partition change. Production baseline 260f5150 and all it
 462 C++ input hashes remain verified before local merge. Root build, focused checks,
 required uncached <=120s, publication and post-disposal replay remain. The complete
 compiler-wide goal is still active and incomplete.
+
+### I068 publication complete
+
+Master compiler 3ef37cd6 passes 74 focused compilations and 333 required checks
+uncached in 102.290s. All 462 C++ input hashes match the qualified worktree.
+Published master fe501029 matches origin. The merged worktree and both owned
+merged branches are removed; one build is retained with verified input timestamps.
+Six post-disposal archive compilations pass, with independent executable copies
+and executable/diagnostic parity. The initial staging guard required space cleanup;
+only two completed I067 profile caches were removed, with a file hash ledger and
+all reports/sources retained. Final closure was 10:10:41 UTC, before the extended
+10:23:16 deadline. Evidence: i068-final-state.json, i068-published-root-audit.json,
+i068-post-disposal-replay.json and its staging receipt. Full goal incomplete.
 
 ## I067: shared lexical binding dependencies for deferred flex bodies
 
