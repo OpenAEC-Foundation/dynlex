@@ -19,14 +19,7 @@ static void removeVariableReferencesFromMatch(
 				refSection->variableReferences.erase(it);
 		}
 
-		// Remove from unresolvedVariableReferences
-		auto uit = context.unresolvedVariableReferences.find(name);
-		if (uit != context.unresolvedVariableReferences.end()) {
-			auto &vec = uit->second;
-			vec.erase(std::remove(vec.begin(), vec.end(), varMatch.variableReference), vec.end());
-			if (vec.empty())
-				context.unresolvedVariableReferences.erase(uit);
-		}
+		removeUnresolvedVariableReference(context, *varMatch.variableReference);
 
 		// Undo searchParentPatterns effects when requested. Stale invalidation may call
 		// this with revertImplicitPromotions=false to avoid transient promotion thrash

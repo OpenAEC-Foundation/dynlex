@@ -2,7 +2,34 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I075 qualified shared debug source reuse; full goal incomplete
+## Current state: I076 worktree qualified; shared verification pending; full goal incomplete
+
+I076 starts 16 November 2026 at 16:10:48 UTC, first deadline 16:55:48 UTC.
+Read-only debugger counts on the published I075 compiler confirm native body
+edits make 3 binding calls / 216 name visits / 2,444 reference visits, while
+debug edits make 187 calls / 29,026 names / 292,946 references. Of the latter,
+186 request one domain. Index those requests from reference publication/removal;
+build only after deferred-body reparenting has finished. Preserve whole-program
+global-domain joins and the existing persisted binding queries. Tests precede
+the implementation. Require real debug-edit CPU improvement and no established
+regression in the original eight native controls, required uncached <=120s,
+affected integration and complete native/debug parity. One heavy job, 45 minutes
+plus at most one extension after concrete progress; do not retry failed matrices.
+
+The fixed matrix passes: debug body edits improve 3.892643 -> 3.811400 CPU
+seconds over 31 pairs, paired ratio interval [.969064, .983547]. None of the
+original eight native controls establishes a regression. Source cbfdda74 /
+compiler 0125c5bc matches all 463 C++ and 22 C inputs and passes 194 focused
+O0/O2 compilations, required 333/0/0 uncached in 100.409s, integration 462/0/0
+in 754.829s, and forty complete real-program native/debug LLVM comparisons.
+Qualify the shared compiler before publication. The sole extension ends at
+17:40:48 UTC; the full objective remains active and incomplete.
+
+The stage audit proves the only binding-domain consumer runs after
+sourceSyntaxResolutionComplete, while the sole source reparenting operation runs
+earlier in the first resolution pass. Build the index at that stable boundary;
+no structural-invalidation callback or defensive rebuild is necessary. Both
+reference registrations and the one removal producer maintain the live index.
 
 I075 enables validated source-owner, parameter-classification and whole-body
 matcher reuse in native debug builds. Source 50f532a3 / compiler 804e1c59 matches
@@ -34,15 +61,63 @@ is not established, and no failed matrix is retried. Production still supports
 native executable incremental output; the LLVM prototype has not been merged.
 I063/I067 timing-rejected and I065 unqualified branches also remain isolated.
 
-Next count the selected-domain binding work before implementing a producer-owned
-index. The current helper scans all unresolved names and references before its
-domain filter; debug binding time rises even while fewer references are rebound.
-Do not attribute the entire timing difference without those counts. Cold resolution
-is about 2.38s in retained stage samples. Semantic section construction, some
+I076 now avoids repeated global scans for selected binding domains. Next audit
+the coupled semantic/native inference controller: debug currently skips its
+entire semantic replay path, not only native debug IR import. A separate semantic
+proof must retain current source anchors while code generation produces fresh
+debug metadata. Cold resolution is about 2.38s in retained stage samples.
+Semantic section construction, some
 inference validation, persistence, debug inference/IR, tracing, LSP and other output
 modes retain broad or missing incremental paths.
 The complete objective covers every .dl/configuration edit and every compiler
 stage; it remains active and incomplete.
+
+## I076: index binding domains at their reference producers
+
+Started 16 November 2026 at 16:10:48 UTC, first deadline 16:55:48 UTC.
+Use the single extension through 17:40:48 UTC after 194 focused compilations
+and the complete fixed CPU gate pass. Finish shared qualification/publication;
+do not repeat a failed completed matrix or redefine the full all-stage goal.
+
+Read-only debugger attribution on I075 shows native edits make 3 binding calls,
+216 name visits and 2,444 reference visits; debug edits make 187 calls, 29,026
+name visits and 292,946 reference visits. Of those debug calls, 186 select one
+domain. The helper was scanning all unresolved names and references before
+filtering that domain. This is the measured producer/consumer boundary.
+
+Build a domain index once on the first selected request, after source resolution
+and deferred-section reparenting. Route both reference registrations and the one
+removal producer through a shared publication API. Later source demands update
+only their own domain. Whole-program binding preserves its original global-name
+joins and persisted query products; no new user declaration/configuration or
+cache format is introduced. Parameter-only owners can have an empty domain.
+Copy the selected view before binding, so publishing another source body cannot
+invalidate an active iteration. The scope-stage audit makes a general structural
+invalidation/rebuild hook unnecessary.
+
+Statistics expose actual consumer name/reference visits, index builds, initial
+index reference visits, selections and publication updates. The real debug edit
+now visits 2,613 references plus 794 once for index construction, with 186
+selections and 1,819 updates. Both images still materialize 528 binding groups,
+rebind 2,613 references, reuse 1,051 binding units and infer 552 bodies. Binding
+wall medians fall 111.322 -> 30.447ms and inference 1846.623 -> 1761.584ms.
+These wall observations are not independent CPU attribution. Whole-process CPU
+improves 3.892643 -> 3.811400s over 31 fixed pairs; paired ratio median .976321,
+interval [.969064, .983547]. All eight native controls establish no regression,
+including cache-disabled cold 5.289689 -> 5.310939s, interval [.998391, 1.020243].
+No general non-debug speedup is claimed. All 186 measured fast builds reuse the
+frontend with zero object builds or linking.
+
+The new minimal three-function test verifies bounded binding scans after a code
+edit under debug inference. Existing global, nested-capture, failure/repair,
+parameter-classification and moved-source checks pass at O0/O2: 194 focused
+compilations. Required passes 333/0/0 uncached in 100.409s; integration passes
+462/0/0 in 754.829s. Twenty native and twenty debug builds match independent
+fresh LLVM/diagnostic outputs across four real-program cases and two edits each.
+All 485 C/C++ inputs and the executable remain unchanged. The frozen image is
+archived. Evidence: i076-binding-baseline/report.json, i076-binding-stage-analysis.json,
+i076-performance-analysis.json, i076-qualification-audit.json and
+i076-next-debug-inference-boundary.json under structured-20261113.
 
 ## I075: reuse source-resolution products in debug native builds
 

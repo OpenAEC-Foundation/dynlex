@@ -59,6 +59,13 @@ inference, cloning and relevant provider mutations demand a unit before consumin
 its matches or bindings. Reusing a typed body can leave its original resolution
 product encoded for the entire build. Binding snapshots retain untouched domains;
 late demands publish new source bindings to live inference identity indexes.
+Selected binding demands use a function-domain reference index built after
+source resolution and deferred-section reparenting. Reference publication and
+removal maintain that index, so binding one demanded function does not scan
+other functions' references. Whole-program binding retains its global-domain
+joins. `binding_reference_visits` counts actual consumer scans;
+`binding_domain_index_reference_visits` counts the initial index scan, with
+separate build, selection and update counters.
 Each reusable body also retains whether its source contains declared variable
 constraints, including typed references bound directly to pattern parameters.
 The constraint collector demands such an owner before collecting its declarations;

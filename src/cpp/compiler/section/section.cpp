@@ -13,6 +13,7 @@
 #include "stringHierarchy.h"
 #include "syntaxConfig.h"
 #include "variable.h"
+#include "variableBindings.h"
 #include <cctype>
 #include <iostream>
 #include <regex>
@@ -634,7 +635,7 @@ void Section::addVariableReference(ParseContext &context, VariableReference *ref
 	if (explicitDeclaration != explicitVariableDeclarations.end() &&
 		std::pair(explicitDeclaration->second.line->mergedLineIndex, explicitDeclaration->second.start()) <=
 			std::pair(reference->range.line->mergedLineIndex, reference->range.start())) {
-		context.unresolvedVariableReferences[reference->name].push_back(reference);
+		registerUnresolvedVariableReference(context, *reference);
 		return;
 	}
 	searchParentPatterns(context, reference);
@@ -789,7 +790,7 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 		parent->searchParentPatterns(context, reference);
 		return;
 	}
-	context.unresolvedVariableReferences[reference->name].push_back(reference);
+	registerUnresolvedVariableReference(context, *reference);
 }
 
 void Section::addPatternReference(PatternReference *reference) {
