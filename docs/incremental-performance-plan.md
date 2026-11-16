@@ -202,10 +202,10 @@ identical-path checkout; timestamp reuse requires exact input hashes and ordinar
 CMake/Ninja flag/dependency validation. No rejected class compiler code is merged.
 I060 is complete as an analysis/instrumentation iteration; the full goal is active.
 
-## I061 next: reuse unchanged source-only dependency section products
+## I061: reuse unchanged source-only dependency section products
 
-Begin after I060 is published; set the start/deadline before implementation.
-Use the new production probes. Persisted section outputs already exist, but the
+Started 16 November 2026 at 02:07 UTC; first deadline 02:52 UTC.
+Baseline is published I060 source 8e6746e7 / root compiler d9098025. Use its probes. Persisted section outputs already exist, but the
 current reuse selector covers mostly native/inference-selected owners. Reuse a
 source-only section's prior graph record when its freshly validated matched
 references produce the same edges and it has no new or retained inferred variants,
