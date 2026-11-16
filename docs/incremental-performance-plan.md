@@ -2,31 +2,34 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I071 qualified on master; full goal incomplete
+## Current state: I074 qualified shared baseline; full goal incomplete
 
-I071 repairs classification propagation while unresolved calls remain. A removed
-provider now retracts every affected cached forwarding parameter before diagnostics,
-while unrelated classifications remain reusable. Frozen compiler 7d9989b8 / code
-f29a2002 passes 90 focused compilations, all 333 required checks uncached in
-105.933s, all 462 integration checks in 764.083s, and twenty complete LLVM/diagnostic
-comparisons across four real-program edit cases with two edits each. Rebuilt master
-03e6cf76 matches all 462 C++ and 22 C inputs, passes the same 90 focused compilations,
-and passes 333 required checks uncached in 103.798s.
+The shared baseline now contains the published I071 transitive parameter-classification
+repair plus the other agent's folded-before-runtime dependency repair (ae127948).
+Compiler db174898 / source 9a8f8f41 matches all 462 C++ and 22 C inputs. It passes
+eight focused folded-call failure/repair compilations at O0/O2, all 333 required
+checks uncached in 103.844s, all 462 integration checks in 763.404s, and twenty
+complete LLVM/diagnostic comparisons across four real-program edit cases with
+two edits each. The rebuilt executable is archived and verified before publication.
+No new general performance improvement is claimed for this necessary repair.
 
-The complete original eight-case CPU cost matrix establishes no gain or regression
-from this necessary repair. All 186 unchanged/comment/wording controls perform zero
-object builds, code generation or linking. I069's qualified graph-column reuse and
-its earlier measured gain remain; I070's mapping optimization has never run its CPU
-matrix and remains isolated. I063/I067 timing-rejected and I065 unqualified changes
-also remain isolated.
+I069's qualified graph-column reuse and measured gain remain. I072's mapping
+candidate is rejected after neither required gain case establishes a benefit.
+I073 implements LLVM text incremental reuse and passes focused/required correctness
+checks, but its original native cold control regresses 5.230720 -> 5.325425 CPU
+seconds; it remains isolated and unqualified. Its complete graphs match clean
+LLVM modulo nonsemantic local names. The source-level cause of its 95ms cold cost
+is not established, and no failed matrix is retried. Production still supports
+native executable incremental output; the LLVM prototype has not been merged.
+I063/I067 timing-rejected and I065 unqualified branches also remain isolated.
 
-I072 rejects the resumed classification mapping candidate: neither required gain
-case establishes a CPU benefit, so the remaining measurements stop and its code
-stays isolated. Audit the shared incremental entry point for uncovered output
-modes next, before selecting an implementation boundary. Semantic section construction, broad setup, some inference
-validation, graph/payload persistence, debug/trace, LSP and other output modes still
-have broad or missing incremental paths. The complete objective covers every
-.dl/configuration edit and every compiler stage; it remains active and incomplete.
+Return to measured resolver work. Cold resolution is about 2.38s in the retained
+stage samples; edited-build resolver setup and metadata processing also remain
+broad. Select one real producer/consumer boundary from actual work counts before
+changing it. Semantic section construction, some inference validation, persistence,
+debug/trace, LSP and other output modes retain broad or missing incremental paths.
+The complete objective covers every .dl/configuration edit and every compiler
+stage; it remains active and incomplete.
 
 ## I074: qualify the concurrent folded-call repair on shared master
 
@@ -47,6 +50,16 @@ and the affected integration suite, then push the combined shared baseline and
 reports. No old failed performance matrix is retried. The full compiler-wide
 incremental goal remains active and incomplete; resolver work remains the next
 optimization boundary after synchronization.
+
+### I074 qualification completed on the combined baseline
+
+The ROOT build and all source inputs stay immutable through eight focused
+compilations, required 333/0/0 in 103.844s, integration 462/0/0 in 763.404s and
+four real-program cases with two edits each (twenty complete LLVM/diagnostic
+builds). The native comparison removes only the first ModuleID comment; it does
+not use the prototype's local-name normalization. The concurrent repair is kept,
+the executable is archived, and the combined source/reports are published without
+overwriting the other agent's commits. The full goal remains incomplete.
 
 ## I073: share incremental products with LLVM text output
 
