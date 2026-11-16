@@ -171,7 +171,10 @@ class RuntimeLifecycleUses {
 				valid = false;
 				return;
 			}
-			collectInstantiation(*expression->selectedInstantiation, expression->selectedCallableDefinition != nullptr);
+			// A folded use must not mark a bodyless instantiation visited: a
+			// later runtime call still needs its executable dependencies.
+			if (!folded)
+				collectInstantiation(*expression->selectedInstantiation, expression->selectedCallableDefinition != nullptr);
 		}
 		if (expression->inferredDataValue)
 			collectExpression(expression->inferredDataValue, bindings);
