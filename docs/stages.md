@@ -91,8 +91,8 @@ locations rebuild the affected IR while unchanged runtime facts remain reusable.
 Imported debug metadata belongs to the current compilation unit, including global
 declaration records. `debug_ir_location_queries` and `debug_ir_location_hits` expose
 location validation work. This whole-unit path
-currently excludes tracing and does not extend the native incremental driver to
-tooling or other output modes.
+currently excludes tracing and does not extend the shared incremental driver to
+tooling or non-native backends.
 
 Native incremental builds retain unresolved expression syntax with a reference
 outline. An unchanged function body registers its current-source pattern and
@@ -1022,7 +1022,7 @@ manifests and individual inference-summary records retain their own JSON formats
 module payloads retain raw LLVM bitcode. All readers select the format from the
 artifact contract. Compiler identity keeps incompatible derived snapshots separate.
 
-Native executable file builds use incremental compilation automatically. The default
+Native executable and LLVM text file builds use incremental compilation automatically. The default
 cache lives under `dynlex/compiler` in the operating system's user cache directory:
 XDG cache storage on Unix, Darwin user cache storage on macOS, and LocalAppData
 on Windows. `--cache-dir <directory>` overrides that location, `--no-incremental`
@@ -2171,8 +2171,8 @@ This still validates the edited source and updates diagnostics and matcher data.
 Cache entries carry BLAKE3 integrity checks and are published with atomic rename.
 Invalid entries and I/O failures are explicit errors. Linking uses private temporary
 copies so cache eviction cannot remove linker inputs. Entries are limited to 256 MiB;
-the disk cache is trimmed to 512 MiB after a build. The LSP and other output modes retain
-their ordinary compilation pipeline.
+the disk cache is trimmed to 512 MiB after a build. The LSP, object-only and non-native
+output modes retain their ordinary compilation pipeline.
 
 # LSP Interaction
 
