@@ -298,6 +298,18 @@ def check_graph_encoding(root, build):
             "a body edit re-encoded unchanged graph paths and edge columns"
         assert edited[0]["graph_encoding_columns_built"] > 0
         previous = current
+    with_call = source.replace('to alpha: ', 'to alpha:\n    beta\n    ')
+    for text in (with_call, source):
+        main.write_text(text)
+        changed = build(entry=main)
+        assert changed[1:] == build(False, entry=main)[1:]
+        current = read_program(root / "cache", main)["section_dependency_graph"]
+        assert set(current["forward"]) == set(previous["forward"])
+        assert current["forward"] != previous["forward"]
+        assert current["reverse"] != previous["reverse"]
+        assert 1 <= changed[0]["graph_encoding_columns_reused"] < 4, \
+            "an added or removed call retained changed edge columns"
+        previous = current
     added = (source.replace('alpha\nbeta\n', 'aardvark\nalpha\nbeta\n') +
              'to aardvark: @intrinsic("discard", 1)\n')
     for text in (added, source):
