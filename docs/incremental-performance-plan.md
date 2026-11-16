@@ -2,56 +2,30 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I069 worktree qualified; master I068; full goal incomplete
+## Current state: I069 qualified on master; full goal incomplete
 
-I068 repairs declared-constraint source demand and the body inference dependency
-on resolved fixed local constraints. Frozen compiler a6907d7f passes 74 focused
-O0/O2 compilations, all 333 required checks uncached in 101.178s, all 462 integration
-checks in 757.179s, and twenty full LLVM/diagnostic comparisons across four real
-program edit cases. Rebuilt master 3ef37cd6 matches all 462 qualified C++ inputs,
-passes the same 74 focused compilations, and passes 333 required checks uncached
-in 102.290s. Publication and worktree-disposal receipts are recorded below.
+I069 reuses unchanged compact dependency-graph columns under producer change
+proofs and exact ordered path identity. Frozen compiler 0b03ef77 / source e7bce926
+passes 114 focused compilations, all 333 required checks uncached in 103.716s,
+all 462 integration checks in 756.024s, and twenty complete LLVM/diagnostic
+comparisons across four real-program edit cases with two edits each. Rebuilt
+master 5830570b matches all 462 C++ and 22 C inputs, passes the same 114 focused
+compilations, and passes 333 required checks uncached in 103.055s.
 
-The fixed eight-case matrix establishes no active-body or cold CPU change; the
-unused-body case has a small established cost. This is a required correctness
-repair, not a speedup claim. All 186 unchanged/comment/wording control builds
-perform zero object builds, code generation or linking. I067's timing-rejected
-lazy-flex/binding-domain changes remain isolated and unmerged.
-
-I069's compact graph-column reuse is now qualified in its worktree. Compiler
-0b03ef77 / source e7bce926 passes 114 focused compilations, 333 required checks
-uncached in 103.716s, all 462 integration checks in 756.024s, and twenty complete
-LLVM/diagnostic comparisons across four real-program cases with two edits each.
-The fixed eight-case CPU gate passes: active-body median 1.480902 -> 1.464755s,
+The original eight-case CPU gate passes: active-body median 1.480902 -> 1.464755s,
 paired ratio interval [.982499, .990949], with no established regression in the
-other seven cases. Root merge, rebuild, qualification and publication remain.
+other seven cases. Cache-disabled cold 5.262873 -> 5.234221s does not establish a
+change. All 186 unchanged/comment/wording controls perform zero object builds,
+code generation or linking. Publication/disposal receipts are recorded below.
+I063/I067 timing-rejected and I065 unqualified changes remain isolated.
 
-Next attribute the producer scopes inside resolution setup. Its 117.377ms median
+Next attribute producer scopes inside resolution setup. Its 117.377ms median
 contains 42.885ms of cached-body selection; section-header evaluation is 2.255ms.
-These overlapping timings must not be added. The complete compiler-wide objective,
-including all source/configuration edits and stages, remains active and incomplete.
-
-I066 fixes stale native callers after an overload changes below a forwarding flex.
-The frozen candidate f567005e passes fourteen O0/O2 regression compilations,
-seventeen entry-metadata checks, all 333 required checks uncached in 100.699s,
-all 462 integration checks in 778.959s, and twenty compilations checking complete
-fresh/incremental LLVM text after two edits in four real-program cases. The fixed
-eight-case matrix establishes no CPU gain or regression; correctness is the reason
-for the change. Matching-dependency captures fall 2,978 -> 2,103 on active edits,
-while one function is inferred and 367 IR bodies remain reused. Rebuilt master
-matches all 462 qualified C++ inputs and passes 333 required checks uncached in
-100.488s. Master is pushed at 2e811a7b. Worktree/merged-branch disposal and six
-post-disposal archived replay compilations pass, including independent executable
-parity. The final closure record followed the intervening user question; no new
-optimization or timing retry was added after the deadline. I063's
-timing-rejected codec and I065's unqualified lazy-flex
-binding changes remain isolated; no optimization gate was waived for them.
-
-Semantic section construction and broad setup still visit unchanged source units;
-dependency publication, some inference validation and module persistence also do
-broad work. Debug/trace, LSP and other output modes do not yet share complete native
-incremental coverage. The objective still covers all .dl/configuration edits and
-all stages; none of those remaining requirements is dropped.
+Do not add overlapping timings. Semantic section construction, broad setup,
+some inference validation, graph/payload persistence, debug/trace, LSP and other
+output modes still have broad or missing incremental paths. The complete objective
+covers every .dl/configuration edit and every compiler stage; it remains active
+and incomplete.
 
 ## I069: attribute dependency persistence and remove repeated publication work
 
@@ -115,8 +89,17 @@ deadline. The full fixed gate and focused/required evidence precede this extensi
 it covers integration, LLVM parity and root qualification/publication only. Both
 staging guard failures collected zero timing samples. Only completed caches owned
 by this task were pruned, with file hash ledgers; reports, source and graph snapshots
-remain. Worktree qualification audit passes; master is still the qualified I068
-baseline before merge. The full compiler-wide goal remains incomplete.
+remain. Worktree qualification audit passes; pre-merge master matched the
+qualified I068 baseline. The full compiler-wide goal remains incomplete.
+
+### I069 master qualification and publication
+
+Merged source e392b7b3 / rebuilt master compiler 5830570b matches all 462 C++ and
+22 C inputs. All 114 focused compilations pass, followed by 333 required checks
+uncached in 103.055s (103.946s driver), with source/ELF unchanged. The complete
+worktree audit, CPU gate and root audit pass. Archive and worktree-disposal replay
+receipts are retained in i069-final-state.json after publication. The complete
+compiler-wide objective remains active and incomplete.
 
 ## I068: demand recorded declared-constraint source products
 
