@@ -2,15 +2,27 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I067 rejected; production I066; full goal incomplete
+## Current state: I068 qualified on master; full goal incomplete
 
-I067's per-body flex binding products remain isolated on
-codex/incremental-shared-binding-domains. Final compiler b3a42350 passes 192 focused
-compilations and all 333 required checks uncached in 103.321s. The fixed eight-case
-matrix fails its predeclared CPU gate; no compiler optimization is merged. Next
-isolate the verified production typed-local constraint crash repair. The complete
-compiler-wide objective, including all source/configuration edits and stages,
-remains active and incomplete.
+I068 repairs declared-constraint source demand and the body inference dependency
+on resolved fixed local constraints. Frozen compiler a6907d7f passes 74 focused
+O0/O2 compilations, all 333 required checks uncached in 101.178s, all 462 integration
+checks in 757.179s, and twenty full LLVM/diagnostic comparisons across four real
+program edit cases. Rebuilt master 3ef37cd6 matches all 462 qualified C++ inputs,
+passes the same 74 focused compilations, and passes 333 required checks uncached
+in 102.290s. Publication and worktree-disposal receipts are recorded below.
+
+The fixed eight-case matrix establishes no active-body or cold CPU change; the
+unused-body case has a small established cost. This is a required correctness
+repair, not a speedup claim. All 186 unchanged/comment/wording control builds
+perform zero object builds, code generation or linking. I067's timing-rejected
+lazy-flex/binding-domain changes remain isolated and unmerged.
+
+Next attribute dependency-state loading and publication before implementing an
+optimization. The code-generation/link parent timing also contains semantic
+snapshots and cache writes; it must not be interpreted as backend work alone.
+The complete compiler-wide objective, including all source/configuration edits
+and stages, remains active and incomplete.
 
 I066 fixes stale native callers after an overload changes below a forwarding flex.
 The frozen candidate f567005e passes fourteen O0/O2 regression compilations,
