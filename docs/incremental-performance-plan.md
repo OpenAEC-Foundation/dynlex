@@ -2,7 +2,7 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I068 qualified on master; full goal incomplete
+## Current state: I069 worktree qualified; master I068; full goal incomplete
 
 I068 repairs declared-constraint source demand and the body inference dependency
 on resolved fixed local constraints. Frozen compiler a6907d7f passes 74 focused
@@ -18,11 +18,18 @@ repair, not a speedup claim. All 186 unchanged/comment/wording control builds
 perform zero object builds, code generation or linking. I067's timing-rejected
 lazy-flex/binding-domain changes remain isolated and unmerged.
 
-Next attribute dependency-state loading and publication before implementing an
-optimization. The code-generation/link parent timing also contains semantic
-snapshots and cache writes; it must not be interpreted as backend work alone.
-The complete compiler-wide objective, including all source/configuration edits
-and stages, remains active and incomplete.
+I069's compact graph-column reuse is now qualified in its worktree. Compiler
+0b03ef77 / source e7bce926 passes 114 focused compilations, 333 required checks
+uncached in 103.716s, all 462 integration checks in 756.024s, and twenty complete
+LLVM/diagnostic comparisons across four real-program cases with two edits each.
+The fixed eight-case CPU gate passes: active-body median 1.480902 -> 1.464755s,
+paired ratio interval [.982499, .990949], with no established regression in the
+other seven cases. Root merge, rebuild, qualification and publication remain.
+
+Next attribute the producer scopes inside resolution setup. Its 117.377ms median
+contains 42.885ms of cached-body selection; section-header evaluation is 2.255ms.
+These overlapping timings must not be added. The complete compiler-wide objective,
+including all source/configuration edits and stages, remains active and incomplete.
 
 I066 fixes stale native callers after an overload changes below a forwarding flex.
 The frozen candidate f567005e passes fourteen O0/O2 regression compilations,
@@ -69,6 +76,47 @@ integration, LLVM/diagnostic parity and uncached required <=120s precede publica
 One heavy job, at most one 45-minute extension after concrete progress; if attribution
 does not identify a worthwhile boundary, close it with evidence and move to another
 plan item. The complete all-stage objective remains active and incomplete.
+
+### I069 measured boundary and qualified candidate
+
+Two actual body edits on frozen LEXI8 source d913a7db show that the second edit
+changes twelve matched records and one inference unit, while the complete graph
+is 1,132,589 bytes. Ordered paths, forward/reverse edges and instantiation lists
+remain unchanged. Loading now retains the compact encoding. Capture publishes
+actual edge/variant change proofs; exact ordered path equality permits column
+reuse, while new/removed paths rebuild all indexed columns. The persisted format
+remains unchanged. Internal encoding/provenance fields are not persisted.
+
+The first required run catches an experiment regression: early constraint errors
+retain a loaded graph without running capture, so its initial change markers were
+absent. A two-line type-provider rename reproduces the extra internal error.
+Decoding now initializes unchanged provenance; capture replaces it with observed
+changes. Repeated-error/repair tests and all existing I068 constraint checks pass.
+The first source/ELF, failed suite and minimized red evidence are retained.
+
+Frozen source e7bce926 / compiler 0b03ef77 passes 20 graph checks at each of O0/O2
+and 37 constraint checks at each level, 333 required checks uncached in 103.716s,
+462 integration checks in 756.024s, and twenty complete LLVM text/diagnostic
+comparisons after two edits in each of four real-program cases. Raw bitcode may
+differ in serialization order; only the first LLVM ModuleID comment is normalized.
+The fixed matrix establishes active-body CPU improvement: 1.480902 -> 1.464755s,
+paired ratio [.982499, .990949]. None of the other seven cases establishes a
+regression. Cache-disabled cold 5.262873 -> 5.234221s, interval [.984243, 1.006155],
+does not establish a change. No completed timing case is repeated.
+
+Median active-body graph conversion/encoding falls 50.050 -> 36.062ms; payload
+loading 80.897 -> 74.710ms. Four compact columns and 13,804 conversion records are
+reused, with 9,870 records converted. One body is inferred and 367 IR bodies reused
+in both images. All 186 unchanged/comment/wording control builds perform zero
+object builds, code generation or linking. Complete-payload serialization remains.
+
+Use the single extension through 11:40:44 UTC, preserving the first 10:55:44
+deadline. The full fixed gate and focused/required evidence precede this extension;
+it covers integration, LLVM parity and root qualification/publication only. Both
+staging guard failures collected zero timing samples. Only completed caches owned
+by this task were pruned, with file hash ledgers; reports, source and graph snapshots
+remain. Worktree qualification audit passes; master is still the qualified I068
+baseline before merge. The full compiler-wide goal remains incomplete.
 
 ## I068: demand recorded declared-constraint source products
 
