@@ -2,7 +2,7 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I076 worktree qualified; shared verification pending; full goal incomplete
+## Current state: I076 qualified shared binding-domain indexing; full goal incomplete
 
 I076 starts 16 November 2026 at 16:10:48 UTC, first deadline 16:55:48 UTC.
 Read-only debugger counts on the published I075 compiler confirm native body
@@ -22,8 +22,12 @@ original eight native controls establishes a regression. Source cbfdda74 /
 compiler 0125c5bc matches all 463 C++ and 22 C inputs and passes 194 focused
 O0/O2 compilations, required 333/0/0 uncached in 100.409s, integration 462/0/0
 in 754.829s, and forty complete real-program native/debug LLVM comparisons.
-Qualify the shared compiler before publication. The sole extension ends at
-17:40:48 UTC; the full objective remains active and incomplete.
+Shared compiler 10e8ea7c / source 11bae61c matches the same 485 inputs and passes
+required 333/0/0 uncached in 105.962s, another 194 focused compilations, complete
+DWARF checks and six real-program builds after worktree/branch disposal. Both
+compiler images are archived and verified; one build is retained with exact
+source hashes/mtimes. The sole extension ends at 17:40:48 UTC; the full objective
+remains active and incomplete.
 
 The stage audit proves the only binding-domain consumer runs after
 sourceSyntaxResolutionComplete, while the sole source reparenting operation runs
@@ -31,7 +35,7 @@ earlier in the first resolution pass. Build the index at that stable boundary;
 no structural-invalidation callback or defensive rebuild is necessary. Both
 reference registrations and the one removal producer maintain the live index.
 
-I075 enables validated source-owner, parameter-classification and whole-body
+The preceding I075 snapshot enabled validated source-owner, parameter-classification and whole-body
 matcher reuse in native debug builds. Source 50f532a3 / compiler 804e1c59 matches
 all 462 C++ and 22 C inputs. It passes 116 focused O0/O2 compilations, required
 333/0/0 uncached in 99.860s, integration 462/0/0 in 767.108s, complete DWARF
@@ -118,6 +122,21 @@ All 485 C/C++ inputs and the executable remain unchanged. The frozen image is
 archived. Evidence: i076-binding-baseline/report.json, i076-binding-stage-analysis.json,
 i076-performance-analysis.json, i076-qualification-audit.json and
 i076-next-debug-inference-boundary.json under structured-20261113.
+
+### I076 shared qualification completed
+
+Local-master merge 11bae61c / compiler 10e8ea7c verifies identical 463 C++ and
+22 C inputs. Required passes 333/0/0 uncached in 105.962s, plus 194 focused
+O0/O2 compilations and complete DWARF checks. Six frozen real-program builds
+succeed after the merged worktree/branch are removed: prime, two body edits,
+comment, wording and unchanged. Fast paths preserve executable bytes and mtime
+with zero object builds/linking. Body edits retain the established two/one
+inference passes and 366/367 reused IR functions, with one object each. The
+executable archive is verified. Evidence: i076-root-qualification-audit.json.
+The full objective remains active; the next bounded goal is separating debug
+semantic inference replay from native IR import, with current source anchors
+and complete fresh debug-output parity. Semantic section construction,
+persistence, tracing, tooling and other output modes also remain incomplete.
 
 ## I075: reuse source-resolution products in debug native builds
 
