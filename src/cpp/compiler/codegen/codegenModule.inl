@@ -297,13 +297,13 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 			context.llvmModule->getOrInsertNamedMetadata("spirv.ExecutionMode")->addOperand(execModeNode);
 		}
 	}
-	if (context.importReusedFunctions && !context.importReusedFunctions(context))
-		return false;
-	stabilizeStaticReferenceIdentities(*context.llvmModule);
-
-	// Finalize debug info before verification
+	// Complete current metadata graphs before LLVM maps cached graphs into them.
 	if (context.diBuilder)
 		context.diBuilder->finalize();
+	if (context.importReusedFunctions && !context.importReusedFunctions(context))
+		return false;
+	sortDebugTypeProducts(*context.llvmModule);
+	stabilizeStaticReferenceIdentities(*context.llvmModule);
 	applyTargetFunctionAttributes(context);
 
 	// Verify

@@ -176,6 +176,9 @@ bool buildNativeOutput(
 	const std::vector<std::string> &libraries, BuildStatistics &statistics, Json *previous,
 	const IncrementalIRReuse *functionReuse, bool restoredModule = false
 ) {
+	// The unoptimized IR snapshot owns cache products; backend units consume only
+	// executable/debug metadata, so these records never enter optimizer inputs.
+	consumeDebugIRProducts(*context.llvmModule);
 	if (!context.options.optimizationLevel)
 		return emitPartitions(
 			context, directory, compilerIdentity, options, libraries, statistics, previous, functionReuse, restoredModule

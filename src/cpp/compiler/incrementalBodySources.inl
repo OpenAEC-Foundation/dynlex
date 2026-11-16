@@ -4,13 +4,7 @@ class InferenceBodySources {
   public:
 	InferenceBodySources(ParseContext &context, const InferenceValueIdentities &identities)
 		: context(context), identities(identities) {
-		std::map<std::pair<std::string, std::string>, size_t> occurrences;
-		for (CodeLine *line : context.codeLines) {
-			if (!line->section)
-				continue; // Empty preprocessing lines have no semantic owner.
-			std::string owner = identities.paths.at(line->section);
-			std::string text = digest(line->rightTrimmedText);
-			Json id = Json::array({owner, text, occurrences[{owner, text}]++});
+		for (auto &[line, id] : sourceLineIdentities(context, identities.paths)) {
 			lines.emplace(line, id);
 			decodedLines.emplace(id.dump(), line);
 			physicalLines.try_emplace(std::pair{line->sourceFile, line->sourceFileLineIndex}, line);

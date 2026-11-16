@@ -1,8 +1,12 @@
 #include "incrementalIRReuse.h"
+#include "codegen/debugTypeProducts.h"
 #include "codegen/libraryDependencies.h"
+#include "incrementalDebugIR.h"
 #include "incrementalModuleBitcode.h"
 #include "parseContext.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/DIBuilder.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalVariable.h"
@@ -10,6 +14,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Linker/Linker.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/Utils/ValueMapper.h"
 #include <optional>
 #include <set>
 #include <stdexcept>
@@ -55,14 +60,17 @@ void collectDependencies(
 IncrementalIRReuse::IncrementalIRReuse(
 	ParseContext &context, const std::string &previousIR, const nlohmann::json &previousFunctions,
 	const nlohmann::json &previousCallableFunctions, const nlohmann::json &previousFunctionInstantiations,
-	std::map<const Section *, std::string> sectionPaths, std::shared_ptr<IncrementalUnitSelection> eligible,
-	std::shared_ptr<IncrementalUnitSelection> replacements, GlobalInputCheck globalInputCheck
+	const nlohmann::json *previousDebugInputs, std::map<const Section *, std::string> sectionPaths,
+	std::shared_ptr<IncrementalUnitSelection> eligible, std::shared_ptr<IncrementalUnitSelection> replacements,
+	GlobalInputCheck globalInputCheck
 )
 	: currentModule(context.llvmModule), previousFunctions(previousFunctions),
 	  previousCallableFunctions(previousCallableFunctions), previousFunctionInstantiations(previousFunctionInstantiations),
-	  sectionPaths(std::move(sectionPaths)), eligible(std::move(eligible)), replacements(std::move(replacements)),
-	  globalInputCheck(std::move(globalInputCheck)) {
+	  previousDebugInputs(previousDebugInputs), sectionPaths(std::move(sectionPaths)), eligible(std::move(eligible)),
+	  replacements(std::move(replacements)), globalInputCheck(std::move(globalInputCheck)) {
 	previousModule = parseCachedModule(previousIR, *context.llvmContext);
+	if (context.options.emitDebugInfo)
+		debugInputs = std::make_unique<IncrementalDebugIR>(context, this->sectionPaths);
 	if (previousModule->getDataLayout() != context.llvmModule->getDataLayout() ||
 		previousModule->getTargetTriple() != context.llvmModule->getTargetTriple())
 		throw std::runtime_error("cached LLVM target differs from the current target");
@@ -72,6 +80,18 @@ IncrementalIRReuse::IncrementalIRReuse(
 		requireCompilerInvariant(previousFunctions.contains(name), "cached instantiation has no generated function owner");
 		previousNamesByPathAndKey[previousFunctions.at(name).get<std::string>()][key.get<std::string>()].push_back(name);
 	}
+}
+
+size_t IncrementalIRReuse::debugLocationQueries() const { return debugInputs ? debugInputs->queries() : 0; }
+size_t IncrementalIRReuse::debugLocationHits() const { return debugInputs ? debugInputs->hits() : 0; }
+
+bool IncrementalIRReuse::debugLocationsUnchanged(const std::string &name) const {
+	if (!debugInputs)
+		return true;
+	auto [proof, inserted] = debugLocationProofs.try_emplace(name);
+	if (inserted)
+		proof->second = debugInputs->unchanged(previousDebugInputs->at(name));
+	return proof->second;
 }
 
 bool IncrementalIRReuse::selected(const std::string &name, const IncrementalUnitSelection &selection) const {
@@ -106,6 +126,8 @@ bool IncrementalIRReuse::reusableClosure(
 	if (!names.insert(name).second)
 		return true;
 	if (!selected(name, *eligible) && !stableWrapper)
+		return false;
+	if (!debugLocationsUnchanged(name))
 		return false;
 	if (!globalInputsUnchanged(
 			sectionsByPath.at(previousFunctions.at(name).get<std::string>()),
@@ -190,6 +212,8 @@ bool IncrementalIRReuse::reuse(
 }
 
 bool IncrementalIRReuse::reuseRoot() {
+	if (!debugLocationsUnchanged("main"))
+		return false;
 	const llvm::Function *entry = previousModule->getFunction("main");
 	requireCompilerInvariant(entry && !entry->isDeclaration(), "cached executable has no entry-point body");
 	std::unordered_set<std::string> closure;
@@ -228,11 +252,77 @@ bool IncrementalIRReuse::import(ParseContext &context, const nlohmann::json &cur
 		}
 	}
 	llvm::ValueToValueMapTy values;
+	std::vector<llvm::MDNode *> retainedTypeProducts;
+	if (context.diBuilder) {
+		std::set<const llvm::DICompositeType *> usedTypes;
+		for (const std::string &name : names)
+			IncrementalDebugIR::visitMetadata(*previousModule->getFunction(name), [&](const llvm::MDNode *metadata) {
+				if (const auto *type = llvm::dyn_cast<llvm::DICompositeType>(metadata))
+					usedTypes.insert(type);
+			});
+		std::map<std::string, llvm::DICompositeType *> currentTypes;
+		auto *currentProducts = currentModule->getOrInsertNamedMetadata(debugTypeProductsName);
+		for (llvm::MDNode *record : currentProducts->operands())
+			currentTypes.emplace(
+				llvm::cast<llvm::MDString>(record->getOperand(0))->getString().str(),
+				llvm::cast<llvm::DICompositeType>(record->getOperand(1))
+			);
+		if (auto *previousProducts = previousModule->getNamedMetadata(debugTypeProductsName))
+			for (llvm::MDNode *record : previousProducts->operands()) {
+				auto *type = llvm::cast<llvm::DICompositeType>(record->getOperand(1));
+				if (!usedTypes.contains(type))
+					continue;
+				std::string identity = llvm::cast<llvm::MDString>(record->getOperand(0))->getString().str();
+				auto current = currentTypes.find(identity);
+				if (current != currentTypes.end())
+					values.MD()[type] = llvm::TrackingMDRef(current->second);
+				else
+					retainedTypeProducts.push_back(record);
+			}
+		for (llvm::DICompileUnit *unit : previousModule->debug_compile_units())
+			values.MD()[unit] = llvm::TrackingMDRef(context.diCompileUnit);
+		std::vector<llvm::Metadata *> globals;
+		for (auto *global : context.diCompileUnit->getGlobalVariables())
+			globals.push_back(global);
+		for (llvm::GlobalVariable &global : previousModule->globals()) {
+			if (!reusedRoot && !mutableGlobalNames.contains(global.getName().str()))
+				continue;
+			llvm::SmallVector<llvm::DIGlobalVariableExpression *, 1> oldInfo, currentInfo;
+			global.getDebugInfo(oldInfo);
+			if (auto *current = currentModule->getGlobalVariable(global.getName(), true))
+				current->getDebugInfo(currentInfo);
+			for (llvm::DIGlobalVariableExpression *old : oldInfo) {
+				llvm::DIGlobalVariableExpression *replacement;
+				if (!currentInfo.empty()) {
+					requireCompilerInvariant(currentInfo.size() == 1, "generated global has multiple debug declarations");
+					replacement = currentInfo.front();
+				} else {
+					auto *variable = old->getVariable();
+					auto *type = llvm::cast<llvm::DIType>(llvm::MapMetadata(variable->getType(), values));
+					auto *declaration = llvm::DIGlobalVariable::getDistinct(
+						*context.llvmContext, context.diCompileUnit, variable->getName(), variable->getLinkageName(),
+						variable->getFile(), variable->getLine(), type, variable->isLocalToUnit(), variable->isDefinition(),
+						variable->getStaticDataMemberDeclaration(), variable->getTemplateParams(), variable->getAlignInBits(),
+						variable->getAnnotations()
+					);
+					replacement =
+						llvm::DIGlobalVariableExpression::get(*context.llvmContext, declaration, old->getExpression());
+					globals.push_back(replacement);
+				}
+				values.MD()[old] = llvm::TrackingMDRef(replacement);
+			}
+		}
+		context.diCompileUnit->replaceGlobalVariables(llvm::MDTuple::get(*context.llvmContext, globals));
+	}
 	std::unique_ptr<llvm::Module> cached = llvm::CloneModule(*previousModule, values, [&](const llvm::GlobalValue *value) {
 		if (const auto *function = llvm::dyn_cast<llvm::Function>(value))
 			return reusedNames.contains(function->getName().str()) || (reusedRoot && function->getName() == "main");
 		return true;
 	});
+	if (auto *products = cached->getNamedMetadata(debugTypeProductsName))
+		cached->eraseNamedMetadata(products);
+	for (llvm::MDNode *record : retainedTypeProducts)
+		currentModule->getOrInsertNamedMetadata(debugTypeProductsName)->addOperand(llvm::MapMetadata(record, values));
 	for (const std::string &name : names)
 		cached->getFunction(name)->setLinkage(llvm::GlobalValue::ExternalLinkage);
 	std::vector<std::pair<std::string, llvm::GlobalValue::LinkageTypes>> globalLinkages;

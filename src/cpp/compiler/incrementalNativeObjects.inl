@@ -76,6 +76,7 @@ struct BuildStatistics {
 	bool reusedRootExecution = false;
 	size_t cachedIRDependencyScans = 0;
 	size_t cachedIRDependencyHits = 0;
+	size_t debugIRLocationQueries = 0, debugIRLocationHits = 0;
 	size_t cachedIRGlobalInputChecks = 0;
 	size_t cachedIRGlobalInputHits = 0;
 	size_t precedenceSignaturesReused = 0;

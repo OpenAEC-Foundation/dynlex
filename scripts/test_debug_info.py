@@ -42,6 +42,20 @@ def check_incremental_source_locations(compiler, verifier, root):
                 dumps.append(lines[1:])
             if index:
                 assert dumps[0] == dumps[1], "incremental DWARF differs from current clean source"
+    from test_incremental_debug_ir import debug_ir_global_edits, debug_ir_recursive_edits
+    for optimization in ("-O0", "-O2"):
+        for index, text in enumerate(debug_ir_global_edits() + debug_ir_recursive_edits()):
+            source.write_text(text)
+            dumps = []
+            for mode in ("incremental", "fresh"):
+                cache = root / f"globals-{optimization}-{mode}{index if mode == 'fresh' else ''}"
+                output = root / f"globals-{mode}.out"
+                subprocess.run([str(compiler), str(source), "-g", optimization, "--cache-dir", str(cache),
+                                "-o", str(output)], cwd=root, capture_output=True, check=True)
+                subprocess.run([str(verifier), "--verify", str(output)], capture_output=True, check=True)
+                dumps.append(subprocess.check_output([str(verifier), "--debug-info", "--debug-line",
+                                                      str(output)], text=True).splitlines()[1:])
+            assert dumps[0] == dumps[1], "reused global/type DWARF differs from a fresh build"
 
 
 def resolve_native_llvm_install_directory() -> Path | None:
@@ -89,6 +103,8 @@ def main() -> int:
         "simple", "debug_class_globals", "debug_empty_function", "recursive_class_pointer", "recursive_class_double_pointer",
     )]
     with tempfile.TemporaryDirectory(prefix="dynlex-debug-info-") as temporary_directory:
+        from test_debug_source_origins import check_cross_file_local_debug_locations
+        check_cross_file_local_debug_locations(compiler, Path(temporary_directory))
         check_incremental_source_locations(compiler, dwarf_verifier, Path(temporary_directory))
         for source in sources:
             executable = Path(temporary_directory) / (source.parent.name + ".out")

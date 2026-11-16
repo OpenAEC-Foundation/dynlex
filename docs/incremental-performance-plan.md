@@ -2,7 +2,83 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I078 codec candidate rejected; shared I077 remains qualified
+## Current state: I080 qualified debug IR reuse; shared verification pending
+
+I080 starts 16 November 2026 at20:08:43 UTC, first deadline20:53:43 UTC.
+The fixed corrected-image matrix passes. Debug body edits improve3.764891 ->
+1.748279 CPU seconds (31 pairs; ratio interval[.462290,.467659]), a53.6% reduction.
+All eight original native controls establish no regression. Typed-body loading
+falls387 ->1;367 functions reuse IR, with9,045 location checks. Inference phase
+wall medians fall2146.816 ->379.739ms; body loading1477.159 ->4.647ms.
+The source-origin repairs require semantic LLVM parity against old I077, while
+candidate-vs-clean validation retains every debug record. Native controls retain
+exact executable equality. Comment/wording/unchanged cases perform zero object
+builds and zero linking in186 measured builds.
+
+Use the single allowed extension, ending21:38:43 UTC, for affected integration,
+complete native/debug LLVM parity, publication and shared-compiler checks.
+All40 native/debug real-program builds pass complete LLVM/diagnostic parity,
+including every debug record, on the same frozen executable.
+The exact corrected image already passes333 required checks in108.576s,
+596 focused compilations and full DWARF; do not rerun those worktree checks.
+The source is frozen at2a8f1dfc / compiler cba27e0a. Integration passes462/0/0
+in761.727s, with all compiler/source hashes unchanged. Worktree qualification
+is complete. Merge the source, rebuild shared master, then verify the required
+suite, focused cases, DWARF and native/debug builds after worktree disposal.
+Shared master remains4150d708 / compiler cf8248da until qualification succeeds.
+The full goal remains active; semantic section construction, broader persistence,
+tracing, tooling and non-native output paths are still incomplete.
+
+I079 passes its fixed debug primary (53.2%CPU gain;3.769174->1.761183s,
+ratio interval[.464736,.470245]) and all eight native controls without established
+regression. Its required suite then finds one efficiency failure: a native edit
+loads7 payloads instead of6 because debug_ir_inputs is hydrated unconditionally.
+Keep I079 f6b3d760/c77a0a1f unqualified and preserve its measurements separately.
+
+Repair the cache consumer: hydrate debug inputs only in debug mode, and express
+that product's absence in the non-debug IR importer. Keep the six-payload test;
+no schema fallback, dummy product or test-expectation increase. The targeted
+three-line fixture now passes; required passes333/0/0 uncached in108.576s,
+plus596 focused O0/O2 builds and complete DWARF. Freeze the revised executable,
+benchmark it once against qualified I077, then run affected integration and full
+native/debug LLVM comparisons. Reuse already completed checks only for the exact
+same executable/source image. One heavy job,45 minutes plus at most one extension
+after concrete progress; do not retry a failed completed fixed variant.
+
+I079 starts 16 November 2026 at 18:50:58 UTC, first deadline 19:35:58 UTC.
+Persist per-function dependencies on authored source locations separately from
+runtime IR inputs. Share the existing logical line identity producer with typed
+bodies; metadata queries cover declarations, statements, variables, classes,
+members and debug records, including referenced globals. Validate those queries
+before admitting an IR closure. Reattach imported subprograms/globals to the
+current compilation unit. Minimal unrelated-edit/moved-location tests precede
+production changes, then require full LLVM/DWARF parity and the fixed CPU gate.
+Native controls must establish no regression; required uncached must stay <=120s.
+One heavy job, 45 minutes plus at most one extension after concrete progress.
+No completed failed matrix is retried. I078 remains isolated and unchanged.
+
+The first prototype passes 582 focused builds and complete DWARF, then exposes
+an existing metadata-origin bug in the real program: a local declaration's line
+584 is paired with the current function's 62-line file. LLVM inspection and a
+nine-line, two-file optional-binding repro prove the wrong file scope. The new
+metadata assertion fails on shared I077. Emit a lexical file scope for local
+locations, shared with ordinary statement-location emission; keep the source
+anchor invariant. The minimal regression passes after the fix. Also correct the
+existing global-debug call passing an expression pointer in the isDefined slot.
+Re-run affected correctness on the corrected image before its fixed CPU matrix.
+
+Resolve debug type graphs at the metadata producer boundary, map concrete class
+products during import, and attach globals/subprograms to the finalized current
+compilation unit. A named cache-product table initially reached optimizer units:
+cold optimization rose3.6->23s. Remove those records after the unoptimized cache
+snapshot, before backend partitioning/fingerprinting; ordinary noncached emission
+does not produce them. Optimization returns to3.54s and cold builds to13.17s.
+The final image passes596 focused compilations, full DWARF including imported
+optional declarations, class rename/recursion, and20 real-program complete LLVM
+comparisons. Freeze it before timing. The verified source-origin repair changes
+debug sections relative to I077; debug comparisons therefore require LLVM-stripped
+semantic IR parity and diagnostics, while all native controls retain executable
+byte equality. Candidate-vs-clean LLVM/DWARF checks retain all metadata.
 
 I078 ran 16 November 2026 from 18:18:42 UTC with a 19:03:42 UTC first deadline.
 Scoped probes attribute the debug edit's 1,476ms body loading to payload loading
@@ -31,7 +107,7 @@ Master's qualified I077 C++ and cf8248da compiler remain unchanged. Evidence und
 structured-20261113: i078-body-phase-analysis.json, i078-debug-stage-analysis.json,
 i078-performance-progress.json and i078-lives-regression-analysis.json.
 
-Next independent boundary: debug IR still regenerates all functions. Its metadata
+I078 identified the next boundary: debug IR still regenerated all functions. Its metadata
 reads function declarations, statements, variables, classes and member source
 locations. Runtime semantic IR dependencies alone do not prove those locations or
 compilation-unit ownership reusable. Audit and persist those producer products

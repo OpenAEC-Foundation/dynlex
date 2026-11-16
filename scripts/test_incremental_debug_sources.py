@@ -1,6 +1,8 @@
 """Debug builds reuse source resolution and regenerate current source locations."""
 
 def check_debug_source_units(root, build):
+    from test_incremental_debug_ir import check_debug_ir_units
+    check_debug_ir_units(root, build)
     from test_incremental_debug_inference import check_debug_inference_units
     check_debug_inference_units(root, build)
     main = root / "debug_source_units.dl"
@@ -23,7 +25,7 @@ def check_debug_source_units(root, build):
         assert edited[0]["body_resolution_units_reused"] > 0, edited[0]
         assert edited[0]["cached_body_resolution_references_skipped"] > 0, edited[0]
         assert not edited[0]["type_inference_reused"]
-        assert not edited[0]["functions_ir_reused"]
+        assert bool(edited[0]["functions_ir_reused"]) == (not prefix), edited[0]
 
     missing = source.replace('"add", value, 1', '"add", missing, 1')
     for text, success in ((missing, False), (source, True),
