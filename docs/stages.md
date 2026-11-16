@@ -1383,8 +1383,12 @@ Classification distinguishes changed inputs from changed exported signatures.
 Strongly connected components use both the old and current edges, including deleted
 providers. A component with changed inputs resolves normally as a group. Unchanged
 downstream components may provisionally restore their saved headers and bodies.
-Before committing the definition boundary, the compiler compares resolved header
-and visible-name exports. An unchanged export stops the cascade. A changed export
+During resolution, the compiler compares ready header and visible-name exports.
+Each header becomes available when its definitions settle. Name environments use
+the definition-completion boundary where declarations are indexed, before those
+declaring calls resolve. An unresolved call elsewhere cannot delay a ready
+producer's changed export or leave cached downstream parameters in diagnostics.
+An unchanged export stops the cascade. A changed export
 retracts the directly dependent cached components, removes their indexed headers
 and body-derived parameter bindings, restores their cached initial word counts,
 and resolves those bodies normally. Their

@@ -750,14 +750,14 @@ bool resolvePatterns(ParseContext &context) {
 					madeProgress = true;
 			}
 
+			if (reactivateCachedClassifications(
+					context, skippedCachedBodies, bodyReferences, unResolvedSections, definitionToReferences,
+					queueReferenceForRematch, definitionReferences
+				)) {
+				appendRequeuedReferences();
+				continue;
+			}
 			if (unResolvedSections.empty() && bodyReferences.empty() && !failedBodyWorklist.hasWaiting()) {
-				if (reactivateCachedClassifications(
-						context, skippedCachedBodies, bodyReferences, unResolvedSections, definitionToReferences,
-						queueReferenceForRematch, definitionReferences
-					)) {
-					appendRequeuedReferences();
-					continue;
-				}
 				break;
 			}
 
