@@ -2,7 +2,97 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Latest rejected iteration: I084 declaration proof at its early consumer
+## Latest rejected iteration: I085 classification and flex demand
+
+Started16 November2026 at23:19:48 UTC; first deadline00:04:48 UTC17 November.
+Previous goal turn made progress: measured section production, verified an eager
+declaration consumer with a minimal test, then rejected I084's fixed variant for
+missing its1% gain gate. Qualified I082 remains the compiler baseline.
+
+Attribute current classification dependency preparation on two consecutive real
+Breakout body edits, distinguishing edge selection, reverse/frontier construction,
+SCC traversal and eligibility checks. Use the project debugger wrapper for coarse
+work boundaries and ordinary compiler counters for timing evidence. Read prior
+I031/I081 results; do not implement topology retention if eligibility is still
+the actual cost. Do not retry I084 or change the original all-stage objective.
+
+The goal is one proved missing incremental boundary and, if its measured cost
+justifies implementation, a minimal test and changed-unit producer/consumer path.
+Any optimization must retain implicit-parameter cascades, failed and positive
+lookups, overload addition/removal and error repair. Require exact clean parity,
+actual skipped work, a predeclared fixed CPU gain gate and no unrelated regression,
+required uncached<=120s and affected integration before publication. One heavy job;
+one45-minute extension only for concrete implementation progress.
+
+### I085 measured consumer and coupled implementation gate
+
+Two current debugger traces attribute edge selection .522/.796ms, reverse/frontier
+work2.334/1.706ms, SCC grouping1.649/1.347ms and eligibility12.746/8.987ms.
+All256 matcher segments are loaded before this scope. Eligibility decodes323
+additional reference tables (343 ->666). Do not cache graph topology on this
+result: downstream consumers still need those reference tables.
+
+Complete the missing whole-body consumer boundary for flex functions. Retain
+unchanged source/resolution products, partition binding products by independent
+body ownership, and demand bodies whose free names connect them to an ancestor.
+Preserve lexical lookup semantics and all typed-constraint demands. Use the
+published binding-domain reference index for late requests, avoiding I067's
+repeated whole-program reference scans. Keep global joins rooted first and
+publish late references through the existing index. This differs from rejected
+I067: its broad selected-domain scans are already eliminated by qualified I076.
+
+Before implementation, reuse its minimal variable-storage, independent/shared
+names, typed parameter/local, activation, overload, demotion and error-repair tests.
+The fixed primary is31 paired unused-flex edits, with at least2% paired median CPU
+gain and95% interval excluding parity. Controls:15 body/lives/unused,31 unchanged/
+comment/wording,11 cache-disabled cold and7 debug-body/LLVM-body pairs. Preserve
+exact executable/diagnostic parity and complete current clean IR equality.
+Required uncached remains<=120s; all affected integration must pass before sharing.
+No completed failed source/image comparison may be rerun or replace its gate.
+The existing deadline and at most one concrete-progress extension still apply.
+
+### I085 closed: more deferred bodies, no whole-build gain
+
+Sourcead1878a1 / image5f42235e passes69 new builds at O0 and69 at O2, plus
+required333/0/0 uncached in113.950s. The initial regression fails on qualified
+I082 because unused flex source/resolution products are materialized. The new
+candidate preserves lexical ownership, demand on new ancestor consumers, typed
+parameter/local constraints, overload activation, parameter demotion and error
+repair. Its format carries binding ownership units and source free-name summaries;
+all current producers/consumers use the new shape without a compatibility path.
+
+The original31-pair unused-flex primary completes with exact executable and
+diagnostic parity. CPU medians .531337 ->.534113s have paired median ratio
+1.001776450,95% interval[.992777137,1.022903082]. This establishes neither gain
+nor regression and fails the predeclared2% improvement. Stop the remaining
+controls; do not run full integration/IR/shared qualification or retry this image.
+
+Retained owners increase343 ->549, restored outline nodes1877 ->944, materialized
+binding groups162 ->78 and binding-reference visits794 ->585. All671 reference
+tables still decode. Frontend wall medians298.105 ->293.560ms and resolution
+264.937 ->261.630ms improve modestly; matcher projection43.747 ->45.484ms and
+cache writing26.637 ->28.042ms increase. Whole internal wall472.312 ->477.989ms
+also shows no saving. These scopes overlap; they are not additive CPU attribution.
+In particular, binding input22.414 ->6.195ms moves first-use scope-index work to
+its new earlier preparation boundary: complete binding24.595 ->23.687ms falls
+only .908ms. Do not advertise the nested input reduction as a16ms compiler gain.
+
+A separate read-only debug probe uses the same image and two new body edits. It
+makes33/30 indexed domain selections, with767/619 reference visits. That confirms
+the index serves actual late demands, but is not a paired acceptance comparison
+and does not replace the failed primary. Keep its full report separately.
+
+Reject the variant, preserve source/tests/image/first comparison and retain one
+identified build. Dispose only the owned worktree; qualified shared I082 code
+stays unchanged. No extension was used. The full incremental goal is active.
+Next profile the larger ordinary inference scope (~315ms), including preinference
+(~68ms), query validation (~34ms) and dependency publication (~70ms), before
+choosing a concrete changed-unit boundary. These existing measurements identify
+nested costs, not an additive decomposition or a new optimization claim.
+Evidence: i085-stage-analysis.json, i085-performance-progress.json,
+i085-observed-required.json/log and i085-debug-binding-profile/report.json.
+
+## Previous rejected iteration: I084 declaration proof at its early consumer
 
 Started16 November2026 at23:07:42 UTC; first deadline23:52:42 UTC.
 I083 completes read-only attribution on qualified image d95dda4b. All2360 headers,
