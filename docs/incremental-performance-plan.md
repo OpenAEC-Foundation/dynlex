@@ -2,12 +2,13 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I062 qualified; publication in progress; full goal incomplete
+## Current state: I062 merged and root-verified; full incremental goal incomplete
 
-Production includes I061 source-only dependency products. I062 selective inference
-proof invalidation passes 20 focused compilations, 333 required checks uncached in
-100.928s, 462 integration checks in 773.683s and complete LLVM parity after two edits
-in each of four real-program cases. Root publication and verification are next.
+Production includes I062 selective inference-proof invalidation. Qualification
+passes 20 focused compilations, 333 required checks uncached in 100.928s, 462
+integration checks in 773.683s and complete LLVM parity after two edits in each
+of four real-program cases. Rebuilt master passes all 333 required checks uncached
+in 100.539s. The merged worktree is removed and archived replay passes afterward.
 The fixed paired CPU gains are 1.17% for active body and 0.99% for game-data edits;
 the unused-edit estimate is slower and uncertain, as recorded below. No control
 establishes a regression under the declared gate. I061's original 1% whole-build
@@ -125,6 +126,23 @@ serialization products and rewrite only changed records, with exact codec/fresh
 parity, real-program CPU evidence and the same correctness/budget controls. Record
 its start/deadline before new experiments. This remaining broad persistence work,
 semantic section construction and tooling/output modes keep the overall goal open.
+
+### I062 publication and closure
+
+Merge ba07227b contains the qualified C++ bytes. Root compiler 738252dd matches
+all 436 qualified C++ input hashes and passes 333 required checks uncached in
+100.539s (100.684s including its recording driver), with source/compiler unchanged.
+The merged worktree and branch are removed. Exact-path build objects are retained
+separately under the recorded byte-identical-input contract; both tested root
+executables and benchmark artifacts have verified lossless archives. A real
+six-compilation archived replay passes after removal and cleans its temporary
+compiler data root. See i062-final-state.json and the independent-copy receipt.
+
+Close I062 before the single extended 05:03 UTC deadline. No second optimization
+variant or confirmation timing was used. Keep the unused-edit uncertainty in the
+published measurements; only body and game-data CPU improvements are established.
+The full compiler-wide goal remains active and incomplete. The next stage goal is
+the bounded P14 serialization producer/consumer work described above.
 
 ## I058: demand class match products at their semantic consumers
 
