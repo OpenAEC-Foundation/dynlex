@@ -1034,8 +1034,8 @@ independent content-addressed artifact; no native objects are lowered or linked.
 An unchanged output or diagnostic-wording edit does not rewrite that file. A
 missing/damaged destination or a changed output path restores the text directly;
 an evicted text artifact regenerates it from saved IR. Streams replay cached text
-on each invocation. Ordinary and incremental LLVM emission share symbol ordering
-and report output I/O errors. Private debug-cache products never enter the output.
+on each invocation. Ordinary and incremental LLVM emission canonicalize symbol order before
+optimization and share final rendering, with explicit output I/O errors. Private debug-cache products never enter the output.
 `llvm_outputs_built` and `llvm_outputs_restored` expose artifact work. Changed LLVM
 output still runs whole-module optimization; semantic and function IR reuse do
 not imply incremental optimization for this output mode.

@@ -170,3 +170,21 @@ def check_incremental_llvm_debug_output(root, compiler):
                 assert b"dynlex.debug.types" not in llvm, "compiler-private debug products leaked into LLVM output"
                 products.append(("".join(line for line in lines if not line.startswith("incremental: ")), llvm))
             assert products[0] == products[1], "incremental LLVM debug output differs from clean source"
+
+
+def check_incremental_llvm_ordering(root, compiler):
+    root.mkdir()
+    source = root / "main.dl"
+    source.write_text('integer means: @intrinsic("type", "int", 32)\nboolean means: @intrinsic("type", "bool")\nclass:\n    patterns:\n        state\n    members:\n        users as integer\n        locked as boolean\nexposed function [decrease]:\n    globals:\n        shared\n    execute:\n        @intrinsic("store", shared\'s users, @intrinsic("subtract", shared\'s users, 1))\nexposed function [copy state]:\n    globals:\n        shared\n    execute:\n        @intrinsic("return", shared)\n@intrinsic("store", shared, @intrinsic("construct", state))\n@intrinsic("store", shared\'s users, @intrinsic("command line argument count"))\ndecrease\n@intrinsic("discard", copy state)\n')
+    products = []
+    for incremental in (False, True):
+        output = root / ("cached.ll" if incremental else "fresh.ll")
+        command = [str(compiler), str(source), "--emit-llvm", "-O2", "-o", str(output)]
+        command += (["--cache-dir", str(root / "cache"), "--incremental-stats"]
+                    if incremental else ["--no-incremental"])
+        result = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=120)
+        assert result.returncode == 0, result.stderr
+        diagnostics = "".join(line for line in result.stderr.splitlines(keepends=True)
+                              if not line.startswith("incremental: "))
+        products.append((diagnostics, output.read_bytes().split(b"\n", 1)[1]))
+    assert products[0] == products[1], "LLVM optimization depends on cache-specific symbol ordering"

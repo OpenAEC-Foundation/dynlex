@@ -101,6 +101,7 @@ def check_default_cache(compiler, root):
             _, stats = invoke("--incremental-stats", env=env)
             assert Path(stats["cache_directory"]).resolve() == (home / ".cache/dynlex/compiler/native-v1").resolve()
     check_compiler_identity(compiler, root / "compiler-identity")
-    from test_incremental_llvm_output import check_incremental_llvm_output, check_incremental_llvm_debug_output
+    from test_incremental_llvm_output import check_incremental_llvm_output, check_incremental_llvm_debug_output, check_incremental_llvm_ordering
     check_incremental_llvm_output(root / "llvm-artifact", compiler)
     check_incremental_llvm_debug_output(root / "llvm-debug", compiler)
+    check_incremental_llvm_ordering(root / "llvm-ordering", compiler)

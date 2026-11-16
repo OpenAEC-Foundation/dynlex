@@ -41,6 +41,39 @@ the original eight native controls must establish no regression; native comparis
 retain exact executable bytes. Do not retry a completed failed variant. Affected
 integration and full native/debug/LLVM parity follow only if this gate passes.
 
+### I082 verified ordering repair; one qualification extension
+
+The first real-program graph comparison stops before completing any CPU case:
+load/store alignment on one global is8 in fresh output and4 in incremental
+output. Saved pre-optimization graphs are identical after symbol ordering, but
+raw declaration order differs. The incremental snapshot canonicalizes symbols
+before optimization; ordinary LLVM output did so only afterward. A debugger
+probe canonicalizing the fresh input produces exactly the cached graph.
+
+A22-line no-import DynLex regression reproduces this with a global record,
+an exposed mutator and an exposed aggregate reader. It fails before the repair.
+Make ordinary LLVM output use the same pre-optimization order. Corrected-image
+checks pass the minimized regression and O0/O2 artifact/debug parity. Recheck
+required and full real-program parity before timing. This is a source correction,
+not a retry of a completed failed CPU comparison.
+
+LLVM speedup/correctness now compares the corrected compiler's incremental and
+clean paths, using separate executable copies with identical hashes. The ordering
+repair intentionally changes optimization annotations relative to old I080, so
+historical LLVM cold timings retain separate per-version graph identities;
+current incremental output must match its own complete clean graph. Native
+controls still compare qualified I080 against the candidate with exact executable
+bytes. No alignment normalization or comparison waiver is used for incremental
+correctness. Use the sole extension, ending23:06:17 UTC, for fixed comparison,
+integration/full graph checks and shared publication if qualified.
+
+The corrected7ecd998d image passes required333/0/0 uncached in109.523s, the
+22-line ordering regression, O0/O2 artifact tests and complete minimal debug LLVM
+parity. A fresh full Breakout compile now matches its same-image cached compile
+with zero complete normalized LLVM graph differences. Freeze this corrected source
+before its distinct fixed matrix. The earlier3918fcd7 comparison remains invalid
+for timing; its saved mismatch and debugger proofs are preserved separately.
+
 ## Prior rejected iteration: I081 matcher layout
 
 The bounded declaration-preparation investigation found mixed matcher-product
