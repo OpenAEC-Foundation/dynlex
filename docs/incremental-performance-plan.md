@@ -2,7 +2,15 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I066 merged and root-verified; full goal incomplete
+## Current state: I067 rejected; production I066; full goal incomplete
+
+I067's per-body flex binding products remain isolated on
+codex/incremental-shared-binding-domains. Final compiler b3a42350 passes 192 focused
+compilations and all 333 required checks uncached in 103.321s. The fixed eight-case
+matrix fails its predeclared CPU gate; no compiler optimization is merged. Next
+isolate the verified production typed-local constraint crash repair. The complete
+compiler-wide objective, including all source/configuration edits and stages,
+remains active and incomplete.
 
 I066 fixes stale native callers after an overload changes below a forwarding flex.
 The frozen candidate f567005e passes fourteen O0/O2 regression compilations,
@@ -25,6 +33,116 @@ dependency publication, some inference validation and module persistence also do
 broad work. Debug/trace, LSP and other output modes do not yet share complete native
 incremental coverage. The objective still covers all .dl/configuration edits and
 all stages; none of those remaining requirements is dropped.
+
+## I067: shared lexical binding dependencies for deferred flex bodies
+
+Started 16 November at 07:48 UTC; first deadline 08:33 UTC. I066 is published
+and its post-disposal replay passes. The intervening direct question received a
+read-only answer; it did not add compiler implementation progress.
+
+Partition binding products by independent source bodies, joining domains only
+where real lexical ownership connects them. Preserve existing lexical semantics:
+flexes still see applicable ancestor declarations and references. Persist the
+names that may bind outside each body; an ancestor consumer demands connected
+body products before inference. Late local demand must neither reset unrelated
+inferred variables nor overwrite another body's binding products. This completes
+the missing producer/consumer boundary from I065, rather than restricting lazy
+flexes to variable-free bodies.
+
+Add minimal storage-origin, same-name independent locals, shared ancestor edits,
+typed constraints and activation tests before implementation. Retain the I065
+parameter-demotion, missing-provider and overload cascade checks. Require clean
+runtime/diagnostic/LLVM parity and the uncached required suite <=120s. Keep only
+with a paired CPU gain excluding parity on body (31 pairs) or unused-flex (15),
+and no established unrelated regression across game-data/unused (15 each),
+unchanged/comment/wording (31 each), cold (11). Full affected integration and root
+qualification precede publication. One heavy job and at most one 45-minute
+extension after concrete progress. A failed full matrix is final for this variant.
+The full compiler-wide goal, including broad section/setup and other modes,
+remains active and incomplete.
+
+### I067 producer/consumer checks
+
+The initial baseline passes eighteen new behavior compilations and fails the
+skipped-work assertion: neither independent flex body remains deferred. The first
+implementation's source-record initialization used canonical paths where readers
+use compact identities; project-wrapper GDB confirms and the producer is corrected.
+The six-line typed-local repro then confirms that the constraint collector must
+demand recorded local declarations before collecting its queries. The source
+product now retains ancestor import names and local-constraint presence; the
+existing query cache still resolves and validates those constraints.
+
+Compiler 0c242add passes all 59 new compilations but required reports 332 passes
+and one failure in 49.944s. The existing nested-global repair test exposes a union
+ordering error: joining a local domain after its global connection makes an inner
+function the representative of top-level references. GDB confirms the resulting
+nonancestor input traversal. Join explicit global domains before lexical-owner
+connections. Corrected compiler 23e915a9 passes all 59 new compilations and all
+21 binding-environment compilations. No assertion is weakened. The precedence
+fixture uses explicit captures and literal-only replacements to retain its
+original no-body-product premise and all original work assertions. Full required
+and the fixed performance matrix remain pending; no optimization is accepted yet.
+
+The corrected required run reaches 332 passes and fails an old eager-work count
+in 51.476s. The isolated original fixture records zero restored references, two
+encoded bodies, zero matcher visits and identical behavior. Require those exact
+stronger reuse counts instead of two restored references/one encoded body. All
+33 definition-resolution builds then pass, retaining all runtime/diagnostic,
+provider-removal, binding and classification assertions.
+
+Use the single permitted extension through 09:18 UTC, retaining the original
+08:33 deadline. Concrete implementation progress is established by the 113
+focused compilations and verified producer/consumer repairs. Complete the fixed
+matrix and full affected qualification or close unqualified; no new optimization
+variant or failed-matrix rerun is authorized. The whole compiler goal is incomplete.
+
+### I067 complete constraint-source inventory
+
+Compiler 23e915a9 passes all 333 required checks uncached in 102.207s. A subsequent
+four-line direct-parameter probe still finds a real wrong result: integer -> 2.5
+is accepted incrementally while clean rejects it. Bound pattern parameters bypass
+ordinary local grouping, so recording constraints only from binding queries omits
+their declarations. Capture all typed source variable references at the binding
+publication boundary. The constraint consumer remains the existing collector.
+
+A separate five-line production probe confirms the same stage gap already crashes
+ordinary functions with a typed local on an integer -> float edit. Keep both
+minimal repros and the new negative/repair tests. Compiler b3a42350 passes 69 new
+compilations at O0 and 69 at O2, plus 21 binding-environment and 33 definition-unit
+compilations. Full required and timing qualification must use this final artifact;
+the preceding green required run does not qualify its subsequent correction.
+
+### I067 closed unqualified: measured global binding-scan overhead
+
+The original complete matrix is final. Active-body paired CPU ratio 1.006754,
+95% interval [1.002730, 1.014008]; unused-flex 1.024255 [1.007968, 1.045177];
+unused body 1.016752 [1.004519, 1.022245]. Game-data 1.015258
+[.995123, 1.020251] and cache-disabled cold [.993153, 1.009250] establish no
+regression or gain. Unchanged improves; comment and diagnostic-wording intervals
+include parity. All independent-image identity, executable and diagnostic checks
+pass. No matrix samples are rerun or selected for acceptance.
+
+Active edits keep 519 bodies encoded instead of 341, while both infer one body
+and reuse 367 IR bodies. Binding total rises 25.064 -> 30.169ms even as its input
+fingerprinting falls 22.856 -> 5.477ms. These scopes overlap later inference.
+GDB work attribution confirms three binding passes / 216 name visits / 2,444
+reference visits on baseline, versus 31 / 1,861 / 18,775 on candidate. Late local
+demand still filters the complete global unresolved-reference index. This extra
+work is verified; it does not by itself attribute every whole-process CPU delta.
+The initial GDB breakpoint matched inlined lambdas as well; preserve that failed
+probe and the corrected exact-address probe. Instrumentation timings are not
+acceptance samples. Extracted executable images are verified and pruned.
+
+Full affected integration and whole-LLVM qualification are not run after the failed
+CPU gate. Required passes 333 / 0 / 0 in 103.321s on frozen source 8c27e64f /
+compiler b3a42350, with 69 O0, 69 O2, 21 binding and 33 definition checks. The root
+compiler and all 462 C++ inputs remain unchanged. One extension used; the
+experiment closes before its 09:18 UTC limit. Evidence is i067-final-state.json,
+i067-performance-analysis.json and i067-binding-work-profile/{report,baseline-work,
+candidate-work}.json. Next isolate only the mandatory typed-constraint consumer
+repair from production, using recorded declaration metadata and keeping existing
+binding partitioning. Broad semantic section/setup, persistence, shared binding
+products, debug/trace, tooling and other modes remain incomplete.
 
 ## I066: include every source-match producer in inference dependencies
 
