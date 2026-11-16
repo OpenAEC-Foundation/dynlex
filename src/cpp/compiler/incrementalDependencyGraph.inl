@@ -68,6 +68,7 @@ Json captureSectionDependencyGraph(
 		std::set<std::string> after;
 	};
 	std::vector<DependencyChange> changes;
+	bool variantsChanged = !hadPrevious;
 	auto dependencySet = [](const Json &entries) {
 		std::set<std::string> result;
 		for (const Json &entry : entries)
@@ -225,6 +226,7 @@ Json captureSectionDependencyGraph(
 		std::set<std::string> before = forward.contains(path) ? dependencySet(forward.at(path)) : std::set<std::string>{};
 		if (before != direct)
 			changes.push_back({path, std::move(before), direct});
+		variantsChanged |= !instantiations.contains(path) || instantiations.at(path) != variants;
 		forward[path] = direct;
 		instantiations[path] = std::move(variants);
 	}
@@ -247,6 +249,7 @@ Json captureSectionDependencyGraph(
 			changes.push_back({path, dependencySet(entry.value()), {}});
 			entry = forward.erase(entry);
 			instantiations.erase(path);
+			variantsChanged = true;
 		}
 		std::map<std::string, std::set<std::string>> changed;
 		auto callersFor = [&](const std::string &dependency) -> std::set<std::string> & {
@@ -301,5 +304,10 @@ Json captureSectionDependencyGraph(
 		callableLookups[key] = std::move(lookup);
 	}
 	graph["callable_lookups"] = std::move(callableLookups);
+	graph["encoding_reuse"] = Json{
+		{"forward", hadPrevious && changes.empty()},
+		{"reverse", hadPrevious && changes.empty()},
+		{"instantiations", hadPrevious && !variantsChanged}
+	};
 	return graph;
 }

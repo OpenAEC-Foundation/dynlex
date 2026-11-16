@@ -276,6 +276,41 @@ def classification_promotions(cache, program):
     return {unit[0]: {(output[0], output[1]) for output in read(unit[4])} for unit in topology["units"]}
 
 
+def check_graph_encoding(root, build):
+    main = root / "graph_encoding.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'to alpha: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\n'
+              'to beta: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))\n'
+              'alpha\nbeta\n')
+    main.write_text(source)
+    cold = build(entry=main)
+    assert cold[0]["graph_encoding_columns_built"] > 0
+    assert cold[0]["graph_encoding_columns_reused"] == 0
+    previous = read_program(root / "cache", main)["section_dependency_graph"]
+    for word in ("second", "third"):
+        main.write_text(source.replace('"first"', f'"{word}"'))
+        edited = build(entry=main)
+        assert edited[1:] == build(False, entry=main)[1:]
+        current = read_program(root / "cache", main)["section_dependency_graph"]
+        assert all(current[field] == previous[field]
+                   for field in ("forward", "reverse", "instantiations"))
+        assert edited[0]["graph_encoding_columns_reused"] >= 4, \
+            "a body edit re-encoded unchanged graph paths and edge columns"
+        assert edited[0]["graph_encoding_columns_built"] > 0
+        previous = current
+    added = (source.replace('alpha\nbeta\n', 'aardvark\nalpha\nbeta\n') +
+             'to aardvark: @intrinsic("discard", 1)\n')
+    for text in (added, source):
+        main.write_text(text)
+        changed = build(entry=main)
+        assert changed[1:] == build(False, entry=main)[1:]
+        assert changed[0]["graph_encoding_columns_reused"] == 0, \
+            "changed path IDs retained an encoded edge column"
+        graph = read_program(root / "cache", main)["section_dependency_graph"]
+        assert all(target in graph["forward"] for edges in graph["forward"].values()
+                   for target in edges)
+
+
 def check_program_payloads(root, build):
     main = root / "program_payloads.dl"
     source = ('integer means: @intrinsic("type", "int")\n'
