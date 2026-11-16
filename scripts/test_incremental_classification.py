@@ -3,9 +3,11 @@
 from test_incremental_program_cache import classification_promotions, read_program
 from test_incremental_classification_inputs import check_classification_inputs
 from test_incremental_nested_lookups import check_nested_classification_lookups
+from test_incremental_classification_failure_cascade import check_classification_failure_cascade
 
 
 def check_recursive_classification_cascade(root, build):
+    check_classification_failure_cascade(root, build)
     main = root / "recursive_classification.dl"
     source = ('to alpha value:\n'
               '    @intrinsic("discard", value)\n'

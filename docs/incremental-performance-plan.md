@@ -2,30 +2,71 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I069 qualified on master; full goal incomplete
+## Current state: I071 qualified on master; full goal incomplete
 
-I069 reuses unchanged compact dependency-graph columns under producer change
-proofs and exact ordered path identity. Frozen compiler 0b03ef77 / source e7bce926
-passes 114 focused compilations, all 333 required checks uncached in 103.716s,
-all 462 integration checks in 756.024s, and twenty complete LLVM/diagnostic
-comparisons across four real-program edit cases with two edits each. Rebuilt
-master 5830570b matches all 462 C++ and 22 C inputs, passes the same 114 focused
-compilations, and passes 333 required checks uncached in 103.055s.
+I071 repairs classification propagation while unresolved calls remain. A removed
+provider now retracts every affected cached forwarding parameter before diagnostics,
+while unrelated classifications remain reusable. Frozen compiler 7d9989b8 / code
+f29a2002 passes 90 focused compilations, all 333 required checks uncached in
+105.933s, all 462 integration checks in 764.083s, and twenty complete LLVM/diagnostic
+comparisons across four real-program edit cases with two edits each. Rebuilt master
+03e6cf76 matches all 462 C++ and 22 C inputs, passes the same 90 focused compilations,
+and passes 333 required checks uncached in 103.798s.
 
-The original eight-case CPU gate passes: active-body median 1.480902 -> 1.464755s,
-paired ratio interval [.982499, .990949], with no established regression in the
-other seven cases. Cache-disabled cold 5.262873 -> 5.234221s does not establish a
-change. All 186 unchanged/comment/wording controls perform zero object builds,
-code generation or linking. Publication/disposal receipts are recorded below.
-I063/I067 timing-rejected and I065 unqualified changes remain isolated.
+The complete original eight-case CPU cost matrix establishes no gain or regression
+from this necessary repair. All 186 unchanged/comment/wording controls perform zero
+object builds, code generation or linking. I069's qualified graph-column reuse and
+its earlier measured gain remain; I070's mapping optimization has never run its CPU
+matrix and remains isolated. I063/I067 timing-rejected and I065 unqualified changes
+also remain isolated.
 
-Next attribute producer scopes inside resolution setup. Its 117.377ms median
-contains 42.885ms of cached-body selection; section-header evaluation is 2.255ms.
-Do not add overlapping timings. Semantic section construction, broad setup,
-some inference validation, graph/payload persistence, debug/trace, LSP and other
-output modes still have broad or missing incremental paths. The complete objective
-covers every .dl/configuration edit and every compiler stage; it remains active
-and incomplete.
+I072 rejects the resumed classification mapping candidate: neither required gain
+case establishes a CPU benefit, so the remaining measurements stop and its code
+stays isolated. Audit the shared incremental entry point for uncovered output
+modes next, before selecting an implementation boundary. Semantic section construction, broad setup, some inference
+validation, graph/payload persistence, debug/trace, LSP and other output modes still
+have broad or missing incremental paths. The complete objective covers every
+.dl/configuration edit and every compiler stage; it remains active and incomplete.
+
+## I072: qualify shared classification vertex mapping after baseline repair
+
+Started 16 November 2026 at 12:46:29 UTC; first deadline
+13:31:29 UTC. I071 is published at 642f81e1, with ROOT required
+333/0/0 in 103.798s, merged worktree/branch removed and six independent archived
+replay builds passing after disposal. Its final receipt verifies all 484 C/C++
+inputs and the remote head. The preceding direct-question turn answered the user
+without implementation; this continuation completed I071 qualification/publication.
+The complete all-stage goal remains active and incomplete.
+
+Resume the isolated I070 mapping candidate, whose first fixed CPU matrix has never
+run. Native attribution found 11,876 reused-edge path lookups plus a separately
+constructed 1,749-entry old-to-current map. Share that map with both consumers;
+preserve deleted vertices for reverse invalidation and current reordered IDs.
+Run the existing minimal insertion/removal/classification tests at O0 and O2,
+including the newly repaired failed-classification cascade. Keep only with the
+original independent-image eight-case CPU gate: established active-body or unused-
+flex gain and no unrelated established regression. A failed completed matrix is
+final; do not retry it or waive the gate. Required uncached <=120s, affected full
+integration and complete LLVM/diagnostic parity remain publication requirements.
+One heavy job, 45 minutes plus at most one extension after concrete progress.
+
+### I072 rejected after both mandatory gain cases completed
+
+Source d4a9ea12 / compiler c74126b4 passes 124 focused compilations and 333 required
+checks uncached in 104.454s. Both immutable-image gain cases pass diagnostic and
+executable parity, but neither establishes a gain: body 31 pairs 1.463372 ->
+1.472969 CPU seconds, ratio interval [.998171, 1.015463]; unused-flex 15 pairs
+.528396 -> .527662s, interval [.981202, 1.004864]. The real application replaces
+11,876 repeated edge path lookups with one 1,749-entry vertex map, but the required
+whole-process benefit is absent. The acceptance gate therefore cannot pass.
+
+Reject the candidate without retry. Stop the remaining matrix in its top-level
+case through its verified dedicated process group; that incomplete case supplies
+no timing claim. No full eight-case matrix, integration/LLVM qualification or
+optimization acceptance is claimed. Keep branch codex/incremental-classification-
+mapping-i072 and its immutable source/ELF/data, remove only its clean owned worktree,
+and retain one build for the next iteration. Production remains qualified I071.
+The full compiler-wide goal is active and incomplete.
 
 ## I071: propagate classification changes before unresolved diagnostics
 
@@ -51,6 +92,44 @@ is accepted by waiving its gate. Require required uncached <=120s, full affected
 integration, complete LLVM/diagnostic parity after two edits in four real-program
 cases, and root qualification before publication. One heavy job and at most one
 45-minute extension after concrete progress. Keep the full all-stage objective.
+
+### I071 candidate and measured repair cost
+
+Frozen source f29a2002 / compiler 7d9989b8 passes 45 focused compilations each at
+O0 and O2. The resolver now propagates completed classification exports after
+each resolution pass, independently of unrelated unresolved calls. Definition
+exports wait for their own definition boundary; visible-name environments wait
+for definition completion, matching declaration-name indexing rather than call
+execution. Deeper removal/repair chains retain unrelated classifications, and
+named-declaration edits agree with clean builds. The named-declaration case also
+passed baseline; it covers the readiness boundary, not a newly discovered bug.
+
+All 333 required checks pass uncached in 105.933s. The original eight-case
+independent-image CPU cost matrix is complete, with executable/diagnostic parity.
+No case establishes a gain or regression: body 1.467350 -> 1.474279s, unused-flex
+.532457 -> .525427s, top-level 1.850979 -> 1.853460s, unused .533905 -> .533772s,
+unchanged .028668 -> .028591s, comment .029166 -> .029282s, wording
+.034690 -> .034540s, cache-disabled cold 5.302783 -> 5.223361s. The paired 95%
+ratio interval contains one in every case. All 186 measured unchanged/comment/
+wording builds perform zero object builds, code generation and linking.
+
+One extension through 13:15:48 UTC is recorded for full integration, complete
+LLVM parity, root qualification and publication. No new variant or acceptance
+timing retry is authorized by this extension. I070 remains isolated and unqualified;
+the full compiler-wide goal remains incomplete.
+
+Full qualification completes at 12:39 UTC: all 462 integration checks pass in
+764.083s, and all twenty real-program builds pass complete LLVM text and diagnostic
+parity after two edits in each of four cases. The source/ELF audit verifies all
+462 C++ and 22 C inputs, excludes I070 changes and checks that transient graph
+encoding provenance is absent from persisted data. Root qualification and publication
+remain; this does not complete the full objective.
+
+Root qualification completes at 12:44 UTC: compiler 03e6cf76 matches all 484
+qualified C/C++ inputs, passes 45 focused compilations at each optimization level,
+and passes all 333 required checks uncached in 103.798s. The ROOT executable is
+archived and verified before publication. This is a necessary correctness repair;
+no optimization gate is waived and the full goal remains incomplete.
 
 ## I070: attribute and reduce classification setup work
 
