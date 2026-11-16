@@ -2,7 +2,7 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I077 debug semantic inference replay qualified in worktree; full goal incomplete
+## Current state: I077 qualified shared debug semantic inference replay; full goal incomplete
 
 I077 starts 16 November 2026 at 17:22:04 UTC, first deadline 18:07:04 UTC.
 Separate debug semantic replay from native IR import: unchanged inference facts
@@ -32,7 +32,9 @@ The cache-disabled native cold control establishes no regression.
 Source d8949810 / compiler 8476ee20 passes 230 focused O0/O2 compilations,
 complete DWARF checks, twenty complete real-program debug LLVM comparisons and
 required 333/0/0 uncached in 101.340s. Integration passes 462/0/0 in 755.897s; twenty native LLVM comparisons also
-pass against the same frozen 485 C/C++ inputs. Shared qualification is next. The sole
+pass against the same frozen 485 C/C++ inputs. Shared compiler cf8248da / source
+e469b81c verifies those inputs and passes required 333/0/0 in 107.500s, another
+230 focused compilations, DWARF and six builds after worktree/branch disposal. The sole
 extension ends at 18:52:04 UTC. Next profile actual body-restoration and snapshot
 producers before choosing a change; no source-level cause is established yet.
 
@@ -141,6 +143,20 @@ i077-qualification-audit.json and i077-next-body-restoration-boundary.json.
 The next bounded optimization profiles actual restoration/snapshot producers;
 debug IR, semantic section construction, tracing, tooling and other output modes
 still leave the full goal incomplete.
+
+### I077 shared qualification completed
+
+Local-master merge e469b81c / compiler cf8248da verifies identical 463 C++ and
+22 C inputs. Required passes 333/0/0 uncached in 107.500s, with another 230
+focused O0/O2 compilations and complete DWARF checks. Six real-program builds
+pass after worktree/branch disposal: prime, two body edits, comment, diagnostic
+wording and unchanged. Fast cases preserve executable bytes/mtime with zero
+object builds or linking. The compiler archive, 105 external source files and
+shared runtime are verified. One matching build is retained for the next bounded
+goal. Evidence: i077-root-qualification-audit.json. The full objective remains
+active and incomplete. Next profile the 1459.974ms typed-body restoration and
+cold snapshot producer before selecting an optimization; fresh debug IR remains
+an independent unresolved stage boundary.
 
 ## I076: index binding domains at their reference producers
 
