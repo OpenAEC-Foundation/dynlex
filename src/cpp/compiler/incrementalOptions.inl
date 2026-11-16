@@ -8,6 +8,7 @@ Json optionIdentity(const ParseContext::Options &options) {
 		sortedFeatures[feature.first().str()] = feature.second;
 	return Json{
 		{"input", options.inputPath},
+		{"llvm_output", options.emitLLVM},
 		{"cwd", fs::current_path().string()},
 		{"no_main", options.noMain},
 		{"optimization", options.optimizationLevel},

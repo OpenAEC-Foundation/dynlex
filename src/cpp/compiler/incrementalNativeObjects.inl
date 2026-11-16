@@ -84,6 +84,8 @@ struct BuildStatistics {
 	size_t topLevelProjectionSectionsReused = 0;
 	size_t reusedObjects = 0;
 	size_t builtObjects = 0;
+	std::string llvmOutputKey;
+	size_t llvmOutputsBuilt = 0, llvmOutputsRestored = 0;
 	size_t nativePartitionModulesBuilt = 0;
 	size_t nativePartitionModulesSkipped = 0;
 	ModulePartitionCloneWork nativePartitionCloneWork;

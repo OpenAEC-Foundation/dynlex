@@ -2,7 +2,102 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I081 rejected; I080 remains qualified
+## Current state: I082 LLVM output; full goal incomplete
+
+Started16 November2026 at21:36:17 UTC, first deadline22:21:17 UTC. The preceding
+turn made progress: I081 was implemented/tested, rejected by its fixed CPU gate,
+and its persistence regression explained; qualified I080 remained unchanged.
+
+Share persistent semantic and per-function IR products with LLVM text output.
+Use existing output producer/restore boundaries directly, rather than adding the
+I073 native-output wrapper layers. Keep mode-specific cache identity and LLVM
+artifacts, current output failure reporting, stdout/no-main behavior and automatic
+cache use. Remove compiler-private debug products before either backend consumes
+IR. Imported debug locations and global/class metadata must match clean output.
+
+The pre-existing LLVM artifact tests fail on the qualified compiler's cache-option
+rejection. Add debug metadata parity/capture exclusion tests and migrate default
+cache checks before testing. Require source/config changes to retain unaffected
+units, output repair without frontend work, full LLVM/diagnostic parity, a fixed
+real-program LLVM speedup and no established native-control regression. Required
+uncached remains<=120s. One heavy job;45 minutes plus at most one extension for
+concrete progress. I073 and I081 stay isolated; do not retry identical failures.
+
+### I082 candidate and fixed comparison protocol
+
+Compiler3918fcd7 passes LLVM artifact tests at O0/O2, complete minimal debug LLVM
+parity with moved class/global metadata, and required333/0/0 uncached in110.237s.
+The new output producer consumes private debug products before output, and a
+cached-text restore avoids initializing LLVM. Mode identity keeps native and LLVM
+results separate; all output-identity producers/consumers use compiler_output.
+
+Freeze this exact source/image before timing. The LLVM body primary uses7 pairs:
+qualified I080 has no incremental LLVM path, so its LLVM calls are cache-disabled;
+the candidate uses its incremental path. Require a CPU gain and complete LLVM
+parser/graph equality after symbol ordering and local-name alpha normalization.
+Types, globals, function names, attributes and metadata remain checked. Inspectors
+run outside the timed child-CPU interval. A7-pair cache-disabled LLVM control and
+the original eight native controls must establish no regression; native comparisons
+retain exact executable bytes. Do not retry a completed failed variant. Affected
+integration and full native/debug/LLVM parity follow only if this gate passes.
+
+### I082 verified ordering repair; one qualification extension
+
+The first real-program graph comparison stops before completing any CPU case:
+load/store alignment on one global is8 in fresh output and4 in incremental
+output. Saved pre-optimization graphs are identical after symbol ordering, but
+raw declaration order differs. The incremental snapshot canonicalizes symbols
+before optimization; ordinary LLVM output did so only afterward. A debugger
+probe canonicalizing the fresh input produces exactly the cached graph.
+
+A22-line no-import DynLex regression reproduces this with a global record,
+an exposed mutator and an exposed aggregate reader. It fails before the repair.
+Make ordinary LLVM output use the same pre-optimization order. Corrected-image
+checks pass the minimized regression and O0/O2 artifact/debug parity. Recheck
+required and full real-program parity before timing. This is a source correction,
+not a retry of a completed failed CPU comparison.
+
+LLVM speedup/correctness now compares the corrected compiler's incremental and
+clean paths, using separate executable copies with identical hashes. The ordering
+repair intentionally changes optimization annotations relative to old I080, so
+historical LLVM cold timings retain separate per-version graph identities;
+current incremental output must match its own complete clean graph. Native
+controls still compare qualified I080 against the candidate with exact executable
+bytes. No alignment normalization or comparison waiver is used for incremental
+correctness. Use the sole extension, ending23:06:17 UTC, for fixed comparison,
+integration/full graph checks and shared publication if qualified.
+
+The corrected7ecd998d image passes required333/0/0 uncached in109.523s, the
+22-line ordering regression, O0/O2 artifact tests and complete minimal debug LLVM
+parity. A fresh full Breakout compile now matches its same-image cached compile
+with zero complete normalized LLVM graph differences. Freeze this corrected source
+before its distinct fixed matrix. The earlier3918fcd7 comparison remains invalid
+for timing; its saved mismatch and debugger proofs are preserved separately.
+
+### I082 qualified candidate; shared publication in progress
+
+Corrected source9334759f / image7ecd998d passes the fixed11-case performance
+matrix. On the real Breakout program, LLVM body-edit CPU medians fall
+4.885286 ->2.248144s; paired ratio .466704,95% interval[.458220,.478002].
+One body is inferred,367 functions reuse IR and705 classification/resolution
+units are retained. Whole-module LLVM optimization still costs976.651ms;
+frontend306.853ms, inference312.038ms and snapshot153.450ms also remain.
+This does not complete the every-stage incremental objective.
+
+Native controls and the historical cache-disabled LLVM cold control establish
+no regression. Native cold medians5.190817 ->5.287781s have paired interval
+[.992173,1.037022], so no cold gain is claimed. First empty-cache population
+includes persistence overhead; warm-edit gains do not describe that first build.
+
+Qualification passes required333/0/0 uncached in109.523s and integration462/0/0
+in793.204s, with unchanged source/image identities. Eighty real-program native,
+debug-native, LLVM and debug-LLVM compilations pass complete same-version clean
+IR/diagnostic parity. Complete native DWARF checks pass. Shared rebuild, required,
+focused, DWARF and post-disposal replay remain before publication.
+Evidence: i082-fixed-performance-analysis.json, i082-fixed-llvm-stage-analysis.json,
+i082-fixed-qualification-audit.json and the four i082-real-*-ir/report.json files.
+
+## Prior rejected iteration: I081 matcher layout
 
 The bounded declaration-preparation investigation found mixed matcher-product
 loading, not declaration decoding, dominated early setup. Its resulting isolated

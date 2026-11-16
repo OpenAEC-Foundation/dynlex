@@ -1,20 +1,3 @@
-void sortModuleSymbols(llvm::Module &module) {
-	auto byName = [](const auto &left, const auto &right) {
-		return left.getName() < right.getName();
-	};
-	std::vector<llvm::GlobalVariable *> globals;
-	for (llvm::GlobalVariable &global : module.globals())
-		globals.push_back(&global);
-	std::sort(globals.begin(), globals.end(), [&](const auto *left, const auto *right) {
-		return byName(*left, *right);
-	});
-	for (llvm::GlobalVariable *global : globals)
-		module.removeGlobalVariable(global);
-	for (llvm::GlobalVariable *global : globals)
-		module.insertGlobalVariable(global);
-	module.getFunctionList().sort(byName);
-}
-
 bool emitPartitions(
 	ParseContext &context, const fs::path &directory, const std::string &compilerIdentity, const Json &options,
 	const std::vector<std::string> &libraries, BuildStatistics &statistics, Json *previous = nullptr,
@@ -100,7 +83,7 @@ bool emitPartitions(
 	statistics.nativeUnits = std::move(dependencies.snapshot);
 	statistics.partitionMilliseconds = elapsedMilliseconds(partitionStart);
 	if (previous && previous->at("object_keys") == statistics.objectKeys && previous->at("libraries") == libraries &&
-		linkedOutputUnchanged(context, *previous)) {
+		compilerOutputUnchanged(context, *previous)) {
 		fs::remove_all(temporary.directory);
 		temporary.directory.clear();
 		return true;

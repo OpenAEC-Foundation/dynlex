@@ -168,6 +168,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"linked_cached_objects", statistics.linkedCachedObjects},
 					  {"objects_reused", statistics.reusedObjects},
 					  {"objects_built", statistics.builtObjects},
+					  {"llvm_outputs_built", statistics.llvmOutputsBuilt},
+					  {"llvm_outputs_restored", statistics.llvmOutputsRestored},
 					  {"matcher_cache_hits", statistics.matcherCacheHits},
 					  {"file_observation_requests", statistics.fileObservationRequests},
 					  {"file_observations_computed", statistics.fileObservationsComputed},

@@ -1027,7 +1027,19 @@ cache lives under `dynlex/compiler` in the operating system's user cache directo
 XDG cache storage on Unix, Darwin user cache storage on macOS, and LocalAppData
 on Windows. `--cache-dir <directory>` overrides that location, `--no-incremental`
 performs a clean build, and `--incremental-stats` reports the actual cache directory
-and reuse. Cache overrides and statistics apply only to native executable file builds.
+and reuse. Cache overrides and statistics apply to native executable and LLVM text file builds.
+LLVM text output uses the same incremental semantic and unoptimized function-IR
+products, with its output mode in the program identity. Its final text has an
+independent content-addressed artifact; no native objects are lowered or linked.
+An unchanged output or diagnostic-wording edit does not rewrite that file. A
+missing/damaged destination or a changed output path restores the text directly;
+an evicted text artifact regenerates it from saved IR. Streams replay cached text
+on each invocation. Ordinary and incremental LLVM emission canonicalize symbol order before
+optimization and share final rendering, with explicit output I/O errors. Private debug-cache products never enter the output.
+`llvm_outputs_built` and `llvm_outputs_restored` expose artifact work. Changed LLVM
+output still runs whole-module optimization; semantic and function IR reuse do
+not imply incremental optimization for this output mode.
+
 A complete native result is reusable while every filesystem observation remains identical. Source edits that
 only add, remove or change comments or trailing whitespace also reuse the result when
 debug locations, execution traces and diagnostics cannot become stale. The semantic

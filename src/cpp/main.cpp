@@ -489,11 +489,11 @@ int main(int argumentCount, char *argumentValues[]) {
 		std::cerr << "--no-incremental cannot be combined with --cache-dir or --incremental-stats" << std::endl;
 		return 1;
 	}
-	const bool nativeFileBuild = !inputFile.empty() && !runLSP && !runDAP && !useStdio && !commandSourceStart &&
-								 !context.options.emitLLVM && !context.options.emitObject && !context.options.emitWASM &&
-								 !context.options.emitSPIRV && !emitCompletions && !dumpPurity && !dumpDependencies;
-	if ((!incrementalDirectory.empty() || incrementalStatistics) && !nativeFileBuild) {
-		std::cerr << "Cache options require a .dl file and native executable output" << std::endl;
+	const bool incrementalFileBuild = !inputFile.empty() && !runLSP && !runDAP && !useStdio && !commandSourceStart &&
+									  !context.options.emitObject && !context.options.emitWASM && !context.options.emitSPIRV &&
+									  !emitCompletions && !dumpPurity && !dumpDependencies;
+	if ((!incrementalDirectory.empty() || incrementalStatistics) && !incrementalFileBuild) {
+		std::cerr << "Cache options require a .dl file and native executable or LLVM output" << std::endl;
 		return 1;
 	}
 
@@ -543,7 +543,7 @@ int main(int argumentCount, char *argumentValues[]) {
 
 	if (!inputFile.empty()) {
 		context.options.inputPath = inputFile;
-		if (nativeFileBuild && !disableIncremental) {
+		if (incrementalFileBuild && !disableIncremental) {
 			if (incrementalDirectory.empty()) {
 				auto directory = defaultCacheDirectory();
 				if (!directory) {
