@@ -26,11 +26,13 @@ if (priorConstraints.source && compatibleObservations(*priorConstraints.source, 
 }
 statistics.constraintPrepareMilliseconds += elapsedMilliseconds(constraintPrepareStart);
 if (priorInference) {
+	// Semantic bodies restore current source anchors. Native debug IR retains
+	// old locations, so debug builds regenerate it from those restored bodies.
+	const Json *nativePrevious = previous && !context.options.emitDebugInfo ? &*previous : nullptr;
 	auto controller = std::make_shared<IncrementalInferenceController>(
-		*priorInference, previous ? &*previous : nullptr, recording->observations, resolvedFunctionProjection, sectionPaths,
-		inferenceReads, frontendDiagnosticRecords, statistics, functionReuse, inferenceReuse, graphStable,
-		inferenceInputFingerprints, summaryStore, &products.references(), products.sourceIndex(), products.globalInputs(),
-		products
+		*priorInference, nativePrevious, recording->observations, resolvedFunctionProjection, sectionPaths, inferenceReads,
+		frontendDiagnosticRecords, statistics, functionReuse, inferenceReuse, graphStable, inferenceInputFingerprints,
+		summaryStore, &products.references(), products.sourceIndex(), products.globalInputs(), products
 	);
 	context.runIncrementalPreinference = [controller](
 											 ParseContext &inferred,

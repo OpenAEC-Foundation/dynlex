@@ -857,12 +857,12 @@ bool compileIncrementally(
 						inferenceReuse
 							? inferenceReuse->snapshot(
 								  sectionPaths, result.at("function_sections"), result.at("function_instantiations"),
-								  &statistics.reusedInferenceSummarySections
+								  &statistics.reusedInferenceSummarySections, compiled.options.emitDebugInfo
 							  )
 							: captureInferenceSummaries(
 								  compiled, products.sourceIndex(), sectionPaths, products.globalInputs(), summaryStore,
 								  nativeInferenceUnits(result.at("function_sections"), result.at("function_instantiations")),
-								  nullptr, nullptr, false, &products.references()
+								  nullptr, nullptr, compiled.options.emitDebugInfo, &products.references()
 							  );
 					result["root_diagnostics"] =
 						captureRootInferenceDiagnostics(compiled, sectionPaths, products.sourceIndex());

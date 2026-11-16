@@ -20,8 +20,7 @@ class IncrementalInferenceController {
 	void run(ParseContext &context, const std::function<bool(const ParseContext::IncrementalFunctionRequest &)> &infer) {
 		auto start = Clock::now();
 		const Json &prior = previous.at("all_function_projection");
-		if (context.options.emitDebugInfo || context.options.traceExecution ||
-			!compatibleObservations(previous, observations, context))
+		if (context.options.traceExecution || !compatibleObservations(previous, observations, context))
 			return;
 		inferredContext = &context;
 		preparing = true;

@@ -2,7 +2,39 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current state: I076 qualified shared binding-domain indexing; full goal incomplete
+## Current state: I077 debug semantic inference replay qualified in worktree; full goal incomplete
+
+I077 starts 16 November 2026 at 17:22:04 UTC, first deadline 18:07:04 UTC.
+Separate debug semantic replay from native IR import: unchanged inference facts
+and typed bodies may be restored with current source anchors, while debug IR
+regenerates. Preserve trace exclusions and all existing query/dependency proofs.
+Test independent body reuse, changed bodies, moved lines and failures/repair before
+the implementation. Require a real debug-edit CPU benefit, no established
+regression in the original native controls, required uncached <=120s, affected
+integration and full native/debug LLVM/DWARF parity. One heavy job, 45 minutes
+plus at most one extension after concrete progress; no failed matrix retries.
+
+The fixed CPU matrix passes: debug body edits improve 3.804354 -> 3.745819
+seconds across 31 pairs, paired ratio interval [.978535, .987254], about 1.5%.
+None of the eight original native controls establishes a regression. The real
+edit infers one function body instead of 552, reusing 399 inference facts and
+loading 387 typed bodies. Native debug IR still regenerates from current source
+anchors. This is a semantic reuse improvement, not incremental debug IR.
+
+Typed-body restoration costs 1459.974ms. Consequently the inference phase itself
+increases 1755.009 -> 2129.145ms, while snapshot work falls 735.156 -> 256.372ms.
+Do not describe the inference-pass reduction as an inference-time reduction.
+An initial debug-cache population pair costs 12.195745 -> 13.166386 CPU seconds,
+with snapshot work 824.812 -> 2047.778ms. That single observation exposes the
+additional cold-cache cost; it does not establish its general distribution.
+The cache-disabled native cold control establishes no regression.
+
+Source d8949810 / compiler 8476ee20 passes 230 focused O0/O2 compilations,
+complete DWARF checks, twenty complete real-program debug LLVM comparisons and
+required 333/0/0 uncached in 101.340s. Integration passes 462/0/0 in 755.897s; twenty native LLVM comparisons also
+pass against the same frozen 485 C/C++ inputs. Shared qualification is next. The sole
+extension ends at 18:52:04 UTC. Next profile actual body-restoration and snapshot
+producers before choosing a change; no source-level cause is established yet.
 
 I076 starts 16 November 2026 at 16:10:48 UTC, first deadline 16:55:48 UTC.
 Read-only debugger counts on the published I075 compiler confirm native body
@@ -65,16 +97,50 @@ is not established, and no failed matrix is retried. Production still supports
 native executable incremental output; the LLVM prototype has not been merged.
 I063/I067 timing-rejected and I065 unqualified branches also remain isolated.
 
-I076 now avoids repeated global scans for selected binding domains. Next audit
-the coupled semantic/native inference controller: debug currently skips its
-entire semantic replay path, not only native debug IR import. A separate semantic
-proof must retain current source anchors while code generation produces fresh
-debug metadata. Cold resolution is about 2.38s in retained stage samples.
+I076 avoids repeated global scans for selected binding domains. I077 separates
+semantic replay from native debug IR import and restores current source anchors.
+Cold resolution is about 2.38s in retained stage samples.
 Semantic section construction, some
-inference validation, persistence, debug inference/IR, tracing, LSP and other output
+inference validation, persistence, debug IR, tracing, LSP and other output
 modes retain broad or missing incremental paths.
 The complete objective covers every .dl/configuration edit and every compiler
 stage; it remains active and incomplete.
+
+## I077: separate debug semantic replay from native IR reuse
+
+Started 16 November 2026 at 17:22:04 UTC. After 230 focused compilations,
+complete debug LLVM parity and the fixed CPU gate passed, use the sole extension
+through 18:52:04 UTC to finish shared qualification and publication.
+
+Permit the existing semantic inference controller in debug builds, preserving its
+query/dependency proofs and trace exclusion. Pass no previous native IR to that
+controller under debug: generated metadata must use current locations. Successful
+debug snapshots retain runtime typed bodies, including side-effecting void bodies,
+because those bodies cannot be replaced by imported native IR. The initial
+candidate exposed this producer mismatch: void-body summaries contained no body
+and repeated inference. Retaining the required body product fixes its cause.
+Minimal tests verify independent bodies, edits, moved locations and failed lookup
+repair at O0/O2. No language rule or cache compatibility fallback is introduced.
+
+Debug body edits improve 3.804354 -> 3.745819 CPU seconds over 31 fixed pairs,
+ratio interval [.978535, .987254]. All eight native controls establish no
+regression. Actual work falls from 552 inference passes to one, with 399 facts
+and 387 typed bodies reused. Body restoration costs 1459.974ms, so inference
+itself increases 1755.009 -> 2129.145ms; snapshot work falls 735.156 -> 256.372ms.
+The net measured gain is 1.5%, not the inference-pass reduction percentage.
+One initial debug-cache population pair increases 12.195745 -> 13.166386 CPU
+seconds, including snapshot 824.812 -> 2047.778ms. This cost needs attribution;
+no repeated cold-debug matrix or general cold-debug performance claim is made.
+
+Frozen source d8949810 / compiler 8476ee20 passes 230 focused compilations,
+required 333/0/0 uncached in 101.340s, integration 462/0/0 in 755.897s,
+complete DWARF verification and forty native/debug real-program LLVM comparisons.
+All 463 C++ and 22 C inputs remain unchanged. Evidence under structured-20261113:
+i077-performance-analysis.json, i077-debug-stage-analysis.json,
+i077-qualification-audit.json and i077-next-body-restoration-boundary.json.
+The next bounded optimization profiles actual restoration/snapshot producers;
+debug IR, semantic section construction, tracing, tooling and other output modes
+still leave the full goal incomplete.
 
 ## I076: index binding domains at their reference producers
 
