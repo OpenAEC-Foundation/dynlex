@@ -1622,6 +1622,19 @@ Storage scopes identify observations within a process and survive key refinement
 the persisted graph uses section paths and final concrete keys. Discarded trials'
 observations are projected into their callers. Cycle checks commit a reusable result
 only after the entire reachable cycle has been checked.
+Within a compiler process, dependency checks share per-query proof nodes. Reading
+a callee interface or observed value records the query's consumer, including reads
+which later reject a proof. Accepting new inference products invalidates their
+recorded transitive consumers instead of clearing unrelated positive proofs.
+Consumer traversal handles cycles and is demand-driven; it does not rebuild a
+whole reverse index after each acceptance. The dependency records being checked
+remain persistent across processes; these memoized validity proofs belong to the
+current inferred context. `inference_query_checks`, `inference_query_units_checked`,
+`inference_query_proof_hits`, `inference_query_proofs_invalidated`,
+`inference_query_proofs_retained` and `inference_query_consumer_edges_visited`
+count actual work. With statistics enabled, `inference_query_check_ms` and
+`inference_query_invalidation_ms` measure checking and invalidation separately.
+Disabled timing probes perform no clock reads.
 Aggregate dependency units are captured only when a retained output's dependency
 closure requests them. Unchanged units retain their records. Source input fingerprints
 are computed once after declared constraints and signature templates are finalized,

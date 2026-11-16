@@ -45,7 +45,8 @@ struct BuildStatistics {
 	size_t valueDependencyQueriesReused = 0;
 	size_t inferenceQueryChecks = 0, inferenceQueryUnitsChecked = 0, inferenceQueryProofHits = 0;
 	size_t inferenceQueryProofsInvalidated = 0;
-	double inferenceQueryCheckMilliseconds = 0;
+	size_t inferenceQueryProofsRetained = 0, inferenceQueryConsumerEdgesVisited = 0;
+	double inferenceQueryCheckMilliseconds = 0, inferenceQueryInvalidationMilliseconds = 0;
 	size_t inferenceSummaryUnitsEncoded = 0;
 	size_t inferenceSummaryUnitsWritten = 0;
 	size_t inferenceBodiesEncoded = 0;

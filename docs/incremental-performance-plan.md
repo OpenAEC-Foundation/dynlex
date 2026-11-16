@@ -48,6 +48,32 @@ before publication. One heavy job. At most one additional 45-minute iteration af
 concrete progress; otherwise reject/park and move to another measured boundary.
 The full compiler-wide goal remains active and incomplete.
 
+### I062 attribution and first implementation
+
+Two consecutive real active edits on baseline ad939de7 each call unchanged 2,800
+times and visit 2,158 dependency units. The three clear sites discard 538 semantic
+proofs, 538 native proofs, then zero proofs. Exact project-wrapper GDB records are
+in i062-proof-work; debugger timing is not used for performance. Probe-only compiler
+1a0e66f9 then measures a median 42.597ms checking cost over five real active edits,
+with 1,076 proofs invalidated each time. This makes the repeated proof work material.
+The probe-only artifact and source 0f3d1857 are preserved before implementation.
+
+Share direct-input and positive state in stable per-query nodes; register consumers
+when checking callee-interface and observed-value edges. Acceptance walks only that
+recorded reverse closure. Positive cycles still commit only after the whole query
+succeeds. No persistent format changes or eager whole-graph reverse index is added.
+Twenty minimal compilations pass, including runtime output, mutual recursion,
+an unrelated edit, recursive-body edits, provider removal/repair, changing known
+pure values and skipped-work counters. The simple edit retains three proofs and
+invalidates zero; baseline discarded two. This is work evidence, not a speedup claim.
+
+Preserve the initial authored-fixture failures separately: unsupported inline
+value-body syntax, an undiscarded printf result, and an expectation that counted
+the executable name as a user argument. The actual compiler implementation and
+clean/incremental output establish zero user arguments in these runs; the corrected
+fixture also executes both sides of its recursion. No compiler failure was masked
+or expected diagnostic changed. Full suite/IR/performance qualification is next.
+
 ## I058: demand class match products at their semantic consumers
 
 Started 15 November 2026 at 23:46 UTC; first deadline 00:31 UTC on 16 November.
