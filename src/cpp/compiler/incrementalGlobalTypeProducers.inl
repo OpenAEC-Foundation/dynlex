@@ -17,7 +17,8 @@ class IncrementalGlobalTypeProducers {
 			for (auto &[variable, original] : originals)
 				variable->type = std::move(original);
 	}
-	void restoreAvailable() {
+	bool restoreAvailable() {
+		bool restoredAny = false;
 		bool progress;
 		do {
 			progress = false;
@@ -40,8 +41,10 @@ class IncrementalGlobalTypeProducers {
 				restored.insert(identity);
 				statistics.globalTypeProducersRestored++;
 				progress = true;
+				restoredAny = true;
 			}
 		} while (progress);
+		return restoredAny;
 	}
 	void commit() { committed = true; }
 

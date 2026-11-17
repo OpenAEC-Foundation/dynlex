@@ -152,15 +152,34 @@ class IncrementalInferenceController {
 			paths, previous.at("section_dependency_graph"), check, globalInputs, *inferenceReuse, statistics
 		);
 		if (rootInputsUnchanged) {
-			globalTypes.restoreAvailable();
-			for (auto &[unit, request] : collectRequests(*eligible, native, symbolic, true)) {
-				if (check.unchanged(unit))
-					continue;
-				if (restoreArguments(unit, request) && probe(unit, request)) {
-					capturedSections.insert(request.section);
-					statistics.preinferSummaryInstantiationsCaptured++;
+			auto pending = collectRequests(*eligible, native, symbolic, true);
+			bool progress;
+			do {
+				progress = globalTypes.restoreAvailable();
+				for (auto item = pending.begin(); item != pending.end();) {
+					auto &[unit, request] = *item;
+					const Json &proof = previous.at("section_dependency_graph")
+											.at("inference_units")
+											.at(unit.first)
+											.at(unit.second)
+											.at("global_inputs");
+					if (!globalInputs.unchanged(proof)) {
+						++item;
+						continue;
+					}
+					bool stable = check.unchanged(unit);
+					if (!stable && restoreArguments(unit, request) && probe(unit, request)) {
+						capturedSections.insert(request.section);
+						statistics.preinferSummaryInstantiationsCaptured++;
+						stable = true;
+					}
+					if (stable) {
+						progress = true;
+						item = pending.erase(item);
+					} else
+						++item;
 				}
-			}
+			} while (progress);
 		}
 
 		statistics.preinferSummarySectionsCaptured += capturedSections.size();
@@ -271,8 +290,7 @@ class IncrementalInferenceController {
 					 !symbolic.contains({path, key})) ||
 					(!globalReaders && !globalProof.empty()) || eligible.contains(section, key))
 					continue;
-				if (globalReaders &&
-					((hasNoGlobalAccess(section) && globalProof.empty()) || !globalInputs.unchanged(globalProof)))
+				if (globalReaders && hasNoGlobalAccess(section) && globalProof.empty())
 					continue;
 				candidates.emplace(InferenceUnitKey{path, key}, Request{const_cast<Section *>(section), {}, {}, {}, {}});
 			}

@@ -73,7 +73,8 @@ def check_global_type_producers(root, build):
              '    execute:\n'
              '        @intrinsic("store", shared, @intrinsic("command line argument count"))\n'
              '        @intrinsic("discard", shared)\n'
-             'setup\n')
+             'setup\n'
+             '@intrinsic("store", shared, @intrinsic("command line argument count"))\n')
     main.write_text(setup)
     build(entry=main)
     reordered = setup.replace(
@@ -84,6 +85,25 @@ def check_global_type_producers(root, build):
     )
     main.write_text(reordered)
     assert build(entry=main, success=False)[1:] == build(False, entry=main, success=False)[1:]
+
+    local = ('to setup:\n    @intrinsic("discard", local)\n'
+             '    @intrinsic("store", local, @intrinsic("command line argument count"))\nsetup\n')
+    main.write_text(local)
+    assert build(entry=main, success=False)[1:] == build(False, entry=main, success=False)[1:]
+
+    # A later producer waits for a changed earlier reader's verified interface.
+    interleaved = source.replace('show\n', 'show\n@intrinsic("store", later, @intrinsic("command line argument count"))\nfinish\n') + (
+        'function finish:\n    globals: later\n    execute:\n'
+        '        @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "nothing"), 1, "%d\\n", @intrinsic("add", later, 1))\n'
+    )
+    main.write_text(interleaved)
+    build(entry=main)
+    main.write_text(interleaved.replace('shared, 1)', 'shared, 2)').replace('later, 1)', 'later, 2)'))
+    changed = build(entry=main)
+    assert changed[1:] == build(False, entry=main)[1:]
+    assert changed[0]['root_execution_reused']
+    assert changed[0]['global_type_producers_restored'] == 2
+    assert changed[0]['preinferred_instantiations'] == 2
 
     # Restoring a class output requires its current structural field identity.
     structured = ('class:\n'
