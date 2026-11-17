@@ -9,7 +9,7 @@ from lsp_tokens import LspSession, default_server_path, initialize_session, to_f
 
 def main():
     root = pathlib.Path(__file__).resolve().parent.parent
-    with tempfile.TemporaryDirectory(prefix="dynlex-message-config-") as directory:
+    with tempfile.TemporaryDirectory(prefix="dynlex message config ") as directory:
         work = pathlib.Path(directory)
         config = work / "config.dl"
         entry = work / "main.dl"
@@ -74,6 +74,26 @@ def main():
                 'editor supplied diagnostic: "Value with \\\"quotes\\\""'
             ], result
             session.notify("textDocument/didClose", {"textDocument": {"uri": builtin_uri}})
+
+            first = 'dynlex options:\n    messages:\n        failed to import source file: "first {path}"\n'
+            config.write_text(first)
+            change(first, 8)
+            entry.write_text("import missing.dl\n")
+            main_uri = to_file_uri(entry)
+            session.notify("textDocument/didOpen", {"textDocument": {"uri": main_uri, "languageId": "dynlex",
+                                                                    "version": 1, "text": entry.read_text()}})
+
+            def main_error():
+                session.request("dynlex/readDocument", {"uri": main_uri})
+                messages = [n["params"]["diagnostics"] for n in session.server_notifications
+                            if n.get("method") == "textDocument/publishDiagnostics" and n["params"]["uri"] == main_uri]
+                assert messages and len(messages[-1]) == 1, messages
+                return messages[-1][0]["message"]
+
+            assert main_error().startswith("first ")
+            change(first.replace('"first ', '"second '), 9)
+            message = main_error()
+            assert message.startswith("second "), message
         finally:
             session.close()
     print("Message overrides, variants, empty values and data-driven completions match compiler configuration.")
