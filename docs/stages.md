@@ -546,6 +546,14 @@ reference assignment target does not execute the expression previously bound the
 Thus the same `for each` replacement handles arrays, lists and heterogeneous packs.
 No separate pack-iteration intrinsic exists.
 
+Pack construction keeps its elements unevaluated; their value/address diagnostics
+are consumed when an extracted expression is actually used. An unresolved
+variable read contributes a deferred value-use diagnostic, while storage targets
+remain inferable. Reusing an argument-inference observation requires both its
+execution-state input and its expression type to match. A later store can refine
+that type without changing the tracked execution state, so state equality alone
+does not justify reusing an earlier unresolved-read observation.
+
 A loop that selects argument references retains a separately inferred body for
 each compile-time iteration, with fresh local types for that iteration. Every caller-body transfer inside those iterations
 also owns its corresponding inferred caller body. Native generation emits those
