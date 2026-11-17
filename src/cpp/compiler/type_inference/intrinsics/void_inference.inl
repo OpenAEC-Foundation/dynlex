@@ -1,22 +1,4 @@
 void ExpressionInferenceSupport::inferVoidIntrinsic(IntrinsicKind kind) {
-	if (kind == IntrinsicKind::Discard) {
-		ScopedRecursiveInferenceObservation valueObservation(context, context.currentInstantiation);
-		DataType valueType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-		if (!valueType.isDeduced() && !valueObservation.ownerObserved()) {
-			Expression *value = resolveThroughFlexBindings(expr->arguments[1]);
-			if (value->kind == Expression::Kind::Variable)
-				context.fail(
-					Diagnostic(
-						context.parseContext, Diagnostic::Level::Error, "variable has no type", value->range, "name",
-						value->variable->name
-					),
-					1, false
-				);
-			else
-				failIntrinsicArgumentRequirement(1, "a value with a resolved type");
-			return;
-		}
-	}
 	if (kind == IntrinsicKind::CheckDeallocation &&
 		!ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack).isPointer()) {
 		failIntrinsicArgumentRequirement(1, "a pointer");
