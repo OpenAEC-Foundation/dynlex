@@ -12,8 +12,11 @@ changes end to end rather than adding overlapping stage savings.
 
 ## Active iteration: I101 shared LSP matcher queries
 
-Started17 November at21:38 UTC after I100 publication; first deadline22:23 UTC,
-with one further iteration only for concrete progress. Complete one
+Started17 November at21:38 UTC after I100 publication; first deadline22:23 UTC.
+At22:19, the consumer-visible reuse boundary, bounded-error lifetime, native/web
+regressions, paired benchmark and required gate are complete. Use the single
+permitted extension until23:08 UTC for remaining integration/shared-root
+qualification and publication; do not start another optimization here. Complete one
 ordinary source-edit reuse boundary by connecting the existing native
 `IncrementalMatcherCache` to LSP compiler hooks. Matching was2.33–2.95 s in the
 LSP; I100's native population spends221 ms computing matcher keys versus1827 ms
@@ -84,7 +87,18 @@ Ordinary-edit paired peak-RSS medians rise6.8–8.3%; process peak medians are
 CPU medians are3.260 ->3.535 s across four openings per image.
 Keep this explicit cold/memory cost alongside roughly65–66% less ordinary-edit
 CPU,97 net production C++ lines, no new dependency and no disk cache. Native
-controls, required/integration suites and shared-root publication remain pending.
+controls pass exact executable and diagnostic parity. Five native body pairs have
+CPU medians1.050157 ->1.046090 s (paired ratio1.00967,[0.99023,1.01370]); three
+cold pairs4.774998 ->4.739672 s (ratio0.97158,[0.95982,1.01464]). Neither establishes
+a native body/cold speedup. Fifteen native comment pairs have ratio0.98630,
+[0.97548,0.98941], and wording0.98931,[0.97875,1.01157]. Native algorithmic work is
+unchanged; these remain controls, not a claim of a new native reuse boundary.
+The uncached required suite passes334/0/0 in98032 ms, below120 s. Full integration
+passes462/0/0 in701879 ms. The final native/web source hashes and both compiler
+artifacts remain unchanged. Integration's1.5 GiB cap records no OOM events or
+kills. Implementation`fb86d6d4` contains the retention-safe code and tests.
+Shared-root publication remains pending. No timing or test rerun is used to erase
+the small costs recorded above.
 
 ## Completed iteration: I100 LSP diagnostic-only configuration queries
 
