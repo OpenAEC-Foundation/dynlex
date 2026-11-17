@@ -849,6 +849,7 @@ run_auxiliary_test \
 run_auxiliary_test "spirv_main_return" 15 python3 -B "$SCRIPT_DIR/test_spirv_main_return.py" "$COMPILER"
 run_auxiliary_test "spirv_call_abi" 60 python3 -B "$SCRIPT_DIR/test_spirv_call_abi.py" "$COMPILER"
 run_auxiliary_test "if_chain_shader" 30 node "$PROJECT_DIR/tests/web/if_chain_shader.mjs" "$COMPILER"
+run_auxiliary_test "web_runtime_heap" 10 node "$PROJECT_DIR/tests/web/runtime_heap.mjs"
 run_auxiliary_test "web_runtime_filesystem" 10 node "$PROJECT_DIR/tests/web/runtime_filesystem.mjs"
 run_auxiliary_test "web_runtime_host" 10 node "$PROJECT_DIR/tests/web/runtime_host.mjs"
 run_auxiliary_test "web_path_library" 30 node "$PROJECT_DIR/tests/web/path_library.mjs" "$COMPILER"

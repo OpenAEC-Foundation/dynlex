@@ -1,3 +1,4 @@
+import {createFreeRangeIndex} from './runtimeHeap.js';
 function runtimeDependencyUrl(path) {
   return new URL(path, import.meta.url).href;
 }
@@ -386,8 +387,11 @@ export function buildRuntimeImports(stdoutChunks, filesystem, layout) {
     throw new WebAssembly.LinkError("DynLex linked memory layout exceeds the runtime memory limit");
   }
   const memory = new WebAssembly.Memory({ initial: initialPages, maximum: maximumPages });
-  const allocationSizes = new Map();
-  const freeBlocks = [];
+  // One requested-length word per aligned address, allocated in 4 KiB pages.
+  // Zero means free; requested+1 also represents malloc(0). Allocation capacity
+  // is derived from the same alignment rule used by malloc and realloc.
+  const allocationMetadata = [];
+  const freeRanges = createFreeRangeIndex();
   let heapPointer = layout.heapBase;
   let randomState = 0x12345678;
 
@@ -417,43 +421,29 @@ export function buildRuntimeImports(stdoutChunks, filesystem, layout) {
     }
   }
 
-  function insertFreeBlock(pointer, size) {
-    let index = 0;
-    while (index < freeBlocks.length && freeBlocks[index].pointer < pointer) {
-      index += 1;
-    }
-    freeBlocks.splice(index, 0, { pointer, size });
 
-    if (index > 0) {
-      const previous = freeBlocks[index - 1];
-      const current = freeBlocks[index];
-      if (previous.pointer + previous.size === current.pointer) {
-        previous.size += current.size;
-        freeBlocks.splice(index, 1);
-        index -= 1;
-      }
-    }
-    if (index + 1 < freeBlocks.length) {
-      const current = freeBlocks[index];
-      const next = freeBlocks[index + 1];
-      if (current.pointer + current.size === next.pointer) {
-        current.size += next.size;
-        freeBlocks.splice(index + 1, 1);
-      }
-    }
+  function allocationRequestAt(pointer) {
+    if (pointer < layout.heapBase || pointer >= heapPointer || pointer % allocationAlignment !== 0) return 0;
+    const slot = (pointer - layout.heapBase) / allocationAlignment;
+    const page = allocationMetadata[slot >>> 10];
+    return page === undefined ? 0 : page[slot & 1023];
+  }
+
+  function rememberAllocation(pointer, requested) {
+    const slot = (pointer - layout.heapBase) / allocationAlignment;
+    const pageIndex = slot >>> 10;
+    const page = allocationMetadata[pageIndex] ??= new Uint32Array(1024);
+    page[slot & 1023] = requested + 1;
   }
 
   function releaseAllocation(pointer) {
     const address = toNonNegativeInteger(pointer);
-    if (address === 0) {
-      return;
-    }
-    const allocation = allocationSizes.get(address);
-    if (!allocation) {
-      throw new WebAssembly.RuntimeError("free received an unknown allocation");
-    }
-    allocationSizes.delete(address);
-    insertFreeBlock(address, allocation.size);
+    if (address === 0) return;
+    const encoded = allocationRequestAt(address);
+    if (encoded === 0) throw new WebAssembly.RuntimeError("free received an unknown allocation");
+    const slot = (address - layout.heapBase) / allocationAlignment;
+    allocationMetadata[slot >>> 10][slot & 1023] = 0;
+    freeRanges.release(address, allocationSizeFor(encoded - 1));
   }
 
   function allocateBytes(byteCount, zeroFill) {
@@ -462,17 +452,8 @@ export function buildRuntimeImports(stdoutChunks, filesystem, layout) {
       return 0;
     }
     const allocationSize = allocationSizeFor(count);
-    let pointer = 0;
-    const freeIndex = freeBlocks.findIndex((block) => block.size >= allocationSize);
-    if (freeIndex >= 0) {
-      const block = freeBlocks[freeIndex];
-      pointer = block.pointer;
-      block.pointer += allocationSize;
-      block.size -= allocationSize;
-      if (block.size === 0) {
-        freeBlocks.splice(freeIndex, 1);
-      }
-    } else {
+    let pointer = freeRanges.take(allocationSize);
+    if (pointer === 0) {
       pointer = heapPointer;
       const endPointer = pointer + allocationSize;
       if (!Number.isSafeInteger(endPointer) || !ensureMemoryForAddress(endPointer)) {
@@ -483,7 +464,7 @@ export function buildRuntimeImports(stdoutChunks, filesystem, layout) {
     if (zeroFill && count > 0) {
       new Uint8Array(memory.buffer).fill(0, pointer, pointer + count);
     }
-    allocationSizes.set(pointer, { requested: count, size: allocationSize });
+    rememberAllocation(pointer, count);
     return pointer;
   }
 
@@ -615,28 +596,29 @@ export function buildRuntimeImports(stdoutChunks, filesystem, layout) {
       if (source === 0) {
         return allocateBytes(requested, false);
       }
-      const sourceAllocation = allocationSizes.get(source);
-      if (!sourceAllocation) {
+      const encoded = allocationRequestAt(source);
+      if (encoded === 0) {
         throw new WebAssembly.RuntimeError("realloc received an unknown allocation");
       }
       if (requested === 0) {
         releaseAllocation(source);
         return 0;
       }
+      const sourceRequested = encoded - 1;
+      const sourceSize = allocationSizeFor(sourceRequested);
       const resizedAllocationSize = allocationSizeFor(requested);
-      if (resizedAllocationSize <= sourceAllocation.size) {
-        if (resizedAllocationSize < sourceAllocation.size) {
-          insertFreeBlock(source + resizedAllocationSize, sourceAllocation.size - resizedAllocationSize);
-          sourceAllocation.size = resizedAllocationSize;
+      if (resizedAllocationSize <= sourceSize) {
+        if (resizedAllocationSize < sourceSize) {
+          freeRanges.release(source + resizedAllocationSize, sourceSize - resizedAllocationSize);
         }
-        sourceAllocation.requested = requested;
+        rememberAllocation(source, requested);
         return source;
       }
       const replacement = allocateBytes(requested, false);
       if (!replacement) {
         return 0;
       }
-      const copied = Math.min(sourceAllocation.requested, requested);
+      const copied = Math.min(sourceRequested, requested);
       new Uint8Array(memory.buffer).copyWithin(replacement, source, source + copied);
       releaseAllocation(source);
       return replacement;

@@ -130,3 +130,27 @@ During extraction, all 386 required checks passed functionally in 133.782 second
 this run exceeded the unchanged 120-second gate. The independent incremental
 compilation group was the last group running. This timing result is not counted
 as a passing gate.
+
+## Farm performance: browser allocation lifetimes
+
+The runtime allocator used a sorted array for free ranges and repeatedly deleted
+and reinserted allocation keys in a JavaScript Map. Retained UI data interleaved
+with temporary world snapshots made range insertion/search quadratic; Map churn
+added lookup costs even when the same addresses were repeatedly reused.
+An address-ordered AVL tree now retains first-fit semantics with logarithmic
+search/coalescing. Lazily allocated typed metadata pages record requested lengths
+without Map tombstones. Alignment, zeroing, realloc copying and invalid-pointer
+errors retain their existing contracts.
+
+A 15,000-operation independent interval model verifies splitting, first fit and
+two-sided coalescing. Public-allocator checks cover zero-byte allocations, stale
+and interior pointers, shrink/move and metadata-page boundaries. In one local
+Farm benchmark, snapshot creation with 2,000 retained allocation holes fell from
+96.37 ms to 6.45 ms median; the unfragmented case fell from 5.48 ms to 3.01 ms.
+These are snapshot timings, not browser frame-rate measurements.
+
+The required gate passed all 387 checks in 84.020 seconds. The integration run
+passed all 486 checks with source files; its 26 other entries were empty local
+directories left by the extraction, and reported missing main.dl. Those empty
+untracked directories have been removed; the extracted fixtures live in the
+website repository.
