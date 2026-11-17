@@ -2263,6 +2263,11 @@ query within a semantic-token request. Reference and definition lookups share
 that index and retain their distinct reference identities. Instantiation and
 constant-parameter values continue to use the owning scope. A later request
 builds its index against the current compilation context.
+Configuration message validation accepts the same arbitrary identifiers, nested
+variants and quoted empty values as the compiler loader. Message completions read
+the current builtin configuration through the editor filesystem, independently
+of a partially written project configuration. Both message names and variant
+names come from that data.
 
 Document symbols combine the authored ranges of their opening line, own code,
 and descendant sections. Anonymous execution and branch sections contribute to

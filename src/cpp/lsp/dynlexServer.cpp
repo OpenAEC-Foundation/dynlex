@@ -1,4 +1,5 @@
 #include "dynlexServer.h"
+#include "builtinSyntaxConfig.h"
 #include "codeLine.h"
 #include "compileTimeValue.h"
 #include "compiler.h"
@@ -513,11 +514,18 @@ CompletionList DynLexServer::onCompletion(const TextDocumentPositionParams &para
 		return {};
 	}
 	if (isConfigDocumentUri(params.textDocument.uri)) {
+		ParseContext configuration;
+		configuration.fileSystem = std::make_unique<LspFileSystem>(documents);
+		if (!initializeBuiltinSyntaxConfig(configuration)) {
+			configuration.printDiagnostics();
+			return {};
+		}
 		return editorCompletions(
-			*docIt->second, collectConfigCompletions(
-								*docIt->second, params.position.line,
-								byteColumn(docIt->second->getLine(params.position.line), params.position.character)
-							)
+			*docIt->second,
+			collectConfigCompletions(
+				*docIt->second, params.position.line,
+				byteColumn(docIt->second->getLine(params.position.line), params.position.character), configuration.builtinSyntax
+			)
 		);
 	}
 
