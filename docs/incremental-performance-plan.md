@@ -10,7 +10,29 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Active iteration: I100 LSP diagnostic-only configuration queries
+## Next iteration: I101 shared LSP matcher queries
+
+Queued after I100 publication; its45-minute clock begins when implementation
+starts, with one further iteration only for concrete progress. Complete one
+ordinary source-edit reuse boundary by connecting the existing native
+`IncrementalMatcherCache` to LSP compiler hooks. Matching was2.33–2.95 s in the
+LSP; I100's native population spends221 ms computing matcher keys versus1827 ms
+body matching and565 ms rematching. Use its existing positive/negative lookup
+proofs, current-source restoration and complete/partial snapshot semantics rather
+than a separate resolver. Clear temporary hooks before their cache lifetime ends.
+Retain only current segments; expose actual evaluations, hits and retained bytes.
+
+First add minimal overload, failed-lookup, parameter-classification, import,
+profile and error-repair regressions. Compare fixed real-program code edits,
+complete tokens/diagnostics, cold opening, peak RSS and retained bytes. Keep a
+clear combined speed/memory/disk/code win without a percentage floor. No new user
+setting or disk cache. The shared LSP also builds into the web compiler; reconcile
+its current matcher-source exclusion and verify the installed Emscripten/LLVM
+boundary without downloading or rebuilding LLVM. If individual-lookup caching
+loses, record it and move to shared whole-body products within the bounded plan.
+The full compiler-wide goal remains active.
+
+## Completed iteration: I100 LSP diagnostic-only configuration queries
 
 Started17 November2026 at20:15 UTC after I099 publication and merged-worktree
 disposal; first deadline21:00 UTC. By20:54 the regression is red and the reuse
@@ -70,10 +92,24 @@ have ratio1.01262,[1.00529,1.02321], approximately0.4 ms paired CPU cost. Keep t
 small cost visible alongside the large editor win, lower editor memory, no new
 persisted cache and105 net production lines. Do not retry to erase it.
 
-The uncached required suite passes334/0/0 in96469 ms, below120 s. Integration
-and shared-root qualification remain pending. The current reuse boundary excludes
-early import/configuration failures and still reruns ordinary source analysis;
-those are unfinished parts of the full objective, not grounds to mark it complete.
+Qualification completes17 November at21:36 UTC, within the single permitted
+extension. The worktree's uncached required suite passes334/0/0 in96469 ms and
+full integration passes462/0/0 in714499 ms. Local master is rebuilt with one job,
+MemoryMax1792 MiB and swap limited to1024 MiB. Its independently built image
+`1efe39ac848a074d557bd1ef64067123d0a603456b5f6d9985187642a0ee6153`
+passes334/0/0 uncached in96662 ms and all four focused LSP regressions. A final
+minimal regression opens a missing import only in the editor, then closes it;
+both profiles repair and restore the import error correctly. That test-only
+extension passes on both owner and root images. All454 C++ input hashes still
+match the frozen benchmark sources. Implementation`1f4e7e39` and regression
+`2e5c319f` are merged into local master; the final qualification record is pushed
+with them. The merged worktree is disposed while retaining one current comparison
+image and reusable build objects; the superseded comparison image is removed
+only after verifying its recorded SHA256.
+
+The current reuse boundary excludes early import/configuration failures and still
+reruns ordinary source analysis. Those are unfinished parts of the full objective,
+not grounds to mark it complete. The P01–P24 objective remains active.
 
 ## Completed iteration: I099 semantic constant queries and blocking tooling bugs
 
