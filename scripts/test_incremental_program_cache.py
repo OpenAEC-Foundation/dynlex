@@ -123,6 +123,7 @@ def decode_graph(encoded):
     unit_keys, unit_sources = encoded["inference_unit_keys"], encoded["inference_unit_sources"]
     assert len(paths) == len(encoded["forward"]) == len(encoded["instantiations"])
     return {
+        "global_type_producers": encoded["global_type_producers"],
         "matched": {path: {"input": item[0], "dependencies": [paths[index] for index in item[1]]}
                     for path, item in zip(paths, encoded["matched"])},
         "forward": {path: [paths[index] for index in edges]

@@ -1,5 +1,6 @@
 """Global type products validate the execution prefix that produced them."""
 
+from test_incremental_program_cache import read_program
 
 def check_global_type_producers(root, build):
     main = root / 'global_type_producers.dl'
@@ -12,6 +13,8 @@ def check_global_type_producers(root, build):
               'show\n')
     main.write_text(source)
     build(entry=main)
+    graph = read_program(root / 'cache', main)['section_dependency_graph']
+    assert len(graph['global_type_producers']) == 1
     for value in (2, 3):
         main.write_text(source.replace('shared, 1)', f'shared, {value})'))
         changed = build(entry=main)
