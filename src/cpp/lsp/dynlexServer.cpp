@@ -344,11 +344,15 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 	std::vector<LspAnalysisResult> results;
 	const auto prior = analysisResults.find(uri);
 	size_t reused = 0;
+	size_t matcherComputations = 0, matcherHits = 0, matcherBytes = 0;
 	for (size_t index = 0; index < analysisProfiles.size(); index++) {
 		const LspAnalysisResult *previous =
 			prior != analysisResults.end() && index < prior->second.size() ? &prior->second[index] : nullptr;
 		auto result = analyzeLspDocument(uri, analysisProfiles[index], compiledDocuments, previous);
 		reused += result.reused;
+		matcherComputations += result.matcherComputations;
+		matcherHits += result.matcherHits;
+		matcherBytes += result.matcherBytes;
 		contexts.push_back(result.context);
 		results.push_back(std::move(result));
 	}
@@ -363,7 +367,10 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 									 {"message", "incremental-lsp: " + Json{
 																		   {"main_uri", uri},
 																		   {"contexts_evaluated", contexts.size() - reused},
-																		   {"contexts_reused", reused}
+																		   {"contexts_reused", reused},
+																		   {"matcher_computations", matcherComputations},
+																		   {"matcher_hits", matcherHits},
+																		   {"matcher_bytes", matcherBytes}
 																	   }.dump()}
 								 }
 		);

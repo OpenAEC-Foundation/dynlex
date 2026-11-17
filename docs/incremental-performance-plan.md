@@ -10,10 +10,10 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Next iteration: I101 shared LSP matcher queries
+## Active iteration: I101 shared LSP matcher queries
 
-Queued after I100 publication; its45-minute clock begins when implementation
-starts, with one further iteration only for concrete progress. Complete one
+Started17 November at21:38 UTC after I100 publication; first deadline22:23 UTC,
+with one further iteration only for concrete progress. Complete one
 ordinary source-edit reuse boundary by connecting the existing native
 `IncrementalMatcherCache` to LSP compiler hooks. Matching was2.33–2.95 s in the
 LSP; I100's native population spends221 ms computing matcher keys versus1827 ms
@@ -31,6 +31,60 @@ its current matcher-source exclusion and verify the installed Emscripten/LLVM
 boundary without downloading or rebuilding LLVM. If individual-lookup caching
 loses, record it and move to shared whole-body products within the bounded plan.
 The full compiler-wide goal remains active.
+
+I101 implementation evidence,17 November at22:03 UTC: a minimal source-edit
+regression is red before implementation because matcher work is unavailable,
+and passes after connecting the shared native cache. It checks current tokens
+and diagnostics against fresh analysis for both CPU and fragment profiles,
+including body edits, overload insertion/removal, implicit-parameter retraction,
+failed-lookup repair, imports and pruning. The full LSP script suite also passes.
+The initial fixed455-input prototype image is
+`51de50986242dffcdb4d29b84bccfb02e6a59543cb8a436b1fbb9899f686c45b`.
+Its strict real-program comparison is retained in`i101-lsp-paired/results.json`:
+three ordinary edit CPU medians fall approximately5.0 ->1.7 s, with exact
+complete-token/diagnostic parity; peak RSS medians rise7.6–8.7%. Cold opening
+rises3.32 ->3.645 s. There is no extra setting or disk cache. Typical edits
+reuse11276–11294 lookups while computing752–770; encoded products are6283411
+bytes. These are prototype measurements, not final acceptance after the fix below.
+
+A focused repeated-failure probe finds that directly using native partial-snapshot
+retention in an editor accumulates obsolete failed lookups:707 ->12507 bytes over
+61 edits on one tiny program. The larger regression also exposes2376 ->26708 bytes.
+Fix the editor lifetime before qualification: retain the last successful product
+set plus only queries used by the current failed analysis. Both lookup sets use
+the existing native fingerprints and restoration code; successful analyses prune
+the previous failed set. The fixed probe stays within900–1197 bytes, and the
+61-edit regression passes with clean-analysis parity and recovery. The exact
+prototype source is retained with its verified original SHA256 alongside the
+prototype frozen-input manifest. Final benchmarks must use a new frozen image.
+The actual web compiler builds against installed pinned LLVM/Emscripten with
+one build job and memory/swap caps; its optimizer/link step is still running.
+Native/web qualification and publication remain pending.
+
+Final I101 source and editor qualification,17 November at22:08 UTC: the frozen
+native image is`e38fa66cb01c161f9594716cca067230b166528aff59f5fb057be4ab1e23fa5b`;
+the actual web module is`a45890799efda3e608c267d4f333207f724333f94fa893db96d7c0df98b10c87`.
+The full LSP script suite and actual WebAssembly host-API edit/parity test pass.
+`i101-lsp-final/results.json` retains64 observations with seven paired edits per
+case on the same frozen45-file Breakout. Both compilers enable the same trace
+option, retaining work counts. All diagnostics and complete token vectors match.
+The initial prototype report remains separate and is not substituted for this
+final retention-safe image.
+
+| Saved LSP edit | Qualified I100 CPU median | Final I101 CPU median | Paired CPU ratio,95% interval |
+| --- | ---: | ---: | ---: |
+| Body |4.81 s|1.66 s|0.34719 [0.34082,0.39196]|
+| Lives |5.02 s|1.69 s|0.33658 [0.33465,0.38499]|
+| Comment |4.90 s|1.70 s|0.34968 [0.33797,0.37055]|
+| Diagnostic wording |0.10 s|0.09 s|1.00000 [0.90000,1.11111]|
+
+These include analysis and semantic-token CPU, sampled at10 ms resolution.
+Ordinary-edit paired peak-RSS medians rise6.8–8.3%; process peak medians are
+436852 ->465284,437480 ->463920 and434596 ->461776 KiB. Cold editor-opening
+CPU medians are3.260 ->3.535 s across four openings per image.
+Keep this explicit cold/memory cost alongside roughly65–66% less ordinary-edit
+CPU,97 net production C++ lines, no new dependency and no disk cache. Native
+controls, required/integration suites and shared-root publication remain pending.
 
 ## Completed iteration: I100 LSP diagnostic-only configuration queries
 

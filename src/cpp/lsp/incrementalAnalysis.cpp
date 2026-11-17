@@ -1,10 +1,20 @@
 #include "compiler.h"
+#include "compilerUtils.h"
+#include "incrementalMatcherCache.h"
 #include "lspAnalysis.h"
 #include "lspFileSystem.h"
 #include "pathUtils.h"
 #include "recordingFileSystem.h"
+#include "llvm/ADT/ScopeExit.h"
 
 namespace lsp {
+struct LspMatcherProducts {
+	std::string index;
+	std::unordered_map<std::string, std::shared_ptr<const std::string>> segments;
+	bool complete = false;
+	std::shared_ptr<const LspMatcherProducts> lastComplete;
+};
+
 namespace {
 std::shared_ptr<ParseContext>
 createContext(const ParseContext::Options &options, std::unordered_map<std::string, std::unique_ptr<TextDocument>> &documents) {
@@ -26,6 +36,74 @@ void refreshDiagnostics(ParseContext &context) {
 				fix.title = renderConfiguredDiagnosticMessage(context, *fix.configuredTitle);
 	}
 }
+
+void compileWithMatcher(const std::string &uri, LspAnalysisResult &result, const LspAnalysisResult *previous) {
+	const LspMatcherProducts *saved = previous && previous->profileCurrent ? previous->matcherProducts.get() : nullptr;
+	ParseContext &context = *result.context;
+	IncrementalMatcherCache matcher(context, saved ? saved->index : "", [&](std::string_view key) {
+		requireCompilerInvariant(saved != nullptr, "editor matcher requested a segment without prior products");
+		return std::optional<std::string>(*saved->segments.at(std::string(key)));
+	});
+	std::unique_ptr<IncrementalMatcherCache> completeMatcher;
+	if (saved && saved->lastComplete)
+		completeMatcher =
+			std::make_unique<IncrementalMatcherCache>(context, saved->lastComplete->index, [&](std::string_view key) {
+			return std::optional<std::string>(*saved->lastComplete->segments.at(std::string(key)));
+		});
+	context.reuseMatcherResult = [&](PatternReference *reference, MatchOptions options, MatchDependencies *dependencies) {
+		auto result = matcher.reuse(reference, options, dependencies);
+		if (result || !completeMatcher)
+			return result;
+		result = completeMatcher->reuse(reference, options, dependencies);
+		if (result)
+			matcher.record(reference, options, *result, dependencies);
+		return result;
+	};
+	context.recordMatcherResult = [&](PatternReference *reference, MatchOptions options, const PatternMatch *match,
+									  const MatchDependencies *dependencies) {
+		result.matcherComputations++;
+		matcher.record(reference, options, match, dependencies);
+	};
+	auto detach = llvm::scope_exit([&]() {
+		context.reuseMatcherResult = {};
+		context.recordMatcherResult = {};
+	});
+	bool complete = compile(uri, context);
+	// Keep only queries used by this analysis. A failed analysis also retains
+	// the last complete product set, without chaining historical failed lookups.
+	auto snapshot = matcher.snapshot(IncrementalMatcherCache::SnapshotScope::Complete);
+	auto products = std::make_shared<LspMatcherProducts>();
+	products->complete = complete;
+	if (!complete && saved)
+		products->lastComplete = saved->complete ? previous->matcherProducts : saved->lastComplete;
+	products->index = std::move(snapshot.index);
+	std::unordered_map<std::string, std::shared_ptr<const std::string>> generated;
+	for (auto &[key, bytes] : snapshot.segments)
+		generated.emplace(std::move(key), std::make_shared<const std::string>(std::move(bytes)));
+	Json index = Json::parse(products->index);
+	for (const auto &[_, descriptor] : index.items()) {
+		const auto &key = descriptor.at("payload").get_ref<const std::string &>();
+		auto current = generated.find(key);
+		if (current != generated.end())
+			products->segments.emplace(key, std::move(current->second));
+		else {
+			requireCompilerInvariant(saved != nullptr, "editor matcher retained a segment without prior products");
+			products->segments.emplace(key, saved->segments.at(key));
+		}
+	}
+	result.matcherHits = matcher.hits() + (completeMatcher ? completeMatcher->hits() : 0);
+	std::unordered_set<const std::string *> counted;
+	auto account = [&](const LspMatcherProducts &set) {
+		result.matcherBytes += set.index.size();
+		for (const auto &[_, bytes] : set.segments)
+			if (counted.insert(bytes.get()).second)
+				result.matcherBytes += bytes->size();
+	};
+	account(*products);
+	if (products->lastComplete)
+		account(*products->lastComplete);
+	result.matcherProducts = std::move(products);
+}
 } // namespace
 
 LspAnalysisResult analyzeLspDocument(
@@ -46,13 +124,22 @@ LspAnalysisResult analyzeLspDocument(
 			prior.builtinSyntaxConfigPath = std::move(configuration->builtinSyntaxConfigPath);
 			prior.projectSyntaxConfigPath = std::move(configuration->projectSyntaxConfigPath);
 			refreshDiagnostics(prior);
-			return {previous->context, std::move(files.observations), std::move(files.configurationObservations), true, true};
+			LspAnalysisResult result{
+				previous->context, std::move(files.observations), std::move(files.configurationObservations), true, true
+			};
+			result.matcherProducts = previous->matcherProducts;
+			result.matcherBytes = previous->matcherBytes;
+			return result;
 		}
 	}
 	auto context = createContext(options, documents);
-	compile(uri, *context);
+	LspAnalysisResult result;
+	result.context = context;
+	compileWithMatcher(uri, result, previous);
 	auto &files = static_cast<RecordingFileSystem &>(*context->fileSystem);
-	return {std::move(context), std::move(files.observations), std::move(files.configurationObservations), true, false};
+	result.sources = std::move(files.observations);
+	result.configurations = std::move(files.configurationObservations);
+	return result;
 }
 
 void addAnalysisTrackingForMain(ImportGraph &graph, const std::string &mainUri, const LspAnalysisResult &result) {

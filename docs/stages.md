@@ -2258,9 +2258,21 @@ identities are unchanged, it updates configured diagnostic messages, related not
 and quick-fix titles without repeating compilation. Native and editor builds share
 the filesystem observation implementation and diagnostic provenance. Configuration
 lookup dependencies include missing candidates, so opening a nearer configuration
-or closing an unsaved document refreshes its consumers. Structural syntax changes,
-source changes and invalid configuration require ordinary compilation. The existing
-LSP trace option reports evaluated and reused context counts through log messages.
+or closing an unsaved document refreshes its consumers.
+
+Ordinary source edits reconstruct a current-source context and reuse the native
+matcher's positive and failed lookup products through compiler hooks. The same
+candidate, binding, precedence and configuration fingerprints validate those
+results; restored matches bind to the current tree and source ranges. Each profile
+retains only index-selected immutable matcher segments in memory. A failed analysis
+keeps its used queries and the last successful product set, without accumulating
+historical failed queries. The next successful analysis prunes that earlier set.
+Temporary hooks are detached before publishing the context. Source preparation,
+classification and type inference still run through the ordinary tooling pipeline.
+The existing LSP trace option reports evaluated/reused contexts, actual matcher
+computations and hits, and retained encoded matcher bytes through log messages.
+The actual WebAssembly host API can be checked with
+`node scripts/test_web_lsp.mjs build-web/dynlex_web.js` after building that target.
 
 When hovering over an expression, the already-evaluated compile-time value and type are shown.
 

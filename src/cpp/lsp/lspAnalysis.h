@@ -13,11 +13,14 @@ using ParseContextMap = std::unordered_map<std::string, ParseContexts>;
 using ImportGraph = std::unordered_map<std::string, std::unordered_set<std::string>>;
 
 class TextDocument;
+struct LspMatcherProducts;
 struct LspAnalysisResult {
 	std::shared_ptr<ParseContext> context;
 	Json sources, configurations;
 	bool profileCurrent = true;
 	bool reused = false;
+	std::shared_ptr<const LspMatcherProducts> matcherProducts = {};
+	size_t matcherComputations = 0, matcherHits = 0, matcherBytes = 0;
 };
 
 LspAnalysisResult analyzeLspDocument(
