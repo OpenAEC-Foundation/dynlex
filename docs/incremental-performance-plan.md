@@ -61,6 +61,30 @@ worklist for interleaved dependencies; those additions still require the frozen
 correctness gates and original performance matrix. Do not claim full qualification
 or compiler-wide completion from the passing scalar and chained cases.
 
+### I088 frozen verification and correctness repairs
+
+The implementation window closed at01:56:20 UTC. Subsequent work is the frozen
+candidate's correctness qualification, not another optimization iteration. Preserve
+each failing source/image and its evidence; no completed performance comparison
+has been retried.
+
+Image5af98bd5 passed34 focused and138 broader builds at each of O0/O2, plus all333
+required checks in112.220s. Real-application cache population then failed before
+any measured pair: a captured expression had become an integer, but its retained
+argument-inference observation still supplied an unresolved-read diagnostic.
+Argument reuse now includes the expression's type as an input alongside execution
+state. A22-line no-import conditional/loop capture regression covers this case.
+
+Imagef6a8a16c passed38 focused and142 broader builds at each of O0/O2. Required
+finished in112.706s with332 passes and one failure: replacement recursion exceeded
+the compatibility stack budget. The direct existing regression reproduces the
+crash; a project-wrapper debugger run with a reduced stack stops in recursive
+argument inference. The new retained input occupies704 bytes, and constructing it
+as a temporary adds stack pressure on that recursive path. Construct its map entry
+in place and rerun the existing regression, complete correctness gates and original
+fixed performance matrix on a new frozen image. Neither this repair nor the global
+producer candidate is qualified for sharing yet.
+
 ## Latest rejected iteration: I087 declared-constraint input work
 
 Started16 November2026 at23:55:59 UTC; first deadline00:40:59 UTC17 November.
