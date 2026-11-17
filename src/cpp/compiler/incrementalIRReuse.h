@@ -33,6 +33,7 @@ class IncrementalIRReuse {
 	bool reuse(Section *section, llvm::Function *function, const nlohmann::json &currentFunctionInstantiations);
 	bool hasReusableIRForInstantiation(const Section *section, const std::string &key) const;
 	bool reuseRoot();
+	void bindRootGlobals(ParseContext &context);
 	bool rootReused() const { return reusedRoot; }
 	bool import(ParseContext &context, const nlohmann::json &currentFunctionInstantiations);
 	size_t reusedCount() const { return reusedNames.size(); }

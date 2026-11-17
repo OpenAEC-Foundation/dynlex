@@ -4,6 +4,8 @@
 #include "incrementalDebugIR.h"
 #include "incrementalModuleBitcode.h"
 #include "parseContext.h"
+#include "section.h"
+#include "variableStorage.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DebugInfoMetadata.h"
@@ -227,6 +229,29 @@ bool IncrementalIRReuse::reuseRoot() {
 	return true;
 }
 
+void IncrementalIRReuse::bindRootGlobals(ParseContext &context) {
+	requireCompilerInvariant(reusedRoot, "global storage import requires a validated entry point");
+	std::map<std::string, std::set<VariableStorageKey>> definitions;
+	for (const auto &[section, path] : sectionPaths)
+		for (const auto &[name, variable] : section->variables)
+			if (variable->isGlobal && !variable->dataInitializer)
+				definitions[name].insert(variableStorageKey(variable->definition, nullptr));
+	for (const llvm::GlobalVariable &old : previousModule->globals()) {
+		auto found = definitions.find(old.getName().str());
+		if (found == definitions.end())
+			continue; // Runtime-internal globals have no source storage declaration.
+		requireCompilerInvariant(!old.isDeclaration(), "entry-owned source global has no definition");
+		auto *declaration = new llvm::GlobalVariable(
+			*currentModule, old.getValueType(), old.isConstant(), llvm::GlobalValue::ExternalLinkage, nullptr, old.getName()
+		);
+		declaration->copyAttributesFrom(&old);
+		declaration->setLinkage(llvm::GlobalValue::ExternalLinkage);
+		context.globalLLVMVariables.emplace(old.getName().str(), declaration);
+		for (const auto &key : found->second)
+			context.variableStorage.emplace(key, declaration);
+	}
+}
+
 bool IncrementalIRReuse::import(ParseContext &context, const nlohmann::json &currentFunctionInstantiations) {
 	if (reusedNames.empty() && !reusedRoot)
 		return true;
@@ -334,8 +359,9 @@ bool IncrementalIRReuse::import(ParseContext &context, const nlohmann::json &cur
 			continue;
 		if (!now)
 			throw std::runtime_error("reused function lost a global variable: " + name);
-		globalLinkages.emplace_back(name, now->getLinkage());
-		old->setInitializer(nullptr);
+		globalLinkages.emplace_back(name, now->isDeclaration() ? old->getLinkage() : now->getLinkage());
+		if (!now->isDeclaration())
+			old->setInitializer(nullptr);
 		old->setLinkage(llvm::GlobalValue::ExternalLinkage);
 		now->setLinkage(llvm::GlobalValue::ExternalLinkage);
 	}

@@ -62,6 +62,7 @@ bool reuseRootWithGlobalTypes(
 	// consume the entry's global types without executing its body again.
 	for (auto &[variable, type] : globals)
 		variable->type = std::move(type);
+	reuse.bindRootGlobals(context);
 	context.reuseRootExecution = true;
 	return true;
 }
