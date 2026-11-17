@@ -35,6 +35,32 @@ required uncached<=120s and affected integration before sharing. One heavy job;
 one45-minute extension only for concrete progress. If this boundary cannot be
 completed in that window, preserve evidence and move to another planned boundary.
 
+### I088 concrete progress and sole extension
+
+The minimal scalar reader passes two successive edits with one preinferred body,
+one independently validated global output and entry reuse. The two-global case
+also restores both outputs and reuses entry inference with clean runtime parity.
+The first cross-process test identified an omitted graph-codec field; the encoder,
+decoder and test reader now carry the output index explicitly. A project-wrapper
+debugger trace confirms entry reuse reached replacement codegen with empty source
+storage maps. Cached global declarations are now bound before replacement emission;
+managed initialization flags retain their actual backend identities separately.
+
+The previous shared compiler also crashes on a read before initialization. A
+second minimized debugger trace confirms the same missing diagnostic for a local
+variable, whose global flag is false and whose expression/variable types remain
+unresolved. Apply the existing configured error to unresolved value reads,
+preserving lvalue inference. Tests retain both cases. Correct two fixture mistakes:
+block-only declarations need indented bodies, and the first chained value was
+local until the fixture actually declared/read both globals. Those fixture failures
+did not reach timing; no completed performance comparison has been rerun.
+
+Use the sole progress-based extension, ending01:58:36 UTC17 November. Current
+source adds prefix-time class facts, managed storage state and a producer/reader
+worklist for interleaved dependencies; those additions still require the frozen
+correctness gates and original performance matrix. Do not claim full qualification
+or compiler-wide completion from the passing scalar and chained cases.
+
 ## Latest rejected iteration: I087 declared-constraint input work
 
 Started16 November2026 at23:55:59 UTC; first deadline00:40:59 UTC17 November.
