@@ -2,6 +2,80 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## Latest rejected iteration: I087 declared-constraint input work
+
+Started16 November2026 at23:55:59 UTC; first deadline00:40:59 UTC17 November.
+Previous goal turn identified and minimized the global-input/root-replay boundary,
+verified two real body edits and six minimal builds, and published documentation
+only. Qualified compiler d95dda4b remains unchanged; the full goal is incomplete.
+
+Profile the existing51ms declared-constraint stage on two current real-program
+body edits. Separate parameter materialization, query identity/collection/alignment,
+syntax retention, signature initialization and result publication. The existing
+740 expression/value hits and zero fresh probes do not imply those producers are
+skipped. Use current counters and the project GDB wrapper, including scoped
+observation overhead. Do not guess a representation or duplicate a global index.
+
+Choose one actual repeated producer, add a minimal no-import counter/parity test,
+and record its fixed real-program CPU gate before implementing. Preserve constraint
+changes, late source demands, class layouts, diagnostics and error repair.
+Required remains uncached<=120s, one heavy job and at most one progress-based
+45-minute extension. No prior failed source/image comparison may be retried.
+Global type producers and root statement/block products remain explicit unfinished
+requirements, not replaced by this independent bounded constraint investigation.
+
+### I087 selected implementation and fixed acceptance
+
+The initial fine-grained debugger probe exceeds its120s observation limit; its
+nested breakpoint setup perturbs execution and yields no usable timing. Preserve
+that failure. The replacement uses only parent-scope boundaries. Move its entry
+timestamp after debugger FinishBreakpoint setup; otherwise that observer setup
+pollutes the first interval. Two corrected traces put collection15.347/18.794ms,
+query construction14.039/10.582ms, worklist6.886/9.011ms and final publication
+9.150/13.943ms. These include debugger overhead and are not acceptance timings.
+
+Each constraint identity currently serializes twice; a variable/rule query also
+indexes every program line, and paths are eagerly built for every source scope.
+Memoize immutable identities by their actual query target, build sibling identity
+components only when a requested ancestor needs them, and index line occurrences
+only in the queried line's owning section. Preserve exact existing IDs, duplicate
+occurrence rules, source URI/columns and generated identities. Expose computation,
+hit, scope and line counts through the existing inference product statistics hook.
+No cache schema or language behavior changes.
+
+Before code, add a minimal three-query fixture with repeated declaration text,
+unused code and two unrelated edits. It requires exactly three identity builds,
+at least three memo hits, only four owner lines indexed and stable unique query
+IDs. Keep only if31 fixed ordinary body-edit pairs establish at least1% paired
+median CPU gain with95% interval excluding parity. Controls:15 unused/unused-flex/
+lives,31 unchanged/comment/wording,11 cache-disabled cold and7 debug/LLVM body pairs.
+Require exact executable/diagnostic parity, original-vs-current source identity
+parity on the fixture, complete clean IR parity, required uncached<=120s and
+affected integration before sharing. No retry replaces a failed fixed variant.
+
+### I087 closed: less constraint work, below the fixed gain threshold
+
+Source42c0567f / image3b9621ca passes87 focused builds at O0 and87 at O2,
+including the new three-query identity regression. The five-build identity fixture
+also preserves the exact old query IDs and declaration paths. Required333/0/0
+passes uncached in111.113s (111.966s observer). Compiler and494 source inputs stay
+unchanged throughout qualification.
+
+The original31-pair ordinary body comparison completes with exact executable and
+diagnostic parity. CPU medians1.466325 ->1.447942s; paired ratio .991030290,
+95% interval [.986114834,.994805902]. That is an established .897% paired gain,
+below the predeclared1% threshold. Preserve this rejected image and branch without
+rerunning the comparison. Remaining controls, full IR qualification and integration
+were not run after the primary failure; no full qualification is claimed.
+
+Declared-constraint stage medians fall47.802 ->30.088ms. The candidate computes745
+identities, reuses740 and indexes only3 source lines, while1758 section identities
+are still needed. Preinference69.570 ->72.344ms and root inference181.104 ->183.017ms
+remain substantial. These are separate scoped medians, not additive CPU savings.
+Shared compiler d95dda4b and the full objective remain unchanged. Next: implement
+the missing validated global type-producing query boundary identified by I086,
+so a changed global reader can be inferred before deciding entry replay.
+
 ## Latest attribution: I086 root-execution reuse boundary
 
 Started16 November2026 at23:43:44 UTC; first deadline00:28:44 UTC17 November.
