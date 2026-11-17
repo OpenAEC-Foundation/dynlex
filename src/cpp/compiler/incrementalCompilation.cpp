@@ -38,6 +38,7 @@
 #include "sourcePreparation.h"
 #include "sourcePreprocessing.h"
 #include "sourceReferenceOrder.h"
+#include "sourceSyntax.h"
 #include "syntaxConfig.h"
 #include "validation.h"
 #include "variableBindings.h"

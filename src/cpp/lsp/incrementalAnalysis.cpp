@@ -5,6 +5,7 @@
 #include "lspFileSystem.h"
 #include "pathUtils.h"
 #include "recordingFileSystem.h"
+#include "sourceSyntax.h"
 #include "llvm/ADT/ScopeExit.h"
 
 namespace lsp {
@@ -35,6 +36,30 @@ void refreshDiagnostics(ParseContext &context) {
 			if (fix.configuredTitle)
 				fix.title = renderConfiguredDiagnosticMessage(context, *fix.configuredTitle);
 	}
+}
+
+bool sameProgramSources(ParseContext &prior, RecordingFileSystem &files, const Json &previous) {
+	for (const auto &[path, observation] : previous.items()) {
+		const Json &current = files.observe(path);
+		if (current == observation)
+			continue;
+		if (!prior.hasCompleted(ParseContext::CompilationStage::InferredTypes) || current.is_null() || observation.is_null() ||
+			current.at("canonical") != observation.at("canonical") || current.at("internal") != observation.at("internal"))
+			return false;
+		const SourceFile *oldFile = prior.importedFiles.at(observation.at("canonical").get<std::string>());
+		const SourceFile *newFile = files.cachedFile(path);
+		requireCompilerInvariant(oldFile && newFile, "recorded editor source has no snapshot");
+		if (oldFile->lineCount() != newFile->lineCount())
+			return false;
+		const std::string &prefix = syntaxConfigForSourceFile(prior, oldFile).commentPrefix;
+		for (int line = 0; line < oldFile->lineCount(); line++) {
+			auto oldText = oldFile->getLine(line), newText = newFile->getLine(line);
+			if (invalidSourceCharacterOffset(newText, prefix) ||
+				sourceCodeWithoutComment(oldText, prefix) != sourceCodeWithoutComment(newText, prefix))
+				return false;
+		}
+	}
+	return true;
 }
 
 void compileWithMatcher(const std::string &uri, LspAnalysisResult &result, const LspAnalysisResult *previous) {
@@ -118,7 +143,7 @@ LspAnalysisResult analyzeLspDocument(
 		if (initializeSyntaxConfigs(*configuration, uri) &&
 			prior.builtinSyntax.nonMessageIdentity == configuration->builtinSyntax.nonMessageIdentity &&
 			prior.projectSyntax.nonMessageIdentity == configuration->projectSyntax.nonMessageIdentity &&
-			files.matches(previous->sources)) {
+			sameProgramSources(prior, files, previous->sources)) {
 			prior.builtinSyntax.messages = std::move(configuration->builtinSyntax.messages);
 			prior.projectSyntax.messages = std::move(configuration->projectSyntax.messages);
 			prior.builtinSyntaxConfigPath = std::move(configuration->builtinSyntaxConfigPath);

@@ -2260,6 +2260,16 @@ the filesystem observation implementation and diagnostic provenance. Configurati
 lookup dependencies include missing candidates, so opening a nearer configuration
 or closing an unsaved document refreshes its consumers.
 
+A successful editor context also survives comment and trailing-whitespace edits
+when configured lexical code remains identical on every physical source line.
+The proof compares the importer's immutable source snapshots, not a live provider
+that may now prefer an editor buffer over disk. It validates current source
+characters through the importer's shared validator, retains missing/shadowing
+lookup checks, and requires unchanged syntax and source identity. Semantic ranges
+keep their original coordinates; comment tokens read the current editor document.
+Edits which move executable lines still reconstruct the ordinary current-source
+context. This boundary adds no disk products or extra user setting.
+
 Ordinary source edits reconstruct a current-source context and reuse the native
 matcher's positive and failed lookup products through compiler hooks. The same
 candidate, binding, precedence and configuration fingerprints validate those

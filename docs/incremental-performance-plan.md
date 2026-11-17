@@ -10,22 +10,116 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Next iteration: I102 shared LSP inference products
+## Active iteration: I103 source-layout-preserving editor comments
 
-Queued after I101 publication. First attribute the remaining final-image editor
-analysis time by stage, then complete one consumer-visible reuse boundary using
-the native inference products and dependency rules. Keep semantic ownership
-independent of native IR and usable by the web compiler. Preserve current typed
-source/hover facts, diagnostics and configured notes/fixes, classes/globals/values,
-callable failures, profile separation and bounded failed-edit retention. Add
-minimal cascade/error-repair regressions before implementation and compare paired
-real-program edits, current work counts, cold opening, RSS and retained bytes.
-Keep the combined speed/memory/disk/code policy; no percentage floor or extra
-user setting. Required uncached <=120 s and affected integration/web checks remain
-mandatory. The iteration is45 minutes, with one further iteration only for
-concrete progress. If native coupling stalls the actual consumer, record evidence
-and move to another remaining P01–P24 item instead of keeping factor-only scaffolding.
-All stages in the full objective remain in scope; I101 is a qualified snapshot.
+Started17 November at23:17 UTC; first deadline18 November at00:02 UTC,
+with one further iteration only for concrete progress. Target P19/P21: ordinary
+editor comment edits still recreate full contexts at roughly1.7 CPU s. Reuse the
+qualified context when configured lexical code, import observations and physical
+source coordinates are unchanged; render lexical comments from the current
+editor document. Preserve custom comment spelling, strings, imported files,
+configuration changes, profiles, current diagnostics/tokens and error recovery.
+Changes that move executable coordinates still require the ordinary pipeline;
+line-mapping replay remains explicit unfinished scope, rather than an unsafe reuse.
+First add focused fresh-analysis parity and work-count tests. Compare fixed real
+program comment edits, body edits and cold opening, including peak RSS and retained
+bytes. Keep only a clear combined tradeoff; no percentage floor. Remove the whole
+experiment if the proof or consumer stalls within the timebox. Required uncached
+<=120 s and affected integration/web gates remain mandatory before publication.
+
+I103 candidate verification,17 November at23:37 UTC: the455 frozen compiler/build
+inputs produce`8466c968462cc0f24024980174972b210a6d615ca2b2834bba7181934344f404`.
+The first prototype incorrectly reacquired an old imported source through its live
+filesystem; opening a buffer could return new text and hide a code change.
+The existing minimal `test_lsp_import_snapshots.py` catches this. Compare the
+importer's retained `importedFiles` pointer instead. The corrected comment test
+also changes an imported body after opening it. All focused and full LSP scripts
+pass. Preserve the exact prototype helper and its original frozen manifest;
+its image is`45fa25345bad02ffc300130560c99ecfc8721b052132d1441eb1974e07283f2d`.
+
+`i103-lsp-paired/results.json` retains64 observations, with seven paired edits per
+case on the same fixed45-file real Breakout. Both images use the same tracing
+option, with exact diagnostic and complete-token parity. CPU includes analysis
+and token rendering at10 ms resolution. An existing CHIP-8 header comment is
+changed without moving executable code; this is distinct from inserting lines.
+
+| Editor edit | Qualified I101 CPU median | I103 CPU median | Paired ratio,95% interval |
+| --- | ---: | ---: | ---: |
+| Body |1.65 s|1.68 s|1.01183 [1.00000,1.03030]|
+| Lives |1.68 s|1.68 s|0.99177 [0.97674,1.00000]|
+| Existing comment |1.67 s|0.10 s|0.06250 [0.05848,0.06587]|
+| Diagnostic wording |0.10 s|0.10 s|1.00000 [0.90000,1.11111]|
+
+For the comment case, peak-RSS medians are473688 ->247216 KiB; the paired
+ratio is0.52190 [0.51760,0.52754]. It evaluates zero contexts and computes zero
+matcher results, retaining the same6283411 matcher bytes. Cold editor-opening
+CPU medians are3.530 ->3.535 s over four openings per image. Other source edits
+retain ordinary compilation and establish no general speed gain. There are17 net
+production lines, no extra disk products, dependency or user configuration.
+Keep the combined clear comment speed/memory win; no percentage floor is used.
+
+A first insertion control then edits the inserted comment's text; only its first
+sample actually moves code. Keep that report separate. The corrected
+`i103-comment-lines-moving/results.json` adds a different number of comment lines
+on every sample. All three edits evaluate a context, with exact parity; both CPU
+medians are1.63 s (paired1.00000 [0.99371,1.00377]). Source-coordinate replay is
+still required for that boundary.
+
+Native controls pass88 rows with exact executable and diagnostic parity. Five
+body pairs have CPU medians1.056213 ->1.037896 s (paired0.99488 [0.97884,1.01089]);
+three cold pairs4.590252 ->4.589081 s (paired0.99809 [0.98950,0.99974]). Native
+comment/wording controls remain around26/30 ms. Do not claim a substantial native
+improvement from these controls. Required tests pass334/0/0 uncached in98523 ms.
+Integration tests pass462/0/0 in701758 ms. The actual WebAssembly build and
+host-API comment/edit/parity regression pass. Its module SHA256 is
+`326e5dc2075da00d7d97553e4ec1302a275e333d4815b9b87dee9e039117cd6b`.
+Shared-root qualification remains pending.
+
+## Rejected iteration: I102 shared encoded LSP inference products
+
+22:30–23:15 UTC on17 November; no extension used. The qualified I101 compiler
+remains the baseline. Stage attribution on the fixed45-file Breakout finds
+ordinary inference0.95–0.97 CPU s, matching0.383–0.397 s, and import/sections
+roughly46 ms. The experiment shares the native inference codecs and dependency
+controller through memory-backed immutable blobs, without native IR ownership.
+It adds377 net production lines; no new dependency or configuration.
+
+The corrected minimal regression is red on I101 and passes on the candidate:
+a leaf edit reduces body-inference passes4 ->2 across CPU/fragment profiles;
+complete tokens and diagnostics match fresh analysis through overload, failed
+lookup, classification and error-repair edits. Retained typed data over61 failed
+edits stays33006–33012 bytes. These narrow passes are not whole-program proof.
+
+The real-program gate rejects the experiment on its first edit. I101 CPU is1.61 s;
+the candidate is3.27 s, with peak RSS438140 ->640560 KiB and43151416 retained
+inference bytes. It reuses399 instantiations with one body-inference pass, yet the
+complete semantic token vector differs while diagnostics match. The benchmark
+stops at that failure; no further cases or full-suite pass are claimed.
+
+A seven-line no-import reproducer isolates source operand grouping. Ordinary
+inference's `commitCodeLineGrouping` updates `CodeLine::expression` and its committed
+grouping, while typed-body decoding restores only the executable body. The editor
+reads the former, so replay does not reproduce the chosen source grouping.
+This incomplete editor boundary is absent from the qualified compiler. Do not
+change token expectations or suppress reuse for operator spellings.
+
+A separate GDB stage attribution uses `scripts/debug.sh`. Current scoped counters
+show body restoration1136.8–1209.5 ms, versus the entire old inference's950–970 ms.
+Source-match projection costs roughly360–380 ms; declaration projection30–40 ms,
+post-inference graph work110–120 ms, and retained-byte accounting70–90 ms on edits.
+Optimized source-line breakpoint intervals are attribution aids, not disjoint
+compiler-stage totals. The direct body-restore counter establishes that reduced
+pass counts alone do not repay materialization. Encoded disk-oriented bodies are
+not kept as the editor cache architecture.
+
+All51 modified code/build/test files and18 new files are removed after verified
+archival. `i102-rejected-experiment.patch.gz` is34415 bytes; its source manifest
+records compiler`90fc3ce3ac0ff8aa1c60caf827b35c42924b8fa641e8620ed1b6b8e1ad9e69c2`.
+The seven-line reproducer, failed complete-token comparison, focused test, profiling
+scripts and raw measurements remain in the evidence directory. Restore the exact
+I101 owner compiler`e38fa66cb01c161f9594716cca067230b166528aff59f5fb057be4ab1e23fa5b`.
+No factor-only storage/backend/namespace scaffold is retained. No compiler behavior
+from this rejected experiment is published; the full incremental goal remains active.
 
 ## Completed iteration: I101 shared LSP matcher queries
 

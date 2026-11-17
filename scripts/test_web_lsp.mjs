@@ -50,6 +50,8 @@ function edit(text, error = false) {
 const source = 'to stable {value}: @intrinsic("discard", value)\nto edited {value}: @intrinsic("discard", value)\nstable 1\nedited 2\n';
 initialize(source);
 assert.equal(result().diagnostics.length, 0);
+edit(source.replace("stable 1\n", "stable 1 # a longer café 🧪 comment\n"));
+edit(source);
 const edited = source.replace('to edited {value}: @intrinsic("discard", value)',
                               'to edited {value}: @intrinsic("discard", @intrinsic("add", value, 1))');
 edit(edited);

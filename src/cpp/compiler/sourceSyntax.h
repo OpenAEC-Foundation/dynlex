@@ -1,6 +1,9 @@
 #pragma once
 #include "parseUtils.h"
+#include "pattern/transformedPattern.h"
+#include "syntaxConfig.h"
 #include <cctype>
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -52,4 +55,38 @@ inline std::vector<std::pair<size_t, size_t>> sourceArgumentSpans(std::string_vi
 	}
 	result.push_back(trimmedSourceSpan(text, argumentStart, end));
 	return result;
+}
+
+inline std::string_view sourceCodeWithoutComment(std::string_view text, std::string_view commentPrefix) {
+	if (size_t comment = findCommentStart(text, commentPrefix); comment != std::string_view::npos)
+		text = text.substr(0, comment);
+	while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())))
+		text.remove_suffix(1);
+	return text;
+}
+
+inline std::optional<size_t> invalidSourceCharacterOffset(std::string_view text, std::string_view commentPrefix) {
+	if (text.find(argumentChar) == std::string_view::npos)
+		return std::nullopt;
+	bool insideString = false;
+	size_t commentStart = findCommentStart(text, commentPrefix);
+	std::optional<size_t> pending;
+	for (size_t index = 0; index < text.size(); index++) {
+		char character = text[index];
+		if (index < commentStart && character == '"' && !isEscapedCharacter(text, index)) {
+			insideString = !insideString;
+			if (!insideString)
+				pending.reset();
+			continue;
+		}
+		if (character != argumentChar)
+			continue;
+		if (index < commentStart && insideString) {
+			if (!pending)
+				pending = index;
+			continue;
+		}
+		return index;
+	}
+	return pending;
 }

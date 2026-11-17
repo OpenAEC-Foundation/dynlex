@@ -9,7 +9,7 @@ namespace lsp {
 class TextDocument;
 
 std::vector<std::vector<SemanticToken>>
-collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCount, bool suppressOnFileErrors = true);
+collectSemanticTokens(ParseContext &context, const SourceFile &source, bool suppressOnFileErrors = true);
 
 std::vector<SemanticToken>
 collectLiveLineSemanticTokens(const ParseContext *context, const TextDocument &document, const std::string &uri, int lineIndex);

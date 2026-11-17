@@ -145,10 +145,7 @@ Json sourceProjection(
 			std::string_view semanticLine = content.substr(start, end - start);
 			if (semanticLine.ends_with('\n'))
 				semanticLine.remove_suffix(1);
-			if (size_t comment = findCommentStart(semanticLine, commentPrefix); comment != std::string_view::npos)
-				semanticLine = semanticLine.substr(0, comment);
-			while (!semanticLine.empty() && std::isspace(static_cast<unsigned char>(semanticLine.back())))
-				semanticLine.remove_suffix(1);
+			semanticLine = sourceCodeWithoutComment(semanticLine, commentPrefix);
 			if (semanticLine.empty()) {
 				start = end;
 				lineIndex++;
