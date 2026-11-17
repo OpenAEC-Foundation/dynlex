@@ -47,6 +47,47 @@ uncached required<=120s. Start its45-minute clock when implementation begins;
 one extension remains conditional on concrete progress. First-edit entry reuse
 and every other unfinished stage remain part of the full goal.
 
+### I091 repaired-image performance gates passed
+
+Image1678b655 is unchanged across all473 C++/header/inline and22 C inputs.
+The fixed primary and all nine controls pass. The corrected LLVM comparison uses
+incremental mode for both compilers and verifies their complete emitted graphs.
+Native/debug comparisons require identical executable bytes and diagnostics.
+
+| Edit/output | Pairs | Qualified baseline CPU median | Candidate CPU median | Paired change |
+|---|---:|---:|---:|---:|
+| Active function body / native |31|1.463039s|1.303654s|10.7% faster|
+| Game behaviour / native |15|1.853551s|1.675546s|9.5% faster|
+| Active function body / LLVM |7|2.246058s|2.077739s|7.3% faster|
+| Active function body / debug |7|1.747953s|1.575317s|9.9% faster|
+| Unused ordinary function |15|0.537764s|0.533635s|No established change|
+| Unused flex definition |15|0.524050s|0.528402s|No established change|
+| Unchanged |31|0.028870s|0.028747s|No established change|
+| Comment only |31|0.029203s|0.029138s|No established change|
+| Warning wording only |31|0.035371s|0.034567s|No established change|
+| Cache-disabled cold |11|5.309385s|5.294398s|No established change|
+
+Percentages use median paired CPU ratios, not ratios of the marginal medians.
+Every claimed gain has its95% paired interval below parity; no control has an
+established regression. All186 measured fast-path builds reuse the frontend and
+build zero objects with zero link time. Each wording sample updates existing
+warning text. Required333/0/0 passes uncached in115.275s, and again in110.016s
+after extracting the existing corruption test to keep code files below1,000 lines.
+
+The primary edit normally infers one body, reuses367 LLVM function bodies and
+builds one object. Anchor readers index166 lines across50 owner requests; these
+are actual construction counts, including requests by separate readers. Entry
+inference reuses30/31 edits. On the first edit only two of four global type
+products restore; subsequent edits restore all four. That is a measured remaining
+gap, not an identified root cause or a completed incremental boundary.
+
+Full integration,80 clean/incremental IR builds and DWARF verification remain
+pending. Keep the candidate isolated until they pass. Do not repeat completed
+timing comparisons. No new implementation variant belongs to this iteration's
+verification window. Evidence: `i091-performance-audit.json`,
+`i091-fast-path-audit.json`, `i091-debug-fixed-stage-analysis.json`,
+`i091-first-edit-gap.json` and the ten `i091-debug-fixed-performance-*.json` reports.
+
 ## Completed iteration: I090 entry-replay consumer attribution
 
 Started17 November2026 at02:49:48 UTC; first deadline03:34:48 UTC. I089 is
