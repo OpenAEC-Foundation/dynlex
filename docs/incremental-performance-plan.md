@@ -2,6 +2,247 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## Next iteration: I091 demand source anchors by owner
+
+The next implementation target is the repeated whole-program source-anchor
+producer identified by I090. Make body/diagnostic source mapping index only the
+semantic owners whose anchors are requested. Preserve the exact existing portable
+identities: owner, text digest and duplicate occurrence. Keep generated physical
+origins, source slices, inline shorthand, repeated imports, duplicate lines and
+late binding publication correct. Reuse one hashing/identity algorithm with debug
+metadata; do not introduce a second anchor format or compatibility path.
+
+Add minimal no-library tests proving unrelated owners are not indexed, plus
+current-source diagnostic/debug locations after inserted/deleted/moved lines.
+Expose actual indexed-owner/line work counters. Use the isolated I089 prerequisite
+and compare the combined frozen candidate with qualified d95dda4b once:31 real
+body pairs need>=5% paired median CPU gain with95% interval below parity. Retain
+the original controls, full clean IR/diagnostic parity, affected integration and
+uncached required<=120s. Start its45-minute clock when implementation begins;
+one extension remains conditional on concrete progress. First-edit entry reuse
+and every other unfinished stage remain part of the full goal.
+
+## Completed iteration: I090 entry-replay consumer attribution
+
+Started17 November2026 at02:49:48 UTC; first deadline03:34:48 UTC. I089 is
+preserved at its original failed5% gate. Use its frozen image only for read-only
+attribution; shared compiler d95dda4b remains unchanged.
+
+Goal: locate the extra work inside preinference and the combined exposed-function/
+managed-lifecycle stage before choosing another optimization. The latter includes
+activation/restoration of replacement bodies; it is not solely exposed-function
+validation. Its40.375ms and the33.898ms body-load timer can overlap.
+
+Run two bounded project-wrapper debugger probes on successive edits of the same
+frozen real application. Measure controller setup/requests, producer validation,
+changed-unit inference, class/entry restoration, replacement activation and managed
+validation as inclusive scopes. Record instrumentation overhead and do not use
+these debugger timings as CPU acceptance data. Retain first-edit cold-cache reuse
+as a separate incomplete requirement. Choose a subsequent implementation only
+after identifying an actual repeated producer or unnecessarily demanded product.
+No retry of either rejected source/image performance comparison is authorized by
+this attribution task. The complete incremental objective remains active.
+
+### I090 verified outcome
+
+The first method-name debugger probe is invalid: optimized inline locations
+triggered repeated entry breakpoints and broke its finish-stack accounting. Retain
+that observer failure; it supplies no usable timings. Two corrected one-shot
+source-boundary probes complete on successive edits. Root diagnostic restoration
+takes29.598/31.071ms. Replacement activation contains33.812/33.150ms of body
+setup/restoration; the remaining managed walk after activation is0.175/0.165ms.
+The inner body-reader entry was optimized out, so these probes do not separate
+its setup from decoding. These are inclusive debugger timings, not CPU acceptance.
+
+Two additional bounded probes observe four calls per edited build to the actual
+`sourceLineIdentities` producer. Every call hashes all7,514 program lines:
+changed-unit product capture, root diagnostic restoration, replacement-body
+restoration and final snapshot capture. Each producer call takes9.319-12.248ms
+under the debugger. `InferenceBodySources` then rebuilds both encoded/decoded
+line maps and all declaration mappings for each consumer. Its constructor invokes
+that complete producer unconditionally. This is verified repeated work, rather
+than an inference from overlapping parent stage times.
+
+Select demand-driven source anchors as the next boundary. Shared compiler/source
+remain unchanged. Evidence: `i090-entry-work-profile/boundary-report.json`,
+`boundary-probe-1.json`, `boundary-probe-2.json`, `line-report.json`,
+`line-probe-1.json`, `line-probe-2.json`. I090 changes documentation/evidence only;
+it does not qualify either prerequisite compiler variant or complete the goal.
+
+## Rejected iteration: I089 complete entry-input products
+
+Started17 November2026 at02:25 UTC; first deadline03:10 UTC. I088 is closed at
+its fixed CPU rejection and remains preserved. This iteration addresses the
+separate constraint/class output boundaries identified by that verification.
+Retain I088 only as an isolated prerequisite; sharing the combined change still
+requires the complete original performance/correctness gates.
+
+Goal: an interface-stable body edit in the frozen real application reuses entry
+inference instead of moving that work into speculative inference. Persist and
+restore ready number-rule results through the same constraint-value product as
+other constraint targets. Join compatible class-instance prefixes through the
+existing transactional class-restoration code, preserving indices, requests,
+cycles and rollback. Do not relax the entry's constraint-result requirement.
+
+Before implementation, add no-import regressions for a number rule, edits to its
+provider, repeated body edits and a class with a later second instantiation.
+Require clean output/diagnostic parity and entry-reuse counters. Benchmark the
+combined frozen candidate once:31 body pairs need>=5% median paired CPU gain
+with95% interval below parity; retain I088's original controls and full IR checks.
+Required remains uncached<=120s, one heavy job,45 minutes plus at most one
+progress-based extension. The full cross-stage goal remains incomplete.
+
+### I089 fixed outcome
+
+Source1d495e30 / image9e1dbba3 passes24 focused and166 broader builds at each of
+O0/O2, plus all333 required checks uncached in114.192s. Two real-program body
+edits match independently empty-cache builds in exact executable bytes, complete
+normalized LLVM and diagnostics. An earlier proof incorrectly compared cached
+native output with cache-disabled native output, which use different code-emission
+paths; retain that observation separately. The corrected proof uses the same
+native output mode and verifies fresh-stage counters.
+
+The fixed31-pair CPU comparison measures medians1.463844 ->1.456312s, paired
+ratio0.992343,95% interval[0.982974,0.997339]. This establishes a small gain but
+misses the predeclared5% requirement. Reject the combined candidate without
+retrying it. Remaining controls, full integration and80-build IR matrix are not
+run after that gate failure. Preserve both I088 and I089 source/image evidence;
+no compiler code from either candidate is shared yet.
+
+Entry inference is reused in30/31 measured edits. Its median stage falls
+180.820 ->0.001ms, but preinference rises69.646 ->204.106ms and exposed-function
+and managed-lifecycle validation rises5.843 ->40.375ms. Total inference changes318.519 ->313.950ms.
+One changed body is restored in both compilers, but restoration rises
+3.688 ->33.898ms. Scoped stage medians overlap and must not be added to other
+reported parent timings. Attribute the actual consumers before selecting another
+optimization. First-edit cold-cache entry reuse also remains an explicit gap;
+later matching source proofs alone do not explain all of its invalidation.
+
+The implementation stores every successful constraint result at its producer,
+including number rules. Rule publication consumes the already validated result;
+fresh inference validates the intrinsic and records warnings, while replay emits
+the retained diagnostic product once. Compatible class prefixes use the existing
+transactional restoration path, including cross-class reservation, request keys,
+overlapping layout checks and rollback. The12-line two-instantiation reproduction
+now reuses entry inference. These are verified functional products, but their
+combined performance qualification failed. The full incremental goal is incomplete.
+
+## Rejected iteration: I088 global type-producing queries
+
+Started17 November2026 at00:28:36 UTC; first deadline01:13:36 UTC.
+I087 completed its original fixed comparison and missed its1% threshold; retain
+its source/image separately. The previous question-only turn explained test-suite
+selection; this continuation revalidated the terminal benchmark and published its
+evidence. Shared compiler d95dda4b remains unchanged; the full goal is incomplete.
+
+Capture each global type output at a completed root statement/control-flow join,
+with the cumulative entry-prefix source, lookup, concrete-call, value and global
+input reads that actually produced it. Persist those as independently checkable
+inference units. During an entry-stable edit, validate producer units before
+temporarily installing their type outputs, then preinfer affected global readers.
+Commit only after normal whole-entry dependency/interface checks pass. Otherwise
+restore the original global types before ordinary entry inference. Never seed a
+global merely because its old type is known. Newly observed speculative global
+inputs must not justify skipping earlier ordinary demand.
+
+First add minimal no-import tests for a stable global reader, edited initializer
+provider, changed type/effect, introduced early global read, forward dependency,
+class output and a second edit after entry replay. Require clean runtime/error
+parity and counters proving producer checks and root work skipped. The initial
+source proof may conservatively include the whole unchanged entry source; finer
+statement source keys remain part of the full goal, not claimed implemented here.
+
+Fixed acceptance:31 paired real-program body edits must improve median CPU by at
+least5% with95% interval below parity. Controls:15 unused/unused-flex/lives,
+31 unchanged/comment/wording,11 cache-disabled cold and7 debug/LLVM body pairs.
+Require exact executable/diagnostic parity, full normalized clean LLVM parity,
+required uncached<=120s and affected integration before sharing. One heavy job;
+one45-minute extension only for concrete progress. If this boundary cannot be
+completed in that window, preserve evidence and move to another planned boundary.
+
+### I088 concrete progress and sole extension
+
+The minimal scalar reader passes two successive edits with one preinferred body,
+one independently validated global output and entry reuse. The two-global case
+also restores both outputs and reuses entry inference with clean runtime parity.
+The first cross-process test identified an omitted graph-codec field; the encoder,
+decoder and test reader now carry the output index explicitly. A project-wrapper
+debugger trace confirms entry reuse reached replacement codegen with empty source
+storage maps. Cached global declarations are now bound before replacement emission;
+managed initialization flags retain their actual backend identities separately.
+
+The previous shared compiler also crashes on a read before initialization. A
+second minimized debugger trace confirms the same missing diagnostic for a local
+variable, whose global flag is false and whose expression/variable types remain
+unresolved. Apply the existing configured error to unresolved value reads,
+preserving lvalue inference. Tests retain both cases. Correct two fixture mistakes:
+block-only declarations need indented bodies, and the first chained value was
+local until the fixture actually declared/read both globals. Those fixture failures
+did not reach timing; no completed performance comparison has been rerun.
+
+Use the sole progress-based extension, ending01:58:36 UTC17 November. Current
+source adds prefix-time class facts, managed storage state and a producer/reader
+worklist for interleaved dependencies; those additions still require the frozen
+correctness gates and original performance matrix. Do not claim full qualification
+or compiler-wide completion from the passing scalar and chained cases.
+
+### I088 frozen verification and correctness repairs
+
+The implementation window closed at01:56:20 UTC. Subsequent work is the frozen
+candidate's correctness qualification, not another optimization iteration. Preserve
+each failing source/image and its evidence; no completed performance comparison
+has been retried.
+
+Image5af98bd5 passed34 focused and138 broader builds at each of O0/O2, plus all333
+required checks in112.220s. Real-application cache population then failed before
+any measured pair: a captured expression had become an integer, but its retained
+argument-inference observation still supplied an unresolved-read diagnostic.
+Argument reuse now includes the expression's type as an input alongside execution
+state. A22-line no-import conditional/loop capture regression covers this case.
+
+Imagef6a8a16c passed38 focused and142 broader builds at each of O0/O2. Required
+finished in112.706s with332 passes and one failure: replacement recursion exceeded
+the compatibility stack budget. The direct existing regression reproduces the
+crash; a project-wrapper debugger run with a reduced stack stops in recursive
+argument inference. The new retained input occupies704 bytes, and constructing it
+as a temporary adds stack pressure on that recursive path. Construct its map entry
+in place and rerun the existing regression, complete correctness gates and original
+fixed performance matrix on a new frozen image. Neither this repair nor the global
+producer candidate is qualified for sharing yet.
+
+### I088 fixed outcome and verified next boundary
+
+Final sourcebc312215 / image8ba81fdf passes38 focused and142 broader builds at each
+of O0/O2, the existing compatibility stack regression and all333 required checks
+uncached in113.417s. Its fixed31-pair native body comparison fails: CPU medians
+1.470378 ->1.482319s, paired ratio1.010800,95% interval[1.002125,1.017050]. Exact
+executables and diagnostics match. Do not retry that source/image comparison or
+run the remaining controls/integration after the primary rejection. Preserve the
+candidate source/image; shared compiler d95dda4b remains qualified and unchanged.
+
+The candidate restores four global type outputs and preinfers one changed reader,
+but entry reuse remains false in every sample. Preinference medians rise
+67.917 ->162.835ms while ordinary entry inference falls180.411 ->91.988ms.
+Total inference rises315.328 ->323.108ms. The work has moved between phases.
+
+An observed root dependency query succeeds. A later debugger stop records740
+reused constraint values against743 total queries. All three missing values are
+ready `numbers are 32 bit` queries. Their probes are retained, but the commit path
+always reinfers them and stores no value. Entry eligibility compares reused values
+with all queries, so it rejects this real application before class preparation.
+The earlier cold/warm class-source fingerprint differences do not establish the
+immediate rejection cause; current root source proofs all match on a later edit.
+
+A separate12-line no-import class case demonstrates a second boundary: one class
+instantiation permits entry reuse; adding a later floating-point instantiation
+after the global producer prevents it. Both edited and clean outputs match.
+Existing class preparation accepts only equal instance tables or completely empty
+ones. Compatible partial prefix facts need an explicit validated join, preserving
+their instance identities and requests. These are constraint/class output-boundary
+requirements, rather than another global-producer performance variant. Evidence:
+`i088-stack-performance-body.json`, `i088-fixed-stage-analysis.json`,
+`i088-class-preparation-debug.log`, `i088-minimal-class-join-report.json`.
+
 ## Latest rejected iteration: I087 declared-constraint input work
 
 Started16 November2026 at23:55:59 UTC; first deadline00:40:59 UTC17 November.
