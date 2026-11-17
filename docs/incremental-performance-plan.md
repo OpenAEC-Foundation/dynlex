@@ -10,10 +10,29 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Next iteration: I099 shared tooling frontend
+## Next iteration: I100 LSP diagnostic-only configuration queries
 
-Starts after I098 publication and fresh worktree creation, with a45-minute first
-deadline and one further iteration only for concrete implementation progress.
+Starts after I099 publication and merged-worktree disposal, with one45-minute
+first deadline and one further iteration only for concrete progress. Complete
+one actual reuse boundary: when only message configuration changes, retain valid
+LSP semantic results and rerender affected diagnostics. Share the native driver's
+configuration identities and diagnostic provenance rather than recognizing syntax
+or particular warning names. Preserve positive and missing-file/import observations,
+builtin/project configuration dependencies, target profiles and unsaved snapshots.
+Changed structural syntax or source inputs must still invalidate the units that
+read them. Add minimal cascade/error-repair and work-count regressions first;
+compare current real-program wording edits against their approximately5-second
+analysis baseline, including memory and cold/default controls. Finish a small
+clear positive change promptly. Ordinary source matching remains the next large
+P19 boundary: resolution alone was2.33–2.95 s, while source/section setup was under
+60 ms. Avoid another extraction-only source-cache framework. All P01–P24 completion
+gates and the full compiler-wide objective remain active.
+
+## Qualified iteration: I099 semantic constant queries and blocking tooling bugs
+
+Started17 November2026 at18:44 UTC after I098 publication and fresh worktree
+creation; first deadline19:29 UTC, with one further iteration only for concrete
+implementation progress.
 Move away from the two rejected matcher-storage attempts. P19 remains a verified
 missing path: recompileMainDocument creates fresh ParseContexts and calls the
 uncached compile pipeline for every editor edit, independently of the native
@@ -31,6 +50,123 @@ bytes and code together, including cold/default native controls. Keep a small
 clear positive change promptly; if the boundary stalls, record why and move to
 another remaining plan stage. Required uncached <=120 s and affected tooling
 integration checks remain mandatory. The full P01–P24 objective stays active.
+
+The first read-only baseline completes at18:50 UTC using the qualified I098 image
+and the same frozen real Breakout source as native comparisons. Three unsaved
+edits per case have median server CPU: rendering6.82 s, gameplay7.39 s,
+comment10.13 s and diagnostic wording7.59 s. No GUI is launched; a semantic-token
+request provides the completion barrier. The initial claim of no diagnostic
+errors was wrong for wording: a later strict check exposes a false config-key
+error. Those initial wording observations are not a healthy baseline.
+Peak process RSS is roughly408 MiB. CPU samples use the Linux process clock at
+10 ms resolution; the measurement helper is platform-specific, not a production
+dependency. Attribute compile/import/parse/resolve/inference/destruction before
+choosing the shared product boundary. Source/compiler hashes and raw measurements
+are retained in i099-lsp-baseline/results.json. These are baseline observations,
+not a new performance claim.
+
+At18:57 UTC attribution changes the bounded implementation target. A read-document
+barrier separates analysis from highlighting: analysis medians4.07/4.18/4.20/4.84 s
+and highlighting2.67/3.31/6.17/3.09 s for rendering/gameplay/comment/wording edits.
+An independent background GDB run through scripts/debug.sh records resolve2.33–
+2.95 s and inference1.02–1.09 s, while import/section construction total under
+60 ms. Its initial wrong-argument and wrong-working-directory observations are
+invalid and retained separately. Do not spend this iteration extracting a source
+cache for that small share of the work.
+
+First finish the large read-side duplication: directExpressionHasConstant walks
+all source expression trees separately for each variable token and definition.
+Share an on-demand reference-identity index within one semantic-token request.
+Keep instantiation/parameter constant semantics and all variable scope identities;
+use no spelling or syntax special cases. A new minimal no-import regression covers
+shadowing, repeated queries and constant/runtime edits before changing production.
+Then use one fixed seven-pair-per-case real-program comparison of full semantic
+token vectors, diagnostics, separate analysis/highlighting CPU, wall time and RSS.
+This closes one tool-query boundary; it does not claim the shared incremental
+frontend is implemented. Return to that remaining P19 boundary after this small
+change if its whole-request benefit is established.
+
+At19:11 UTC the first fixed matrix stops on that config error after all seven
+pairs for rendering/gameplay/comment pass complete token/diagnostic parity.
+Minimal repro: a three-line config overrides ambiguous operand grouping; native
+compilation accepts it, but the LSP's duplicated message-key allowlist rejects it.
+Fix validation for arbitrary message IDs, nested variants and quoted empty values
+to match the compiler. Remove the duplicated completion catalogue too: load current
+builtin message/variant data independently of the unfinished project config.
+Focused regressions verify native acceptance, editor diagnostics/completions,
+escaping and an unsaved builtin override. Local commits a191bb82/1ef70055 preserve
+the separate token-index implementation and generic configuration correction.
+
+Before accepting the configuration path, a second minimal no-library import test
+in a directory containing spaces proves that an unsaved message override still
+reads its disk value. LspFileSystem manually concatenates file:// with a physical
+path, missing the escaped editor URI. Use the shared platform URI utility; commit
+0f020872 fixes the provider and the regression then passes. The in-flight matrix
+is explicitly stopped and retained incomplete; no failed or interrupted run is
+converted into acceptance.
+
+At19:29 UTC use the single permitted verification extension, ending20:14 UTC.
+Concrete progress is established: the small index saves several seconds in three
+complete seven-pair cases, and both independently minimized tooling bugs are
+fixed. Finish verification/publication only; add no optimization variant. The
+final frozen image is
+e0861113f577b419c8161f112e86d9bf4c920acc3dc571f062799a794d44ae1d.
+One new fixed seven-pair matrix includes every final change. It retains raw
+diagnostics and requires exact token parity plus exactly one intentional baseline
+delta: the old compiler emits the false config-key error and the fixed one removes
+it. All other diagnostics must match. Native required and full affected integration
+qualification remain pending. The full incremental frontend goal remains active.
+
+At19:34 UTC exact parity stops that final-image unsaved comparison at gameplay
+sample4. The retained reproducer records the actual difference: the baseline
+number token is one character, while the changed value10 requires two. A separate
+two-file no-library regression proves that the old LspFileSystem also ignores
+unsaved CWD-relative imports. The existing URI-provider fix already covers it;
+no further production change is needed. Commit d5c2890c adds this regression.
+The raw failed comparisons and their source/compiler identities remain intact.
+
+The accepted performance protocol must compare equal work. A new fixed seven-pair
+matrix writes each edit to both disk and the editor snapshot, so the old baseline
+also reads the actual changed imported code. The earlier unsaved timings are
+screening/bug evidence only. Complete semantic vectors must match, including
+longer numbers and shifted comment lines, with only the explicitly corrected
+baseline config-key diagnostic allowed to differ. Unsaved-buffer correctness
+is verified independently by the minimal space-containing-path and CWD-relative
+import regressions. The final compiler image remains the same e0861113 hash.
+
+At19:50 UTC the fixed saved-edit comparison completes:64 observations, including
+28 paired edits. Both compiler images stay unchanged; complete semantic vectors
+match, including longer numbers and moved comment lines. Diagnostics match apart
+from the exact, intentionally removed false config-key error. The earlier failed
+and interrupted protocols are not acceptance evidence.
+
+| Saved LSP edit | Baseline analysis + tokens CPU median | Current CPU median | Paired CPU ratio,95% interval |
+| --- | ---: | ---: | --- |
+| Rendering function body |8.19 s|5.19 s|.61566 [.60000,.63614]|
+| Gameplay function body |8.67 s|5.08 s|.58184 [.56633,.58520]|
+| Comment in imported source |12.02 s|5.06 s|.40262 [.38470,.41870]|
+| Warning wording |8.46 s|5.15 s|.60422 [.59574,.62264]|
+
+Highlighting alone falls from3.07/3.55/7.07/3.34 s to.10/.11/.11/.10 s.
+The analysis stage still runs broadly; do not attribute the whole-request saving
+to incremental compilation or claim a native cold-build gain from this change.
+Peak-process-RSS paired ratios range.98568–1.00239, effectively unchanged. No new
+disk cache, persisted format or dependency is introduced. The combined production
+diff is120 added/106 removed lines, net14, including the generic configuration and
+URI fixes. This is a favorable speed/memory/disk/code tradeoff under the user's
+policy, pending required integration/shared qualification.
+
+Owner required334/0/0 passes uncached in104.360 s after the compiler build.
+The full integration suite is running; shared rebuild/required and publication
+remain pending. No further optimization variant belongs to this iteration.
+
+At20:04 UTC full integration462/0/0 passes in739.444 s, including the complete LSP
+suite and its three new minimal regressions. Required334/0/0 had passed uncached
+in104.360 s. The implementation is retained as a191bb82,1ef70055,0f020872 and
+d5c2890c. The final image and all450 C++ source hashes remain unchanged. Owner
+qualification is complete; shared-master rebuild/required and publication follow.
+This closes the measured query duplication and both reproduced provider/schema
+bugs, without claiming that ordinary LSP compilation has become incremental.
 
 ## Completed iteration: I098 constraint-source identities
 
