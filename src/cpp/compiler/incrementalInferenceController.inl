@@ -196,7 +196,7 @@ class IncrementalInferenceController {
 			}
 		}
 		bool rootEligible = rootInputsUnchanged && check.unchanged({"root", aggregateGraphVariant}) &&
-							reusableRootExecution(context, previous, frontendDiagnostics, paths);
+							reusableRootExecution(context, previous, frontendDiagnostics, *inferenceReuse);
 		if (rootEligible && reuseRootWithGlobalTypes(context, previous, paths, *irReuse)) {
 			globalTypes.commit();
 			graphStable.insert(context.mainSection);

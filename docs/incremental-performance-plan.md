@@ -2,6 +2,29 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## Current iteration: I089 complete entry-input products
+
+Started17 November2026 at02:25 UTC; first deadline03:10 UTC. I088 is closed at
+its fixed CPU rejection and remains preserved. This iteration addresses the
+separate constraint/class output boundaries identified by that verification.
+Retain I088 only as an isolated prerequisite; sharing the combined change still
+requires the complete original performance/correctness gates.
+
+Goal: an interface-stable body edit in the frozen real application reuses entry
+inference instead of moving that work into speculative inference. Persist and
+restore ready number-rule results through the same constraint-value product as
+other constraint targets. Join compatible class-instance prefixes through the
+existing transactional class-restoration code, preserving indices, requests,
+cycles and rollback. Do not relax the entry's constraint-result requirement.
+
+Before implementation, add no-import regressions for a number rule, edits to its
+provider, repeated body edits and a class with a later second instantiation.
+Require clean output/diagnostic parity and entry-reuse counters. Benchmark the
+combined frozen candidate once:31 body pairs need>=5% median paired CPU gain
+with95% interval below parity; retain I088's original controls and full IR checks.
+Required remains uncached<=120s, one heavy job,45 minutes plus at most one
+progress-based extension. The full cross-stage goal remains incomplete.
+
 ## Rejected iteration: I088 global type-producing queries
 
 Started17 November2026 at00:28:36 UTC; first deadline01:13:36 UTC.
@@ -108,7 +131,7 @@ with all queries, so it rejects this real application before class preparation.
 The earlier cold/warm class-source fingerprint differences do not establish the
 immediate rejection cause; current root source proofs all match on a later edit.
 
-A separate14-line no-import class case demonstrates a second boundary: one class
+A separate12-line no-import class case demonstrates a second boundary: one class
 instantiation permits entry reuse; adding a later floating-point instantiation
 after the global producer prevents it. Both edited and clean outputs match.
 Existing class preparation accepts only equal instance tables or completely empty

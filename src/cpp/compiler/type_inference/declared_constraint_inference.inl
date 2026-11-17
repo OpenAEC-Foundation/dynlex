@@ -102,6 +102,8 @@ static void commitDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, P
 		readPatternTypeConstraintValue(expression, context, constraint, parameterType),
 		"pattern type-constraint probe and committed result type disagreed"
 	);
+	parseContext.constraintQueries.at(index).value =
+		ParseContext::IncrementalConstraintValue{constraint, parameterType};
 	item.expression = expression;
 	if (item.numberRuleLine) {
 		item.numberRuleConstraint = std::move(constraint);
@@ -482,10 +484,12 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 				destroyExpressions();
 				return false;
 			}
-			bool reuseValue = reuseItem && !item.numberRuleLine && prior->value;
+			bool reuseValue = reuseItem && prior->value;
 			if (reuseValue) {
 				const auto &value = *prior->value;
-				if (item.element) {
+				if (item.numberRuleLine) {
+					item.numberRuleConstraint = value.constraint;
+				} else if (item.element) {
 					item.element->resolvedTypeConstraint = value.constraint;
 					item.element->resolvedParameterType = value.parameterType;
 				} else {
@@ -500,14 +504,6 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 				parseContext.constraintValuesReused++;
 			} else {
 				commitDeclaredTypeConstraint(item, parseContext, itemIndex);
-				if (item.element)
-					query.value = ParseContext::IncrementalConstraintValue{
-						item.element->resolvedTypeConstraint, item.element->resolvedParameterType
-					};
-				else if (item.variableReference)
-					query.value = ParseContext::IncrementalConstraintValue{
-						item.variableReference->declaredTypeConstraint, item.variableReference->declaredType
-					};
 				recordDeclaredConstraintDependencies(item, parseContext, variableOwners, query.dependencies);
 			}
 			query.state = Query::State::Ready;
