@@ -6,6 +6,18 @@ from cache_payloads import decode_cbor, read_payload
 import os
 
 
+def check_corrupt_object_entry(cache, output, build):
+    # Damage all option variants so the current program certainly encounters one.
+    entries = list((cache / "native-v1").glob("object-*.entry"))
+    for entry in entries:
+        data = entry.read_bytes()
+        entry.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
+    output.unlink()
+    corrupted = build(success=False)
+    assert "corrupt cache entry" in corrupted[1], "cache corruption was hidden"
+    assert corrupted[0] is None or corrupted[0]["objects_built"] == 0
+
+
 def check_recent_cache_entries(root, build):
     active = ('integer means: @intrinsic("type", "int")\n'
               'exposed function preserved:\n    execute:\n'

@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 from test_incremental_dependency_graph import check_cross_file_typed_overload, check_deferred_match_key_replay, check_independent_constraint_probes, check_skipped_constraint_expression_retention, check_class_constraint_value_reuse, check_header_parameter_constraint_owner, check_precedence_match_key_replay, check_folded_value_remains_active, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_resolved_declaration_snapshot_reuse, check_reused_ir_dependency_graph_variants, check_runtime_pure_value_summary, check_temporary_expression_parse_reuse, check_top_level_projection_reuse, check_top_level_execution_constraint_probes, check_unrelated_added_pattern_constraint_probes
-from test_incremental_program_cache import check_integration_builds, check_program_payloads, check_cache_eviction, check_recent_cache_entries, check_graph_encoding
+from test_incremental_program_cache import check_integration_builds, check_program_payloads, check_cache_eviction, check_recent_cache_entries, check_graph_encoding, check_corrupt_object_entry
 from test_incremental_frontend_diagnostic_owners import check_frontend_diagnostic_units
 from test_incremental_match_replay import check_choice_declaration_replay, check_deferred_body_match_replay, check_flex_body_match_replay
 from test_incremental_native_units import check_interned_literal_identity, check_native_partition_edits
@@ -988,13 +988,5 @@ function left times right:
     build()
     namespace = check_cache_eviction(root, build)
 
-    # Damage all option variants so the current program certainly encounters one.
-    entries = list((cache / "native-v1").glob("object-*.entry"))
-    for entry in entries:
-        data = entry.read_bytes()
-        entry.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
-    output.unlink()
-    corrupted = build(success=False)
-    assert "corrupt cache entry" in corrupted[1], "cache corruption was hidden"
-    assert corrupted[0] is None or corrupted[0]["objects_built"] == 0
+    check_corrupt_object_entry(cache, output, build)
 print("Incremental native builds, invalidation, partial reuse, diagnostics and corruption checks passed")
