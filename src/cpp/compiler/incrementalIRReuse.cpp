@@ -143,6 +143,10 @@ bool IncrementalIRReuse::reusableClosure(
 		llvm::GlobalVariable *now = current.getGlobalVariable(old->getName(), true);
 		if (!now && allowDeferredGlobals)
 			continue;
+		if (allowDeferredGlobals && reusedRoot && now && now->isDeclaration() &&
+			rootGlobalDeclarations.contains(old->getName().str()) && now->getValueType() == old->getValueType() &&
+			old->hasInitializer())
+			continue; // The validated cached entry supplies this prepared declaration's definition.
 		if (!now || now->getValueType() != old->getValueType() || now->getLinkage() != old->getLinkage() ||
 			!now->hasInitializer() || !old->hasInitializer() || now->getInitializer() != old->getInitializer())
 			return false;
@@ -248,6 +252,7 @@ void IncrementalIRReuse::bindRootGlobals(ParseContext &context, const nlohmann::
 		);
 		declaration->copyAttributesFrom(&old);
 		declaration->setLinkage(llvm::GlobalValue::ExternalLinkage);
+		rootGlobalDeclarations.insert(declaration->getName().str());
 		return declaration;
 	};
 	for (const llvm::GlobalVariable &old : previousModule->globals()) {

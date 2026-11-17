@@ -72,6 +72,7 @@ class IncrementalIRReuse {
 	std::map<std::string, const Section *> sectionsByPath;
 	std::unordered_map<std::string, std::unordered_map<std::string, std::vector<std::string>>> previousNamesByPathAndKey;
 	std::unordered_set<std::string> reusedNames;
+	std::unordered_set<std::string> rootGlobalDeclarations;
 	bool reusedRoot = false;
 	mutable std::unordered_map<const llvm::Function *, Dependencies> dependencyCache;
 	mutable size_t dependencyCacheHits = 0;
