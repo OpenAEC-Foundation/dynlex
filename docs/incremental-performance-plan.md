@@ -10,7 +10,25 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Active iteration: I103 source-layout-preserving editor comments
+## Next iteration: I104 matcher work after source movement
+
+After I103 publication, use one45-minute iteration to attribute and reduce the
+extra matcher work on the first edit which moves code. The fixed real-program
+control computes5342 matcher queries on its first inserted-comment edit versus
+752 on later coordinate-moving edits; equivalent source results alone do not yet
+explain that difference. Target P08's shared matcher query inputs, rather than
+reintroducing I102's encoded editor runtime bodies. First isolate the relevant
+fingerprint or lifecycle input with minimal no-library fixtures and current
+work counters. Include ordinary added/removed statements as well as comments;
+retain exact diagnostics, tokens and native output, and parameter/overload/scope
+cascades. Remove irrelevant key inputs only after proving their semantic role.
+Complete one measured consumer boundary, with CPU/RSS/bytes/cold controls and
+required<=120 s plus affected integration/web gates. If the boundary does not
+repay its cost, record the result and move to the next P03/P14 materialization
+consumer. One extension is available only for concrete progress. The full
+source/config/classification/inference/diagnostic/IR/object/link goal remains active.
+
+## Completed iteration: I103 source-layout-preserving editor comments
 
 Started17 November at23:17 UTC; first deadline18 November at00:02 UTC,
 with one further iteration only for concrete progress. Target P19/P21: ordinary
@@ -73,7 +91,11 @@ improvement from these controls. Required tests pass334/0/0 uncached in98523 ms.
 Integration tests pass462/0/0 in701758 ms. The actual WebAssembly build and
 host-API comment/edit/parity regression pass. Its module SHA256 is
 `326e5dc2075da00d7d97553e4ec1302a275e333d4815b9b87dee9e039117cd6b`.
-Shared-root qualification remains pending.
+Shared-root source commit`673b430f` rebuilds to compiler
+`25b75b7b8b7d4f166cf2ec134a7605681634fb71ef92c2f82bc7213756b9212e`.
+All334 required checks pass uncached in96853 ms, followed by all six focused LSP
+regressions. Qualification completes17 November before the00:02 UTC first
+deadline, without an extension. This is a qualified snapshot, not full-goal completion.
 
 ## Rejected iteration: I102 shared encoded LSP inference products
 
