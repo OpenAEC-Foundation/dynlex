@@ -18,7 +18,7 @@ def package_files(root):
             if source.is_file() and source.suffix in ['.dl', '.js', '.wasm', '.svg']:
                 files[source.relative_to(root).as_posix()] = source.read_bytes()
     for name in ['scripts/compile_project.mjs', 'scripts/run_program.mjs', 'scripts/test_web_browser.sh', 'scripts/install_release.sh',
-                 'web/wgsl-translator.js', 'web/graphics-backend.js', 'LICENSE.md', 'shared/call-colors.json',
+                 'web/wgsl-translator.js', 'web/graphics-backend.js', 'LICENSE.md', 'shared/call-colors.json', 'metadata/release-manifest.txt',
                  'tests/web/allocation_probe.mjs', 'tests/web/json_memory.mjs', 'tests/web/browser_test_driver.mjs', 'tests/web/float_shader_reference.mjs']:
         files[name] = (root / name).read_bytes()
     files['package.json'] = b'{"type":"module","private":true}\n'
