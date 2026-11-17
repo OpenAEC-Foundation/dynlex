@@ -10,10 +10,12 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Next iteration: I100 LSP diagnostic-only configuration queries
+## Active iteration: I100 LSP diagnostic-only configuration queries
 
-Starts after I099 publication and merged-worktree disposal, with one45-minute
-first deadline and one further iteration only for concrete progress. Complete
+Started17 November2026 at20:15 UTC after I099 publication and merged-worktree
+disposal; first deadline21:00 UTC. By20:54 the regression is red and the reuse
+boundary, query tracking and diagnostic provenance migration are implemented;
+use the single permitted extension until21:45 UTC for build and qualification. Complete
 one actual reuse boundary: when only message configuration changes, retain valid
 LSP semantic results and rerender affected diagnostics. Share the native driver's
 configuration identities and diagnostic provenance rather than recognizing syntax
@@ -27,6 +29,51 @@ clear positive change promptly. Ordinary source matching remains the next large
 P19 boundary: resolution alone was2.33–2.95 s, while source/section setup was under
 60 ms. Avoid another extraction-only source-cache framework. All P01–P24 completion
 gates and the full compiler-wide objective remain active.
+
+I100 implementation and initial qualification,17 November at21:09 UTC: the
+minimal regression and full LSP script suite pass. The shared observation wrapper
+supports local/editor filesystems; the old native-only implementation is removed.
+Configured related notes and all configured quick-fix producers now retain message
+provenance, including typed-body and failed-inference serialization. Shader/program
+return failures use the existing configured failure API instead of losing their
+configuration identity in a rendered string. Old compiler images have independent
+cache identities; no compatibility reader is introduced.
+
+The fixed454-input candidate image is
+`65200c1f7c8883b990f3cb4eae2bd07d910268313c0386397af1f0005d1d40aa`.
+The qualified I099 baseline is `e0861113f577b419c8161f112e86d9bf4c920acc3dc571f062799a794d44ae1d`.
+`i100-lsp-paired/results.json` retains64 observations, seven edit pairs per case,
+on frozen real Breakout revision`d913a7db39d7705b738aeab0db6204ecc801f352`
+(45 DynLex files), without launching its GUI. Both disk and editor receive each
+edit. All diagnostics and complete token vectors match exactly. Process CPU has
+10 ms sampling resolution; the5.7 ms configuration analysis figure is wall time.
+
+| Saved LSP edit | I099 analysis + tokens CPU median | I100 CPU median | Paired CPU ratio,95% interval |
+| --- | ---: | ---: | ---: |
+| Body |5.08 s|4.95 s|0.96318 [0.96145,0.97441]|
+| Lives |4.87 s|4.92 s|1.01027 [1.00495,1.01279]|
+| Comment |4.95 s|5.06 s|1.03030 [0.99505,1.03586]|
+| Diagnostic wording |4.93 s|0.10 s|0.02028 [0.02000,0.02228]|
+
+Wording analysis wall time falls4.82548 ->0.005694 s. Its process peak RSS falls
+429688 ->229700 KiB (paired ratio0.53457). Source-edit peak RSS ratios are
+0.97184–0.97547. Cold LSP opening CPU medians are3.245 ->3.235 s; there is no
+claim of faster ordinary code-edit analysis or native cold compilation here.
+Production changes total303 added/198 removed,105 net lines, including factoring
+shared observations and provenance. There is no new disk cache or dependency.
+Native controls in`i100-native-controls.json` pass exact executable and diagnostic
+parity. Five body pairs have CPU medians1.074762 ->1.082052 s (paired ratio1.00678,
+95% interval[0.97382,1.03267]); three cold pairs4.692112 ->4.726275 s (paired ratio
+0.99946,[0.99190,1.03099]). There is no demonstrated native improvement. Fifteen
+comment pairs have ratio1.01343,[0.99870,1.01867]; fifteen native wording pairs
+have ratio1.01262,[1.00529,1.02321], approximately0.4 ms paired CPU cost. Keep that
+small cost visible alongside the large editor win, lower editor memory, no new
+persisted cache and105 net production lines. Do not retry to erase it.
+
+The uncached required suite passes334/0/0 in96469 ms, below120 s. Integration
+and shared-root qualification remain pending. The current reuse boundary excludes
+early import/configuration failures and still reruns ordinary source analysis;
+those are unfinished parts of the full objective, not grounds to mark it complete.
 
 ## Completed iteration: I099 semantic constant queries and blocking tooling bugs
 

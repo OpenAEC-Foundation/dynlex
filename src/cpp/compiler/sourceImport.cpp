@@ -4,6 +4,7 @@
 #include "pathUtils.h"
 #include "pattern/transformedPattern.h"
 #include "section/parseUtils.h"
+#include "sourceIdentity.h"
 #include "sourcePreparation.h"
 #include "sourceSyntax.h"
 #include "sourceTransform.h"
@@ -167,18 +168,6 @@ static bool validateSourceCharacters(ParseContext &context, CodeLine *line, cons
 		return false;
 	}
 	return true;
-}
-
-static std::string canonicalSourceKey(std::string_view path) {
-	std::filesystem::path fsPath = pathutil::toFilesystemPath(path);
-	std::error_code ec;
-	std::filesystem::path canonical = std::filesystem::weakly_canonical(fsPath, ec);
-	if (ec) {
-		canonical = std::filesystem::absolute(fsPath, ec);
-		if (ec)
-			return fsPath.lexically_normal().string();
-	}
-	return canonical.lexically_normal().string();
 }
 
 bool isInternalSourcePath(std::string_view path) {

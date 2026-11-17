@@ -39,11 +39,9 @@ void ExpressionInferenceSupport::inferVoidIntrinsic(IntrinsicKind kind) {
 			Range returnRange = context.activeFlexCallStack.empty() ? expr->range : context.activeFlexCallStack.back()->range;
 			DataType programReturnType{DataType::Kind::Int, 4};
 			if (!DataType::supportsRuntimeConversion(retType, programReturnType)) {
-				std::string detail = renderConfiguredMessage(
-					syntaxConfigForRange(context.parseContext, returnRange), "program return value invalid", "message",
-					{{"value_type", typeToUserName(retType)}}
+				failConfigured(
+					returnRange, "program return value invalid", "message", {{"value_type", typeToUserName(retType)}}
 				);
-				failWithDetail(returnRange, detail);
 				return;
 			}
 		}

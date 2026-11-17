@@ -570,12 +570,10 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 
 	std::sort(conflicts.begin(), conflicts.end(), definitionConflictComesBefore);
 	const DefinitionConflict &conflict = conflicts.front();
-	const SyntaxConfig &syntax = syntaxConfigForRange(context, conflict.primary->range);
 	Diagnostic diagnostic(context, Diagnostic::Level::Error, "duplicate pattern definition", conflict.primary->range);
-	diagnostic.relatedInfo.push_back({
-		renderConfiguredMessage(syntax, "duplicate pattern definition related existing"),
-		conflict.related->range,
-	});
+	diagnostic.relatedInfo.push_back(configuredRelatedInfo(
+		context, conflict.primary->range, "duplicate pattern definition related existing", "message", conflict.related->range
+	));
 	appendImplicitPromotionDuplicateDetails(diagnostic, conflict.primary, conflict.related);
 	context.diagnostics.push_back(std::move(diagnostic));
 	return false;
@@ -716,26 +714,20 @@ static void appendUnusedLiteralParameterNotes(ParseContext &context, PatternRefe
 		return;
 	}
 
-	const SyntaxConfig &syntax = syntaxConfigForRange(context, reference->range());
 	for (PatternDefinition *definition : acceptedLiteralMatch->matchingDefinitions) {
 		std::vector<AcceptedLiteralDiagnosticInfo> infos =
 			collectAcceptedLiteralDiagnosticInfo(*acceptedLiteralMatch, definition);
 		if (infos.empty())
 			continue;
 		for (const AcceptedLiteralDiagnosticInfo &info : infos) {
-			diagnostic.relatedInfo.push_back(
-				{renderConfiguredMessage(
-					 syntax, "unresolved pattern", "related unused parameter candidate", {{"parameter", info.name}}
-				 ),
-				 info.range}
-			);
-			diagnostic.quickFixes.push_back({
-				renderConfiguredMessage(
-					syntax, "unresolved pattern", "quick fix unused parameter candidate", {{"parameter", info.name}}
-				),
-				info.range,
-				"{" + info.name + "}",
-			});
+			diagnostic.relatedInfo.push_back(configuredRelatedInfo(
+				context, reference->range(), "unresolved pattern", "related unused parameter candidate", info.range,
+				{{"parameter", info.name}}
+			));
+			diagnostic.quickFixes.push_back(configuredDiagnosticFix(
+				context, reference->range(), "unresolved pattern", "quick fix unused parameter candidate", info.range,
+				"{" + info.name + "}", {{"parameter", info.name}}
+			));
 		}
 		break;
 	}

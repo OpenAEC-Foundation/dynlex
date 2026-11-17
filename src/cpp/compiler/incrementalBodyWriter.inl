@@ -366,7 +366,9 @@ class InferenceBodyWriter {
 				Json::array({cachedDiagnosticText(note.message, note.configuredMessage), sources.range(note.range)})
 			);
 		for (const auto &fix : value->quickFixes)
-			fixes.push_back(Json::array({fix.title, sources.range(fix.range), fix.replacement}));
+			fixes.push_back(
+				Json::array({cachedDiagnosticText(fix.title, fix.configuredTitle), sources.range(fix.range), fix.replacement})
+			);
 		return Json::array(
 			{static_cast<int>(value->level), cachedDiagnosticText(value->message, value->configuredMessage),
 			 sources.range(value->range), std::move(notes), std::move(fixes)}

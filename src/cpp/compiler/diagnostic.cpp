@@ -74,6 +74,18 @@ RelatedInfo configuredRelatedInfo(
 	};
 }
 
+DiagnosticFix configuredDiagnosticFix(
+	const ParseContext &context, Range syntaxRange, std::string_view key, std::string_view variant, Range fixRange,
+	std::string replacement, std::vector<std::pair<std::string, std::string>> placeholders
+) {
+	ConfiguredDiagnosticMessage configured =
+		configuredDiagnosticMessage(context, syntaxRange, key, variant, std::move(placeholders));
+	return {
+		renderConfiguredDiagnosticMessage(context, configured), fixRange, std::move(replacement),
+		std::make_shared<const ConfiguredDiagnosticMessage>(std::move(configured))
+	};
+}
+
 Diagnostic unknownTypeConstraintDiagnostic(const ParseContext &context, Range range, std::string_view constraint) {
 	return Diagnostic(context, Diagnostic::Level::Error, "unknown type constraint", range, "type_constraint", constraint);
 }

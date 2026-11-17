@@ -104,8 +104,7 @@ static void commitDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, P
 		readPatternTypeConstraintValue(expression, context, constraint, parameterType),
 		"pattern type-constraint probe and committed result type disagreed"
 	);
-	parseContext.constraintQueries.at(index).value =
-		ParseContext::IncrementalConstraintValue{constraint, parameterType};
+	parseContext.constraintQueries.at(index).value = ParseContext::IncrementalConstraintValue{constraint, parameterType};
 	item.expression = expression;
 	if (item.numberRuleLine) {
 		item.numberRuleConstraint = std::move(constraint);
@@ -218,7 +217,6 @@ static bool collectDeclaredTypeConstraintWorkItems(
 			Range ruleRange(line, line->patternText);
 			ScopeRules &rules = rulesSection->rules;
 			if (rules.numberRulePending) {
-				const SyntaxConfig &syntax = syntaxConfigForRange(parseContext, ruleRange);
 				Diagnostic diagnostic(
 					parseContext, Diagnostic::Level::Error, "scope rule repeated", ruleRange, "rule", line->patternText
 				);
@@ -227,9 +225,9 @@ static bool collectDeclaredTypeConstraintWorkItems(
 						   &static_cast<ScopeRulesSection *>(item.numberRuleLine->section)->rules == &rules;
 				});
 				requireCompilerInvariant(first != items.end(), "pending number rule has no work item");
-				diagnostic.relatedInfo.push_back(
-					{renderConfiguredMessage(syntax, "scope rule repeated", "related rule"), first->diagnosticRange}
-				);
+				diagnostic.relatedInfo.push_back(configuredRelatedInfo(
+					parseContext, ruleRange, "scope rule repeated", "related rule", first->diagnosticRange
+				));
 				parseContext.diagnostics.push_back(std::move(diagnostic));
 				return false;
 			}

@@ -67,6 +67,9 @@ DynLexServer::~DynLexServer() = default;
 
 InitializeResult DynLexServer::onInitialize(const InitializeParams &params) {
 	analysisProfiles = parseAnalysisProfiles(params.initializationOptions);
+	for (auto &[_, results] : analysisResults)
+		for (auto &result : results)
+			result.profileCurrent = false;
 	if (params.rootUri) {
 		workspaceRootPath = pathutil::toFilesystemPath(*params.rootUri);
 	} else {
@@ -102,9 +105,9 @@ void DynLexServer::onDidOpen(const DidOpenTextDocumentParams &params) {
 		return;
 	}
 
-	// If this file is already compiled as an import of a main document, skip —
-	// diagnostics are already published from the main document's compilation.
-	if (importedBy.contains(uri) && !importedBy[uri].empty()) {
+	// Refresh consumers against the newly available editor snapshot.
+	if (observedBy.contains(uri) && !observedBy.at(uri).empty()) {
+		recompileDependents(uri);
 		requestSemanticTokensRefresh();
 		return;
 	}
@@ -151,6 +154,8 @@ void DynLexServer::onDidClose(const DidCloseTextDocumentParams &params) {
 		publishDiagnostics(uri, {});
 
 	compiledDocuments.erase(uri);
+	analysisResults.erase(uri);
+	eraseImportTrackingForMain(observedBy, uri);
 	lockedLinesByUri.erase(uri);
 	for (auto cursorIt = activeCursors.begin(); cursorIt != activeCursors.end();) {
 		if (cursorIt->second.uri == uri) {
@@ -189,6 +194,7 @@ void DynLexServer::onDidClose(const DidCloseTextDocumentParams &params) {
 	}
 
 	LanguageServer::onDidClose(params);
+	recompileDependents(uri);
 	requestSemanticTokensRefresh();
 }
 
@@ -335,13 +341,32 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 
 	ParseContexts contexts;
 	contexts.reserve(analysisProfiles.size());
-	for (const ParseContext::Options &analysisProfile : analysisProfiles) {
-		auto context = std::make_shared<ParseContext>();
-		context->options = analysisProfile;
-		context->fileSystem = std::make_unique<LspFileSystem>(compiledDocuments);
-		compile(uri, *context);
-		contexts.push_back(std::move(context));
+	std::vector<LspAnalysisResult> results;
+	const auto prior = analysisResults.find(uri);
+	size_t reused = 0;
+	for (size_t index = 0; index < analysisProfiles.size(); index++) {
+		const LspAnalysisResult *previous =
+			prior != analysisResults.end() && index < prior->second.size() ? &prior->second[index] : nullptr;
+		auto result = analyzeLspDocument(uri, analysisProfiles[index], compiledDocuments, previous);
+		reused += result.reused;
+		contexts.push_back(result.context);
+		results.push_back(std::move(result));
 	}
+	eraseImportTrackingForMain(observedBy, uri);
+	for (const auto &result : results)
+		addAnalysisTrackingForMain(observedBy, uri, result);
+	analysisResults[uri] = std::move(results);
+	if (tracingEnabled())
+		sendNotification(
+			"window/logMessage", Json{
+									 {"type", 4},
+									 {"message", "incremental-lsp: " + Json{
+																		   {"main_uri", uri},
+																		   {"contexts_evaluated", contexts.size() - reused},
+																		   {"contexts_reused", reused}
+																	   }.dump()}
+								 }
+		);
 
 	// Update the import graph from every target profile. Imports are available
 	// as soon as the ImportedFiles stage completes, even if a later stage fails.
@@ -388,26 +413,8 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 }
 
 void DynLexServer::recompileDependents(const std::string &uri) {
-	if (isConfigDocumentUri(uri)) {
-		std::vector<std::string> dependentMainUris;
-		for (const auto &[mainUri, contexts] : parseContexts) {
-			const bool usesConfig = std::any_of(contexts.begin(), contexts.end(), [&](const auto &context) {
-				return !context->projectSyntaxConfigPath.empty() &&
-					   pathutil::toAbsoluteUri(context->projectSyntaxConfigPath) == uri;
-			});
-			if (usesConfig)
-				dependentMainUris.push_back(mainUri);
-		}
-		for (const std::string &mainUri : dependentMainUris)
-			recompileMainDocument(mainUri);
-		return;
-	}
-
-	if (parseContexts.contains(uri))
-		recompileMainDocument(uri);
-
-	auto it = importedBy.find(uri);
-	if (it == importedBy.end())
+	auto it = observedBy.find(uri);
+	if (it == observedBy.end())
 		return;
 
 	auto mainUris = it->second;

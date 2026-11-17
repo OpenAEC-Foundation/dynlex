@@ -2245,10 +2245,22 @@ This still validates the edited source and updates diagnostics and matcher data.
 Cache entries carry BLAKE3 integrity checks and are published with atomic rename.
 Invalid entries and I/O failures are explicit errors. Linking uses private temporary
 copies so cache eviction cannot remove linker inputs. Entries are limited to 256 MiB;
-the disk cache is trimmed to 512 MiB after a build. The LSP, object-only and non-native
+the disk cache is trimmed to 512 MiB after a build. Object-only and non-native
 output modes retain their ordinary compilation pipeline.
 
 # LSP Interaction
+
+The language server retains semantic contexts per main document and analysis
+profile. A new analysis request reloads configuration and validates actual source
+observations, including failed import lookups, content, canonical identity and
+internal-library classification. If those source inputs and non-message syntax
+identities are unchanged, it updates configured diagnostic messages, related notes
+and quick-fix titles without repeating compilation. Native and editor builds share
+the filesystem observation implementation and diagnostic provenance. Configuration
+lookup dependencies include missing candidates, so opening a nearer configuration
+or closing an unsaved document refreshes its consumers. Structural syntax changes,
+source changes and invalid configuration require ordinary compilation. The existing
+LSP trace option reports evaluated and reused context counts through log messages.
 
 When hovering over an expression, the already-evaluated compile-time value and type are shown.
 

@@ -309,13 +309,10 @@ static bool resolveReferences(
 							suggestion.definition->range
 						));
 					if (suggestion.isMultiWord && !suggestion.spelling.empty()) {
-						diag.quickFixes.push_back({
-							renderConfiguredMessage(
-								syntax, "ambiguous single word reference", "quick fix", {{"spelling", suggestion.spelling}}
-							),
-							reference->range(),
-							suggestion.spelling,
-						});
+						diag.quickFixes.push_back(configuredDiagnosticFix(
+							context, reference->range(), "ambiguous single word reference", "quick fix", reference->range(),
+							suggestion.spelling, {{"spelling", suggestion.spelling}}
+						));
 					}
 					// Intentionally no per-reference dedupe tracking here.
 					context.diagnostics.push_back(std::move(diag));

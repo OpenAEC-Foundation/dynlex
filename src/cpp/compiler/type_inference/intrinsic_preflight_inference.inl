@@ -42,14 +42,7 @@ bool ExpressionInferenceSupport::validateIntrinsic(IntrinsicKind kind, const Int
 			if (kind == IntrinsicKind::ShaderInput) {
 				bool knownInput = *name == "FragCoord" || *name == "Position";
 				if (!knownInput) {
-					failWithDetail(
-						expr->arguments[1]->range,
-						renderConfiguredMessage(
-							syntaxConfigForRange(context.parseContext, expr->arguments[1]->range), "unknown shader input",
-							"message", {{"name", *name}}
-						),
-						0
-					);
+					failConfigured(expr->arguments[1]->range, "unknown shader input", "message", {{"name", *name}}, 0);
 					return false;
 				}
 				if (context.parseContext.options.emitSPIRV) {
@@ -57,28 +50,14 @@ bool ExpressionInferenceSupport::validateIntrinsic(IntrinsicKind kind, const Int
 											  (*name == "Position") == (context.parseContext.options.shaderStage ==
 																		ParseContext::ShaderStage::Vertex);
 					if (!stageProvidesInput) {
-						failWithDetail(
-							expr->arguments[1]->range,
-							renderConfiguredMessage(
-								syntaxConfigForRange(context.parseContext, expr->arguments[1]->range),
-								"shader input unavailable", "message", {{"name", *name}}
-							),
-							0
-						);
+						failConfigured(expr->arguments[1]->range, "shader input unavailable", "message", {{"name", *name}}, 0);
 						return false;
 					}
 				}
 			}
 		}
 		if (!context.parseContext.options.emitSPIRV) {
-			failWithDetail(
-				expr->range,
-				renderConfiguredMessage(
-					syntaxConfigForRange(context.parseContext, expr->range), "shader operation unavailable", "message",
-					{{"operation", expr->intrinsicName}}
-				),
-				0
-			);
+			failConfigured(expr->range, "shader operation unavailable", "message", {{"operation", expr->intrinsicName}}, 0);
 			return false;
 		}
 	}

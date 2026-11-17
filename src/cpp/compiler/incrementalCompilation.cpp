@@ -28,10 +28,12 @@
 #include "numberScopeRules.h"
 #include "pathUtils.h"
 #include "patternTreeNode.h"
+#include "recordingFileSystem.h"
 #include "section.h"
 #include "section/classSection.h"
 #include "section/variable.h"
 #include "sectionIdentity.h"
+#include "sourceIdentity.h"
 #include "sourceLineIdentity.h"
 #include "sourcePreparation.h"
 #include "sourcePreprocessing.h"
@@ -118,12 +120,6 @@ double processCPUMilliseconds() {
 	return std::chrono::duration<double, std::milli>(user + system).count();
 }
 
-std::string digest(std::string_view text) {
-	llvm::BLAKE3 hash;
-	hash.update(llvm::StringRef(text.data(), text.size()));
-	return llvm::toHex(hash.final(), true);
-}
-
 #include "incrementalCompilerIdentity.inl"
 
 std::string readFile(const fs::path &path) {
@@ -196,8 +192,6 @@ void writeEntry(const fs::path &path, std::string_view payload) {
 }
 
 #include "incrementalProgramCache.inl"
-
-#include "incrementalSourceObservations.inl"
 
 #include "incrementalDiagnosticCache.inl"
 #include "incrementalParsedExpressionCache.inl"

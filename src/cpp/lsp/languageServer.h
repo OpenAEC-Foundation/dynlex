@@ -36,6 +36,7 @@ class LanguageServer {
 	void processMessage(const Json &message);
 
   protected:
+	bool tracingEnabled() const { return traceStream != nullptr; }
 	// Override these in derived classes for language-specific behavior
 
 	// Called when client sends initialize request

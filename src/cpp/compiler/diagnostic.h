@@ -59,7 +59,13 @@ struct DiagnosticFix {
 	std::string title;
 	Range range;
 	std::string replacement;
+	std::shared_ptr<const ConfiguredDiagnosticMessage> configuredTitle = {};
 };
+
+DiagnosticFix configuredDiagnosticFix(
+	const ParseContext &context, Range syntaxRange, std::string_view key, std::string_view variant, Range fixRange,
+	std::string replacement, std::vector<std::pair<std::string, std::string>> placeholders = {}
+);
 
 struct Diagnostic {
 	enum class Level { Info, Warning, Error };
