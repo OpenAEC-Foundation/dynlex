@@ -21,6 +21,8 @@ with tempfile.TemporaryDirectory() as temporary:
         assert 'lib/farm_challenge.dl' not in archive.namelist()
         assert 'lib/river_challenge.dl' not in archive.namelist()
         for name in ['scripts/compile_project.mjs', 'scripts/install_release.sh',
-                     'src/web/compiler/services.js', 'resources/branding/dynlex-icon.svg']:
+                     'src/web/compiler/services.js', 'resources/branding/dynlex-icon.svg',
+                     'src/web/ide/public/compiler/runtimeHeap.js',
+                     'shared/call-colors.json', 'metadata/release-manifest.txt']:
             assert name in archive.namelist(), name
 print('Browser compiler package: reproducible, complete, integrity-checked and application-independent.')
