@@ -10,7 +10,29 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Active iteration: I098 constraint-source identities
+## Next iteration: I099 shared tooling frontend
+
+Starts after I098 publication and fresh worktree creation, with a45-minute first
+deadline and one further iteration only for concrete implementation progress.
+Move away from the two rejected matcher-storage attempts. P19 remains a verified
+missing path: recompileMainDocument creates fresh ParseContexts and calls the
+uncached compile pipeline for every editor edit, independently of the native
+incremental products.
+
+Complete one shared frontend reuse boundary for LSP edits. First measure actual
+edit-to-diagnostic latency/stage work on frozen real Breakout without launching
+its GUI, then reuse existing native source/parser or semantic products at their
+real consumer. Choose the largest measured avoidable work; avoid a separate
+editor semantic implementation or an extraction-only framework with no consumer.
+Respect open unsaved documents, configuration edits, imports, target profiles,
+source ranges and error repair. Add minimal locality/cascade and token/diagnostic
+parity regressions before implementation. Compare speed, peak memory, retained
+bytes and code together, including cold/default native controls. Keep a small
+clear positive change promptly; if the boundary stalls, record why and move to
+another remaining plan stage. Required uncached <=120 s and affected tooling
+integration checks remain mandatory. The full P01–P24 objective stays active.
+
+## Completed iteration: I098 constraint-source identities
 
 Started17 November 2026 at 17:58:26 UTC; first deadline18:43:26 UTC.
 I096 and I097 are preserved as rejected experiments with their original fixed
@@ -72,6 +94,17 @@ erase it. The combined tradeoff remains favorable against the roughly43 ms
 repeated-gameplay saving, lower peak RSS and identical disk use. The final change
 adds53 net production lines. Shared-master rebuild/required qualification and
 publication remain pending. The full compiler-wide goal remains incomplete.
+
+I098 shared qualification completes at18:42 UTC. Implementation `a54360f3` is
+fast-forwarded to local master and rebuilt serially under the established
+1792 MiB resident/1024 MiB swap/64-task cap. The rebuilt image is
+`58edf0de87f5139ba6772c782155e51dcf27bb878788007f11379b53b4f3fa9e`;
+all449 C++ source inputs match the frozen owner image's inputs. Shared required
+334/0/0 passes uncached in118.445 s, inside the120-second post-build budget.
+Owner required334/102.849 s and integration462/741.503 s remain the independent
+qualification results. Publish this record, dispose the merged worktree and
+retain one verified owner image as the next comparison baseline. No broader
+compiler-wide completion is claimed.
 
 ## Rejected combined iteration: I097 independent body demands
 
