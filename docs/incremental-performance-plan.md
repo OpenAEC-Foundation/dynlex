@@ -4,10 +4,30 @@ Owner: this compiler task. Established 13 November 2026.
 
 ## Current iteration: I091 demand source anchors by owner
 
-Started17 November2026 at03:00:33 UTC; first deadline03:45:33 UTC. The previous
-goal turn completed I090's attribution and published its evidence. I091 now has
-minimal counter/parity tests and an initial implementation; its rebuild and
-qualification are pending. The full incremental objective is incomplete.
+Started17 November2026 at03:00:33 UTC; first deadline03:45:33 UTC. Use the sole
+progress-based extension through04:30:33 UTC for the repaired frozen candidate's
+verification. No second implementation extension is available. The previous
+question-only turn made no goal progress; this continuation checked terminal
+build/test evidence before starting further work. The full objective is incomplete.
+
+The first frozen candidate passes23 focused and189 broader builds at each of
+O0/O2, plus333 required checks uncached in115.205s. Its31-pair native body case
+improves median CPU1.459551 ->1.310088s, paired ratio0.894489 with95% interval
+[0.889053,0.909445]. Native controls and cache-disabled cold show no established
+regression; the lives case improves about8.6%. Those results belong to image
+ee23232d, which remains unqualified: its debug control fails exact output parity.
+
+An11-line no-import reproduction identifies the source of that failure. Entry
+import reconstructed the compile unit's global debug list from name-sorted LLVM
+symbols instead of its saved declaration order. It also emitted an empty debug
+type table when no records existed. Repair both producers; the rebuilt image
+1678b655 passes full LLVM/executable parity for scalar/class reproductions and
+33 focused O0 builds. Run the complete original gates on this distinct image.
+
+The old frozen benchmark also forced the LLVM baseline cold. That LLVM timing
+cannot establish incremental improvement against the current qualified compiler.
+Preserve it as invalid comparison evidence and use equal incremental modes in
+the repaired candidate's frozen harness. Native comparisons were unaffected.
 
 The next implementation target is the repeated whole-program source-anchor
 producer identified by I090. Make body/diagnostic source mapping index only the

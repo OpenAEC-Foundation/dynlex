@@ -98,7 +98,10 @@ owner requested independently by separate readers; they do not claim distinct
 owners across the whole process. Unrelated owners do not incur anchor hashing or
 encoded/decoded anchor-map construction.
 Imported debug metadata belongs to the current compilation unit, including global
-declaration records. `debug_ir_location_queries` and `debug_ir_location_hits` expose
+declaration records. Reusing entry IR preserves the saved compile unit's global
+declaration order independently of the module's canonical symbol ordering. Debug
+type metadata is emitted only when it has actual records.
+`debug_ir_location_queries` and `debug_ir_location_hits` expose
 location validation work. This whole-unit path
 currently excludes tracing and does not extend the shared incremental driver to
 tooling or non-native backends.
