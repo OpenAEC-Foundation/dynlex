@@ -2,9 +2,11 @@
 
 from test_incremental_global_producers import check_global_type_producers
 from test_incremental_entry_inputs import check_entry_input_products
+from test_incremental_owner_anchors import check_owner_source_anchors
 
 
 def check_root_execution_reuse(root, build):
+    check_owner_source_anchors(root, build)
     check_entry_input_products(root, build)
     check_global_type_producers(root, build)
     main = root / "root_execution.dl"

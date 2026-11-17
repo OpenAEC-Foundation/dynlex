@@ -107,6 +107,8 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"inference_units_reused", statistics.inferenceUnitsReused},
 					  {"inference_summary_units_loaded", statistics.inferenceSummaryUnitsLoaded},
 					  {"inference_bodies_loaded", context.inferenceBodiesLoaded},
+					  {"body_source_anchor_owners_indexed", context.bodySourceAnchorOwnersIndexed},
+					  {"body_source_anchor_lines_indexed", context.bodySourceAnchorLinesIndexed},
 					  {"debug_ir_location_queries", statistics.debugIRLocationQueries},
 					  {"debug_ir_location_hits", statistics.debugIRLocationHits},
 					  {"inference_bodies_encoded", statistics.inferenceBodiesEncoded},
