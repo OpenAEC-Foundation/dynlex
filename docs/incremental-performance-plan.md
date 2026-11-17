@@ -2,7 +2,7 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current iteration: I089 complete entry-input products
+## Rejected iteration: I089 complete entry-input products
 
 Started17 November2026 at02:25 UTC; first deadline03:10 UTC. I088 is closed at
 its fixed CPU rejection and remains preserved. This iteration addresses the
@@ -24,6 +24,41 @@ combined frozen candidate once:31 body pairs need>=5% median paired CPU gain
 with95% interval below parity; retain I088's original controls and full IR checks.
 Required remains uncached<=120s, one heavy job,45 minutes plus at most one
 progress-based extension. The full cross-stage goal remains incomplete.
+
+### I089 fixed outcome
+
+Source1d495e30 / image9e1dbba3 passes24 focused and166 broader builds at each of
+O0/O2, plus all333 required checks uncached in114.192s. Two real-program body
+edits match independently empty-cache builds in exact executable bytes, complete
+normalized LLVM and diagnostics. An earlier proof incorrectly compared cached
+native output with cache-disabled native output, which use different code-emission
+paths; retain that observation separately. The corrected proof uses the same
+native output mode and verifies fresh-stage counters.
+
+The fixed31-pair CPU comparison measures medians1.463844 ->1.456312s, paired
+ratio0.992343,95% interval[0.982974,0.997339]. This establishes a small gain but
+misses the predeclared5% requirement. Reject the combined candidate without
+retrying it. Remaining controls, full integration and80-build IR matrix are not
+run after that gate failure. Preserve both I088 and I089 source/image evidence;
+no compiler code from either candidate is shared yet.
+
+Entry inference is reused in30/31 measured edits. Its median stage falls
+180.820 ->0.001ms, but preinference rises69.646 ->204.106ms and exposed-function
+validation rises5.843 ->40.375ms. Total inference changes318.519 ->313.950ms.
+One changed body is restored in both compilers, but restoration rises
+3.688 ->33.898ms. Scoped stage medians overlap and must not be added to other
+reported parent timings. Attribute the actual consumers before selecting another
+optimization. First-edit cold-cache entry reuse also remains an explicit gap;
+later matching source proofs alone do not explain all of its invalidation.
+
+The implementation stores every successful constraint result at its producer,
+including number rules. Rule publication consumes the already validated result;
+fresh inference validates the intrinsic and records warnings, while replay emits
+the retained diagnostic product once. Compatible class prefixes use the existing
+transactional restoration path, including cross-class reservation, request keys,
+overlapping layout checks and rollback. The12-line two-instantiation reproduction
+now reuses entry inference. These are verified functional products, but their
+combined performance qualification failed. The full incremental goal is incomplete.
 
 ## Rejected iteration: I088 global type-producing queries
 
