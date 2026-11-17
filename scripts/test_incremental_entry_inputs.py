@@ -11,9 +11,10 @@ def check_entry_input_products(root, build):
 def check_number_rule_result(root, build):
     main = root / "entry_number_rule.dl"
     source = (
+        'numbers are properties means: @intrinsic("number rule", properties)\n'
         'rule properties means: @intrinsic("type", "int", 64)\n'
         'in this file:\n'
-        '    @intrinsic("number rule", rule properties)\n'
+        '    numbers are rule properties\n'
         'to report:\n'
         '    @intrinsic("discard", @intrinsic("call", "libc", "puts", '
         '@intrinsic("type", "int", 32), "before"))\n'
