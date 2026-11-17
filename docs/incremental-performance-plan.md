@@ -2,7 +2,27 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current iteration: I090 entry-replay consumer attribution
+## Next iteration: I091 demand source anchors by owner
+
+The next implementation target is the repeated whole-program source-anchor
+producer identified by I090. Make body/diagnostic source mapping index only the
+semantic owners whose anchors are requested. Preserve the exact existing portable
+identities: owner, text digest and duplicate occurrence. Keep generated physical
+origins, source slices, inline shorthand, repeated imports, duplicate lines and
+late binding publication correct. Reuse one hashing/identity algorithm with debug
+metadata; do not introduce a second anchor format or compatibility path.
+
+Add minimal no-library tests proving unrelated owners are not indexed, plus
+current-source diagnostic/debug locations after inserted/deleted/moved lines.
+Expose actual indexed-owner/line work counters. Use the isolated I089 prerequisite
+and compare the combined frozen candidate with qualified d95dda4b once:31 real
+body pairs need>=5% paired median CPU gain with95% interval below parity. Retain
+the original controls, full clean IR/diagnostic parity, affected integration and
+uncached required<=120s. Start its45-minute clock when implementation begins;
+one extension remains conditional on concrete progress. First-edit entry reuse
+and every other unfinished stage remain part of the full goal.
+
+## Completed iteration: I090 entry-replay consumer attribution
 
 Started17 November2026 at02:49:48 UTC; first deadline03:34:48 UTC. I089 is
 preserved at its original failed5% gate. Use its frozen image only for read-only
@@ -22,6 +42,32 @@ as a separate incomplete requirement. Choose a subsequent implementation only
 after identifying an actual repeated producer or unnecessarily demanded product.
 No retry of either rejected source/image performance comparison is authorized by
 this attribution task. The complete incremental objective remains active.
+
+### I090 verified outcome
+
+The first method-name debugger probe is invalid: optimized inline locations
+triggered repeated entry breakpoints and broke its finish-stack accounting. Retain
+that observer failure; it supplies no usable timings. Two corrected one-shot
+source-boundary probes complete on successive edits. Root diagnostic restoration
+takes29.598/31.071ms. Replacement activation contains33.812/33.150ms of body
+setup/restoration; the remaining managed walk after activation is0.175/0.165ms.
+The inner body-reader entry was optimized out, so these probes do not separate
+its setup from decoding. These are inclusive debugger timings, not CPU acceptance.
+
+Two additional bounded probes observe four calls per edited build to the actual
+`sourceLineIdentities` producer. Every call hashes all7,514 program lines:
+changed-unit product capture, root diagnostic restoration, replacement-body
+restoration and final snapshot capture. Each producer call takes9.319-12.248ms
+under the debugger. `InferenceBodySources` then rebuilds both encoded/decoded
+line maps and all declaration mappings for each consumer. Its constructor invokes
+that complete producer unconditionally. This is verified repeated work, rather
+than an inference from overlapping parent stage times.
+
+Select demand-driven source anchors as the next boundary. Shared compiler/source
+remain unchanged. Evidence: `i090-entry-work-profile/boundary-report.json`,
+`boundary-probe-1.json`, `boundary-probe-2.json`, `line-report.json`,
+`line-probe-1.json`, `line-probe-2.json`. I090 changes documentation/evidence only;
+it does not qualify either prerequisite compiler variant or complete the goal.
 
 ## Rejected iteration: I089 complete entry-input products
 
