@@ -2,6 +2,27 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## Current iteration: I090 entry-replay consumer attribution
+
+Started17 November2026 at02:49:48 UTC; first deadline03:34:48 UTC. I089 is
+preserved at its original failed5% gate. Use its frozen image only for read-only
+attribution; shared compiler d95dda4b remains unchanged.
+
+Goal: locate the extra work inside preinference and the combined exposed-function/
+managed-lifecycle stage before choosing another optimization. The latter includes
+activation/restoration of replacement bodies; it is not solely exposed-function
+validation. Its40.375ms and the33.898ms body-load timer can overlap.
+
+Run two bounded project-wrapper debugger probes on successive edits of the same
+frozen real application. Measure controller setup/requests, producer validation,
+changed-unit inference, class/entry restoration, replacement activation and managed
+validation as inclusive scopes. Record instrumentation overhead and do not use
+these debugger timings as CPU acceptance data. Retain first-edit cold-cache reuse
+as a separate incomplete requirement. Choose a subsequent implementation only
+after identifying an actual repeated producer or unnecessarily demanded product.
+No retry of either rejected source/image performance comparison is authorized by
+this attribution task. The complete incremental objective remains active.
+
 ## Rejected iteration: I089 complete entry-input products
 
 Started17 November2026 at02:25 UTC; first deadline03:10 UTC. I088 is closed at
@@ -44,7 +65,7 @@ no compiler code from either candidate is shared yet.
 
 Entry inference is reused in30/31 measured edits. Its median stage falls
 180.820 ->0.001ms, but preinference rises69.646 ->204.106ms and exposed-function
-validation rises5.843 ->40.375ms. Total inference changes318.519 ->313.950ms.
+and managed-lifecycle validation rises5.843 ->40.375ms. Total inference changes318.519 ->313.950ms.
 One changed body is restored in both compilers, but restoration rises
 3.688 ->33.898ms. Scoped stage medians overlap and must not be added to other
 reported parent timings. Attribute the actual consumers before selecting another
