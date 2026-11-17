@@ -4,6 +4,7 @@ from test_incremental_program_cache import read_program
 
 
 def check_declared_constraint_sources(root, build):
+    check_constraint_identity_work(root, build)
     cases = (
         ('local', 'to get chosen {value}:\n'
          '    @intrinsic("store", {integer:hidden}, value)\n'
@@ -60,3 +61,32 @@ def check_declared_constraint_sources(root, build):
     assert build(entry=main, success=False)[1:] == build(False, entry=main, success=False)[1:]
     main.write_text(source)
     assert build(entry=main)[1:] == build(False, entry=main)[1:]
+
+
+def check_constraint_identity_work(root, build):
+    main = root / "constraint_identity_work.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'to checked {integer:value}:\n'
+              '    @intrinsic("store", {integer:copy}, value)\n'
+              '    @intrinsic("discard", copy)\n'
+              '    @intrinsic("store", {integer:copy}, value)\n'
+              '    @intrinsic("discard", copy)\n'
+              'to untouched: @intrinsic("discard", 1)\n'
+              'to running: @intrinsic("discard", 2)\n'
+              'checked @intrinsic("command line argument count")\nrunning\n')
+    main.write_text(source)
+    build(entry=main)
+    before = read_program(root / "cache", main)["all_function_projection"]["constraint_probe_schedule"]["items"]
+    assert len(before) == len(set(before)) == 3
+    for value in (3, 4):
+        main.write_text(source.replace('"discard", 2', f'"discard", {value}'))
+        edited = build(entry=main)
+        assert edited[1:] == build(False, entry=main)[1:]
+        assert edited[0]["constraint_values_reused"] == 3
+        assert edited[0]["constraint_identity_computations"] == 3, \
+            "a retained constraint identity was constructed more than once"
+        assert edited[0]["constraint_identity_cache_hits"] >= 3
+        assert edited[0]["constraint_identity_lines_indexed"] == 4, \
+            "a constraint query indexed unrelated source lines"
+        current = read_program(root / "cache", main)["all_function_projection"]["constraint_probe_schedule"]["items"]
+        assert current == before, "an unrelated body edit changed constraint source identities"

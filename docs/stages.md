@@ -1498,6 +1498,15 @@ from work performed for the edit; `classification_ms` measures the stage. Patter
 keys combine active definition contributions independent of insertion order;
 removing and readding the same definition restores its earlier key.
 
+Declared-constraint source identities are built once per actual declaration target
+during a constraint pass. Element, variable-reference and number-rule targets have
+separate keys. Source-path components are indexed on demand, and line-occurrence
+indexes visit only the queried line's owning scope. Persistent identity bytes are
+unchanged, including duplicate declaration ordinals. The
+`constraint_identity_computations`, `constraint_identity_cache_hits`,
+`constraint_identity_sections_indexed` and `constraint_identity_lines_indexed`
+counters expose this work.
+
 Variable ownership has separate persistent products after expression expansion.
 Queries are partitioned by spelling and lexical function boundary. A declared
 global reader joins the ancestor domains it can reach before ownership is

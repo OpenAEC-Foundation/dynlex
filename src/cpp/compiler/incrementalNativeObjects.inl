@@ -141,6 +141,8 @@ struct BuildStatistics {
 	size_t bodySyntaxUnitsParsed = 0, bodySyntaxUnitsRestored = 0, bodySyntaxUnitsSkipped = 0;
 	SourceProjectionWork sourceProjectionWork;
 	DeclarationProjectionWork declarationProjection;
+	size_t constraintIdentityComputations = 0, constraintIdentityHits = 0;
+	size_t constraintIdentityScopesIndexed = 0, constraintIdentityLinesIndexed = 0;
 	ClassificationWork classification;
 	double matcherKeyMilliseconds = 0;
 	double matcherRestoreMilliseconds = 0;

@@ -1,5 +1,6 @@
 #pragma once
 #include "compileTimeInfo.h"
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -26,6 +27,7 @@ struct InferenceProductHooks {
 	virtual void discardedBatch(const std::function<void()> &) = 0;
 	virtual void globalInput(const InferenceReadOwner &, VariableReference *) = 0;
 	virtual void rootCheckpoint() = 0;
+	virtual void constraintIdentities(size_t computations, size_t hits, size_t scopes, size_t lines) = 0;
 	virtual void
 	conversionLookup(const InferenceReadOwner &, const lsp::SourceFile &, bool, const std::vector<PatternDefinition *> &) = 0;
 	virtual void discarded(

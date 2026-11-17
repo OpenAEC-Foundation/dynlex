@@ -134,6 +134,12 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 		}
 	}
 	const auto &globalTypeProducers() const { return globalProducers; }
+	void constraintIdentities(size_t computations, size_t hits, size_t scopes, size_t lines) override {
+		statistics.constraintIdentityComputations += computations;
+		statistics.constraintIdentityHits += hits;
+		statistics.constraintIdentityScopesIndexed += scopes;
+		statistics.constraintIdentityLinesIndexed += lines;
+	}
 	void conversionLookup(
 		const InferenceReadOwner &owner, const lsp::SourceFile &source, bool implicit,
 		const std::vector<PatternDefinition *> &definitions

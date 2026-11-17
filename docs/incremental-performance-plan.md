@@ -2,6 +2,222 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+Current tradeoff policy: prioritize speed, then memory, disk space and code size,
+while judging the combined result rather than treating that order as absolute.
+A worthwhile disk reduction can justify a small slowdown; extra memory needs a
+commensurate speed benefit. Keep small, clearly positive changes promptly and
+move on to larger opportunities. Percentage floors in historical experiments
+are historical decisions, not current acceptance requirements. Measure combined
+changes end to end rather than adding overlapping stage savings.
+
+## Active iteration: I098 constraint-source identities
+
+Started17 November 2026 at 17:58:26 UTC; first deadline18:43:26 UTC.
+I096 and I097 are preserved as rejected experiments with their original fixed
+results. This branch starts from qualified master `1e7ed371`; none of their
+storage, binding-format or flex-eligibility changes belong to this candidate.
+At iteration start the worktree executable belonged to I097 and was not a valid
+baseline; comparison uses the verified retained I095 image instead.
+
+Finish one bounded positive change: avoid rebuilding identical constraint-source
+identities and unneeded scope/line indexes. Review I087 source `42c0567f` against
+current APIs before applying it. Its original .897%31-pair CPU gain is established;
+the investigator's1% rejection floor is superseded, not retroactively passed.
+Keep source identity bytes and query invalidation semantics unchanged. Reuse its
+minimal identity/line-index regression before implementation, then compare to the
+current qualified compiler, including memory/disk costs. Required<=120 s uncached,
+clean parity and affected integration remain mandatory. Finish promptly if it
+still gives a small clear benefit; do not extend it into another framework.
+One45-minute extension only for concrete progress. The full P01–P24 goal stays
+active and incomplete.
+
+I098 build/focused verification completed at18:09 UTC. The reviewed patch needs
+a current-API adjustment: IncrementalInferenceProducts already owns statistics,
+and rootCheckpoint must remain in the hooks interface. Keep both rather than
+replacing the newer callback. All three work-item producers provide distinct
+stable element/reference/rule-line targets. The baseline fails the new work
+counter assertion; current image
+`afab27efde4f2e4ab52bd8ad4d8f363a69251df0c592932d6fa0f38ae85a2f3c`
+passes locality plus edit/error recovery. Six independent baseline/current builds
+preserve exact identity strings for repeated declarations, inline locals and file
+number rules. Required334/0/0 passes uncached in102.849 s. A new fixed five-pair
+body/lives first/repeated comparison against the current qualified base is running;
+it does not replace or retry the old I087 experiment. No C++/header changes are
+made during this comparison.
+
+I098 fixed comparison completes at18:18 UTC:64 builds,30 exact native/diagnostic
+pairs and four clean diagnostic controls pass with unchanged compiler images.
+Rendering first/repeated paired CPU ratios are .99556 [.98553,1.04678] and
+.99985 [.94584,1.08735], both inconclusive. Gameplay first is .99284
+[.96149,1.01418], also inconclusive. Gameplay repeated CPU medians1.515021 ->
+1.471971 s give paired ratio.97158 [.92283,.99013], an established2.84% gain.
+Cold CPU controls are inconclusive. Peak-RSS paired ratios range.98701–.99451;
+allocated and logical cache bytes are identical in every pair. Keep the small
+candidate if correctness qualification finishes: no new persisted format,
+unchanged source identity bytes, fewer computations and lower measured memory.
+There is no percentage floor and no retry to make other cases significant.
+Full integration is running. Complete-IR/fast controls and shared qualification
+remain pending. This source change is about60 net production lines; do not fold
+any rejected storage/binding mechanisms back into it.
+
+I098 owner qualification completes at18:35 UTC. Integration462/0/0 passes in
+741.503 s. Twelve complete LLVM graph builds match baseline/candidate and
+clean/incremental output; all images remain unchanged. Fifteen paired comment
+and wording controls each retain frontend reuse, zero new objects and zero link
+time, with exact executable/diagnostic parity. Their CPU medians increase
+26.850 ->27.284 ms and31.642 ->32.190 ms; paired ratios1.01616
+[1.00342,1.03307] and1.03145 [1.00858,1.04361]. The small fast-path cost is
+real in this experiment; its cause is not established and no retry is used to
+erase it. The combined tradeoff remains favorable against the roughly43 ms
+repeated-gameplay saving, lower peak RSS and identical disk use. The final change
+adds53 net production lines. Shared-master rebuild/required qualification and
+publication remain pending. The full compiler-wide goal remains incomplete.
+
+## Rejected combined iteration: I097 independent body demands
+
+Started 17 November 2026 at 17:33:12 UTC; first deadline 18:18:12 UTC.
+Previous goal turn is progress: it published I095, and I096 changes authoritative
+state/evidence with a passing locality regression and a fixed failed whole-build
+comparison. Shared master/origin remains qualified `1e7ed371`; I096 is isolated
+at `9b5696fc`, not accepted. This distinct combined candidate starts from that
+experimental parent and will be compared to the published compiler, not to the
+slower rejected image.
+
+Complete one missing producer/consumer boundary: independent flex source/resolution
+and lexical binding products. Reuse reviewed source/tests from I085 (`ad1878a1`),
+whose standalone matrix showed no gain. Couple it with exact-index lazy matcher
+retention only if complete-build reads actually disappear. Do not drop lexical
+ancestor dependencies, typed constraints, storage origins, overload/demotion or
+error-repair behavior. Add its minimal regressions before applying the code;
+preserve stronger demand/work assertions and all independent cache-eviction checks.
+Verify current API/ownership changes rather than treating an old patch as qualified.
+
+Use one fixed comparison of the final combined image against `1e7ed371`: fresh
+first and repeated body/lives edits on frozen real Breakout, with peak RSS/cache
+size, complete artifact/diagnostic parity and actual full-build read counters.
+Keep I096's failed result unchanged. The user ranks speed, memory, disk, code and
+permits combined gains; no percentage floor applies. If coupling still yields
+no net benefit, reject both mechanisms and move to the next stage. Required
+uncached <=120 s and full affected integration/LLVM/fast controls precede sharing.
+One further45-minute iteration is allowed only for concrete implementation progress.
+
+At17:41 UTC the coupled image builds and passes the focused flex binding/demand
+checks atO0/O2 plus indexed-retention, partial-eviction, corruption and missing-
+provider recovery. The baseline failed the unmaterialized-flex demand assertion.
+Required334/0/0 passes uncached in106.324 s. Current image
+`c251de9d01c48431cb320cb2ba3bbfd378cad44d8cbfd7a2575f15ad339ec544`.
+The storage counter now subtracts entries when a later consumer loads their payload,
+and the final statistics copy happens after late snapshot/graph consumers. This
+prevents a publication-time skip from being advertised as a whole-build skip.
+The final fixed five-pair body/lives first/repeated comparison is running; no
+performance acceptance is claimed. Full affected integration/IR/fast controls
+remain pending if the combined result justifies retaining it.
+
+I097 closes at17:49 UTC without performance acceptance. Fixed final-image
+comparison:64 builds,30 exact native/diagnostic pairs and four clean controls all
+pass; compiler images stay unchanged. Required334/0/0 had passed in106.324 s.
+Full integration/IR/fast qualification was not run after the failed comparison.
+
+| Edit | Baseline CPU median | Candidate CPU median | Paired ratio, 95% interval |
+|---|---:|---:|---|
+| Rendering first |1.129333 s|1.136114 s|1.00600 [.99047,1.02718]|
+| Rendering repeated |1.080371 s|1.126569 s|1.02842 [.97891,1.06097]|
+| Gameplay first |1.474077 s|1.490036 s|1.00872 [.97510,1.02650]|
+| Gameplay repeated |1.419177 s|1.461761 s|1.02758 [1.01287,1.04565]|
+
+Peak RSS is only0.3–0.6% lower; cold allocated cache bytes rise3.46%. Retained
+source/resolution owners rise to542 and only7 demand, but1465 references still
+restore and1936 cached results are read. Those reads touch every result bucket:
+all320 payloads load, with9.28 MB even on repeated rendering edits, and zero
+published entries remain unread. Thus the combined variant does not eliminate
+the broad physical read. Reject it; shared master stays `1e7ed371`.
+
+Stop this area after the two bounded attempts. A future alternative would need
+record-granular storage or source-owner payloads, not another metadata/result
+bucket rearrangement. Do not implement that larger storage mechanism now. Move
+to the already established I087 constraint-identity duplication: its old31-pair
+comparison proved a .897% gain but was rejected solely by a1% floor, superseded
+by the user's tradeoff policy. Reassess its small source change on the current
+qualified base, with memory/disk evidence and all required correctness gates.
+
+## Rejected storage-only iteration: I096 resolution setup locality
+
+Started 17 November 2026 at 16:54:17 UTC; first deadline 17:39:17 UTC.
+Shared snapshot `1e7ed371` is pushed and passes required 334/0/0 uncached in
+98.912 s; I095 integration passes 462/0/0. Its merged worktree was disposed and
+this branch recreated through the project script; verified build inputs/artifacts
+were retained without duplicating the build directory.
+
+Complete one goal: reduce resolution setup by skipping unchanged producer work.
+The current real-program first-edit medians are 105.940 ms setup, including
+37.038 ms cached-body selection. Attribute the remaining phases before choosing
+an implementation: source/class preparation, definition restoration/indexing,
+reference tokenization, initial counts and worklist setup. Use bounded debugger
+CPU-clock probes rather than changing a central header merely to time phases.
+Add a minimal locality/cascade regression before the selected implementation.
+Reuse existing dependency/output proofs; preserve last-parameter-use changes,
+new/removed overloads, failed lookups, source diagnostics and clean output parity.
+
+Judge CPU, memory, disk and code together in the user's order. Keep small clear
+benefits promptly; prioritize the largest measured avoidable work. No percentage
+floor or retry-to-pass gate. One further 45-minute iteration is allowed only for
+concrete progress. If the chosen boundary stalls, move to the next measured item
+instead of extending the same attribution loop. Full required <=120 s uncached
+and affected integration/parity checks remain necessary. P01–P24 stay in scope.
+
+I096 first attribution completed at 16:57 UTC: three successful bounded GDB
+runs use the inferior process's POSIX CPU clock, read externally via
+clock_getcpuclockid/clock_gettime. Debugger sampling time is excluded. Optimized
+source lines399/400 share a stop, so data/class preparation cannot be separated
+by those markers. Medians: combined preparation9.616 ms; source-outline selection
+plus initial collection40.477; definition restoration4.942; reference publication/
+tokenization1.559; initial counts7.168; cached-body selection38.574; remaining
+setup0.019. The ordinary full-build timer independently records source-owner
+selection41.956 ms, versus only2.032 ms creating source-outline nodes.
+
+Prior I003 evidence already warns that digest-prefix matcher buckets mix metadata
+and result kinds; simply splitting them can move loading to a later consumer.
+Current retained source owners avoid materializing many bodies, so reassess that
+boundary using complete-build load/retention work. First split the40 ms owner
+selection between InitialParameterCounts preparation, segment loading and reference
+metadata restoration, then choose the avoided-work change. Do not duplicate the
+body fingerprint cache or treat a moved timer as a gain. No I096 C++ edit yet.
+
+I096 storage-only outcome (17:29 UTC): exact key membership, kind-partitioned
+payloads and opaque retention pass the new no-library locality/provider-deletion/
+repair check plus existing partial eviction and corruption checks. The unchanged
+baseline fails the new locality assertion. Source image
+`0f50578336f8c16c89ea9acd469400850f2dea132521da51e4f23350d9d7971d`.
+All64 fixed real-program builds pass, including30 exact native/diagnostic pairs
+and four clean diagnostic controls. Full required/integration/IR qualification was
+not run after the performance rejection; do not describe this as qualified.
+
+| Body edit | Baseline CPU median | Candidate CPU median | Paired ratio, 95% interval |
+|---|---:|---:|---|
+| Rendering first |1.132343 s|1.113886 s|.98799 [.97691,.99927]|
+| Rendering repeated |1.080977 s|1.119464 s|1.03405 [1.02513,1.04379]|
+| Gameplay first |1.492254 s|1.494930 s|1.00282 [.98109,1.02388]|
+| Gameplay repeated |1.462266 s|1.443652 s|1.00621 [.93760,1.01940]|
+
+Peak RSS falls about1–2%, but repeated-edit allocated cache bytes rise1.6–2.2%
+(cold +2.84%). The real build still loads318–320 payloads, reading9.2–10.1 MB;
+only31–64 entries remain in wholly unread payloads on repeated edits. Setup improves
+but downstream demands/pruning consume almost all payloads. A cold/warm record
+census shows1175 failed match records (~1.59 MB) disappear, spreading first-edit
+pruning through every result bucket. Do not mistake moved I/O for incrementality.
+Reject the storage-only variant: its +3.4% repeated-rendering cost outweighs the
+small first-edit and memory gains. Preserve `i096-first-edit-comparison.json` and
+`i096-record-kind-census.json`; no retry replaces this outcome.
+
+Next goal is the actual body consumer boundary. Prior I085 source `ad1878a1`
+already implements independent flex source/resolution and lexical binding products,
+passes138 focused builds and required333/0/0, but alone had no whole-build gain.
+Assess a distinct combined variant against published `1e7ed371`: complete that
+body-demand boundary and test whether payloads can then stay unread. This is not
+acceptance of either rejected image. Keep the previous failures and measurements;
+if the coupled variant has no net benefit, drop it and move on. Shared production
+remains `1e7ed371` until a complete qualified change is measured.
+
 ## Completed iteration: I095 graph snapshot and persistence
 
 Started 17 November 2026 at 15:43:48 UTC, after I094 publication; first deadline
