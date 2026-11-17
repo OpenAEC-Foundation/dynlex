@@ -10,7 +10,24 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Active iteration: I101 shared LSP matcher queries
+## Next iteration: I102 shared LSP inference products
+
+Queued after I101 publication. First attribute the remaining final-image editor
+analysis time by stage, then complete one consumer-visible reuse boundary using
+the native inference products and dependency rules. Keep semantic ownership
+independent of native IR and usable by the web compiler. Preserve current typed
+source/hover facts, diagnostics and configured notes/fixes, classes/globals/values,
+callable failures, profile separation and bounded failed-edit retention. Add
+minimal cascade/error-repair regressions before implementation and compare paired
+real-program edits, current work counts, cold opening, RSS and retained bytes.
+Keep the combined speed/memory/disk/code policy; no percentage floor or extra
+user setting. Required uncached <=120 s and affected integration/web checks remain
+mandatory. The iteration is45 minutes, with one further iteration only for
+concrete progress. If native coupling stalls the actual consumer, record evidence
+and move to another remaining P01–P24 item instead of keeping factor-only scaffolding.
+All stages in the full objective remain in scope; I101 is a qualified snapshot.
+
+## Completed iteration: I101 shared LSP matcher queries
 
 Started17 November at21:38 UTC after I100 publication; first deadline22:23 UTC.
 At22:19, the consumer-visible reuse boundary, bounded-error lifetime, native/web
@@ -97,8 +114,18 @@ The uncached required suite passes334/0/0 in98032 ms, below120 s. Full integrati
 passes462/0/0 in701879 ms. The final native/web source hashes and both compiler
 artifacts remain unchanged. Integration's1.5 GiB cap records no OOM events or
 kills. Implementation`fb86d6d4` contains the retention-safe code and tests.
-Shared-root publication remains pending. No timing or test rerun is used to erase
-the small costs recorded above.
+Shared-root qualification completes17 November at22:27 UTC. Local master is
+rebuilt from the same455 source/build inputs and passes334/0/0 uncached in99950 ms,
+plus all five focused LSP regressions. Its independently built image is
+`baf07303b796fdd63b555ade3f65cf96fa9dad73ff414150ff71b9c645b9cea2`.
+All qualified CPP/CMake, native owner-image and web-module hashes remain intact.
+The final record is pushed with implementation`fb86d6d4` and owner qualification
+`a27808b9`. Dispose the merged worktree while preserving its native/web build
+objects and one current comparison image; remove only the SHA256-verified
+superseded comparison image. No timing or test rerun is used to erase the small
+costs recorded above. The full P01–P24 objective stays active: current-source
+setup/classification/inference, broader native stage locality/persistence and
+other output paths still need work.
 
 ## Completed iteration: I100 LSP diagnostic-only configuration queries
 
