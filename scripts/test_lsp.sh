@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 node "$SCRIPT_DIR/generate_call_colors.mjs" --check
 python3 "$SCRIPT_DIR/test_lsp_call_colors.py"
+python3 "$SCRIPT_DIR/test_lsp_constant_modifiers.py"
 python3 "$SCRIPT_DIR/test_lsp_unicode.py"
 python3 "$SCRIPT_DIR/test_lsp_symbols.py"
 

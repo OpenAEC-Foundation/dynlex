@@ -2258,6 +2258,11 @@ ranges, semantic tokens, web diagnostics, and execution traces convert back.
 Normalized semantic tokens map each authored source slice separately. Formatted literal text and braces receive string annotations, while embedded expressions keep their own tokens.
 Source files share line indexing; the semantic token encoder is shared by the
 language server and tagged-token inspection tools.
+Constant-variable modifiers index direct source-expression facts on their first
+query within a semantic-token request. Reference and definition lookups share
+that index and retain their distinct reference identities. Instantiation and
+constant-parameter values continue to use the owning scope. A later request
+builds its index against the current compilation context.
 
 Document symbols combine the authored ranges of their opening line, own code,
 and descendant sections. Anonymous execution and branch sections contribute to

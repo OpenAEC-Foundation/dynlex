@@ -19,6 +19,7 @@
 #include <cctype>
 #include <filesystem>
 #include <string_view>
+#include <unordered_set>
 
 using namespace std::literals;
 
@@ -85,31 +86,40 @@ static Section *findOwningVariableSection(Section *fromSection, VariableReferenc
 	return nullptr;
 }
 
-static bool directExpressionHasConstant(const ParseContext &context, const VariableReference *reference) {
-	if (!reference)
-		return false;
-	for (CodeLine *line : context.codeLines) {
-		if (!line || !line->expression)
-			continue;
-		bool found = false;
-		visitExpressionTree(line->expression, [&](Expression *expression) {
-			found = expression->kind == Expression::Kind::Variable && expression->variable == reference &&
-					isCompileTimeKnown(expression->compileTimeValue);
-			return found;
-		});
-		if (found)
-			return true;
+class DirectConstantIndex {
+  public:
+	explicit DirectConstantIndex(const ParseContext &context) : context(context) {}
+	bool contains(const VariableReference *reference) {
+		if (!reference)
+			return false;
+		if (!indexed) {
+			indexed = true;
+			for (CodeLine *line : context.codeLines) {
+				if (!line->expression)
+					continue;
+				visitExpressionTree(line->expression, [&](Expression *expression) {
+					if (expression->kind == Expression::Kind::Variable && isCompileTimeKnown(expression->compileTimeValue))
+						constants.insert(expression->variable);
+					return false;
+				});
+			}
+		}
+		return constants.contains(reference);
 	}
-	return false;
-}
 
-static bool hasStoredConstantValue(const ParseContext &context, const VariableReference *reference) {
+  private:
+	const ParseContext &context;
+	bool indexed = false;
+	std::unordered_set<const VariableReference *> constants;
+};
+
+static bool hasStoredConstantValue(DirectConstantIndex &constants, const VariableReference *reference) {
 	if (!reference)
 		return false;
-	if (directExpressionHasConstant(context, reference))
+	if (constants.contains(reference))
 		return true;
 	VariableReference *definition = reference->definition ? reference->definition : const_cast<VariableReference *>(reference);
-	if (directExpressionHasConstant(context, definition))
+	if (constants.contains(definition))
 		return true;
 
 	Section *startSection = reference->range.line ? reference->range.line->section : nullptr;
@@ -137,11 +147,11 @@ static bool hasStoredConstantValue(const ParseContext &context, const VariableRe
 	return false;
 }
 
-static bool isCompileTimeVariableReference(const ParseContext &context, const VariableReference *reference) {
-	return hasStoredConstantValue(context, reference);
+static bool isCompileTimeVariableReference(DirectConstantIndex &constants, const VariableReference *reference) {
+	return hasStoredConstantValue(constants, reference);
 }
 
-static bool isCompileTimeVariableByName(const ParseContext &context, const ::Range &range) {
+static bool isCompileTimeVariableByName(DirectConstantIndex &constants, const ::Range &range) {
 	if (!range.line || !range.line->section)
 		return false;
 	const std::string name = std::string(range.subString);
@@ -154,7 +164,7 @@ static bool isCompileTimeVariableByName(const ParseContext &context, const ::Ran
 	VariableReference *definition = variableIt->second->definition;
 	if (!definition)
 		return false;
-	if (directExpressionHasConstant(context, definition))
+	if (constants.contains(definition))
 		return true;
 	for (const auto &[argTypes, inst] : owner->instantiations) {
 		(void)argTypes;
@@ -328,7 +338,8 @@ std::vector<SemanticToken> collectLiveLineSemanticTokens(
 					escaped = false;
 				}
 			}
-			tokens.push_back({static_cast<int>(start), static_cast<int>(std::min(i, code.size())), SemanticTokenType::String, 0}
+			tokens.push_back(
+				{static_cast<int>(start), static_cast<int>(std::min(i, code.size())), SemanticTokenType::String, 0}
 			);
 			continue;
 		}
@@ -378,6 +389,7 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 	}
 
 	SemanticTokenBuilder builder(lineCount);
+	DirectConstantIndex constants(context);
 	using MappedRange = std::pair<SourceLocation, SourceLocation>;
 	auto mappedRangeForUri = [&uri](const ::Range &range) -> std::optional<MappedRange> {
 		SourceLocation mappedStart = range.sourceStart();
@@ -423,7 +435,7 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 						continue;
 					addMappedTokenWithModifiers(
 						*mappedRange, SemanticTokenType::Variable,
-						semanticTokenModifiers(ref->isDefinition(), isCompileTimeVariableReference(context, ref))
+						semanticTokenModifiers(ref->isDefinition(), isCompileTimeVariableReference(constants, ref))
 					);
 				}
 			}
@@ -446,7 +458,7 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 		case ParseContext::SourceTokenKind::Variable:
 			addTokenWithModifiers(
 				annotation.range, SemanticTokenType::Variable,
-				semanticTokenModifiers(false, isCompileTimeVariableByName(context, annotation.range))
+				semanticTokenModifiers(false, isCompileTimeVariableByName(constants, annotation.range))
 			);
 			break;
 		case ParseContext::SourceTokenKind::Number:
@@ -489,7 +501,7 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 				addTokenWithModifiers(
 					expr->range, SemanticTokenType::Variable,
 					semanticTokenModifiers(
-						expr->variable->isDefinition(), isCompileTimeVariableReference(context, expr->variable)
+						expr->variable->isDefinition(), isCompileTimeVariableReference(constants, expr->variable)
 					)
 				);
 			}
