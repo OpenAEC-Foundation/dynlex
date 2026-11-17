@@ -244,6 +244,7 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"graph_encoding_columns_reused", statistics.graphEncoding.columnsReused},
 					  {"graph_encoding_columns_built", statistics.graphEncoding.columnsBuilt},
 					  {"graph_encoding_records_built", statistics.graphEncoding.recordsBuilt},
+                      {"graph_encoding_records_reused", statistics.graphEncoding.recordsReused},
 					  {"projection_fields_copied", statistics.projectionCopy.copied},
 					  {"projection_fields_copy_skipped", statistics.projectionCopy.skipped},
 					  {"matcher_declarations_reused", statistics.matcherDeclarationsReused},

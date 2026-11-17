@@ -299,6 +299,7 @@ def check_graph_encoding(root, build):
     cold = build(entry=main)
     assert cold[0]["graph_encoding_columns_built"] > 0
     assert cold[0]["graph_encoding_columns_reused"] == 0
+    assert cold[0]["graph_encoding_records_reused"] == 0
     previous = read_program(root / "cache", main)["section_dependency_graph"]
     for word in ("second", "third"):
         main.write_text(source.replace('"first"', f'"{word}"'))
@@ -310,6 +311,7 @@ def check_graph_encoding(root, build):
         assert edited[0]["graph_encoding_columns_reused"] >= 4, \
             "a body edit re-encoded unchanged graph paths and edge columns"
         assert edited[0]["graph_encoding_columns_built"] > 0
+        assert edited[0]["graph_encoding_records_reused"] > 0
         previous = current
     with_call = source.replace('to alpha: ', 'to alpha:\n    beta\n    ')
     for text in (with_call, source):

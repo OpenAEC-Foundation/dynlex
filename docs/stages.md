@@ -1925,10 +1925,19 @@ Loading retains the compact encoding alongside its semantic graph. Capture recor
 whether forward edges, reverse edges and instantiation lists changed. Publication
 reuses those encoded columns and the path table when the ordered path identities
 are unchanged; adding or removing an identity rebuilds every path-indexed column.
-Inference-unit tables and matched inputs are encoded from their current products.
+Matched-input rows retain their encoding when their version and indexed dependencies
+match. Inference-unit rows are compared against the current shared key/source tables
+and retained in place when all encoded fields agree. Rebuilding the dictionaries in
+canonical order avoids accumulating obsolete entries. New observations, shifted
+key IDs, changed values and path additions/removals still rebuild affected rows.
+The codec lives in `incrementalGraphCodec.cpp` and has direct roundtrip/edit coverage.
+This avoids reconstructing equal JSON rows; it still visits current dictionaries
+and compares inference fields. It does not make graph capture or whole-payload
+CBOR serialization incremental.
 The retained encoding and change markers are process-local producer state, not
 additional persisted graph fields. `graph_encoding_columns_reused`,
-`graph_encoding_columns_built` and `graph_encoding_records_built` report actual
+`graph_encoding_columns_built`, `graph_encoding_records_built` and
+`graph_encoding_records_reused` report actual
 conversion work at native graph publication.
 Variants whose compile-time arguments
 cannot form an inference-summary key store the union of their selected edges

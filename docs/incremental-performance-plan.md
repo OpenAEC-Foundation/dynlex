@@ -2,6 +2,75 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## Active iteration: I095 graph snapshot and persistence
+
+Started 17 November 2026 at 15:43:48 UTC, after I094 publication; first deadline
+16:28:48 UTC. Master/origin `3ffcc606` passes shared required 334/0/0 uncached
+in 108.627 s. The prior worktree was disposed and this branch recreated through
+the project script, retaining verified unchanged build inputs/artifacts.
+
+Target the measured broad snapshot/persistence work described in the priority
+section below. First distinguish graph transformation from CBOR serialization
+using bounded debugger probes; do not infer that their combined timer is all
+avoidable conversion cost. Then implement reuse of unchanged graph records (or
+a simpler representation if measurements support it), with a minimal regression
+before the implementation. Preserve exact decoded dependency information,
+add/remove/negative dependency cascades and bounded cache storage. Compare full
+build speed, peak RSS, disk and code complexity using the user's ranking and
+combined-effect criterion. Finish a clearly positive bounded change and move on;
+allow one extension only for concrete implementation/measurement progress.
+
+The user's explicit tradeoff order is speed, memory, disk, code size; judge their
+combined effect. There is no fixed percentage floor. Keep bounded, clearly positive
+changes; larger mechanisms need proportionate gains. The prior investigator-chosen
+5%-in-every-case gate is superseded, while its inconclusive evidence stays recorded.
+
+At 16:00 UTC the debugger probe confirmed both compact conversion and CBOR are
+material work, but its wall measurements are affected by debugger memory pressure
+and are not acceptance benchmarks. A standalone codec comparison and full-build
+pairs will provide CPU/resource evidence. The candidate preserves canonical shared
+dictionary numbering and compares encoded inference rows against current tables,
+retaining identical rows in place. It adds no persisted fields or append-only table.
+Regression written first: unchanged source fails the row-reuse assertion. Cover
+roundtrip fidelity, source versions, value observations, key insertion/removal,
+null-version match dependencies and changed path identities.
+
+At 16:15:56 UTC, required passes 334/0/0 uncached in 101.136 s. Candidate image
+`af4c633d9fac9e840e43259c5bd5ce0be28e373fdfb4925be6ea845ddb52ce01`.
+The isolated graph conversion check measures 16.3915 -> 14.0130 ms CPU (40 samples
+after one warmup), with identical serialized graph bytes. A smaller borrowed-string
+variant is 16.6025 ms and is not retained. These are isolated measurements, not a
+claimed whole-build speedup. Full paired CPU/RSS/cache-size comparisons are running.
+
+Row retention does not complete P19/P20: inference fields and current shared tables
+are still visited, capture remains broad, and CBOR writes the complete payload.
+Do not equate 8,438 reused rows (many empty) with 8,438 expensive computations saved.
+The candidate adds roughly 100 production lines, no dependency or persisted field.
+Finish the bounded comparison rather than constructing another storage layer here.
+
+I095 fixed full-build comparison completed at 16:20:55 UTC: 64 builds, five
+fresh-cache paired samples per body/lives case, first and immediate second edits,
+and four clean diagnostic controls. All 30 native artifact/diagnostic pairs match
+exactly; compiler images remain unchanged. Evidence: `i095-first-edit-comparison.json`.
+
+| First edit | Baseline CPU median | Candidate CPU median | Paired CPU ratio, 95% interval | Paired peak-RSS ratio |
+|---|---:|---:|---|---:|
+| Rendering body | 1.210075 s | 1.206188 s | .98817 [.96423, 1.05698] | .98176 |
+| Gameplay lives | 1.552062 s | 1.553940 s | .99766 [.95219, 1.05670] | .98224 |
+
+Whole-build speed is inconclusive; do not claim those paired estimates as gains.
+Peak RSS is consistently lower: first-edit medians 270212 ->265912 KiB and
+293528 ->287744 KiB; cold/second-edit ratios are also below parity. The GNU-time
+metric includes inherited child maximum, not summed simultaneous process-tree RSS.
+Allocated and logical cache bytes are identical for every paired build. Cold CPU
+controls are also inconclusive. Retain the bounded implementation if correctness
+qualification finishes: isolated conversion is clearly faster, peak RSS improves,
+and no format/storage cost is added. Do not re-sample to manufacture a speed claim.
+Full integration started 16:21 UTC; complete-IR and fast-path controls still remain.
+
+The full cross-process incremental goal remains incomplete. Do not mark this
+snapshot or one optimized stage as completion of P01–P24.
+
 ## Completed iteration: I093 recursive flex argument-pack crash
 
 Started 17 November 2026 at 13:20:48 UTC; first deadline 14:05:48 UTC.

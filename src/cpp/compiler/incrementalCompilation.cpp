@@ -15,6 +15,7 @@
 #include "expressionCapture.h"
 #include "incrementalClassRestoration.h"
 #include "incrementalDebugIR.h"
+#include "incrementalGraphCodec.h"
 #include "incrementalIRReuse.h"
 #include "incrementalMatcherCache.h"
 #include "incrementalModuleBitcode.h"

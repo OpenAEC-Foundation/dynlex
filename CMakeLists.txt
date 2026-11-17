@@ -604,7 +604,8 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
     )
 
-    add_executable(dynlex_cached_cbor_test tests/cpp/cachedCborTest.cpp src/cpp/compiler/cachedCbor.cpp)
+    add_executable(dynlex_cached_cbor_test tests/cpp/cachedCborTest.cpp tests/cpp/incrementalGraphCodecTest.cpp
+        src/cpp/compiler/cachedCbor.cpp src/cpp/compiler/incrementalGraphCodec.cpp)
     target_include_directories(dynlex_cached_cbor_test PRIVATE src/cpp)
     target_link_libraries(dynlex_cached_cbor_test PRIVATE nlohmann_json::nlohmann_json)
     set_target_properties(dynlex_cached_cbor_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -655,6 +656,7 @@ if(DYNLEX_WEB)
 
     set(DYNLEX_WEB_SOURCES ${PROJECT_SOURCES})
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalCompilation\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalGraphCodec\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalMatcherCache\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalIRReuse\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalDebugIR\\.cpp$")
