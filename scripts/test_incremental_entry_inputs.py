@@ -49,6 +49,14 @@ def check_number_rule_result(root, build):
     main.write_text(source)
     assert build(entry=main)[1:] == build(False, entry=main)[1:]
 
+    warning = source.replace('@intrinsic("type", "int", 64)', '@intrinsic("type", "any")')
+    main.write_text(warning)
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]
+    main.write_text(warning.replace('"before"', '"warning retained"'))
+    changed = build(entry=main)
+    assert changed[1:] == build(False, entry=main)[1:]
+    assert changed[0]["constraint_values_reused"] == 1
+
 
 def check_partial_class_result(root, build):
     main = root / "entry_class_prefix.dl"
