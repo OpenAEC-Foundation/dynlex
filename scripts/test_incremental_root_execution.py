@@ -1,7 +1,10 @@
 """Retain entry-point inference and IR when a body edit preserves its interface."""
 
+from test_incremental_global_producers import check_global_type_producers
+
 
 def check_root_execution_reuse(root, build):
+    check_global_type_producers(root, build)
     main = root / "root_execution.dl"
     source = (
         'integer means: @intrinsic("type", "int")\n'

@@ -385,6 +385,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalConstraintState.inl"
 #include "incrementalInferenceUnitCheck.inl"
 #include "incrementalRootExecution.inl"
+#include "incrementalGlobalTypeProducers.inl"
 #include "incrementalInferenceController.inl"
 #include "incrementalInferenceState.inl"
 // clang-format on

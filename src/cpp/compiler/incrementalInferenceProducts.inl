@@ -11,7 +11,7 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 		const std::map<std::string, Section *> &sections, InferenceSummaryStore &store, IncrementalInferenceReads &reads,
 		BuildStatistics &statistics
 	)
-		: context(context), paths(paths), identities(paths), store(store), reads(reads),
+		: context(context), paths(paths), identities(paths), store(store), reads(reads), statistics(statistics),
 		  sourceIdentities(context, paths, sections, statistics),
 		  globalInputQueries(paths, sourceIdentities, statistics, reads) {
 		context.inferenceProducts = this;
@@ -74,6 +74,53 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 	void globalInput(const InferenceReadOwner &owner, VariableReference *reference) override {
 		globalInputQueries.observe(owner, reference);
 	}
+	struct GlobalTypeProducer {
+		Json type;
+		Scope prefix;
+		Json globalInputs;
+		std::set<std::string> internalGlobals;
+	};
+	void rootCheckpoint() override {
+		if (!rootGlobals) {
+			rootGlobals.emplace();
+			for (const auto &[section, path] : paths)
+				for (const auto &[name, variable] : section->variables)
+					if (variable->isGlobal) {
+						rootGlobals->emplace(Json::array({path, name}).dump(), std::pair{variable, variable->type});
+						if (!variable->type.isDeduced())
+							initiallyUntypedGlobals.insert(variable);
+					}
+			return;
+		}
+		std::map<std::string, Json> outputs;
+		for (auto &[identity, state] : *rootGlobals) {
+			auto &[variable, prior] = state;
+			if (variable->type == prior)
+				continue;
+			prior = variable->type;
+			std::set<std::pair<const ClassDefinition *, int>> visiting;
+			auto type = inferenceTypeIdentity(variable->type, identities.classes, visiting);
+			if (!type) {
+				globalProducers.erase(identity);
+				continue;
+			}
+			outputs.emplace(identity, std::move(*type));
+			if (initiallyUntypedGlobals.contains(variable))
+				internallyProducedGlobals.insert(
+					sourceIdentities.definition(normalizeBindingReference(variable->definition)).dump()
+				);
+			statistics.globalTypeProducersCaptured++;
+		}
+		if (outputs.empty())
+			return;
+		auto prefix = reads.freezeRootPrefix(context.mainSection);
+		Json inputs = globalInputQueries.captureScope({}).value_or(Json(nullptr));
+		for (auto &[identity, type] : outputs)
+			globalProducers.insert_or_assign(
+				identity, GlobalTypeProducer{std::move(type), prefix, inputs, internallyProducedGlobals}
+			);
+	}
+	const auto &globalTypeProducers() const { return globalProducers; }
 	void conversionLookup(
 		const InferenceReadOwner &owner, const lsp::SourceFile &source, bool implicit,
 		const std::vector<PatternDefinition *> &definitions
@@ -185,6 +232,7 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 	InferenceValueIdentities identities;
 	InferenceSummaryStore &store;
 	IncrementalInferenceReads &reads;
+	BuildStatistics &statistics;
 	InferenceSourceIndex sourceIdentities;
 	mutable InferenceGlobalInputs globalInputQueries;
 	std::unique_ptr<InferenceBodySources> sources;
@@ -202,5 +250,9 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 		bool previous;
 	};
 	std::map<std::string, Producer> producers;
+	std::optional<std::map<std::string, std::pair<Variable *, DataType>>> rootGlobals;
+	std::map<std::string, GlobalTypeProducer> globalProducers;
+	std::unordered_set<Variable *> initiallyUntypedGlobals;
+	std::set<std::string> internallyProducedGlobals;
 	std::map<std::string, std::map<std::string, std::set<std::string>>> selectedVariants;
 };

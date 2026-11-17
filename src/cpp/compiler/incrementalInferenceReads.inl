@@ -83,6 +83,12 @@ class IncrementalInferenceReads {
 			probeDependencies[*owner.constraintProbe].insert(path);
 	}
 	const ScopeNodes &scopes() const { return scopeNodes; }
+	Scope freezeRootPrefix(const Section *root) {
+		auto scope = std::make_shared<const VariableStorageScope>();
+		auto found = scopeNodes.find({});
+		scopeNodes.emplace(scope, found == scopeNodes.end() ? ScopeNode{root, {}, {}, {}, {}} : found->second);
+		return scope;
+	}
 	void
 	recordValue(const InferenceReadOwner &owner, const Section &dependency, const Scope &calleeScope, const Json &identity) {
 		ensureScope(calleeScope, &dependency);

@@ -2,6 +2,39 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## Current iteration: I088 global type-producing queries
+
+Started17 November2026 at00:28:36 UTC; first deadline01:13:36 UTC.
+I087 completed its original fixed comparison and missed its1% threshold; retain
+its source/image separately. The previous question-only turn explained test-suite
+selection; this continuation revalidated the terminal benchmark and published its
+evidence. Shared compiler d95dda4b remains unchanged; the full goal is incomplete.
+
+Capture each global type output at a completed root statement/control-flow join,
+with the cumulative entry-prefix source, lookup, concrete-call, value and global
+input reads that actually produced it. Persist those as independently checkable
+inference units. During an entry-stable edit, validate producer units before
+temporarily installing their type outputs, then preinfer affected global readers.
+Commit only after normal whole-entry dependency/interface checks pass. Otherwise
+restore the original global types before ordinary entry inference. Never seed a
+global merely because its old type is known. Newly observed speculative global
+inputs must not justify skipping earlier ordinary demand.
+
+First add minimal no-import tests for a stable global reader, edited initializer
+provider, changed type/effect, introduced early global read, forward dependency,
+class output and a second edit after entry replay. Require clean runtime/error
+parity and counters proving producer checks and root work skipped. The initial
+source proof may conservatively include the whole unchanged entry source; finer
+statement source keys remain part of the full goal, not claimed implemented here.
+
+Fixed acceptance:31 paired real-program body edits must improve median CPU by at
+least5% with95% interval below parity. Controls:15 unused/unused-flex/lives,
+31 unchanged/comment/wording,11 cache-disabled cold and7 debug/LLVM body pairs.
+Require exact executable/diagnostic parity, full normalized clean LLVM parity,
+required uncached<=120s and affected integration before sharing. One heavy job;
+one45-minute extension only for concrete progress. If this boundary cannot be
+completed in that window, preserve evidence and move to another planned boundary.
+
 ## Latest rejected iteration: I087 declared-constraint input work
 
 Started16 November2026 at23:55:59 UTC; first deadline00:40:59 UTC17 November.

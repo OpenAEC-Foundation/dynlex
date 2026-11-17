@@ -148,6 +148,20 @@ class IncrementalInferenceController {
 					statistics.preinferSummaryInstantiationsCaptured++;
 				}
 			}
+		IncrementalGlobalTypeProducers globalTypes(
+			paths, previous.at("section_dependency_graph"), check, globalInputs, statistics
+		);
+		if (rootInputsUnchanged) {
+			globalTypes.restoreAvailable();
+			for (auto &[unit, request] : collectRequests(*eligible, native, symbolic, true)) {
+				if (check.unchanged(unit))
+					continue;
+				if (restoreArguments(unit, request) && probe(unit, request)) {
+					capturedSections.insert(request.section);
+					statistics.preinferSummaryInstantiationsCaptured++;
+				}
+			}
+		}
 
 		statistics.preinferSummarySectionsCaptured += capturedSections.size();
 		updateEligible();
@@ -165,6 +179,7 @@ class IncrementalInferenceController {
 		bool rootEligible = rootInputsUnchanged && check.unchanged({"root", aggregateGraphVariant}) &&
 							reusableRootExecution(context, previous, frontendDiagnostics, paths);
 		if (rootEligible && reuseRootWithGlobalTypes(context, previous, paths, *irReuse)) {
+			globalTypes.commit();
 			graphStable.insert(context.mainSection);
 			restoreInferenceDiagnostics(context, {}, previous.at("root_diagnostics"), [&]() -> auto & {
 				if (!diagnosticSources)
@@ -237,28 +252,27 @@ class IncrementalInferenceController {
 
 	std::vector<std::pair<InferenceUnitKey, Request>> collectRequests(
 		const IncrementalUnitSelection &eligible, const std::set<InferenceUnitKey> &native,
-		const SymbolicInferenceUnits &symbolic
+		const SymbolicInferenceUnits &symbolic, bool globalReaders = false
 	) {
 		const Json &prior = previous.at("all_function_projection"), &summaries = previous.at("inference_summaries");
 		std::map<InferenceUnitKey, Request> candidates;
 		for (const auto &[section, path] : paths) {
-			if (!hasNoGlobalAccess(section) || !summaries.contains(path) || !prior.at("matches").contains(path) ||
-				!projection.at("matches").contains(path) ||
+			if ((!globalReaders && !hasNoGlobalAccess(section)) || !summaries.contains(path) ||
+				!prior.at("matches").contains(path) || !projection.at("matches").contains(path) ||
 				prior.at("declaration_fingerprints").at(path) != projection.at("declaration_fingerprints").at(path))
 				continue;
 			statistics.preinferDependencyGraphSectionsChecked++;
 			for (const auto &[key, summary] : summaries.at(path).items()) {
 				if (summary.at("failed").get<bool>())
 					continue;
+				const Json &globalProof =
+					previous.at("section_dependency_graph").at("inference_units").at(path).at(key).at("global_inputs");
 				if ((!native.contains({path, key}) && !inferenceSummaryHasValueState(summary) &&
 					 !symbolic.contains({path, key})) ||
-					!previous.at("section_dependency_graph")
-						 .at("inference_units")
-						 .at(path)
-						 .at(key)
-						 .at("global_inputs")
-						 .empty() ||
-					eligible.contains(section, key))
+					(!globalReaders && !globalProof.empty()) || eligible.contains(section, key))
+					continue;
+				if (globalReaders &&
+					((hasNoGlobalAccess(section) && globalProof.empty()) || !globalInputs.unchanged(globalProof)))
 					continue;
 				candidates.emplace(InferenceUnitKey{path, key}, Request{const_cast<Section *>(section), {}, {}, {}, {}});
 			}

@@ -31,7 +31,8 @@ void updateEligibility(const InferenceUnitKey &unit) {
 }
 bool equivalent(const Json &current, const Json &prior) {
 	const Json *fresh = summaryStore.load(current), *saved = summaryStore.load(prior);
-	return fresh && saved && current.at("diagnostics") == prior.at("diagnostics") && sameInterface(*fresh, *saved);
+	return fresh && saved && (!preparing || fresh->at("global_inputs") == saved->at("global_inputs")) &&
+		   current.at("diagnostics") == prior.at("diagnostics") && sameInterface(*fresh, *saved);
 }
 void adoptQueries() {
 	std::set<InferenceUnitKey> accepted;
