@@ -113,7 +113,10 @@ python3 scripts/package_web_compiler.py --output build/dynlex-web.zip
 The content-addressed package includes the browser compiler, standard library,
 shader translator, generic compiler services, runtime, build tools, installer and
 compiler branding. Consumers pin its manifest hash and build without a compiler
-checkout. The installer is maintained at `scripts/install_release.sh`; the
+checkout. `scripts/compile_project.mjs` uses the browser compiler by default. Set
+`DYNLEX_PROJECT_COMPILER` to an absolute installed compiler executable to compile
+CPU jobs natively against the package standard library; shader jobs continue to
+use the pinned browser compiler and translator. The installer is maintained at `scripts/install_release.sh`; the
 canonical logo is `resources/branding/dynlex-icon.svg`.
 
 Compiler WASM C ABI exports:

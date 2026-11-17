@@ -1,3 +1,5 @@
+Website implementation and application tests now live in [dynlex-website](https://github.com/OpenAEC-Foundation/dynlex-website). Paths under `site/` in this implementation report refer to that repository.
+
 # UI framework extraction: fixes found during implementation
 
 The compiler retains general section, callback, memory and graphics facilities.

@@ -12,7 +12,7 @@ function compile(source, success = true) {
   compiler.ccall('dynlex_web_set_main_source', null, ['string'], [source]);
   const status = compiler.ccall('dynlex_web_compile_and_emit_wasm', 'number', [], []);
   const diagnostics = compiler.ccall('dynlex_web_get_diagnostics_json', 'string', [], []);
-  if (!success) { assert.notEqual(status, 0, 'The extracted UI must not remain embedded in the compiler'); return diagnostics; }
+  if (!success) { assert.notEqual(status, 0, 'Extracted application and UI libraries must not remain embedded in the compiler'); return diagnostics; }
   assert.equal(status, 0, diagnostics);
   assert.equal(JSON.parse(diagnostics).diagnostics.length, 0, diagnostics);
   const encoded = compiler.ccall('dynlex_web_get_output_wasm_base64', 'string', [], []);
@@ -34,5 +34,6 @@ for (const fixture of ['static_callback_cast', 'recursive_local_comparison']) {
 assert.equal(await run('import lib/utf8.dl\nprint line UTF8 text for code point 233\n'), 'é\n');
 assert.equal(await run('import lib/utf8.dl\nprint line the previous UTF8 boundary before 2 in (the string form of "A")\n', true),
   'A UTF-8 byte offset must be inside the text\n');
-assert.match(compile('import lib/ui.dl\n', false), /ui\.dl/);
+for (const library of ['ui', 'farm_challenge', 'river_challenge'])
+  assert.match(compile(`import lib/${library}.dl\n`, false), new RegExp(library+'\\.dl'));
 console.log('Browser compiler: static callbacks, recursion, current UTF-8 library and extracted UI verified.');

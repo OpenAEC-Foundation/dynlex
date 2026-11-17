@@ -742,7 +742,7 @@ run_auxiliary_test() {
     local test_name="$1"
     local required_test=false
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|build_arguments|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|incremental_cache_entries|data_declaration_cache|cache_codec|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|embedded_directory|llvm_toolchain|build_arguments|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|incremental_cache_entries|data_declaration_cache|cache_codec|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
         required_test=true ;;
     esac
     if [[ "$suite" == required && "$required_test" != true ]] ||
@@ -802,6 +802,7 @@ else
         python3 -B "$SCRIPT_DIR/test_macos_dependency_staging.py"
     run_auxiliary_test "process_posix_write" 10 python3 -B "$SCRIPT_DIR/test_process_posix_write.py"
 fi
+run_auxiliary_test "embedded_directory" 10 python3 -B "$SCRIPT_DIR/test_embedded_directory.py"
 run_auxiliary_test "llvm_toolchain" 10 python3 -B "$SCRIPT_DIR/test_llvm_toolchain.py"
 run_auxiliary_test "entrypoint_checker" 60 python3 -B "$SCRIPT_DIR/test_entrypoint_checker.py" "$COMPILER"
 run_auxiliary_test "numeric_literals" 30 python3 -B "$SCRIPT_DIR/test_numeric_literals.py" "$PROJECT_DIR"

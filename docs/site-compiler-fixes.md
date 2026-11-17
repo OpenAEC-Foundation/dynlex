@@ -114,3 +114,19 @@ site, River, character inspection and Farm flows across WebGPU and both WebGL
 capability configurations. Browser checks cover syntax colors, hover, navigation,
 quick fixes, undo, themes, downloads, gameplay, persistence and deadline recovery.
 The tested candidate is served by the local preview.
+
+
+## Website extraction: embedded-library deletion
+
+The browser build tracked existing embedded files but did not retain directory
+membership as an input. Deleting a file removed a dependency edge without making
+Ninja relink the compiler, leaving the deleted library in its virtual filesystem.
+A generated membership manifest now participates in link dependencies. A small
+CMake/Ninja regression verifies deletion, edits and additions; real browser
+negative-import checks verify Farm and River are absent from the standard library.
+The application supplies that vocabulary as ordinary project sources instead.
+
+During extraction, all 386 required checks passed functionally in 133.782 seconds;
+this run exceeded the unchanged 120-second gate. The independent incremental
+compilation group was the last group running. This timing result is not counted
+as a passing gate.

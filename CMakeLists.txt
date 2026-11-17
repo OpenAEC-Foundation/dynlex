@@ -696,10 +696,11 @@ if(DYNLEX_WEB)
         "['_dynlex_web_init','_dynlex_web_set_main_source','_dynlex_web_set_import_sources','_dynlex_web_set_entry_file','_dynlex_web_compile_and_emit_wasm','_dynlex_web_compile_and_emit_shader_spirv','_dynlex_web_get_diagnostics_json','_dynlex_web_get_output_wasm_ptr','_dynlex_web_get_output_wasm_len','_dynlex_web_get_output_wasm_base64','_dynlex_web_get_output_shader_spirv_base64','_dynlex_web_get_shader_reflection_json','_dynlex_web_get_compiler_log_json','_dynlex_web_lsp_exchange_json']"
     )
     set(DYNLEX_WEB_EXPORTED_RUNTIME_METHODS "['ccall','cwrap','UTF8ToString']")
-    file(GLOB_RECURSE DYNLEX_WEB_EMBEDDED_LIBRARY_FILES
-        CONFIGURE_DEPENDS
-        LIST_DIRECTORIES false
-        "${CMAKE_SOURCE_DIR}/lib/*"
+    include(cmake/EmbeddedDirectory.cmake)
+    dynlex_embedded_directory_dependencies(
+        "${CMAKE_SOURCE_DIR}/lib"
+        "${CMAKE_CURRENT_BINARY_DIR}/dynlex_web.embedded-files"
+        DYNLEX_WEB_EMBEDDED_LIBRARY_FILES
     )
     set_property(TARGET dynlex_web APPEND PROPERTY LINK_DEPENDS ${DYNLEX_WEB_EMBEDDED_LIBRARY_FILES})
     target_link_options(dynlex_web PRIVATE
