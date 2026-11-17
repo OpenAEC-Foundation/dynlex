@@ -2,7 +2,7 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Active iteration: I093 recursive flex argument-pack crash
+## Completed iteration: I093 recursive flex argument-pack crash
 
 Started 17 November 2026 at 13:20:48 UTC; first deadline 14:05:48 UTC.
 The user explicitly prioritizes confirmed compiler problems before further
@@ -57,6 +57,14 @@ The incremental overload-addition/removal recovery check also passes against
 clean builds. Full corrected-environment integration and the final required run
 (including that additional regression) remain to be recorded before publishing.
 
+Final qualification completed at 14:16:27 UTC: corrected integration passed
+462/0/0 in 761.497 s, and required passed 334/0/0 uncached in 112.326 s, including
+the added overload recovery check. The qualified compiler image is
+`864cbe7dd756a3014af474d68d671267f11a043d1a6558f5e7131d45eb8fd2cd`;
+the implementation commit is `bf4b74c1`. The service recorded no task denials,
+memory-limit hits, OOM events or swap use. The earlier timed-out required run
+and incorrectly task-limited integration failure remain recorded above.
+
 The sole qualification extension is justified by the implemented crash fix,
 passing required/recovery tests and verified test-service thread-limit failure.
 Its final deadline is 14:50:48 UTC. Do not publish the snapshot before corrected
@@ -71,6 +79,35 @@ input (`i094-red-lookup-results.log`). The next implementation should share the
 existing resolved-match identity machinery across source-owner units, retaining
 raw reference keys for lookup validation and replay. Set a separate bounded
 performance gate before retaining that optimization.
+
+## Queued iteration: I094 source lookup output boundaries
+
+Start its 45-minute implementation window after I093's final qualification.
+The no-import regression is `check_source_lookup_results`; it currently fails
+because a nonmatching overload changes an existing constructor query's source
+input. Preserve clean/incremental execution and diagnostic parity when the
+overload is added and removed. Reuse `resolvedFunctionMatches`' ordered semantic
+identities for source-owner reference units, including flex/class/lifecycle
+owners. Keep initial/final input keys for matcher validation and replay, and
+retain semantic output products across deferred source owners. Migrate every
+projection producer and consumer; do not introduce a cache-format fallback.
+
+Before retaining the optimization, require the real frozen LEXI8 program's first
+body and lives edits to restore all four unchanged global type products and
+reuse entry inference. Measure seven paired baseline/candidate samples per edit,
+each starting from a freshly populated cold cache. The fixed gain gate is at
+least 5% median summed CPU improvement in both first-edit cases, with a paired
+95% bootstrap interval excluding no improvement. Record elapsed time too.
+The cold populations and immediate second edits serve as controls: reject a
+measured regression exceeding 5%. Preserve comment/wording fast paths and run
+the required/integration correctness gates before publication. Use one heavy
+job, bounded memory and one live cache per compiler/sample; remove disposable
+payloads after preserving raw measurements.
+
+If that window cannot produce a qualifying implementation, allow one extension
+only for concrete code/measurement progress. Otherwise record the result and
+move to a different P01–P24 boundary rather than starting another attribution
+iteration on the same first-edit issue.
 
 ## Full-objective status
 
