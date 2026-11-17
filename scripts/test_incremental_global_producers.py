@@ -3,6 +3,7 @@
 from test_incremental_program_cache import read_program
 
 def check_global_type_producers(root, build):
+    check_storage_value_demand(root, build)
     main = root / 'global_type_producers.dl'
     source = ('@intrinsic("store", shared, @intrinsic("command line argument count"))\n'
               'function show:\n'
@@ -142,3 +143,15 @@ def check_global_type_producers(root, build):
     assert changed[2] == b'after\n0\n7\n'
     assert changed[0]['root_execution_reused']
     assert read_program(root / 'cache', main)['global_storage']
+
+
+def check_storage_value_demand(root, build):
+    main = root / 'storage_value_demand.dl'
+    definitions = ('function set {target} to {value}:\n'
+                   '    replacement:\n        @intrinsic("store", target, value)\n'
+                   'function consume {value}:\n'
+                   '    replacement:\n        @intrinsic("discard", value)\n')
+    main.write_text(definitions + 'set sample to 7\nconsume sample\n')
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]
+    main.write_text(definitions + 'consume sample\nset sample to 7\n')
+    assert build(entry=main, success=False)[1:] == build(False, entry=main, success=False)[1:]
