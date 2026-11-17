@@ -2,6 +2,30 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## Full-objective status
+
+The complete goal is still active. A qualified optimization is a snapshot, not
+proof that every stage is incremental. The P01-P24 inventory below retains the
+complete scope. Current evidence and remaining boundaries are:
+
+| Requirement | Verified coverage | Remaining work |
+|---|---|---|
+| Source/config edits | File preparation, preprocessing chunks, source observations and outlines have retained products. | Semantic section/declaration objects still reconstruct broadly after active edits. |
+| Parameter classification | Focused tests cover removing the last parameter use, dependent reclassification and recovery. | Broad eligibility/index consumers still run; prove locality across every declaration and scope change. |
+| Positive/failed pattern lookups | Persistent match, binding and constraint reads retain successful and failed dependencies. | Some matcher catalogs, validation and persistence still process broad program state. |
+| Type inference | Ordinary concrete bodies, constraint results, diagnostics and validated global products can replay. | First cold-cache edit can repeat entry inference; statement/block/CFG entry products are missing. |
+| Diagnostics | All62 wording benchmark invocations update existing warnings with zero objects/linking; focused tests cover error removal and diagnostic movement. | Complete locality across all early-error and configuration changes remains unproven. |
+| LLVM IR | Native/debug function and entry closures reuse; LLVM text has an incremental driver. | Whole-module work remains, and tracing excludes major paths. Current snapshot's80-build IR qualification is pending. |
+| Objects/link | Unchanged objects reuse; ordinary body benchmark rebuilds one object; fast paths skip linking. | Necessary executable changes use a conventional full link. Other output drivers still need shared products. |
+| Tooling/targets | Existing native and LLVM regression coverage. | LSP, object-only, WebAssembly and SPIR-V do not yet share the complete persistent pipeline. |
+| Required budget | Repaired candidate333/0/0 uncached in110.016s after the last test-code edit. | Recheck the shared build before publishing this snapshot. |
+
+Next attribution after I091 closes: inspect why the first edit restores two global
+type products while later edits restore four. Identify the failed input proof on
+the frozen real program, minimize it without library imports, then choose a fixed
+implementation/performance gate. Do not relax eligibility from saved output types
+or repeat a completed failed variant. This does not replace the other boundaries.
+
 ## Current iteration: I091 demand source anchors by owner
 
 Started17 November2026 at03:00:33 UTC; first deadline03:45:33 UTC. Use the sole
