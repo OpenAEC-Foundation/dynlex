@@ -2,7 +2,7 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Current iteration: I088 global type-producing queries
+## Rejected iteration: I088 global type-producing queries
 
 Started17 November2026 at00:28:36 UTC; first deadline01:13:36 UTC.
 I087 completed its original fixed comparison and missed its1% threshold; retain
@@ -84,6 +84,39 @@ as a temporary adds stack pressure on that recursive path. Construct its map ent
 in place and rerun the existing regression, complete correctness gates and original
 fixed performance matrix on a new frozen image. Neither this repair nor the global
 producer candidate is qualified for sharing yet.
+
+### I088 fixed outcome and verified next boundary
+
+Final sourcebc312215 / image8ba81fdf passes38 focused and142 broader builds at each
+of O0/O2, the existing compatibility stack regression and all333 required checks
+uncached in113.417s. Its fixed31-pair native body comparison fails: CPU medians
+1.470378 ->1.482319s, paired ratio1.010800,95% interval[1.002125,1.017050]. Exact
+executables and diagnostics match. Do not retry that source/image comparison or
+run the remaining controls/integration after the primary rejection. Preserve the
+candidate source/image; shared compiler d95dda4b remains qualified and unchanged.
+
+The candidate restores four global type outputs and preinfers one changed reader,
+but entry reuse remains false in every sample. Preinference medians rise
+67.917 ->162.835ms while ordinary entry inference falls180.411 ->91.988ms.
+Total inference rises315.328 ->323.108ms. The work has moved between phases.
+
+An observed root dependency query succeeds. A later debugger stop records740
+reused constraint values against743 total queries. All three missing values are
+ready `numbers are 32 bit` queries. Their probes are retained, but the commit path
+always reinfers them and stores no value. Entry eligibility compares reused values
+with all queries, so it rejects this real application before class preparation.
+The earlier cold/warm class-source fingerprint differences do not establish the
+immediate rejection cause; current root source proofs all match on a later edit.
+
+A separate14-line no-import class case demonstrates a second boundary: one class
+instantiation permits entry reuse; adding a later floating-point instantiation
+after the global producer prevents it. Both edited and clean outputs match.
+Existing class preparation accepts only equal instance tables or completely empty
+ones. Compatible partial prefix facts need an explicit validated join, preserving
+their instance identities and requests. These are constraint/class output-boundary
+requirements, rather than another global-producer performance variant. Evidence:
+`i088-stack-performance-body.json`, `i088-fixed-stage-analysis.json`,
+`i088-class-preparation-debug.log`, `i088-minimal-class-join-report.json`.
 
 ## Latest rejected iteration: I087 declared-constraint input work
 
