@@ -56,7 +56,9 @@ def check_global_type_producers(root, build):
     # The same unchanged producer proof can feed another producer in the prefix.
     chained = source.replace(
         'function show:', '@intrinsic("store", second, @intrinsic("add", shared, 5))\nfunction show:'
-    ).replace('globals: shared', 'globals: second').replace('"add", shared, 1', '"add", second, 1')
+    ).replace('globals: shared', 'globals:\n        shared\n        second').replace(
+        'execute:\n', 'execute:\n        @intrinsic("discard", shared)\n'
+    ).replace('"add", shared, 1', '"add", second, 1')
     main.write_text(chained)
     build(entry=main)
     main.write_text(chained.replace('second, 1)', 'second, 2)'))
