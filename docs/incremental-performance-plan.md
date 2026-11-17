@@ -20,11 +20,22 @@ complete scope. Current evidence and remaining boundaries are:
 | Tooling/targets | Existing native and LLVM regression coverage. | LSP, object-only, WebAssembly and SPIR-V do not yet share the complete persistent pipeline. |
 | Required budget | Shared compiler333/0/0 uncached in115.499s; candidate also passes in110.016s. | Preserve the120s post-build budget in subsequent iterations. |
 
-Next attribution after I091 closes: inspect why the first edit restores two global
+## Current iteration: I092 first-edit global-product attribution
+
+Started17 November2026 at04:42:41 UTC; first deadline05:27:41 UTC. The previous
+goal turn made progress: it qualified, merged and pushed I091, verified the shared
+compiler and disposed its merged worktree. Revalidate current master d03a8e42 and
+the published7238ae26 image before this new investigation. The full goal remains
+active and incomplete.
+
+Inspect why the first edit restores two global
 type products while later edits restore four. Identify the failed input proof on
 the frozen real program, minimize it without library imports, then choose a fixed
 implementation/performance gate. Do not relax eligibility from saved output types
 or repeat a completed failed variant. This does not replace the other boundaries.
+Use one heavy job and project-wrapper debugger probes. Stop attribution when the
+actual missing producer/consumer contract is identified; choose implementation
+only from that evidence. One45-minute extension requires concrete progress.
 
 ## Completed iteration: I091 demand source anchors by owner
 
