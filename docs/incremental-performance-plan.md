@@ -18,7 +18,7 @@ complete scope. Current evidence and remaining boundaries are:
 | LLVM IR | Native/debug function and entry closures reuse; LLVM text has an incremental driver. Current snapshot passes80 clean/incremental IR builds and16 exact native/debug output pairs. | Whole-module work remains, and tracing excludes major paths. |
 | Objects/link | Unchanged objects reuse; ordinary body benchmark rebuilds one object; fast paths skip linking. | Necessary executable changes use a conventional full link. Other output drivers still need shared products. |
 | Tooling/targets | Existing native and LLVM regression coverage. | LSP, object-only, WebAssembly and SPIR-V do not yet share the complete persistent pipeline. |
-| Required budget | Repaired candidate333/0/0 uncached in110.016s after the last test-code edit. | Recheck the shared build before publishing this snapshot. |
+| Required budget | Shared compiler333/0/0 uncached in115.499s; candidate also passes in110.016s. | Preserve the120s post-build budget in subsequent iterations. |
 
 Next attribution after I091 closes: inspect why the first edit restores two global
 type products while later edits restore four. Identify the failed input proof on
@@ -26,7 +26,7 @@ the frozen real program, minimize it without library imports, then choose a fixe
 implementation/performance gate. Do not relax eligibility from saved output types
 or repeat a completed failed variant. This does not replace the other boundaries.
 
-## Current iteration: I091 demand source anchors by owner
+## Completed iteration: I091 demand source anchors by owner
 
 Started17 November2026 at03:00:33 UTC; first deadline03:45:33 UTC. Use the sole
 progress-based extension through04:30:33 UTC for the repaired frozen candidate's
@@ -116,6 +116,31 @@ variant belongs to this iteration's verification window. Evidence:
 `i091-performance-audit.json`,
 `i091-fast-path-audit.json`, `i091-debug-fixed-stage-analysis.json`,
 `i091-first-edit-gap.json` and the ten `i091-debug-fixed-performance-*.json` reports.
+
+### I091 shared publication proof
+
+Candidate qualification closes17 November2026 at04:26:11 UTC, before the sole
+extension deadline04:30:33. No subsequent implementation variant or repeated
+timing comparison is introduced. Local master merges the qualified snapshot at
+a75a8992. Its serial58-step C++ rebuild passes in632.514s; that build is outside
+the required suite's post-build budget.
+
+Shared compiler7238ae26 passes333 required checks uncached in115.499s, all190
+focused anchor/entry/global builds across O0/O2, LLVM ordering/output/debug checks
+and DWARF verification. Its473 C++/header/inline and22 C source inputs match the
+qualified candidate exactly. Retain the one qualified worktree build with input
+hashes and mtimes, dispose the merged worktree/branch, then verify15 actual native,
+debug and LLVM builds through the shared compiler. Those post-disposal builds
+pass, including two code edits, fast comment/wording/unchanged paths and LLVM
+output restoration. The shared executable is archived and hash verified.
+
+Keep the measured optimization. This is a published snapshot of the active full
+goal, not its completion. Semantic section construction, broad query consumers,
+entry statement/block products, first-edit global products, whole-module work,
+tracing and other drivers remain in scope. Next perform the first-edit attribution
+specified above. Evidence: `i091-root-qualification-audit.json`,
+`i091-root-build.json`, `i091-root-focused-audit.json`,
+`i091-root-disposed-replay-final/report.json` and `i091-implementation-close.json`.
 
 ## Completed iteration: I090 entry-replay consumer attribution
 
