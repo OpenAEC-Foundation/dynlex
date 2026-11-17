@@ -147,6 +147,21 @@ def main():
             actions = session.request("textDocument/codeAction", {"textDocument": {"uri": uri},
                                       "range": result["range"], "context": {"diagnostics": [result]}})
             assert len(actions) == 1 and actions[0]["title"].startswith("changed conversion "), actions
+
+            change(entry, 'import invented.dl\n@intrinsic("discard", found)\n', 3)
+            work_counts(2, 0)
+            assert any(d["severity"] == 1 for d in diagnostics())
+            invented = entry.parent / "invented.dl"
+            session.server_notifications.clear()
+            open_document(invented, "found means: 1\n")
+            session.request("dynlex/readDocument", {"uri": uri})
+            work_counts(2, 0)
+            assert not any(d["severity"] == 1 for d in diagnostics()), diagnostics()
+            session.server_notifications.clear()
+            session.notify("textDocument/didClose", {"textDocument": {"uri": to_file_uri(invented)}})
+            session.request("dynlex/readDocument", {"uri": uri})
+            work_counts(2, 0)
+            assert any(d["severity"] == 1 for d in diagnostics())
         finally:
             session.close()
     print("LSP configuration queries reuse all target profiles and preserve source, import, note and fix dependencies.")
