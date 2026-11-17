@@ -159,8 +159,7 @@ bool ExpressionInferenceSupport::inferVariable() {
 			expr->type = var->type;
 		else if (var->declaredType.isDeduced() && expressionIsLValueOnlyUse(context, expr))
 			expr->type = var->declaredType;
-		if (context.parseContext.incrementalPreinferenceActive && var->isGlobal && !expr->type.isDeduced() &&
-			!expressionIsLValueOnlyUse(context, expr)) {
+		if (var->isGlobal && !expr->type.isDeduced() && !expressionIsLValueOnlyUse(context, expr)) {
 			context.fail(context.setConfiguredTypeFailure(expr->range, "variable has no type", "message", {{"name", varName}}));
 			return false;
 		}

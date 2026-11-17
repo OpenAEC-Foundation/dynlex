@@ -76,6 +76,8 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 	}
 	struct GlobalTypeProducer {
 		Json type;
+		Variable *variable;
+		Json classes;
 		Scope prefix;
 		Json globalInputs;
 		std::set<std::string> internalGlobals;
@@ -115,10 +117,21 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 			return;
 		auto prefix = reads.freezeRootPrefix(context.mainSection);
 		Json inputs = globalInputQueries.captureScope({}).value_or(Json(nullptr));
-		for (auto &[identity, type] : outputs)
+		InferenceClassSnapshot classes(identities, [&](const Json &state) {
+			store.recordClassSnapshotCapture();
+			return store.saveClass(state);
+		});
+		for (auto &[identity, type] : outputs) {
+			std::set<std::string> required;
+			collectInferenceClassDependencies(type, required);
+			Json layouts = captureInferenceClasses(required, identities, classes);
 			globalProducers.insert_or_assign(
-				identity, GlobalTypeProducer{std::move(type), prefix, inputs, internallyProducedGlobals}
+				identity, GlobalTypeProducer{
+							  std::move(type), rootGlobals->at(identity).first, std::move(layouts), prefix, inputs,
+							  internallyProducedGlobals
+						  }
 			);
+		}
 	}
 	const auto &globalTypeProducers() const { return globalProducers; }
 	void conversionLookup(

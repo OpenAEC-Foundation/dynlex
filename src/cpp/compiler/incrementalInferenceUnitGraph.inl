@@ -146,18 +146,19 @@ class InferenceUnitGraphCapture {
 		}
 		if (!products)
 			return;
-		auto current = captureGlobalTypeProjection(paths);
-		if (!current)
-			return;
 		for (const auto &[identity, producer] : products->globalTypeProducers()) {
-			if (current->at(identity) != producer.type)
+			std::set<std::pair<const ClassDefinition *, int>> visiting;
+			auto current = inferenceTypeIdentity(producer.variable->type, identities.classes, visiting);
+			if (!current || *current != producer.type)
 				continue; // Later type refinement did not publish this prefix's output.
 			std::string key = "global:" + identity;
 			Json unit = emptyInferenceUnit();
 			mergeScope(unit, producer.prefix, context.mainSection, false);
 			unit["direct_global_inputs"] = producer.globalInputs;
 			units["root"][key] = std::move(unit);
-			globalTypes[identity] = Json{{"unit", key}, {"type", producer.type}, {"internal", producer.internalGlobals}};
+			globalTypes[identity] = Json{
+				{"unit", key}, {"type", producer.type}, {"classes", producer.classes}, {"internal", producer.internalGlobals}
+			};
 		}
 	}
 	void propagateGlobalInputs() {

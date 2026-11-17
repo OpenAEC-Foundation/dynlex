@@ -149,7 +149,7 @@ class IncrementalInferenceController {
 				}
 			}
 		IncrementalGlobalTypeProducers globalTypes(
-			paths, previous.at("section_dependency_graph"), check, globalInputs, statistics
+			paths, previous.at("section_dependency_graph"), check, globalInputs, *inferenceReuse, statistics
 		);
 		if (rootInputsUnchanged) {
 			globalTypes.restoreAvailable();

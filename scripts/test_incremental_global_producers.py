@@ -93,4 +93,30 @@ def check_global_type_producers(root, build):
     main.write_text(structured)
     build(entry=main)
     main.write_text(structured.replace("shared's number, 1)", "shared's number, 2)"))
-    assert build(entry=main)[1:] == build(False, entry=main)[1:]
+    changed = build(entry=main)
+    assert changed[1:] == build(False, entry=main)[1:]
+    assert changed[0]['root_execution_reused']
+    assert changed[0]['global_type_producers_restored'] == 1
+
+    # A regenerated writer must share the cached entry's managed init flag.
+    managed = ('class:\n    patterns: token\n    members: number\n'
+               '    retain: @intrinsic("discard", @intrinsic("lifecycle value"))\n'
+               '    release:\n'
+               '        @intrinsic("variadic call", "libc", "printf", '
+               '@intrinsic("type", "nothing"), 1, "%d\\n", '
+               '@intrinsic("property", @intrinsic("lifecycle value"), "number"))\n'
+               '@intrinsic("store", shared, @intrinsic("construct", token, '
+               '@intrinsic("command line argument count")))\n'
+               'function replace:\n    globals: shared\n    execute:\n'
+               '        @intrinsic("discard", @intrinsic("call", "libc", "puts", '
+               '@intrinsic("type", "int"), "before"))\n'
+               '        @intrinsic("store", shared, @intrinsic("construct", token, 7))\n'
+               'replace\n')
+    main.write_text(managed)
+    build(entry=main)
+    main.write_text(managed.replace('"before"', '"after"'))
+    changed = build(entry=main)
+    assert changed[1:] == build(False, entry=main)[1:]
+    assert changed[2] == b'after\n0\n7\n'
+    assert changed[0]['root_execution_reused']
+    assert read_program(root / 'cache', main)['global_storage']

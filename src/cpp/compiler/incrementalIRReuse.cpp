@@ -229,26 +229,41 @@ bool IncrementalIRReuse::reuseRoot() {
 	return true;
 }
 
-void IncrementalIRReuse::bindRootGlobals(ParseContext &context) {
+void IncrementalIRReuse::bindRootGlobals(ParseContext &context, const nlohmann::json &managedStorage) {
 	requireCompilerInvariant(reusedRoot, "global storage import requires a validated entry point");
 	std::map<std::string, std::set<VariableStorageKey>> definitions;
+	std::map<std::string, DataType> types;
 	for (const auto &[section, path] : sectionPaths)
 		for (const auto &[name, variable] : section->variables)
-			if (variable->isGlobal && !variable->dataInitializer)
+			if (variable->isGlobal && !variable->dataInitializer) {
 				definitions[name].insert(variableStorageKey(variable->definition, nullptr));
-	for (const llvm::GlobalVariable &old : previousModule->globals()) {
-		auto found = definitions.find(old.getName().str());
-		if (found == definitions.end())
-			continue; // Runtime-internal globals have no source storage declaration.
-		requireCompilerInvariant(!old.isDeclaration(), "entry-owned source global has no definition");
+				auto [entry, inserted] = types.emplace(name, variable->type);
+				requireCompilerInvariant(
+					inserted || entry->second == variable->type, "global storage aliases disagree on their type"
+				);
+			}
+	auto declare = [&](const llvm::GlobalVariable &old) {
 		auto *declaration = new llvm::GlobalVariable(
 			*currentModule, old.getValueType(), old.isConstant(), llvm::GlobalValue::ExternalLinkage, nullptr, old.getName()
 		);
 		declaration->copyAttributesFrom(&old);
 		declaration->setLinkage(llvm::GlobalValue::ExternalLinkage);
+		return declaration;
+	};
+	for (const llvm::GlobalVariable &old : previousModule->globals()) {
+		auto found = definitions.find(old.getName().str());
+		if (found == definitions.end())
+			continue; // Runtime-internal globals have no source storage declaration.
+		requireCompilerInvariant(!old.isDeclaration(), "entry-owned source global has no definition");
+		auto *declaration = declare(old);
 		context.globalLLVMVariables.emplace(old.getName().str(), declaration);
 		for (const auto &key : found->second)
 			context.variableStorage.emplace(key, declaration);
+	}
+	for (const auto &[name, flagName] : managedStorage.items()) {
+		auto *flag = previousModule->getGlobalVariable(flagName.get<std::string>(), true);
+		requireCompilerInvariant(flag && !flag->isDeclaration(), "managed global lost its initialization state");
+		context.managedGlobalStorage.push_back({context.globalLLVMVariables.at(name), declare(*flag), types.at(name), nullptr});
 	}
 }
 

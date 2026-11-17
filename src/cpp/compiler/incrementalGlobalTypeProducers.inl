@@ -4,9 +4,9 @@ class IncrementalGlobalTypeProducers {
   public:
 	IncrementalGlobalTypeProducers(
 		const std::map<const Section *, std::string> &paths, const Json &graph, InferenceUnitCheck &queries,
-		InferenceGlobalInputs &inputs, BuildStatistics &statistics
+		InferenceGlobalInputs &inputs, IncrementalInferenceReuse &inference, BuildStatistics &statistics
 	)
-		: graph(graph), queries(queries), inputs(inputs), statistics(statistics), classes(classIdentityPaths(paths)) {
+		: graph(graph), queries(queries), inputs(inputs), inference(inference), statistics(statistics) {
 		for (const auto &[section, path] : paths)
 			for (const auto &[name, variable] : section->variables)
 				if (variable->isGlobal)
@@ -29,7 +29,7 @@ class IncrementalGlobalTypeProducers {
 				const Json &unit = graph.at("inference_units").at("root").at(key);
 				if (!inputs.unchanged(unit.at("global_inputs")) || !queries.unchanged({"root", key}))
 					continue;
-				auto type = decodeInferenceTypeIdentity(output.at("type"), classes);
+				auto type = inference.decodeTypeOutput(output.at("type"), output.at("classes"));
 				if (!type)
 					continue;
 				Variable *variable = variables.at(identity);
@@ -49,8 +49,8 @@ class IncrementalGlobalTypeProducers {
 	const Json &graph;
 	InferenceUnitCheck &queries;
 	InferenceGlobalInputs &inputs;
+	IncrementalInferenceReuse &inference;
 	BuildStatistics &statistics;
-	ClassIdentityPaths classes;
 	std::map<std::string, Variable *> variables;
 	std::map<Variable *, DataType> originals;
 	std::set<std::string> restored;

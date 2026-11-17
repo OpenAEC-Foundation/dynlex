@@ -62,9 +62,19 @@ bool reuseRootWithGlobalTypes(
 	// consume the entry's global types without executing its body again.
 	for (auto &[variable, type] : globals)
 		variable->type = std::move(type);
-	reuse.bindRootGlobals(context);
+	reuse.bindRootGlobals(context, previous.at("global_storage"));
 	context.reuseRootExecution = true;
 	return true;
+}
+
+Json captureGlobalStorage(const ParseContext &context) {
+	Json storage = Json::object();
+	for (const auto &state : context.managedGlobalStorage) {
+		auto *address = llvm::cast<llvm::GlobalVariable>(state.address);
+		auto *initialized = llvm::cast<llvm::GlobalVariable>(state.initializedAddress);
+		storage[address->getName().str()] = initialized->getName().str();
+	}
+	return storage;
 }
 
 void recordIRReuseStatistics(

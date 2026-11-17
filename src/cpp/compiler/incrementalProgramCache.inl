@@ -271,6 +271,9 @@ void recordInferencePayloadKeys(Json &program) {
 						classes.insert(definition.at("payload").get<std::string>());
 				}
 			}
+		for (const Json &output : program.at("section_dependency_graph").at("global_type_producers"))
+			for (const Json &definition : output.at("classes"))
+				classes.insert(definition.at("payload").get<std::string>());
 		program["inference_summary_keys"] = summaries;
 		program["inference_body_keys"] = bodies;
 		program["inference_class_keys"] = classes;

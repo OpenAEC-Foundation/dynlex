@@ -855,6 +855,7 @@ bool compileIncrementally(
 										   ? previous->at("global_types")
 										   : captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
 					result["global_types"] = globalTypes;
+					result["global_storage"] = captureGlobalStorage(compiled);
 					result["inference_summaries"] =
 						inferenceReuse
 							? inferenceReuse->snapshot(
