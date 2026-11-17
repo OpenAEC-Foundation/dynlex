@@ -4,6 +4,7 @@ from test_incremental_program_cache import read_program
 
 def check_global_type_producers(root, build):
     check_storage_value_demand(root, build)
+    check_capture_type_change(root, build)
     main = root / 'global_type_producers.dl'
     source = ('@intrinsic("store", shared, @intrinsic("command line argument count"))\n'
               'function show:\n'
@@ -155,3 +156,12 @@ def check_storage_value_demand(root, build):
     assert build(entry=main)[1:] == build(False, entry=main)[1:]
     main.write_text(definitions + 'consume sample\nset sample to 7\n')
     assert build(entry=main, success=False)[1:] == build(False, entry=main, success=False)[1:]
+
+
+def check_capture_type_change(root, build):
+    main = root / "capture_type_change.dl"
+    source = 'function set variable to value:\n    replacement:\n        @intrinsic("store", variable, value)\n        @intrinsic("set subject", variable)\nleft * right means: @intrinsic("multiply", left, right)\nleft + right means: @intrinsic("add", left, right)\nflex section loop while condition:\n    replacement: @intrinsic("loop while", condition)\nflex section if condition:\n    replacement: @intrinsic("if", condition)\nleft < right means: @intrinsic("less than", left, right)\nto work {value}:\n    @intrinsic("store", row, 0)\n    loop while row < value:\n        @intrinsic("store", column, 0)\n        loop while column < 8:\n            if column < 4:\n                set cell to row * 64 + column\n                @intrinsic("discard", cell)\n            @intrinsic("store", column, @intrinsic("add", column, 1))\n        @intrinsic("store", row, @intrinsic("add", row, 1))\nwork @intrinsic("command line argument count")\n'
+    main.write_text(source)
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]
+    main.write_text(source.replace("* 64", "* 32"))
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]

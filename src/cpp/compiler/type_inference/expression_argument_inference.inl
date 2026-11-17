@@ -18,7 +18,7 @@ bool ExpressionInferenceSupport::inferArgument(
 											 : inferExpression(arg, context, false, flexBindingFrameStack);
 	expr->arguments[index] = arg;
 	if (inferred && beforeArgument && beforeArgument->matches(context))
-		argumentScope.unchanged.emplace(arg, std::move(*beforeArgument));
+		argumentScope.unchanged.emplace(arg, InferredArgumentScope::Input{std::move(*beforeArgument), arg->type});
 	return inferred;
 }
 
