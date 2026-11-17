@@ -80,10 +80,23 @@ existing resolved-match identity machinery across source-owner units, retaining
 raw reference keys for lookup validation and replay. Set a separate bounded
 performance gate before retaining that optimization.
 
-## Queued iteration: I094 source lookup output boundaries
+## Completed implementation: I094 source lookup output boundaries
 
-Start its 45-minute implementation window after I093's final qualification.
-The no-import regression is `check_source_lookup_results`; it currently fails
+Started 17 November 2026 at 14:19:27 UTC; first deadline 15:04:27 UTC.
+I093 passed both complete suites and was merged into local master `aefbd3a5`.
+Its worktree was disposed and recreated through the project script; verified
+unchanged build-input timestamps retain its existing build artifacts. Shared
+master qualification/push is in progress; no I094 compiler change is published.
+Shared I093 qualification subsequently passed 334/0/0 uncached in 112.003 s;
+master and origin now both point to `aefbd3a5`.
+
+The first I094 C++ build hit its private memory limit at 14:26:54 UTC. Kernel
+logs identify `CONSTRAINT_MEMCG`, the `dynlex-i094-build.service` cgroup and
+Clang PID 3508568: 2 GiB RAM/128 MiB swap was insufficient for the incremental
+compiler translation unit. This was a job-local kill, not a host OOM. After
+checking 3.6 GiB available, retry serially with a 2.25 GiB RAM/512 MiB swap cap;
+do not remove the resource limit or start another heavy job.
+The no-import regression is `check_source_lookup_results`; it initially failed
 because a nonmatching overload changes an existing constructor query's source
 input. Preserve clean/incremental execution and diagnostic parity when the
 overload is added and removed. Reuse `resolvedFunctionMatches`' ordered semantic
@@ -109,6 +122,131 @@ only for concrete code/measurement progress. Otherwise record the result and
 move to a different P01–P24 boundary rather than starting another attribution
 iteration on the same first-edit issue.
 
+I094 measurements completed at 14:42 UTC (88 compilations, unchanged compiler
+images). The minimal regression now passes all six builds and clean execution
+comparisons. Every one of the 14 candidate first edits restores all four global
+type products and reuses entry inference; both baseline cases restore only two.
+All 42 baseline/candidate cold/first/second native artifact and diagnostic pairs
+match exactly. Four separate clean builds match diagnostics; native clean and
+incremental code use different optimization pipelines, so raw executable equality
+is not their correctness oracle. Complete LLVM-graph parity is being checked.
+
+| First edit | Baseline median CPU | Candidate median CPU | Paired median gain | Paired ratio 95% interval |
+|---|---:|---:|---:|---|
+| Rendering body | 1.497493 s | 1.309383 s | 11.32% | 0.88043–0.89831 |
+| Initial lives | 1.754988 s | 1.718758 s | 4.86% | 0.94014–1.03367 |
+
+Cold-population paired CPU changes are +0.91%/+1.26%; immediate second-edit
+changes are -3.34%/+2.82%. No control's measured median regression exceeds 5%.
+The originally declared both-case gain gate is **not met**: lives is below 5%
+and its interval includes no improvement. Do not present that gate as passed.
+The user questioned discarding gains below 5%; the proposed replacement is a
+reliably measured benefit that justifies its complexity without material
+regression, rather than a minimum percentage in every case. Nothing has been
+discarded or published while that decision and correctness validation remain open.
+
+User acceptance update (17 November, after these measurements): keep a change
+when it undoubtedly gives more than it takes; a large new mechanism for a 2%
+gain is not justified. This supersedes the investigator's minimum-percentage
+gate. Assess the implemented mechanism's complexity and measured benefit, retain
+all raw results (including inconclusive cases), and require correctness and
+control checks. I094 shares existing per-reference identity code and adds a
+small source-owner result mapping, with a verified 11.32% rendering-case gain
+and no measured material control regression. The lives estimate is inconclusive;
+do not claim a proved improvement there. Retention is pending the remaining
+parity, fast-path and suite checks, rather than a 5% floor in each case.
+
+The user further directs that a small but undoubtedly positive change should be
+finished promptly, then work should move on; prioritize the largest gains first.
+Finish I094's running correctness gates without more lives-case sampling or
+percentage tuning. Select the next P01–P24 target from measured avoidable whole-
+build cost, not from a small inconclusive timing difference.
+
+User tradeoff priority: **speed, memory, disk space, code size**, in that order,
+with combined effects considered. Doubling speed can justify doubling code, but
+the added code still needs explanation; 10% more memory for 5% more speed is
+questionable; 50% less disk for a 3% slowdown can be worthwhile. Assess measured
+resource cost rather than using a percentage floor or LOC count as the decision.
+Before publishing I094, add a bounded peak-RSS/cache-size comparison because its
+timing samples currently account for CPU/elapsed time but not per-build RSS.
+
+Further I094 checks: all 12 complete-LLVM-graph builds/comparisons pass for
+baseline/candidate and clean/incremental body/lives edits. All 92 comment/wording
+control builds pass, including 42 paired native-artifact comparisons and clean
+diagnostic checks. Every measured fast-path run reuses the frontend, builds zero
+objects and spends zero time linking. Candidate median CPU is 29.383 ms for
+comments and 34.704 ms for wording. Comment paired CPU ratio is 0.96511
+(95% interval 0.96236–0.98976); wording is 0.97551 (0.94447–1.03294), so retain
+the latter as inconclusive. Both scan the same 3,164 cache entries as baseline.
+The complete required/integration suites are now running against the unchanged
+`52f21249dc3999e483bf79650cce125cb110f8cbaa67916551faa32b46a184a7` candidate.
+
+Required passed 334/0/0 uncached in 117.635 s. The first integration run finished
+461/1/0 in 828.353 s; only `unary_arithmetic_types` exceeded its unchanged
+20-second limit. Its 250-process batch subsequently passes unchanged in an
+isolated comparison: baseline 17.82 s (5.82 user/11.84 system CPU), candidate
+17.90 s (5.89/11.93). This does not reproduce a material candidate slowdown;
+do not claim a precise cause for the full-run timeout from those controls alone.
+Keep the test and timeout unchanged. A full integration recheck is running with
+1.5 GiB memory headroom and 64 tasks; capture cgroup pressure/denial counters.
+
+Resource comparison is complete: 24 builds, three fresh-cache paired samples
+per edit, fixed compiler images, identical frozen program. Native compile peak
+RSS and allocated cache bytes are:
+
+| Stage | Baseline median RSS | Candidate median RSS | Baseline allocated cache | Candidate allocated cache |
+|---|---:|---:|---:|---:|
+| Cold, rendering case | 384,272 KiB | 386,584 KiB | 39,723,008 B | 39,927,808 B |
+| First rendering edit | 274,864 KiB | 264,936 KiB | 57,806,848 B | 57,266,176 B |
+| Cold, lives case | 384,308 KiB | 386,240 KiB | 39,723,008 B | 39,927,808 B |
+| First lives edit | 290,636 KiB | 289,480 KiB | 57,622,528 B | 58,056,704 B |
+
+The rendering edit's paired RSS ratio is 0.96627 and allocated-disk ratio
+0.99065. Lives ratios are 0.99874 and 1.00753. Cold ratios are about 1.005 for
+both RSS and allocated disk. Production C++ changes add 40/remove 12 lines,
+sharing existing machinery and adding no dependency. These measured costs
+support the user-approved tradeoff; complete integration qualification remains
+required before publication.
+
+Final owner qualification completed at 15:30 UTC: the unchanged candidate passes
+all 462 integration checks in 773.972 s, including the original unary-arithmetic
+test and 20-second timeout. Its service recorded zero memory/task denials, zero
+OOM events and zero swap use. Together with the 334-check uncached required pass,
+the graph/artifact parity checks and resource comparison, I094 is qualified for
+shared-master verification and publication under the user's stated tradeoff.
+The earlier integration timeout remains recorded; no test or limit was relaxed.
+
+Use the sole extension, ending 15:49:27 UTC, to finish complete LLVM parity,
+comment/wording controls and required/integration validation of this implemented
+boundary. The concrete progress is the passing minimal regression, verified
+stopped cascade and measured rendering-case gain. Do not repeat samples simply
+to cross a threshold or start another attribution loop on the same issue.
+
+## Next priority after I094: P19/P20 graph snapshot and persistence
+
+Use the largest measured avoidable common cost, following the user's ranking.
+In the current candidate's seven first-rendering-edit samples, snapshot plus
+cache writing has a 238.839 ms median. Those scopes are sequential, although
+their sub-timers overlap: graph construction is about 66 ms, and graph compacting
+plus CBOR serialization is 34.465 ms. One object changes, but the snapshot visits
+4,219 sections and encodes 9,878 records (7 columns rebuilt, 4 retained).
+This is a larger combined target than another small timing variation in I094.
+
+After publishing I094, start one bounded implementation iteration on retaining
+unchanged graph records through snapshot/serialization. Inspect producer dirty
+sets and dictionary-ID stability first; preserve changed/deleted edges, query
+variants, negative reads, global-type products and cache cleanup. Keep storage
+bounded and remove obsolete records. Reuse existing mechanisms; do not introduce
+a general storage engine speculatively. Measure complete-build time, peak RSS,
+logical/allocated cache bytes and code cost together. A simpler encoding is also
+eligible if its speed/memory benefits justify measured disk cost. Use the same
+real program and full correctness gates; keep the full P01–P24 goal intact.
+
+Resolution setup (about 118 ms, including about 42 ms of cached-body selection)
+is the next measured frontend candidate if graph persistence cannot produce a
+positive tradeoff within its bounded iteration. Do not spend another iteration
+trying to force the inconclusive lives percentage over a threshold.
+
 ## Full-objective status
 
 The complete goal is still active. A qualified optimization is a snapshot, not
@@ -120,12 +258,12 @@ complete scope. Current evidence and remaining boundaries are:
 | Source/config edits | File preparation, preprocessing chunks, source observations and outlines have retained products. | Semantic section/declaration objects still reconstruct broadly after active edits. |
 | Parameter classification | Focused tests cover removing the last parameter use, dependent reclassification and recovery. | Broad eligibility/index consumers still run; prove locality across every declaration and scope change. |
 | Positive/failed pattern lookups | Persistent match, binding and constraint reads retain successful and failed dependencies. | Some matcher catalogs, validation and persistence still process broad program state. |
-| Type inference | Ordinary concrete bodies, constraint results, diagnostics and validated global products can replay. | First cold-cache edit can repeat entry inference; statement/block/CFG entry products are missing. |
+| Type inference | Ordinary concrete bodies, constraint results, diagnostics and validated global products can replay. I094's two first-edit benchmarks retain entry inference and all four global type products. | Statement/block/CFG entry products and complete locality across other source/configuration changes remain unfinished. |
 | Diagnostics | All62 wording benchmark invocations update existing warnings with zero objects/linking; focused tests cover error removal and diagnostic movement. | Complete locality across all early-error and configuration changes remains unproven. |
-| LLVM IR | Native/debug function and entry closures reuse; LLVM text has an incremental driver. Current snapshot passes80 clean/incremental IR builds and16 exact native/debug output pairs. | Whole-module work remains, and tracing excludes major paths. |
+| LLVM IR | Native/debug function and entry closures reuse; LLVM text has an incremental driver. I094 passes12 complete-graph builds/comparisons and42 native artifact pairs; required/integration checks include debug edit/parity coverage. | Whole-module work remains, and tracing excludes major paths. |
 | Objects/link | Unchanged objects reuse; ordinary body benchmark rebuilds one object; fast paths skip linking. | Necessary executable changes use a conventional full link. Other output drivers still need shared products. |
 | Tooling/targets | Existing native and LLVM regression coverage. | LSP, object-only, WebAssembly and SPIR-V do not yet share the complete persistent pipeline. |
-| Required budget | Shared compiler333/0/0 uncached in115.499s; candidate also passes in110.016s. | Preserve the120s post-build budget in subsequent iterations. |
+| Required budget | I094 owner334/0/0 uncached in117.635s; I093 shared compiler334/0/0 in112.003s. | Complete I094 shared verification and preserve the120s post-build budget. |
 
 ## Prior iteration: I092 first-edit global-product attribution
 

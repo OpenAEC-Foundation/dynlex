@@ -87,6 +87,7 @@ struct InitialMatcherProjection {
 			{"declaration_digests", Json::object()},
 			{"match_overrides", Json::object()},
 			{"source_match_units", Json::object()},
+			{"source_match_results", Json::object()},
 			{"constraint_sources", Json::object()},
 			{"body_units", Json::object()},
 			{"final_body_units", Json::object()},
@@ -173,6 +174,30 @@ struct InitialMatcherProjection {
 			headers.push_back(Json::array({line - lines.begin(), std::move(definitions)}));
 		}
 		return headers;
+	}
+
+	void captureSourceMatchResults(
+		const std::string &path, const std::vector<PatternReference *> &references, const Json &expanded,
+		const std::map<const Section *, std::string> &paths, IncrementalMatcherCache &matcherCache, bool retained = false
+	) {
+		const Json &entries = value.at("source_match_units").at(path);
+		const Json *oldEntries = priorUnits && priorUnits->at("source_match_units").contains(path)
+									 ? &priorUnits->at("source_match_units").at(path)
+									 : nullptr;
+		std::string results;
+		if (retained)
+			results = priorUnits->at("source_match_results").at(path).get<std::string>();
+		else if (expanded.at("match_entries").contains(path) && expanded.at("match_entries").at(path) == entries)
+			results = expanded.at("matches").at(path).get<std::string>();
+		else {
+			const Json *oldResults = oldEntries ? &priorUnits->at("source_match_results").at(path) : nullptr;
+			results = resolvedReferenceMatches(references, paths, matcherCache, oldEntries, oldResults, nullptr).fingerprint;
+		}
+		// Keep ordered per-reference identities available for a later edit, while
+		// consumers depend only on their settled semantic result fingerprint.
+		if (matcherCache.contains(results))
+			matcherCache.retain(results);
+		value.at("source_match_results")[path] = std::move(results);
 	}
 
 	void captureBodyUnits(
@@ -266,6 +291,7 @@ struct InitialMatcherProjection {
 			if (context.retainedSourceOwners.contains(owner.section) ||
 				(context.deferredBodyResolution && context.deferredBodyResolution(owner.section))) {
 				value.at("source_match_units")[owner.path] = priorUnits->at("source_match_units").at(owner.path);
+				captureSourceMatchResults(owner.path, owner.references, expanded, paths, matcherCache, true);
 				for (const char *field : {"final_body_units", "header_definitions"})
 					value.at(field)[owner.path] = priorUnits->at(field).at(owner.path);
 				matcherCache.retain(value.at("final_body_units").at(owner.path).get_ref<const std::string &>());
@@ -294,6 +320,7 @@ struct InitialMatcherProjection {
 			orderSourceReferences(unitReferences);
 			value.at("source_match_units")[owner.path] =
 				unitReferences == owner.references ? key : matcherCache.recordReferenceKeys(unitReferences);
+			captureSourceMatchResults(owner.path, unitReferences, expanded, paths, matcherCache);
 			referenceTimer.stop();
 			if (!finalEntries.contains(owner.path) || finalEntries.at(owner.path).get_ref<const std::string &>() != key)
 				value.at("match_overrides")[owner.path] = std::move(key);
@@ -310,6 +337,7 @@ struct InitialMatcherProjection {
 			if (!references.empty()) {
 				orderSourceReferences(references);
 				value.at("source_match_units")[path] = matcherCache.recordReferenceKeys(references);
+				captureSourceMatchResults(path, references, expanded, paths, matcherCache);
 			}
 		}
 		return std::move(value);

@@ -1,8 +1,10 @@
 """Global type products validate the execution prefix that produced them."""
 
 from test_incremental_program_cache import read_program
+from test_incremental_lookup_outputs import check_source_lookup_results
 
 def check_global_type_producers(root, build):
+    check_source_lookup_results(root, build)
     check_storage_value_demand(root, build)
     check_capture_type_change(root, build)
     main = root / 'global_type_producers.dl'

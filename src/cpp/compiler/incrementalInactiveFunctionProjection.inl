@@ -42,9 +42,9 @@ std::optional<Json> refreshInactiveFunctionProjection(
 			return std::nullopt;
 		refreshed["bodies"][path] = body;
 		if (reusable.contains(path)) {
-			ResolvedFunctionMatches result = resolvedFunctionMatches(
-				sections.at(path), paths, matcherCache, &prior.at("match_entries").at(path), &prior.at("matches").at(path),
-				&matchEntriesReused
+			ResolvedReferenceMatches result = resolvedReferenceMatches(
+				sourceOwnerReferences(*sections.at(path)), paths, matcherCache, &prior.at("match_entries").at(path),
+				&prior.at("matches").at(path), &matchEntriesReused
 			);
 			refreshed["matches"][path] = std::move(result.fingerprint);
 			refreshed["match_entries"][path] = std::move(result.entries);

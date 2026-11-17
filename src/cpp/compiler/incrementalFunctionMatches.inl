@@ -15,8 +15,8 @@ template <typename Visitor> void forEachInferenceSourceReference(const Section &
 std::string sourceMatchInputs(const Json &projection, const std::string &path) {
 	std::string products;
 	for (const auto &[kind, outputs] : std::array{
-			 std::pair{'M', &projection.at("matches")}, std::pair{'E', &projection.at("match_entries")},
-			 std::pair{'U', &projection.at("matcher_projection").at("source_match_units")}
+			 std::pair{'M', &projection.at("matches")},
+			 std::pair{'U', &projection.at("matcher_projection").at("source_match_results")}
 		 })
 		if (auto result = outputs->find(path); result != outputs->end()) {
 			products.push_back(kind);
@@ -76,16 +76,15 @@ Json resolvedMatchIdentity(const PatternMatch &match, const std::map<const Secti
 	};
 }
 
-struct ResolvedFunctionMatches {
+struct ResolvedReferenceMatches {
 	std::string fingerprint;
 	std::string entries;
 };
 
-ResolvedFunctionMatches resolvedFunctionMatches(
-	const Section *section, const std::map<const Section *, std::string> &paths, IncrementalMatcherCache &matcherCache,
-	const Json *priorEntries, const Json *priorFingerprint, size_t *reused
+ResolvedReferenceMatches resolvedReferenceMatches(
+	const std::vector<PatternReference *> &references, const std::map<const Section *, std::string> &paths,
+	IncrementalMatcherCache &matcherCache, const Json *priorEntries, const Json *priorFingerprint, size_t *reused
 ) {
-	std::vector<PatternReference *> references = sourceOwnerReferences(*section);
 	auto oldEntries = priorEntries ? matcherCache.restoreReferenceKeys(priorEntries->get_ref<const std::string &>()) : nullptr;
 	auto oldIdentities =
 		priorFingerprint ? matcherCache.restoreMatchIdentities(priorFingerprint->get_ref<const std::string &>()) : std::nullopt;

@@ -320,6 +320,14 @@ call results; a changed function becomes a stable dependency boundary only when
 those results, types, and effects are all preserved. Unserializable observed results
 leave that boundary unproven, so callers are checked again.
 
+Source-owner inference inputs consume ordered resolved-match identities, including
+flex, class and lifecycle owners. Initial/final lookup keys still validate cached
+matching and replay, but a changed candidate tree with an unchanged selected
+result does not invalidate downstream inference. Unchanged source reference units
+retain their result identities; equivalent expanded-function reference units share
+the same product. A changed match, variable classification or argument grouping
+changes the semantic result fingerprint and propagates to its consumers.
+
 Incremental matcher keys reuse each parsed reference's candidate literal spellings and numeric literal arguments.
 Each indexed definition contributes to a tree of its required literal words. A reference fingerprints only
 the signatures whose words occur in its matcher input, including wildcard-start patterns. A new overload
