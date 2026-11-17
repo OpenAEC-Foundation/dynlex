@@ -2,7 +2,12 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Next iteration: I091 demand source anchors by owner
+## Current iteration: I091 demand source anchors by owner
+
+Started17 November2026 at03:00:33 UTC; first deadline03:45:33 UTC. The previous
+goal turn completed I090's attribution and published its evidence. I091 now has
+minimal counter/parity tests and an initial implementation; its rebuild and
+qualification are pending. The full incremental objective is incomplete.
 
 The next implementation target is the repeated whole-program source-anchor
 producer identified by I090. Make body/diagnostic source mapping index only the
