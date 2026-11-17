@@ -306,12 +306,12 @@ bool IncrementalIRReuse::import(ParseContext &context, const nlohmann::json &cur
 					usedTypes.insert(type);
 			});
 		std::map<std::string, llvm::DICompositeType *> currentTypes;
-		auto *currentProducts = currentModule->getOrInsertNamedMetadata(debugTypeProductsName);
-		for (llvm::MDNode *record : currentProducts->operands())
-			currentTypes.emplace(
-				llvm::cast<llvm::MDString>(record->getOperand(0))->getString().str(),
-				llvm::cast<llvm::DICompositeType>(record->getOperand(1))
-			);
+		if (auto *currentProducts = currentModule->getNamedMetadata(debugTypeProductsName))
+			for (llvm::MDNode *record : currentProducts->operands())
+				currentTypes.emplace(
+					llvm::cast<llvm::MDString>(record->getOperand(0))->getString().str(),
+					llvm::cast<llvm::DICompositeType>(record->getOperand(1))
+				);
 		if (auto *previousProducts = previousModule->getNamedMetadata(debugTypeProductsName))
 			for (llvm::MDNode *record : previousProducts->operands()) {
 				auto *type = llvm::cast<llvm::DICompositeType>(record->getOperand(1));
@@ -356,6 +356,22 @@ bool IncrementalIRReuse::import(ParseContext &context, const nlohmann::json &cur
 				}
 				values.MD()[old] = llvm::TrackingMDRef(replacement);
 			}
+		}
+		if (reusedRoot) {
+			// IR symbols are sorted independently of the entry's debug declarations.
+			// Restore that declaration order from its compile-unit product.
+			std::vector<llvm::Metadata *> ordered;
+			std::set<llvm::Metadata *> included;
+			for (llvm::DICompileUnit *unit : previousModule->debug_compile_units())
+				for (auto *global : unit->getGlobalVariables()) {
+					auto *mapped = llvm::MapMetadata(global, values);
+					ordered.push_back(mapped);
+					included.insert(mapped);
+				}
+			for (llvm::Metadata *global : globals)
+				if (included.insert(global).second)
+					ordered.push_back(global);
+			globals = std::move(ordered);
 		}
 		context.diCompileUnit->replaceGlobalVariables(llvm::MDTuple::get(*context.llvmContext, globals));
 	}

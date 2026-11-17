@@ -65,11 +65,11 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     output = root / ("program.exe" if os.name == "nt" else "program")
     main.write_text(source)
 
-    def build(incremental=True, flags=(), success=True, entry=main, target=output):
+    def build(incremental=True, flags=(), success=True, entry=main, target=output, cache_root=cache):
         build_target = target if incremental else target.with_name(target.name + ".clean")
         arguments = [str(compiler), str(entry), *optimization_flags, *flags, "-o", str(build_target)]
         if incremental:
-            arguments += ["--cache-dir", str(cache), "--incremental-stats"]
+            arguments += ["--cache-dir", str(cache_root), "--incremental-stats"]
         else:
             arguments += ["--no-incremental"]
         result = subprocess.run(arguments, cwd=root, capture_output=True, text=True, timeout=120)

@@ -2,6 +2,8 @@
 
 
 def check_owner_source_anchors(root, build):
+    from test_incremental_debug_entry import check_debug_entry_globals
+    check_debug_entry_globals(root, build)
     for flags in ((), ("-g",)):
         main = root / ("owner_anchors_debug.dl" if flags else "owner_anchors.dl")
         source = (
