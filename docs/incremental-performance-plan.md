@@ -28,7 +28,7 @@ P19 boundary: resolution alone was2.33–2.95 s, while source/section setup was 
 60 ms. Avoid another extraction-only source-cache framework. All P01–P24 completion
 gates and the full compiler-wide objective remain active.
 
-## Qualified iteration: I099 semantic constant queries and blocking tooling bugs
+## Completed iteration: I099 semantic constant queries and blocking tooling bugs
 
 Started17 November2026 at18:44 UTC after I098 publication and fresh worktree
 creation; first deadline19:29 UTC, with one further iteration only for concrete
@@ -167,6 +167,15 @@ d5c2890c. The final image and all450 C++ source hashes remain unchanged. Owner
 qualification is complete; shared-master rebuild/required and publication follow.
 This closes the measured query duplication and both reproduced provider/schema
 bugs, without claiming that ordinary LSP compilation has become incremental.
+
+I099 closes at20:10 UTC within its single verification extension. Local master is
+fast-forwarded and rebuilt serially; all450 qualified C++ source hashes match.
+Shared required334/0/0 passes uncached in103.812 s. All three new LSP regressions
+also pass against the rebuilt shared image
+a966c177a57489d9cec5598671aa614a27d417c0643145db6bf094100142f533.
+Publish this record and dispose the merged worktree, retaining one verified owner
+image for the next comparison. The full compiler-wide goal remains active and
+incomplete; I100 is the next bounded reuse boundary, not a completion claim.
 
 ## Completed iteration: I098 constraint-source identities
 
