@@ -1,1 +1,0 @@
-Farm characters share articulated models, preserve equipped poses, follow simulation motion, animate tools and remove departed entities.

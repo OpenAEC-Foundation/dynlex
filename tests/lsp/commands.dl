@@ -1,0 +1,25 @@
+import lib/std.dl
+
+class:
+    patterns:
+        a passenger
+    members:
+        identifier as an integer
+
+[the|] sheep means: @intrinsic("construct", a passenger, 1)
+[the|] wolf means: @intrinsic("construct", a passenger, 2)
+[the|] hay means: @intrinsic("construct", a passenger, 3)
+
+function get {a passenger:passenger} in the boat:
+    execute:
+        print line passenger's identifier
+
+function:
+    patterns:
+        row to the other side
+        row to the other bank
+        row across the river
+        row across the water
+        row back
+    execute:
+        print line "row"

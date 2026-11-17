@@ -1,1 +1,0 @@
-Farm applies shared roles and rebuilds source mappings without restarting saved worker state.

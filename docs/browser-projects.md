@@ -33,7 +33,7 @@ their clients post queued requests. Internal failures are logged, while clients
 receive the generic error message. User-source diagnostics remain structured
 compiler results.
 
-The website controller in `site/editor/language.dl` owns initialization, document
+The website controller in [dynlex-website](https://github.com/OpenAEC-Foundation/dynlex-website), `site/editor/language.dl`, owns initialization, document
 versions, analysis timing, diagnostics and token themes. The shared UI receives
 only source-bound UTF-8 color spans. It does not know DynLex token classes or
 the language-server protocol.

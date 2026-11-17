@@ -1,4 +1,4 @@
-> Historical implementation report. The current website uses DynLex UI; the HTML/Monaco/Vite implementation and its dependency tree have been retired. See `site/README.md` for current build and verification commands.
+> Historical implementation report. The current website uses DynLex UI; the HTML/Monaco/Vite implementation and its dependency tree have been retired. See [dynlex-website](https://github.com/OpenAEC-Foundation/dynlex-website) for current build and verification commands.
 
 The source migrations save **165,233 characters** across **792 `.dl` files**. Counts include spaces, tabs and LF newlines. The initial migration saved 54,675 characters; the first follow-up saved 3,653; the complete repository pass saves another 106,905. Implementation changes and new source additions between those snapshots are excluded. Documentation and embedded source snippets were also migrated and are excluded from this program-source total.
 

@@ -116,10 +116,9 @@ assert.ok(publishedDiagnostics, `didOpen published no diagnostics: ${JSON.string
 assert.deepEqual(publishedDiagnostics.params.diagnostics, []);
 
 const nestedImportUri = "file:///workspace/nested-import.dl";
-const nestedImportSource = await readFile(
-  path.resolve(import.meta.dirname, "../../site/shaders/nano-choreography.dl"),
-  "utf8"
-);
+const nestedImportSource = "import nested/helpers.dl\n";
+assert.equal(moduleInstance.ccall("dynlex_web_set_import_sources", "number", ["string"],
+  [JSON.stringify({"nested/helpers.dl": "this deliberately unresolved fixture reports an imported diagnostic\n"})]), 0);
 const nestedImportMessages = notifyLsp("textDocument/didOpen", {
   textDocument: {
     uri: nestedImportUri,
@@ -132,7 +131,7 @@ const nestedImportDiagnosticUris = nestedImportMessages
   .filter((message) => message?.method === "textDocument/publishDiagnostics")
   .map((message) => message.params?.uri);
 assert.ok(
-  nestedImportDiagnosticUris.some((uri) => uri?.endsWith("/lib/shader.dl")),
+  nestedImportDiagnosticUris.some((uri) => uri?.endsWith("/nested/helpers.dl")),
   `Nested web import did not publish the expected library diagnostic: ${JSON.stringify(nestedImportMessages)}`
 );
 for (const uri of nestedImportDiagnosticUris) {
@@ -273,9 +272,7 @@ for (const {line, character, value} of markupHoverExpected) {
 notifyLsp("textDocument/didClose", {textDocument: {uri: markupHoverUri}});
 
 const riverCallUri = "file:///workspace/river-calls.dl";
-const riverCallSource = `import lib/river_challenge.dl
-get the sheep in the boat and row to the other side
-`;
+const riverCallSource = "import lib/std.dl\n\nclass:\n    patterns:\n        a passenger\n    members:\n        identifier as an integer\n\nthe sheep means: @intrinsic(\"construct\", a passenger, 1)\nthe wolf means: @intrinsic(\"construct\", a passenger, 2)\nthe hay means: @intrinsic(\"construct\", a passenger, 3)\n\nfunction get {a passenger:passenger} in the boat:\n    execute:\n        print line passenger's identifier\n\nto row to the other side:\n    print line \"row\"\n\nget the sheep in the boat and row to the other side\n";
 notifyLsp("textDocument/didOpen", {
   textDocument: {
     uri: riverCallUri,
@@ -288,7 +285,7 @@ const riverCallExpressions = requestLsp("dynlex/callExpressions", { uri: riverCa
 const riverCommandSources = riverCallExpressions
   .filter((call) => (
     call.returnType === "nothing"
-    && call.definition.uri.endsWith("/lib/river_challenge.dl")
+    && call.definition.uri === riverCallUri
   ))
   .map((call) => {
     assert.equal(call.range.start.line, call.range.end.line);
@@ -832,8 +829,8 @@ const shaderInitializeResult = requestLsp("initialize", {
 assert.equal(shaderInitializeResult.capabilities.hoverProvider, true);
 notifyLsp("initialized", {});
 
-const shaderHoverUri = "file:///workspace/nano-choreography.dl";
-const shaderHoverSource = nestedImportSource;
+const shaderHoverUri = "file:///workspace/dual-stage.dl";
+const shaderHoverSource = await readFile(new URL("../games/dual_stage_shader.dl", import.meta.url), "utf8");
 const shaderHoverMessages = notifyLsp("textDocument/didOpen", {
   textDocument: {
     uri: shaderHoverUri,
@@ -852,7 +849,7 @@ assert.equal(
 );
 const shaderHover = requestLsp("textDocument/hover", {
   textDocument: { uri: shaderHoverUri },
-  position: { line: 84, character: 14 }
+  position: { line: 5, character: 9 }
 });
 assert.ok(
   shaderHover?.contents,

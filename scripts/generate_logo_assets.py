@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export extension logos from the website's canonical SVG.
+"""Export extension logos from the compiler's canonical SVG.
 
 Requires PyGObject and GdkPixbuf with the SVG loader (librsvg).
 """
@@ -15,7 +15,7 @@ from gi.repository import GdkPixbuf
 
 def main():
     project = Path(__file__).resolve().parent.parent
-    source = project / "site/assets/branding/dynlex-icon.svg"
+    source = project / "resources/branding/dynlex-icon.svg"
 
     for relative in (
         "vscode-extension/icons/dynlex.svg",

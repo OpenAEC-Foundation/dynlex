@@ -1,5 +1,0 @@
-import packages/dynlex-ui/ui/browser.dl
-import packages/dynlex-ui/platform/browser/requests.dl
-import application.dl
-
-open the DynLex website using the browser UI driver with the browser UI service provider

@@ -1,4 +1,4 @@
-import lib/river_challenge.dl
+import tests/lsp/commands.dl
 
 set existing to 5
 set {player 2 score} to 5

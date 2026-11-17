@@ -1,0 +1,30 @@
+import lib/std.dl
+import lib/subject.dl
+
+class:
+    patterns:
+        test target
+    members:
+        identifier as an integer
+
+tree means: 1
+thirsty crop means: 2
+the nearest kind means: @intrinsic("construct", test target, kind)
+everything means: @intrinsic("construct", test target, 0)
+logs means: @intrinsic("construct", test target, 0)
+{integer:amount} {test target:items} means: @intrinsic("construct", test target, amount)
+
+to walk to target:
+    @intrinsic("set subject", target)
+
+i can reach {test target:target} means: target's identifier > 0
+{test target:target}'s still there means: target's identifier > 0
+
+to chop {test target:target} down:
+    print line target's identifier
+
+to store target:
+    print line target's identifier
+
+to water target:
+    print line target's identifier

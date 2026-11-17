@@ -1,1 +1,0 @@
-River playback steps at instruction boundaries, pauses exactly, changes speed, records goals and resets failures after impact.

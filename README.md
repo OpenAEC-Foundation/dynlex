@@ -100,37 +100,21 @@ Run the compiler WASM smoke test:
 ./scripts/test_web_smoke.sh
 ```
 
-Build the DynLex website with its pinned UI source package:
+The website is maintained in [dynlex-website](https://github.com/OpenAEC-Foundation/dynlex-website).
+The reusable UI framework is maintained in [dynlex-ui](https://github.com/OpenAEC-Foundation/dynlex-ui).
+This repository provides the compiler service and runtime distribution, independent of either application.
+
+Export a relocatable compiler package after building the browser compiler:
 
 ```bash
-./scripts/build_web_root.sh
+python3 scripts/package_web_compiler.py --output build/dynlex-web.zip
 ```
 
-Serve the generated `build/site` directory:
-
-```bash
-./scripts/view_web.sh 7000
-```
-
-The helper prints the preview URL. Open that URL in your browser. Set
-`DYNLEX_WEB_ROOT` to serve another build directory.
-
-Web layout:
-- `site/`: DynLex page declarations, controllers, games and static assets
-- `site/dependencies/dynlex-ui.zip`: pinned shared UI source package
-- `src/web/compiler/`: compiler and program worker transport
-- `src/web/ide/public/compiler/`: shipped compiler and runtime payloads
-- `build/site/`: generated website, also used by the deployment workflow
-
-The web app uses:
-- one editable `/workspace/*.dl` entry file plus read-only imported definitions
-- bundled stdlib from `/lib/*.dl` in Emscripten virtual FS
-- live debounced compile with diagnostics published by the DynLex language server
-- one persistent DynLex LSP session for completion, hover, go-to-definition,
-  semantic tokens, document symbols, quick fixes, and DynLex instantiation selection
-- live WebGPU previews for DynLex fragment/vertex shaders opened from the homepage shader gallery
-- built-in light and dark themes
-- `Run` executing the latest successful emitted program WASM
+The content-addressed package includes the browser compiler, standard library,
+shader translator, generic compiler services, runtime, build tools, installer and
+compiler branding. Consumers pin its manifest hash and build without a compiler
+checkout. The installer is maintained at `scripts/install_release.sh`; the
+canonical logo is `resources/branding/dynlex-icon.svg`.
 
 Compiler WASM C ABI exports:
 - `dynlex_web_init`

@@ -887,19 +887,7 @@ if [[ "$suite" == integration ]]; then
         run_auxiliary_test "${fixture}_targets" 180 node "$PROJECT_DIR/tests/web/library_values.mjs" "$COMPILER" "--case=$fixture" --shipped
     done
     run_auxiliary_test "literal_search_targets" 60 node "$PROJECT_DIR/tests/web/text_search.mjs" "$COMPILER" --shipped
-    run_auxiliary_test "site_shaders" 180 python3 -B "$PROJECT_DIR/tests/web/site_runtime.py" --compiler "$COMPILER" --case site_shader_program --case site_shader_buffers
-    run_auxiliary_test "site_routes" 10 python3 -B "$PROJECT_DIR/tests/web/site_routes.py"
-    run_auxiliary_test "site_preview" 10 python3 -B "$PROJECT_DIR/tests/web/site_preview.py"
-    # Includes 2,019 independent action/condition scenarios and a 900-turn team.
-    # This group compiles six distinct programs at O0/O2 and in the shipped
-    # compiler before checking its eight model corpora, including 900 turns.
-    run_auxiliary_test "farm_models" 600 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --group=core --shipped
-    run_auxiliary_test "farm_saved_state" 300 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --group=state --shipped
-    run_auxiliary_test "farm_state_ownership" 300 node "$PROJECT_DIR/tests/web/farm_models.mjs" "$COMPILER" --group=ownership --shipped
-    run_auxiliary_test "farm_art" 180 python3 -B "$PROJECT_DIR/tests/web/farm_art.py" --compiler "$COMPILER"
-    run_auxiliary_test "farm_crop_art" 180 python3 -B "$PROJECT_DIR/tests/web/farm_art.py" --compiler "$COMPILER" --case crops
     run_auxiliary_test "vector_shaders" 20 python3 -B "$SCRIPT_DIR/test_vector_shaders.py" "$COMPILER"
-    run_auxiliary_test "farm_vocabulary_generated" 30 python3 "$SCRIPT_DIR/generate_farm_vocabulary.py" --compiler "$COMPILER" --check
 fi
 run_auxiliary_test "wide_integers_wasm" 60 node "$PROJECT_DIR/tests/web/wide_integers.mjs" "$COMPILER"
 run_auxiliary_test "wide_integer_values" 60 python3 -B "$SCRIPT_DIR/test_wide_integers.py" "$COMPILER"

@@ -76,7 +76,7 @@ def main() -> int:
     for call in calls:
         if call["returnType"] != "nothing":
             continue
-        if not call["definition"]["uri"].endswith("/lib/river_challenge.dl"):
+        if not call["definition"]["uri"].endswith("/tests/lsp/commands.dl"):
             continue
         start = call["range"]["start"]
         end = call["range"]["end"]

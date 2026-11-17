@@ -29,7 +29,7 @@ const textureLibrary = fs.readFileSync(
   "utf8",
 );
 const linuxInstaller = fs.readFileSync(
-  path.join(projectDirectory, "site/public/install.sh"),
+  path.join(projectDirectory, "scripts/install_release.sh"),
   "utf8",
 );
 const nativeCodegen = fs.readFileSync(
@@ -505,7 +505,7 @@ esac
       assert.equal(tarResult.status, 0, tarResult.stderr);
     }
 
-    const installScript = path.join(projectDirectory, "site/public/install.sh");
+    const installScript = path.join(projectDirectory, "scripts/install_release.sh");
     const tarPrefix = path.join(temporaryDirectory, "local-tar-prefix");
     const localTarResult = spawnSync(
       "sh",

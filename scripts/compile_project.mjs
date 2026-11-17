@@ -1,10 +1,10 @@
 // Compile source snapshots with the compiler shipped to browser projects.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { createWgslTranslator } from '../web/wgsl-translator.js';
 
-const [requestFile, outputArgument, compilerArgument = 'src/web/ide/public/compiler'] = process.argv.slice(2);
+const [requestFile, outputArgument, compilerArgument = fileURLToPath(new URL('../src/web/ide/public/compiler/', import.meta.url))] = process.argv.slice(2);
 if (!requestFile || !outputArgument) throw new Error('Usage: compile_project.mjs <project.json> <output> [compiler directory]');
 const request = JSON.parse(await readFile(requestFile, 'utf8'));
 const directory = path.resolve(compilerArgument);
