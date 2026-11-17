@@ -385,6 +385,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalConstraintState.inl"
 #include "incrementalInferenceUnitCheck.inl"
 #include "incrementalRootExecution.inl"
+#include "incrementalGlobalTypeProducers.inl"
 #include "incrementalInferenceController.inl"
 #include "incrementalInferenceState.inl"
 // clang-format on
@@ -854,6 +855,7 @@ bool compileIncrementally(
 										   ? previous->at("global_types")
 										   : captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
 					result["global_types"] = globalTypes;
+					result["global_storage"] = captureGlobalStorage(compiled);
 					result["inference_summaries"] =
 						inferenceReuse
 							? inferenceReuse->snapshot(

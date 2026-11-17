@@ -1,38 +1,15 @@
 // Entry replay requires stable execution dependencies and the same typed
 // declaration inputs, including any restored class layouts.
-bool prepareRootClassLayouts(const Json &saved, const std::map<const Section *, std::string> &sectionPaths) {
-	Json current = captureClassInstantiations(sectionPaths);
-	if (current.size() != saved.size())
-		return false;
-	Json missing = Json::object();
-	for (const auto &[path, entry] : saved.items()) {
-		if (!current.contains(path) || current.at(path).at("source") != entry.at("source"))
-			return false;
-		const Json &instances = current.at(path).at("instances");
-		if (instances == entry.at("instances"))
-			continue;
-		if (!instances.empty())
-			return false;
-		missing[path] = entry;
-	}
-	if (missing.empty())
-		return true;
-	std::map<std::string, Section *> sections;
-	for (const auto &[section, path] : sectionPaths)
-		sections.emplace(path, const_cast<Section *>(section));
-	return restoreClassInstantiations(missing, sections);
-}
-
 bool reusableRootExecution(
 	const ParseContext &context, const Json &previous, const Json &frontendDiagnostics,
-	const std::map<const Section *, std::string> &sectionPaths
+	IncrementalInferenceReuse &inference
 ) {
 	if (context.options.noMain || !context.scopeRuleWarnings.empty() ||
 		context.diagnostics.size() != frontendDiagnostics.size() ||
 		!sameFrontendDiagnosticRecords(frontendDiagnostics, previous.at("frontend_diagnostic_records")) ||
 		previous.at("root_diagnostics").is_null() || context.constraintValuesReused != context.constraintQueries.size())
 		return false;
-	return prepareRootClassLayouts(previous.at("all_function_projection").at("class_instantiations"), sectionPaths);
+	return inference.restoreRootClasses(previous.at("all_function_projection").at("class_instantiations"));
 }
 
 bool reuseRootWithGlobalTypes(
@@ -62,8 +39,19 @@ bool reuseRootWithGlobalTypes(
 	// consume the entry's global types without executing its body again.
 	for (auto &[variable, type] : globals)
 		variable->type = std::move(type);
+	reuse.bindRootGlobals(context, previous.at("global_storage"));
 	context.reuseRootExecution = true;
 	return true;
+}
+
+Json captureGlobalStorage(const ParseContext &context) {
+	Json storage = Json::object();
+	for (const auto &state : context.managedGlobalStorage) {
+		auto *address = llvm::cast<llvm::GlobalVariable>(state.address);
+		auto *initialized = llvm::cast<llvm::GlobalVariable>(state.initializedAddress);
+		storage[address->getName().str()] = initialized->getName().str();
+	}
+	return storage;
 }
 
 void recordIRReuseStatistics(

@@ -88,8 +88,20 @@ locations, variable/class/member locations and referenced global debug records.
 Logical source-line identities are shared with typed-body restoration. IR closure
 reuse requires those queries to retain their current physical locations; moved
 locations rebuild the affected IR while unchanged runtime facts remain reusable.
+Body and diagnostic source readers construct anchor identities only for requested
+semantic owners. The shared identity builder preserves the owner, text digest and
+duplicate occurrence used by debug metadata. Generated-line origins and source
+slices use the first authored physical anchor in import order. Late binding
+publication updates declaration mappings. `body_source_anchor_owners_indexed` and
+`body_source_anchor_lines_indexed` count actual index construction, including an
+owner requested independently by separate readers; they do not claim distinct
+owners across the whole process. Unrelated owners do not incur anchor hashing or
+encoded/decoded anchor-map construction.
 Imported debug metadata belongs to the current compilation unit, including global
-declaration records. `debug_ir_location_queries` and `debug_ir_location_hits` expose
+declaration records. Reusing entry IR preserves the saved compile unit's global
+declaration order independently of the module's canonical symbol ordering. Debug
+type metadata is emitted only when it has actual records.
+`debug_ir_location_queries` and `debug_ir_location_hits` expose
 location validation work. This whole-unit path
 currently excludes tracing and does not extend the shared incremental driver to
 tooling or non-native backends.
@@ -536,6 +548,14 @@ it or assigning through it resolves in its captured caller scope. Inferring a
 reference assignment target does not execute the expression previously bound there.
 Thus the same `for each` replacement handles arrays, lists and heterogeneous packs.
 No separate pack-iteration intrinsic exists.
+
+Pack construction keeps its elements unevaluated; their value/address diagnostics
+are consumed when an extracted expression is actually used. An unresolved
+variable read contributes a deferred value-use diagnostic, while storage targets
+remain inferable. Reusing an argument-inference observation requires both its
+execution-state input and its expression type to match. A later store can refine
+that type without changing the tracked execution state, so state equality alone
+does not justify reusing an earlier unresolved-read observation.
 
 A loop that selects argument references retains a separately inferred body for
 each compile-time iteration, with fresh local types for that iteration. Every caller-body transfer inside those iterations
@@ -1214,6 +1234,10 @@ by identity before inference, so inserting or removing a declaration cannot shif
 another query's result. Retained lookup reads use the same identity to locate their
 original record when the next snapshot is captured. Other results are committed
 by inference as before.
+Number rules retain their successful constraint result through this same product.
+Fresh inference validates the rule intrinsic and records its diagnostics; replay
+installs the validated properties and publishes the retained diagnostics once.
+An edited provider invalidates that result through the ordinary query dependencies.
 Class references are keyed by stable class-section paths. Committed class
 instantiation field types and function signatures are saved with the constraint
 probe schedule. When the class declaration still has the same fields, the
@@ -1652,6 +1676,27 @@ agree. Imported entry IR also supplies globals that exposed functions reference.
 The `root_execution_reused` counter records when the entry was imported.
 Lifecycle discovery also follows each preinferred function whose body will be
 generated. These bodies can require managed cleanup when the entry IR is reused.
+
+Global type outputs retain independently validated entry-prefix queries. A prefix
+records its actual source, positive/failed lookup, callee, value and external
+global-type reads, together with class facts at that checkpoint. Globals produced
+inside the prefix are outputs of its execution proof. They do not become circular
+external inputs merely because a store also observes its target's type. A worklist
+can restore proved outputs and preinfer changed readers before checking the whole
+entry. These types are provisional until entry reuse succeeds; ordinary entry
+inference receives the original types if that proof fails. Knowing an older type
+alone never validates a producer. The current prefix source proof can still cover
+the entire unchanged entry; this is not statement-level incremental execution.
+`global_type_producers_captured`, `global_type_producers_checked` and
+`global_type_producers_restored` expose the work.
+
+Entry preparation extends compatible class-instance prefixes transactionally.
+Existing indices and layouts must agree; referenced class cycles are reserved
+before field decoding, and request collisions reject reuse. Failed restoration
+rolls back appended instances and requests. Cached entry globals are bound to their
+actual LLVM declarations before replacement code generation. Managed globals keep
+the saved initialization-flag identity, so regenerated writers and reused entry
+code use the same storage.
 
 The graph follows instantiated replacement bodies, caller bodies, static loop
 iterations, and data expressions, including compile-time-only callable queries.

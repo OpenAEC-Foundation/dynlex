@@ -283,12 +283,14 @@ Json captureSectionDependencyGraph(
 	}
 	reverseTimer.stop();
 	IncrementalWorkTimer unitsTimer(statistics.measureDependencyGraph ? &statistics.dependencyGraphUnitsMilliseconds : nullptr);
-	graph["inference_units"] =
-		InferenceUnitGraphCapture(
-			context, program.at("all_function_projection"), paths, inferenceReads, graph, priorUnits, lookupOwners, statistics,
-			fingerprints, products, globalInputs, retained.keysByPath
-		)
-			.capture(program.at("inference_summaries"), program.at("function_sections"), program.at("function_instantiations"));
+	InferenceUnitGraphCapture unitCapture(
+		context, program.at("all_function_projection"), paths, inferenceReads, graph, priorUnits, lookupOwners, statistics,
+		fingerprints, products, globalInputs, retained.keysByPath
+	);
+	graph["inference_units"] = unitCapture.capture(
+		program.at("inference_summaries"), program.at("function_sections"), program.at("function_instantiations")
+	);
+	graph["global_type_producers"] = unitCapture.globalTypeOutputs();
 	unitsTimer.stop();
 	IncrementalWorkTimer lookupsTimer(
 		statistics.measureDependencyGraph ? &statistics.dependencyGraphLookupsMilliseconds : nullptr

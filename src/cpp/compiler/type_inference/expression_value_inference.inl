@@ -164,6 +164,10 @@ bool ExpressionInferenceSupport::inferVariable() {
 			context.fail(context.setConfiguredTypeFailure(expr->range, "variable has no type", "message", {{"name", varName}}));
 			return false;
 		}
+		if (!expr->type.isDeduced())
+			expr->memoryFacts.value = std::make_shared<Diagnostic>(
+				context.parseContext, Diagnostic::Level::Error, "variable has no type", expr->range, "name", varName
+			);
 	}
 	context.setExpressionValue(expr, inferVariableCompileTimeValue(expr, context, flexBindingFrameStack));
 	if (expr->type.kind == DataType::Kind::ArgumentReference && !context.inferringReferenceAssignmentTarget) {

@@ -4,6 +4,8 @@
 #include "incrementalDebugIR.h"
 #include "incrementalModuleBitcode.h"
 #include "parseContext.h"
+#include "section.h"
+#include "variableStorage.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DebugInfoMetadata.h"
@@ -141,6 +143,10 @@ bool IncrementalIRReuse::reusableClosure(
 		llvm::GlobalVariable *now = current.getGlobalVariable(old->getName(), true);
 		if (!now && allowDeferredGlobals)
 			continue;
+		if (allowDeferredGlobals && reusedRoot && now && now->isDeclaration() &&
+			rootGlobalDeclarations.contains(old->getName().str()) && now->getValueType() == old->getValueType() &&
+			old->hasInitializer())
+			continue; // The validated cached entry supplies this prepared declaration's definition.
 		if (!now || now->getValueType() != old->getValueType() || now->getLinkage() != old->getLinkage() ||
 			!now->hasInitializer() || !old->hasInitializer() || now->getInitializer() != old->getInitializer())
 			return false;
@@ -227,6 +233,45 @@ bool IncrementalIRReuse::reuseRoot() {
 	return true;
 }
 
+void IncrementalIRReuse::bindRootGlobals(ParseContext &context, const nlohmann::json &managedStorage) {
+	requireCompilerInvariant(reusedRoot, "global storage import requires a validated entry point");
+	std::map<std::string, std::set<VariableStorageKey>> definitions;
+	std::map<std::string, DataType> types;
+	for (const auto &[section, path] : sectionPaths)
+		for (const auto &[name, variable] : section->variables)
+			if (variable->isGlobal && !variable->dataInitializer) {
+				definitions[name].insert(variableStorageKey(variable->definition, nullptr));
+				auto [entry, inserted] = types.emplace(name, variable->type);
+				requireCompilerInvariant(
+					inserted || entry->second == variable->type, "global storage aliases disagree on their type"
+				);
+			}
+	auto declare = [&](const llvm::GlobalVariable &old) {
+		auto *declaration = new llvm::GlobalVariable(
+			*currentModule, old.getValueType(), old.isConstant(), llvm::GlobalValue::ExternalLinkage, nullptr, old.getName()
+		);
+		declaration->copyAttributesFrom(&old);
+		declaration->setLinkage(llvm::GlobalValue::ExternalLinkage);
+		rootGlobalDeclarations.insert(declaration->getName().str());
+		return declaration;
+	};
+	for (const llvm::GlobalVariable &old : previousModule->globals()) {
+		auto found = definitions.find(old.getName().str());
+		if (found == definitions.end())
+			continue; // Runtime-internal globals have no source storage declaration.
+		requireCompilerInvariant(!old.isDeclaration(), "entry-owned source global has no definition");
+		auto *declaration = declare(old);
+		context.globalLLVMVariables.emplace(old.getName().str(), declaration);
+		for (const auto &key : found->second)
+			context.variableStorage.emplace(key, declaration);
+	}
+	for (const auto &[name, flagName] : managedStorage.items()) {
+		auto *flag = previousModule->getGlobalVariable(flagName.get<std::string>(), true);
+		requireCompilerInvariant(flag && !flag->isDeclaration(), "managed global lost its initialization state");
+		context.managedGlobalStorage.push_back({context.globalLLVMVariables.at(name), declare(*flag), types.at(name), nullptr});
+	}
+}
+
 bool IncrementalIRReuse::import(ParseContext &context, const nlohmann::json &currentFunctionInstantiations) {
 	if (reusedNames.empty() && !reusedRoot)
 		return true;
@@ -261,12 +306,12 @@ bool IncrementalIRReuse::import(ParseContext &context, const nlohmann::json &cur
 					usedTypes.insert(type);
 			});
 		std::map<std::string, llvm::DICompositeType *> currentTypes;
-		auto *currentProducts = currentModule->getOrInsertNamedMetadata(debugTypeProductsName);
-		for (llvm::MDNode *record : currentProducts->operands())
-			currentTypes.emplace(
-				llvm::cast<llvm::MDString>(record->getOperand(0))->getString().str(),
-				llvm::cast<llvm::DICompositeType>(record->getOperand(1))
-			);
+		if (auto *currentProducts = currentModule->getNamedMetadata(debugTypeProductsName))
+			for (llvm::MDNode *record : currentProducts->operands())
+				currentTypes.emplace(
+					llvm::cast<llvm::MDString>(record->getOperand(0))->getString().str(),
+					llvm::cast<llvm::DICompositeType>(record->getOperand(1))
+				);
 		if (auto *previousProducts = previousModule->getNamedMetadata(debugTypeProductsName))
 			for (llvm::MDNode *record : previousProducts->operands()) {
 				auto *type = llvm::cast<llvm::DICompositeType>(record->getOperand(1));
@@ -312,6 +357,22 @@ bool IncrementalIRReuse::import(ParseContext &context, const nlohmann::json &cur
 				values.MD()[old] = llvm::TrackingMDRef(replacement);
 			}
 		}
+		if (reusedRoot) {
+			// IR symbols are sorted independently of the entry's debug declarations.
+			// Restore that declaration order from its compile-unit product.
+			std::vector<llvm::Metadata *> ordered;
+			std::set<llvm::Metadata *> included;
+			for (llvm::DICompileUnit *unit : previousModule->debug_compile_units())
+				for (auto *global : unit->getGlobalVariables()) {
+					auto *mapped = llvm::MapMetadata(global, values);
+					ordered.push_back(mapped);
+					included.insert(mapped);
+				}
+			for (llvm::Metadata *global : globals)
+				if (included.insert(global).second)
+					ordered.push_back(global);
+			globals = std::move(ordered);
+		}
 		context.diCompileUnit->replaceGlobalVariables(llvm::MDTuple::get(*context.llvmContext, globals));
 	}
 	std::unique_ptr<llvm::Module> cached = llvm::CloneModule(*previousModule, values, [&](const llvm::GlobalValue *value) {
@@ -334,8 +395,9 @@ bool IncrementalIRReuse::import(ParseContext &context, const nlohmann::json &cur
 			continue;
 		if (!now)
 			throw std::runtime_error("reused function lost a global variable: " + name);
-		globalLinkages.emplace_back(name, now->getLinkage());
-		old->setInitializer(nullptr);
+		globalLinkages.emplace_back(name, now->isDeclaration() ? old->getLinkage() : now->getLinkage());
+		if (!now->isDeclaration())
+			old->setInitializer(nullptr);
 		old->setLinkage(llvm::GlobalValue::ExternalLinkage);
 		now->setLinkage(llvm::GlobalValue::ExternalLinkage);
 	}

@@ -146,8 +146,10 @@ Json encodeSectionGraph(Json &graph, GraphEncodingWork *work) {
 	encoded["inference_unit_sources"] = std::move(unitSources);
 	encoded["callable_lookups"] = std::move(encodedLookups);
 	encoded["inference_reads"] = std::move(encodedReads);
+	encoded["global_type_producers"] = graph.at("global_type_producers");
 	for (const char *name :
-		 {"matched", "inference_units", "inference_unit_keys", "inference_unit_sources", "callable_lookups", "inference_reads"})
+		 {"matched", "inference_units", "inference_unit_keys", "inference_unit_sources", "callable_lookups", "inference_reads",
+		  "global_type_producers"})
 		recordColumn(false, encoded.at(name).size());
 	return encoded;
 }
@@ -169,6 +171,7 @@ Json decodeSectionGraph(Json encoded) {
 	Json graph{{"forward", Json::object()},		   {"reverse", Json::object()},			 {"instantiations", Json::object()},
 			   {"matched", Json::object()},		   {"callable_lookups", Json::object()}, {"inference_reads", Json::object()},
 			   {"inference_units", Json::object()}};
+	graph["global_type_producers"] = encoded.at("global_type_producers");
 	for (size_t index = 0; index < paths.size(); index++) {
 		const std::string &path = paths.at(index).get_ref<const std::string &>();
 		graph["forward"][path] = decodeEdges(forward.at(index));
@@ -268,6 +271,9 @@ void recordInferencePayloadKeys(Json &program) {
 						classes.insert(definition.at("payload").get<std::string>());
 				}
 			}
+		for (const Json &output : program.at("section_dependency_graph").at("global_type_producers"))
+			for (const Json &definition : output.at("classes"))
+				classes.insert(definition.at("payload").get<std::string>());
 		program["inference_summary_keys"] = summaries;
 		program["inference_body_keys"] = bodies;
 		program["inference_class_keys"] = classes;

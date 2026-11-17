@@ -177,6 +177,7 @@ struct BuildStatistics {
 	double matcherSnapshotMilliseconds = 0;
 	size_t matcherSnapshotBytes = 0;
 	IncrementalMatcherCache::StorageStatistics matcherStorage;
+	size_t globalTypeProducersCaptured = 0, globalTypeProducersChecked = 0, globalTypeProducersRestored = 0;
 	size_t globalInputDefinitionsIndexed = 0, globalTypeInputsCaptured = 0, globalTypeInputsChecked = 0,
 		   globalTypeInputFingerprintsComputed = 0, globalTypeInputReadsRecorded = 0;
 	size_t deferredQueryProbes = 0, deferredQueryInterfacesPreserved = 0;

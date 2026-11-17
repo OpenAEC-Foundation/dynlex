@@ -2,7 +2,56 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Next iteration: I091 demand source anchors by owner
+## Full-objective status
+
+The complete goal is still active. A qualified optimization is a snapshot, not
+proof that every stage is incremental. The P01-P24 inventory below retains the
+complete scope. Current evidence and remaining boundaries are:
+
+| Requirement | Verified coverage | Remaining work |
+|---|---|---|
+| Source/config edits | File preparation, preprocessing chunks, source observations and outlines have retained products. | Semantic section/declaration objects still reconstruct broadly after active edits. |
+| Parameter classification | Focused tests cover removing the last parameter use, dependent reclassification and recovery. | Broad eligibility/index consumers still run; prove locality across every declaration and scope change. |
+| Positive/failed pattern lookups | Persistent match, binding and constraint reads retain successful and failed dependencies. | Some matcher catalogs, validation and persistence still process broad program state. |
+| Type inference | Ordinary concrete bodies, constraint results, diagnostics and validated global products can replay. | First cold-cache edit can repeat entry inference; statement/block/CFG entry products are missing. |
+| Diagnostics | All62 wording benchmark invocations update existing warnings with zero objects/linking; focused tests cover error removal and diagnostic movement. | Complete locality across all early-error and configuration changes remains unproven. |
+| LLVM IR | Native/debug function and entry closures reuse; LLVM text has an incremental driver. Current snapshot passes80 clean/incremental IR builds and16 exact native/debug output pairs. | Whole-module work remains, and tracing excludes major paths. |
+| Objects/link | Unchanged objects reuse; ordinary body benchmark rebuilds one object; fast paths skip linking. | Necessary executable changes use a conventional full link. Other output drivers still need shared products. |
+| Tooling/targets | Existing native and LLVM regression coverage. | LSP, object-only, WebAssembly and SPIR-V do not yet share the complete persistent pipeline. |
+| Required budget | Repaired candidate333/0/0 uncached in110.016s after the last test-code edit. | Recheck the shared build before publishing this snapshot. |
+
+Next attribution after I091 closes: inspect why the first edit restores two global
+type products while later edits restore four. Identify the failed input proof on
+the frozen real program, minimize it without library imports, then choose a fixed
+implementation/performance gate. Do not relax eligibility from saved output types
+or repeat a completed failed variant. This does not replace the other boundaries.
+
+## Current iteration: I091 demand source anchors by owner
+
+Started17 November2026 at03:00:33 UTC; first deadline03:45:33 UTC. Use the sole
+progress-based extension through04:30:33 UTC for the repaired frozen candidate's
+verification. No second implementation extension is available. The previous
+question-only turn made no goal progress; this continuation checked terminal
+build/test evidence before starting further work. The full objective is incomplete.
+
+The first frozen candidate passes23 focused and189 broader builds at each of
+O0/O2, plus333 required checks uncached in115.205s. Its31-pair native body case
+improves median CPU1.459551 ->1.310088s, paired ratio0.894489 with95% interval
+[0.889053,0.909445]. Native controls and cache-disabled cold show no established
+regression; the lives case improves about8.6%. Those results belong to image
+ee23232d, which remains unqualified: its debug control fails exact output parity.
+
+An11-line no-import reproduction identifies the source of that failure. Entry
+import reconstructed the compile unit's global debug list from name-sorted LLVM
+symbols instead of its saved declaration order. It also emitted an empty debug
+type table when no records existed. Repair both producers; the rebuilt image
+1678b655 passes full LLVM/executable parity for scalar/class reproductions and
+33 focused O0 builds. Run the complete original gates on this distinct image.
+
+The old frozen benchmark also forced the LLVM baseline cold. That LLVM timing
+cannot establish incremental improvement against the current qualified compiler.
+Preserve it as invalid comparison evidence and use equal incremental modes in
+the repaired candidate's frozen harness. Native comparisons were unaffected.
 
 The next implementation target is the repeated whole-program source-anchor
 producer identified by I090. Make body/diagnostic source mapping index only the
@@ -21,6 +70,52 @@ the original controls, full clean IR/diagnostic parity, affected integration and
 uncached required<=120s. Start its45-minute clock when implementation begins;
 one extension remains conditional on concrete progress. First-edit entry reuse
 and every other unfinished stage remain part of the full goal.
+
+### I091 repaired-image performance gates passed
+
+Image1678b655 is unchanged across all473 C++/header/inline and22 C inputs.
+The fixed primary and all nine controls pass. The corrected LLVM comparison uses
+incremental mode for both compilers and verifies their complete emitted graphs.
+Native/debug comparisons require identical executable bytes and diagnostics.
+
+| Edit/output | Pairs | Qualified baseline CPU median | Candidate CPU median | Paired change |
+|---|---:|---:|---:|---:|
+| Active function body / native |31|1.463039s|1.303654s|10.7% faster|
+| Game behaviour / native |15|1.853551s|1.675546s|9.5% faster|
+| Active function body / LLVM |7|2.246058s|2.077739s|7.3% faster|
+| Active function body / debug |7|1.747953s|1.575317s|9.9% faster|
+| Unused ordinary function |15|0.537764s|0.533635s|No established change|
+| Unused flex definition |15|0.524050s|0.528402s|No established change|
+| Unchanged |31|0.028870s|0.028747s|No established change|
+| Comment only |31|0.029203s|0.029138s|No established change|
+| Warning wording only |31|0.035371s|0.034567s|No established change|
+| Cache-disabled cold |11|5.309385s|5.294398s|No established change|
+
+Percentages use median paired CPU ratios, not ratios of the marginal medians.
+Every claimed gain has its95% paired interval below parity; no control has an
+established regression. All186 measured fast-path builds reuse the frontend and
+build zero objects with zero link time. Each wording sample updates existing
+warning text. Required333/0/0 passes uncached in115.275s, and again in110.016s
+after extracting the existing corruption test to keep code files below1,000 lines.
+
+The primary edit normally infers one body, reuses367 LLVM function bodies and
+builds one object. Anchor readers index166 lines across50 owner requests; these
+are actual construction counts, including requests by separate readers. Entry
+inference reuses30/31 edits. On the first edit only two of four global type
+products restore; subsequent edits restore all four. That is a measured remaining
+gap, not an identified root cause or a completed incremental boundary.
+
+Full integration462/0/0 passes in795.912s. All80 clean/incremental IR builds pass
+in native, native debug, LLVM text and LLVM text debug modes, plus16 exact fresh/
+incremental native/debug executable comparisons. Retained native/debug bitcode
+and complete LLVM artifacts match their report hashes. DWARF verification passes.
+The frozen candidate is qualified; local-master rebuild and post-disposal proof
+are next. Do not repeat completed timing comparisons. No new implementation
+variant belongs to this iteration's verification window. Evidence:
+`i091-qualification-audit.json`, `i091-fresh-native-output-audit.json`,
+`i091-performance-audit.json`,
+`i091-fast-path-audit.json`, `i091-debug-fixed-stage-analysis.json`,
+`i091-first-edit-gap.json` and the ten `i091-debug-fixed-performance-*.json` reports.
 
 ## Completed iteration: I090 entry-replay consumer attribution
 

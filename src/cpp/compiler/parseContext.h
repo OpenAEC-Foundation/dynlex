@@ -192,6 +192,7 @@ struct ParseContext {
 	size_t sourceBodyExpressionsCloned = 0;
 	double sourceBodyCloneMilliseconds = 0;
 	size_t inferenceBodiesLoaded = 0;
+	size_t bodySourceAnchorOwnersIndexed = 0, bodySourceAnchorLinesIndexed = 0;
 	double inferenceBodyLoadMilliseconds = 0;
 	std::function<void(ParseContext &, const std::function<bool(const IncrementalFunctionRequest &)> &)>
 		runIncrementalPreinference;

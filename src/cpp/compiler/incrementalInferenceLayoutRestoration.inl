@@ -1,9 +1,11 @@
 bool classes(const Json &references, const std::set<std::string> &required) {
 	auto records = owner.summaryStore.loadClasses(references, required);
-	if (!records)
-		return false;
+	return records && classRecords(*records);
+}
+
+bool classRecords(const Json &records) {
 	std::map<std::string, ClassDefinition *> definitions;
-	for (const auto &[path, record] : records->items()) {
+	for (const auto &[path, record] : records.items()) {
 		auto found = owner.identities.sections.find(path);
 		if (found == owner.identities.sections.end() || found->second->type != SectionType::Class)
 			return false;
@@ -26,7 +28,7 @@ bool classes(const Json &references, const std::set<std::string> &required) {
 	// Reserve the complete class dependency cycle before decoding any fields.
 	std::map<ClassDefinition *, size_t> appended;
 	for (const auto &[path, definition] : definitions) {
-		size_t size = records->at(path).at("instances").size();
+		size_t size = records.at(path).at("instances").size();
 		if (size > definition->instantiations.size()) {
 			recordInferenceClassRestoration(caller, definition);
 			classSizes.try_emplace(definition, definition->instantiations.size());
@@ -38,7 +40,7 @@ bool classes(const Json &references, const std::set<std::string> &required) {
 		auto original = appended.find(definition);
 		if (original == appended.end())
 			continue;
-		const Json &saved = records->at(path).at("instances");
+		const Json &saved = records.at(path).at("instances");
 		bool restored = false;
 		for (size_t index = original->second; index < saved.size(); index++) {
 			std::vector<DataType> fields;
@@ -52,7 +54,7 @@ bool classes(const Json &references, const std::set<std::string> &required) {
 			owner.summaryStore.recordClassRestored();
 	}
 	for (const auto &[path, definition] : definitions) {
-		auto requests = decodeClassRequests(records->at(path).at("requests"), owner.identities);
+		auto requests = decodeClassRequests(records.at(path).at("requests"), owner.identities);
 		if (!requests)
 			return false;
 		for (auto &[key, request] : *requests) {

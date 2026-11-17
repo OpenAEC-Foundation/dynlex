@@ -160,14 +160,9 @@ Json captureSectionInferenceSummary(
 	return summaries;
 }
 
-Json captureInferenceFactClasses(
-	const Json &summary, const InferenceValueIdentities &identities, InferenceClassSnapshot &classSnapshot
+Json captureInferenceClasses(
+	const std::set<std::string> &required, const InferenceValueIdentities &identities, InferenceClassSnapshot &classSnapshot
 ) {
-	std::set<std::string> required;
-	(void)remapInferenceSummaryTypes(summary, [&](const Json &type) {
-		collectInferenceClassDependencies(type, required);
-		return nullptr;
-	});
 	Json records = Json::object();
 	std::stack<std::string> pending;
 	for (const auto &path : required)
@@ -184,6 +179,17 @@ Json captureInferenceFactClasses(
 			pending.push(dependency);
 	}
 	return records;
+}
+
+Json captureInferenceFactClasses(
+	const Json &summary, const InferenceValueIdentities &identities, InferenceClassSnapshot &classSnapshot
+) {
+	std::set<std::string> required;
+	(void)remapInferenceSummaryTypes(summary, [&](const Json &type) {
+		collectInferenceClassDependencies(type, required);
+		return nullptr;
+	});
+	return captureInferenceClasses(required, identities, classSnapshot);
 }
 
 // Observations belong to the same immutable pure query even when successive
@@ -390,6 +396,24 @@ class IncrementalInferenceReuse {
 	) {
 		Restoration transaction(*this, nullptr);
 		return transaction.types(summary, reference) && decode(identities) && transaction.finish();
+	}
+	bool restoreRootClasses(const Json &records) {
+		if (records.size() != identities.classes.size())
+			return false;
+		for (const auto &[definition, path] : identities.classes)
+			if (!records.contains(path) || definition->instantiations.size() > records.at(path).at("instances").size())
+				return false;
+		Restoration transaction(*this, nullptr);
+		return transaction.classRecords(records) && transaction.finish();
+	}
+	std::optional<DataType> decodeTypeOutput(const Json &type, const Json &classes) {
+		std::set<std::string> required;
+		collectInferenceClassDependencies(type, required);
+		Restoration transaction(*this, nullptr);
+		if (!transaction.classes(classes, required))
+			return {};
+		auto decoded = decodeInferenceTypeIdentity(type, identities.classes);
+		return decoded && transaction.finish() ? decoded : std::nullopt;
 	}
 
 	size_t reusedCount() const { return count; }
