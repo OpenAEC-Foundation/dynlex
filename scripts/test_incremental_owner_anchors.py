@@ -27,9 +27,7 @@ def check_owner_source_anchors(root, build):
         expanded = source.replace('"first"', '"third"').replace(
             '    @intrinsic("discard", 1)\n',
             '    @intrinsic("discard", 1)\n'
-            '    @intrinsic("discard", 2)\n'
-            '    @intrinsic("discard", 3)\n'
-            '    @intrinsic("discard", 4)\n',
+            '    @intrinsic("discard", 2)\n',
         )
         main.write_text(expanded)
         changed = build(entry=main, flags=flags)
@@ -44,3 +42,26 @@ def check_owner_source_anchors(root, build):
         changed = build(entry=main, flags=flags)
         assert changed[1:] == build(False, entry=main, flags=flags)[1:]
         assert changed[2] == "μ fourth\n".encode()
+    check_owner_diagnostic_anchors(root, build)
+
+
+def check_owner_diagnostic_anchors(root, build):
+    main = root / "owner_diagnostic_anchors.dl"
+    source = (
+        'function return value:\n    replacement: @intrinsic("return", value)\n'
+        'to get left - right:\n    return @intrinsic("subtract", left, right)\n'
+        'to get value adjusted:\n    return value\n'
+        'to get the tested form of value:\n    return value - 1 adjusted\n'
+        'to report:\n    @intrinsic("discard", @intrinsic("call", "libc", "puts", '
+        '@intrinsic("type", "int", 32), "first"))\n'
+    )
+    call = '@intrinsic("discard", the tested form of @intrinsic("command line argument count"))\n'
+    main.write_text(source + call + "report\n")
+    first = build(entry=main)
+    assert first[1].count("Warning:") == 1
+    for prefix, calls, message in (("", call, "second"), ("# moved\n\n", call * 2, "third"),
+                                   ("", "", "fourth"), ("# restored\n", call, "fifth")):
+        main.write_text(prefix + source.replace('"first"', f'"{message}"') + calls + "report\n")
+        changed = build(entry=main)
+        assert changed[1:] == build(False, entry=main)[1:]
+        assert changed[1].count("Warning:") == bool(calls)
