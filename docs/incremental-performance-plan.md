@@ -68,6 +68,45 @@ qualification finishes: isolated conversion is clearly faster, peak RSS improves
 and no format/storage cost is added. Do not re-sample to manufacture a speed claim.
 Full integration started 16:21 UTC; complete-IR and fast-path controls still remain.
 
+The first deadline is reached at 16:28:48 UTC with concrete implementation,
+passing required and full paired/resource measurements. Use the single 45-minute
+verification extension (deadline 17:13:48 UTC) for the running integration suite,
+complete-IR/fast controls, shared-master verification and publication. No further
+optimization variant or statistical re-sampling belongs to this iteration.
+
+Full integration passes 462/0/0 in 749.739 s. The service journal records a
+1.4 GiB peak under the 1.5 GiB/no-swap/64-task cap. Intermediate cgroup event
+captures show no denials/OOM events; do not present a partial capture as an
+end-of-run event audit. All 12 complete LLVM graph comparisons also pass against
+the baseline and clean builds. The C++ regression now uses the producer's actual
+object-shaped lookup/global-input fields and its direct helper recheck passes.
+The Python codec wrapper now includes the C++ subprocess's real stdout/stderr
+on failure; the earlier wrapper exposed only a generic CalledProcessError.
+Fast controls and shared-master qualification/publication remain pending.
+
+I095 fast controls finish with 68 successful builds: all measured comment and
+wording edits reuse the frontend with zero objects/links, and native/diagnostic
+parity passes. Preserve the original timing result: comment CPU26.018 ->26.770 ms
+(paired ratio1.03710, interval[1.02051,1.03865]); wording30.609 ->31.563 ms
+(1.03143,[1.02301,1.03884]). Driver totals are nearly unchanged for comments and
++0.23 ms for wording, so most extra time lies outside that timer.
+
+One bounded diagnostic follow-up tests --version (64 pairs) and comment builds
+with/without statistics (31 pairs each). Bare startup is +0.2265 ms paired median;
+loader relocation counts are unchanged. Normal comment CPU medians27.748 ->27.653 ms
+(ratio.98923,[.98320,1.00164]); statistics27.956 ->27.963 ms
+(.99327,[.98828,1.00425]). This follow-up changes only the edited chip-file mtime,
+whereas the original harness refreshes five source files: it is diagnostic evidence,
+not a replacement for the original controls. The original extra time has no
+established precise cause; do not claim it disproved or attribute it to LLVM.
+
+Finish and retain the bounded implementation under the user's combined-effect
+criterion: conversion -2.38 ms CPU, first-edit peak RSS around -2%, unchanged disk,
+no new persisted state, about115 production lines. Whole-build CPU remains
+inconclusive and the original fast-path timing difference stays visible. Do not
+spend another iteration chasing a sub-millisecond attribution. Shared-master
+verification/publication and the larger resolution-setup goal are next.
+
 The full cross-process incremental goal remains incomplete. Do not mark this
 snapshot or one optimized stage as completion of P01–P24.
 

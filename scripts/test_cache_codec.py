@@ -12,7 +12,9 @@ from cache_payloads import decode_cbor
 project = Path(sys.argv[1]).resolve()
 executable = project / "build" / ("dynlex_cached_cbor_test.exe" if sys.platform == "win32"
                                  else "dynlex_cached_cbor_test")
-result = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+result = subprocess.run([str(executable)], capture_output=True, text=True)
+assert result.returncode == 0, (f"C++ cache codec checks failed ({result.returncode}):\n"
+                              f"{result.stdout}{result.stderr}")
 fixture = json.loads(result.stdout)
 value = decode_cbor(bytes(fixture["encoded"]))
 assert value == fixture["value"]
