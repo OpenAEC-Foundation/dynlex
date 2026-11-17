@@ -1,23 +1,8 @@
 import {createFreeRangeIndex} from './runtimeHeap.js';
-function runtimeDependencyUrl(path) {
-  return new URL(path, import.meta.url).href;
-}
-
-const [filesystemModule, hostModule, layoutModule, wideIntegerModule] = await Promise.all([
-  import(runtimeDependencyUrl("./runtimeFilesystem.js")),
-  import(runtimeDependencyUrl("./runtimeHost.js")),
-  import(runtimeDependencyUrl("./runtimeLayout.js")),
-  import(runtimeDependencyUrl("./runtimeWideIntegers.js"))
-]);
-const {
-  createFileImports,
-  createRuntimeFilesystem,
-  readCString,
-  writeCString
-} = filesystemModule;
-const { createHostImports } = hostModule;
-const { inspectRuntimeWasmLayout } = layoutModule;
-const { createWideIntegerImports, wideIntegerImportNames } = wideIntegerModule;
+import {createFileImports, createRuntimeFilesystem, readCString, writeCString} from './runtimeFilesystem.js';
+import {createHostImports} from './runtimeHost.js';
+import {inspectRuntimeWasmLayout} from './runtimeLayout.js';
+import {createWideIntegerImports, wideIntegerImportNames} from './runtimeWideIntegers.js';
 
 // LLVM lowers these floating-point intrinsics to C ABI imports in WebAssembly.
 // Share the definitions with import validation so the IDE accepts the same runtime.

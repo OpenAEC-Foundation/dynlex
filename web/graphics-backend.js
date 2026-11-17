@@ -14,34 +14,72 @@ export async function requestGraphicsBackend() {
   }
 }
 
-export function createWebGlProgram(gl, vertexSource, fragmentSource) {
-  const shaders = [];
-  let program = null;
+function startWebGlProgram(gl, vertexSource, fragmentSource) {
+  const work = { shaders: [], program: null };
   try {
     for (const [type, source] of [[gl.VERTEX_SHADER, vertexSource], [gl.FRAGMENT_SHADER, fragmentSource]]) {
       const shader = gl.createShader(type);
       if (!shader) throw new Error("WebGL could not allocate a shader");
-      shaders.push(shader);
+      work.shaders.push(shader);
       gl.shaderSource(shader, source);
       gl.compileShader(shader);
+    }
+    work.program = gl.createProgram();
+    if (!work.program) throw new Error("WebGL could not allocate a shader program");
+    for (const shader of work.shaders) gl.attachShader(work.program, shader);
+    gl.linkProgram(work.program);
+    return work;
+  } catch (error) {
+    discardWebGlProgram(gl, work);
+    throw error;
+  }
+}
+
+function discardWebGlProgram(gl, work) {
+  if (work.program) gl.deleteProgram(work.program);
+  for (const shader of work.shaders) gl.deleteShader(shader);
+}
+
+function finishWebGlProgram(gl, work) {
+  try {
+    for (const shader of work.shaders) {
       if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
         console.error("WebGL shader compilation failed", gl.getShaderInfoLog(shader));
         throw new Error("An error occurred. Check the log.");
       }
     }
-    program = gl.createProgram();
-    if (!program) throw new Error("WebGL could not allocate a shader program");
-    for (const shader of shaders) gl.attachShader(program, shader);
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error("WebGL shader linking failed", gl.getProgramInfoLog(program));
+    if (!gl.getProgramParameter(work.program, gl.LINK_STATUS)) {
+      console.error("WebGL shader linking failed", gl.getProgramInfoLog(work.program));
       throw new Error("An error occurred. Check the log.");
     }
-    return program;
+    return work.program;
   } catch (error) {
-    if (program) gl.deleteProgram(program);
+    if (work.program) gl.deleteProgram(work.program);
     throw error;
   } finally {
-    for (const shader of shaders) gl.deleteShader(shader);
+    for (const shader of work.shaders) gl.deleteShader(shader);
   }
+}
+
+export function createWebGlProgram(gl, vertexSource, fragmentSource) {
+  return finishWebGlProgram(gl, startWebGlProgram(gl, vertexSource, fragmentSource));
+}
+
+// Compile/link immediately, then use the driver's nonblocking completion query.
+// Drivers without this extension expose only the standard blocking status query.
+export async function createWebGlProgramAsync(gl, vertexSource, fragmentSource) {
+  const extension = gl.getExtension('KHR_parallel_shader_compile');
+  const work = startWebGlProgram(gl, vertexSource, fragmentSource);
+  try {
+    if (extension !== null) {
+      while (!gl.getProgramParameter(work.program, extension.COMPLETION_STATUS_KHR))
+        await new Promise(resolve => setTimeout(resolve, 0));
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  } catch (error) {
+    discardWebGlProgram(gl, work);
+    throw error;
+  }
+  return finishWebGlProgram(gl, work);
 }
