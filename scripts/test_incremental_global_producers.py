@@ -37,7 +37,7 @@ def check_global_type_producers(root, build):
     assert build(entry=main, success=False)[1:] == build(False, entry=main, success=False)[1:]
 
     # Changing a type provider invalidates its output and the global reader.
-    provider = ('to get initial: @intrinsic("return", 1)\n'
+    provider = ('to get initial:\n    @intrinsic("return", 1)\n'
                 '@intrinsic("store", shared, initial)\n'
                 'function show:\n'
                 '    globals: shared\n'
@@ -85,8 +85,8 @@ def check_global_type_producers(root, build):
 
     # Restoring a class output requires its current structural field identity.
     structured = ('class:\n'
-                  '    patterns: record\n'
-                  '    members: number\n'
+                  '    patterns:\n        record\n'
+                  '    members:\n        number\n'
                   '@intrinsic("store", shared, @intrinsic("construct", record, '
                   '@intrinsic("command line argument count")))\n' +
                   source[source.index('function show:'):].replace('"add", shared, 1', '"add", shared\'s number, 1'))
@@ -99,7 +99,7 @@ def check_global_type_producers(root, build):
     assert changed[0]['global_type_producers_restored'] == 1
 
     # A regenerated writer must share the cached entry's managed init flag.
-    managed = ('class:\n    patterns: token\n    members: number\n'
+    managed = ('class:\n    patterns:\n        token\n    members:\n        number\n'
                '    retain: @intrinsic("discard", @intrinsic("lifecycle value"))\n'
                '    release:\n'
                '        @intrinsic("variadic call", "libc", "printf", '
