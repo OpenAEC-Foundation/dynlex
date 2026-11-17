@@ -149,8 +149,9 @@ Farm benchmark, snapshot creation with 2,000 retained allocation holes fell from
 96.37 ms to 6.45 ms median; the unfragmented case fell from 5.48 ms to 3.01 ms.
 These are snapshot timings, not browser frame-rate measurements.
 
-The required gate passed all 387 checks in 84.020 seconds. The integration run
-passed all 486 checks with source files; its 26 other entries were empty local
-directories left by the extraction, and reported missing main.dl. Those empty
-untracked directories have been removed; the extracted fixtures live in the
-website repository.
+The required gate passed all 387 checks in 84.020 seconds. After removing the
+empty untracked fixture directories left by extraction, the full integration
+suite passed all 486 checks with zero failures in 1,105.719 seconds under a
+1 GiB process-tree memory cap. The extracted application fixtures live in the
+website repository. The standalone application builds successfully in website
+CI; local full-app builds exceed the deliberately imposed 1.5 GiB limit.
