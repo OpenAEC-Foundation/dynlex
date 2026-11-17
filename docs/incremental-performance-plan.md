@@ -2,7 +2,7 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
-## Active iteration: I095 graph snapshot and persistence
+## Completed iteration: I095 graph snapshot and persistence
 
 Started 17 November 2026 at 15:43:48 UTC, after I094 publication; first deadline
 16:28:48 UTC. Master/origin `3ffcc606` passes shared required 334/0/0 uncached
@@ -106,6 +106,22 @@ no new persisted state, about115 production lines. Whole-build CPU remains
 inconclusive and the original fast-path timing difference stays visible. Do not
 spend another iteration chasing a sub-millisecond attribution. Shared-master
 verification/publication and the larger resolution-setup goal are next.
+
+Final shared-master qualification at 16:51:17 UTC: required 334/0/0 uncached in
+98.912 s after the compiler build. Shared compiler image
+`07df1db6634b160605a96a9c7cac249562948406e4dfecebdbbb2f90628008b9`;
+implementation `3728eb66`, cost/error-reporting record `a5eca16e`. Code and codec
+regressions pass; complete native/LLVM parity and the original inconclusive or
+regressed timing controls remain recorded above. Publish the qualified snapshot,
+dispose its worktree and keep the complete compiler-wide goal active.
+
+Next bounded goal: reduce resolution setup by reusing unchanged setup products.
+The current first-body-edit medians are 105.940 ms setup, including 37.038 ms
+cached-body selection. First attribute the remaining work between definition
+restoration/indexing, reference tokenization, initial counts and source/class
+preparation, then implement the largest justified dependency boundary. Retain
+last-parameter-use, overload-add/remove, failed-lookup and clean-diagnostic parity.
+Do not extend this iteration into a second serialization-attribution loop.
 
 The full cross-process incremental goal remains incomplete. Do not mark this
 snapshot or one optimized stage as completion of P01–P24.
