@@ -1,0 +1,3 @@
+tests/required/argument_pack_reference_recursion/main.dl:9-29: Error: recursive flex expansion
+  note: while inferring call 'assign item to value' with arguments [an argument pack, a 32-bit integer] -> an unresolved value tests/required/argument_pack_reference_recursion/main.dl:9-29
+  note: while inferring call 'assign target to 1' with arguments [an argument pack, a 32-bit integer] -> an unresolved value tests/required/argument_pack_reference_recursion/main.dl:1-19

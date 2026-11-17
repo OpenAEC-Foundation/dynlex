@@ -2,6 +2,76 @@
 
 Owner: this compiler task. Established 13 November 2026.
 
+## Active iteration: I093 recursive flex argument-pack crash
+
+Started 17 November 2026 at 13:20:48 UTC; first deadline 14:05:48 UTC.
+The user explicitly prioritizes confirmed compiler problems before further
+performance work. First reduce the no-cache stack overflow from I092 to a
+no-import reproduction, identify why the existing recursive-expansion identity
+does not detect the repeated call, and fix that producer/consumer contract.
+Do not add a recursion-depth threshold, syntax special case, or exception mask.
+Add the minimal regression before the implementation; preserve valid finite
+compile-time recursion and nested section-body execution. Verify focused cases,
+the uncached required suite within 120 seconds after building, and affected
+integration coverage. Builds and tests run serially in bounded memory groups.
+
+One further 45-minute iteration is available only after concrete progress.
+After the crash fix is qualified, resume P03/P06 dependency-output boundaries:
+the first edited build changes a lookup input key despite byte-identical match
+outputs, invalidating unchanged inference/global products. Keep every other
+P01–P24 boundary in scope and let the fixed correctness/performance gates decide
+which implementation to retain. The complete incremental objective is unfinished.
+
+I093 evidence at 17 November 2026 13:45 UTC:
+
+- The original 376-line no-cache overflow reduces to six lines with no imports:
+  extract a pack element into a local reference, then forward that reference to
+  the same variadic replacement. The unchanged compiler exceeds a three-second
+  watchdog. GDB shows identical definitions/types/value arguments but a newly
+  wrapped capture and growing binding stack on every expansion.
+- `inferArgumentPack` forwards existing packs but did not forward existing
+  `ExpressionCapture` values. Preserving that reference fixes its identity and
+  caller scope. The minimal regression now reports the existing recursive-flex
+  diagnostic in 14 ms; the original reproducer reports it in 37 ms.
+- Required qualification: the first candidate run hit the unchanged 120-second
+  watchdog. A control with the unchanged compiler passed 333 checks in 116.550 s.
+  The candidate rerun passed all 334 checks uncached in 106.181 s. This is a
+  correctness qualification, not evidence of a suite performance improvement.
+- The affected full integration suite is running. No snapshot is qualified for
+  merging until it passes. Compilation remains serial and memory bounded.
+- A separate, unevaluated direct-extraction recursion also exceeds the watchdog;
+  forwarding known references does not resolve that case. Keep it open rather
+  than claiming a general termination proof for lazy source transformations.
+- The first-edit lookup probe finds identical source text, pattern elements,
+  keyframes, numeric spellings and ancestor scopes. Compare the complete key
+  buffer next; do not discard input dependencies without proving the output
+  boundary and testing changed overloads and failed lookups.
+
+At 13:59 UTC the first full integration run finished 461/1/0 in 760.126 s.
+The only failure was the Vulkan runtime, caused by this investigation's
+`TasksMax=32` service limit, not the compiler patch. Both unchanged and candidate
+compilers pass its isolated check with 64 tasks and segfault with 32. The
+unchanged-compiler control records three denied creations in `pids.events` and a
+32-task peak. Preserve memory limits but allow 64 tasks for test processes.
+The incremental overload-addition/removal recovery check also passes against
+clean builds. Full corrected-environment integration and the final required run
+(including that additional regression) remain to be recorded before publishing.
+
+The sole qualification extension is justified by the implemented crash fix,
+passing required/recovery tests and verified test-service thread-limit failure.
+Its final deadline is 14:50:48 UTC. Do not publish the snapshot before corrected
+integration and required results exist.
+
+The complete 1,810-byte lookup fingerprints now differ only at bytes 16–79:
+the candidate-tree digest. Source representation is not the cause. Rematching
+correctly revalidates candidate changes, but downstream inference consumes raw
+lookup input versions despite unchanged selected results. A 14-line, no-import
+regression adding a nonmatching overload reproduces a changed constructor source
+input (`i094-red-lookup-results.log`). The next implementation should share the
+existing resolved-match identity machinery across source-owner units, retaining
+raw reference keys for lookup validation and replay. Set a separate bounded
+performance gate before retaining that optimization.
+
 ## Full-objective status
 
 The complete goal is still active. A qualified optimization is a snapshot, not
@@ -20,7 +90,7 @@ complete scope. Current evidence and remaining boundaries are:
 | Tooling/targets | Existing native and LLVM regression coverage. | LSP, object-only, WebAssembly and SPIR-V do not yet share the complete persistent pipeline. |
 | Required budget | Shared compiler333/0/0 uncached in115.499s; candidate also passes in110.016s. | Preserve the120s post-build budget in subsequent iterations. |
 
-## Current iteration: I092 first-edit global-product attribution
+## Prior iteration: I092 first-edit global-product attribution
 
 Started17 November2026 at04:42:41 UTC; first deadline05:27:41 UTC. The previous
 goal turn made progress: it qualified, merged and pushed I091, verified the shared

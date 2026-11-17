@@ -369,6 +369,9 @@ one argument when no ordinary spelling matches. Parentheses delimit an element's
 expression normally. There is one trie path for a variadic declaration, independent
 of argument count. Each matched element retains its caller-owned pack, element index and caller bindings;
 resolution does not generate declarations for different arities. Captures resolve the current element root, so operand regrouping updates the original argument tree. The compilation context retains captured source bodies for its arena lifetime.
+Forwarding an extracted argument reference into another pack preserves its original
+capture and caller bindings. It does not capture the forwarding variable again;
+recursive expansion checks therefore recognize the same source argument.
 
 Capture names are type-agnostic unless a type expression appears before the colon. There is no lexical word-capture type; finite concepts such as shader stages are represented by literal patterns, and text values use an ordinary string type constraint.
 

@@ -50,6 +50,10 @@ void ExpressionInferenceSupport::inferArgumentPack() {
 		CompileTimeValue forwarded = resolveStoredCompileTimeValue(argument, flexBindingFrameStack, &context);
 		if (expr->arguments.size() == 1 && std::holds_alternative<ArgumentPackValue>(forwarded))
 			pack = std::get<ArgumentPackValue>(std::move(forwarded));
+		// A reference already owns its caller expression and bindings. Wrapping
+		// it again hides the same argument from recursive expansion detection.
+		else if (const auto *reference = std::get_if<ExpressionCapture>(&forwarded))
+			pack.elements.push_back(*reference);
 		else
 			pack.elements.push_back(captureExpression(context.parseContext, expr, index, flexBindingFrameStack));
 	}
