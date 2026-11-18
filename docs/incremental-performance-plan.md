@@ -16,6 +16,32 @@ Native eaaf1cc6 passes all 391 required checks in 63.588 seconds after the compi
 
 The shared-root compiler 71c9192f passes all 391 required checks in 65.419 seconds, native LSP and the focused grouping checks. Production source and browser artifacts match the qualified worktree.
 
+## Iteration I120: reuse native CLI WebAssembly compilation products
+
+Native CLI Wasm builds now reuse the frontend and unoptimized function IR
+with a target-specific cache identity. The linker embeds the destination
+basename, including the standard-output spelling. Restore the relocatable
+object and run the same linker for a moved or damaged output. A live,
+unchanged output needs neither object lowering nor linking. A missing cached
+object is regenerated from saved IR.
+
+The O0 and debug O2 focused tests pass byte-for-byte clean output checks for
+active edits, renames, stdout, damaged output, eviction and message-only
+configuration changes. Native-CLI host callback and runtime math tests pass.
+The compiler under test is 13da4606, built from 0ccad59f and the frozen
+combined native objects.
+
+On the 125-file browser Ribbon example at dynlex-ui revision 488f0c14,
+two slide-color edits take 19.517 CPU seconds median with a clean build
+and 11.069 seconds with a warm cache. Each build reuses 560 function IR
+products. Three comment edits take 46 ms median CPU time and perform no
+lowering or linking. The initial cache population takes 40.617 CPU seconds,
+while one clean original-source run takes 19.890 seconds. This is a material
+first-build cost. Sampling does not establish a cold speedup. On the two
+edited builds, whole-module optimization takes 3.4 and 5.0 wall seconds,
+while linking takes under 5 ms. These are stage observations from those
+builds. Shared native and browser validation still follows.
+
 ## Iteration I118: replay source-loading and preprocessing diagnostics
 
 Unchanged early failures and message-only edits now validate source and
