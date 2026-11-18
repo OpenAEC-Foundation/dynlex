@@ -171,6 +171,7 @@ struct Instantiation : InstantiationExecutionEffects {
 	bool valid = true;
 	bool inferenceReusedFromCache = false;
 	std::string inferenceProductIdentity;
+	std::shared_ptr<const GroupingProduct> groupingProduct;
 };
 
 struct Section {

@@ -131,7 +131,7 @@ class RuntimeLifecycleUses {
 		requireCompilerInvariant(
 			context.parseContext.reuseInferredInstantiation &&
 				context.parseContext.reuseInferredInstantiation(
-					section, slot->first, instance, ParseContext::InferenceReuseUse::RuntimeCall, &context
+					section, slot->first, instance, ParseContext::InferenceReuseUse::RuntimeCall, &context, nullptr
 				),
 			"restored runtime dependency lost its inference facts"
 		);

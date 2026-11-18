@@ -10,6 +10,59 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## Active iteration: I109 qualify grouping execution dependencies
+
+Started18 November at06:05:16 UTC; first deadline06:50:16 UTC. I108's source-fact
+boundary remains parked. Finish the demonstrated cross-stage grouping bugs:
+semantic query replay must preserve first-instantiation choices and warnings,
+evicted bodies and new constant observations must infer ordinarily, and LLVM
+reuse must depend on the actual grouping results. A runtime regression prints10
+incrementally versus20 cleanly before the native fix. The real Breakout control
+also exposes a grouping-result invariant failure; minimize and diagnose that
+context transition before further optimization. Complete one correct producer /
+consumer boundary with exact fresh/reused diagnostics and runtime parity, then
+measure real-program CPU, memory, disk and code. The required uncached suite is
+currently334/0/0 in97.802 seconds on the preceding candidate; that is not final
+qualification. Do not publish the current patch until all gates pass. One45-minute
+extension requires concrete progress. The full every-stage goal remains active.
+
+At06:48 UTC all focused grouping regressions and the five-case native parity
+matrix pass, and the uncached required suite passes334/0/0 in100.525 seconds.
+Do not publish this candidate: a body edit grows from one inferred body to104,
+and1.14 to3.49 CPU seconds. Grouping outputs currently use changed line text as
+identity and interface comparison includes contextual grouping inputs. Complete
+the bounded precision correction using unit-relative source positions and output
+interfaces, then remeasure. Memoize final IR grouping checks only after inference
+has established immutable results. This is concrete implementation and benchmark
+progress; use the sole extension to07:35:16 UTC. Editor source facts remain parked.
+
+## Parked iteration: I108 shared source inference results
+
+Started18 November at04:37:01 UTC; first deadline05:22:01 UTC. Previous turn is
+progress: qualified I107 is published as224cac46, its merged worktree disposed,
+and one verifiedf35682d9 baseline retained. Complete a genuine semantic-query
+reuse boundary for current source facts. Native return/effect summaries alone do
+not satisfy current hover, constant, overload and call-expression consumers.
+Produce immutable source facts with portable identities and current grouping,
+then share the existing dependency proof and migrate consumers fully. Avoid I102's
+rejected runtime-body replay and retaining entire old contexts. Do not publish
+consumer-only scaffolding without an actual justified reuse result. First verify
+that semantic query replay respects source grouping when a different
+instantiation is demanded first. Fix any demonstrated compiler issue before
+continuing. Minimal no-import fresh/reused parity tests and actual work counters
+must drive the change. Compare fixed real-program code/cold CPU, memory, disk and
+code together; required uncached<=120 s, affected integration, LSP and actual web
+behavior remain gates. One45-minute extension is available only for concrete
+implementation progress. The full cross-process, every-stage goal stays active.
+
+At05:21 UTC the no-import regression demonstrates a pre-existing correctness
+failure: a cached integer call followed by a new real call accepts incompatible
+shared source groupings, while a clean build rejects them. The regression now
+covers both first argument types, added calls, reordered calls and removal.
+Implementing explicit grouping input/output products and transactional replay is
+concrete progress; use the sole extension to06:07:01 UTC for this correctness
+boundary. Current-source editor facts remain a separate subsequent boundary.
+
 ## Completed iteration: I107 structurally unique grouping inference
 
 Started18 November at03:09:53 UTC; first deadline03:54:53 UTC. Previous turn is

@@ -86,6 +86,7 @@ static std::optional<Expression::SectionOutcome::Kind> inferExpressionSectionOut
 	if (inferExpression(trialExpression, trialContext, alreadyOrdered, bindingFrameStack, false) && trialContext.typesValid)
 		kind = finalizedBranchOutcome(trialExpression);
 	rollbackTrialJournal(trialContext, journal);
+	observeGroupingProbe(trialContext, context);
 	applyGroupingSnapshot(originalGrouping);
 	recomputeRanges(expression);
 	resetExpressionTypes(expression);
@@ -126,6 +127,7 @@ static bool inferNextLoopHeaderOutcomeInTrial(
 	if (inferred && execute)
 		execution.emplace(trialContext);
 	rollbackTrialJournal(trialContext, journal);
+	observeGroupingProbe(trialContext, context);
 	if (execution)
 		execution->restore(context);
 	return inferred;

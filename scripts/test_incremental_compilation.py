@@ -45,6 +45,7 @@ from test_incremental_classification import check_recursive_classification_casca
 from test_incremental_effect_cascade import check_bounded_effect_cascade
 from test_incremental_inferred_dependencies import check_callable_trial_dependencies, check_inferred_section_dependencies
 from test_incremental_data_initializers import check_global_data_initializers
+from test_incremental_grouping_state import check_grouping_state
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -115,6 +116,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_body_materialization(root, build)
     check_body_syntax_products(root, build)
     check_inference_failures(root, build)
+    check_grouping_state(root, build)
     check_validation_units(root, build)
     check_failed_validation_units(root, build)
     check_capture_scope_queries(root, build)

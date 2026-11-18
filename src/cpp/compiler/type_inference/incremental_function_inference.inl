@@ -41,6 +41,8 @@ static bool inferIncrementalFunctionBody(
 		Instantiation &instantiation = found->second;
 		if (instantiation.purity == InstantiationPurity::Pure && instantiation.returnType.kind != DataType::Kind::Void) {
 			InferenceContext context(parseContext, true);
+			context.groupingTrace = trial.groupingTrace;
+			context.inheritedGroupingContext = &trial;
 			context.trialJournal = trial.trialJournal;
 			context.inheritedTrialExpressionValues = &trial.trialExpressionValues;
 			context.currentInstantiation = &instantiation;

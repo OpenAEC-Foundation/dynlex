@@ -122,6 +122,7 @@ static bool inferSectionLineRange(
 	auto inferLineExpression = [&](CodeLine *line, Expression *&lineExpression) {
 		if (!lineExpression)
 			return true;
+		observeCodeLineGrouping(line, context);
 		applyCodeLineGrouping(line, lineExpression, context);
 		bool alreadyOrdered = codeLineCanReuseGrouping(line, context);
 		bool ambiguityChecked = context.detectGroupingAmbiguity;
@@ -638,9 +639,13 @@ bool inferTypes(ParseContext &parseContext) {
 	if (!parseContext.reuseRootExecution) {
 		size_t firstDiagnostic = parseContext.diagnostics.size();
 		if (!inferSection(parseContext.mainSection, nullptr, nullptr, context, {})) {
+			if (parseContext.inferenceProducts)
+				parseContext.rootGroupingProduct = captureGroupingProduct(context.groupingTrace, {});
 			emitPendingInferenceFailure(context);
 			return false;
 		}
+		if (parseContext.inferenceProducts)
+			parseContext.rootGroupingProduct = captureGroupingProduct(context.groupingTrace, {});
 		auto &rootDiagnostics = parseContext.deferredInferenceDiagnostics[{}];
 		validateVariableUsage(context, parseContext.mainSection, nullptr, {}, {});
 		for (size_t index = firstDiagnostic; index < parseContext.diagnostics.size(); index++) {

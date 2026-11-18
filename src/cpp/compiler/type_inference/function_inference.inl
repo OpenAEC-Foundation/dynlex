@@ -20,6 +20,11 @@ static DataType ensureExpressionType(Expression *&expr, InferenceContext &contex
 #include <bit>
 #include <memory>
 
+static std::shared_ptr<const GroupingProduct>
+captureGroupingProduct(const std::shared_ptr<const GroupingTrace> &, const std::shared_ptr<const GroupingTrace> &);
+static void observeGroupingResult(const Instantiation &, InferenceContext &);
+static void observeGroupingProbe(const InferenceContext &, InferenceContext &);
+
 static DataType effectiveInferredExpressionType(Expression *expression) {
 	if (!expression)
 		return {};
@@ -438,6 +443,15 @@ static bool runInstantiationReinferenceLoop(
 	InferenceContext &context, Instantiation &instantiation, PatternDefinition *definition, const Range &fallbackRange,
 	std::string functionName, bool canDeferToCaller, InferPassFn &&inferPass
 ) {
+	struct RetainGroupingProduct {
+		InferenceContext &context;
+		Instantiation &instance;
+		std::shared_ptr<const GroupingTrace> begin;
+		~RetainGroupingProduct() {
+			if (context.parseContext.inferenceProducts)
+				instance.groupingProduct = captureGroupingProduct(context.groupingTrace, begin);
+		}
+	} grouping{context, instantiation, context.groupingTrace};
 	struct RetainedPureValues {
 		Instantiation &instantiation;
 		decltype(Instantiation::pureReturnValuesByArguments) values;

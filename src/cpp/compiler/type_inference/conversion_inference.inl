@@ -92,6 +92,7 @@ static std::optional<ConversionOutcome> probeConversionOutcome(
 	if (inferred && call->type.isDeduced() && call->type.kind != DataType::Kind::Void)
 		result = ConversionOutcome{call->type, isCompileTimeKnown(trialContext.lookupExpressionValue(call))};
 	rollbackTrialJournal(trialContext, journal);
+	observeGroupingProbe(trialContext, context);
 	return result;
 }
 

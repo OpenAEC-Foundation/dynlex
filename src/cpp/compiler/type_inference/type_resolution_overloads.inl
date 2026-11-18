@@ -49,6 +49,7 @@ struct InferenceContext {
 
 	struct TrialCodeLineGrouping {
 		GroupingSnapshot grouping;
+		GroupingState state;
 		bool reusableTemplate = false;
 		bool ambiguityChecked = false;
 	};
@@ -426,10 +427,20 @@ struct InferenceContext {
 	std::unordered_map<Expression *, CompileTimeValue> trialExpressionValues;
 	const std::unordered_map<Expression *, CompileTimeValue> *inheritedTrialExpressionValues{};
 	std::unordered_map<CodeLine *, TrialCodeLineGrouping> trialCodeLineGroupings;
+	const InferenceContext *inheritedGroupingContext = nullptr;
+	std::shared_ptr<const GroupingTrace> groupingTrace;
 	std::unordered_map<PatternDefinition *, Instantiation *> trialCallableInstantiations;
 
 	InferenceContext(ParseContext &pc) : parseContext(pc) {}
 	InferenceContext(ParseContext &pc, bool trial) : parseContext(pc), trial(trial) {}
+	const TrialCodeLineGrouping *groupingForLine(CodeLine *line) const {
+		for (const InferenceContext *scope = this; scope && scope->trial; scope = scope->inheritedGroupingContext) {
+			auto found = scope->trialCodeLineGroupings.find(line);
+			if (found != scope->trialCodeLineGroupings.end())
+				return &found->second;
+		}
+		return nullptr;
+	}
 
 	template <typename Recorder> void recordDependencyRead(Recorder &&record) const {
 		if (dependencyReads.constraintProbe)
@@ -460,6 +471,8 @@ struct InferenceContext {
 	}
 
 	void inheritSectionExecutionState(const InferenceContext &other) {
+		inheritedGroupingContext = &other;
+		groupingTrace = other.groupingTrace;
 		dependencyReads = other.dependencyReads;
 		typeRefinements = other.typeRefinements;
 		memoryFlexBase = other.memoryFlexBase;
@@ -760,6 +773,7 @@ struct InferenceContext {
 			trial && other.trial && trialJournal == other.trialJournal,
 			"committing child inference requires its owning trial context"
 		);
+		groupingTrace = other.groupingTrace;
 		for (const auto &[expression, value] : other.trialExpressionValues)
 			setExpressionValue(expression, value);
 		for (auto &[line, grouping] : other.trialCodeLineGroupings) {

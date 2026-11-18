@@ -182,7 +182,10 @@ struct ParseContext {
 	// Native incremental builds may import a previously generated function body
 	// after this compilation has inferred its current types and selected calls.
 	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;
-	std::function<bool(Section *, const InstantiationKey &, Instantiation &, InferenceReuseUse, InferenceContext *)>
+	std::function<bool(
+		Section *, const InstantiationKey &, Instantiation &, InferenceReuseUse, InferenceContext *,
+		const std::vector<CompileTimeValue> *
+	)>
 		reuseInferredInstantiation;
 	std::function<bool(Section *, Instantiation &, InferenceContext *)> restoreInferredBody;
 	size_t functionBodyInferencePasses = 0;
@@ -510,6 +513,7 @@ struct ParseContext {
 	);
 
 	InferenceProductHooks *inferenceProducts = nullptr;
+	std::shared_ptr<const GroupingProduct> rootGroupingProduct;
 	std::map<std::pair<Section *, InstantiationKey>, std::shared_ptr<const VariableStorageScope>> instantiationStorageScopes;
 	std::map<std::string, std::shared_ptr<const VariableStorageScope>> logicalInstantiationScopes;
 	std::map<const VariableStorageScope *, std::string> frozenStorageIdentities;

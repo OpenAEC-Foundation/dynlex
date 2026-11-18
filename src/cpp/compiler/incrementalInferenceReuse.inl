@@ -84,8 +84,9 @@ bool inferenceSummaryHasValueState(const Json &summary) {
 
 Json captureSectionInferenceSummary(
 	const Section *section, const InferenceValueIdentities &identities, InferenceStorageIdentities &storage,
-	InferenceGlobalInputs &globals, size_t *capturedInstantiations = nullptr, const IncrementalUnitSelection *skipped = nullptr,
-	const std::string *onlyKey = nullptr, std::map<std::string, const Instantiation *> *capturedInstances = nullptr
+	InferenceGlobalInputs &globals, const InferenceSourceIndex &sourceIndex, size_t *capturedInstantiations = nullptr,
+	const IncrementalUnitSelection *skipped = nullptr, const std::string *onlyKey = nullptr,
+	std::map<std::string, const Instantiation *> *capturedInstances = nullptr
 ) {
 	Json summaries = Json::object();
 	for (const auto &[key, instantiation] : section->instantiations) {
@@ -104,6 +105,7 @@ Json captureSectionInferenceSummary(
 			Json record = std::move(*encodedKey);
 			record["invocation"] = encodeInferenceInvocation(*section, instantiation, globals.declaration(*section));
 			record["global_inputs"] = std::move(*globalInputs);
+			record["grouping"] = encodeGroupingProduct(instantiation.groupingProduct, sourceIndex);
 			summaries[identity] = std::move(record);
 			if (capturedInstances)
 				(*capturedInstances)[identity] = &instantiation;
@@ -128,6 +130,7 @@ Json captureSectionInferenceSummary(
 			instantiation.pureReturnValuesComplete && pureValues.size() == instantiation.pureReturnValuesByArguments.size();
 		Json record = std::move(*encodedKey);
 		record["invocation"] = encodeInferenceInvocation(*section, instantiation, globals.declaration(*section));
+		record["grouping"] = encodeGroupingProduct(instantiation.groupingProduct, sourceIndex);
 		record.update(
 			Json{
 				{"failure", nullptr},
@@ -241,8 +244,9 @@ Json captureInferenceSummaries(
 	};
 	for (const auto &[section, path] : sectionPaths) {
 		std::map<std::string, const Instantiation *> instances;
-		Json variants =
-			captureSectionInferenceSummary(section, identities, storage, globals, nullptr, skipped, nullptr, &instances);
+		Json variants = captureSectionInferenceSummary(
+			section, identities, storage, globals, sourceIndex, nullptr, skipped, nullptr, &instances
+		);
 		for (auto &[key, summary] : variants.items()) {
 			const Instantiation &instance = *instances.at(key);
 			if (instance.failure)
@@ -306,7 +310,7 @@ class IncrementalInferenceReuse {
 
 	bool reuse(
 		Section *section, const InstantiationKey &key, Instantiation &instantiation, ParseContext::InferenceReuseUse use,
-		InferenceContext *caller
+		InferenceContext *caller, const std::vector<CompileTimeValue> *values = nullptr
 	) {
 		auto keyText = inferenceSummaryKey(key, identities);
 		if (!keyText || (!eligible->contains(section, *keyText) && !refreshed(sectionPaths.at(section), *keyText)))
@@ -331,12 +335,17 @@ class IncrementalInferenceReuse {
 			return true;
 		}
 		{
-			Restoration transaction(*this, caller);
-			if (!transaction.prepare(section, key, instantiation, use) || !transaction.finish())
+			Restoration transaction(*this, caller, use != ParseContext::InferenceReuseUse::SymbolicReference);
+			if (!transaction.prepare(section, key, instantiation, use, values) || !transaction.finish())
 				return false;
 		}
 		if (instantiation.needsReinfer)
 			loadBody(section, key, instantiation, caller);
+		if (!instantiation.needsReinfer && use != ParseContext::InferenceReuseUse::SymbolicReference)
+			requireCompilerInvariant(
+				applyGroupingProduct(context, instantiation.groupingProduct, caller),
+				"inference preparation changed grouping inputs"
+			);
 		return true;
 	}
 

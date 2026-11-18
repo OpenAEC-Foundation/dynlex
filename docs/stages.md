@@ -735,6 +735,15 @@ We know this because we instantiate `print line value` and walk over the code ju
 
 All instantiations of a function have the same operand reordering for each code line, but can use different overloads. The first valid instantiation determines reordering.
 
+Native semantic queries retain their observed grouping inputs and resulting
+groupings, including the absence of a prior choice. Reuse requires those inputs
+to match the current execution order. Publishing a cached choice participates in
+the caller's grouping transaction; rejecting that trial removes its choice.
+Already inferred callees contribute observations of their current grouping state
+to enclosing queries. Removing an earlier call therefore restores ambiguity
+checking when the remaining call becomes the first instantiation. Portable node
+layouts can stay encoded until source inference actually demands that body.
+
 We reuse the same strategy (code) for flex functions where possible, keeping it DRY.
 
 Each function body is contained in one source file. Includes at file scope may

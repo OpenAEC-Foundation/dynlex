@@ -65,17 +65,19 @@
 			return resolveStoredCompileTimeValue(argumentExpression, flexBindingFrameStack, &context);
 		}, knownBindings, knownValues);
 	}
+	std::vector<CompileTimeValue> argumentValues =
+		knownCallArguments ? compileTimeArgumentValueVector(knownValues) : std::vector<CompileTimeValue>{};
 	if (!inst.returnType.isDeduced() && context.parseContext.reuseInferredInstantiation) {
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 		context.parseContext.reuseInferredInstantiation(
 			matchedSection, instantiationKey, inst,
 			knownCallArguments ? ParseContext::InferenceReuseUse::ConstantCall : ParseContext::InferenceReuseUse::RuntimeCall,
-			&context
+			&context, knownCallArguments ? &argumentValues : nullptr
 		);
 	} else if (inst.inferenceReusedFromCache && !knownCallArguments && !inst.needsReinfer &&
 			   !inst.pureReturnValuesByArguments.empty() && context.parseContext.reuseInferredInstantiation) {
 		bool prepared = context.parseContext.reuseInferredInstantiation(
-			matchedSection, instantiationKey, inst, ParseContext::InferenceReuseUse::RuntimeCall, &context
+			matchedSection, instantiationKey, inst, ParseContext::InferenceReuseUse::RuntimeCall, &context, nullptr
 		);
 		requireCompilerInvariant(prepared, "cached pure observations changed before runtime use");
 	}
@@ -85,7 +87,6 @@
 	}
 	if (knownCallArguments && inst.inferenceReusedFromCache && inst.purity == InstantiationPurity::Pure &&
 		inst.returnType.kind != DataType::Kind::Void) {
-		auto argumentValues = compileTimeArgumentValueVector(knownValues);
 		if (inst.pureReturnValuesByArguments.contains(argumentValues))
 			context.parseContext.pureValueSummaryHits++;
 		else if (!inst.bodyInferred && (!context.parseContext.restoreInferredBody ||
@@ -94,8 +95,10 @@
 	}
 	std::optional<InstantiationKey> refinedInstantiationKey;
 	bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer;
-	if (!inst.inferring && hasReusableInstantiation)
+	if (!inst.inferring && hasReusableInstantiation) {
+		observeGroupingResult(inst, context);
 		publishDeferredInferenceDiagnostics(context, inst);
+	}
 	if (!inst.inferring && !hasReusableInstantiation) {
 		int failureBase = static_cast<int>(context.diagnosticTraceDepth());
 		ScopedSectionLocalVariableState calleeVariableState(context.parseContext, matchedSection);
