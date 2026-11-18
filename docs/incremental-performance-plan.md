@@ -10,6 +10,35 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## Iteration I115: prove a unique operand layout before retaining grouping state
+
+The focused preinference reproduction changes a wrapper's integer literal.
+Before the proof, an earlier real-argument call establishes a grouping input
+and the first edit re-infers an unchanged integer helper. A chain of prefixes
+or a chain of suffixes has one nesting order. Record grouping reads only where
+matched operand edges admit exchanges. Existing grouping-state tests now use
+mixed operators where they depend on genuinely different candidate layouts.
+Those cases pass on the baseline and the candidate.
+
+The isolated proof at ae8a9f82 passes the full focused grouping-state check.
+The 45-file Breakout comparison uses the shared compiler from 3d5ee1ad and
+separate caches. All five cases pass output and diagnostic parity. The first
+body edit drops from 2.441 to 1.699 CPU seconds and from 32 to 10 inferred
+bodies. Entry inference is reused, and measured inference drops from 966 to
+475 ms. Across three successive edits the baseline infers 32, 11 and 1
+bodies. The candidate infers 10, 1 and 1. The corresponding median CPU times
+are 1.590 and 1.392 seconds. Cold performance is unresolved with three pairs.
+Wording updates keep zero code generation and have medians of 48 and 52
+CPU milliseconds in this run. The work saved on the first real code edit
+justifies full production qualification of the proof. The remaining ten
+body passes and the broader dependency-locality objective stay open.
+
+The shared I113 snapshot was pushed as 3d5ee1ad after bounding Git's pack
+workers and window memory. The first push was killed at the publication
+unit's 256 MiB cap after all local gates had passed. A new owner worktree
+retains the verified build data. Its production I115 build plan recompiles
+the inference translation unit and relinks.
+
 ## Completed iteration: I113 integrate and publish the corrected compiler
 
 Started18 November at12:05 UTC; implementation deadline12:50 UTC. The previous
