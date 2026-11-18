@@ -1,6 +1,7 @@
 #pragma once
 #include "parseContext.h"
 #include <memory>
+#include <string_view>
 
 namespace llvm {
 class TargetMachine;
@@ -9,10 +10,12 @@ class Module;
 
 std::unique_ptr<llvm::TargetMachine> createNativeTargetMachine(ParseContext &context, std::string &errorMessage);
 std::string nativeExecutablePath(const ParseContext::Options &options);
+std::string nativeObjectPath(const ParseContext::Options &options);
 
 // Emit a native object file from the LLVM module.
 // Returns true on success, false on error (errors added to context.diagnostics).
-bool emitNativeObject(ParseContext &context);
+bool emitNativeObject(ParseContext &context, std::string *emittedBytes = nullptr);
+bool writeNativeObject(ParseContext &context, std::string_view bytes);
 
 // Emit a native executable from the LLVM module.
 // Returns true on success, false on error (errors added to context.diagnostics).

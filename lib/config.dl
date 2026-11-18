@@ -152,6 +152,7 @@ dynlex options:
         failed to get target: "Failed to get target: {error}"
         failed to create target machine: "Failed to create target machine"
         failed to open object file: "Could not open object file: {error}"
+        failed to write object file: "Could not write object file: {error}"
         target machine cannot emit object file: "Target machine cannot emit object file"
         linking failed:
             message: "Linking failed with exit code {exit_code}"

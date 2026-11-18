@@ -1293,12 +1293,12 @@ manifests and individual inference-summary records retain their own JSON formats
 module payloads retain raw LLVM bitcode. All readers select the format from the
 artifact contract. Compiler identity keeps incompatible derived snapshots separate.
 
-Native executable and LLVM text file builds use incremental compilation automatically. The default
+Native executable, native object and LLVM text file builds use incremental compilation automatically. The default
 cache lives under `dynlex/compiler` in the operating system's user cache directory:
 XDG cache storage on Unix, Darwin user cache storage on macOS, and LocalAppData
 on Windows. `--cache-dir <directory>` overrides that location, `--no-incremental`
 performs a clean build, and `--incremental-stats` reports the actual cache directory
-and reuse. Cache overrides and statistics apply to native executable and LLVM text file builds.
+and reuse. Cache overrides and statistics apply to all three output modes.
 LLVM text output uses the same incremental semantic and unoptimized function-IR
 products, with its output mode in the program identity. Its final text has an
 independent content-addressed artifact; no native objects are lowered or linked.
@@ -1310,6 +1310,14 @@ optimization and share final rendering, with explicit output I/O errors. Private
 `llvm_outputs_built` and `llvm_outputs_restored` expose artifact work. Changed LLVM
 output still runs whole-module optimization; semantic and function IR reuse do
 not imply incremental optimization for this output mode.
+Native object output shares the frontend and unoptimized function-IR products.
+The complete object is an independently cached artifact. An unchanged object
+stays in place, and a missing or changed destination restores its bytes directly.
+An evicted artifact is lowered from saved IR. A changed object uses whole-module
+optimization and lowering, with `objects_built` and `objects_reused` reporting
+that work. The compiler skips linking. Standard output receives the cached bytes
+on each invocation. On a cache miss, a temporary seekable file lets the object
+writer and ELF debug post-processing finish before the binary stream is written.
 
 A complete native result is reusable while every filesystem observation remains identical. Source edits that
 only add, remove or change comments or trailing whitespace also reuse the result when

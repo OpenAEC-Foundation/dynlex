@@ -324,9 +324,8 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 	// The incremental output producer owns optimization and lowering.
 	if (outputEmitter)
 		return outputEmitter(context);
-	// LLVM optimization observes module traversal order, including alignment
-	// refinement. Match the incremental IR producer's canonical input order.
-	if (context.options.emitLLVM)
+	// Match the incremental IR producer's input order for whole-module outputs.
+	if (context.options.emitLLVM || context.options.emitObject)
 		sortModuleSymbols(*context.llvmModule);
 	if (context.options.optimizationLevel > 0)
 		optimizeLLVMModule(context, *context.llvmModule);

@@ -1,9 +1,19 @@
 fs::path compilerOutputPath(const ParseContext &context) {
-	return fs::absolute(context.options.emitLLVM ? llvmOutputPath(context.options) : nativeExecutablePath(context.options));
+	const auto &options = context.options;
+	if (options.emitLLVM)
+		return fs::absolute(llvmOutputPath(options));
+	if (options.emitObject)
+		return fs::absolute(nativeObjectPath(options));
+	return fs::absolute(nativeExecutablePath(options));
+}
+
+bool compilerOutputIsStdout(const ParseContext &context) {
+	const auto &options = context.options;
+	return (options.emitLLVM || options.emitObject) && options.outputPath == "-";
 }
 
 Json compilerOutputIdentity(const ParseContext &context) {
-	if (context.options.emitLLVM && llvmOutputIsStdout(context.options))
+	if (compilerOutputIsStdout(context))
 		return Json{{"path", "-"}, {"digest", ""}};
 	fs::path path = compilerOutputPath(context);
 	requireCompilerInvariant(fs::is_regular_file(path), "successful output producer produced no artifact");
@@ -11,7 +21,7 @@ Json compilerOutputIdentity(const ParseContext &context) {
 }
 
 bool compilerOutputUnchanged(const ParseContext &context, const Json &previous) {
-	if (context.options.emitLLVM && llvmOutputIsStdout(context.options))
+	if (compilerOutputIsStdout(context))
 		return false;
 	const Json &identity = previous.at("compiler_output");
 	fs::path path = compilerOutputPath(context);

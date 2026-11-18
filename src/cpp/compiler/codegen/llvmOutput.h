@@ -1,4 +1,5 @@
 #pragma once
+#include "fileOutput.h"
 #include "moduleSymbols.h"
 #include "parseContext.h"
 #include "llvm/Support/raw_ostream.h"
@@ -9,8 +10,6 @@ inline std::string llvmOutputPath(const ParseContext::Options &options) {
 	return options.outputPath.empty() ? options.inputPath + ".ll" : options.outputPath;
 }
 
-inline bool llvmOutputIsStdout(const ParseContext::Options &options) { return options.outputPath == "-"; }
-
 inline std::string renderLLVMOutput(llvm::Module &module) {
 	sortModuleSymbols(module);
 	std::string text;
@@ -20,22 +19,7 @@ inline std::string renderLLVMOutput(llvm::Module &module) {
 }
 
 inline bool writeLLVMOutput(ParseContext &context, std::string_view text) {
-	std::error_code error;
-	llvm::raw_fd_ostream output(llvmOutputPath(context.options), error);
-	const char *message = "failed to open output file";
-	if (!error) {
-		output.write(text.data(), text.size());
-		if (llvmOutputIsStdout(context.options))
-			output.flush();
-		else
-			output.close();
-		error = output.error();
-		message = "failed to write output file";
-	}
-	if (error) {
-		output.clear_error();
-		context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, message, Range(), "error", error.message()));
-		return false;
-	}
-	return true;
+	return writeFileOutput(
+		context, llvmOutputPath(context.options), text, "failed to open output file", "failed to write output file"
+	);
 }
