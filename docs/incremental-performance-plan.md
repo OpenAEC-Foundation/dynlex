@@ -10,6 +10,77 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## Closed iteration: I105 rejected adaptive signature intersection
+
+Started18 November at01:19 UTC; first deadline02:04 UTC. Previous turn is
+progress: I104 is qualified and published asc8fed286. Start from its retained
+c7d01ebc owner image with no other compiler/test job running. Measure current
+matcher fingerprint cost and repeated input construction on the fixed real
+Breakout program before selecting one immutable producer to retain. Complete
+one reduction in relevant work; preserve positive/failed lookup dependencies,
+overload additions/removals, scope visibility, parameter reclassification,
+diagnostics and source ranges. Compare native and editor cold/edited controls,
+CPU, peak memory, retained/disk bytes and code size. No percentage floor; keep
+only a justified combined tradeoff. Avoid I102's rejected encoded editor bodies.
+One45-minute extension is available only for concrete implementation progress.
+Required uncached<=120 s and affected integration, LSP and actual web checks
+remain gates. The full source/config/classification/inference/IR/object/link
+goal stays active/incomplete.
+
+I105 closes18 November at01:43 UTC, before its first deadline, without an
+extension. The candidate adds27 net production lines in one C++ file: traverse
+the smaller of a signature node's children and the remaining sorted query
+literals, then preserve the original sorted visit order. The minimal eight-word,
+two-line regression changes37 probes to8. Separate sparse/branching/punctuation
+fixtures retain byte-identical lookup fingerprints, encoded outcomes, diagnostics
+and executables while changing38->8,52->13 and17->4 probes. Focused matcher,
+segment retention and eviction checks pass. Candidate image40e48237 and its455
+compiler/build inputs are frozen before measurement.
+
+The full150-observation, five-case editor matrix preserves complete tokens and
+diagnostics. Forty paired source edits have CPU medians1.59->1.59 s and total
+CPU63.69->63.66 s. The paired ratio is1.00000, interval[0.99377,1.00000].
+Twenty-five cold openings have paired ratio1.00000, interval[0.98913,1.00280].
+There is no established end-to-end gain. Existing key timers change201.62->190.35
+and193.70->183.55 ms on the two instrumented edits; signature probes drop from
+1478196 to591861, with identical11294 key computations and11276 reused results.
+This component saving does not justify the larger algorithm without a program-
+level improvement. Reject the candidate; do not retry the matrix or claim a
+speedup from fewer probes. No arbitrary percentage threshold was applied.
+
+The first30-observation probe completed its parity comparisons but its summary
+attempted a median of no ratios when all baseline analysis CPU samples were zero
+at10 ms resolution. Report that ratio as undefined. The original rows are retained
+unchanged and reanalyzed, without repeating the measurements. The full matrix
+uses that numerical correction. GDB's optimized compile-wrapper finish timer
+measures only the inference tail; its whole-compile CPU field is invalid. A first
+sampling attempt stopped after one interrupt; a corrected sampler's broad entry
+name also matched inline callables, so per-phase grouping is invalid. Retain only
+aggregate stack locations as qualitative hotspot evidence. These limitations are
+recorded explicitly in i105-profile/validity.json; no debugger timing is an
+acceptance measurement. Verified compression reduces118 MB of raw samples/logs
+to2.34 MB without losing their contents.
+
+Archive the rejected patch and frozen manifest, then restore both owned compiler
+and test files exactly. Rebuilding recovers the qualifiedc7d01ebc native image;
+all455 compiler/build inputs and the actuald8ff9641 web image remain identical
+to I104. Focused matcher and LSP checks pass after restoration. Reuse the exact-
+image I104 required/integration/web qualification rather than rerunning unchanged
+tests. Only this research record is retained in the repository.
+
+Next bounded work targets ordinary editor inference, about0.96 CPU s per edit,
+rather than another matcher-key micro-optimization. Investigate reusable source-
+inference outputs and their dependency boundary: unchanged source groupings,
+types and diagnostics must survive while relevant parameter/overload changes
+cascade. Do not reuse I102's expensive encoded runtime-body engine or publish
+tooling state that omits the source-expression facts its consumers read. The
+full cross-process, all-stage objective remains active/incomplete.
+
+Evidence: i105-{frozen-inputs,fingerprint-parity,rejection,restoration-audit}.json;
+i105-rejected-experiment.patch.gz; i105-matcher-work-red.log;
+i105-{focused,restored-focused,restored-lsp}.log; i105-lsp-probe/results.json;
+i105-lsp-paired/results.json; i105-profile/{stages,candidate-stages,validity,storage}.json.
+
 ## Completed iteration: I104 stable matcher source identity
 
 Started18 November at00:02 UTC; first deadline00:47 UTC. Use one45-minute
