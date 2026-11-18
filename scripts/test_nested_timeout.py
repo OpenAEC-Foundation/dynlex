@@ -99,6 +99,7 @@ def main():
         child = root / "child.py"
         pid_file = root / "child.pid"
         parallel_pid_file = root / "parallel.pid"
+        orphan_pid_file = root / "orphan.pid"
         child.write_text(
             "import os,sys,tempfile,time\n"
             "from pathlib import Path\n"
@@ -108,33 +109,44 @@ def main():
             "Path(sys.argv[1]).write_text(str(os.getpid()))\n"
             "time.sleep(60)\n", encoding="utf-8",
         )
+        (root / "orphan.py").write_text(
+            "import subprocess,sys\n"
+            "subprocess.Popen([sys.executable, sys.argv[1], sys.argv[2]])\n",
+            encoding="utf-8",
+        )
         script = root / "nested.sh"
         script.write_text('PROJECT_DIR=$2\n' + wrapper + '''
 if [[ "$1" == inner ]]; then
     run_with_timeout 30 "$3" "$4/child.py" "$4/child.pid" &
     run_with_timeout 30 "$3" "$4/child.py" "$4/parallel.pid" &
+    if [[ "$6" == windows ]]; then
+        "$3" "$4/orphan.py" "$4/child.py" "$4/orphan.pid" || exit
+    fi
     wait
 else
-    run_with_timeout "$6" --isolate-temporaries true "$5" "$0" inner "$2" "$3" "$4" "$5"
+    run_with_timeout "$6" --isolate-temporaries true "$5" "$0" inner "$2" "$3" "$4" "$5" "$7"
 fi
 ''', encoding="utf-8", newline="\n")
-        pids = []
+        pid_files = [pid_file, parallel_pid_file]
+        if os.name == "nt":
+            # The job keeps descendants even after their direct parent exits.
+            pid_files.append(orphan_pid_file)
         try:
             started = time.monotonic()
             result = subprocess.run(
                 [shell, script.as_posix(), "outer", project.as_posix(), sys.executable, root.as_posix(), shell,
-                 "3" if os.name == "nt" else "1"],
+                 "3" if os.name == "nt" else "1", "windows" if os.name == "nt" else "posix"],
                 capture_output=True, text=True, timeout=10,
             )
-            assert pid_file.exists() and parallel_pid_file.exists(), "parallel nested children never started"
-            pids = [int(path.read_text()) for path in (pid_file, parallel_pid_file)]
+            assert all(path.exists() for path in pid_files), "nested children never started"
+            pids = [int(path.read_text()) for path in pid_files]
             assert result.returncode == 124, (result.returncode, result.stdout, result.stderr)
             assert time.monotonic() - started < 10, "watchdog did not return promptly"
             assert all(not running(pid) for pid in pids), "outer timeout left a nested timed process running"
             assert all(not Path(path.read_text()).exists() for path in root.glob('*.temporary')), \
                 "outer timeout left child temporary files behind"
         finally:
-            for path in (pid_file, parallel_pid_file):
+            for path in pid_files:
                 if path.exists():
                     pid = int(path.read_text())
                     if running(pid):

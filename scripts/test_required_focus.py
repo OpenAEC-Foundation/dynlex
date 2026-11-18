@@ -41,15 +41,14 @@ failed=0
         "incremental_compilation_integration": ("integration",),
     }
     for suite in ("required", "integration", "compiler-regressions"):
-        for name, expected_suites in cases.items():
-            result = subprocess.run(
-                [shell, "-c", stubs + routing + '\nsuite=$1\nrun_auxiliary_test "$2" 10 true\n',
-                 "suite-policy", suite, name],
-                capture_output=True, text=True, timeout=10,
-            )
-            expected = suite in expected_suites
-            if result.returncode != 0 or bool(result.stdout) != expected:
-                failures.append(f"{runner}: incorrect {suite} routing for {name}: {result.stderr}")
+        result = subprocess.run(
+            [shell, "-c", stubs + routing + '\nsuite=$1; shift\nfor name; do run_auxiliary_test "$name" 10 true; done\n',
+             "suite-policy", suite, *cases],
+            capture_output=True, text=True, timeout=10,
+        )
+        expected = [f"Testing {name}..." for name, expected_suites in cases.items() if suite in expected_suites]
+        if result.returncode != 0 or result.stdout.splitlines() != expected:
+            failures.append(f"{runner}: incorrect {suite} routing: {result.stdout}{result.stderr}")
 
     preparation = 'if [[ "$run_only" != "true" ]]; then\n'
     build_phase = preparation + source.split(preparation, 1)[1].split('\nif ! (cd "$PROJECT_DIR"', 1)[0]

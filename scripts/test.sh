@@ -290,15 +290,16 @@ if working_directory is not None:
     popen_options["cwd"] = working_directory
 if process_environment is not None:
     popen_options["env"] = process_environment
-if os.name == "nt":
-    popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-else:
-    popen_options["start_new_session"] = True
-
 sys.path.insert(0, str(project_directory / "scripts"))
 from process_error_mode import unattended_child_processes
 with unattended_child_processes():
-    process = subprocess.Popen(cmd, **popen_options)
+    if os.name == "nt":
+        from windows_test_job import WindowsTestJob
+        job = WindowsTestJob()
+        atexit.register(job.close)
+        process = job.start(cmd, **popen_options)
+    else:
+        process = subprocess.Popen(cmd, start_new_session=True, **popen_options)
 
 def kill_posix_tree(pid):
     # Nested watchdogs create separate sessions. Freeze the tree before killing
@@ -345,16 +346,7 @@ try:
 except subprocess.TimeoutExpired:
     termination_error = b""
     if os.name == "nt":
-        terminated = subprocess.run(
-            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
-        if terminated.returncode != 0:
-            termination_error = terminated.stderr
-            if process.poll() is None:
-                process.kill()
+        job.terminate()
     else:
         kill_posix_tree(process.pid)
 
