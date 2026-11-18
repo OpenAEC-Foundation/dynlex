@@ -10,7 +10,7 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Active iteration: I104 matcher work after source movement
+## Completed iteration: I104 stable matcher source identity
 
 Started18 November at00:02 UTC; first deadline00:47 UTC. Use one45-minute
 iteration to attribute and reduce the
@@ -100,6 +100,30 @@ body CPU1.070739 ->1.059797 s, cold4.697140 ->4.730025 s, comment0.025605
 parity; no native speed gain or regression is established. All334 required tests
 pass uncached in98210 ms. Integration, actual web and shared-root qualification
 remain pending. Keep source/compiler inputs frozen throughout those checks.
+
+I104 qualification completed18 November at01:16 UTC, before its sole extension
+deadline. Source commit13e46fb6 retains the frozen455 compiler/build inputs and
+native imagec7d01ebc. Owner required334/0/0:98210 ms; integration462/0/0:
+715819 ms. The full native LSP suite passes. The actual WebAssembly module
+`d8ff9641225fc25fcd860870cabbe925c9e7fd47f338fb618f1940b4bdb20e6d`
+passes host edits covering overloads, negative lookups, classification, profiles
+and fresh-analysis parity. The local-master rebuild produces image3ba7bc65;
+its uncached required suite passes334/0/0 in96998 ms, and all seven focused
+LSP regression scripts pass. No compiler input changed between measurement and
+qualification. Heavy jobs ran sequentially within the recorded memory caps.
+
+Keep the measured first-imported-edit gain, not a general cold/repeat-build gain.
+There is no new disk product or setting, retained matcher bytes are identical,
+and production code grows by one net line. Ordinary editor context construction
+and inference remain live; the full cross-stage goal is still active/incomplete.
+Next bounded work returns to P08's shared matcher-query inputs on this qualified
+baseline, measuring current key/input construction before choosing a producer
+to retain. Do not resurrect I102's rejected encoded editor runtime engine.
+
+Evidence: i104-provider-repro.json; i104-provider-identity/snapshots.json;
+i104-source-identity-{red,test}.log; i104-lsp-suite.log;
+i104-lsp-paired/results.json; i104-native-controls.json; i104-validation.json;
+i104-web-qualification.json; i104-root-validation.json; i104-frozen-inputs.json.
 
 ## Completed iteration: I103 source-layout-preserving editor comments
 
