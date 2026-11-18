@@ -807,6 +807,11 @@ Native semantic queries retain their observed grouping inputs and resulting
 groupings, including the absence of a prior choice. Reuse requires those inputs
 to match the current execution order. Publishing a cached choice participates in
 the caller's grouping transaction; rejecting that trial removes its choice.
+The compiler records these dependencies where an operand can change parents.
+A chain of prefix calls must start at its first prefix. A chain of suffix calls
+must end at its last suffix. Interior arguments and parenthesized operands
+start separate regions. When no region allows an alternative layout, the
+inferred body can be reused whether or not an earlier call chose its grouping.
 Already inferred callees contribute observations of their current grouping state
 to enclosing queries. Removing an earlier call therefore restores ambiguity
 checking when the remaining call becomes the first instantiation. Portable node

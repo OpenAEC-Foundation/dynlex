@@ -102,6 +102,30 @@ static void observeGroupingProbe(const InferenceContext &probe, InferenceContext
 		observeDiscardedGroupings(*captureGroupingProduct(probe.groupingTrace, caller.groupingTrace), caller);
 }
 
+static bool groupingCanExchangeOperands(Expression *expression) {
+	if (!expressionHasGroupingShape(expression))
+		return false;
+	size_t arguments = groupingArgumentCount(expression);
+	if (!arguments)
+		return false;
+	const bool left = startsWithArgument(expression), right = endsWithArgument(expression);
+	auto canExchange = [&](size_t index) {
+		int slot = groupingArgumentIndex(expression, index);
+		if (slot < 0)
+			return false;
+		Expression *operand = unconvertedExpression(unconvertedExpression(expression)->arguments.at(slot));
+		if (operand->isExplicitGroup || !expressionHasGroupingShape(operand))
+			return false;
+		const bool operandLeft = startsWithArgument(operand), operandRight = endsWithArgument(operand);
+		// Prefixes can only start their spans, and suffixes can only end
+		// them. A run of like-sided calls has one possible nesting order.
+		if (!operandLeft && !operandRight)
+			return false;
+		return (left && right) || left != operandLeft || right != operandRight;
+	};
+	return (left && canExchange(0)) || (right && canExchange(arguments - 1));
+}
+
 static void prepareGroupingSourceNodes(CodeLine *line) {
 	if (!line->groupingSourceNodes.empty())
 		return;
@@ -114,9 +138,7 @@ static void prepareGroupingSourceNodes(CodeLine *line) {
 			self(self, argument);
 	};
 	visit(visit, line->expression);
-	line->groupingDependencyTracked = std::ranges::count_if(line->groupingSourceNodes, [](Expression *expression) {
-		return expressionHasGroupingShape(expression);
-	}) > 1;
+	line->groupingDependencyTracked = std::ranges::any_of(line->groupingSourceNodes, groupingCanExchangeOperands);
 }
 
 static GroupingSnapshot materializeGrouping(CodeLine *line, const GroupingState &state) {
