@@ -10,7 +10,7 @@ def check_comment_inactive_active_sequence(root, build):
               '    execute:\n'
               '        @intrinsic("return", @intrinsic("add", item, 10))\n'
               'to idle: @intrinsic("discard", 1)\n'
-              '@intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\\n", compute 2))\n')
+              '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", compute 2))\n')
     main.write_text(source)
     assert build(entry=main)[2] == b"12\n"
     prior = read_program(root / "cache", main)["all_function_projection"]
@@ -45,7 +45,7 @@ def check_nested_inactive_stage_retention(root, build):
               '    execute:\n'
               '        to idle: @intrinsic("discard", 1)\n'
               '        @intrinsic("return", @intrinsic("add", item, 10))\n'
-              '@intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\\n", compute 2))\n')
+              '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", compute 2))\n')
     main.write_text(source)
     assert build(entry=main)[2] == b"12\n"
     prior = read_program(root / "cache", main)["all_function_projection"]

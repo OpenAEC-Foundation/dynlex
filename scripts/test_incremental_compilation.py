@@ -51,8 +51,8 @@ from test_incremental_grouping_state import check_grouping_state
 
 project = Path(sys.argv[1]).resolve()
 mode = sys.argv[2:]
-if mode not in ([], ["--integration"], ["--required-base"], ["--required-dependencies"]):
-    raise SystemExit("Expected --integration, --required-base, --required-dependencies, or no mode")
+if mode not in ([], ["--integration"], ["--required-base"], ["--required-dependencies"], ["--required-native"]):
+    raise SystemExit("Expected --integration, --required-base, --required-dependencies, --required-native, or no mode")
 integration_mode = mode == ["--integration"]
 # Most counter checks use O0 so native body dependency shortcuts are observable.
 # Dedicated optimized checks also exercise function reuse at every optimized level.
@@ -97,42 +97,47 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         print("Incremental native integration builds passed")
         raise SystemExit(0)
 
-    if mode != ["--required-base"]:
-        check_root_execution_reuse(root, build)
+    if mode in ([], ["--required-dependencies"]):
+        check_root_execution_reuse(root, build, compiler)
         check_storage_origin_reuse(root, build)
         check_body_materialization(root, build)
         check_incremental_classification(root, build)
         check_independent_constraint_probes(root, build)
-        check_leaf_dependency_cascade(root, build)
         check_native_partition_edits(root, build)
         if mode == ["--required-dependencies"]:
             print("Incremental dependency and native-unit checks passed")
+            raise SystemExit(0)
+
+    if mode in ([], ["--required-native"]):
+        check_leaf_dependency_cascade(root, build)
+        check_optimized_function_reuse(root, build)
+        check_optimization_units(root, build)
+        check_body_resolution_units(root, build)
+        check_section_analysis_work(root, build)
+        check_optimized_native_codegen(root, build)
+        check_root_class_reuse(root, build)
+        check_inactive_body_activation(root, build)
+        check_source_preparation(root, build)
+        check_source_checkpoints(root, build)
+        check_inference_failures(root, build)
+        check_grouping_state(root, build)
+        if mode == ["--required-native"]:
+            print("Incremental native and materialization checks passed")
             raise SystemExit(0)
 
     check_default_cache(compiler, root / "automatic-cache")
     check_scope_rule_after_local_edit(root, build)
     check_shared_class_type_graph(root, build)
     check_recent_cache_entries(root, build)
-    check_optimized_function_reuse(root, build)
-    check_optimization_units(root, build)
-    check_body_resolution_units(root, build)
-    check_section_analysis_work(root, build)
-    check_optimized_native_codegen(root, build)
-    check_root_class_reuse(root, build)
-    check_inactive_body_activation(root, build)
     check_conversion_reuse(root, build)
     check_matcher_fingerprint_work(root, build)
     check_source_observation_reuse(root, build)
-    check_source_preparation(root, build)
-    check_source_checkpoints(root, build)
     check_static_reference_identities(root, build)
     check_partition_closure_work(root, build)
     check_capture_note_wording(root, build)
     check_diagnostic_stage_reuse(root, build)
     check_variable_binding_units(root, build)
     check_body_syntax_products(root, build)
-    check_inference_failures(root, build)
-    check_grouping_state(root, build)
     check_validation_units(root, build)
     check_failed_validation_units(root, build)
     check_capture_scope_queries(root, build)

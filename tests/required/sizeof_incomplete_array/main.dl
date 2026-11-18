@@ -4,4 +4,4 @@ class:
     members:
         payload
 
-@intrinsic("call", "libc", "printf", @intrinsic("type", "nothing"), "%lld\n", @intrinsic("size of", @intrinsic("array", 2, envelope)))
+@intrinsic("variadic call", "libc", "printf", @intrinsic("type", "nothing"), 1, "%lld\n", @intrinsic("size of", @intrinsic("array", 2, envelope)))

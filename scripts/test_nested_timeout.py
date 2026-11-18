@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """The suite watchdog must terminate children in nested timeout sessions."""
 
+import ast
 import ctypes
 import os
 from pathlib import Path
@@ -10,6 +11,36 @@ import subprocess
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
+
+
+def check_exited_process_group(source):
+    """Darwin rejects killpg after all members have already become zombies."""
+    program = source.split("<<'PY'\n", 1)[1].split('\nPY', 1)[0]
+    helper = next(node for node in ast.parse(program).body
+                  if isinstance(node, ast.FunctionDef) and node.name == 'kill_posix_tree')
+    alive = {100, 101, 102}
+    signalled = set()
+
+    def kill(pid, action):
+        assert pid in {100, 101, 102}, 'watchdog signalled an unrelated process'
+        if action == signal.SIGKILL:
+            signalled.add(pid)
+            alive.discard(pid)
+
+    def killpg(pid, action):
+        assert pid == 100
+        if not alive & {100, 101}:
+            raise PermissionError('Darwin process group contains only zombies')
+
+    namespace = {
+        'os': SimpleNamespace(kill=kill, killpg=killpg), 'signal': signal,
+        'subprocess': SimpleNamespace(run=lambda *args, **kwargs: SimpleNamespace(
+            stdout='100 10 100\n101 100 100\n102 101 102\n300 1 300\n')),
+    }
+    exec(compile(ast.Module(body=[helper], type_ignores=[]), '<watchdog>', 'exec'), namespace)
+    namespace['kill_posix_tree'](100)
+    assert signalled == {100, 101, 102}, 'watchdog left a discovered child alive'
 
 
 def running(pid):
@@ -38,6 +69,7 @@ def running(pid):
 def main():
     project = Path(__file__).resolve().parents[1]
     source = (project / "scripts" / "test.sh").read_text(encoding="utf-8")
+    check_exited_process_group(source)
     wrapper = "run_with_timeout() {" + source.split("run_with_timeout() {", 1)[1].split('\nif [[ "$run_only"', 1)[0]
     shell = os.environ.get("DYNLEX_TEST_BASH", "bash")
     with tempfile.TemporaryDirectory(prefix="dynlex-nested-timeout-") as temporary:

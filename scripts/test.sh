@@ -321,15 +321,14 @@ def kill_posix_tree(pid):
                     pass
             tracked.update(newly_found)
     finally:
+        # Every discovered process is stopped, so it cannot fork during cleanup.
+        # Signal each PID once; Darwin rejects a second group kill when only
+        # zombies remain in that group.
         for child in tracked:
             try:
                 os.kill(child, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-        try:
-            os.killpg(pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
 
 try:
     output, _ = process.communicate(input=standard_input, timeout=timeout_seconds)
@@ -422,7 +421,12 @@ trap cleanup_test_output EXIT
 total_start_ms=$(now_ms)
 
 run_fixture_tests() {
+local fixture_shard=${1:-0} fixture_shards=${2:-1} fixture_index=0
+local TEST_OUTPUT_DIR="$TEST_OUTPUT_DIR/fixtures-$fixture_shard"
+mkdir -p "$TEST_OUTPUT_DIR" || return
 for test_dir in "$TESTS_DIR"/*/; do
+    fixture_index=$((fixture_index + 1))
+    [[ $(((fixture_index - 1) % fixture_shards)) == "$fixture_shard" ]] || continue
     test_start_ms=$(now_ms)
     test_dir="${test_dir%/}"
     test_name="${test_dir##*/}"
@@ -691,66 +695,15 @@ done
 return 0
 }
 
-start_fixture_tests() {
-    start_test_group fixture run_fixture_tests
-    fixture_worker=$test_group_worker
-}
-
-collect_fixture_tests() {
-    collect_test_group fixture "$fixture_worker"
-}
-
-start_test_group() {
-    local group="$1"
-    shift
-    (
-        trap - EXIT
-        passed=0; failed=0; skipped=0; test_output=""; failures=()
-        "$@" || exit "$?"
-        printf '%s\0' "$passed" "$failed" "$skipped" "$test_output" "${failures[@]}" > "$TEST_OUTPUT_DIR/$group-results"
-    ) &
-    test_group_worker=$!
-}
-
-collect_test_group() {
-    local group="$1" worker="$2"
-    local worker_status=0
-    wait "$worker" || worker_status=$?
-    if [[ $worker_status -ne 0 ]]; then
-        echo "Test group $group exited with status $worker_status." >&2
-        return "$worker_status"
-    fi
-    local group_passed group_failed group_skipped group_output group_failure
-    local group_failures=()
-    {
-        IFS= read -r -d '' group_passed &&
-        IFS= read -r -d '' group_failed &&
-        IFS= read -r -d '' group_skipped &&
-        IFS= read -r -d '' group_output || return 1
-        while IFS= read -r -d '' group_failure; do
-            group_failures+=("$group_failure")
-        done
-    } < "$TEST_OUTPUT_DIR/$group-results" || return 1
-    passed=$((passed + group_passed))
-    failed=$((failed + group_failed))
-    skipped=$((skipped + group_skipped))
-    test_output="$group_output$test_output"
-    failures=("${group_failures[@]}" "${failures[@]}")
-}
-
-collect_required_tests() {
-    local status=0
-    collect_fixture_tests || status=$?
-    collect_test_group incremental "$incremental_worker" || status=$?
-    collect_test_group incremental_dependencies "$incremental_dependencies_worker" || status=$?
-    return "$status"
-}
+source "$SCRIPT_DIR/test_suite_groups.sh"
 
 # Run fixtures concurrently with the independent auxiliary checks in the short gate.
 # Integration checks keep their existing single-group memory budget.
 if [[ "$suite" == required ]]; then
-    start_test_group fixture run_fixture_tests
+    start_test_group fixture run_fixture_tests 0 2
     fixture_worker=$test_group_worker
+    start_test_group fixture_parallel run_fixture_tests 1 2
+    fixture_parallel_worker=$test_group_worker
 else
     run_fixture_tests
 fi
@@ -759,7 +712,7 @@ run_auxiliary_test() {
     local test_name="$1"
     local required_test=false
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|embedded_directory|llvm_toolchain|build_arguments|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|incremental_dependencies|incremental_cache_entries|data_declaration_cache|cache_codec|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|embedded_directory|llvm_toolchain|build_arguments|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|incremental_dependencies|incremental_native|incremental_cache_entries|data_declaration_cache|cache_codec|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
         required_test=true ;;
     esac
     if [[ "$suite" == required && "$required_test" != true ]] ||
@@ -798,6 +751,9 @@ if [[ "$suite" == required ]]; then
     start_test_group incremental_dependencies run_auxiliary_test \
         "incremental_dependencies" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required-dependencies
     incremental_dependencies_worker=$test_group_worker
+    start_test_group incremental_native run_auxiliary_test \
+        "incremental_native" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required-native
+    incremental_native_worker=$test_group_worker
 fi
 
 run_auxiliary_test "elf_binary_guard" 10 python3 -B "$SCRIPT_DIR/test_no_elf_binaries.py"

@@ -104,7 +104,7 @@ struct InitialMatcherProjection {
 		};
 		auto declarationTimer = measure(&MatcherProjectionWork::declarations);
 		bool stableDeclarations =
-			prior && previous->at("initial_matcher_tree") == tree &&
+			prior && previous->at("initial_matcher_tree").get_ref<const std::string &>() == tree &&
 			value.at("scope_rule_bodies") == prior->at("scope_rule_bodies") &&
 			sourceProjectionsEqual(value.at("ambient_nonexecution_sources"), prior->at("ambient_nonexecution_sources"));
 		if (stableDeclarations)

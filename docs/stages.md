@@ -207,6 +207,13 @@ Patterns are matched. Here we identify:
 - What is a variable
 - What is an argument
 
+Shared matcher states publish completed submatches in traversal priority order.
+A completion is a queued action after the enclosing pattern's higher-priority
+literal continuations. Publishing a shorter prefix immediately would let a later
+parent replay that prefix ahead of a longer match which has not been explored yet.
+Publication resumes the canonical parent group, including parents joined since
+the action was queued; it is not another memoized matching state.
+
 Pattern resolution commits explicit validity boundaries. Definitions and all
 references inside their bodies become valid together before top-level references
 are attempted. Top-level references become valid at the next boundary, followed

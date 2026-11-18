@@ -94,7 +94,7 @@ def check_selected_dependencies(root, build):
               '    @intrinsic("return", @intrinsic("add", value, 1))\n'
               'to get choose {boolean:value}:\n'
               '    @intrinsic("return", @intrinsic("add", @intrinsic("cast", value, integer), 10))\n'
-              'to dispatch value: @intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\\n", choose value))\n'
+              'to dispatch value: @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", choose value))\n'
               f'dispatch {argument}\n')
     main.write_text(source)
     first = build(entry=main)
