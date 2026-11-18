@@ -116,9 +116,6 @@ Json sourceProjection(
 		if (work)
 			work->scanned++;
 		std::string projection;
-		std::string_view content = source->content;
-		size_t start = 0;
-		int lineIndex = 0;
 		bool inMaskedRun = false;
 		auto appendPreserved = [&](std::string_view part) {
 			if (part.empty())
@@ -136,21 +133,7 @@ Json sourceProjection(
 				projection += 'M';
 			inMaskedRun = true;
 		};
-		while (start < content.size()) {
-			size_t end = content.find('\n', start);
-			if (end == std::string_view::npos)
-				end = content.size();
-			else
-				end++;
-			std::string_view semanticLine = content.substr(start, end - start);
-			if (semanticLine.ends_with('\n'))
-				semanticLine.remove_suffix(1);
-			semanticLine = sourceCodeWithoutComment(semanticLine, commentPrefix);
-			if (semanticLine.empty()) {
-				start = end;
-				lineIndex++;
-				continue;
-			}
+		forEachSemanticLine(*source, commentPrefix, [&](std::string_view semanticLine, int lineIndex) {
 			std::string normalizedLine(semanticLine);
 			normalizedLine.push_back('\n');
 			std::string_view line(normalizedLine);
@@ -176,9 +159,7 @@ Json sourceProjection(
 			} else {
 				appendPreserved(line);
 			}
-			start = end;
-			lineIndex++;
-		}
+		});
 		sources[source->uri] =
 			Json{{"digest", digest(projection)}, {"content", contentDigest}, {"mask", std::move(maskDigest)}};
 	}

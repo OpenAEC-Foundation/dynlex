@@ -199,7 +199,7 @@ void recordSemanticSources(Json &result, RecordingFileSystem &files, const Parse
 			throw std::runtime_error("recorded source disappeared: " + path);
 		const std::string &prefix =
 			file->isInternal ? context.builtinSyntax.commentPrefix : context.projectSyntax.commentPrefix;
-		observation["semantic"] = semanticSourceDigest(file->content, prefix);
+		observation["semantic"] = semanticSourceDigest(*file, prefix);
 	}
 }
 

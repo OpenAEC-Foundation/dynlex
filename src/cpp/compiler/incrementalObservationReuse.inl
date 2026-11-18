@@ -34,7 +34,7 @@ bool observationsStillEquivalent(
 			throw std::runtime_error("recorded source disappeared: " + path);
 		const std::string &prefix = file->isInternal ? prefixes.at("builtin").get_ref<const std::string &>()
 													 : prefixes.at("project").get_ref<const std::string &>();
-		if (semanticSourceDigest(file->content, prefix) != previous.at("files").at(path).at("semantic").get<std::string>())
+		if (semanticSourceDigest(*file, prefix) != previous.at("files").at(path).at("semantic").get<std::string>())
 			return false;
 	}
 	std::optional<std::string> rendered =

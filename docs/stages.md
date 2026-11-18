@@ -1315,7 +1315,10 @@ A complete native result is reusable while every filesystem observation remains 
 only add, remove or change comments or trailing whitespace also reuse the result when
 debug locations, execution traces and diagnostics cannot become stale. The semantic
 comparison uses each source file's configured comment prefix and retains line boundaries
-between executable text. Observations include source/config contents, canonical source
+between executable text. Source digests, source projections and diagnostic relocation
+use the physical source line index, including CR, LF and CRLF terminators. Comments
+containing the reserved argument byte remain observable to the source loader.
+Observations include source/config contents, canonical source
 identities and failed lookup candidates; a newly created higher-priority import or
 configuration therefore invalidates the result.
 Within a compilation, successful lookups of the same immutable native source
