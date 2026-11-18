@@ -16,6 +16,17 @@ Native eaaf1cc6 passes all 391 required checks in 63.588 seconds after the compi
 
 The shared-root compiler 71c9192f passes all 391 required checks in 65.419 seconds, native LSP and the focused grouping checks. Production source and browser artifacts match the qualified worktree.
 
+## Iteration I121: publish fully patched SPIR-V bytes
+
+The native shader stdout path previously emitted an incomplete artifact then
+aborted when trying to close stdout. The compiler now patches the encoded
+module in memory and writes the finished artifact once. The focused target,
+vertex-input, uniform and resource checks pass. The Event Horizon shader
+produces exactly the previous file bytes at O0 and O2, including when piped,
+and validates with spirv-val for Vulkan 1.3. A write error on /dev/full reports
+the actual failure. The correction is 7f481c87, screened on 7aa38859.
+Persistent SPIR-V replay still needs the codegen-produced interface facts.
+
 ## Iteration I120: reuse native CLI WebAssembly compilation products
 
 Native CLI Wasm builds now reuse the frontend and unoptimized function IR
