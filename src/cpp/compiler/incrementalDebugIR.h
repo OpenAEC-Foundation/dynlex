@@ -28,4 +28,3 @@ class IncrementalDebugIR {
 };
 
 nlohmann::json captureDebugIRInputs(const ParseContext &, const std::map<const Section *, std::string> &);
-void consumeDebugIRProducts(llvm::Module &);

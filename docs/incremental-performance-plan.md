@@ -10,6 +10,32 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## I134 Screen separate WebAssembly machine objects
+
+After the normal LLVM optimizer, a private prototype lowers 16 groups of
+functions and a separate static-data object. The Ribbon color edit reuses
+16 of the 17 objects. The second run lowers 11 of 161 functions. Including
+dependency checks, planning and linking, the backend after LLVM optimization
+takes 0.233 seconds wall time versus 1.731 seconds for the whole object.
+The first run also reuses 16 objects but has a different set of function
+names because Ribbon is staged in a fresh workspace each run.
+
+All reused objects and the linked artifact match a fresh partitioned build
+byte for byte when linked with the same output basename. Both layouts also
+match the existing compiler's imports, exports, host callback behavior and
+one rendered frame's submitted geometry in a deterministic host. The edit
+changes that frame. This is a stage-level measurement with private artifacts.
+
+## I133 Count WebAssembly lowering inputs affected by a Ribbon edit
+
+The pinned backend reproduces the two actual compiler objects exactly from
+the cached unoptimized IR. Comparing the optimized modules shows 161
+functions in each, one changed function, and 1,591 unchanged LLVM symbol
+components out of 1,592 after checking their declaration dependencies.
+The edited build spends about 2.46 seconds in whole-module optimization and
+1.78 seconds lowering and storing the emitted object. This leaves separate
+opportunities in optimization and machine emission.
+
 ## I130 Deduplicate grouping storage identities
 
 Inference products and the entry grouping record now refer to a shared scope

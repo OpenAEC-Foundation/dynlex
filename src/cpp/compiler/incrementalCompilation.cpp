@@ -3,6 +3,7 @@
 #include "cachedCbor.h"
 #include "classInstantiationRequest.h"
 #include "codegen/codegen.h"
+#include "codegen/debugTypeProducts.h"
 #include "codegen/llvmOutput.h"
 #include "codegen/native.h"
 #include "codegen/nativeLibraries.h"

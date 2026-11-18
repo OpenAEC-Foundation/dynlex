@@ -327,14 +327,13 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 	// Match the incremental IR producer's input order for whole-module outputs.
 	if (context.options.emitLLVM || context.options.emitObject || context.options.emitWASM)
 		sortModuleSymbols(*context.llvmModule);
+	if (context.options.emitWASM)
+		return emitWASMModule(context);
 	if (context.options.optimizationLevel > 0)
 		optimizeLLVMModule(context, *context.llvmModule);
 
 	if (context.options.emitSPIRV) {
 		if (!emitSPIRVModule(context))
-			return false;
-	} else if (context.options.emitWASM) {
-		if (!emitWASMModule(context))
 			return false;
 #ifdef DYNLEX_WEB
 	} else {

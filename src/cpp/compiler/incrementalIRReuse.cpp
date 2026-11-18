@@ -374,7 +374,9 @@ bool IncrementalIRReuse::import(ParseContext &context, const nlohmann::json &cur
 					ordered.push_back(global);
 			globals = std::move(ordered);
 		}
-		context.diCompileUnit->replaceGlobalVariables(llvm::MDTuple::get(*context.llvmContext, globals));
+		context.diCompileUnit->replaceGlobalVariables(
+			globals.empty() ? nullptr : llvm::MDTuple::get(*context.llvmContext, globals)
+		);
 	}
 	std::unique_ptr<llvm::Module> cached = llvm::CloneModule(*previousModule, values, [&](const llvm::GlobalValue *value) {
 		if (const auto *function = llvm::dyn_cast<llvm::Function>(value))

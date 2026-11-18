@@ -12,6 +12,7 @@ def check_incremental_wasm_output(root, compiler, flags):
     main.write_text('import provider.dl\n'
                     'integer means: @intrinsic("type", "int")\n'
                     'to get stable item:\n    @intrinsic("return", @intrinsic("add", item, 10))\n'
+                    '@intrinsic("call", "env", "record_text", @intrinsic("type", "nothing"), "stable data")\n'
                     '@intrinsic("store", number, @intrinsic("call", "env", "read_number", integer))\n'
                     '@intrinsic("return", @intrinsic("add", base number, stable number))\n')
     source = 'to get base item:\n    @intrinsic("return", @intrinsic("add", item, 1))\n'
@@ -48,7 +49,8 @@ def check_incremental_wasm_output(root, compiler, flags):
 
     first = parity()
     assert first[2].startswith(b"\x00asm")
-    assert first[0]["objects_built"] == 1
+    count = first[0]["objects_built"]
+    assert count > 1
     timestamp = output.stat().st_mtime_ns
     unchanged = build()
     assert unchanged[0]["frontend_reused"] and unchanged[0]["codegen_and_link_ms"] == 0
@@ -59,14 +61,15 @@ def check_incremental_wasm_output(root, compiler, flags):
         edit = parity()
         assert edit[0]["source_preparation_files_reused"] >= 1
         assert edit[0]["functions_ir_reused"] > 0
-        assert edit[0]["objects_built"] == 1
+        assert edit[0]["objects_built"] >= 1 and edit[0]["objects_reused"] >= 1
+        assert edit[0]["objects_built"] + edit[0]["objects_reused"] == count
         assert edit[2] != first[2]
 
     output.write_bytes(b"damaged")
     for destination in (output, root / "renamed.wasm", "-", "-"):
         restored = parity(target=destination)
         assert restored[0]["frontend_reused"]
-        assert restored[0]["objects_built"] == 0 and restored[0]["objects_reused"] == 1
+        assert restored[0]["objects_built"] == 0 and restored[0]["objects_reused"] == count
         assert restored[0]["linked_cached_objects"]
     assert (root / "renamed.wasm").read_bytes() != edit[2]
 
@@ -76,6 +79,7 @@ def check_incremental_wasm_output(root, compiler, flags):
     output.unlink()
     rebuilt = parity()
     assert rebuilt[0]["frontend_reused"] and rebuilt[0]["objects_built"] == 1
+    assert rebuilt[0]["objects_reused"] == count - 1
     assert rebuilt[2] == edit[2]
 
     bad_output = root / "missing-directory" / "main.wasm"
@@ -96,3 +100,39 @@ def check_incremental_wasm_output(root, compiler, flags):
     assert "Second warning for value" in renamed[1] and renamed[2] == warned[2]
     assert renamed[0]["frontend_reused"] and renamed[0]["codegen_and_link_ms"] == 0
     assert path.stat().st_mtime_ns == timestamp
+
+
+def check_wasm_optimized_function_reuse(root, compiler):
+    root.mkdir()
+    entry = root / "main.dl"
+    output = root / "main.dl.wasm"
+    source = '''integer32 means: @intrinsic("type", "int", 32)
+function inc {integer32:item}:
+    execute:
+        @intrinsic("store", result, @intrinsic("call", "host", "number", integer32, item))
+        @intrinsic("return", @intrinsic("add", result, item))
+function unchanged {integer32:first} and {integer32:second}:
+    execute:
+        @intrinsic("return", @intrinsic("add", inc first, @intrinsic("add", inc second, inc first)))
+@intrinsic("call", "host", "save_callback", @intrinsic("type", "nothing"), @intrinsic("function", "unchanged $ and $"))
+@intrinsic("return", 41)
+'''
+
+    def build(flags):
+        return subprocess.run([str(compiler), entry.name, "--emit-wasm", "-O2", *flags],
+                              cwd=root, capture_output=True, text=True, check=True, timeout=30)
+
+    cache = ["--cache-dir", str(root / "cache"), "--incremental-stats"]
+    entry.write_text(source)
+    build(cache)
+    before = output.read_bytes()
+    entry.write_text(source.replace("return\", 41", "return\", 42"))
+    edited = build(cache)
+    stats, = (json.loads(line[13:]) for line in edited.stderr.splitlines() if line.startswith("incremental: "))
+    assert stats["functions_ir_reused"] > 0
+    assert stats["objects_built"] == 1 and stats["objects_reused"] == 1
+    assert stats["native_functions_lowered"] == 1
+    after = output.read_bytes()
+    assert before != after
+    build(["--no-incremental"])
+    assert output.read_bytes() == after

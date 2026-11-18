@@ -8,6 +8,11 @@
 
 inline constexpr const char *debugTypeProductsName = "dynlex.debug.types";
 
+inline void consumeDebugIRProducts(llvm::Module &module) {
+	if (auto *products = module.getNamedMetadata(debugTypeProductsName))
+		module.eraseNamedMetadata(products);
+}
+
 inline void recordDebugTypeProduct(ParseContext &context, const DataType &type, llvm::DICompositeType *metadata) {
 	if (!context.recordGeneratedFunction)
 		return;

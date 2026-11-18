@@ -1,6 +1,5 @@
 #include "incrementalDebugIR.h"
 #include "codeLine.h"
-#include "codegen/debugTypeProducts.h"
 #include "lsp/sourceFile.h"
 #include "parseContext.h"
 #include "sourceLineIdentity.h"
@@ -135,9 +134,4 @@ Json captureDebugIRInputs(const ParseContext &context, const std::map<const Sect
 		if (!function.isDeclaration())
 			result[function.getName().str()] = inputs.capture(function);
 	return result;
-}
-
-void consumeDebugIRProducts(llvm::Module &module) {
-	if (auto *products = module.getNamedMetadata(debugTypeProductsName))
-		module.eraseNamedMetadata(products);
 }

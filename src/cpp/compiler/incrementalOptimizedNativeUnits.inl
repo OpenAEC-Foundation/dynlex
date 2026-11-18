@@ -186,26 +186,61 @@ bool buildStandaloneObject(ParseContext &context, const fs::path &directory, Bui
 }
 
 bool buildWASMLinkedOutput(
-	ParseContext &context, const fs::path &directory, const std::vector<std::string> &libraries, BuildStatistics &statistics,
-	const Json *previous
+	ParseContext &context, const fs::path &directory, const std::string &compilerIdentity, const Json &options,
+	const std::vector<std::string> &libraries, BuildStatistics &statistics, const Json *previous,
+	const std::string &identifier, std::string_view generatedIR
 ) {
-	optimizeWholeModuleOutput(context, statistics);
+	const auto optimizationStart = Clock::now();
+	llvm::LLVMContext llvmContext;
+	auto module = optimizeWASMModule(context, llvmContext, identifier, generatedIR);
+	statistics.optimizationMilliseconds += elapsedMilliseconds(optimizationStart);
 	const auto start = Clock::now();
 	TemporaryObjects temporary;
-	fs::path path = temporary.directory / "program.o";
-	if (!emitWASMObject(context, path.string()))
-		return false;
-	std::string bytes = readFile(path);
-	std::string key = digest(bytes);
-	writeEntry(directory / ("object-" + key + ".entry"), bytes);
-	statistics.objectKeys = {std::move(key)};
-	++statistics.builtObjects;
+	const auto partitions = prepareWASMObjectPartitions(*module);
+	const std::string environment = compilerIdentity + options.dump();
+	std::vector<std::string> paths;
+	paths.reserve(partitions.size());
+	for (const WASMObjectPartition &partition : partitions) {
+		auto part = cloneWASMObjectPartition(*module, partition, statistics.nativePartitionCloneWork);
+		++statistics.nativePartitionModulesBuilt;
+		const size_t functions = std::ranges::count_if(*part, [](const llvm::Function &function) {
+			return !function.isDeclarationForLinker();
+		});
+		statistics.nativeFunctions += functions;
+		const std::string input = digest(environment + serializeCachedModule(*part));
+		const auto entry = directory / ("native-unit-" + input + ".entry");
+		auto key = readEntry(entry);
+		std::optional<std::string> bytes;
+		if (key)
+			bytes = readEntry(directory / ("object-" + *key + ".entry"));
+		fs::path path = temporary.directory / (std::to_string(paths.size()) + ".o");
+		paths.push_back(path.string());
+		if (bytes) {
+			std::ofstream output(path, std::ios::binary);
+			output.write(bytes->data(), bytes->size());
+			output.close();
+			if (!output)
+				throw std::runtime_error("cannot materialize cached WebAssembly object: " + path.string());
+			++statistics.reusedObjects;
+		} else {
+			if (!emitWASMObject(context, *part, paths.back()))
+				return false;
+			bytes = readFile(path);
+			key = digest(*bytes);
+			writeEntry(directory / ("object-" + *key + ".entry"), *bytes);
+			writeEntry(entry, *key);
+			statistics.nativeFunctionsLowered += functions;
+			++statistics.builtObjects;
+		}
+		statistics.objectKeys.push_back(std::move(*key));
+	}
 	statistics.nativeUnitMilliseconds += elapsedMilliseconds(start);
 	if (objectLinkUnchanged(context, previous, libraries, statistics.objectKeys))
 		return true;
 	const auto linkStart = Clock::now();
-	const bool linked = linkWASMObject(context, path.string());
+	const bool linked = linkWASMObjects(context, paths);
 	statistics.linkMilliseconds += elapsedMilliseconds(linkStart);
+	statistics.linkedCachedObjects = statistics.builtObjects == 0;
 	return linked;
 }
 
@@ -215,6 +250,11 @@ bool buildCompilerOutput(
 	BuildStatistics &statistics, std::string_view generatedIR, Json *previous, const IncrementalIRReuse *functionReuse,
 	bool restoredModule = false
 ) {
+	if (context.options.emitWASM)
+		return buildWASMLinkedOutput(
+			context, directory, compilerIdentity, options, libraries, statistics, previous,
+			context.llvmModule->getModuleIdentifier(), generatedIR
+		);
 	// The unoptimized IR snapshot owns cache products; backend units consume only
 	// executable/debug metadata, so these records never enter optimizer inputs.
 	consumeDebugIRProducts(*context.llvmModule);
@@ -222,8 +262,6 @@ bool buildCompilerOutput(
 		return buildLLVMArtifact(context, directory, compilerIdentity, options, generatedIR, statistics);
 	if (context.options.emitObject)
 		return buildStandaloneObject(context, directory, statistics);
-	if (context.options.emitWASM)
-		return buildWASMLinkedOutput(context, directory, libraries, statistics, previous);
 	if (!context.options.optimizationLevel)
 		return emitPartitions(
 			context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics, previous, functionReuse,
@@ -306,12 +344,19 @@ bool restoreCompilerOutput(
 		auto start = Clock::now();
 		statistics.cachePayloadsLoaded += hydrateProgramField(previous, retainedPayloads, "generated_ir");
 		statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(start);
-		restoreGeneratedModule(context, previous, entry);
+		if (!context.options.emitWASM)
+			restoreGeneratedModule(context, previous, entry);
 	}
 	statistics.objectKeys.clear();
+	const auto &generatedIR = previous.at("generated_ir").get_ref<const std::string &>();
+	if (context.options.emitWASM)
+		return buildWASMLinkedOutput(
+			context, directory, compilerIdentity, options, libraries, statistics, &previous,
+			previous.at("module_id").get_ref<const std::string &>(), generatedIR
+		);
 	return buildCompilerOutput(
-		context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics,
-		previous.at("generated_ir").get_ref<const std::string &>(), &previous, nullptr, true
+		context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics, generatedIR, &previous,
+		nullptr, true
 	);
 }
 

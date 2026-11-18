@@ -1190,7 +1190,7 @@ therefore select distinct LLVM functions for the same inferred argument types.
 A Boolean's LLVM `i1` type alone does not guarantee a canonical C Boolean.
 
 WebAssembly object emission is followed by the pinned LLD WebAssembly driver, embedded in both native and browser
-compilers. Each link consumes one compiler object and uses one thread, including in single-threaded Web Workers.
+compilers. Each link consumes the compiler's relocatable objects and uses one thread, including in single-threaded Web Workers.
 The linker resolves all code and data relocations, exports `main`, and reserves the first 16 bytes for null.
 Static data precedes the aligned 8 MiB stack, and the immutable `__heap_base` export identifies the first heap address,
 including any BSS that has no active data segment. The module defines its own stack pointer and exports its function table as
@@ -1324,12 +1324,24 @@ that work. The compiler skips linking. Standard output receives the cached bytes
 on each invocation. On a cache miss, a temporary seekable file lets the object
 writer and ELF debug post-processing finish before the binary stream is written.
 WebAssembly output from the native CLI uses its own target configuration and
-reuses frontend results and unoptimized function IR. It lowers a whole module
-to one relocatable object, then links with the normal WebAssembly linker.
-Unchanged Wasm output skips both stages. Destination changes, output damage and
-standard output can link the saved object for the current destination, keeping
-the module name selected by the linker. An evicted object regenerates from the
-saved IR. Object counters and link timing report these operations.
+reuses frontend results and unoptimized function IR. Clean and incremental
+builds both read the serialized IR before whole-module optimization. LLVM
+derives its initial value naming and use order from that representation.
+The optimizer's result is split into up to sixteen code
+groups and a separate static-data group. Components constrained by LLVM aliases,
+COMDATs, or block addresses stay together. The compiler gives local symbols
+hidden linker-visible names so references can cross object boundaries.
+
+Each group's bitcode and target configuration identify its relocatable object.
+An active edit still runs whole-module optimization and prepares the groups
+for comparison. Groups whose inputs match saved objects skip machine lowering.
+Unchanged object keys and a valid destination skip linking. Destination changes,
+output damage and standard output link the saved objects for the current
+destination, keeping the module name selected by the linker. If an object was
+evicted, the compiler reads the saved unoptimized IR and lowers the missing
+group while reusing the other objects. `objects_built`, `objects_reused`,
+`native_functions_lowered`, `optimization_ms`, `native_unit_ms` and `link_ms`
+report the work.
 
 A complete native result is reusable while every filesystem observation remains identical. Source edits that
 only add, remove or change comments or trailing whitespace also reuse the result when

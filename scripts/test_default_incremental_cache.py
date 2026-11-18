@@ -108,6 +108,7 @@ def check_default_cache(compiler, root):
     from test_incremental_object_output import check_incremental_object_output
     check_incremental_object_output(root / "object-artifact", compiler, ["-O0"])
     check_incremental_object_output(root / "object-debug", compiler, ["-O2", "-g"])
-    from test_incremental_wasm_output import check_incremental_wasm_output
+    from test_incremental_wasm_output import check_incremental_wasm_output, check_wasm_optimized_function_reuse
     check_incremental_wasm_output(root / "wasm-artifact", compiler, ["-O0"])
     check_incremental_wasm_output(root / "wasm-debug", compiler, ["-O2", "-g"])
+    check_wasm_optimized_function_reuse(root / "wasm-optimized-function", compiler)
