@@ -112,7 +112,7 @@ def check_incremental_llvm_output(root, compiler, optimization="-O0"):
                         if line.startswith("incremental: "))
     assert native_stats["cache_entry"] != repaired[0]["cache_entry"]
     runtime = subprocess.run([str(executable)], cwd=root, input=b"A", capture_output=True, timeout=10)
-    assert runtime.returncode == 0 and runtime.stdout == b"69 75\n", runtime
+    assert runtime.returncode == 0 and runtime.stdout.replace(b"\r\n", b"\n") == b"69 75\n", runtime
     assert build()[0]["frontend_reused"]
     definitions = root / "definitions.dl"
     definitions.write_text('to get identity item:\n    @intrinsic("return", item)\n')
