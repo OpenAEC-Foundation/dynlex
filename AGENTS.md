@@ -124,6 +124,7 @@ Clang 20+ as the bootstrap compiler, and the pinned LLVM 23 fork built by
 - `src/cpp/lsp/`: Language server
 - `src/web/compiler/`: Browser compiler and program-worker transport
 - `src/web/ide/public/compiler/`: Shipped compiler and generic runtime payloads
+- DynLex Studio and the reusable code editor live in dynlex-ide.
 - Website declarations, games and deployment live in the separate dynlex-website repository.
 - `web/`: Shared graphics-backend and shader-translator adapters
 - `vscode-extension/`: VS Code extension (TypeScript)
