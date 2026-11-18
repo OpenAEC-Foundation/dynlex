@@ -12,6 +12,7 @@ build_args=()
 for arg in "$@"; do
     case "$arg" in
     --integration) suite=integration ;;
+    --compiler-regressions) suite=compiler-regressions ;;
     --run-only) run_only=true ;;
     --suite-worker) run_only=true; suite_worker=true ;;
     *) build_args+=("$arg") ;;
@@ -64,25 +65,20 @@ test_output=""
 KNOWN_FAILURES=""
 
 now_ms() {
-    local timestamp
-    timestamp=$(date +%s%3N 2>/dev/null || true)
-    if [[ "$timestamp" =~ ^[0-9]+$ ]]; then
-        printf "%s\n" "$timestamp"
-        return
+    local timestamp="${EPOCHREALTIME:-}"
+    if [[ -n "$timestamp" ]]; then
+        local fraction="${timestamp#*.}"
+        printf -v "$1" '%d' "$(( ${timestamp%.*} * 1000 + 10#${fraction:0:3} ))"
+    else
+        # The macOS system Bash has SECONDS but no EPOCHREALTIME.
+        printf -v "$1" '%d' "$((SECONDS * 1000))"
     fi
-    timestamp=$(date +%s 2>/dev/null || true)
-    if [[ "$timestamp" =~ ^[0-9]+$ ]]; then
-        printf "%s\n" "$((timestamp * 1000))"
-        return
-    fi
-    printf "0\n"
 }
 
 elapsed_ms_since() {
-    local start_ms="$1"
-    local end_ms
-    end_ms=$(now_ms)
-    printf "%s\n" "$((end_ms - start_ms))"
+    local finish_ms
+    now_ms finish_ms
+    printf -v "$2" '%d' "$((finish_ms - $1))"
 }
 
 append_test_output() {
@@ -289,15 +285,16 @@ if working_directory is not None:
     popen_options["cwd"] = working_directory
 if process_environment is not None:
     popen_options["env"] = process_environment
-if os.name == "nt":
-    popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-else:
-    popen_options["start_new_session"] = True
-
 sys.path.insert(0, str(project_directory / "scripts"))
 from process_error_mode import unattended_child_processes
 with unattended_child_processes():
-    process = subprocess.Popen(cmd, **popen_options)
+    if os.name == "nt":
+        from windows_test_job import WindowsTestJob
+        job = WindowsTestJob()
+        atexit.register(job.close)
+        process = job.start(cmd, **popen_options)
+    else:
+        process = subprocess.Popen(cmd, start_new_session=True, **popen_options)
 
 def kill_posix_tree(pid):
     # Nested watchdogs create separate sessions. Freeze the tree before killing
@@ -344,16 +341,7 @@ try:
 except subprocess.TimeoutExpired:
     termination_error = b""
     if os.name == "nt":
-        terminated = subprocess.run(
-            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
-        if terminated.returncode != 0:
-            termination_error = terminated.stderr
-            if process.poll() is None:
-                process.kill()
+        job.terminate()
     else:
         kill_posix_tree(process.pid)
 
@@ -428,7 +416,7 @@ cleanup_test_output() {
 }
 trap cleanup_test_output EXIT
 
-total_start_ms=$(now_ms)
+now_ms total_start_ms
 
 run_fixture_tests() {
 local fixture_shard=${1:-0} fixture_shards=${2:-1} fixture_index=0
@@ -437,7 +425,7 @@ mkdir -p "$TEST_OUTPUT_DIR" || return
 for test_dir in "$TESTS_DIR"/*/; do
     fixture_index=$((fixture_index + 1))
     [[ $(((fixture_index - 1) % fixture_shards)) == "$fixture_shard" ]] || continue
-    test_start_ms=$(now_ms)
+    now_ms test_start_ms
     test_dir="${test_dir%/}"
     test_name="${test_dir##*/}"
     echo "Testing $test_name..."
@@ -456,7 +444,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 
     if [[ ! -f "$source_file" ]]; then
-        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        elapsed_ms_since "$test_start_ms" test_elapsed_ms
         append_test_result "FAIL" "$RED" "$test_name" "missing main.dl" "$test_elapsed_ms"
         ((failed++))
         failures+=("$test_name")
@@ -472,7 +460,7 @@ for test_dir in "$TESTS_DIR"/*/; do
         normalized_expected_diagnostics=$(normalize_diagnostics "$expected_diagnostics" true 2>&1)
         expected_diagnostics_exit=$?
         if [[ $expected_diagnostics_exit -ne 0 ]]; then
-            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            elapsed_ms_since "$test_start_ms" test_elapsed_ms
             append_test_result "FAIL" "$RED" "$test_name" "invalid expected diagnostics" "$test_elapsed_ms"
             append_test_output "  $normalized_expected_diagnostics"
             ((failed++))
@@ -491,8 +479,9 @@ for test_dir in "$TESTS_DIR"/*/; do
     if [[ "$is_windows" == "true" ]]; then
         compile_timeout=$((compile_timeout * 2))
     fi
-    if ! compile_timeout=$(dynlex_fixture_compile_timeout "$test_dir" "$compile_timeout"); then
-        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+    if [[ -f "$test_dir/compile_timeout_seconds.txt" ]] &&
+        ! compile_timeout=$(dynlex_fixture_compile_timeout "$test_dir" "$compile_timeout"); then
+        elapsed_ms_since "$test_start_ms" test_elapsed_ms
         append_test_result "FAIL" "$RED" "$test_name" "invalid compile_timeout_seconds.txt" "$test_elapsed_ms"
         ((failed++))
         failures+=("$test_name")
@@ -506,7 +495,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     if [[ -f "$stack_limit_file" && "$is_windows" != "true" ]]; then
         stack_limit_kb=$(<"$stack_limit_file")
         if [[ ! "$stack_limit_kb" =~ ^[1-9][0-9]*$ ]]; then
-            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            elapsed_ms_since "$test_start_ms" test_elapsed_ms
             append_test_result "FAIL" "$RED" "$test_name" "invalid stack_limit_kb.txt" "$test_elapsed_ms"
             ((failed++))
             failures+=("$test_name")
@@ -518,14 +507,14 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
     compile_exit=$?
     if [[ $compile_exit -eq 124 ]]; then
-        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        elapsed_ms_since "$test_start_ms" test_elapsed_ms
         append_test_result "FAIL" "$RED" "$test_name" "compilation timed out" "$test_elapsed_ms"
         ((failed++))
         failures+=("$test_name")
         continue
     fi
     if [[ $compile_exit -eq 125 ]]; then
-        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        elapsed_ms_since "$test_start_ms" test_elapsed_ms
         append_test_result "FAIL" "$RED" "$test_name" "compiler terminated abnormally" "$test_elapsed_ms"
         [[ -n "$compile_output" ]] && append_test_output "  $compile_output"
         ((failed++))
@@ -533,7 +522,7 @@ for test_dir in "$TESTS_DIR"/*/; do
         continue
     fi
     if [[ $compile_exit -ge 128 ]]; then
-        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        elapsed_ms_since "$test_start_ms" test_elapsed_ms
         signal=$((compile_exit - 128))
         append_test_result "FAIL" "$RED" "$test_name" "compiler crashed with signal ${signal}" "$test_elapsed_ms"
         [[ -n "$compile_output" ]] && append_test_output "  $compile_output"
@@ -552,7 +541,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     normalized_compile_output=$(normalize_diagnostics "$compile_output")
 
     if [[ "$normalized_compile_output" != "$normalized_expected_diagnostics" ]]; then
-        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        elapsed_ms_since "$test_start_ms" test_elapsed_ms
         if [[ "$has_expected_diagnostics" == "true" ]]; then
             append_test_result "FAIL" "$RED" "$test_name" "diagnostics mismatch" "$test_elapsed_ms"
             append_test_output "  Compiler exit:        $compile_exit"
@@ -570,11 +559,11 @@ for test_dir in "$TESTS_DIR"/*/; do
 
     if [[ $compile_exit -ne 0 || "$output_binary_exists" != "true" ]]; then
         if [[ "$has_expected_diagnostics" == "true" && ! -f "$expected_file" ]]; then
-            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            elapsed_ms_since "$test_start_ms" test_elapsed_ms
             append_test_result "PASS" "$GREEN" "$test_name" "" "$test_elapsed_ms"
             ((passed++))
         else
-            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            elapsed_ms_since "$test_start_ms" test_elapsed_ms
             if [[ "$output_binary_exists" != "true" ]]; then
                 append_test_result "FAIL" "$RED" "$test_name" "compiler exited $compile_exit without runnable output" "$test_elapsed_ms"
             else
@@ -589,7 +578,7 @@ for test_dir in "$TESTS_DIR"/*/; do
 
     # Compilation succeeded but this test only expected diagnostics from a failed compile
     if [[ "$has_expected_diagnostics" == "true" && ! -f "$expected_file" ]]; then
-        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        elapsed_ms_since "$test_start_ms" test_elapsed_ms
         append_test_result "FAIL" "$RED" "$test_name" "expected compile diagnostics without runnable output, but compilation succeeded" "$test_elapsed_ms"
         ((failed++))
         failures+=("$test_name")
@@ -616,14 +605,14 @@ for test_dir in "$TESTS_DIR"/*/; do
     actual_output=$("${run_command[@]}" "$output_binary" 2>&1)
     run_exit=$?
     if [[ $run_exit -eq 124 ]]; then
-        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        elapsed_ms_since "$test_start_ms" test_elapsed_ms
         append_test_result "FAIL" "$RED" "$test_name" "execution timed out" "$test_elapsed_ms"
         ((failed++))
         failures+=("$test_name")
         continue
     fi
     if [[ $run_exit -eq 125 ]]; then
-        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        elapsed_ms_since "$test_start_ms" test_elapsed_ms
         append_test_result "FAIL" "$RED" "$test_name" "program terminated abnormally" "$test_elapsed_ms"
         [[ -n "$actual_output" ]] && append_test_output "  $actual_output"
         ((failed++))
@@ -643,7 +632,7 @@ for test_dir in "$TESTS_DIR"/*/; do
         exit:[0-9]*)
             expected_run_exit="${expected_runtime_failure#exit:}"
             if [[ "$expected_run_exit" -gt 255 ]]; then
-                test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+                elapsed_ms_since "$test_start_ms" test_elapsed_ms
                 append_test_result "FAIL" "$RED" "$test_name" "invalid exit status: $expected_run_exit" "$test_elapsed_ms"
                 ((failed++))
                 failures+=("$test_name")
@@ -651,7 +640,7 @@ for test_dir in "$TESTS_DIR"/*/; do
             fi
             ;;
         *)
-            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            elapsed_ms_since "$test_start_ms" test_elapsed_ms
             append_test_result \
                 "FAIL" "$RED" "$test_name" \
                 "invalid expected_runtime_failure.txt: $expected_runtime_failure" "$test_elapsed_ms"
@@ -661,11 +650,11 @@ for test_dir in "$TESTS_DIR"/*/; do
             ;;
         esac
         if [[ $run_exit -eq $expected_run_exit ]]; then
-            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            elapsed_ms_since "$test_start_ms" test_elapsed_ms
             append_test_result "PASS" "$GREEN" "$test_name" "expected runtime failure" "$test_elapsed_ms"
             ((passed++))
         else
-            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            elapsed_ms_since "$test_start_ms" test_elapsed_ms
             append_test_result \
                 "FAIL" "$RED" "$test_name" \
                 "expected runtime failure exit $expected_run_exit, got $run_exit" "$test_elapsed_ms"
@@ -676,7 +665,7 @@ for test_dir in "$TESTS_DIR"/*/; do
         continue
     fi
     if [[ $run_exit -ne 0 ]]; then
-        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        elapsed_ms_since "$test_start_ms" test_elapsed_ms
         append_test_result "FAIL" "$RED" "$test_name" "runtime error, exit $run_exit" "$test_elapsed_ms"
         append_test_output "  $actual_output"
         ((failed++))
@@ -691,11 +680,11 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
     normalized_actual_output=$(normalize_output "$actual_output")
     if [[ "$normalized_actual_output" == "$expected_output" ]]; then
-        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        elapsed_ms_since "$test_start_ms" test_elapsed_ms
         append_test_result "PASS" "$GREEN" "$test_name" "" "$test_elapsed_ms"
         ((passed++))
     else
-        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        elapsed_ms_since "$test_start_ms" test_elapsed_ms
         append_test_result "FAIL" "$RED" "$test_name" "output mismatch" "$test_elapsed_ms"
         append_test_output "$(render_output_difference "$expected_output" "$normalized_actual_output")"
         ((failed++))
@@ -714,19 +703,20 @@ if [[ "$suite" == required ]]; then
     fixture_worker=$test_group_worker
     start_test_group fixture_parallel run_fixture_tests 1 2
     fixture_parallel_worker=$test_group_worker
-else
+elif [[ "$suite" == integration ]]; then
     run_fixture_tests
 fi
 
 run_auxiliary_test() {
     local test_name="$1"
-    local required_test=false
+    local test_suite=integration
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|embedded_directory|llvm_toolchain|build_arguments|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|incremental_dependencies|incremental_native|incremental_cache_entries|data_declaration_cache|cache_codec|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
-        required_test=true ;;
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|embedded_directory|llvm_toolchain|build_arguments|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|incremental_cache_entries|data_declaration_cache|cache_codec|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
+        test_suite=required ;;
+    incremental_regression_base|incremental_regression_dependencies|incremental_regression_native)
+        test_suite=compiler-regressions ;;
     esac
-    if [[ "$suite" == required && "$required_test" != true ]] ||
-        [[ "$suite" == integration && "$required_test" == true ]]; then
+    if [[ "$suite" != "$test_suite" && !( "$suite" == integration && "$test_suite" == compiler-regressions ) ]]; then
         return
     fi
     local base_timeout_seconds="$2"
@@ -738,10 +728,10 @@ run_auxiliary_test() {
     local auxiliary_exit
     local test_elapsed_ms
     echo "Testing $test_name..."
-    test_start_ms=$(now_ms)
+    now_ms test_start_ms
     auxiliary_output=$(run_with_timeout "$timeout_seconds" "$@" 2>&1)
     auxiliary_exit=$?
-    test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+    elapsed_ms_since "$test_start_ms" test_elapsed_ms
     local progress="Auxiliary check $test_name finished in $test_elapsed_ms ms (exit $auxiliary_exit)."
     if [[ $auxiliary_exit -ne 0 && -n "$auxiliary_output" ]]; then
         progress+=$'\n'"$auxiliary_output"
@@ -761,15 +751,13 @@ run_auxiliary_test() {
 
 if [[ "$suite" == required ]]; then
     start_test_group incremental run_auxiliary_test \
-        "incremental_compilation" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required-base
+        "incremental_compilation" 30 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required
     incremental_worker=$test_group_worker
-    start_test_group incremental_dependencies run_auxiliary_test \
-        "incremental_dependencies" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required-dependencies
-    incremental_dependencies_worker=$test_group_worker
-    start_test_group incremental_native run_auxiliary_test \
-        "incremental_native" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required-native
-    incremental_native_worker=$test_group_worker
 fi
+for group in base dependencies native; do
+    run_auxiliary_test "incremental_regression_$group" 600 \
+        python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" "--regression-$group"
+done
 
 run_auxiliary_test "elf_binary_guard" 10 python3 -B "$SCRIPT_DIR/test_no_elf_binaries.py"
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
@@ -890,10 +878,10 @@ run_auxiliary_test "normal_distribution_native_abi" 30 python3 -B "$SCRIPT_DIR/t
 
 if [[ "$suite" == required ]]; then
     echo "Testing timeout_process_tree..."
-    timeout_test_start_ms=$(now_ms)
+    now_ms timeout_test_start_ms
     timeout_test_output=$(run_with_timeout 1 python3 -B "$SCRIPT_DIR/test_timeout_process_tree.py" 2>&1)
     timeout_test_exit=$?
-    timeout_test_elapsed_ms=$(elapsed_ms_since "$timeout_test_start_ms")
+    elapsed_ms_since "$timeout_test_start_ms" timeout_test_elapsed_ms
     if [[ $timeout_test_exit -eq 124 && $timeout_test_elapsed_ms -lt 10000 ]]; then
         append_test_result "PASS" "$GREEN" "timeout_process_tree" "" "$timeout_test_elapsed_ms"
         ((passed++))
@@ -909,14 +897,14 @@ fi
 
 if [[ "$suite" == integration ]]; then
     echo "Testing lsp_integration..."
-    lsp_test_start_ms=$(now_ms)
+    now_ms lsp_test_start_ms
     lsp_shell="$BASH"
     if [[ "$is_windows" == "true" ]] && command -v cygpath >/dev/null 2>&1; then
         lsp_shell=$(cygpath -w "$lsp_shell")
     fi
     lsp_test_output=$(run_with_timeout 30 "$lsp_shell" "$SCRIPT_DIR/test_lsp.sh" 2>&1)
     lsp_test_exit=$?
-    lsp_test_elapsed_ms=$(elapsed_ms_since "$lsp_test_start_ms")
+    elapsed_ms_since "$lsp_test_start_ms" lsp_test_elapsed_ms
     if [[ $lsp_test_exit -eq 0 ]]; then
         append_test_result "PASS" "$GREEN" "lsp_integration" "" "$lsp_test_elapsed_ms"
         ((passed++))
@@ -932,7 +920,7 @@ if [[ "$suite" == required ]]; then
     collect_required_tests || { status=$?; printf '%s' "$test_output"; exit "$status"; }
 fi
 
-total_elapsed_ms=$(elapsed_ms_since "$total_start_ms")
+elapsed_ms_since "$total_start_ms" total_elapsed_ms
 
 # Only show per-test details if there are failures
 if [[ $failed -gt 0 ]]; then

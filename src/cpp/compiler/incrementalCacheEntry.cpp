@@ -1,5 +1,11 @@
 #include "incrementalCacheEntry.h"
 #include "stableIdentity.h"
+#include "llvm/Support/FileSystem.h"
+#ifdef _WIN32
+#include "../../runtime/windowsFileDisposition.h"
+#include "llvm/Support/Windows/WindowsSupport.h"
+#include "llvm/Support/WindowsError.h"
+#endif
 #include <stdexcept>
 #include <string>
 
@@ -16,6 +22,36 @@ std::optional<IncrementalCacheEntry> IncrementalCacheEntry::open(const std::file
 	if ((*contents)->getBufferSize() > maximumBytes)
 		throw std::runtime_error("cache entry exceeds the size limit: " + filename.str());
 	return IncrementalCacheEntry(std::move(*contents));
+}
+
+void IncrementalCacheEntry::evict(const std::filesystem::path &path) {
+	const std::u8string utf8 = path.u8string();
+	const llvm::StringRef filename(reinterpret_cast<const char *>(utf8.data()), utf8.size());
+	std::error_code error;
+#ifdef _WIN32
+	llvm::SmallVector<wchar_t, 128> nativePath;
+	error = llvm::sys::windows::widenPath(filename, nativePath);
+	if (error)
+		throw std::filesystem::filesystem_error("cannot open cache entry for eviction", path, error);
+	HANDLE file = CreateFileW(
+		nativePath.data(), DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+		FILE_FLAG_OPEN_REPARSE_POINT, nullptr
+	);
+	if (file == INVALID_HANDLE_VALUE) {
+		error = llvm::mapWindowsError(GetLastError());
+	} else {
+		// Delete-on-close leaves the pathname inaccessible while a snapshot is mapped.
+		// POSIX disposition unlinks the name while existing mappings retain the bytes.
+		if (!dynlex_unlink_windows_file(file, 0))
+			error = llvm::mapWindowsError(GetLastError());
+		if (auto closeError = llvm::sys::fs::closeFile(file); !error)
+			error = closeError;
+	}
+#else
+	error = llvm::sys::fs::remove(filename);
+#endif
+	if (error && error != std::errc::no_such_file_or_directory)
+		throw std::filesystem::filesystem_error("cannot evict cache entry", path, error);
 }
 
 IncrementalCacheEntry IncrementalCacheEntry::fromPayload(std::string_view payload) {

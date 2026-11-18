@@ -41,7 +41,7 @@ int verifyEntries(int argc, char **argv) {
 		IncrementalCacheSnapshots snapshots;
 		expect(snapshots.observe(path), "The snapshot set missed an existing entry");
 		expect(bool(retained), "The fixture was not opened");
-		expect(!llvm::sys::fs::remove(utf8Path(path)), "Could not evict the retained file");
+		IncrementalCacheEntry::evict(path);
 		expect(retained->payload() == payload, "Eviction invalidated a retained payload");
 		expect(snapshots.available(path) && snapshots.payload(path) == payload,
 			   "The snapshot set reopened an evicted pathname");
@@ -51,6 +51,10 @@ int verifyEntries(int argc, char **argv) {
 		missing.retainProduced(path, payload);
 		expect(missing.available(path) && missing.payload(path) == payload,
 			   "A newly produced payload still depended on a file's lifetime");
+		writeEntry(path, "new entry");
+		expect(IncrementalCacheEntry::open(path)->payload() == "new entry", "Eviction kept the name reserved");
+		expect(retained->payload() == payload, "Recreating the pathname changed the old mapping");
+		IncrementalCacheEntry::evict(path);
 	}
 	{
 		IncrementalCacheSnapshots produced;
@@ -74,7 +78,7 @@ int verifyEntries(int argc, char **argv) {
 	(void)fresh.observe(path);
 	expect(snapshots.payload(path) == "first" && fresh.payload(path) == "second",
 		   "Atomic replacement changed the snapshot set's observed identity");
-	expect(!llvm::sys::fs::remove(utf8Path(path)), "Could not remove the replaced entry");
+	IncrementalCacheEntry::evict(path);
 	first.reset();
 	second.reset();
 	writeEntry(path, "valid");

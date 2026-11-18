@@ -372,6 +372,7 @@ if(NOT EMSCRIPTEN)
         src/runtime/runtimeError.h
         src/runtime/runtimeText.h
         src/runtime/windowsEnvironment.h
+        src/runtime/windowsFileDisposition.h
     )
     if(WIN32)
         set(DYNLEX_WINDOWS_RUNTIME_COMPILER

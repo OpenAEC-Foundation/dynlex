@@ -17,8 +17,8 @@ def check_runner_policy():
     routing = "run_auxiliary_test() {\n" + source.split("run_auxiliary_test() {\n", 1)[1].split("\n}\n", 1)[0] + "\n}\n"
     shell = os.environ.get("DYNLEX_TEST_BASH", "bash")
     stubs = '''
-now_ms() { printf '0\\n'; }
-elapsed_ms_since() { printf '0\\n'; }
+now_ms() { printf -v "$1" 0; }
+elapsed_ms_since() { printf -v "$2" 0; }
 run_with_timeout() { return 0; }
 append_test_result() { :; }
 execution_timeout_scale=1
@@ -26,21 +26,29 @@ passed=0
 failed=0
 '''
     failures = []
-    for suite in ("required", "integration"):
-        for name, expected_suite in (("numeric_literals", "required"),
-                                     ("class_layout", "required"),
-                                     ("incremental_dependencies", "required"),
-                                     ("incremental_native", "required"),
-                                     ("compiler_stack", "required"),
-                                     ("timeout_output", "required")):
-            result = subprocess.run(
-                [shell, "-c", stubs + routing + '\nsuite=$1\nrun_auxiliary_test "$2" 10 true\n',
-                 "suite-policy", suite, name],
-                capture_output=True, text=True, timeout=10,
-            )
-            expected = suite == expected_suite
-            if result.returncode != 0 or bool(result.stdout) != expected:
-                failures.append(f"{runner}: incorrect {suite} routing for {name}: {result.stderr}")
+    cases = {
+        "numeric_literals": ("required",),
+        "class_layout": ("required",),
+        "incremental_compilation": ("required",),
+        "incremental_cache_entries": ("required",),
+        "pattern_precedence": ("required",),
+        "associative_grouping": ("required",),
+        "compiler_stack": ("required",),
+        "timeout_output": ("required",),
+        "incremental_regression_base": ("integration", "compiler-regressions"),
+        "incremental_regression_dependencies": ("integration", "compiler-regressions"),
+        "incremental_regression_native": ("integration", "compiler-regressions"),
+        "incremental_compilation_integration": ("integration",),
+    }
+    for suite in ("required", "integration", "compiler-regressions"):
+        result = subprocess.run(
+            [shell, "-c", stubs + routing + '\nsuite=$1; shift\nfor name; do run_auxiliary_test "$name" 10 true; done\n',
+             "suite-policy", suite, *cases],
+            capture_output=True, text=True, timeout=10,
+        )
+        expected = [f"Testing {name}..." for name, expected_suites in cases.items() if suite in expected_suites]
+        if result.returncode != 0 or result.stdout.splitlines() != expected:
+            failures.append(f"{runner}: incorrect {suite} routing: {result.stdout}{result.stderr}")
 
     preparation = 'if [[ "$run_only" != "true" ]]; then\n'
     build_phase = preparation + source.split(preparation, 1)[1].split('\nif ! (cd "$PROJECT_DIR"', 1)[0]

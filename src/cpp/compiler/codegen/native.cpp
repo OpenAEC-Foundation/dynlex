@@ -13,6 +13,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FileUtilities.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/TargetSelect.h"
@@ -363,6 +364,12 @@ void addNativeEmissionError(ParseContext &context, std::string message) {
 	context.diagnostics.push_back(std::move(diagnostic));
 }
 
+std::string defaultNativeOutputStem(std::string inputPath) {
+	if (inputPath.ends_with(".dl"))
+		inputPath.resize(inputPath.size() - 3);
+	return inputPath;
+}
+
 } // namespace
 
 bool emitNativeObjectModule(ParseContext &context, llvm::Module &module, const std::string &objectPath) {
@@ -448,7 +455,7 @@ bool emitNativeObjectModule(ParseContext &context, llvm::Module &module, const s
 }
 
 std::string nativeObjectPath(const ParseContext::Options &options) {
-	return options.outputPath.empty() ? nativeExecutablePath(options) + ".o" : options.outputPath;
+	return options.outputPath.empty() ? defaultNativeOutputStem(options.inputPath) + ".o" : options.outputPath;
 }
 
 bool writeNativeObject(ParseContext &context, std::string_view bytes) {
@@ -495,9 +502,11 @@ bool emitNativeExecutable(ParseContext &context) {
 std::string nativeExecutablePath(const ParseContext::Options &options) {
 	if (!options.outputPath.empty())
 		return options.outputPath;
-	std::string path = options.inputPath;
-	if (path.ends_with(".dl"))
-		path.resize(path.size() - 3);
+	std::string path = defaultNativeOutputStem(options.inputPath);
+#ifdef _WIN32
+	if (llvm::sys::path::extension(path).empty())
+		path += ".exe";
+#endif
 	return path;
 }
 
@@ -592,6 +601,13 @@ bool emitNativeExecutableWithObjects(
 	}
 	commandStorage.push_back("-o");
 	commandStorage.push_back(outputPath);
+#ifdef _WIN32
+	if (llvm::sys::path::extension(outputPath).empty()) {
+		// Clang adds .exe to a suffixless -o before invoking the MinGW linker.
+		// The linker takes the last output argument, which preserves the requested name.
+		commandStorage.insert(commandStorage.end(), {"-Xlinker", "-o", "-Xlinker", outputPath});
+	}
+#endif
 
 	if (context.options.emitDebugInfo)
 		commandStorage.push_back("-g");
