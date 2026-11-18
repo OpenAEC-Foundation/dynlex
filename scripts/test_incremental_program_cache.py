@@ -1,6 +1,8 @@
 """Focused checks for the native program cache manifest and payload entries."""
 
 import json
+import struct
+from pathlib import Path
 
 from cache_payloads import decode_cbor, read_payload
 import os
@@ -58,13 +60,21 @@ def check_recent_cache_entries(root, build):
 
 def check_cache_metadata(root, build):
     main = root / "cache_metadata.dl"
+    cache = root / "metadata-cache"
     main.write_text('@intrinsic("discard", 0)\n')
-    first = build(entry=main)
+    first = build(entry=main, cache_root=cache)
     assert first[0]["cache_entries_scanned"] > 0
     assert first[0]["cache_entries_sorted"] == 0, \
         "cache entries were ordered when no eviction was necessary"
     assert first[0]["cache_entries_removed"] == 0
-    directory = root / "cache" / "native-v1"
+    main.write_text('@intrinsic("discard", 1)\n')
+    edited = build(entry=main, cache_root=cache)
+    assert edited[0]["cache_entries_scanned"] == 0, edited[0]["cache_entries_scanned"]
+    assert edited[1:] == build(False, entry=main)[1:]
+    repeated = build(entry=main, cache_root=cache)
+    assert repeated[0]["frontend_reused"] and repeated[0]["cache_entries_scanned"] == 0
+
+    directory = cache / "native-v1"
     older = directory / ("object-" + "0" * 63 + "1.entry")
     newer = directory / ("object-" + "0" * 63 + "2.entry")
     invalid = directory / ("object-" + "f" * 64 + ".entry")
@@ -74,14 +84,14 @@ def check_cache_metadata(root, build):
             with path.open("wb") as sparse:
                 sparse.truncate(256 * 1024 * 1024)
             os.utime(path, (1, 1))
-        repeated = build(entry=main)
-        assert repeated[1:] == first[1:]
+        repeated = build(entry=main, cache_root=cache)
+        assert repeated[1:] == edited[1:]
         assert repeated[0]["cache_entries_sorted"] == repeated[0]["cache_entries_scanned"]
         assert repeated[0]["cache_entries_removed"] > 0
         assert not older.exists() and newer.exists(), \
             "equal-age cache entries were not evicted in path order"
         invalid.mkdir()
-        failure = build(entry=main, success=False)
+        failure = build(entry=main, cache_root=cache, success=False)
         assert "cannot inspect cache" in failure[1], \
             "a directory masquerading as a cache entry did not report its filesystem error"
     finally:
@@ -90,7 +100,7 @@ def check_cache_metadata(root, build):
                 path.unlink()
         if invalid.exists():
             invalid.rmdir()
-    assert build(entry=main)[1:] == first[1:]
+    assert build(entry=main, cache_root=cache)[1:] == edited[1:]
 
 
 def check_cache_eviction(root, build):
@@ -440,7 +450,13 @@ def check_program_payloads(root, build):
                 pending.append(target)
     assert all((path, key) in required for path, variants in units.items() for key in variants), \
         "dependency capture built aggregate units outside the retained output closure"
-    assert edited_program["generated_ir"].startswith(b"BC\xc0\xde")
+    bitcode = edited_program["generated_ir"]
+    if bitcode.startswith(b"\xde\xc0\x17\x0b"):
+        # LLVM wraps Mach-O bitcode in a header with the raw payload's extent.
+        _, version, offset, size, _ = struct.unpack_from("<5I", bitcode)
+        assert version == 0 and 20 <= offset <= offset + size <= len(bitcode)
+        bitcode = bitcode[offset:offset + size]
+    assert bitcode.startswith(b"BC\xc0\xde")
     for field in ("matches", "match_entries"):
         assert all(isinstance(key, str) and len(key) == 64
                    for key in edited_program["all_function_projection"][field].values()), \
@@ -461,3 +477,35 @@ def check_program_payloads(root, build):
     assert unused[0]["type_inference_reused"] and unused[0]["cache_payloads_loaded"] == 2, \
         "unused edit loaded dependency, inference, or generated-code payloads"
     assert unused[1:] == build(False, entry=main)[1:]
+
+
+def check_native_cache_lifecycle(main, source, cache, output, build):
+    cold = build()
+    assert not cold[0]["frontend_reused"] and not cold[0]["linked_cached_objects"]
+    assert cold[0]["source_projection_mask_ms"] >= 0 and cold[0]["source_projection_files_ms"] >= 0
+    assert cold[0]["projection_declarations_ms"] >= 0 and cold[0]["projection_matches_ms"] >= 0
+    assert cold[0]["dependency_graph_ms"] >= 0
+    assert all(cold[0][key] >= 0 for key in ("resolution_setup_ms", "resolution_definition_ms", "resolution_body_ms", "resolution_precedence_ms", "resolution_rematch_ms", "resolution_candidate_collection_ms", "resolution_candidate_sort_ms", "resolution_replay_setup_ms", "resolution_candidate_match_ms", "precedence_tree_signature_ms", "precedence_signature_ms"))
+    assert cold[0]["objects_built"] > 0
+    clean = build(False)
+    assert cold[1:] == clean[1:], "cold build differs from clean build"
+    warm = build()
+    assert warm[0]["frontend_reused"] and warm[0]["link_ms"] == 0
+    assert warm[0]["objects_built"] == 0
+    assert warm[0]["objects_reused"] == 0, "unchanged output materialized cached objects"
+    assert warm[1:] == clean[1:], "warm build differs from clean build"
+    # Evict an object referenced by this program, independently of directory order
+    # and objects left by earlier checks sharing the private cache.
+    program = json.loads(Path(warm[0]["cache_entry"]).read_bytes().split(b"\n", 2)[2])
+    (cache / "native-v1" / f'object-{program["object_keys"][0]}.entry').unlink()
+    output.unlink()
+    recovered = build()
+    assert recovered[0]["frontend_reused"] and not recovered[0]["linked_cached_objects"]
+    assert recovered[0]["objects_built"] == 1, "evicted object was not rebuilt from cached IR"
+    assert recovered[1:] == clean[1:], "evicted object changed compilation behavior"
+    main.write_text(source.replace("alpha\nbeta\n", "beta\nbeta\n"))
+    same_file_edit = build()
+    assert same_file_edit[0]["matcher_cache_hits"] > 0, "code edit discarded unchanged same-file matches"
+    assert same_file_edit[0]["definition_parse_hits"] >= 3, "code edit reparsed unchanged declarations"
+    assert same_file_edit[1:] == build(False)[1:], "same-file match reuse differs from clean build"
+    return clean[2]

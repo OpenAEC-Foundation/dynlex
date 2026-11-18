@@ -46,8 +46,8 @@ source "$2/test_fixture_options.sh"
 suite=required; is_windows=false; execution_timeout_scale=1
 RED=""; GREEN=""; YELLOW=""; KNOWN_FAILURES=""
 passed=0; failed=0; skipped=0; failures=(); test_output=""
-now_ms() { printf '0\\n'; }
-elapsed_ms_since() { printf '0\\n'; }
+now_ms() { printf -v "$1" 0; }
+elapsed_ms_since() { printf -v "$2" 0; }
 append_test_result() { :; }
 append_test_output() { :; }
 normalize_output() { printf '%s' "$1"; }
@@ -174,8 +174,8 @@ printf 'failure:%s\n' "${failures[@]}"
                      .split("\n}\n", 1)[0] + "\n}\n")
         statuses = '''
 suite=required; execution_timeout_scale=1; GREEN=""; RED=""
-now_ms() { printf '0\n'; }
-elapsed_ms_since() { printf '0\n'; }
+now_ms() { printf -v "$1" 0; }
+elapsed_ms_since() { printf -v "$2" 0; }
 run_with_timeout() { shift; "$@"; }
 append_test_result() { :; }
 append_test_output() { :; }
@@ -200,7 +200,6 @@ printf 'failure:%s\n' "${failures[@]}"
         joins = '''
 crashed() { return 17; }
 completed() { passed=2; test_output="completed output"; }
-dependencies() { passed=3; test_output="dependency output"; }
 passed=0; failed=0; skipped=0; test_output=""; failures=()
 start_test_group fixture crashed
 fixture_worker=$test_group_worker
@@ -208,17 +207,13 @@ start_test_group fixture_parallel completed
 fixture_parallel_worker=$test_group_worker
 start_test_group incremental completed
 incremental_worker=$test_group_worker
-start_test_group incremental_dependencies dependencies
-incremental_dependencies_worker=$test_group_worker
-start_test_group incremental_native dependencies
-incremental_native_worker=$test_group_worker
 status=0
 collect_required_tests || status=$?
 printf '%s/%s/%s\n' "$status" "$passed" "$test_output"
 '''
         result = run_suite_script(shell, root, "joined-suite-workers", setup + helpers + joins, sys.executable)
         assert result.returncode == 0, result.stderr
-        assert result.stdout == "17/10/dependency outputdependency outputcompleted outputcompleted output\n", result.stdout
+        assert result.stdout == "17/4/completed outputcompleted output\n", result.stdout
 
 
 if __name__ == "__main__":

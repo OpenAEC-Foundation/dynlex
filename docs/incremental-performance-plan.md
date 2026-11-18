@@ -10,6 +10,33 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## Iteration I124: account for cache publications without rescanning
+
+The compiler maintains the logical byte count of immutable cache entries
+across processes. It records replacements under the publication lock and
+marks the checkpoint incomplete before mutation. A build with an intact
+under-budget checkpoint skips the directory scan. Initial accounting,
+external directory changes, interrupted publications and over-budget totals
+still rescan. Eviction uses the live access timestamps.
+
+In a cache seeded with 39,408 unrelated entries, six rejected WebAssembly
+edits take 11.2 ms median CPU with the checkpoint versus 109.6 ms with the
+old scan. The original unary arithmetic workload takes 3.63 seconds wall
+versus 21.81 seconds, with identical results. In a small cache those six
+edits take 11.2 ms CPU versus 9.1 ms. The first crowded-cache scan takes
+138.0 ms versus 94.3 ms. On LEXI8, two body edits take 2.597 s median CPU
+versus 2.604 s, with byte-identical native objects. The single initial
+population pair takes 8.888 s versus 8.530 s.
+
+The first staged gate exposed a ThinLTO worker that needed the cache
+publisher explicitly. The corrected staged compiler passes all 389
+required checks in 41.830 s. The quota, recovery, tie-order and filesystem
+error checks pass, as do five concurrent compiler runs and O0/debug-O2
+WebAssembly artifact replay. A Linux fault-injection check kills a compiler
+just after an entry rename, then a fresh process rescans and produces the
+same output as a clean compilation. This covers process interruption at the
+publication boundary.
+
 ## Qualified snapshot I119
 
 Native eaaf1cc6 passes all 391 required checks in 63.588 seconds after the compiler build. Native LSP, focused grouping and source checks, rebuilt browser host LSP, and all 487 integration checks pass. This snapshot includes fixed grouping, physical source-line proofs, early diagnostic replay and native object output. The overall goal remains active.

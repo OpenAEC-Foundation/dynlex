@@ -25,6 +25,7 @@ invalid = {
 with tempfile.TemporaryDirectory(prefix="dynlex-unary-types-") as directory:
     temporary = Path(directory)
     source = temporary / "case.dl"
+    # Exercise each operand in a clean frontend without writing incremental cache entries.
     for mode in ("--emit-llvm", "--emit-wasm", "--emit-spirv"):
         for operation in operations:
             for name, operand in invalid.items():
@@ -34,7 +35,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-unary-types-") as directory:
                     + f'@intrinsic("discard", @intrinsic("{operation}", {operand}))\n'
                 )
                 result = subprocess.run(
-                    [str(compiler), str(source), mode, "-o", str(temporary / "result")],
+                    [str(compiler), str(source), mode, "--no-incremental", "-o", str(temporary / "result")],
                     capture_output=True, text=True,
                 )
                 diagnostics = result.stdout + result.stderr
@@ -51,7 +52,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-unary-types-") as directory:
             )
             output = temporary / "valid.ll"
             result = subprocess.run(
-                [str(compiler), str(source), "--emit-llvm", "-O0", "-o", str(output)],
+                [str(compiler), str(source), "--emit-llvm", "--no-incremental", "-O0", "-o", str(output)],
                 capture_output=True, text=True,
             )
             assert result.returncode == 0, (kind, operation, result.stdout + result.stderr)

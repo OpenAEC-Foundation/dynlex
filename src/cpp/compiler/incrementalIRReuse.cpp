@@ -14,6 +14,7 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/ValueHandle.h"
 #include "llvm/Linker/Linker.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
@@ -415,8 +416,22 @@ bool IncrementalIRReuse::import(ParseContext &context, const nlohmann::json &cur
 		replacementLinkages.emplace_back(name, function->getLinkage());
 		function->setLinkage(llvm::GlobalValue::ExternalLinkage);
 	}
+	// Linking replaces the temporary declarations bound for regenerated writers.
+	// Retain the definitions that the cache manifest will describe after linking.
+	using GlobalHandle = llvm::TrackingVH<llvm::GlobalVariable>;
+	std::vector<std::pair<GlobalHandle, GlobalHandle>> managedGlobals;
+	managedGlobals.reserve(context.managedGlobalStorage.size());
+	for (const auto &storage : context.managedGlobalStorage)
+		managedGlobals.emplace_back(
+			llvm::cast<llvm::GlobalVariable>(storage.address), llvm::cast<llvm::GlobalVariable>(storage.initializedAddress)
+		);
 	if (llvm::Linker::linkModules(*context.llvmModule, std::move(cached), llvm::Linker::Flags::LinkOnlyNeeded))
 		throw std::runtime_error("failed to import cached function IR");
+	for (size_t index = 0; index < managedGlobals.size(); ++index) {
+		auto &storage = context.managedGlobalStorage[index];
+		storage.address = managedGlobals[index].first;
+		storage.initializedAddress = managedGlobals[index].second;
+	}
 	for (const auto &[name, linkage] : globalLinkages)
 		context.llvmModule->getGlobalVariable(name, true)->setLinkage(linkage);
 	for (const auto &[name, linkage] : replacementLinkages)

@@ -1,5 +1,8 @@
 """Global type products validate the execution prefix that produced them."""
 
+import json
+from pathlib import Path
+
 from test_incremental_program_cache import read_program
 from test_incremental_lookup_outputs import check_source_lookup_results
 
@@ -124,7 +127,12 @@ def check_global_type_producers(root, build):
     assert changed[0]['root_execution_reused']
     assert changed[0]['global_type_producers_restored'] == 1
 
+    check_managed_global_storage(root, build)
+
+
+def check_managed_global_storage(root, build):
     # A regenerated writer must share the cached entry's managed init flag.
+    main = root / "managed_global_storage.dl"
     managed = ('class:\n    patterns:\n        token\n    members:\n        number\n'
                '    retain: @intrinsic("discard", @intrinsic("lifecycle value"))\n'
                '    release:\n'
@@ -139,13 +147,21 @@ def check_global_type_producers(root, build):
                '        @intrinsic("store", shared, @intrinsic("construct", token, 7))\n'
                'replace\n')
     main.write_text(managed)
-    build(entry=main)
-    main.write_text(managed.replace('"before"', '"after"'))
-    changed = build(entry=main)
-    assert changed[1:] == build(False, entry=main)[1:]
-    assert changed[2] == b'after\n0\n7\n'
-    assert changed[0]['root_execution_reused']
-    assert read_program(root / 'cache', main)['global_storage']
+    def storage(stats):
+        manifest = Path(stats["cache_entry"]).read_bytes().split(b"\n", 2)[2]
+        return json.loads(manifest)["global_storage"]
+
+    cold = build(entry=main)
+    expected = storage(cold[0])
+    assert expected == {"shared": "shared.initialized"}, expected
+    for message in ("after", "again"):
+        main.write_text(managed.replace('"before"', f'"{message}"'))
+        changed = build(entry=main)
+        assert changed[1:] == build(False, entry=main)[1:]
+        assert changed[2] == message.encode() + b'\n0\n7\n'
+        assert changed[0]['root_execution_reused']
+        saved = storage(changed[0])
+        assert saved == expected, f"entry IR reuse changed managed storage: {saved}"
 
 
 def check_storage_value_demand(root, build):

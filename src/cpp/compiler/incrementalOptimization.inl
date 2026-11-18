@@ -81,6 +81,7 @@ struct IncrementalOptimization {
 
 	void run(const std::set<std::string> &materialize = {}) {
 		auto indexStart = Clock::now();
+		auto &entryCache = IncrementalCacheDirectory::current();
 		std::mutex mutex;
 		std::exception_ptr failure;
 		std::map<unsigned, std::pair<std::string, std::string>> tasks;
@@ -125,10 +126,10 @@ struct IncrementalOptimization {
 				std::string key = digest(bitcode);
 				fs::path path = programPayloadPath(directory, key);
 				if (!recordCacheAccess(path))
-					writeEntry(path, bitcode);
+					entryCache.publish(path, bitcode);
 				Json result = summarizeOptimizedUnit(module);
 				result["bitcode_key"] = std::move(key);
-				writeEntry(directory / ("optimization-" + identity.first + ".entry"), result.dump());
+				entryCache.publish(directory / ("optimization-" + identity.first + ".entry"), result.dump());
 				std::lock_guard lock(mutex);
 				outputs.insert_or_assign(identity.second, std::move(result));
 				materializedBitcode.insert_or_assign(identity.second, std::move(bitcode));
