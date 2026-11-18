@@ -22,10 +22,10 @@ Path(sys.argv[2]).write_text(json.dumps({p.name:p.read_text() for p in sorted(ro
 ''')
     (root / 'CMakeLists.txt').write_text(f'''cmake_minimum_required(VERSION 3.20)
 project(embedded_files NONE)
-include("{ROOT / 'cmake/EmbeddedDirectory.cmake'}")
+include("{(ROOT / 'cmake/EmbeddedDirectory.cmake').as_posix()}")
 dynlex_embedded_directory_dependencies("${{CMAKE_CURRENT_SOURCE_DIR}}/lib" "${{CMAKE_CURRENT_BINARY_DIR}}/embedded-files.txt" inputs)
 add_custom_command(OUTPUT "${{CMAKE_CURRENT_BINARY_DIR}}/bundle.json"
- COMMAND "{sys.executable}" "${{CMAKE_CURRENT_SOURCE_DIR}}/pack.py" "${{CMAKE_CURRENT_SOURCE_DIR}}/lib" "${{CMAKE_CURRENT_BINARY_DIR}}/bundle.json"
+ COMMAND "{Path(sys.executable).as_posix()}" "${{CMAKE_CURRENT_SOURCE_DIR}}/pack.py" "${{CMAKE_CURRENT_SOURCE_DIR}}/lib" "${{CMAKE_CURRENT_BINARY_DIR}}/bundle.json"
  DEPENDS ${{inputs}} VERBATIM)
 add_custom_target(bundle ALL DEPENDS "${{CMAKE_CURRENT_BINARY_DIR}}/bundle.json")
 ''')

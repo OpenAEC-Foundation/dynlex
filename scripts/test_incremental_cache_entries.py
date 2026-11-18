@@ -7,10 +7,6 @@ import sys
 import tempfile
 
 project = Path(sys.argv[1]).resolve()
-subprocess.run([
-    "cmake", "--build", str(project / "build"), "--target", "dynlex_incremental_cache_entry_test",
-    "--parallel", os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL", "1")
-], cwd=project, check=True)
 executable = project / "build" / ("dynlex_incremental_cache_entry_test.exe" if os.name == "nt" else "dynlex_incremental_cache_entry_test")
 with tempfile.TemporaryDirectory(prefix="dynlex-cache-entry-") as directory:
     subprocess.run([str(executable), directory], cwd=project, check=True)

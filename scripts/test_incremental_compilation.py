@@ -90,7 +90,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
             runtime = subprocess.run([str(build_target)], cwd=root, capture_output=True, timeout=10)
             if runtime.returncode:
                 raise AssertionError(f"execution failed: {runtime.stderr!r}")
-        return stats, diagnostics, runtime.stdout if runtime else None
+        return stats, diagnostics, runtime.stdout.replace(b"\r\n", b"\n") if runtime else None
 
     if integration_mode:
         check_integration_builds(project, build)
@@ -164,7 +164,10 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     assert warm[0]["objects_built"] == 0
     assert warm[0]["objects_reused"] == 0, "unchanged output materialized cached objects"
     assert warm[1:] == clean[1:], "warm build differs from clean build"
-    next((cache / "native-v1").glob("object-*.entry")).unlink()
+    # Evict an object referenced by this program, independently of directory order
+    # and objects left by earlier checks sharing the private cache.
+    program = json.loads(Path(warm[0]["cache_entry"]).read_bytes().split(b"\n", 2)[2])
+    (cache / "native-v1" / f'object-{program["object_keys"][0]}.entry').unlink()
     output.unlink()
     recovered = build()
     assert recovered[0]["frontend_reused"] and not recovered[0]["linked_cached_objects"]

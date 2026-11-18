@@ -28,7 +28,7 @@ done
 printf '%s|%s\\n' "$source" "$output" >> "$COMPILE_LOG"
 printf '#!/bin/sh\\nexit 0\\n' > "$output"
 chmod +x "$output"
-''')
+''', encoding='utf-8', newline='\n')
         compiler.chmod(0o755)
         setup = '''
 set -uo pipefail

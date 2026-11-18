@@ -425,13 +425,8 @@ collectMatcherFrontierCandidates(const CompletionContext &context, SectionType s
 		// also resumes its parent or extends it as an operand of another call.
 		if (sourceComplete && subtreeHasVisibleDefinition(current.currentNode, *completionSourceFile(context))) {
 			size_t parentDepth = 0;
-			for (const MatchProgress *nested = &current; nested->parents;) {
-				requireCompilerInvariant(
-					!nested->parents->values.empty(), "completion matcher has a parent set without a parent"
-				);
-				nested = nested->parents->values.front();
+			for (const MatchProgress *nested = current.firstParent(); nested; nested = nested->firstParent())
 				parentDepth++;
-			}
 			candidates.push_back({
 				{current.currentNode, directMatchedVariables(current, storage)},
 				current.match.discoveredVariables.size(),

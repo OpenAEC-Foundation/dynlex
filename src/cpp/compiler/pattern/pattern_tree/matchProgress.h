@@ -172,6 +172,7 @@ struct MatchProgress {
 	MatchStep step(MatchStorage &storage, const std::vector<PatternDefinition *> &visibleDefinitions);
 	void publishCompletion(MatchStorage &storage, std::vector<MatchProgress> &queue) const;
 	void mergeParents(MatchStorage &storage, MatchParentAlternatives *known, std::vector<MatchProgress> &queue) const;
+	const MatchProgress *firstParent() const;
 	MatchControlState controlState() const;
 	MatchContinuationState continuationState() const;
 	bool canStartSubmatch() const;

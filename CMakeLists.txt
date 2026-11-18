@@ -624,6 +624,12 @@ if(NOT EMSCRIPTEN)
     target_include_directories(dynlex_cached_cbor_test PRIVATE src/cpp)
     target_link_libraries(dynlex_cached_cbor_test PRIVATE nlohmann_json::nlohmann_json)
     set_target_properties(dynlex_cached_cbor_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+    add_custom_target(dynlex_required_test_tools DEPENDS
+        dynlex_numeric_literal_test
+        dynlex_class_layout_test
+        dynlex_incremental_cache_entry_test
+        dynlex_cached_cbor_test
+    )
 
 
     # MinGW stores full DWARF in every COFF object for a normal Debug build.
@@ -725,6 +731,24 @@ endif()
 #
 # Install targets
 #
+if(WIN32)
+    # LLVM paths and the compiler's source/diagnostic text are UTF-8. Declare
+    # that process-wide contract so narrow CRT arguments and filesystem paths
+    # use the same encoding, independently of the machine's ANSI code page.
+    set(DYNLEX_UTF8_MANIFEST "${CMAKE_SOURCE_DIR}/metadata/windows-utf8.manifest")
+    get_property(DYNLEX_NATIVE_TARGETS DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(DYNLEX_NATIVE_TARGET IN LISTS DYNLEX_NATIVE_TARGETS)
+        get_target_property(DYNLEX_NATIVE_TARGET_TYPE ${DYNLEX_NATIVE_TARGET} TYPE)
+        if(DYNLEX_NATIVE_TARGET_TYPE STREQUAL "EXECUTABLE")
+            target_link_options(${DYNLEX_NATIVE_TARGET} PRIVATE
+                "LINKER:/MANIFEST:EMBED"
+                "LINKER:/MANIFESTINPUT:${DYNLEX_UTF8_MANIFEST}"
+            )
+            set_property(TARGET ${DYNLEX_NATIVE_TARGET} APPEND PROPERTY LINK_DEPENDS "${DYNLEX_UTF8_MANIFEST}")
+        endif()
+    endforeach()
+endif()
+
 if(TARGET ${PROJECT_NAME})
     install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()

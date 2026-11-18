@@ -1,5 +1,7 @@
 #!/bin/bash
 set -uo pipefail
+# Fixtures, compiler diagnostics and generated shell source use UTF-8 everywhere.
+export PYTHONUTF8=1
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -140,7 +142,13 @@ run_with_timeout() {
     local working_directory_file=""
     local environment_file=""
     local isolate_temporaries=false
+    local stream_output=false
     while [[ "${1:-}" == --* ]]; do
+        if [[ "$1" == --stream-output ]]; then
+            stream_output=true
+            shift
+            continue
+        fi
         if [[ $# -lt 2 ]]; then
             echo "run_with_timeout: ${1:-option} requires a path" >&2
             return 125
@@ -159,7 +167,7 @@ run_with_timeout() {
         esac
         shift 2
     done
-    python3 - "$seconds" "$arguments_file" "$standard_input_file" "$standard_input_bytes_file" "$working_directory_file" "$environment_file" "$PROJECT_DIR" "$isolate_temporaries" "$@" <<'PY'
+    python3 - "$seconds" "$arguments_file" "$standard_input_file" "$standard_input_bytes_file" "$working_directory_file" "$environment_file" "$PROJECT_DIR" "$isolate_temporaries" "$stream_output" "$@" <<'PY'
 import atexit
 import os
 from pathlib import Path
@@ -177,7 +185,8 @@ working_directory_file = sys.argv[5]
 environment_file = sys.argv[6]
 project_directory = Path(sys.argv[7])
 isolate_temporaries = sys.argv[8] == "true"
-cmd = sys.argv[9:]
+stream_output = sys.argv[9] == "true"
+cmd = sys.argv[10:]
 if arguments_file:
     data = Path(arguments_file).read_bytes()
     argument_lines = [] if not data else data.split(b"\n")
@@ -269,7 +278,7 @@ if isolate_temporaries:
     process_environment.update({name: temporary_path for name in ("TMPDIR", "TMP", "TEMP")})
 
 popen_options = {
-    "stdout": subprocess.PIPE,
+    "stdout": None if stream_output else subprocess.PIPE,
     # The suite compares combined output. Capture one pipe rather than replaying
     # two streams in an order determined by this Python process's buffering.
     "stderr": subprocess.STDOUT,
@@ -353,7 +362,8 @@ except subprocess.TimeoutExpired:
     except subprocess.TimeoutExpired as cleanup_timeout:
         if process.poll() is None:
             process.kill()
-        process.stdout.close()
+        if not stream_output:
+            process.stdout.close()
         process.wait(timeout=5)
         output = cleanup_timeout.output or b""
         termination_error += b"Timed-out process tree did not release its output pipes\n"
@@ -387,7 +397,7 @@ PY
 
 if [[ "$run_only" != "true" ]]; then
     printf '%s\n' "${YELLOW}Building compiler...${NC}"
-    "$SCRIPT_DIR/build.sh" "${build_args[@]}"
+    "$SCRIPT_DIR/build.sh" --test-tools "${build_args[@]+"${build_args[@]}"}"
     build_exit=$?
     if [[ $build_exit -ne 0 ]]; then
         printf '%s\n' "${RED}Build failed.${NC}"
@@ -397,7 +407,7 @@ if [[ "$run_only" != "true" ]]; then
 fi
 
 if [[ "$suite" == required && "$suite_worker" != true ]]; then
-    run_with_timeout 120 --isolate-temporaries true "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --suite-worker
+    run_with_timeout 120 --isolate-temporaries true --stream-output "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --suite-worker
     suite_exit=$?
     if [[ $suite_exit -eq 124 ]]; then
         printf '%s\n' "${RED}Required tests exceeded the 120-second budget.${NC}"
@@ -732,6 +742,7 @@ run_auxiliary_test() {
     auxiliary_output=$(run_with_timeout "$timeout_seconds" "$@" 2>&1)
     auxiliary_exit=$?
     test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+    printf 'Auxiliary check %s finished in %s ms (exit %s).\n' "$test_name" "$test_elapsed_ms" "$auxiliary_exit" >&2
     if [[ $auxiliary_exit -eq 0 ]]; then
         append_test_result "PASS" "$GREEN" "$test_name" "" "$test_elapsed_ms"
         ((passed++))

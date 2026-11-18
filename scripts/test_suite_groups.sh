@@ -3,12 +3,15 @@
 
 start_test_group() {
     local group="$1"
+    local started=$SECONDS
     shift
     (
         trap - EXIT
         passed=0; failed=0; skipped=0; test_output=""; failures=()
         "$@" || exit "$?"
         printf '%s\0' "$passed" "$failed" "$skipped" "$test_output" "${failures[@]+"${failures[@]}"}" > "$TEST_OUTPUT_DIR/$group-results"
+        printf 'Test group %s finished in %s seconds (%s passed, %s failed, %s skipped).\n' \
+            "$group" "$((SECONDS - started))" "$passed" "$failed" "$skipped" >&2
     ) &
     test_group_worker=$!
 }
