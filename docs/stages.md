@@ -1281,6 +1281,8 @@ result types, with bitcasts at signless SSA boundaries. This includes numeric
 conversions, division, remainders, shifts, comparisons and signed GLSL extrema.
 Constant logical addresses use typed, losslessly narrowed indices instead of
 unnecessarily requiring 64-bit indexing.
+The shader backend patches its SPIR-V bytes in memory before writing the
+finished artifact to a file or standard output.
 
 # Incremental Native Builds
 

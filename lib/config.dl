@@ -187,6 +187,7 @@ dynlex options:
         shader interpolant input unavailable: "Shader interpolant input '{name}' is only available in fragment shaders"
         shader interpolant output unavailable: "Shader interpolant output '{name}' is only available in vertex shaders"
         spirv output open failed: "Could not open SPIR-V output file: {error}"
+        spirv output write failed: "Could not write SPIR-V output file: {error}"
         spirv target cannot emit object file: "SPIR-V target cannot emit object file"
         spirv patch failed: "{error}"
         array literal element type mismatch: "Array literal elements must have matching or compatible numeric types"

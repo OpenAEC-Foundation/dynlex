@@ -1,15 +1,16 @@
 #include "spirv.h"
 #include "compilerUtils.h"
+#include "fileOutput.h"
 #include "parseContext.h"
 #include "shaderUniformType.h"
 #include "targetOptions.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/MC/TargetRegistry.h"
-#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
@@ -17,7 +18,6 @@
 #include "llvm/TargetParser/Triple.h"
 #include <algorithm>
 #include <cstring>
-#include <fstream>
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
@@ -257,23 +257,15 @@ struct ShaderIoVar {
 // Post-process SPIR-V binary to convert exported functions to shader entry points.
 // The LLVM SPIR-V backend emits functions with Export linkage instead of entry points.
 static bool patchShaderBinary(
-	const std::string &path, uint32_t executionModel, const std::vector<ShaderIoVar> &ioVars, const ParseContext &context,
-	std::string &errorMsg
+	std::string_view bytes, uint32_t executionModel, const std::vector<ShaderIoVar> &ioVars, const ParseContext &context,
+	std::vector<uint32_t> &output, std::string &errorMsg
 ) {
-	std::ifstream in(path, std::ios::binary | std::ios::ate);
-	if (!in) {
-		errorMsg = "Cannot open SPIR-V file for patching: " + path;
-		return false;
-	}
-	size_t fileSize = in.tellg();
-	if (fileSize % 4 != 0 || fileSize < 20) {
+	if (bytes.size() % sizeof(uint32_t) != 0 || bytes.size() < 5 * sizeof(uint32_t)) {
 		errorMsg = "Invalid SPIR-V file size";
 		return false;
 	}
-	in.seekg(0);
-	std::vector<uint32_t> binary(fileSize / 4);
-	in.read(reinterpret_cast<char *>(binary.data()), fileSize);
-	in.close();
+	std::vector<uint32_t> binary(bytes.size() / sizeof(uint32_t));
+	std::memcpy(binary.data(), bytes.data(), bytes.size());
 
 	if (binary[0] != 0x07230203) {
 		errorMsg = "Invalid SPIR-V magic number";
@@ -338,7 +330,6 @@ static bool patchShaderBinary(
 	}
 
 	// Build patched output
-	std::vector<uint32_t> output;
 	output.insert(output.end(), binary.begin(), binary.begin() + 5); // header
 
 	bool entryPointInserted = false;
@@ -633,13 +624,6 @@ static bool patchShaderBinary(
 	if (!newDecors.empty())
 		output.insert(output.begin() + decorInsertPos, newDecors.begin(), newDecors.end());
 
-	// Write patched binary
-	std::ofstream out(path, std::ios::binary | std::ios::trunc);
-	if (!out) {
-		errorMsg = "Cannot write patched SPIR-V file: " + path;
-		return false;
-	}
-	out.write(reinterpret_cast<const char *>(output.data()), output.size() * 4);
 	return true;
 }
 
@@ -710,15 +694,8 @@ bool emitSPIRVModule(ParseContext &context) {
 	defineShaderOutputVectorSeeds(*context.llvmModule);
 	lowerShaderAddressIndices(*context.llvmModule);
 
-	std::error_code ec;
-	llvm::raw_fd_ostream dest(outputPath, ec, llvm::sys::fs::OF_None);
-	if (ec) {
-		context.diagnostics.push_back(
-			Diagnostic(context, Diagnostic::Level::Error, "spirv output open failed", Range(), "error", ec.message())
-		);
-		return false;
-	}
-
+	llvm::SmallVector<char, 0> unpatched;
+	llvm::raw_svector_ostream dest(unpatched);
 	llvm::legacy::PassManager passManager;
 	if (targetMachine.addPassesToEmitFile(passManager, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
 		context.diagnostics.push_back(
@@ -728,8 +705,6 @@ bool emitSPIRVModule(ParseContext &context) {
 	}
 
 	passManager.run(*context.llvmModule);
-	dest.flush();
-	dest.close();
 
 	// Build I/O variable descriptors based on shader stage
 	bool isVertex = context.options.shaderStage == ParseContext::ShaderStage::Vertex;
@@ -803,12 +778,16 @@ bool emitSPIRVModule(ParseContext &context) {
 		variable.binding = resource.binding;
 		ioVars.push_back(std::move(variable));
 	}
-	if (!patchShaderBinary(outputPath, executionModel, ioVars, context, patchError)) {
+	std::vector<uint32_t> words;
+	if (!patchShaderBinary({unpatched.data(), unpatched.size()}, executionModel, ioVars, context, words, patchError)) {
 		context.diagnostics.push_back(
 			Diagnostic(context, Diagnostic::Level::Error, "spirv patch failed", Range(), "error", patchError)
 		);
 		return false;
 	}
 
-	return true;
+	return writeFileOutput(
+		context, outputPath, {reinterpret_cast<const char *>(words.data()), words.size() * sizeof(uint32_t)},
+		"spirv output open failed", "spirv output write failed"
+	);
 }

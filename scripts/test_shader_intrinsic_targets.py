@@ -426,6 +426,22 @@ def named_spirv_locations(path: Path) -> dict[str, int]:
     return named_spirv_decorations(path, DECORATION_LOCATION)
 
 
+def check_shader_standard_output(compiler, directory):
+    source = directory / "streamed-fragment.dl"
+    source.write_text(
+        '@intrinsic("store", shade, @intrinsic("shader uniform", "shade", 2, @intrinsic("type", "float", 32)))\n'
+        '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), shade, 0.0, 0.0, 1.0))\n'
+    )
+    output = directory / "fragment.spv"
+    for optimization in ("-O0", "-O2"):
+        command = [str(compiler), str(source), "--emit-spirv", "--shader-stage=fragment", optimization]
+        file = subprocess.run(command + ["-o", str(output)], cwd=directory, capture_output=True, check=True, timeout=15)
+        streamed = subprocess.run(command + ["-o", "-"], cwd=directory, capture_output=True, check=True, timeout=15)
+        assert streamed.stderr == file.stderr
+        assert streamed.stdout == output.read_bytes()
+        assert named_spirv_decorations(output, DECORATION_BINDING)["ubo_shade"] == 2
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: test_shader_intrinsic_targets.py <compiler>", file=sys.stderr)
@@ -439,6 +455,7 @@ def main() -> int:
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="dynlex-shader-targets-") as temporary_directory:
         temporary_path = Path(temporary_directory)
+        check_shader_standard_output(compiler, temporary_path)
 
         for target_name, target_arguments in TARGETS_WITHOUT_SHADERS:
             for intrinsic_name, (source, _shader_stage) in SHADER_INTRINSICS.items():
