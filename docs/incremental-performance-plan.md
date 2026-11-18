@@ -96,6 +96,13 @@ same fixed120-observation editor and88-observation native matrices once on the
 corrected image, then require every full gate. Do not change diagnostic expectations.
 The full objective remains active/incomplete.
 
+Use the sole qualification extension, ending04:39:53 UTC, for the corrected
+boundary and its full gates. No further optimization enters this window. Corrected
+imagef35682d9 is frozen; each measured main-body edit skips20974 nested trials
+with unchanged matcher/parser work and payloads. Complete its independent fixed
+matrices, required/integration, actual web and shared-root gates before retention
+or publication. The initial194ccf13 result remains unqualified.
+
 ## Completed iteration: I106 shared editor syntax products
 
 Started18 November at01:45 UTC; first deadline02:30 UTC. Previous turn is
