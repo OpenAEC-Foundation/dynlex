@@ -14,6 +14,8 @@ changes end to end rather than adding overlapping stage savings.
 
 Native eaaf1cc6 passes all 391 required checks in 63.588 seconds after the compiler build. Native LSP, focused grouping and source checks, rebuilt browser host LSP, and all 487 integration checks pass. This snapshot includes fixed grouping, physical source-line proofs, early diagnostic replay and native object output. The overall goal remains active.
 
+The shared-root compiler 71c9192f passes all 391 required checks in 65.419 seconds, native LSP and the focused grouping checks. Production source and browser artifacts match the qualified worktree.
+
 ## Iteration I118: replay source-loading and preprocessing diagnostics
 
 Unchanged early failures and message-only edits now validate source and
