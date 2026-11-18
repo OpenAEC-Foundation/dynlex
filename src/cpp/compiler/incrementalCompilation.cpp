@@ -185,24 +185,6 @@ void writeEntry(const fs::path &path, std::string_view payload) {
 #include "incrementalSourcePreparation.inl"
 #include "incrementalSourceTransforms.inl"
 
-void recordSemanticSources(Json &result, RecordingFileSystem &files, const ParseContext &context) {
-	result["comment_prefixes"] =
-		Json{{"builtin", context.builtinSyntax.commentPrefix}, {"project", context.projectSyntax.commentPrefix}};
-	result["configuration_files"] = files.configurationObservations;
-	result["syntax_structure"] =
-		Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity});
-	for (auto &[path, observation] : result["files"].items()) {
-		if (observation.is_null() || fs::path(path).extension() != ".dl")
-			continue;
-		lsp::SourceFile *file = files.cachedFile(path);
-		if (!file)
-			throw std::runtime_error("recorded source disappeared: " + path);
-		const std::string &prefix =
-			file->isInternal ? context.builtinSyntax.commentPrefix : context.projectSyntax.commentPrefix;
-		observation["semantic"] = semanticSourceDigest(*file, prefix);
-	}
-}
-
 bool containsNestedDefinition(const Section &section) {
 	for (const Section *child : section.children) {
 		if (!child->patternDefinitions.empty() || containsNestedDefinition(*child))
@@ -915,17 +897,12 @@ bool compileIncrementally(
 			} else if (context.compilationStage >= ParseContext::CompilationStage::ImportedFiles &&
 					   !context.diagnostics.empty()) {
 				auto failureWriteStart = Clock::now();
-				std::string diagnostics;
-				std::set<std::string> diagnosticSources;
-				Json records = captureCachedDiagnostics(context, diagnostics, diagnosticSources);
 				Json savedBindings = bindings.snapshot();
-				Json result{{"files", recording->observations},
-							{"diagnostics", diagnostics},
-							{"diagnostic_records", std::move(records)},
-							{"diagnostic_sources", std::move(diagnosticSources)},
-							{"binding_units", std::move(savedBindings)},
-							{"matcher_key", saveMatcher(IncrementalMatcherCache::SnapshotScope::Partial)}};
-				recordSemanticSources(result, *recording, context);
+				Json result{
+					{"binding_units", std::move(savedBindings)},
+					{"matcher_key", saveMatcher(IncrementalMatcherCache::SnapshotScope::Partial)}
+				};
+				recordFailureDiagnostics(result, *recording, context);
 				result["validation_units"] = validation.snapshot();
 				if (constraintState.is_null() && previousFailure)
 					constraintState = previousFailure->at("constraint_state");
@@ -946,6 +923,24 @@ bool compileIncrementally(
 				} else if (priorInference)
 					state = inferenceStateManifest(directory, *priorInference);
 				result["inference_state"] = std::move(state);
+				writeEntry(failedEntry, result.dump());
+				statistics.cacheWriteMilliseconds += elapsedMilliseconds(failureWriteStart);
+			} else if (!context.diagnostics.empty() && !recording->observations.empty()) {
+				// Source observations begin after valid configuration. Keep
+				// previous semantic products through this early failure.
+				auto failureWriteStart = Clock::now();
+				Json result = previousFailure ? std::move(*previousFailure)
+											  : Json{
+													{"binding_units", Json::object()},
+													{"validation_units", Json::object()},
+													{"matcher_key", ""},
+													{"constraint_state", nullptr},
+													{"inference_state", nullptr}
+												};
+				if (Json &constraints = result.at("constraint_state"); !constraints.is_null())
+					for (const char *field : constraintStateFields)
+						constraints.erase(field);
+				recordFailureDiagnostics(result, *recording, context);
 				writeEntry(failedEntry, result.dump());
 				statistics.cacheWriteMilliseconds += elapsedMilliseconds(failureWriteStart);
 			}

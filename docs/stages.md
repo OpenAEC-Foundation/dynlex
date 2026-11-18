@@ -1349,10 +1349,12 @@ inference must run again. Missing optimized objects load only their own optimize
 number of payloads read on a build.
 An evicted manifest payload invalidates the program entry. Evicting an individual
 optimized unit or object only affects builds that need that artifact.
-Failed builds that reached section analysis or later store diagnostic records and
-failed pattern lookups separately from the last successful native result. An
-unchanged source or message-only configuration edit replays the errors without
-rerunning the frontend. A later code edit reuses a failed lookup only while its
+Failed builds store diagnostic records and failed lookups separately from the
+last successful native result. A failure during file loading or preprocessing
+records the observed files, including missing import candidates, and retains
+previously completed semantic products. An unchanged source or message-only
+configuration edit replays the errors without rerunning the frontend. A later
+code edit reuses a failed lookup only while its
 source and candidate pattern tree are equivalent; a successful build retires the
 failed snapshot.
 Concrete inference results have a semantic snapshot independent of successful native

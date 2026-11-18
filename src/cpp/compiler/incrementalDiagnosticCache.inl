@@ -192,3 +192,31 @@ std::optional<std::string> renderCachedDiagnostics(
 	}
 	return rendered;
 }
+
+void recordSemanticSources(Json &result, RecordingFileSystem &files, const ParseContext &context) {
+	result["comment_prefixes"] =
+		Json{{"builtin", context.builtinSyntax.commentPrefix}, {"project", context.projectSyntax.commentPrefix}};
+	result["configuration_files"] = files.configurationObservations;
+	result["syntax_structure"] =
+		Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity});
+	for (auto &[path, observation] : result["files"].items()) {
+		if (observation.is_null() || fs::path(path).extension() != ".dl")
+			continue;
+		lsp::SourceFile *file = files.cachedFile(path);
+		if (!file)
+			throw std::runtime_error("recorded source disappeared: " + path);
+		const std::string &prefix =
+			file->isInternal ? context.builtinSyntax.commentPrefix : context.projectSyntax.commentPrefix;
+		observation["semantic"] = semanticSourceDigest(*file, prefix);
+	}
+}
+
+void recordFailureDiagnostics(Json &result, RecordingFileSystem &files, const ParseContext &context) {
+	std::string diagnostics;
+	std::set<std::string> sources;
+	result["files"] = files.observations;
+	result["diagnostic_records"] = captureCachedDiagnostics(context, diagnostics, sources);
+	result["diagnostics"] = std::move(diagnostics);
+	result["diagnostic_sources"] = std::move(sources);
+	recordSemanticSources(result, files, context);
+}
