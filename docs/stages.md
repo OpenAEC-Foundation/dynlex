@@ -751,6 +751,13 @@ The grouping candidate generator also has a non-inlined entry point. This keeps
 coroutine allocation elision from placing its suspended enumeration state in
 the recursive inference stack.
 
+Inside an active grouping trial, an expression with at most one grouping-capable
+node has no alternative operand grouping. It uses that fixed structure and the
+parent trial's rollback journal directly, while still inferring current types,
+overloads, effects and diagnostics. This skips candidate generation and a nested
+transaction; it does not reuse a prior typed result. Native incremental statistics
+and editor traces expose the actual count as `unique_grouping_trials_skipped`.
+
 Unary arithmetic intrinsics require numeric scalar or vector values. Classes, pointers, arrays, matrices, booleans, and type values are rejected during inference, before code generation. Floating-point vector negation uses the element type to select floating-point instructions.
 
 ## Operand Reordering

@@ -186,6 +186,7 @@ struct ParseContext {
 		reuseInferredInstantiation;
 	std::function<bool(Section *, Instantiation &, InferenceContext *)> restoreInferredBody;
 	size_t functionBodyInferencePasses = 0;
+	size_t uniqueGroupingTrialsSkipped = 0;
 	size_t inferenceFailuresReused = 0;
 	size_t sourceBodyClones = 0;
 	size_t sourceFunctionBodyClones = 0;

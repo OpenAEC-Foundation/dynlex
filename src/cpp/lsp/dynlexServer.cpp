@@ -345,6 +345,7 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 	const auto prior = analysisResults.find(uri);
 	size_t reused = 0;
 	size_t matcherComputations = 0, matcherHits = 0, matcherBytes = 0;
+	size_t uniqueGroupingTrialsSkipped = 0;
 	ParsedSyntaxResult syntax;
 	for (size_t index = 0; index < analysisProfiles.size(); index++) {
 		const LspAnalysisResult *previous =
@@ -359,6 +360,8 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 		syntax.definitionsReused += result.syntax.definitionsReused;
 		syntax.temporaryReused += result.syntax.temporaryReused;
 		syntax.bytes += result.syntax.bytes;
+		if (!result.reused)
+			uniqueGroupingTrialsSkipped += result.context->uniqueGroupingTrialsSkipped;
 		contexts.push_back(result.context);
 		results.push_back(std::move(result));
 	}
@@ -382,7 +385,8 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 													  {"syntax_expression_parses", syntax.expressionsParsed},
 													  {"syntax_definitions_reused", syntax.definitionsReused},
 													  {"syntax_temporary_reused", syntax.temporaryReused},
-													  {"syntax_bytes", syntax.bytes}
+													  {"syntax_bytes", syntax.bytes},
+													  {"unique_grouping_trials_skipped", uniqueGroupingTrialsSkipped}
 												  }.dump()}
 			}
 		);

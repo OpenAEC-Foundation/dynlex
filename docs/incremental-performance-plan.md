@@ -10,6 +10,71 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## Active iteration: I107 current-source inference facts
+
+Started18 November at03:09:53 UTC; first deadline03:54:53 UTC. Previous turn is
+progress: I106 is qualified, pushed as4f55e68e, and its merged worktree disposed
+while retaining verified build artifacts and one baseline. Work from the ordinary
+editor inference stage, about0.96 CPU s on real Breakout edits. Reuse semantic
+query results only with current source grouping, type/value, class, dependency and
+diagnostic facts intact. Prefer sharing existing compiler query products; avoid
+I102's rejected runtime-body serialization path and retaining whole old contexts.
+Begin with a minimal red work/parity regression, complete one producer/consumer
+boundary, then compare fixed real-program edit/cold CPU, peak memory, retained
+bytes and code together. Keep a small clear combined win promptly; prioritize
+substantial avoided inference rather than another parser micro-optimization.
+Park a stalled boundary instead of extending research indefinitely. One45-minute
+extension is available only for concrete implementation progress. Required
+uncached<=120 s, affected integration, full LSP and actual web behavior remain
+gates. The complete cross-process all-stage goal stays active/incomplete.
+
+At03:15 UTC complete the source-fact consumer audit without adding another
+serialized inference engine. Return summaries omit source grouping/value facts;
+sharing the full native controller also constructs source projections and class
+restoration before query reuse. Move this bounded iteration to a structural
+inference producer: an expression with at most one grouping-capable node has no
+alternative operand grouping. Inside an existing grouping trial, infer that
+unique grouping directly under its parent's rollback rather than opening another
+transaction. Current types, overloads, diagnostics and callee groupings still run.
+No cached typed result or syntax spelling decides validity. Add a minimal no-import,
+two-profile work/parity regression before the implementation; it is red because
+the qualified baseline performs no such direct unique-grouping inferences.
+Measure real edit/cold CPU and RSS before retention. This reduces required current
+inference work; it does not claim cross-edit typed-query reuse or complete the goal.
+
+I107 candidate194ccf13 freezes457 compiler/build inputs. The new minimal
+regression, complete LSP suite and nested/associative/precedence runtime checks
+pass. The first error fixture mistakenly used integer-plus-string, which is
+valid byte-pointer arithmetic on both images. Multiplication is invalid; both
+images report identical errors and inference notes. Correct the fixture from
+that verified language behavior, without changing compiler expectations. A
+separate controller invocation used the wrong argument shape for two helpers;
+correct those arguments and resume only the remaining checks. No benchmark had
+run before those corrections.
+
+The fixed primary comparison uses POSIX nanosecond process CPU clocks on the
+real45-file Breakout program:120 observations, three independent paired sessions
+per case and three edits per session. Complete tokens/diagnostics match. Body,
+imported lives, imported VM statement and moved-comment edit medians are
+1.58016->1.48931,1.58904->1.48066,1.57550->1.48879 and1.58316->1.47969 CPU s.
+The twelve independent session-total ratios have median0.932516 and interval
+[0.927536,0.936529]. Every main-body edit skips14447 nested trials while parser
+and matcher counts/payloads remain unchanged. Fifteen paired cold editor opens
+have CPU medians3.58966->3.49530 s, ratio0.970742 [0.958455,0.976144].
+Measured edit peak-RSS medians are1.5-3.0% lower; this is not a universal memory
+claim. The implementation adds16 net production lines,12696 native-binary bytes
+and no persistent or in-memory cache payload. Keep the favorable combined result.
+
+The original88-observation native control matrix is complete with byte-identical
+executables/diagnostics. Five active-body pairs have CPU medians1.06496->1.05449 s,
+ratio0.993970 [0.936317,1.012414]: no established native-edit gain. Three cold
+pairs observe4.61420->4.49324 s, ratio0.973459 [0.963666,0.976133]. Comment and
+wording paths remain around26 and30 ms; no algorithmic fast-path gain is claimed.
+Complete required uncached<=120 s, affected integration, actual web and shared-root
+qualification before publication. Ordinary editor inference still runs; this
+iteration eliminates redundant nested grouping work rather than restoring typed
+queries across edits. The complete all-stage objective remains active/incomplete.
+
 ## Completed iteration: I106 shared editor syntax products
 
 Started18 November at01:45 UTC; first deadline02:30 UTC. Previous turn is

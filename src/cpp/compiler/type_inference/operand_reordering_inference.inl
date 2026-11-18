@@ -115,6 +115,16 @@ static bool inferExpression(
 		if (context.resolvedGroupingRoots)
 			context.resolvedGroupingRoots->insert(selectedFixedGroupingRoots.begin(), selectedFixedGroupingRoots.end());
 	};
+	// One grouping-capable node cannot exchange operands with another node.
+	// Its enclosing trial already owns rollback, so no nested trial is needed.
+	if (!alreadyOrdered && context.trial && context.groupingTrialJournal &&
+		std::ranges::count_if(initialGrouping.nodes, [](const auto &node) {
+		return expressionHasGroupingShape(node.first);
+	}) <= 1) {
+		resetExpressionTypes(expr);
+		alreadyOrdered = true;
+		context.parseContext.uniqueGroupingTrialsSkipped++;
+	}
 	if (alreadyOrdered) {
 		// A committed line or cloned header preserves its entire snapshot,
 		// independently of the roots fixed by an enclosing caller's trial.

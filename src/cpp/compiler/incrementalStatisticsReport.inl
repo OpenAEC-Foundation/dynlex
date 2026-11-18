@@ -80,6 +80,7 @@ template <typename Statistics> void emitIncrementalStatistics(const ParseContext
 					  {"inference_products_restored_current_build", statistics.restoredCurrentInferenceProducts},
 					  {"pure_value_summary_hits", context.pureValueSummaryHits},
 					  {"function_body_inference_passes", context.functionBodyInferencePasses},
+					  {"unique_grouping_trials_skipped", context.uniqueGroupingTrialsSkipped},
 					  {"inference_failures_reused", context.inferenceFailuresReused},
 					  {"source_body_clones", context.sourceBodyClones},
 					  {"body_syntax_units_parsed", statistics.bodySyntaxUnitsParsed},
