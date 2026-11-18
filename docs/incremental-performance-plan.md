@@ -10,7 +10,7 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Active iteration: I106 source inference products
+## Completed iteration: I106 shared editor syntax products
 
 Started18 November at01:45 UTC; first deadline02:30 UTC. Previous turn is
 progress: I105's full real-program comparison rejected an unhelpful matcher
@@ -81,6 +81,29 @@ has identical allocated ELF sections, addresses and sizes to the benchmarked
 and program data are unchanged; retain the original native gates and measurements
 with this explicit provenance. Actual full web and shared-root gates remain
 required before publication. No native cold algorithmic speedup is claimed.
+
+I106 closes18 November before its03:15 UTC extension deadline. Actual web build
+and host editor parity pass with WASM435eaf9e. Local master is rebuilt from the
+same457 frozen source/build inputs: all334 required checks pass uncached in
+95.657 s, followed by all eight focused editor regressions. Root native image is
+e3e4dfb8; owner is d1230f74, with its explicit82ea576d benchmark/gate code-data
+equivalence proof. The implementation adds151 net production lines and1,021,232
+bytes to the debug-enabled native binary; its measured per-profile syntax payload
+is892,763 bytes. It adds no persistent cache or user configuration. Keep this
+small positive shared-parser boundary under the combined tradeoff policy. Do not
+claim native cold speedup or incremental editor inference. The original complete
+native control matrix remains unchanged; body/comment/wording comparisons include
+parity, and three cold pairs alone do not establish an algorithmic cold gain.
+
+Next priority is the ordinary editor inference stage, about0.96 CPU s per edit.
+Complete a compact producer/consumer boundary for current-source inference facts,
+including grouping, types/values and diagnostics, with real dependency invalidation.
+Reuse the native query semantics without repeating I102's rejected runtime-body
+serialization engine. The full all-stage, cross-process source/config goal stays
+active/incomplete. Evidence is i106-{frozen-inputs,benchmark-inputs,validation,
+web-qualification,root-validation,native-controls,tradeoff-ledger}.json,
+i106-lsp-{paired,precision}/results.json, i106-precision-session-analysis.json
+and i106-length-portability/{native-equivalence,reader-tests}.json.
 
 ## Closed iteration: I105 rejected adaptive signature intersection
 
