@@ -361,7 +361,7 @@ def check_program_payloads(root, build):
     manifest = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
     assert set(manifest["payload_keys"]) == {
         "all_function_projection", "section_dependency_graph", "inference_summaries", "generated_ir", "native_units",
-        "optimization_units", "validation_units", "debug_ir_inputs"
+        "optimization_units", "validation_units", "debug_ir_inputs", "root_grouping"
     }
     assert all(field not in manifest for field in manifest["payload_keys"])
     summary_blob = directory / f"payload-{manifest['payload_keys']['inference_summaries']}.entry"
@@ -383,7 +383,7 @@ def check_program_payloads(root, build):
     assert commented[1:] == build(False, entry=main)[1:]
     main.write_text("# comment\n" + source.replace('"first"', '"second"'))
     edited = build(entry=main)
-    assert edited[0]["cache_payloads_loaded"] == 6
+    assert edited[0]["cache_payloads_loaded"] == 7
     assert edited[1:] == build(False, entry=main)[1:]
     edited_program = read_program(root / "cache", main)
     units = edited_program["section_dependency_graph"]["inference_units"]

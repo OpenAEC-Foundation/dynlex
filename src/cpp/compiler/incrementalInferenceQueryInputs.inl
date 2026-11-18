@@ -74,7 +74,9 @@ bool currentGroupingMatchesNative(const Section *section, const std::string &key
 			continue;
 		const Json *summary = summaryStore.load(saved);
 		return summary &&
-			   sameGroupingOutputs(encodeGroupingProduct(instance.groupingProduct, sourceIndex), summary->at("grouping"));
+			   sameGroupingLayouts(
+				   encodeGroupingLayouts(instance.groupingProduct, sourceIndex), summary->at("grouping").at("groupings")
+			   );
 	}
 	return true;
 }
@@ -98,7 +100,8 @@ bool nativeInputsUnchanged(const Section *section, const std::string &key) {
 			return false;
 		if (current->at("payload") != saved.at("payload")) {
 			const Json *facts = summaryStore.load(*current), *nativeFacts = summaryStore.load(saved);
-			if (!facts || !nativeFacts || !sameGroupingOutputs(facts->at("grouping"), nativeFacts->at("grouping")))
+			if (!facts || !nativeFacts ||
+				!sameGroupingLayouts(facts->at("grouping").at("groupings"), nativeFacts->at("grouping").at("groupings")))
 				return false;
 		}
 	}

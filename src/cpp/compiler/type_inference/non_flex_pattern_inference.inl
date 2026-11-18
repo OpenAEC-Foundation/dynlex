@@ -67,13 +67,20 @@
 	}
 	std::vector<CompileTimeValue> argumentValues =
 		knownCallArguments ? compileTimeArgumentValueVector(knownValues) : std::vector<CompileTimeValue>{};
-	if (!inst.returnType.isDeduced() && context.parseContext.reuseInferredInstantiation) {
+	bool unavailable = context.parseContext.inferenceProducts && !inst.inferring &&
+					   !inferenceInstanceAvailable(context.parseContext, inst.storageScope, &context);
+	if ((!inst.returnType.isDeduced() || (inst.inferenceReusedFromCache && unavailable)) &&
+		context.parseContext.reuseInferredInstantiation) {
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
-		context.parseContext.reuseInferredInstantiation(
+		bool prepared = context.parseContext.reuseInferredInstantiation(
 			matchedSection, instantiationKey, inst,
 			knownCallArguments ? ParseContext::InferenceReuseUse::ConstantCall : ParseContext::InferenceReuseUse::RuntimeCall,
 			&context, knownCallArguments ? &argumentValues : nullptr
 		);
+		if (!prepared && unavailable) {
+			inst.failure.reset();
+			inst.needsReinfer = true;
+		}
 	} else if (inst.inferenceReusedFromCache && !knownCallArguments && !inst.needsReinfer &&
 			   !inst.pureReturnValuesByArguments.empty() && context.parseContext.reuseInferredInstantiation) {
 		bool prepared = context.parseContext.reuseInferredInstantiation(
@@ -81,7 +88,12 @@
 		);
 		requireCompilerInvariant(prepared, "cached pure observations changed before runtime use");
 	}
+	if (context.parseContext.inferenceProducts && inst.valid && inst.returnType.isDeduced() && !inst.inferring &&
+		!supportsGroupingQuery(inst, &context))
+		inst.needsReinfer = true;
 	if (inst.failure) {
+		if (context.parseContext.inferenceProducts && !inst.groupingProduct->providedInstances.empty())
+			recordInferenceInstance(context, inst.storageScope, false);
 		replayInferenceFailure(context, *inst.failure);
 		return true;
 	}
@@ -94,7 +106,9 @@
 			inst.needsReinfer = true;
 	}
 	std::optional<InstantiationKey> refinedInstantiationKey;
-	bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer;
+	bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer &&
+									(!context.parseContext.inferenceProducts ||
+									 inferenceInstanceAvailable(context.parseContext, inst.storageScope, &context));
 	if (!inst.inferring && hasReusableInstantiation) {
 		observeGroupingResult(inst, context);
 		publishDeferredInferenceDiagnostics(context, inst);
@@ -213,7 +227,8 @@
 		observeUnresolvedRecursiveDependency(context);
 	}
 	if (!inst.valid) {
-		noteInferenceProduct(inst, context);
+		if (!inst.inferring)
+			noteInferenceProduct(inst, context);
 		context.typesValid = false;
 		return true;
 	}
@@ -278,6 +293,7 @@
 		context.parseContext.refineInstantiationStorageScope(matchedSection, instantiationKey, *refinedInstantiationKey);
 	}
 	context.setExpressionValue(expr, context.lookupExpressionValue(expr));
-	noteInferenceProduct(inst, context);
+	if (!inst.inferring)
+		noteInferenceProduct(inst, context);
 	return true;
 }

@@ -534,6 +534,10 @@ static void commitTrialCodeLineGroupings(InferenceContext &context) {
 		line->groupingAmbiguityChecked = line->groupingAmbiguityChecked || trialGrouping.ambiguityChecked;
 	}
 	context.trialCodeLineGroupings.clear();
+	context.parseContext.availableInferenceInstances.insert(
+		context.trialAvailableInferenceInstances.begin(), context.trialAvailableInferenceInstances.end()
+	);
+	context.trialAvailableInferenceInstances.clear();
 }
 
 static int countMatchedParameters(Expression *expression, PatternDefinition *definition) {

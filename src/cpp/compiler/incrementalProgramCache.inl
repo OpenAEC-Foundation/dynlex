@@ -1,8 +1,8 @@
 #include "incrementalInferenceSummaryCodec.inl"
 
-constexpr std::array<const char *, 8> programPayloadFields{
+constexpr std::array<const char *, 9> programPayloadFields{
 	"all_function_projection", "section_dependency_graph", "inference_summaries", "generated_ir", "native_units",
-	"optimization_units",	   "validation_units",		   "debug_ir_inputs"
+	"optimization_units",	   "validation_units",		   "debug_ir_inputs",	  "root_grouping"
 };
 
 bool isModulePayload(std::string_view field) { return field == "generated_ir"; }

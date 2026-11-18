@@ -92,6 +92,9 @@ Json captureSectionInferenceSummary(
 	for (const auto &[key, instantiation] : section->instantiations) {
 		if (!canPersistInferenceSummary(section, key, instantiation, identities))
 			continue;
+		Json grouping = encodeGroupingProduct(instantiation.groupingProduct, sourceIndex);
+		if (grouping.is_null())
+			continue;
 		auto encodedKey = encodeInferenceKey(key, identities);
 		if (!encodedKey)
 			continue;
@@ -105,7 +108,8 @@ Json captureSectionInferenceSummary(
 			Json record = std::move(*encodedKey);
 			record["invocation"] = encodeInferenceInvocation(*section, instantiation, globals.declaration(*section));
 			record["global_inputs"] = std::move(*globalInputs);
-			record["grouping"] = encodeGroupingProduct(instantiation.groupingProduct, sourceIndex);
+			record["grouping"] = std::move(grouping);
+			record["grouping_checked"] = instantiation.groupingAmbiguityRequested;
 			summaries[identity] = std::move(record);
 			if (capturedInstances)
 				(*capturedInstances)[identity] = &instantiation;
@@ -130,7 +134,8 @@ Json captureSectionInferenceSummary(
 			instantiation.pureReturnValuesComplete && pureValues.size() == instantiation.pureReturnValuesByArguments.size();
 		Json record = std::move(*encodedKey);
 		record["invocation"] = encodeInferenceInvocation(*section, instantiation, globals.declaration(*section));
-		record["grouping"] = encodeGroupingProduct(instantiation.groupingProduct, sourceIndex);
+		record["grouping"] = std::move(grouping);
+		record["grouping_checked"] = instantiation.groupingAmbiguityRequested;
 		record.update(
 			Json{
 				{"failure", nullptr},
@@ -319,7 +324,9 @@ class IncrementalInferenceReuse {
 		const Json *current = reference(unit);
 		if (!current)
 			return false;
-		if (instantiation.inferenceReusedFromCache && instantiation.inferenceProductIdentity == productIdentity(unit)) {
+		if (instantiation.inferenceReusedFromCache && instantiation.inferenceProductIdentity == productIdentity(unit) &&
+			(use == ParseContext::InferenceReuseUse::SymbolicReference ||
+			 inferenceInstanceAvailable(context, instantiation.storageScope, caller))) {
 			if (instantiation.failure)
 				return true;
 			auto unit = std::pair{static_cast<const Section *>(section), *keyText};
@@ -334,14 +341,18 @@ class IncrementalInferenceReuse {
 				loadBody(section, key, instantiation, caller);
 			return true;
 		}
+		bool execute = use != ParseContext::InferenceReuseUse::SymbolicReference &&
+					   !inferenceInstanceAvailable(context, context.storageScopeForInstantiation(section, key), caller);
 		{
-			Restoration transaction(*this, caller, use != ParseContext::InferenceReuseUse::SymbolicReference);
+			Restoration transaction(*this, caller, execute);
 			if (!transaction.prepare(section, key, instantiation, use, values) || !transaction.finish())
 				return false;
 		}
 		if (instantiation.needsReinfer)
 			loadBody(section, key, instantiation, caller);
-		if (!instantiation.needsReinfer && use != ParseContext::InferenceReuseUse::SymbolicReference)
+		if (!instantiation.needsReinfer && instantiation.groupingProduct->providedInstances.empty())
+			context.availableInferenceInstances.insert(instantiation.storageScope);
+		if (!instantiation.needsReinfer && execute)
 			requireCompilerInvariant(
 				applyGroupingProduct(context, instantiation.groupingProduct, caller),
 				"inference preparation changed grouping inputs"

@@ -42,6 +42,7 @@ class Restoration {
 		entry.identity = *identity;
 		const Json &summary = *saved;
 		entry.facts.groupingProduct = decodeGroupingProduct(summary.at("grouping"), owner.sourceIndex);
+		entry.facts.groupingAmbiguityRequested = summary.at("grouping_checked").get<bool>();
 		if (!types(summary, *reference))
 			return false;
 		if (!owner.globalInputClosureUnchanged(path, *identity))
@@ -192,7 +193,8 @@ class Restoration {
 				return false;
 		}
 		for (auto &[slot, entry] : entries) {
-			if (slot == requested && !validateGroupingProduct(entry.facts.groupingProduct, caller))
+			if (slot == requested && (!supportsGroupingQuery(entry.facts, caller) ||
+									  !validateGroupingProduct(owner.context, entry.facts.groupingProduct, caller)))
 				return false;
 		}
 		for (auto &[slot, entry] : entries) {

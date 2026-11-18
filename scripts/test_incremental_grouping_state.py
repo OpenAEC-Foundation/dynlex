@@ -1,7 +1,17 @@
 """Cached inference observes and publishes shared source operand grouping."""
 
+import json
+from pathlib import Path
+from cache_payloads import read_payload
+
 
 def check_grouping_state(root, build):
+    check_recursive_publication(root, build)
+    check_completed_negative_observation(root, build)
+    check_available_facts(root, build)
+    check_completed_callee_materialization(root, build)
+    check_exposed_grouping(root, build)
+    check_conversion_grouping(root, build)
     check_failed_grouping_candidate(root, build)
     main = root / "grouping_interface.dl"
     interface = '''to get identity {value}:
@@ -186,3 +196,177 @@ to get chosen {value}:
     changed = build(entry=main)
     assert changed[1:] == build(False, entry=main)[1:]
     assert changed[2] == b"1\n"
+
+
+def check_recursive_publication(root, build):
+    main = root / "recursive_publication.dl"
+    source = '''flex section if condition:
+    replacement: @intrinsic("if", condition)
+to get recursive {value}:
+    if @intrinsic("less than", value, 1):
+        @intrinsic("return", value)
+    @intrinsic("return", recursive @intrinsic("subtract", value, 1))
+@intrinsic("discard", recursive @intrinsic("command line argument count"))
+'''
+    for edited in (source, source.replace('"subtract", value, 1', '"subtract", value, 2')):
+        main.write_text(edited)
+        assert build(entry=main)[1:] == build(False, entry=main)[1:]
+
+
+def check_completed_negative_observation(root, build):
+    main = root / "completed_negative_observation.dl"
+    source = '''integer means: @intrinsic("type", "int", 32)
+real means: @intrinsic("type", "float", 64)
+to get doubled {integer:value}:
+    @intrinsic("return", @intrinsic("add", value, value))
+to get generic {value}:
+    @intrinsic("return", doubled doubled value)
+to get query {real:value}:
+    @intrinsic("discard", value)
+    @intrinsic("return", generic "bad")
+to get query {integer:value}:
+    @intrinsic("return", value)
+to get {real:value} converted:
+    @intrinsic("return", @intrinsic("cast", value, integer))
+to get {integer:value} converted:
+    @intrinsic("return", @intrinsic("less than", value, 0))
+to get chosen {value}:
+    @intrinsic("return", query value converted)
+@intrinsic("discard", chosen 1.0)
+@intrinsic("discard", generic 1)
+@intrinsic("discard", chosen 1.0)
+'''
+    for edited in (source, source + '@intrinsic("discard", chosen 2.0)\n',
+                   source.replace('@intrinsic("discard", generic 1)\n', '')):
+        main.write_text(edited)
+        assert build(entry=main)[1:] == build(False, entry=main)[1:]
+
+
+def check_available_facts(root, build):
+    main = root / "available_facts.dl"
+    source = '''integer means: @intrinsic("type", "int", 32)
+real means: @intrinsic("type", "float", 64)
+boolean means: @intrinsic("type", "bool")
+class box:
+    members:
+        number as integer
+to get wrapped {integer:value}:
+    @intrinsic("return", @intrinsic("less than", value, 0))
+to get wrapped {real:value}:
+    @intrinsic("discard", value)
+    @intrinsic("return", 0)
+to get {integer:value} flipped:
+    @intrinsic("discard", value)
+    @intrinsic("return", 1.0)
+to get {real:value} flipped:
+    @intrinsic("discard", value)
+    @intrinsic("return", 1)
+to get generic {value}:
+    @intrinsic("return", wrapped value flipped)
+implicitly convert {box:value}:
+    execute:
+        @intrinsic("discard", value)
+        @intrinsic("return", generic 1.0)
+implicitly convert {box:value}:
+    execute:
+        @intrinsic("discard", value)
+        @intrinsic("return", @intrinsic("equal", 0, 1))
+to get accepts {boolean:value}:
+    @intrinsic("return", value)
+to get selected {value}:
+    @intrinsic("return", accepts value)
+@intrinsic("discard", selected @intrinsic("construct", box, 1))
+@intrinsic("discard", generic 1)
+'''
+    main.write_text(source)
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]
+    main.write_text(source + '''exposed function external entry {integer:value}:
+    execute:
+        @intrinsic("discard", selected @intrinsic("construct", box, value))
+''')
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]
+
+
+def check_completed_callee_materialization(root, build):
+    main = root / "completed_callee_materialization.dl"
+    source = '''to get identity {value}:
+    @intrinsic("return", value)
+to get nested {value}:
+    @intrinsic("return", identity identity value)
+to get caller {value}:
+    @intrinsic("return", nested value)
+@intrinsic("discard", caller @intrinsic("command line argument count"))
+'''
+    main.write_text(source)
+    initial = build(entry=main)
+    assert initial[1:] == build(False, entry=main)[1:]
+    main.write_text(source + '@intrinsic("discard", nested @intrinsic("command line argument count"))\n')
+    edited = build(entry=main)
+    assert edited[1:] == build(False, entry=main)[1:]
+    assert edited[0]["function_body_inference_passes"] == 0, \
+        "materializing a completed callee repeated its first-execution grouping checks"
+
+
+def check_exposed_grouping(root, build):
+    main = root / "exposed_grouping.dl"
+    main.write_text('''integer means: @intrinsic("type", "int", 32)
+to get identity {value}:
+    @intrinsic("return", value)
+exposed function entry {integer:value}:
+    execute:
+        @intrinsic("discard", identity identity value)
+''')
+    initial = build(entry=main)
+    assert initial[1:] == build(False, entry=main)[1:]
+    states = published_grouping_states(initial)
+    assert states and all(state[2] for state in states), "completed exposed grouping was stored as unchecked"
+
+
+def published_grouping_states(result):
+    manifest = json.loads(Path(result[0]["cache_entry"]).read_bytes().split(b"\n", 2)[2])
+    directory = Path(result[0]["cache_entry"]).parent
+    references = read_payload(directory / ("payload-" + manifest["payload_keys"]["inference_summaries"] + ".entry"))
+    states = []
+    for variants in references.values():
+        for reference in variants.values():
+            record = json.loads((directory / ("inference-summary-" + reference["payload"] + ".entry"))
+                                .read_bytes().split(b"\n", 2)[2])["summary"]
+            states.extend(transition[1] for transition in record["grouping"]["groupings"].values() if transition[1] is not None)
+    return states
+
+
+def check_conversion_grouping(root, build):
+    main = root / "conversion_grouping.dl"
+    main.write_text('''integer means: @intrinsic("type", "int", 32)
+class box:
+    members:
+        number as integer
+class target:
+    members:
+        number as integer
+to get wrapped {integer:value}:
+    @intrinsic("return", @intrinsic("add", value, 10))
+to get {integer:value} flipped:
+    @intrinsic("return", @intrinsic("multiply", value, 2))
+implicitly convert {integer:value}:
+    execute:
+        @intrinsic("return", @intrinsic("construct", box, wrapped value flipped))
+implicitly convert {integer:value}:
+    execute:
+        @intrinsic("return", @intrinsic("construct", target, value))
+to take {target:value}:
+    @intrinsic("discard", value)
+to take box {box:value}:
+    @intrinsic("discard", value)
+take 1
+''')
+    initial = build(entry=main)
+    assert initial[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text() + "take box 1\n")
+    selected = build(entry=main)
+    assert selected[1:] == build(False, entry=main)[1:]
+    assert selected[1], "selected conversion must check and report ambiguous operand grouping"
+    main.write_text(main.read_text().removesuffix("take box 1\n"))
+    removed = build(entry=main)
+    assert removed[1:] == build(False, entry=main)[1:]
+    assert not removed[1], "removing the selected conversion must remove its ambiguity warning"

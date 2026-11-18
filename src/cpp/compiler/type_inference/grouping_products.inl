@@ -16,23 +16,71 @@ static void recordGroupingTransition(InferenceContext &context, CodeLine *line, 
 			std::make_shared<GroupingTrace>(GroupingTrace{context.groupingTrace, line, std::move(transition)});
 }
 
-static std::shared_ptr<const GroupingProduct>
-captureGroupingProduct(const std::shared_ptr<const GroupingTrace> &end, const std::shared_ptr<const GroupingTrace> &begin) {
+static std::shared_ptr<const GroupingProduct> captureGroupingProduct(
+	const std::shared_ptr<const GroupingTrace> &end, const std::shared_ptr<const GroupingTrace> &begin,
+	const std::shared_ptr<const VariableStorageScope> &instance
+) {
 	auto product = std::make_shared<GroupingProduct>();
 	for (auto cursor = end; cursor != begin; cursor = cursor->previous) {
 		requireCompilerInvariant(cursor != nullptr, "grouping query lost its entry checkpoint");
-		auto [entry, inserted] = product->try_emplace(cursor->line, cursor->transition);
+		if (cursor->kind != GroupingTrace::Kind::Grouping) {
+			product->providedInstances.insert(cursor->instance);
+			if (cursor->kind == GroupingTrace::Kind::ProvidedInstance)
+				product->requiredInstances.erase(cursor->instance);
+			else
+				product->requiredInstances.insert(cursor->instance);
+			continue;
+		}
+		auto [entry, inserted] = product->groupings.try_emplace(cursor->line, cursor->transition);
 		if (!inserted)
 			entry->second.input = cursor->transition.input;
 	}
+	if (instance && (!product->groupings.empty() || !product->requiredInstances.empty() || !product->providedInstances.empty()))
+		product->providedInstances.insert(instance);
 	return product;
 }
 
 static void observeDiscardedGroupings(const GroupingProduct &product, InferenceContext &context) {
-	for (const auto &[line, _] : product) {
+	for (const auto &[line, _] : product.groupings) {
 		auto state = currentGroupingState(line, &context);
 		recordGroupingTransition(context, line, {state, state});
 	}
+	for (const auto &scope : product.requiredInstances)
+		recordInferenceInstance(context, scope, false);
+}
+
+bool inferenceInstanceAvailable(
+	ParseContext &parseContext, const std::shared_ptr<const VariableStorageScope> &scope, const InferenceContext *context
+) {
+	for (auto *cursor = context; cursor && cursor->trial; cursor = cursor->inheritedGroupingContext)
+		if (cursor->trialAvailableInferenceInstances.contains(scope))
+			return true;
+	return parseContext.availableInferenceInstances.contains(scope);
+}
+
+void recordInferenceInstance(
+	InferenceContext &context, const std::shared_ptr<const VariableStorageScope> &scope, bool provided
+) {
+	if (!context.parseContext.inferenceProducts)
+		return;
+	requireCompilerInvariant(scope != nullptr, "inferred instance has no storage identity");
+	if (provided) {
+		if (context.trial) {
+			if (context.groupingTrialJournal)
+				context.groupingTrialJournal->recordAvailabilityWrite(context.trialAvailableInferenceInstances, scope);
+			context.trialAvailableInferenceInstances.insert(scope);
+		} else
+			context.parseContext.availableInferenceInstances.insert(scope);
+	} else
+		requireCompilerInvariant(
+			inferenceInstanceAvailable(context.parseContext, scope, &context), "inference consumed an unavailable instance"
+		);
+	context.groupingTrace = std::make_shared<GroupingTrace>(GroupingTrace{
+		.previous = context.groupingTrace,
+		.transition = {},
+		.instance = scope,
+		.kind = provided ? GroupingTrace::Kind::ProvidedInstance : GroupingTrace::Kind::RequiredInstance
+	});
 }
 
 static void observeGroupingProbe(const InferenceContext &probe, InferenceContext &caller) {
@@ -110,7 +158,16 @@ static void observeCodeLineGrouping(CodeLine *line, InferenceContext &context) {
 static void observeGroupingResult(const Instantiation &instance, InferenceContext &context) {
 	if (!context.parseContext.inferenceProducts || !instance.groupingProduct)
 		return;
-	for (const auto &[line, transition] : *instance.groupingProduct) {
+	// A completed query carries its completed callees as well. Observing only
+	// this instance would publish different availability effects depending on
+	// whether its body ran here or an earlier caller had already inferred it.
+	for (const auto &scope : instance.groupingProduct->providedInstances)
+		recordInferenceInstance(context, scope, false);
+	for (const auto &[line, transition] : instance.groupingProduct->groupings) {
+		// Absence is an input observation, not a published source choice. The
+		// concrete instance prerequisite preserves its original producer.
+		if (!transition.output)
+			continue;
 		auto state = currentGroupingState(line, &context);
 		bool checkedLater = state && transition.output && state->ambiguityChecked && !transition.output->ambiguityChecked &&
 							state->root == transition.output->root && state->nodes == transition.output->nodes;
@@ -121,17 +178,33 @@ static void observeGroupingResult(const Instantiation &instance, InferenceContex
 	}
 }
 
-bool validateGroupingProduct(const std::shared_ptr<const GroupingProduct> &product, InferenceContext *context) {
-	for (const auto &[line, transition] : *product)
+bool validateGroupingProduct(
+	ParseContext &parseContext, const std::shared_ptr<const GroupingProduct> &product, InferenceContext *context
+) {
+	for (const auto &scope : product->requiredInstances)
+		if (!inferenceInstanceAvailable(parseContext, scope, context))
+			return false;
+	for (const auto &[line, transition] : product->groupings)
 		if (!sameGroupingState(currentGroupingState(line, context), transition.input))
 			return false;
 	return true;
 }
 
-bool applyGroupingProduct(ParseContext &, const std::shared_ptr<const GroupingProduct> &product, InferenceContext *context) {
-	if (!validateGroupingProduct(product, context))
+bool supportsGroupingQuery(const Instantiation &instance, const InferenceContext *context) {
+	requireCompilerInvariant(instance.groupingProduct != nullptr, "inferred query has no grouping product");
+	return instance.groupingAmbiguityRequested || instance.groupingProduct->groupings.empty() ||
+		   (context && context->trial && !context->detectGroupingAmbiguity);
+}
+
+bool applyGroupingProduct(
+	ParseContext &parseContext, const std::shared_ptr<const GroupingProduct> &product, InferenceContext *context
+) {
+	if (!validateGroupingProduct(parseContext, product, context))
 		return false;
-	for (const auto &[line, transition] : *product) {
+	if (context)
+		for (const auto &scope : product->requiredInstances)
+			recordInferenceInstance(*context, scope, false);
+	for (const auto &[line, transition] : product->groupings) {
 		if (context)
 			recordGroupingTransition(*context, line, transition);
 		if (sameGroupingState(transition.input, transition.output))
@@ -152,6 +225,12 @@ bool applyGroupingProduct(ParseContext &, const std::shared_ptr<const GroupingPr
 			line->hasCommittedGrouping = true;
 			line->groupingAmbiguityChecked = transition.output->ambiguityChecked;
 		}
+	}
+	for (const auto &scope : product->providedInstances) {
+		if (context)
+			recordInferenceInstance(*context, scope, true);
+		else
+			parseContext.availableInferenceInstances.insert(scope);
 	}
 	return true;
 }

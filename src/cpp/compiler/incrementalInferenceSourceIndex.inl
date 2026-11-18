@@ -2,6 +2,7 @@
 // inference borrows or groups expressions. Every fact snapshot shares this view.
 class InferenceSourceIndex {
   public:
+	ParseContext &parseContext() const { return context; }
 	InferenceSourceIndex(
 		ParseContext &context, const std::map<const Section *, std::string> &paths,
 		const std::map<std::string, Section *> &sections, BuildStatistics &statistics

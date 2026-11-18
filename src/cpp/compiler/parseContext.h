@@ -514,6 +514,7 @@ struct ParseContext {
 
 	InferenceProductHooks *inferenceProducts = nullptr;
 	std::shared_ptr<const GroupingProduct> rootGroupingProduct;
+	InferenceInstanceSet availableInferenceInstances;
 	std::map<std::pair<Section *, InstantiationKey>, std::shared_ptr<const VariableStorageScope>> instantiationStorageScopes;
 	std::map<std::string, std::shared_ptr<const VariableStorageScope>> logicalInstantiationScopes;
 	std::map<const VariableStorageScope *, std::string> frozenStorageIdentities;

@@ -125,7 +125,7 @@ static bool inferSectionLineRange(
 		observeCodeLineGrouping(line, context);
 		applyCodeLineGrouping(line, lineExpression, context);
 		bool alreadyOrdered = codeLineCanReuseGrouping(line, context);
-		bool ambiguityChecked = context.detectGroupingAmbiguity;
+		bool ambiguityChecked = !context.trial || context.detectGroupingAmbiguity;
 		if (!inferExpression(
 				lineExpression, context, alreadyOrdered, bindingFrameStack, section->type != SectionType::Replacement
 			)) {

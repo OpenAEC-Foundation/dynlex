@@ -196,10 +196,11 @@ class IncrementalInferenceController {
 				statistics.dependencyGraphSectionsReused++;
 			}
 		}
-		bool rootEligible = rootInputsUnchanged && check.unchanged({"root", aggregateGraphVariant}) &&
+		bool rootEligible = rootInputsUnchanged && !previous.at("root_grouping").is_null() &&
+							check.unchanged({"root", aggregateGraphVariant}) &&
 							reusableRootExecution(context, previous, frontendDiagnostics, *inferenceReuse);
 		auto rootGrouping = rootEligible ? decodeGroupingProduct(previous.at("root_grouping"), sourceIndex) : nullptr;
-		if (rootEligible && validateGroupingProduct(rootGrouping, nullptr) &&
+		if (rootEligible && validateGroupingProduct(context, rootGrouping, nullptr) &&
 			reuseRootWithGlobalTypes(context, previous, paths, *irReuse)) {
 			requireCompilerInvariant(
 				applyGroupingProduct(context, rootGrouping, nullptr), "entry replay changed grouping inputs"
@@ -230,9 +231,9 @@ class IncrementalInferenceController {
 			return false;
 		return std::ranges::all_of(current.items(), [&](const auto &entry) {
 			if (entry.key() == "grouping")
-				return prior.contains("grouping") && sameGroupingOutputs(entry.value(), prior.at("grouping"), true);
-			return entry.key() == "pure_values" || entry.key() == "pure_values_complete" || entry.key() == "invocation" ||
-				   entry.key() == "global_inputs" || entry.key() == "pure_value_inputs" ||
+				return prior.contains("grouping") && sameGroupingOutputs(entry.value(), prior.at("grouping"));
+			return entry.key() == "grouping_checked" || entry.key() == "pure_values" || entry.key() == "pure_values_complete" ||
+				   entry.key() == "invocation" || entry.key() == "global_inputs" || entry.key() == "pure_value_inputs" ||
 				   (prior.contains(entry.key()) && prior.at(entry.key()) == entry.value());
 		});
 	}

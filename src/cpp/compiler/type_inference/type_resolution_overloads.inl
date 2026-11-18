@@ -272,6 +272,12 @@ struct InferenceContext {
 		};
 
 		std::vector<ExpressionValueUndo> expressionValueUndo;
+		std::vector<std::pair<InferenceInstanceSet *, std::shared_ptr<const VariableStorageScope>>> availabilityUndo;
+		void
+		recordAvailabilityWrite(InferenceInstanceSet &instances, const std::shared_ptr<const VariableStorageScope> &scope) {
+			if (!instances.contains(scope))
+				availabilityUndo.emplace_back(&instances, scope);
+		}
 		SeenWrites<ExpressionValueMap, Expression> seenExpressionValueWrites;
 		std::vector<CodeLineGroupingUndo> codeLineGroupingUndo;
 		SeenWrites<CodeLineGroupingMap, CodeLine> seenCodeLineGroupingWrites;
@@ -311,6 +317,10 @@ struct InferenceContext {
 		}
 
 		void absorb(GroupingTrialJournal &&nested) {
+			availabilityUndo.insert(
+				availabilityUndo.end(), std::make_move_iterator(nested.availabilityUndo.begin()),
+				std::make_move_iterator(nested.availabilityUndo.end())
+			);
 			for (ExpressionValueUndo &undo : nested.expressionValueUndo) {
 				if (recordFirstWrite(seenExpressionValueWrites, undo.map, undo.expression))
 					expressionValueUndo.push_back(std::move(undo));
@@ -326,6 +336,8 @@ struct InferenceContext {
 		}
 
 		void rollback() {
+			for (auto undo = availabilityUndo.rbegin(); undo != availabilityUndo.rend(); ++undo)
+				undo->first->erase(undo->second);
 			for (auto undo = callableInstantiationUndo.rbegin(); undo != callableInstantiationUndo.rend(); ++undo) {
 				if (undo->existed)
 					(*undo->map)[undo->definition] = undo->instantiation;
@@ -414,6 +426,7 @@ struct InferenceContext {
 	bool hasTypeFailureDiagnostic = false;
 	TrialJournal *trialJournal{};
 	GroupingTrialJournal *groupingTrialJournal{};
+	InferenceInstanceSet trialAvailableInferenceInstances;
 	// Signature inference sets this signal while probing a type-constraint
 	// expression. Encountering an overload whose own signature is unresolved
 	// defers the probe instead of choosing a declaration-order candidate.
@@ -785,6 +798,11 @@ struct InferenceContext {
 			if (groupingTrialJournal)
 				groupingTrialJournal->recordCallableInstantiationWrite(trialCallableInstantiations, definition);
 			trialCallableInstantiations.insert_or_assign(definition, instantiation);
+		}
+		for (const auto &scope : other.trialAvailableInferenceInstances) {
+			if (groupingTrialJournal)
+				groupingTrialJournal->recordAvailabilityWrite(trialAvailableInferenceInstances, scope);
+			trialAvailableInferenceInstances.insert(scope);
 		}
 	}
 
