@@ -20,6 +20,8 @@ matched probe fall from seven to one, and total CPU time falls from 1.017
 seconds to 0.232 seconds with identical diagnostics. The probe evicts 193
 old entries versus seven previously. A separate quota test verifies the
 eviction order and the next publication's scan-free path.
+The staged Linux compiler passes all 389 required checks in 33.616 seconds
+after the compiler build.
 
 ## Iteration I124: account for cache publications without rescanning
 
