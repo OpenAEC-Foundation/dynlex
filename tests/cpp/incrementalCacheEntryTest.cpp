@@ -30,7 +30,7 @@ void writeEntry(const fs::path &path, const std::string &payload) {
 	expect(bool(output), "Could not write the cache fixture");
 }
 
-int main(int argc, char **argv) {
+int verifyEntries(int argc, char **argv) {
 	expect(argc == 2, "Pass a private test directory");
 	const fs::path directory = argv[1];
 	const fs::path path = directory / fs::path(u8"retained payload 🌽.entry");
@@ -99,4 +99,14 @@ int main(int argc, char **argv) {
 	expect(rejected, "An oversized retained entry bypassed the size limit");
 	fs::remove(path);
 	std::cout << "Retained cache payloads survive eviction and atomic replacement; integrity checks remain explicit.\n";
+	return 0;
+}
+
+int main(int argc, char **argv) {
+	try {
+		return verifyEntries(argc, argv);
+	} catch (const std::exception &error) {
+		std::cerr << error.what() << '\n';
+		return 1;
+	}
 }

@@ -1,5 +1,7 @@
 #!/bin/bash
 set -uo pipefail
+# Fixtures, compiler diagnostics and generated shell source use UTF-8 everywhere.
+export PYTHONUTF8=1
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -732,6 +734,7 @@ run_auxiliary_test() {
     auxiliary_output=$(run_with_timeout "$timeout_seconds" "$@" 2>&1)
     auxiliary_exit=$?
     test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+    printf 'Auxiliary check %s finished in %s ms (exit %s).\n' "$test_name" "$test_elapsed_ms" "$auxiliary_exit" >&2
     if [[ $auxiliary_exit -eq 0 ]]; then
         append_test_result "PASS" "$GREEN" "$test_name" "" "$test_elapsed_ms"
         ((passed++))

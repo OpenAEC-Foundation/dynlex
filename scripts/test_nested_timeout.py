@@ -21,10 +21,11 @@ def check_exited_process_group(source):
                   if isinstance(node, ast.FunctionDef) and node.name == 'kill_posix_tree')
     alive = {100, 101, 102}
     signalled = set()
+    model_signal = SimpleNamespace(SIGSTOP='stop', SIGKILL='kill')
 
     def kill(pid, action):
         assert pid in {100, 101, 102}, 'watchdog signalled an unrelated process'
-        if action == signal.SIGKILL:
+        if action == model_signal.SIGKILL:
             signalled.add(pid)
             alive.discard(pid)
 
@@ -34,7 +35,7 @@ def check_exited_process_group(source):
             raise PermissionError('Darwin process group contains only zombies')
 
     namespace = {
-        'os': SimpleNamespace(kill=kill, killpg=killpg), 'signal': signal,
+        'os': SimpleNamespace(kill=kill, killpg=killpg), 'signal': model_signal,
         'subprocess': SimpleNamespace(run=lambda *args, **kwargs: SimpleNamespace(
             stdout='100 10 100\n101 100 100\n102 101 102\n300 1 300\n')),
     }
