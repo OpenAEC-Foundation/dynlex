@@ -1995,6 +1995,28 @@ boundaries are:
 | Tooling/targets | Native/LLVM reuse; editor source syntax and matcher products share current source identities. I107 improves measured editor updates about7%. | Ordinary editor type inference still runs; object-only, WebAssembly and SPIR-V do not share the complete persistent pipeline. |
 | Required budget | Current combined compiler391/0/0 uncached in67.745s. No fixtures or assertions were removed; native checks and fixture workers remain independent. | Verify the updated shared-root suite with master1a9f9a90 and preserve the120s post-build budget. |
 
+## Iteration I116: reuse frontend and IR for native object output
+
+Object mode now uses the existing incremental frontend and per-function IR.
+A single output object has one artifact key. An unchanged destination can keep
+its bytes; a moved or damaged destination restores the object, and an evicted
+object is produced from saved IR. A changed object still lowers the whole
+module. No linker is involved. Emission to a pipe previously aborted because
+LLVM needed a seekable stream. Both pipelines now lower into a temporary
+seekable file when they produce a new object for stdout.
+
+The candidate 9178ec67 passes focused object and LLVM parity at O0 and
+debug O2, including artifact eviction, output recovery and warning-only
+configuration changes. The existing native C ABI fixture passes as well.
+On three paired samples per case using the 45-file LEXI8 Breakout source,
+median object compilation CPU time is 6.792 to 4.011 seconds for a body edit,
+5.743 to 0.042 seconds for a comment edit, and 5.989 to 0.039 seconds for a
+warning wording edit. The edited builds reuse 367 function IR products.
+Comment and wording edits perform zero optimization, object lowering or
+linking. Each edited object matches the clean object bytes and diagnostics.
+The three cache-disabled controls are insufficient to establish a cold speedup.
+The focused comparison is complete; shared-branch suite qualification follows.
+
 ## Prior iteration: I092 first-edit global-product attribution
 
 Started17 November2026 at04:42:41 UTC; first deadline05:27:41 UTC. The previous
