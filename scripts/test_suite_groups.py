@@ -200,7 +200,6 @@ printf 'failure:%s\n' "${failures[@]}"
         joins = '''
 crashed() { return 17; }
 completed() { passed=2; test_output="completed output"; }
-dependencies() { passed=3; test_output="dependency output"; }
 passed=0; failed=0; skipped=0; test_output=""; failures=()
 start_test_group fixture crashed
 fixture_worker=$test_group_worker
@@ -208,17 +207,13 @@ start_test_group fixture_parallel completed
 fixture_parallel_worker=$test_group_worker
 start_test_group incremental completed
 incremental_worker=$test_group_worker
-start_test_group incremental_dependencies dependencies
-incremental_dependencies_worker=$test_group_worker
-start_test_group incremental_native dependencies
-incremental_native_worker=$test_group_worker
 status=0
 collect_required_tests || status=$?
 printf '%s/%s/%s\n' "$status" "$passed" "$test_output"
 '''
         result = run_suite_script(shell, root, "joined-suite-workers", setup + helpers + joins, sys.executable)
         assert result.returncode == 0, result.stderr
-        assert result.stdout == "17/10/dependency outputdependency outputcompleted outputcompleted output\n", result.stdout
+        assert result.stdout == "17/4/completed outputcompleted output\n", result.stdout
 
 
 if __name__ == "__main__":

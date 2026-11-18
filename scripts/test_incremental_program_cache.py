@@ -1,6 +1,7 @@
 """Focused checks for the native program cache manifest and payload entries."""
 
 import json
+from pathlib import Path
 
 from cache_payloads import decode_cbor, read_payload
 import os
@@ -461,3 +462,35 @@ def check_program_payloads(root, build):
     assert unused[0]["type_inference_reused"] and unused[0]["cache_payloads_loaded"] == 2, \
         "unused edit loaded dependency, inference, or generated-code payloads"
     assert unused[1:] == build(False, entry=main)[1:]
+
+
+def check_native_cache_lifecycle(main, source, cache, output, build):
+    cold = build()
+    assert not cold[0]["frontend_reused"] and not cold[0]["linked_cached_objects"]
+    assert cold[0]["source_projection_mask_ms"] >= 0 and cold[0]["source_projection_files_ms"] >= 0
+    assert cold[0]["projection_declarations_ms"] >= 0 and cold[0]["projection_matches_ms"] >= 0
+    assert cold[0]["dependency_graph_ms"] >= 0
+    assert all(cold[0][key] >= 0 for key in ("resolution_setup_ms", "resolution_definition_ms", "resolution_body_ms", "resolution_precedence_ms", "resolution_rematch_ms", "resolution_candidate_collection_ms", "resolution_candidate_sort_ms", "resolution_replay_setup_ms", "resolution_candidate_match_ms", "precedence_tree_signature_ms", "precedence_signature_ms"))
+    assert cold[0]["objects_built"] > 0
+    clean = build(False)
+    assert cold[1:] == clean[1:], "cold build differs from clean build"
+    warm = build()
+    assert warm[0]["frontend_reused"] and warm[0]["link_ms"] == 0
+    assert warm[0]["objects_built"] == 0
+    assert warm[0]["objects_reused"] == 0, "unchanged output materialized cached objects"
+    assert warm[1:] == clean[1:], "warm build differs from clean build"
+    # Evict an object referenced by this program, independently of directory order
+    # and objects left by earlier checks sharing the private cache.
+    program = json.loads(Path(warm[0]["cache_entry"]).read_bytes().split(b"\n", 2)[2])
+    (cache / "native-v1" / f'object-{program["object_keys"][0]}.entry').unlink()
+    output.unlink()
+    recovered = build()
+    assert recovered[0]["frontend_reused"] and not recovered[0]["linked_cached_objects"]
+    assert recovered[0]["objects_built"] == 1, "evicted object was not rebuilt from cached IR"
+    assert recovered[1:] == clean[1:], "evicted object changed compilation behavior"
+    main.write_text(source.replace("alpha\nbeta\n", "beta\nbeta\n"))
+    same_file_edit = build()
+    assert same_file_edit[0]["matcher_cache_hits"] > 0, "code edit discarded unchanged same-file matches"
+    assert same_file_edit[0]["definition_parse_hits"] >= 3, "code edit reparsed unchanged declarations"
+    assert same_file_edit[1:] == build(False)[1:], "same-file match reuse differs from clean build"
+    return clean[2]

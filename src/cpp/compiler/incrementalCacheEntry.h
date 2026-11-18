@@ -14,6 +14,7 @@ class IncrementalCacheEntry {
 	static constexpr std::string_view header = "DynLex incremental cache v1\n";
 	static constexpr uintmax_t maximumBytes = 256 * 1024 * 1024;
 	static std::optional<IncrementalCacheEntry> open(const std::filesystem::path &path);
+	static void evict(const std::filesystem::path &path);
 	static IncrementalCacheEntry fromPayload(std::string_view payload);
 	std::string_view payload() const;
 

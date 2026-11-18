@@ -64,8 +64,16 @@ jobs:
           path: .cache/llvm-toolchain
           key: ${{ steps.llvm.outputs.cache-primary-key }}
 
-      - name: Build and test
-        run: ./scripts/test.sh --lint=false
+      - name: Build compiler and test tools
+        id: compiler-build
+        run: ./scripts/build.sh --lint=false --test-tools
+
+      - name: Required tests
+        run: ./scripts/test.sh --run-only
+
+      - name: Incremental compiler regressions
+        if: ${{ !cancelled() && steps.compiler-build.outcome == 'success' }}
+        run: ./scripts/test.sh --compiler-regressions --run-only
 
       - name: ccache stats
         if: always()
@@ -116,8 +124,16 @@ jobs:
           path: .cache/llvm-toolchain
           key: ${{ steps.llvm.outputs.cache-primary-key }}
 
-      - name: Build and test
-        run: ./scripts/test.sh --lint=false
+      - name: Build compiler and test tools
+        id: compiler-build
+        run: ./scripts/build.sh --lint=false --test-tools
+
+      - name: Required tests
+        run: ./scripts/test.sh --run-only
+
+      - name: Incremental compiler regressions
+        if: ${{ !cancelled() && steps.compiler-build.outcome == 'success' }}
+        run: ./scripts/test.sh --compiler-regressions --run-only
 
       - name: ccache stats
         if: always()
@@ -160,8 +176,18 @@ jobs:
             .cache/vcpkg-installed
           key: ${{ steps.llvm.outputs.cache-primary-key }}
 
-      - name: Build and test
-        run: ./scripts/test.sh --lint=false
+      - name: Build compiler and test tools
+        id: compiler-build
+        run: ./scripts/build.sh --lint=false --test-tools
+        shell: bash
+
+      - name: Required tests
+        run: ./scripts/test.sh --run-only
+        shell: bash
+
+      - name: Incremental compiler regressions
+        if: ${{ !cancelled() && steps.compiler-build.outcome == 'success' }}
+        run: ./scripts/test.sh --compiler-regressions --run-only
         shell: bash
 
   web-build-smoke:

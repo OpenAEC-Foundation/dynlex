@@ -2491,6 +2491,9 @@ Loading a program manifest retains immutable file snapshots for its payloads.
 Later stages decode those retained snapshots rather than reopening their paths,
 so concurrent cache eviction cannot invalidate an active build. Single-entry
 lookups also open and retain the file before reading its contents.
+Windows eviction uses POSIX file disposition to remove the name while existing
+mappings retain the payload. Managed global storage follows the LLVM definitions
+that replace its temporary declarations during cached IR linking.
 Invalid entries and I/O failures are explicit errors. Linking uses private temporary
 copies so cache eviction cannot remove linker inputs. Entries are limited to 256 MiB;
 the disk cache is trimmed to 512 MiB after a build. Object-only and non-native

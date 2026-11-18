@@ -12,6 +12,7 @@ build_args=()
 for arg in "$@"; do
     case "$arg" in
     --integration) suite=integration ;;
+    --compiler-regressions) suite=compiler-regressions ;;
     --run-only) run_only=true ;;
     --suite-worker) run_only=true; suite_worker=true ;;
     *) build_args+=("$arg") ;;
@@ -714,19 +715,20 @@ if [[ "$suite" == required ]]; then
     fixture_worker=$test_group_worker
     start_test_group fixture_parallel run_fixture_tests 1 2
     fixture_parallel_worker=$test_group_worker
-else
+elif [[ "$suite" == integration ]]; then
     run_fixture_tests
 fi
 
 run_auxiliary_test() {
     local test_name="$1"
-    local required_test=false
+    local test_suite=integration
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|embedded_directory|llvm_toolchain|build_arguments|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|incremental_dependencies|incremental_native|incremental_cache_entries|data_declaration_cache|cache_codec|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
-        required_test=true ;;
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|embedded_directory|llvm_toolchain|build_arguments|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|incremental_cache_entries|data_declaration_cache|cache_codec|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
+        test_suite=required ;;
+    incremental_regression_base|incremental_regression_dependencies|incremental_regression_native)
+        test_suite=compiler-regressions ;;
     esac
-    if [[ "$suite" == required && "$required_test" != true ]] ||
-        [[ "$suite" == integration && "$required_test" == true ]]; then
+    if [[ "$suite" != "$test_suite" && !( "$suite" == integration && "$test_suite" == compiler-regressions ) ]]; then
         return
     fi
     local base_timeout_seconds="$2"
@@ -761,15 +763,13 @@ run_auxiliary_test() {
 
 if [[ "$suite" == required ]]; then
     start_test_group incremental run_auxiliary_test \
-        "incremental_compilation" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required-base
+        "incremental_compilation" 30 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required
     incremental_worker=$test_group_worker
-    start_test_group incremental_dependencies run_auxiliary_test \
-        "incremental_dependencies" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required-dependencies
-    incremental_dependencies_worker=$test_group_worker
-    start_test_group incremental_native run_auxiliary_test \
-        "incremental_native" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required-native
-    incremental_native_worker=$test_group_worker
 fi
+for group in base dependencies native; do
+    run_auxiliary_test "incremental_regression_$group" 600 \
+        python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" "--regression-$group"
+done
 
 run_auxiliary_test "elf_binary_guard" 10 python3 -B "$SCRIPT_DIR/test_no_elf_binaries.py"
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"

@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 from test_incremental_dependency_graph import check_cross_file_typed_overload, check_deferred_match_key_replay, check_independent_constraint_probes, check_skipped_constraint_expression_retention, check_class_constraint_value_reuse, check_header_parameter_constraint_owner, check_precedence_match_key_replay, check_folded_value_remains_active, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_resolved_declaration_snapshot_reuse, check_reused_ir_dependency_graph_variants, check_runtime_pure_value_summary, check_temporary_expression_parse_reuse, check_top_level_projection_reuse, check_top_level_execution_constraint_probes, check_unrelated_added_pattern_constraint_probes
-from test_incremental_program_cache import check_integration_builds, check_program_payloads, check_cache_eviction, check_recent_cache_entries, check_shared_class_type_graph, check_graph_encoding, check_corrupt_object_entry
+from test_incremental_program_cache import check_integration_builds, check_program_payloads, check_cache_eviction, check_recent_cache_entries, check_native_cache_lifecycle, check_shared_class_type_graph, check_graph_encoding, check_corrupt_object_entry
 from test_incremental_frontend_diagnostic_owners import check_frontend_diagnostic_units
 from test_incremental_match_replay import check_choice_declaration_replay, check_deferred_body_match_replay, check_flex_body_match_replay
 from test_incremental_native_units import check_interned_literal_identity, check_native_partition_edits
@@ -48,11 +48,12 @@ from test_incremental_effect_cascade import check_bounded_effect_cascade
 from test_incremental_inferred_dependencies import check_callable_trial_dependencies, check_inferred_section_dependencies
 from test_incremental_data_initializers import check_global_data_initializers
 from test_incremental_grouping_state import check_grouping_state
+from test_incremental_global_producers import check_managed_global_storage
 
 project = Path(sys.argv[1]).resolve()
 mode = sys.argv[2:]
-if mode not in ([], ["--integration"], ["--required-base"], ["--required-dependencies"], ["--required-native"]):
-    raise SystemExit("Expected --integration, --required-base, --required-dependencies, --required-native, or no mode")
+if mode not in ([], ["--required"], ["--integration"], ["--regression-base"], ["--regression-dependencies"], ["--regression-native"]):
+    raise SystemExit("Expected --required, --integration, --regression-base, --regression-dependencies, --regression-native, or no mode")
 integration_mode = mode == ["--integration"]
 # Most counter checks use O0 so native body dependency shortcuts are observable.
 # Dedicated optimized checks also exercise function reuse at every optimized level.
@@ -92,23 +93,29 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
                 raise AssertionError(f"execution failed: {runtime.stderr!r}")
         return stats, diagnostics, runtime.stdout.replace(b"\r\n", b"\n") if runtime else None
 
+    if mode == ["--required"]:
+        check_native_cache_lifecycle(main, source, cache, output, build)
+        check_managed_global_storage(root, build)
+        print("Incremental cold, warm, eviction, edit and managed-global checks passed")
+        raise SystemExit(0)
+
     if integration_mode:
         check_integration_builds(project, build)
         print("Incremental native integration builds passed")
         raise SystemExit(0)
 
-    if mode in ([], ["--required-dependencies"]):
+    if mode in ([], ["--regression-dependencies"]):
         check_root_execution_reuse(root, build, compiler)
         check_storage_origin_reuse(root, build)
         check_body_materialization(root, build)
         check_incremental_classification(root, build)
         check_independent_constraint_probes(root, build)
         check_native_partition_edits(root, build)
-        if mode == ["--required-dependencies"]:
+        if mode == ["--regression-dependencies"]:
             print("Incremental dependency and native-unit checks passed")
             raise SystemExit(0)
 
-    if mode in ([], ["--required-native"]):
+    if mode in ([], ["--regression-native"]):
         check_leaf_dependency_cascade(root, build)
         check_optimized_function_reuse(root, build)
         check_optimization_units(root, build)
@@ -121,7 +128,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         check_source_checkpoints(root, build)
         check_inference_failures(root, build)
         check_grouping_state(root, build)
-        if mode == ["--required-native"]:
+        if mode == ["--regression-native"]:
             print("Incremental native and materialization checks passed")
             raise SystemExit(0)
 
@@ -150,34 +157,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_local_function_symbols(root, build)
     check_static_function_dependency(root, build)
     check_recursive_classification_cascade(root, build)
-    cold = build()
-    assert not cold[0]["frontend_reused"] and not cold[0]["linked_cached_objects"]
-    assert cold[0]["source_projection_mask_ms"] >= 0 and cold[0]["source_projection_files_ms"] >= 0
-    assert cold[0]["projection_declarations_ms"] >= 0 and cold[0]["projection_matches_ms"] >= 0
-    assert cold[0]["dependency_graph_ms"] >= 0
-    assert all(cold[0][key] >= 0 for key in ("resolution_setup_ms", "resolution_definition_ms", "resolution_body_ms", "resolution_precedence_ms", "resolution_rematch_ms", "resolution_candidate_collection_ms", "resolution_candidate_sort_ms", "resolution_replay_setup_ms", "resolution_candidate_match_ms", "precedence_tree_signature_ms", "precedence_signature_ms"))
-    assert cold[0]["objects_built"] > 0
-    clean = build(False)
-    assert cold[1:] == clean[1:], "cold build differs from clean build"
-    warm = build()
-    assert warm[0]["frontend_reused"] and warm[0]["link_ms"] == 0
-    assert warm[0]["objects_built"] == 0
-    assert warm[0]["objects_reused"] == 0, "unchanged output materialized cached objects"
-    assert warm[1:] == clean[1:], "warm build differs from clean build"
-    # Evict an object referenced by this program, independently of directory order
-    # and objects left by earlier checks sharing the private cache.
-    program = json.loads(Path(warm[0]["cache_entry"]).read_bytes().split(b"\n", 2)[2])
-    (cache / "native-v1" / f'object-{program["object_keys"][0]}.entry').unlink()
-    output.unlink()
-    recovered = build()
-    assert recovered[0]["frontend_reused"] and not recovered[0]["linked_cached_objects"]
-    assert recovered[0]["objects_built"] == 1, "evicted object was not rebuilt from cached IR"
-    assert recovered[1:] == clean[1:], "evicted object changed compilation behavior"
-    main.write_text(source.replace("alpha\nbeta\n", "beta\nbeta\n"))
-    same_file_edit = build()
-    assert same_file_edit[0]["matcher_cache_hits"] > 0, "code edit discarded unchanged same-file matches"
-    assert same_file_edit[0]["definition_parse_hits"] >= 3, "code edit reparsed unchanged declarations"
-    assert same_file_edit[1:] == build(False)[1:], "same-file match reuse differs from clean build"
+    clean_output = check_native_cache_lifecycle(main, source, cache, output, build)
     check_choice_declaration_replay(root, build)
     rematch_main = root / "rematch_main.dl"
     rematch_output = root / "rematch_program"
@@ -478,7 +458,7 @@ function left times right:
     main.write_text(source)
     build()
     output.unlink()
-    assert build()[2] == clean[2], "cache failed to recreate a deleted executable"
+    assert build()[2] == clean_output, "cache failed to recreate a deleted executable"
     main.write_text(source.replace('"alpha"))', '"gamma"))'))
     edited = build()
     assert not edited[0]["frontend_reused"]

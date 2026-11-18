@@ -1,6 +1,7 @@
 #include "filesystemRuntimeInternal.h"
 #include "filesystemTransactionInternal.h"
 #include "runtimeError.h"
+#include "windowsFileDisposition.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -14,12 +15,8 @@
 
 #define DYNLEX_FILE_RENAME_INFO_CLASS ((FILE_INFO_BY_HANDLE_CLASS)3)
 #define DYNLEX_FILE_RENAME_INFO_EX_CLASS ((FILE_INFO_BY_HANDLE_CLASS)22)
-#define DYNLEX_FILE_DISPOSITION_INFO_EX_CLASS ((FILE_INFO_BY_HANDLE_CLASS)21)
 #define DYNLEX_FILE_RENAME_REPLACE_IF_EXISTS 0x00000001UL
 #define DYNLEX_FILE_RENAME_POSIX_SEMANTICS 0x00000002UL
-#define DYNLEX_FILE_DISPOSITION_DELETE 0x00000001UL
-#define DYNLEX_FILE_DISPOSITION_POSIX_SEMANTICS 0x00000002UL
-#define DYNLEX_FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE 0x00000010UL
 
 typedef struct {
 	DWORD flags;
@@ -27,10 +24,6 @@ typedef struct {
 	DWORD file_name_length;
 	WCHAR file_name[1];
 } DynlexFileRenameInfo;
-
-typedef struct {
-	DWORD flags;
-} DynlexFileDispositionInfoEx;
 
 typedef struct {
 	size_t references;
@@ -477,13 +470,7 @@ static int delete_stage(DynlexWindowsStaging *staging, int32_t failure_operation
 		dynlex_runtime_set_windows_error("Could not remove filesystem staging file", GetLastError());
 		return -1;
 	}
-	DynlexFileDispositionInfoEx disposition = {
-		.flags = DYNLEX_FILE_DISPOSITION_DELETE | DYNLEX_FILE_DISPOSITION_POSIX_SEMANTICS |
-				 DYNLEX_FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE
-	};
-	if (!SetFileInformationByHandle(
-			staging->staging, DYNLEX_FILE_DISPOSITION_INFO_EX_CLASS, &disposition, (DWORD)sizeof(disposition)
-		)) {
+	if (!dynlex_unlink_windows_file(staging->staging, DYNLEX_FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE)) {
 		dynlex_runtime_set_windows_error("Could not remove filesystem staging file", GetLastError());
 		return -1;
 	}

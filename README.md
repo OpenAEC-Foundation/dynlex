@@ -60,6 +60,11 @@ with `./scripts/build.sh --test-tools`. The same process-tree budget applies.
 The integration suite covers larger library and application programs, additional
 compiler regressions, runtime behavior and tooling. It has individual check timeouts
 but no overall 120-second limit. Release verification runs both suites.
+The required gate checks cold and warm incremental builds, edit invalidation,
+object recovery, managed global storage, and cache-entry integrity. The longer
+incremental scenarios run in the integration suite. Linux, macOS, and Windows
+CI also run those scenarios in a dedicated step with
+`./scripts/test.sh --compiler-regressions --run-only`.
 The CAD fixtures and their verifier live in dynlex-cadkernel.
 
 Integration compilations have a 30-second default budget (60 seconds on Windows)

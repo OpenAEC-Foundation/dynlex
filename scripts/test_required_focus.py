@@ -26,19 +26,28 @@ passed=0
 failed=0
 '''
     failures = []
-    for suite in ("required", "integration"):
-        for name, expected_suite in (("numeric_literals", "required"),
-                                     ("class_layout", "required"),
-                                     ("incremental_dependencies", "required"),
-                                     ("incremental_native", "required"),
-                                     ("compiler_stack", "required"),
-                                     ("timeout_output", "required")):
+    cases = {
+        "numeric_literals": ("required",),
+        "class_layout": ("required",),
+        "incremental_compilation": ("required",),
+        "incremental_cache_entries": ("required",),
+        "pattern_precedence": ("required",),
+        "associative_grouping": ("required",),
+        "compiler_stack": ("required",),
+        "timeout_output": ("required",),
+        "incremental_regression_base": ("integration", "compiler-regressions"),
+        "incremental_regression_dependencies": ("integration", "compiler-regressions"),
+        "incremental_regression_native": ("integration", "compiler-regressions"),
+        "incremental_compilation_integration": ("integration",),
+    }
+    for suite in ("required", "integration", "compiler-regressions"):
+        for name, expected_suites in cases.items():
             result = subprocess.run(
                 [shell, "-c", stubs + routing + '\nsuite=$1\nrun_auxiliary_test "$2" 10 true\n',
                  "suite-policy", suite, name],
                 capture_output=True, text=True, timeout=10,
             )
-            expected = suite == expected_suite
+            expected = suite in expected_suites
             if result.returncode != 0 or bool(result.stdout) != expected:
                 failures.append(f"{runner}: incorrect {suite} routing for {name}: {result.stderr}")
 
