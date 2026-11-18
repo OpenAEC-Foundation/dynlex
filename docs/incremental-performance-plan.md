@@ -10,6 +10,10 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## Qualified snapshot I119
+
+Native eaaf1cc6 passes all 391 required checks in 63.588 seconds after the compiler build. Native LSP, focused grouping and source checks, rebuilt browser host LSP, and all 487 integration checks pass. This snapshot includes fixed grouping, physical source-line proofs, early diagnostic replay and native object output. The overall goal remains active.
+
 ## Iteration I118: replay source-loading and preprocessing diagnostics
 
 Unchanged early failures and message-only edits now validate source and
