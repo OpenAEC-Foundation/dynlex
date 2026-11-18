@@ -812,9 +812,10 @@ bool compileIncrementally(
 							  );
 					result["root_diagnostics"] =
 						captureRootInferenceDiagnostics(compiled, sectionPaths, products.sourceIndex());
-					result["root_grouping"] = compiled.reuseRootExecution
-												  ? previous->at("root_grouping")
-												  : encodeGroupingProduct(compiled.rootGroupingProduct, products.sourceIndex());
+					result["root_grouping"] =
+						compiled.reuseRootExecution
+							? previous->at("root_grouping")
+							: encodeGroupingProduct(compiled.rootGroupingProduct, products.sourceIndex(), summaryStore);
 					result["section_dependency_graph"] = captureSectionDependencyGraph(
 						compiled, result, sectionPaths, inferenceReads,
 						result.at("all_function_projection").at("constraint_probe_schedule").at("callable_lookups"), statistics,

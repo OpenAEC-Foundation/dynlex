@@ -167,7 +167,7 @@ class IncrementalInferenceProducts : public InferenceProductHooks {
 		requireCompilerInvariant(discardedStorage && discardedClasses, "discarded query has no immutable snapshot");
 		InferenceStorageIdentities &storage = *discardedStorage;
 		Json summary = captureSectionInferenceSummary(
-			section, identities, storage, globalInputQueries, sourceIdentities, nullptr, nullptr, &*identity
+			section, identities, storage, globalInputQueries, sourceIdentities, store, nullptr, nullptr, &*identity
 		);
 		if (!summary.contains(*identity))
 			return;

@@ -84,7 +84,8 @@ bool inferenceSummaryHasValueState(const Json &summary) {
 
 Json captureSectionInferenceSummary(
 	const Section *section, const InferenceValueIdentities &identities, InferenceStorageIdentities &storage,
-	InferenceGlobalInputs &globals, const InferenceSourceIndex &sourceIndex, size_t *capturedInstantiations = nullptr,
+	InferenceGlobalInputs &globals, const InferenceSourceIndex &sourceIndex, InferenceSummaryStore &summaryStore,
+	size_t *capturedInstantiations = nullptr,
 	const IncrementalUnitSelection *skipped = nullptr, const std::string *onlyKey = nullptr,
 	std::map<std::string, const Instantiation *> *capturedInstances = nullptr
 ) {
@@ -92,14 +93,14 @@ Json captureSectionInferenceSummary(
 	for (const auto &[key, instantiation] : section->instantiations) {
 		if (!canPersistInferenceSummary(section, key, instantiation, identities))
 			continue;
-		Json grouping = encodeGroupingProduct(instantiation.groupingProduct, sourceIndex);
-		if (grouping.is_null())
-			continue;
 		auto encodedKey = encodeInferenceKey(key, identities);
 		if (!encodedKey)
 			continue;
 		const std::string identity = digest(encodedKey->dump());
 		if ((skipped && skipped->contains(section, identity)) || (onlyKey && identity != *onlyKey))
+			continue;
+		Json grouping = encodeGroupingProduct(instantiation.groupingProduct, sourceIndex, summaryStore);
+		if (grouping.is_null())
 			continue;
 		auto globalInputs = globals.capture(instantiation);
 		if (!globalInputs)
@@ -251,7 +252,7 @@ Json captureInferenceSummaries(
 	for (const auto &[section, path] : sectionPaths) {
 		std::map<std::string, const Instantiation *> instances;
 		Json variants = captureSectionInferenceSummary(
-			section, identities, storage, globals, sourceIndex, nullptr, skipped, nullptr, &instances
+			section, identities, storage, globals, sourceIndex, summaryStore, nullptr, skipped, nullptr, &instances
 		);
 		for (auto &[key, summary] : variants.items()) {
 			const Instantiation &instance = *instances.at(key);

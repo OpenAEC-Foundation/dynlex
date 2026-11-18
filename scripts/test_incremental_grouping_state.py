@@ -161,6 +161,29 @@ to get computed {value}:
     repaired = build(entry=main)
     assert repaired[1:] == build(False, entry=main)[1:]
     assert repaired[2] == b"20\n"
+    check_grouping_scope_eviction(root, build, arithmetic, output)
+
+
+def check_grouping_scope_eviction(root, build, definitions, output):
+    main = root / "grouping_scope_eviction.dl"
+    cache = root / "grouping_scope_cache"
+    main.write_text(definitions + output)
+    first = build(entry=main, cache_root=cache)
+    assert first[2] == b"20\n"
+    manifest = Path(first[0]["cache_entry"])
+    program = json.loads(manifest.read_bytes().split(b"\n", 2)[2])
+    grouping = read_payload(manifest.with_name(f'payload-{program["payload_keys"]["root_grouping"]}.entry'))
+    keys = set(grouping["requires"] + grouping["provides"])
+    assert keys and all(len(key) == 64 for key in keys), "completed grouping scopes must have independent products"
+    scopes = [manifest.with_name(f"payload-{key}.entry") for key in keys]
+    for scope in scopes:
+        scope.unlink()
+    main.write_text(definitions + output.replace('"%d', '"value %d'))
+    repaired = build(entry=main, cache_root=cache)
+    assert repaired[1:] == build(False, entry=main)[1:]
+    assert repaired[2] == b"value 20\n"
+    assert repaired[0]["function_body_inference_passes"] > 0
+    assert all(scope.exists() for scope in scopes)
 
 
 def check_fixed_grouping_edit(root, build):

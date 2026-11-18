@@ -148,6 +148,30 @@ class InferenceSummaryStore {
 		return snapshots.available(inferenceSummaryPath(directory, reference.at("payload").get_ref<const std::string &>()));
 	}
 
+	const std::string &saveGroupingScope(const std::string &identity) {
+		if (auto found = groupingScopeKeys.find(identity); found != groupingScopeKeys.end())
+			return *found->second;
+		auto record = groupingScopes.try_emplace(digest(identity), identity).first;
+		fs::path path = programPayloadPath(directory, record->first);
+		if (!recordCacheAccess(path))
+			writeEntry(path, identity);
+		groupingScopeKeys.emplace(record->second, &record->first);
+		return record->first;
+	}
+
+	const std::string *loadGroupingScope(const std::string &key) {
+		if (auto found = groupingScopes.find(key); found != groupingScopes.end())
+			return &found->second;
+		auto identity = readEntry(programPayloadPath(directory, key));
+		if (!identity)
+			return nullptr;
+		if (digest(*identity) != key)
+			throw std::runtime_error("corrupt grouping scope: " + key);
+		auto record = groupingScopes.emplace(key, std::move(*identity)).first;
+		groupingScopeKeys.emplace(record->second, &record->first);
+		return &record->second;
+	}
+
 	Json save(const Json &summary, Json body, Json classes, Json diagnostics) {
 		auto start = Clock::now();
 		std::string payload = encodeInferenceSummary(summary).dump();
@@ -226,4 +250,7 @@ class InferenceSummaryStore {
 	IncrementalCacheSnapshots snapshots;
 	std::map<std::string, Json> loadedClasses;
 	std::map<Json, Json> classReferences;
+	std::map<std::string, std::string> groupingScopes;
+	// Views point into the immutable entries owned by groupingScopes.
+	std::unordered_map<std::string_view, const std::string *> groupingScopeKeys;
 };

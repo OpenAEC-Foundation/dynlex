@@ -816,6 +816,9 @@ Already inferred callees contribute observations of their current grouping state
 to enclosing queries. Removing an earlier call therefore restores ambiguity
 checking when the remaining call becomes the first instantiation. Portable node
 layouts can stay encoded until source inference actually demands that body.
+Grouping products refer to each storage scope identity by content digest. The
+entry and concrete inference results share its bytes. Replay loads identities
+on demand and requires every identity its grouping proof uses.
 Interface comparison uses the resulting operand trees; ambiguity-check progress
 remains part of the execution precondition, while actual diagnostics have their
 own retained product. Selected-grouping replay can disable further ambiguity

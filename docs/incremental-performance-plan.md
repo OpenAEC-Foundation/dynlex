@@ -10,6 +10,52 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## I130 Deduplicate grouping storage identities
+
+Inference products and the entry grouping record now refer to a shared scope
+identity by its content digest. The compiler loads that identity only when it
+replays grouping. A missing identity invalidates that replay and lets fresh
+inference publish the result. The focused test evicts a scope shared by the
+entry and a concrete inference result, changes the entry, and compares the
+repaired program with a clean build.
+
+On the archived 125-file Ribbon program, 628 inference summaries after one
+warm edit contain 16,950 scope references. Their repeated identity text takes
+102.1 MB for 322 distinct identities totaling 3.8 MB. Two paired builds give
+the following medians. Both compilers produce the same diagnostics and exact
+WebAssembly bytes as the clean control in each workspace.
+
+| Case | CPU seconds before → after | Peak RSS MiB before → after | Cache MB before → after |
+|---|---:|---:|---:|
+| Populate an empty cache | 25.39 → 24.71 | 887 → 784 | 176.9 → 80.7 |
+| Edit a function body | 8.89 → 8.71 | 727 → 684 | 224.9 → 120.3 |
+
+Population time in summary encoding and publication falls from 1.40 to
+0.68 seconds. The warm edit still infers 35 bodies and reuses 560 function IR
+products. This change reduces cache processing and storage for the same
+semantic work. The checkout-specific staged compiler passes the focused
+grouping tests, all 389 uncached required checks in 24.633 seconds, and all
+three compiler regression groups in 80.906 seconds. Full integration is a
+separate publication gate.
+
+## I129 Screen an owned cache payload without a second envelope
+
+The cache-entry ownership and integrity tests pass. One matched Ribbon
+population pair produces identical WebAssembly bytes and takes 25.31 versus
+25.66 CPU seconds, with 884.6 versus 884.3 MiB peak RSS. The benchmark then
+attempted to compare bytes from another workspace and stopped. The candidate
+stays isolated. I130 compares all outputs within each workspace and targets
+the larger allocation and serialization cost.
+
+## I128 Measure the first cache population with one compiler
+
+Three paired Ribbon runs of the qualified I125 compiler take a median 15.65
+CPU seconds with incremental compilation disabled and 25.30 seconds to
+populate an empty cache. Edited clean builds take 15.77 seconds, warm body
+edits take 8.81, and warm comment edits take 37 ms. All runs compare against
+clean output in the same workspace. This controls for compiler revision,
+which differed in the initial I120 population comparison.
+
 ## Iteration I125: amortize eviction in a nearly full cache
 
 The default cache held 24,613 entries and was 500 bytes below its 512 MiB

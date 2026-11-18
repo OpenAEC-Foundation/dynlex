@@ -199,8 +199,8 @@ class IncrementalInferenceController {
 		bool rootEligible = rootInputsUnchanged && !previous.at("root_grouping").is_null() &&
 							check.unchanged({"root", aggregateGraphVariant}) &&
 							reusableRootExecution(context, previous, frontendDiagnostics, *inferenceReuse);
-		auto rootGrouping = rootEligible ? decodeGroupingProduct(previous.at("root_grouping"), sourceIndex) : nullptr;
-		if (rootEligible && validateGroupingProduct(context, rootGrouping, nullptr) &&
+		auto rootGrouping = rootEligible ? decodeGroupingProduct(previous.at("root_grouping"), sourceIndex, summaryStore) : nullptr;
+		if (rootGrouping && validateGroupingProduct(context, rootGrouping, nullptr) &&
 			reuseRootWithGlobalTypes(context, previous, paths, *irReuse)) {
 			requireCompilerInvariant(
 				applyGroupingProduct(context, rootGrouping, nullptr), "entry replay changed grouping inputs"

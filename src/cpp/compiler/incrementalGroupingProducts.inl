@@ -27,14 +27,16 @@ Json encodeGroupingLayouts(const std::shared_ptr<const GroupingProduct> &product
 	return result;
 }
 
-Json encodeGroupingProduct(const std::shared_ptr<const GroupingProduct> &product, const InferenceSourceIndex &sources) {
+Json encodeGroupingProduct(
+	const std::shared_ptr<const GroupingProduct> &product, const InferenceSourceIndex &sources, InferenceSummaryStore &store
+) {
 	auto instances = [&](const InferenceInstanceSet &scopes) -> std::optional<Json> {
 		std::set<std::string> identities;
 		for (const auto &scope : scopes) {
 			auto identity = sources.parseContext().frozenStorageIdentities.find(scope.get());
 			if (identity == sources.parseContext().frozenStorageIdentities.end())
 				return std::nullopt;
-			identities.insert(identity->second);
+			identities.insert(store.saveGroupingScope(identity->second));
 		}
 		return identities;
 	};
@@ -48,26 +50,33 @@ Json encodeGroupingProduct(const std::shared_ptr<const GroupingProduct> &product
 	};
 }
 
-std::shared_ptr<const GroupingProduct> decodeGroupingProduct(const Json &encoded, const InferenceSourceIndex &sources) {
+std::shared_ptr<const GroupingProduct> decodeGroupingProduct(
+	const Json &encoded, const InferenceSourceIndex &sources, InferenceSummaryStore &store
+) {
 	auto result = std::make_shared<GroupingProduct>();
+	auto instances = [&](const Json &identities, InferenceInstanceSet &scopes) {
+		ParseContext &context = sources.parseContext();
+		for (const auto &identity : identities) {
+			const std::string *key = store.loadGroupingScope(identity.get_ref<const std::string &>());
+			if (!key)
+				return false;
+			auto [logical, inserted] = context.logicalInstantiationScopes.try_emplace(*key);
+			if (inserted) {
+				logical->second = std::make_shared<VariableStorageScope>();
+				context.frozenStorageIdentities.emplace(logical->second.get(), *key);
+			}
+			scopes.insert(logical->second);
+		}
+		return true;
+	};
+	if (!instances(encoded.at("requires"), result->requiredInstances) ||
+		!instances(encoded.at("provides"), result->providedInstances))
+		return nullptr;
 	for (const auto &[identity, transition] : encoded.at("groupings").items())
 		result->groupings.emplace(
 			sources.decodeLine(Json::parse(identity)),
 			GroupingTransition{decodeGroupingState(transition.at(0)), decodeGroupingState(transition.at(1))}
 		);
-	auto instances = [&](const Json &identities, InferenceInstanceSet &scopes) {
-		ParseContext &context = sources.parseContext();
-		for (const auto &identity : identities) {
-			const std::string &key = identity.get_ref<const std::string &>();
-			auto [logical, inserted] = context.logicalInstantiationScopes.try_emplace(key);
-			if (inserted)
-				logical->second = std::make_shared<VariableStorageScope>();
-			context.frozenStorageIdentities[logical->second.get()] = key;
-			scopes.insert(logical->second);
-		}
-	};
-	instances(encoded.at("requires"), result->requiredInstances);
-	instances(encoded.at("provides"), result->providedInstances);
 	return result;
 }
 

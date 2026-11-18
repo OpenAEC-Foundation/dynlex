@@ -41,7 +41,9 @@ class Restoration {
 			return true;
 		entry.identity = *identity;
 		const Json &summary = *saved;
-		entry.facts.groupingProduct = decodeGroupingProduct(summary.at("grouping"), owner.sourceIndex);
+		entry.facts.groupingProduct = decodeGroupingProduct(summary.at("grouping"), owner.sourceIndex, owner.summaryStore);
+		if (!entry.facts.groupingProduct)
+			return false;
 		entry.facts.groupingAmbiguityRequested = summary.at("grouping_checked").get<bool>();
 		if (!types(summary, *reference))
 			return false;
