@@ -11,6 +11,7 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FileUtilities.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/TargetSelect.h"
@@ -460,6 +461,10 @@ std::string nativeExecutablePath(const ParseContext::Options &options) {
 	std::string path = options.inputPath;
 	if (path.ends_with(".dl"))
 		path.resize(path.size() - 3);
+#ifdef _WIN32
+	if (llvm::sys::path::extension(path).empty())
+		path += ".exe";
+#endif
 	return path;
 }
 
@@ -554,6 +559,13 @@ bool emitNativeExecutableWithObjects(
 	}
 	commandStorage.push_back("-o");
 	commandStorage.push_back(outputPath);
+#ifdef _WIN32
+	if (llvm::sys::path::extension(outputPath).empty()) {
+		// Clang adds .exe to a suffixless -o before invoking the MinGW linker.
+		// The linker takes the last output argument, which preserves the requested name.
+		commandStorage.insert(commandStorage.end(), {"-Xlinker", "-o", "-Xlinker", outputPath});
+	}
+#endif
 
 	if (context.options.emitDebugInfo)
 		commandStorage.push_back("-g");

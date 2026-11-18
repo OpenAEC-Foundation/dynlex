@@ -1,6 +1,7 @@
 """Focused checks for the native program cache manifest and payload entries."""
 
 import json
+import struct
 from pathlib import Path
 
 from cache_payloads import decode_cbor, read_payload
@@ -441,7 +442,13 @@ def check_program_payloads(root, build):
                 pending.append(target)
     assert all((path, key) in required for path, variants in units.items() for key in variants), \
         "dependency capture built aggregate units outside the retained output closure"
-    assert edited_program["generated_ir"].startswith(b"BC\xc0\xde")
+    bitcode = edited_program["generated_ir"]
+    if bitcode.startswith(b"\xde\xc0\x17\x0b"):
+        # LLVM wraps Mach-O bitcode in a header with the raw payload's extent.
+        _, version, offset, size, _ = struct.unpack_from("<5I", bitcode)
+        assert version == 0 and 20 <= offset <= offset + size <= len(bitcode)
+        bitcode = bitcode[offset:offset + size]
+    assert bitcode.startswith(b"BC\xc0\xde")
     for field in ("matches", "match_entries"):
         assert all(isinstance(key, str) and len(key) == 64
                    for key in edited_program["all_function_projection"][field].values()), \

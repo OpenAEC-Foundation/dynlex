@@ -69,7 +69,8 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     root = Path(temporary)
     cache = root / "cache"
     main = root / "main.dl"
-    output = root / ("program.exe" if os.name == "nt" else "program")
+    # Exercise an explicit suffixless output in the required gate on every platform.
+    output = root / ("program.exe" if os.name == "nt" and mode != ["--required"] else "program")
     main.write_text(source)
 
     def build(incremental=True, flags=(), success=True, entry=main, target=output, cache_root=cache):
@@ -88,6 +89,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         diagnostics = "".join(line for line in lines if not line.startswith("incremental: "))
         runtime = None
         if success:
+            assert build_target.is_file(), f"Compiler did not produce {build_target}"
             runtime = subprocess.run([str(build_target)], cwd=root, capture_output=True, timeout=10)
             if runtime.returncode:
                 raise AssertionError(f"execution failed: {runtime.stderr!r}")
@@ -96,6 +98,12 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     if mode == ["--required"]:
         check_native_cache_lifecycle(main, source, cache, output, build)
         check_managed_global_storage(root, build)
+        default_output = main.with_suffix(".exe" if os.name == "nt" else "")
+        default_build = subprocess.run(
+            [str(compiler), str(main), "-O0", "--no-incremental"],
+            cwd=root, capture_output=True, text=True, timeout=120,
+        )
+        assert default_build.returncode == 0 and default_output.is_file(), default_build
         print("Incremental cold, warm, eviction, edit and managed-global checks passed")
         raise SystemExit(0)
 
