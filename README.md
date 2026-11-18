@@ -2,7 +2,7 @@
 
 A natural-language-like programming language that compiles to native code via LLVM.
 
-UI libraries and the native/browser ribbon, Snake and editor demos live in the separate
+UI libraries and the native/browser ribbon, Snake and text demos live in the separate
 `dynlex-ui` repository. This compiler supplies their generic section and callback facilities.
 
 ## Features
@@ -108,7 +108,8 @@ Run the compiler WASM smoke test:
 
 The website is maintained in [dynlex-website](https://github.com/OpenAEC-Foundation/dynlex-website).
 The reusable UI framework is maintained in [dynlex-ui](https://github.com/OpenAEC-Foundation/dynlex-ui).
-This repository provides the compiler service and runtime distribution, independent of either application.
+DynLex Studio and the embeddable code editor are maintained in [dynlex-ide](https://github.com/OpenAEC-Foundation/dynlex-ide).
+This repository provides their compiler service and runtime distribution.
 
 Export a relocatable compiler package after building the browser compiler:
 
