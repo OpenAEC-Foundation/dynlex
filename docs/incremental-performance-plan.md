@@ -103,6 +103,28 @@ with unchanged matcher/parser work and payloads. Complete its independent fixed
 matrices, required/integration, actual web and shared-root gates before retention
 or publication. The initial194ccf13 result remains unqualified.
 
+The correctedf35682d9 comparison is complete and separate:120 editor
+observations with full token/diagnostic parity. Body, lives, VM statement and
+moved-comment edit CPU medians are1.60325->1.49913,1.60677->1.49105,
+1.60648->1.48272 and1.58550->1.48873 s. Twelve independent session-total ratios
+have median0.931089 [0.927353,0.937715]. Fifteen paired cold editor opens have
+medians3.60920->3.49728 s, ratio0.970058 [0.955533,0.977009]. Config wording
+still reuses its context; its interval includes parity. Peak-RSS edit medians
+are1.4-2.9% lower in these cases. Corrected code adds37 net production lines,
+32128 native-binary bytes and no cache payload, disk product or user setting.
+
+All88 corrected native observations preserve exact executable/diagnostic parity.
+Five native body-edit pairs have CPU medians1.05313->1.05080 s, ratio0.998900
+[0.975829,1.018928]; no established native-edit gain. Three native cold pairs
+observe4.64899->4.56287 s, ratio0.983278 [0.970412,0.986460]. Native comment
+and wording controls stay around26 and30 ms, with intervals including parity.
+The primary comparison was repeated only because the corrected compiler is a
+different artifact, not to retry a failed performance gate. Keep the corrected
+combined tradeoff, subject to all full gates. Evidence is
+i107-corrected-{diagnostic-parity,performance-analysis,editor-cold-analysis,
+tradeoff-ledger,native-controls,prequalification}.json and
+i107-corrected-lsp-paired/results.json. No timing from194ccf13 qualifiesf35682d9.
+
 ## Completed iteration: I106 shared editor syntax products
 
 Started18 November at01:45 UTC; first deadline02:30 UTC. Previous turn is
