@@ -1,6 +1,7 @@
 #pragma once
 #include "lspProtocol.h"
 #include "parseContext.h"
+#include "parsedSyntaxProducts.h"
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -21,6 +22,7 @@ struct LspAnalysisResult {
 	bool reused = false;
 	std::shared_ptr<const LspMatcherProducts> matcherProducts = {};
 	size_t matcherComputations = 0, matcherHits = 0, matcherBytes = 0;
+	ParsedSyntaxResult syntax{};
 };
 
 LspAnalysisResult analyzeLspDocument(

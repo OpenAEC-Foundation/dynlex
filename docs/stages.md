@@ -2274,6 +2274,16 @@ keep their original coordinates; comment tokens read the current editor document
 Edits which move executable lines still reconstruct the ordinary current-source
 context. This boundary adds no disk products or extra user setting.
 
+Tooling also retains the native parser's unresolved expression and definition
+products, including temporary type-constraint syntax. Parser inputs and the
+current builtin/project non-message syntax identity select reusable products.
+Restoration creates ordinary nodes, references and bindings at current ranges;
+matching and inference determine their current meaning. A failed analysis keeps
+its used syntax plus one last complete set; success prunes earlier entries.
+The trace reports actual expression parses, reused expressions and definitions,
+reused temporary expressions (a subset of expression reuse), and encoded syntax
+bytes. This cache adds no disk product or configuration option.
+
 Ordinary source edits reconstruct a current-source context and reuse the native
 matcher's positive and failed lookup products through compiler hooks. The same
 candidate, binding, precedence and configuration fingerprints validate those

@@ -10,6 +10,64 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## Active iteration: I106 source inference products
+
+Started18 November at01:45 UTC; first deadline02:30 UTC. Previous turn is
+progress: I105's full real-program comparison rejected an unhelpful matcher
+algorithm and restored the exact qualified images. Target the larger ordinary
+editor inference stage, roughly0.96 CPU s per edit. Audit the source-expression,
+grouping, type/value and diagnostic facts consumed after inference, and reuse
+unchanged units through their actual input/dependency proof. Share compiler
+products and semantics; do not reintroduce I102's encoded runtime-body engine or
+skip facts which editor consumers need. Begin with minimal fresh/reused parity
+tests including parameter-last-use, overload/failed-lookup changes and errors.
+Complete one producer/consumer boundary, measure actual units skipped and real
+program CPU/RSS/bytes, and qualify required uncached<=120 s plus affected native,
+LSP and actual web behavior. Prioritize the full cross-process/all-stage goal,
+which remains active/incomplete. One45-minute extension is available only for
+concrete implementation progress; park a stalled boundary and change targets.
+
+At02:04 UTC park the typed-inference boundary after the consumer/dependency
+audit: return summaries omit source grouping and per-instantiation body facts,
+and the native constraint product also depends on class restoration, source
+projections and failed/callable/conversion reads. Moving just cached values would
+be incorrect; moving the whole rejected runtime-body path would repeat I102.
+The original deadline still applies. Switch this iteration to shared unresolved
+syntax products, including temporary type-constraint expressions. The compiler
+already has that codec; decoded nodes use current ranges and ordinary matching
+and inference. There is no new semantic engine, disk product or user setting.
+Retain the latest used syntax and one last complete set through errors, guarded
+by current builtin/project non-message syntax identity. The minimal two-file,
+two-profile work/parity regression is red on the qualified baseline. Build the
+candidate and let real-program CPU/RSS/bytes decide whether to retain it. This
+does not claim that ordinary editor type inference has become incremental.
+
+At02:28 UTC retain the small positive parser boundary and use the sole
+qualification extension, ending03:15 UTC. No further optimization enters this
+window. Candidate82ea576d freezes457 compiler/build inputs. The minimal two-file,
+two-profile parity/work test passes, including syntax changes and error recovery.
+On the real45-file Breakout edit, it reuses2842 expression products (including65
+temporary type expressions) and819 definitions, with one new expression parse.
+Encoded syntax is892763 bytes per measured profile; matcher bytes remain6283411.
+
+The original150-observation matrix remains unchanged: forty paired code edits
+have CPU totals63.75->63.42 s and medians1.59->1.585 s; its tick-resolution
+paired interval includes parity. Twenty-five cold-opening pairs also include
+parity, ratio1.00557 [0.99726,1.00824]. Do not claim a broad cold-build gain.
+One secondary precision check uses the POSIX process CPU clock in nanoseconds,
+with three independent session pairs and five edits each for main body, imported
+lives and imported VM statements:108 observations,45 paired edits. All tokens
+and diagnostics match. Analyze the nine session totals as independent blocks,
+not the45 correlated edits: median ratio0.992889, interval[0.986484,0.996516].
+The cases' aggregate CPU is24.38910->24.26244,24.50665->24.28269 and
+24.78305->24.46247 s. This is a small established gain, not a percentage-floor
+exception. The payload is under1 MiB and no disk product/setting is added.
+First-edit process RSS is about2% lower in the primary matrix; repeat peaks do
+not establish a general memory gain. The larger cgroup peak in the precision
+run includes its result-holding Python client; retained compiler products stay
+flat across edits. Finish native controls, required<=120 s, affected integration,
+full LSP, actual web and shared-root qualification before publication.
+
 ## Closed iteration: I105 rejected adaptive signature intersection
 
 Started18 November at01:19 UTC; first deadline02:04 UTC. Previous turn is

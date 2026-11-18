@@ -345,6 +345,7 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 	const auto prior = analysisResults.find(uri);
 	size_t reused = 0;
 	size_t matcherComputations = 0, matcherHits = 0, matcherBytes = 0;
+	ParsedSyntaxResult syntax;
 	for (size_t index = 0; index < analysisProfiles.size(); index++) {
 		const LspAnalysisResult *previous =
 			prior != analysisResults.end() && index < prior->second.size() ? &prior->second[index] : nullptr;
@@ -353,6 +354,11 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 		matcherComputations += result.matcherComputations;
 		matcherHits += result.matcherHits;
 		matcherBytes += result.matcherBytes;
+		syntax.expressionsReused += result.syntax.expressionsReused;
+		syntax.expressionsParsed += result.syntax.expressionsParsed;
+		syntax.definitionsReused += result.syntax.definitionsReused;
+		syntax.temporaryReused += result.syntax.temporaryReused;
+		syntax.bytes += result.syntax.bytes;
 		contexts.push_back(result.context);
 		results.push_back(std::move(result));
 	}
@@ -362,17 +368,23 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 	analysisResults[uri] = std::move(results);
 	if (tracingEnabled())
 		sendNotification(
-			"window/logMessage", Json{
-									 {"type", 4},
-									 {"message", "incremental-lsp: " + Json{
-																		   {"main_uri", uri},
-																		   {"contexts_evaluated", contexts.size() - reused},
-																		   {"contexts_reused", reused},
-																		   {"matcher_computations", matcherComputations},
-																		   {"matcher_hits", matcherHits},
-																		   {"matcher_bytes", matcherBytes}
-																	   }.dump()}
-								 }
+			"window/logMessage",
+			Json{
+				{"type", 4},
+				{"message", "incremental-lsp: " + Json{
+													  {"main_uri", uri},
+													  {"contexts_evaluated", contexts.size() - reused},
+													  {"contexts_reused", reused},
+													  {"matcher_computations", matcherComputations},
+													  {"matcher_hits", matcherHits},
+													  {"matcher_bytes", matcherBytes},
+													  {"syntax_expressions_reused", syntax.expressionsReused},
+													  {"syntax_expression_parses", syntax.expressionsParsed},
+													  {"syntax_definitions_reused", syntax.definitionsReused},
+													  {"syntax_temporary_reused", syntax.temporaryReused},
+													  {"syntax_bytes", syntax.bytes}
+												  }.dump()}
+			}
 		);
 
 	// Update the import graph from every target profile. Imports are available

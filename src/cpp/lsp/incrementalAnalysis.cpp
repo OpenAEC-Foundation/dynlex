@@ -93,7 +93,10 @@ void compileWithMatcher(const std::string &uri, LspAnalysisResult &result, const
 		context.reuseMatcherResult = {};
 		context.recordMatcherResult = {};
 	});
-	bool complete = compile(uri, context);
+	result.syntax = compileWithParsedSyntaxProducts(context, previous ? previous->syntax.products : nullptr, [&] {
+		return compile(uri, context);
+	});
+	bool complete = result.syntax.success;
 	// Keep only queries used by this analysis. A failed analysis also retains
 	// the last complete product set, without chaining historical failed lookups.
 	auto snapshot = matcher.snapshot(IncrementalMatcherCache::SnapshotScope::Complete);
@@ -154,6 +157,8 @@ LspAnalysisResult analyzeLspDocument(
 			};
 			result.matcherProducts = previous->matcherProducts;
 			result.matcherBytes = previous->matcherBytes;
+			result.syntax.products = previous->syntax.products;
+			result.syntax.bytes = previous->syntax.bytes;
 			return result;
 		}
 	}
