@@ -2530,6 +2530,8 @@ holding the lock. Cache readers continue to own their immutable snapshots.
 When the checkpoint matches the directory and stays within the budget,
 finalization skips entry enumeration. Initial accounting, a changed directory,
 an interrupted publication or an over-budget total uses a full scan.
+When the total exceeds 512 MiB, eviction reduces it to 508 MiB or less so
+subsequent small publications can reuse the checkpoint.
 
 # LSP Interaction
 

@@ -32,17 +32,21 @@ void writeEntry(const fs::path &path, const std::string &payload) {
 	expect(bool(output), "Could not write the cache fixture");
 }
 
+void createSparseEntry(const fs::path &path, uint64_t size, std::chrono::hours age) {
+	int descriptor;
+	expect(!llvm::sys::fs::openFileForWrite(utf8Path(path), descriptor), "Could not create a sparse cache fixture");
+	expect(!llvm::sys::fs::resize_file_sparse(descriptor, size), "Could not size a sparse cache fixture");
+	expect(!llvm::sys::Process::SafelyCloseFileDescriptor(descriptor), "Could not close a sparse cache fixture");
+	fs::last_write_time(path, fs::file_time_type::clock::now() - age);
+}
+
 void verifyCacheBudget(const fs::path &directory) {
 	const fs::path filler = directory / ("object-" + std::string(64, 'a') + ".entry");
 	const fs::path entry = directory / ("program-" + std::string(64, 'b') + ".entry");
 	{
 		IncrementalCacheDirectory cache(directory);
-		int descriptor;
-		expect(!llvm::sys::fs::openFileForWrite(utf8Path(filler), descriptor), "Could not create a sparse cache fixture");
 		auto size = 512 * 1024 * 1024 - IncrementalCacheEntry::header.size() - 66;
-		expect(!llvm::sys::fs::resize_file_sparse(descriptor, size), "Could not size a sparse cache fixture");
-		expect(!llvm::sys::Process::SafelyCloseFileDescriptor(descriptor), "Could not close a sparse cache fixture");
-		fs::last_write_time(filler, fs::file_time_type::clock::now() - std::chrono::hours(1));
+		createSparseEntry(filler, size, std::chrono::hours(1));
 		expect(cache.trim().entriesScanned == 1, "Initial budget missed an existing entry");
 		cache.publish(entry, "a");
 		expect(cache.trim().entriesScanned == 0, "Tracking a published entry scanned the directory");
@@ -64,6 +68,24 @@ void verifyCacheBudget(const fs::path &directory) {
 	IncrementalCacheDirectory recovered(directory);
 	expect(recovered.trim().entriesScanned == 1, "Interrupted accounting did not rescan persisted entries");
 	expect(recovered.trim().entriesScanned == 0, "Recovered accounting did not persist");
+}
+
+void verifyEvictionHeadroom(const fs::path &directory) {
+	IncrementalCacheDirectory cache(directory);
+	constexpr uint64_t mib = 1024 * 1024;
+	const fs::path oldest = directory / ("object-" + std::string(64, 'a') + ".entry");
+	const fs::path next = directory / ("object-" + std::string(64, 'b') + ".entry");
+	const fs::path newest = directory / ("object-" + std::string(64, 'c') + ".entry");
+	const fs::path firstWrite = directory / ("program-" + std::string(64, 'd') + ".entry");
+	const fs::path nextWrite = directory / ("program-" + std::string(64, 'e') + ".entry");
+	createSparseEntry(oldest, mib, std::chrono::hours(3));
+	createSparseEntry(next, 4 * mib, std::chrono::hours(2));
+	createSparseEntry(newest, 507 * mib - 100, std::chrono::hours(1));
+	expect(cache.trim().entriesRemoved == 0, "A near-limit cache evicted entries before it needed to");
+	cache.publish(firstWrite, std::string(256, 'x'));
+	expect(cache.trim().entriesRemoved == 2 && fs::exists(newest), "Eviction did not leave room for later writes");
+	cache.publish(nextWrite, std::string(2 * mib, 'y'));
+	expect(cache.trim().entriesScanned == 0, "A write within eviction headroom rescanned the directory");
 }
 
 int verifyEntries(int argc, char **argv) {
@@ -139,6 +161,7 @@ int verifyEntries(int argc, char **argv) {
 	expect(rejected, "An oversized retained entry bypassed the size limit");
 	fs::remove(path);
 	verifyCacheBudget(directory / "accounting");
+	verifyEvictionHeadroom(directory / "headroom");
 	std::cout << "Retained cache payloads survive eviction and atomic replacement; integrity checks remain explicit.\n";
 	return 0;
 }
