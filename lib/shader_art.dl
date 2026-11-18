@@ -21,8 +21,8 @@ the dimensions measuring {floating-point number:width} by {floating-point number
     @intrinsic("construct", an aggregate of 3 floating-point number values, width, height, depth)
 )
 
-the shader width means: @intrinsic("shader uniform", "width", 2)
-the shader height means: @intrinsic("shader uniform", "height", 3)
+the shader width means: @intrinsic("shader uniform", "width", 2, @intrinsic("type", "float", 32))
+the shader height means: @intrinsic("shader uniform", "height", 3, @intrinsic("type", "float", 32))
 to get the fractional part of number:
     return number - the floor of number
 

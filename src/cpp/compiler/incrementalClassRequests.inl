@@ -1,3 +1,20 @@
+std::optional<Json> encodeClassRequestValue(const CompileTimeValue &value, const InferenceValueIdentities &identities) {
+	if (std::holds_alternative<std::monostate>(value))
+		return Json::array({"unknown"});
+	if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
+		return Json::array({"minimum"});
+	return encodeInferenceValue(value, identities);
+}
+
+std::optional<CompileTimeValue> decodeClassRequestValue(const Json &encoded, const InferenceValueIdentities &identities) {
+	const std::string &kind = encoded.at(0).get_ref<const std::string &>();
+	if (kind == "unknown")
+		return CompileTimeValue{};
+	if (kind == "minimum")
+		return MinimumSignedIntegerMagnitude{std::make_shared<const MinimumSignedIntegerMagnitudeIdentity>()};
+	return decodeInferenceValue(encoded, identities);
+}
+
 bool classRequestTypeIsPortable(const DataType &type) {
 	if (type.typeExpression)
 		return false;
@@ -25,7 +42,7 @@ Json encodeClassRequests(const ClassDefinition &definition, const InferenceValue
 				reference && !classRequestTypeIsPortable(reference->type))
 				return nullptr;
 			auto encodedType = encodePortableConstraintType(type, identities.classes);
-			auto encodedValue = encodeInferenceValue(value, identities);
+			auto encodedValue = encodeClassRequestValue(value, identities);
 			if (!encodedType || !encodedValue)
 				return nullptr;
 			parameters.push_back(Json::array({name, std::move(*encodedType), std::move(*encodedValue)}));
@@ -57,7 +74,7 @@ decodeClassRequests(const Json &records, const InferenceValueIdentities &identit
 		for (const Json &parameter : record.at(0)) {
 			if (!portableConstraintTypeReferencesPresent(parameter.at(1), identities.classes))
 				return std::nullopt;
-			auto value = decodeInferenceValue(parameter.at(2), identities);
+			auto value = decodeClassRequestValue(parameter.at(2), identities);
 			if (!value)
 				return std::nullopt;
 			request.parameters.emplace_back(

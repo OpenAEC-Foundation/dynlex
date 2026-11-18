@@ -1,0 +1,7 @@
+function measure {input}:
+    execute:
+        @intrinsic("store", copy, input)
+        @intrinsic("discard", copy)
+        @intrinsic("store", copy, 2)
+        @intrinsic("return", copy)
+@intrinsic("discard", measure 7)

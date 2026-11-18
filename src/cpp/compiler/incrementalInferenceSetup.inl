@@ -1,13 +1,14 @@
 if (previous) {
 	auto payloadStart = Clock::now();
 	for (const char *field : {"section_dependency_graph", "inference_summaries", "generated_ir", "root_grouping"})
-		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, field);
+		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, field);
 	if (context.options.emitDebugInfo)
-		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "debug_ir_inputs");
+		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "debug_ir_inputs");
 	statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 }
-priorInference =
-	selectInferenceState(previous ? &*previous : nullptr, previousFailure ? &*previousFailure : nullptr, directory, statistics);
+priorInference = selectInferenceState(
+	previous ? &*previous : nullptr, previousFailure ? &*previousFailure : nullptr, directory, retainedPayloads, statistics
+);
 if (priorInference) {
 	const Json &prior = priorInference->at("all_function_projection");
 	const Json &graph = priorInference->at("section_dependency_graph");
@@ -16,8 +17,9 @@ if (priorInference) {
 		inferenceReads.validate(context, graph.at("callable_lookups"));
 }
 auto constraintPrepareStart = Clock::now();
-priorConstraints =
-	selectConstraintReuseState(priorInference, previousFailure ? &*previousFailure : nullptr, directory, statistics);
+priorConstraints = selectConstraintReuseState(
+	priorInference, previousFailure ? &*previousFailure : nullptr, directory, retainedPayloads, statistics
+);
 if (priorConstraints.source && compatibleObservations(*priorConstraints.source, recording->observations, context)) {
 	auto changed = inferenceReads.changedKeys();
 	if (!priorInference || priorConstraints.graph != &priorInference->at("section_dependency_graph"))

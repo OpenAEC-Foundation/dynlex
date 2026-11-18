@@ -11,13 +11,15 @@ struct InferenceExecutionSnapshot {
 	InferenceContext::SubjectState subject;
 	TypeRefinementState types;
 	Instantiation *instantiation;
-	std::optional<InstantiationExecutionEffects> effects;
+	// Snapshots are immutable. Keep the aggregate out of recursive traversal
+	// frames, including the common case with no owning instantiation.
+	std::shared_ptr<const InstantiationExecutionEffects> effects;
 
 	explicit InferenceExecutionSnapshot(const InferenceContext &context)
 		: values(context.currentVariableValues), addresses(context.currentAddressState), subject(context.currentSubject),
 		  types(context.typeRefinements), instantiation(context.currentInstantiation) {
 		if (instantiation)
-			effects = *instantiation;
+			effects = std::make_shared<const InstantiationExecutionEffects>(*instantiation);
 	}
 
 	void restore(InferenceContext &context) const {

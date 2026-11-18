@@ -1,0 +1,30 @@
+type means: @intrinsic("type", "type")
+pointer to {type:value} means: @intrinsic("add pointer depth", value)
+integer means: @intrinsic("type", "int", 32)
+
+class:
+    patterns:
+        container
+    members:
+        entries as @intrinsic("array", 2, entry)
+
+class:
+    patterns:
+        entry
+    members:
+        container as pointer to container
+        number as integer
+
+function read array value {pointer to integer:context}:
+    execute:
+        @intrinsic("store", source, @intrinsic("cast", context, pointer to entry))
+        @intrinsic("store", owner, source's container)
+        @intrinsic("return", (@intrinsic("extract element", owner's entries, 1))'s number)
+
+@intrinsic("store", state, @intrinsic("construct", entry))
+@intrinsic("store", callback, @intrinsic("function", "read array value $"))
+@intrinsic("store", state's number, 23)
+@intrinsic("store", owner, @intrinsic("construct", container, [state, state]))
+@intrinsic("store", state's container, @intrinsic("address of", owner))
+@intrinsic("store", result, @intrinsic("call pointer", callback, integer, @intrinsic("cast", @intrinsic("address of", state), pointer to integer)))
+@intrinsic("variadic call", "libc", "printf", @intrinsic("type", "nothing"), 1, "%d\n", result)

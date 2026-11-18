@@ -1,0 +1,29 @@
+integer means: @intrinsic("type", "int", 32)
+
+function [height is] {value}:
+    replacement:
+        @intrinsic("multiply", value, 2)
+
+function {value} [is finite]:
+    replacement:
+        @intrinsic("equal", value, value)
+
+function [validate] {height}:
+    execute:
+        @intrinsic("return", height is finite)
+
+function [check local]:
+    execute:
+        @intrinsic("store", {height}, 1.0)
+        @intrinsic("return", height is finite)
+
+constant means: 5
+
+function [inspect] {constant}:
+    execute:
+        @intrinsic("return", constant)
+
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", @intrinsic("cast", validate 1.0, integer)))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", @intrinsic("cast", check local, integer)))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", height is 7))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", inspect 9))

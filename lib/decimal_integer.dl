@@ -1,0 +1,170 @@
+# Unsigned multiword arithmetic for exact decimal/binary conversion. Buffers have
+# one explicit owner; operations borrow pointers and copies allocate new storage.
+import lib/string.dl
+import lib/check.dl
+
+class:
+    patterns:
+        decimal magnitude
+    members:
+        words as a pointer to a 32 bit unsigned integer
+        count as an integer
+        capacity as an integer
+
+to get a decimal magnitude from {a 64 bit unsigned integer:value}:
+    set words to the checked allocation from (0 as a pointer) resized to 2 items of a 32 bit unsigned integer
+    store (value as a 32 bit unsigned integer) into words at 0
+    store ((value shifted right by 32) as a 32 bit unsigned integer) into words at 1
+    set count to 1 if (the item at 1 in words = 0), else 2
+    return @intrinsic("construct", decimal magnitude, words, count, 2)
+
+to [free decimal magnitude] {a pointer to decimal magnitude:value}:
+    deallocate value's words
+
+to [reserve decimal magnitude] {a pointer to decimal magnitude:value} for {integer:count} [words]:
+    if count <= value's capacity:
+        return nothing
+    set capacity to the collection capacity from (value's capacity) expanded to hold count items
+    set words to the checked allocation from (value's words as a pointer) resized to capacity items of a 32 bit unsigned integer
+    set value's words to words
+    set value's capacity to capacity
+
+to get a copy of decimal magnitude {a pointer to decimal magnitude:value}:
+    set result to a decimal magnitude from (0 as a 64 bit unsigned integer)
+    reserve decimal magnitude (the address of result) for (value's count) words
+    set index to 0
+    loop while index < value's count:
+        store (the item at index in (value's words)) into (result's words) at index
+        increment index
+    set result's count to value's count
+    return result
+
+to [trim decimal magnitude] {a pointer to decimal magnitude:value}:
+    loop while (value's count > 1) and ((the item at (value's count - 1) in (value's words)) = 0):
+        decrement value's count
+
+to get [compare decimal magnitude] {a pointer to decimal magnitude:left} with {a pointer to decimal magnitude:right}:
+    if left's count != right's count:
+        return (-1) if (left's count < right's count), else 1
+    set index to left's count - 1
+    loop while index >= 0:
+        set a to the item at index in (left's words)
+        set b to the item at index in (right's words)
+        if a != b:
+            return (-1) if (a < b), else 1
+        decrement index
+    return 0
+
+to [multiply decimal magnitude] {a pointer to decimal magnitude:value} by {a 32 bit unsigned integer:factor} adding {a 32 bit unsigned integer:extra}:
+    set carry to extra as a 64 bit unsigned integer
+    set index to 0
+    loop while index < value's count:
+        set word to (the item at index in (value's words)) as a 64 bit unsigned integer
+        set product to word * (factor as a 64 bit unsigned integer) + carry
+        store (product as a 32 bit unsigned integer) into (value's words) at index
+        set carry to product shifted right by 32
+        increment index
+    if carry != 0:
+        reserve decimal magnitude value for (value's count + 1) words
+        store (carry as a 32 bit unsigned integer) into (value's words) at (value's count)
+        increment value's count
+    trim decimal magnitude value
+
+to [subtract decimal magnitude] {a pointer to decimal magnitude:right} from {a pointer to decimal magnitude:left}:
+    require condition ((compare decimal magnitude left with right) >= 0) reporting "An exact conversion subtracted a larger magnitude"
+    set borrow to 0 as a 64 bit unsigned integer
+    set index to 0
+    loop while index < left's count:
+        set a to (the item at index in (left's words)) as a 64 bit unsigned integer
+        set b to borrow
+        if index < right's count:
+            add ((the item at index in (right's words)) as a 64 bit unsigned integer) to b
+        store ((a - b) as a 32 bit unsigned integer) into (left's words) at index
+        set borrow to (1 as a 64 bit unsigned integer) if (a < b), else (0 as a 64 bit unsigned integer)
+        increment index
+    trim decimal magnitude left
+
+to [add decimal magnitude] {a pointer to decimal magnitude:right} to {a pointer to decimal magnitude:left}:
+    set count to the maximum of (left's count) and (right's count)
+    reserve decimal magnitude left for (count + 1) words
+    set carry to 0 as a 64 bit unsigned integer
+    set index to 0
+    loop while index < count:
+        set sum to carry
+        if index < left's count:
+            add ((the item at index in (left's words)) as a 64 bit unsigned integer) to sum
+        if index < right's count:
+            add ((the item at index in (right's words)) as a 64 bit unsigned integer) to sum
+        store (sum as a 32 bit unsigned integer) into (left's words) at index
+        set carry to sum shifted right by 32
+        increment index
+    set left's count to count
+    if carry != 0:
+        store (carry as a 32 bit unsigned integer) into (left's words) at count
+        increment left's count
+
+to [shift decimal magnitude] {a pointer to decimal magnitude:value} left by {integer:bits}:
+    require condition (bits >= 0) reporting "An exact conversion used a negative left shift"
+    set whole to bits / 32
+    set part to bits mod 32
+    set previous to value's count
+    reserve decimal magnitude value for (previous + whole + 1) words
+    set carry to 0 as a 64 bit unsigned integer
+    set index to 0
+    loop while index < previous:
+        set word to (the item at index in (value's words)) as a 64 bit unsigned integer
+        set shifted to (word shifted left by part) bitwise or carry
+        store (shifted as a 32 bit unsigned integer) into (value's words) at index
+        set carry to shifted shifted right by 32
+        increment index
+    if carry != 0:
+        store (carry as a 32 bit unsigned integer) into (value's words) at previous
+        increment previous
+    set index to previous - 1
+    loop while index >= 0:
+        store (the item at index in (value's words)) into (value's words) at (index + whole)
+        decrement index
+    set index to 0
+    loop while index < whole:
+        store (0 as a 32 bit unsigned integer) into (value's words) at index
+        increment index
+    set value's count to previous + whole
+    trim decimal magnitude value
+
+to [halve decimal magnitude] {a pointer to decimal magnitude:value}:
+    set carry to 0 as a 32 bit unsigned integer
+    set index to value's count - 1
+    loop while index >= 0:
+        set word to the item at index in (value's words)
+        store ((word shifted right by 1) bitwise or carry) into (value's words) at index
+        set carry to word shifted left by 31
+        decrement index
+    trim decimal magnitude value
+
+to get the bit length of decimal magnitude {a pointer to decimal magnitude:value}:
+    set word to the item at (value's count - 1) in (value's words)
+    set result to (value's count - 1) * 32
+    loop while word != 0:
+        increment result
+        set word to word shifted right by 1
+    return result
+
+to get [the rounded decimal quotient of] {a pointer to decimal magnitude:numerator} by {a pointer to decimal magnitude:denominator}:
+    set shift to (the bit length of decimal magnitude numerator) - (the bit length of decimal magnitude denominator)
+    require condition (shift < 64) reporting "An exact conversion quotient exceeded 64 bits"
+    set result to 0 as a 64 bit unsigned integer
+    if shift >= 0:
+        set divisor to a copy of decimal magnitude denominator
+        shift decimal magnitude (the address of divisor) left by shift
+        loop while shift >= 0:
+            if (compare decimal magnitude numerator with (the address of divisor)) >= 0:
+                subtract decimal magnitude (the address of divisor) from numerator
+                set result to result bitwise or ((1 as a 64 bit unsigned integer) shifted left by shift)
+            halve decimal magnitude (the address of divisor)
+            decrement shift
+        free decimal magnitude (the address of divisor)
+    multiply decimal magnitude numerator by (2 as a 32 bit unsigned integer) adding (0 as a 32 bit unsigned integer)
+    set comparison to compare decimal magnitude numerator with denominator
+    if (comparison > 0) or ((comparison = 0) and ((result bitwise and 1) != 0)):
+        increment result
+    return result

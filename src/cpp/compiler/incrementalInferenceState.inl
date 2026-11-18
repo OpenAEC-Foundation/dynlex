@@ -18,16 +18,17 @@ Json inferenceStateManifest(const fs::path &directory, const Json &source) {
 	return state;
 }
 
-Json *selectInferenceState(Json *native, Json *failure, const fs::path &directory, BuildStatistics &statistics) {
+Json *selectInferenceState(
+	Json *native, Json *failure, const fs::path &directory, ProgramPayloads &retainedPayloads, BuildStatistics &statistics
+) {
 	if (!failure || failure->at("inference_state").is_null())
 		return native;
 	Json &state = failure->at("inference_state");
-	for (const auto &key : state.at("payload_keys"))
-		if (!recordCacheAccess(programPayloadPath(directory, key.get<std::string>())))
-			return native; // The independently evictable semantic index is unavailable.
+	if (!retainProgramPayloads(state, directory, retainedPayloads))
+		return native; // The independently evictable semantic index is unavailable.
 	auto start = Clock::now();
 	for (const char *field : inferenceStateFields)
-		statistics.cachePayloadsLoaded += hydrateProgramField(state, directory, field);
+		statistics.cachePayloadsLoaded += hydrateProgramField(state, retainedPayloads, field);
 	statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(start);
 	return &state;
 }

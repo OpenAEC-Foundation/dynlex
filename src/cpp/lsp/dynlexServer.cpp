@@ -16,7 +16,9 @@
 #include "sectionType.h"
 #include "semanticTokenBuilder.h"
 #include "semanticTokenDebug.h"
+#include "sourceExpressionFacts.h"
 #include "sourceFile.h"
+#include "sourceStringLiterals.h"
 #include "variable.h"
 #include <algorithm>
 #include <cmath>
@@ -765,7 +767,11 @@ static Section *findBestSectionForVariableLookup(
 				stack.push_back(child);
 		}
 
-		Variable *candidateVariable = section->findVariable(name);
+		// A binding visible through an ancestor is not owned by this section.
+		auto binding = section->variables.find(name);
+		if (binding == section->variables.end())
+			continue;
+		Variable *candidateVariable = binding->second;
 		if (!candidateVariable || !candidateVariable->definition)
 			continue;
 		if (definition && !sameVariableDefinitionSource(candidateVariable->definition, definition))

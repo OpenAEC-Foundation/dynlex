@@ -76,8 +76,7 @@ static std::optional<Expression::SectionOutcome::Kind> inferExpressionSectionOut
 	trialContext.currentVariableValues = context.currentVariableValues;
 	trialContext.currentAddressState = context.currentAddressState;
 	trialContext.currentSubject = context.currentSubject;
-	trialContext.inheritedTrialExpressionValues =
-		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;
+	trialContext.inheritedTrialContext = context.trial ? &context : context.inheritedTrialContext;
 	trialContext.trialJournal = &journal;
 	trialContext.unresolvedPatternConstraintSignal = context.unresolvedPatternConstraintSignal;
 	trialContext.detectGroupingAmbiguity = false;
@@ -105,8 +104,7 @@ static bool inferNextLoopHeaderOutcomeInTrial(
 	trialContext.currentVariableValues = context.currentVariableValues;
 	trialContext.currentAddressState = context.currentAddressState;
 	trialContext.currentSubject = context.currentSubject;
-	trialContext.inheritedTrialExpressionValues =
-		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;
+	trialContext.inheritedTrialContext = context.trial ? &context : context.inheritedTrialContext;
 	trialContext.trialJournal = &journal;
 	trialContext.unresolvedPatternConstraintSignal = context.unresolvedPatternConstraintSignal;
 	trialContext.detectGroupingAmbiguity = false;

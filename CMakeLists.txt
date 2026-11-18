@@ -545,6 +545,21 @@ if(NOT EMSCRIPTEN)
     )
 
     add_executable(
+        dynlex_incremental_cache_entry_test EXCLUDE_FROM_ALL
+        tests/cpp/incrementalCacheEntryTest.cpp
+        $<TARGET_OBJECTS:dynlex_compiler_objects>
+    )
+    target_compile_definitions(dynlex_incremental_cache_entry_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_DEFINITIONS>
+    )
+    target_compile_options(dynlex_incremental_cache_entry_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_OPTIONS>
+    )
+    target_link_libraries(dynlex_incremental_cache_entry_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},LINK_LIBRARIES>
+    )
+
+    add_executable(
         dynlex_expression_ownership_test EXCLUDE_FROM_ALL
         tests/cpp/expressionOwnershipTest.cpp
         $<TARGET_OBJECTS:dynlex_compiler_objects>
@@ -656,6 +671,8 @@ if(DYNLEX_WEB)
 
     set(DYNLEX_WEB_SOURCES ${PROJECT_SOURCES})
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalCompilation\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalCacheEntry\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalMatcherCache\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalGraphCodec\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalIRReuse\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalDebugIR\\.cpp$")
@@ -680,13 +697,14 @@ if(DYNLEX_WEB)
     dynlex_link_llvm(dynlex_web ${DYNLEX_LLVM_COMMON_COMPONENTS} SPIRV)
 
     set(DYNLEX_WEB_EXPORTED_FUNCTIONS
-        "['_dynlex_web_init','_dynlex_web_set_main_source','_dynlex_web_compile_and_emit_wasm','_dynlex_web_compile_and_emit_shader_spirv','_dynlex_web_get_diagnostics_json','_dynlex_web_get_output_wasm_ptr','_dynlex_web_get_output_wasm_len','_dynlex_web_get_output_wasm_base64','_dynlex_web_get_output_shader_spirv_base64','_dynlex_web_get_shader_uniforms_json','_dynlex_web_get_compiler_log_json','_dynlex_web_lsp_exchange_json']"
+        "['_dynlex_web_init','_dynlex_web_set_main_source','_dynlex_web_set_import_sources','_dynlex_web_set_entry_file','_dynlex_web_compile_and_emit_wasm','_dynlex_web_compile_and_emit_shader_spirv','_dynlex_web_get_diagnostics_json','_dynlex_web_get_output_wasm_ptr','_dynlex_web_get_output_wasm_len','_dynlex_web_get_output_wasm_base64','_dynlex_web_get_output_shader_spirv_base64','_dynlex_web_get_shader_reflection_json','_dynlex_web_get_compiler_log_json','_dynlex_web_lsp_exchange_json']"
     )
     set(DYNLEX_WEB_EXPORTED_RUNTIME_METHODS "['ccall','cwrap','UTF8ToString']")
-    file(GLOB_RECURSE DYNLEX_WEB_EMBEDDED_LIBRARY_FILES
-        CONFIGURE_DEPENDS
-        LIST_DIRECTORIES false
-        "${CMAKE_SOURCE_DIR}/lib/*"
+    include(cmake/EmbeddedDirectory.cmake)
+    dynlex_embedded_directory_dependencies(
+        "${CMAKE_SOURCE_DIR}/lib"
+        "${CMAKE_CURRENT_BINARY_DIR}/dynlex_web.embedded-files"
+        DYNLEX_WEB_EMBEDDED_LIBRARY_FILES
     )
     set_property(TARGET dynlex_web APPEND PROPERTY LINK_DEPENDS ${DYNLEX_WEB_EMBEDDED_LIBRARY_FILES})
     target_link_options(dynlex_web PRIVATE

@@ -7,10 +7,11 @@ static void initializeSectionSymbolIdentities(ParseContext &context) {
 	});
 }
 
-using ClassLayoutStack = std::vector<std::pair<const ClassDefinition *, int>>;
+// Retain every discovered layout so shared graphs encode once, including cycles.
+using ClassLayoutGraph = std::vector<std::pair<const ClassDefinition *, int>>;
 
 static void
-appendCodegenTypeIdentity(ParseContext &context, const DataType &type, ClassLayoutStack &layouts, std::string &identity) {
+appendCodegenTypeIdentity(ParseContext &context, const DataType &type, ClassLayoutGraph &layouts, std::string &identity) {
 	identity += std::to_string(static_cast<int>(type.kind)) + "," + std::to_string(type.numericSize) + "," +
 				std::to_string(type.pointerDepth) + "," + std::to_string(static_cast<int>(type.referencedKind)) + "," +
 				std::to_string(type.arraySize) + "," + std::to_string(type.matrixRowCount) + ";";
@@ -46,14 +47,13 @@ appendCodegenTypeIdentity(ParseContext &context, const DataType &type, ClassLayo
 	for (const DataType &field : definition.instantiations.at(type.classInstIndex).fieldTypes)
 		appendCodegenTypeIdentity(context, field, layouts, identity);
 	identity += "}";
-	layouts.pop_back();
 }
 
 static void appendInternalFunctionIdentity(
 	ParseContext &context, const Section *section, const std::vector<DataType> &argumentTypes, std::string &name
 ) {
 	std::string identity = context.functionSymbolIdentities.at(section);
-	ClassLayoutStack layouts;
+	ClassLayoutGraph layouts;
 	for (const DataType &type : argumentTypes) {
 		identity += "(";
 		appendCodegenTypeIdentity(context, type, layouts, identity);
@@ -63,7 +63,7 @@ static void appendInternalFunctionIdentity(
 }
 
 static void appendCodegenConstraintIdentity(
-	ParseContext &context, const TypeConstraint &constraint, ClassLayoutStack &layouts, std::string &identity
+	ParseContext &context, const TypeConstraint &constraint, ClassLayoutGraph &layouts, std::string &identity
 ) {
 	auto append = [&](const auto &value) {
 		identity += value ? std::to_string(static_cast<long long>(*value)) : "?";
@@ -99,7 +99,7 @@ static void appendCodegenConstraintIdentity(
 }
 
 static std::string codegenConstraintIdentity(ParseContext &context, const TypeConstraint &constraint) {
-	ClassLayoutStack layouts;
+	ClassLayoutGraph layouts;
 	std::string identity;
 	appendCodegenConstraintIdentity(context, constraint, layouts, identity);
 	return sectionIdentityDigest(identity);
@@ -148,11 +148,15 @@ static std::string encodeInstantiationKeyForFunctionName(ParseContext &context, 
 		else if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
 			suffix += "ptr" + std::to_string(pointer->address);
 		else if (const auto *function = std::get_if<CompileTimeFunction>(&value)) {
-			const Range &range = function->definition->range;
-			suffix += "fn" + std::to_string(range.line->mergedLineIndex) + "_" + std::to_string(range.start()) + "_" +
-					  std::to_string(function->pathIndex);
+			const auto &definitions = function->definition->section->patternDefinitions;
+			auto definition = std::ranges::find(definitions, function->definition);
+			requireCompilerInvariant(definition != definitions.end(), "function constant has an unowned definition");
+			std::string identity = context.functionSymbolIdentities.at(function->definition->section) + ":" +
+								   std::to_string(definition - definitions.begin()) + ":" + std::to_string(function->pathIndex);
+			ClassLayoutGraph layouts;
 			for (const DataType &type : function->instantiation->argumentTypes)
-				suffix += "_" + encodeLLVMNameComponent(type.toString());
+				appendCodegenTypeIdentity(context, type, layouts, identity);
+			suffix += "fn" + sectionIdentityDigest(identity);
 		} else
 			suffix += "unknown";
 	}

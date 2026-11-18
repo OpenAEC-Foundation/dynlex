@@ -1,0 +1,75 @@
+# Immutable sequences are owning values. Copies share storage; elements
+# keep their ordinary value ownership. Builders can keep using the mutable list library.
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] sequence
+    members:
+        data
+        length as an integer
+        owner as a pointer to integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to integer):
+            store (the value at owner) + 1 at owner
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to integer):
+            set references to the value at owner
+            if references = 1:
+                set data to the data of @intrinsic("lifecycle value")
+                set cursor to the length of @intrinsic("lifecycle value")
+                loop while cursor > 0:
+                    decrement cursor
+                    destroy the value at data + cursor
+                deallocate data
+                deallocate owner
+            else:
+                store references - 1 at owner
+
+to get an empty sequence of {type:kind}:
+    return @intrinsic("construct", a sequence, 0 as a pointer to kind, 0, 0 as a pointer to integer)
+
+to get [a sequence copying] {a value:values}:
+    set kind to the type of (the item at 0 in values)
+    set count to the length of values
+    if count = 0:
+        return an empty sequence of kind
+    set data to the checked allocation from (0 as a pointer) resized to count items of kind
+    set owner to the checked allocation from (0 as a pointer) resized to 1 items of integer
+    store 0 at owner
+    set cursor to 0
+    loop while cursor < count:
+        initialize (the item at cursor in values) at data + cursor
+        increment cursor
+    return @intrinsic("construct", a sequence, data, count, owner)
+
+to get the item at {integer:position} in {a sequence:values}:
+    if (position < 0) or (position >= the length of values):
+        stop because a list index is out of bounds
+    return the item at position in (values' data)
+
+to get {a sequence:values} contains item:
+    set cursor to 0
+    loop while cursor < the length of values:
+        if (the item at cursor in values) = item:
+            return true
+        increment cursor
+    return false
+
+
+# Transfer a completed builder without copying or retaining its elements. The
+# builder stays valid and empty, so its descriptor can be reused or freed.
+to get [a sequence taking the items from] {a pointer to a list:values}:
+    set kind to the type of (the item at 0 in values)
+    set data to values' data
+    set count to values' length
+    if data = (0 as a pointer to kind):
+        return an empty sequence of kind
+    set owner to the checked allocation from (0 as a pointer) resized to 1 items of integer
+    store 0 at owner
+    set values' data to 0 as a pointer to kind
+    set values' length to 0
+    set values' capacity to 0
+    return @intrinsic("construct", a sequence, data, count, owner)

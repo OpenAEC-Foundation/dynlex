@@ -63,7 +63,7 @@ show 42
                                                 "contentChanges": [{"text": updated}]})
         assert calls(tokens(updated), 4) == calls(original, 4)
 
-        farm = """import lib/farm_challenge.dl
+        farm = """import tests/lsp/color_vocabulary.dl
 walk to the nearest tree
 if i can reach it:
     chop it down

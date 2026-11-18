@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -12,7 +13,8 @@ if len(sys.argv) != 2:
 project = Path(sys.argv[1]).resolve()
 build = project / "build"
 subprocess.run(
-    ["cmake", "--build", str(build), "--target", "dynlex_native_target_test", "--parallel", "2"],
+    ["cmake", "--build", str(build), "--target", "dynlex_native_target_test",
+     "--parallel", os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL", "1")],
     check=True,
 )
 executable = build / ("dynlex_native_target_test.exe" if sys.platform == "win32" else "dynlex_native_target_test")

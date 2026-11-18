@@ -34,7 +34,7 @@ to get {string:text} starts with {C string:prefix}:
     return text starts with the string form of prefix
 
 to get {C string:text} starts with {C string:prefix}:
-    return the string form of text starts with the string form of prefix
+    return (the string form of text) starts with (the string form of prefix)
 
 to get {string:text} ends with {string:suffix}:
     return text has suffix at offset the length of text - the length of suffix
@@ -43,7 +43,7 @@ to get {string:text} ends with {C string:suffix}:
     return text ends with the string form of suffix
 
 to get {C string:text} ends with {C string:suffix}:
-    return the string form of text ends with the string form of suffix
+    return (the string form of text) ends with (the string form of suffix)
 
 to get {string:text} contains {string:fragment}:
     return the index of fragment in text >= 0
@@ -52,7 +52,7 @@ to get {string:text} contains {C string:fragment}:
     return the index of fragment in text >= 0
 
 to get {C string:text} contains {C string:fragment}:
-    return the string form of text contains the string form of fragment
+    return (the string form of text) contains (the string form of fragment)
 
 to get the lowercase form of {string:text}:
     set result to a new string buffer containing (the length of text) bytes
@@ -153,7 +153,7 @@ to get {string:text} split at {C string:separator}:
     return text split at the string form of separator
 
 to get {C string:text} split at {C string:separator}:
-    return the string form of text split at the string form of separator
+    return (the string form of text) split at (the string form of separator)
 
 to get {a pointer to a list:parts} joined with {string:separator}:
     set length and cursor to 0

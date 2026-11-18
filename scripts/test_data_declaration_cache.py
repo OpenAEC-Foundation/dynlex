@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""Named data remains visible to function bodies across cached source edits."""
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+
+def verify_edits(compiler, prefix, edits, options=()):
+    with tempfile.TemporaryDirectory(prefix=prefix) as temporary:
+        folder = Path(temporary)
+        source = folder / 'main.dl'
+        output = folder / 'main.out'
+        cache = folder / 'cache'
+        for index, (text, expected) in enumerate(edits):
+            source.write_text(text)
+            for arguments in [['--cache-dir', str(cache)], ['--no-incremental']]:
+                compiled = subprocess.run([str(compiler), str(source), *arguments, *options, '-o', str(output)],
+                                          text=True, capture_output=True, timeout=15)
+                if compiled.returncode or compiled.stderr:
+                    raise AssertionError((index, arguments, compiled.returncode, compiled.stdout, compiled.stderr))
+                result = subprocess.run([str(output)], text=True, capture_output=True, timeout=5)
+                if result.returncode or result.stdout != expected or result.stderr:
+                    raise AssertionError((index, arguments, expected, result.returncode, result.stdout, result.stderr))
+
+
+def main():
+    compiler = Path(sys.argv[1]).resolve()
+    root = Path(__file__).resolve().parents[1]
+    original = (root / 'tests/required/data_declaration_function_globals/main.dl').read_text()
+    changed = original.replace('42', '43')
+    changed_again = original.replace('42', '44')
+    renamed = changed.replace('sample entry', 'another answer')
+    verify_edits(compiler, 'dynlex-declaration-cache-',
+                 [(text, '') for text in [original, changed, changed_again, renamed, renamed, original]])
+    # A static value consumes both the declaration's arguments and the calls
+    # that produced them, even when the reader's source and global type stay put.
+    source = '''integer means: @intrinsic("type", "int", 32)
+to get initial:
+    @intrinsic("return", 42)
+section answer {name} from {integer:initial value}:
+    declares: name
+    result: integer
+    value: initial value
+function inspect:
+    globals: sample entry
+    execute: @intrinsic("return", sample entry)
+answer sample entry from initial:
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", inspect))
+'''
+    provider = source.replace('"return", 42', '"return", 43')
+    argument = provider.replace('sample entry from initial:', 'sample entry from 44:')
+    verify_edits(compiler, 'dynlex-declaration-value-inputs-',
+                 [(source, '42\n'), (provider, '43\n'), (argument, '44\n'),
+                  (argument, '44\n'), (source, '42\n')])
+    # Runtime-backed descriptions must keep one snapshot when readers are
+    # reused, other declarations move, or the initializer changes.
+    fixture = root / 'tests/required/data_section_cross_function_value/main.dl'
+    original = fixture.read_text()
+    changed = original.replace('    1\n', '    2\n')
+    reordered = changed.replace('numbers first palette:', 'numbers unused palette:\n    9\nnumbers first palette:')
+    renamed = reordered.replace('first palette', 'new palette')
+    verify_edits(compiler, 'dynlex-snapshot-cache-',
+                 [(original, '1\n'), (changed, '2\n'), (reordered, '2\n'),
+                  (renamed, '2\n'), (renamed, '2\n'), (original, '1\n')], ['-O0'])
+    original = (root / 'tests/required/data_section_main_flex_capture/main.dl').read_text()
+    changed = original.replace('value: 42', 'value: 43')
+    renamed = changed.replace('answer', 'named number')
+    forward = (root / 'tests/required/data_section_main_flex_forward/main.dl').read_text()
+    verify_edits(compiler, 'dynlex-inline-data-cache-',
+                 [(original, '43\n'), (changed, '44\n'), (renamed, '44\n'),
+                  (forward, '43\n'), (original, '43\n')], ['-O0'])
+    original = (root / 'tests/required/data_section_callback_snapshot/main.dl').read_text()
+    renamed = original.replace('callback answer', 'another callback')
+    verify_edits(compiler, 'dynlex-callback-data-cache-',
+                 [(text, '1 1\n') for text in [original, renamed, renamed, original]], ['-O0'])
+    print('Named data preserves static descriptions, snapshots and inline captures across cached edits, reordering and renames.')
+
+
+if __name__ == '__main__':
+    main()

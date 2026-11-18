@@ -414,19 +414,12 @@ local function the completed workspace edit parse for {a pointer to a parsed wor
             return a failed workspace edit parse reporting reason
         return a successful workspace edit parse containing edit
 
-to get the result of parsing {string:source} as a workspace edit:
-    parse source as JSON and set parsed to it
-    if parsed failed:
-        set outcome to a failed workspace edit parse reporting the string form of "Workspace edit is not valid JSON"
-        free parsed
-        return outcome
-    set root to the value of parsed
+to get the result of parsing {a pointer to a JSON value:root} as a workspace edit:
     set state to a new workspace edit parser state
     if root violates the workspace JSON object requirement reporting the string form of "Workspace edit must be an object" using state:
         set composition to a new parsed workspace edit using document changes false
         set outcome to the completed workspace edit parse for composition using state
         free state
-        free parsed
         return outcome
 
     set ordered to (root has JSON member named "documentChanges")
@@ -467,6 +460,15 @@ to get the result of parsing {string:source} as a workspace edit:
         parse workspace annotations from root into composition using state
     set outcome to the completed workspace edit parse for composition using state
     free state
+    return outcome
+
+to get the result of parsing {string:source} as a workspace edit:
+    parse source as JSON and set parsed to it
+    if parsed failed:
+        set outcome to a failed workspace edit parse reporting the string form of "Workspace edit is not valid JSON"
+        free parsed
+        return outcome
+    set outcome to the result of parsing (the value of parsed) as a workspace edit
     free parsed
     return outcome
 

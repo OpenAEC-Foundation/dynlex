@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import {buildRuntimeImports,createRuntimeFilesystem,inspectRuntimeWasmLayout} from '../../src/web/ide/public/compiler/runtimeImports.js';
+import {observeAllocations} from './allocation_probe.mjs';
+const bytes=await fs.readFile(process.argv[2]),output=[];
+const runtime=buildRuntimeImports(output,createRuntimeFilesystem(),inspectRuntimeWasmLayout(bytes));
+const allocation=observeAllocations(runtime,4*1024*1024);
+const {instance}=await WebAssembly.instantiate(bytes,runtime);instance.exports.main();
+assert.equal(output.join(''),'JSON text buffers scale with individual tokens and preserve Unicode decoding.\n');
+assert.equal(allocation.live,0,'Parsing left owned JSON strings or containers allocated');
+console.log(`JSON Unicode parsing used ${allocation.peak} peak live bytes and freed every allocation.`);

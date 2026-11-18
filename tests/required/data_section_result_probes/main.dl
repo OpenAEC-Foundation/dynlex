@@ -1,0 +1,22 @@
+integer means: @intrinsic("type", "integer")
+class:
+    patterns:
+        descriptor
+    members:
+        value as integer
+section describe {name}:
+    declares: name
+    result: descriptor
+    value:
+        @intrinsic("construct", descriptor, 1)
+describe example:
+collection means: [example]
+
+# Independent signature probes must not infer the shared result schema in place.
+function accept array {@intrinsic("array", @intrinsic("type extent", collection, 0), descriptor):value}:
+    execute:
+        @intrinsic("discard", value)
+function accept another {@intrinsic("array", @intrinsic("type extent", collection, 0), descriptor):value}:
+    execute:
+        @intrinsic("discard", value)
+@intrinsic("discard", example)

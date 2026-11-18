@@ -16,6 +16,7 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/IntrinsicsSPIRV.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include <algorithm>
@@ -335,6 +336,7 @@ static bool generateIntrinsicRuntimeValue(ParseContext &context, Expression *exp
 #include "codegenIntrinsicMemory.inl"
 #include "codegenIntrinsicNumeric.inl"
 #include "codegenIntrinsicTypes.inl"
+#include "codegenShaderResources.inl"
 
 CodegenResult generateIntrinsicCode(
 	ParseContext &context, Expression *callExpr, const std::string &name, const std::vector<Expression *> &allArguments,
@@ -440,10 +442,29 @@ CodegenResult generateIntrinsicCode(
 		return generateConstructIntrinsic(context, args, resultType);
 	if (kind == IntrinsicKind::Property)
 		return generatePropertyIntrinsic(context, callExpr, args);
-	if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpolantInput)
-		return generateShaderInputIntrinsic(context, args, kind);
+	if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderVertexInput ||
+		kind == IntrinsicKind::ShaderInterpolantInput)
+		return generateShaderInputIntrinsic(context, callExpr, args, kind);
 	if (kind == IntrinsicKind::ShaderUniform)
 		return generateShaderUniformIntrinsic(context, callExpr, args);
+	if (kind == IntrinsicKind::ShaderDerivative) {
+		std::string axis = getCompileTimeString(context, args[1]);
+		requireCompilerInvariant(axis == "x" || axis == "y", "shader derivative lost its validated axis");
+		llvm::Value *value = nullptr;
+		if (!generateIntrinsicRuntimeValue(context, args[2], value))
+			return CodegenResult::failure();
+		auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+		auto *operation = builder.CreateIntrinsic(
+			axis == "x" ? llvm::Intrinsic::spv_ddx : llvm::Intrinsic::spv_ddy, {value->getType()}, {value}
+		);
+		operation->getCalledFunction()->setConvergent();
+		operation->setConvergent();
+		return operation;
+	}
+	if (kind == IntrinsicKind::ShaderImage || kind == IntrinsicKind::ShaderSampler)
+		return nullptr;
+	if (kind == IntrinsicKind::ShaderSampleLevel || kind == IntrinsicKind::ShaderSampleCompare)
+		return generateShaderSampleIntrinsic(context, callExpr);
 	if (kind == IntrinsicKind::ShaderOutput || kind == IntrinsicKind::ShaderInterpolantOutput)
 		return generateShaderOutputIntrinsic(context, args, kind);
 	if (kind == IntrinsicKind::ExtractElement)

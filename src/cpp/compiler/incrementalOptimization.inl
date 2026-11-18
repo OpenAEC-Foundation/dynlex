@@ -34,12 +34,16 @@ Json summarizeOptimizedUnit(const llvm::Module &module) {
 	}
 	bool assembly = !module.getModuleInlineAsm().empty();
 	if (assembly)
-		llvm::ModuleSymbolTable::CollectAsmSymbols(module, [&](llvm::StringRef name, llvm::object::BasicSymbolRef::Flags flags) {
+		llvm::ModuleSymbolTable::CollectAsmSymbols(
+			module, [&](llvm::StringRef name, llvm::object::BasicSymbolRef::Flags flags) {
 			if (flags & llvm::object::BasicSymbolRef::SF_Undefined)
 				references.insert(name.str());
-		});
+		}
+		);
 	return Json{
-		{"definitions", std::move(definitions)}, {"references", std::move(references)}, {"functions", functions},
+		{"definitions", std::move(definitions)},
+		{"references", std::move(references)},
+		{"functions", functions},
 		{"assembly", assembly}
 	};
 }
@@ -55,14 +59,15 @@ struct IncrementalOptimization {
 	std::map<std::string, std::string> materializedBitcode;
 
 	IncrementalOptimization(
-		ParseContext &context, const fs::path &directory, const std::string &compilerIdentity, const Json &options,
-		Json *previous, BuildStatistics &statistics, const IncrementalIRReuse *functionReuse
+		ParseContext &context, const fs::path &directory, const ProgramPayloads &retainedPayloads,
+		const std::string &compilerIdentity, const Json &options, Json *previous, BuildStatistics &statistics,
+		const IncrementalIRReuse *functionReuse
 	)
 		: context(context), directory(directory), statistics(statistics), cacheIdentity(compilerIdentity + options.dump()) {
 		auto start = Clock::now();
 		if (previous) {
 			auto payloadStart = Clock::now();
-			statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "optimization_units");
+			statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "optimization_units");
 			statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 		}
 		inputs = captureOptimizationInputs(
@@ -158,39 +163,40 @@ struct IncrementalOptimization {
 		statistics.optimizationIndexMilliseconds += elapsedMilliseconds(indexStart);
 		llvm::FileCache cache(
 			[&](unsigned task, llvm::StringRef key, const llvm::Twine &module) -> llvm::Expected<llvm::AddStreamFn> {
-				try {
-					std::string name = module.str();
-					if (!materialize.empty() && !materialize.contains(name))
+			try {
+				std::string name = module.str();
+				if (!materialize.empty() && !materialize.contains(name))
+					return llvm::AddStreamFn{};
+				std::string identity = digest(cacheIdentity + key.str());
+				if (materialize.empty())
+					if (auto payload = readEntry(directory / ("optimization-" + identity + ".entry"))) {
+						Json result = Json::parse(*payload);
+						std::lock_guard lock(mutex);
+						outputs.emplace(std::move(name), std::move(result));
+						statistics.optimizationUnitsReused++;
 						return llvm::AddStreamFn{};
-					std::string identity = digest(cacheIdentity + key.str());
-					if (materialize.empty())
-						if (auto payload = readEntry(directory / ("optimization-" + identity + ".entry"))) {
-							Json result = Json::parse(*payload);
-							std::lock_guard lock(mutex);
-							outputs.emplace(std::move(name), std::move(result));
-							statistics.optimizationUnitsReused++;
-							return llvm::AddStreamFn{};
-						}
-					std::lock_guard lock(mutex);
-					tasks.emplace(task, std::pair{std::move(identity), std::move(name)});
-					return llvm::AddStreamFn(
-						[](unsigned, const llvm::Twine &) -> llvm::Expected<std::unique_ptr<llvm::CachedFileStream>> {
-							crashCompilerBug("optimization query reached native lowering");
-						}
-					);
-				} catch (const std::exception &error) {
-					return llvm::createStringError(std::make_error_code(std::errc::io_error), llvm::Twine(error.what()));
+					}
+				std::lock_guard lock(mutex);
+				tasks.emplace(task, std::pair{std::move(identity), std::move(name)});
+				return llvm::AddStreamFn(
+					[](unsigned, const llvm::Twine &) -> llvm::Expected<std::unique_ptr<llvm::CachedFileStream>> {
+					crashCompilerBug("optimization query reached native lowering");
 				}
-			}, directory.string()
+				);
+			} catch (const std::exception &error) {
+				return llvm::createStringError(std::make_error_code(std::errc::io_error), llvm::Twine(error.what()));
+			}
+		}, directory.string()
 		);
 		auto runStart = Clock::now();
 		llvm::Error error =
 			optimizer.run([](unsigned, const llvm::Twine &) -> llvm::Expected<std::unique_ptr<llvm::CachedFileStream>> {
-				crashCompilerBug("optimization query emitted an uncached native object");
-			}, std::move(cache));
+			crashCompilerBug("optimization query emitted an uncached native object");
+		}, std::move(cache));
 		statistics.optimizationBackendMilliseconds += elapsedMilliseconds(runStart);
-		statistics.optimizationMilliseconds =
-			statistics.optimizationInputMilliseconds + statistics.optimizationIndexMilliseconds + statistics.optimizationBackendMilliseconds;
+		statistics.optimizationMilliseconds = statistics.optimizationInputMilliseconds +
+											  statistics.optimizationIndexMilliseconds +
+											  statistics.optimizationBackendMilliseconds;
 		if (failure) {
 			llvm::consumeError(std::move(error));
 			std::rethrow_exception(failure);

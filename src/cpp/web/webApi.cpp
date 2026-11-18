@@ -2,6 +2,7 @@
 #ifdef DYNLEX_WEB
 
 #include "codegen/codegen.h"
+#include "codegen/spirv.h"
 #include "compiler/compiler.h"
 #include "lsp/dynlexServer.h"
 #include "lsp/fileSystem.h"
@@ -12,11 +13,15 @@
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <optional>
+#include <set>
 #include <spirv_cross.hpp>
 #include <stdexcept>
 #include <string>
@@ -140,12 +145,14 @@ class WebLspServer final : public lsp::DynLexServer {
 
 struct WebCompilerState {
 	bool initialized = false;
-	std::string mainSource;
+	std::string entryPath = kMainSourcePath;
+	std::optional<std::string> mainSource;
+	std::vector<std::filesystem::path> importSourcePaths;
 	std::vector<uint8_t> outputWasm;
 	std::string outputWasmBase64;
 	std::vector<uint8_t> outputShaderSpirv;
 	std::string outputShaderSpirvBase64;
-	std::string shaderUniformsJson = R"({"uniforms":[]})";
+	std::string shaderReflectionJson = R"({"uniforms":[],"vertexInputs":[],"resources":[]})";
 	std::vector<CompilerLogEntry> compilerLog;
 	std::string diagnosticsJson = R"({"diagnostics":[]})";
 	std::string compilerLogJson = R"({"messages":[]})";
@@ -156,6 +163,28 @@ struct WebCompilerState {
 WebCompilerState &webState() {
 	static WebCompilerState state;
 	return state;
+}
+
+std::filesystem::path relativeSourcePath(const std::string &name) {
+	const std::filesystem::path path(name);
+	if (name.empty() || name.find('\0') != std::string::npos || path.is_absolute() || path.filename().empty() || path == "." ||
+		*path.begin() == ".." || path.lexically_normal().generic_string() != name)
+		throw std::invalid_argument("A source needs a normalized relative filename");
+	return path;
+}
+
+void clearImportSources(WebCompilerState &state) {
+	std::set<std::filesystem::path> directories;
+	for (const auto &path : state.importSourcePaths) {
+		std::filesystem::remove(path);
+		for (auto directory = path.parent_path(); directory != "/workspace"; directory = directory.parent_path())
+			directories.insert(directory);
+	}
+	for (auto directory = directories.rbegin(); directory != directories.rend(); ++directory) {
+		if (std::filesystem::is_empty(*directory))
+			std::filesystem::remove(*directory);
+	}
+	state.importSourcePaths.clear();
 }
 
 void appendCompilerLog(std::string level, std::string message) {
@@ -293,7 +322,11 @@ std::string encodeBase64(const std::vector<uint8_t> &bytes) {
 	return encoded;
 }
 
-bool reflectShaderSpirv(const std::vector<uint8_t> &spirvBytes, std::string &uniformsJson, std::string &errorMessage) {
+#include "webShaderResources.inl"
+
+bool reflectShaderSpirv(
+	const std::vector<uint8_t> &spirvBytes, const ParseContext &context, std::string &reflectionJson, std::string &errorMessage
+) {
 	if (spirvBytes.size() < 20 || spirvBytes.size() % sizeof(uint32_t) != 0) {
 		errorMessage = "emitted SPIR-V is not a complete word stream";
 		return false;
@@ -324,6 +357,51 @@ bool reflectShaderSpirv(const std::vector<uint8_t> &spirvBytes, std::string &uni
 			reflectedUniform["name"] = spirvName.substr(prefix.size());
 			reflectedUniform["group"] = compiler.get_decoration(uniform.id, spv::DecorationDescriptorSet);
 			reflectedUniform["binding"] = compiler.get_decoration(uniform.id, spv::DecorationBinding);
+			const auto &block = compiler.get_type(uniform.base_type_id);
+			requireCompilerInvariant(block.member_types.size() == 1, "uniform block has an unexpected member count");
+			const auto &value = compiler.get_type(block.member_types.front());
+			const char *scalar = nullptr;
+			uint32_t rows = 1, columns = value.vecsize;
+			if (value.basetype == spirv_cross::SPIRType::Struct) {
+				requireCompilerInvariant(!value.member_types.empty(), "matrix uniform storage has no rows");
+				const auto &row = compiler.get_type(value.member_types.front());
+				columns = row.vecsize;
+				const uint32_t step = columns < 4 ? 2 : 1;
+				rows = value.member_types.size() / step;
+				requireCompilerInvariant(
+					row.basetype == spirv_cross::SPIRType::Float && row.width == 32 && row.columns == 1 && row.array.empty() &&
+						columns >= 2 && columns <= 4 && rows >= 2 && rows <= 4 && value.member_types.size() == rows * step &&
+						compiler.get_declared_struct_size(value) == rows * 16,
+					"matrix uniform has an unsupported physical layout"
+				);
+				for (uint32_t index = 0; index < rows; ++index) {
+					requireCompilerInvariant(
+						value.member_types[index * step] == value.member_types.front() &&
+							compiler.type_struct_member_offset(value, index * step) == index * 16,
+						"matrix uniform rows have inconsistent storage"
+					);
+					if (step == 2) {
+						const auto &padding = compiler.get_type(value.member_types[index * step + 1]);
+						requireCompilerInvariant(
+							padding.basetype == spirv_cross::SPIRType::Float && padding.width == 32 && padding.columns == 1 &&
+								padding.vecsize == 4 - columns && padding.array.empty() &&
+								compiler.type_struct_member_offset(value, index * step + 1) == index * 16 + columns * 4,
+							"matrix uniform padding has inconsistent storage"
+						);
+					}
+				}
+				scalar = "float32";
+			} else {
+				scalar = value.basetype == spirv_cross::SPIRType::Float	 ? "float32"
+						 : value.basetype == spirv_cross::SPIRType::Int	 ? "sint32"
+						 : value.basetype == spirv_cross::SPIRType::UInt ? "uint32"
+																		 : nullptr;
+				requireCompilerInvariant(
+					scalar && value.width == 32 && value.columns == 1 && value.array.empty(),
+					"uniform block has an unsupported reflected type"
+				);
+			}
+			reflectedUniform["type"] = {{"scalar", scalar}, {"rows", rows}, {"columns", columns}};
 			uniforms.push_back(std::move(reflectedUniform));
 		}
 		std::sort(uniforms.begin(), uniforms.end(), [](const nlohmann::json &left, const nlohmann::json &right) {
@@ -333,7 +411,47 @@ bool reflectShaderSpirv(const std::vector<uint8_t> &spirvBytes, std::string &uni
 		});
 		nlohmann::json reflection;
 		reflection["uniforms"] = std::move(uniforms);
-		uniformsJson = reflection.dump();
+		nlohmann::json inputs = nlohmann::json::array();
+		if (context.options.shaderStage == ParseContext::ShaderStage::Vertex) {
+			for (const auto &input : resources.stage_inputs) {
+				const std::string symbol = compiler.get_name(input.id);
+				auto declared =
+					std::find_if(context.shaderVertexInputs.begin(), context.shaderVertexInputs.end(), [&](const auto &entry) {
+					return shaderVertexInputGlobalName(entry.name, entry.location, entry.type) == symbol;
+				});
+				if (declared == context.shaderVertexInputs.end() ||
+					!compiler.has_decoration(input.id, spv::DecorationLocation)) {
+					errorMessage = "Emitted vertex input is missing its declared interface";
+					return false;
+				}
+				const auto &type = compiler.get_type(input.base_type_id);
+				std::string format;
+				if (type.basetype == spirv_cross::SPIRType::Float)
+					format = "float32";
+				else if (type.basetype == spirv_cross::SPIRType::Int)
+					format = "sint32";
+				else if (type.basetype == spirv_cross::SPIRType::UInt)
+					format = "uint32";
+				if (format.empty() || type.width != 32 || type.columns != 1 || type.vecsize < 1 || type.vecsize > 4 ||
+					!type.array.empty()) {
+					errorMessage = "Emitted vertex input has an unsupported GPU format";
+					return false;
+				}
+				if (type.vecsize > 1)
+					format += "x" + std::to_string(type.vecsize);
+				inputs.push_back(
+					{{"name", declared->name},
+					 {"location", compiler.get_decoration(input.id, spv::DecorationLocation)},
+					 {"format", format}}
+				);
+			}
+			std::sort(inputs.begin(), inputs.end(), [](const auto &left, const auto &right) {
+				return left.at("location") < right.at("location");
+			});
+		}
+		reflection["vertexInputs"] = std::move(inputs);
+		reflection["resources"] = reflectedShaderResources(compiler, resources, context);
+		reflectionJson = reflection.dump();
 		return true;
 	} catch (const std::exception &error) {
 		errorMessage = error.what();
@@ -353,12 +471,12 @@ int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderSta
 	state.outputWasmBase64.clear();
 	state.outputShaderSpirv.clear();
 	state.outputShaderSpirvBase64.clear();
-	state.shaderUniformsJson = R"({"uniforms":[]})";
+	state.shaderReflectionJson = R"({"uniforms":[],"vertexInputs":[],"resources":[]})";
 	state.compilerLog.clear();
 	appendCompilerLog("info", "compile request started");
 
 	ParseContext context;
-	context.options.inputPath = kMainSourcePath;
+	context.options.inputPath = state.entryPath;
 	context.options.outputPath = outputKind == WebOutputKind::ShaderSpirv ? kOutputSpirvPath : kOutputWasmPath;
 	context.options.emitWASM = outputKind == WebOutputKind::ProgramWasm;
 	context.options.emitLLVM = false;
@@ -366,10 +484,11 @@ int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderSta
 	context.options.shaderStage = shaderStage;
 	context.options.traceExecution = traceExecution;
 	auto memoryFileSystem = std::make_unique<lsp::MemoryFileSystem>(std::make_unique<lsp::LocalFileSystem>());
-	memoryFileSystem->setFile(kMainSourcePath, state.mainSource);
+	if (state.mainSource)
+		memoryFileSystem->setFile(state.entryPath, *state.mainSource);
 	context.fileSystem = std::move(memoryFileSystem);
 
-	bool frontEndSuccess = compile(kMainSourcePath, context);
+	bool frontEndSuccess = compile(state.entryPath, context);
 	bool codegenSuccess = false;
 	if (frontEndSuccess) {
 		appendCompilerLog("info", "front-end compile finished");
@@ -419,7 +538,7 @@ int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderSta
 			return WebCompileStatusInternalError;
 		}
 		std::string reflectionError;
-		if (!reflectShaderSpirv(state.outputShaderSpirv, state.shaderUniformsJson, reflectionError)) {
+		if (!reflectShaderSpirv(state.outputShaderSpirv, context, state.shaderReflectionJson, reflectionError)) {
 			std::cerr << "Shader reflection failed: " << reflectionError << '\n';
 			appendCompilerLog("error", "An error occurred. Check the browser log.");
 			flushCompilerLogJson();
@@ -468,6 +587,7 @@ extern "C" {
 // NOLINTBEGIN(readability-identifier-naming)
 EMSCRIPTEN_KEEPALIVE void dynlex_web_init() {
 	WebCompilerState &state = webState();
+	clearImportSources(state);
 	state = {};
 	state.initialized = true;
 	state.mainSource = "print \"\"";
@@ -481,7 +601,67 @@ EMSCRIPTEN_KEEPALIVE void dynlex_web_set_main_source(const char *utf8Source) {
 	WebCompilerState &state = webState();
 	if (!state.initialized)
 		dynlex_web_init();
+	state.entryPath = kMainSourcePath;
 	state.mainSource = utf8Source ? std::string(utf8Source) : std::string{};
+}
+
+EMSCRIPTEN_KEEPALIVE int dynlex_web_set_entry_file(const char *relativeFilename) {
+	WebCompilerState &state = webState();
+	if (!state.initialized)
+		dynlex_web_init();
+	try {
+		if (!relativeFilename)
+			throw std::invalid_argument("The entry file needs a relative filename");
+		state.entryPath = (std::filesystem::path("/workspace") / relativeSourcePath(relativeFilename)).generic_string();
+		state.mainSource.reset();
+		return WebCompileStatusOk;
+	} catch (const std::invalid_argument &error) {
+		appendCompilerLog("error", error.what());
+		flushCompilerLogJson();
+		return WebCompileStatusCompileFailed;
+	}
+}
+
+// Replace the browser workspace's project modules. No application library is
+// embedded in the compiler; the caller explicitly selects an inline or file entry.
+EMSCRIPTEN_KEEPALIVE int dynlex_web_set_import_sources(const char *sourcesJson) {
+	WebCompilerState &state = webState();
+	if (!state.initialized)
+		dynlex_web_init();
+	std::map<std::string, std::string> sources;
+	try {
+		if (!sourcesJson)
+			throw std::invalid_argument("Imported sources need a JSON object");
+		const Json input = Json::parse(sourcesJson);
+		if (!input.is_object())
+			throw std::invalid_argument("Imported sources must be a filename-to-source object");
+		for (const auto &[name, value] : input.items()) {
+			relativeSourcePath(name);
+			sources.emplace(name, value.get<std::string>());
+		}
+		for (const auto &[name, source] : sources) {
+			for (auto parent = std::filesystem::path(name).parent_path(); !parent.empty(); parent = parent.parent_path()) {
+				if (sources.contains(parent.generic_string()))
+					throw std::invalid_argument("An imported source filename cannot also be a directory");
+			}
+		}
+	} catch (const std::exception &error) {
+		appendCompilerLog("error", std::string("Imported sources rejected: ") + error.what());
+		flushCompilerLogJson();
+		return WebCompileStatusCompileFailed;
+	}
+
+	clearImportSources(state);
+	for (const auto &[name, source] : sources) {
+		const auto path = std::filesystem::path("/workspace") / name;
+		std::filesystem::create_directories(path.parent_path());
+		std::ofstream output(path, std::ios::binary);
+		output.exceptions(std::ios::badbit | std::ios::failbit);
+		output.write(source.data(), static_cast<std::streamsize>(source.size()));
+		output.close();
+		state.importSourcePaths.push_back(path);
+	}
+	return WebCompileStatusOk;
 }
 
 EMSCRIPTEN_KEEPALIVE int dynlex_web_compile_and_emit_wasm() {
@@ -527,7 +707,7 @@ EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_output_shader_spirv_base64() {
 	return webState().outputShaderSpirvBase64.c_str();
 }
 
-EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_shader_uniforms_json() { return webState().shaderUniformsJson.c_str(); }
+EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_shader_reflection_json() { return webState().shaderReflectionJson.c_str(); }
 
 EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_compiler_log_json() { return webState().compilerLogJson.c_str(); }
 

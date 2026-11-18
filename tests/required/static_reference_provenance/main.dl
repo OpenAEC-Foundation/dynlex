@@ -1,0 +1,33 @@
+# Static descriptions keep one shared immutable graph through nested copies.
+[a|] type means: @intrinsic("type", "type")
+[an|] integer means: @intrinsic("type", "int", 32)
+[a|] pointer to {type:kind} means: @intrinsic("add pointer depth", kind)
+
+class:
+    patterns:
+        record
+    members:
+        value as an integer
+        first as a pointer to an integer
+        second as a pointer to an integer
+        third as a pointer to an integer
+        fourth as a pointer to an integer
+
+copy of {a pointer to record:source} means: @intrinsic("static reference", @intrinsic("construct", record,
+    @intrinsic("property", source, "value"),
+    @intrinsic("property", source, "first"),
+    @intrinsic("property", source, "second"),
+    @intrinsic("property", source, "third"),
+    @intrinsic("property", source, "fourth")))
+
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+[initial record] means: @intrinsic("static reference", @intrinsic("construct", record, 74,
+    @intrinsic("static reference", 1),
+    @intrinsic("static reference", 1),
+    @intrinsic("static reference", 1),
+    @intrinsic("static reference", 1)))
+set copied to copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (initial record))))))))))))))
+@intrinsic("discard", @intrinsic("call", "libc", "printf", an integer, "%d\n", @intrinsic("property", copied, "value")))

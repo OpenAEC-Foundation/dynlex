@@ -742,13 +742,15 @@ collect_required_tests() {
     local status=0
     collect_fixture_tests || status=$?
     collect_test_group incremental "$incremental_worker" || status=$?
+    collect_test_group incremental_dependencies "$incremental_dependencies_worker" || status=$?
     return "$status"
 }
 
 # Run fixtures concurrently with the independent auxiliary checks in the short gate.
 # Integration checks keep their existing single-group memory budget.
 if [[ "$suite" == required ]]; then
-    start_fixture_tests
+    start_test_group fixture run_fixture_tests
+    fixture_worker=$test_group_worker
 else
     run_fixture_tests
 fi
@@ -757,7 +759,7 @@ run_auxiliary_test() {
     local test_name="$1"
     local required_test=false
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|build_arguments|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|cache_codec|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|embedded_directory|llvm_toolchain|build_arguments|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|incremental_dependencies|incremental_cache_entries|data_declaration_cache|cache_codec|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
         required_test=true ;;
     esac
     if [[ "$suite" == required && "$required_test" != true ]] ||
@@ -791,8 +793,11 @@ run_auxiliary_test() {
 
 if [[ "$suite" == required ]]; then
     start_test_group incremental run_auxiliary_test \
-        "incremental_compilation" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR"
+        "incremental_compilation" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required-base
     incremental_worker=$test_group_worker
+    start_test_group incremental_dependencies run_auxiliary_test \
+        "incremental_dependencies" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required-dependencies
+    incremental_dependencies_worker=$test_group_worker
 fi
 
 run_auxiliary_test "elf_binary_guard" 10 python3 -B "$SCRIPT_DIR/test_no_elf_binaries.py"
@@ -816,12 +821,14 @@ else
         python3 -B "$SCRIPT_DIR/test_macos_dependency_staging.py"
     run_auxiliary_test "process_posix_write" 10 python3 -B "$SCRIPT_DIR/test_process_posix_write.py"
 fi
+run_auxiliary_test "embedded_directory" 10 python3 -B "$SCRIPT_DIR/test_embedded_directory.py"
 run_auxiliary_test "llvm_toolchain" 10 python3 -B "$SCRIPT_DIR/test_llvm_toolchain.py"
 run_auxiliary_test "entrypoint_checker" 60 python3 -B "$SCRIPT_DIR/test_entrypoint_checker.py" "$COMPILER"
 run_auxiliary_test "numeric_literals" 30 python3 -B "$SCRIPT_DIR/test_numeric_literals.py" "$PROJECT_DIR"
 run_auxiliary_test "class_layout" 30 python3 -B "$SCRIPT_DIR/test_class_layout.py" "$PROJECT_DIR"
 run_auxiliary_test "incremental_module_partition" 30 python3 -B "$SCRIPT_DIR/test_incremental_module_partition.py" "$PROJECT_DIR"
 run_auxiliary_test "build_arguments" 10 python3 -B "$SCRIPT_DIR/test_build_arguments.py" "$PROJECT_DIR"
+run_auxiliary_test "incremental_cache_entries" 600 python3 -B "$SCRIPT_DIR/test_incremental_cache_entries.py" "$PROJECT_DIR"
 run_auxiliary_test "cache_codec" 10 python3 -B "$SCRIPT_DIR/test_cache_codec.py" "$PROJECT_DIR"
 run_auxiliary_test "incremental_compilation_integration" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --integration
 run_auxiliary_test "address_provenance" 600 python3 -B "$SCRIPT_DIR/test_address_provenance.py" "$PROJECT_DIR"
@@ -848,6 +855,7 @@ run_auxiliary_test "compiler_stack" 45 python3 -B "$SCRIPT_DIR/test_compiler_sta
 run_auxiliary_test "nested_timeout" 10 python3 -B "$SCRIPT_DIR/test_nested_timeout.py"
 run_auxiliary_test "timeout_output" 10 python3 -B "$SCRIPT_DIR/test_timeout_output.py"
 run_auxiliary_test "completion_visibility" 15 python3 -B "$SCRIPT_DIR/test_completion_visibility.py" "$COMPILER"
+run_auxiliary_test "data_declaration_cache" 30 python3 -B "$SCRIPT_DIR/test_data_declaration_cache.py" "$COMPILER"
 run_auxiliary_test \
     "lifecycle_codegen" 15 python3 -B "$SCRIPT_DIR/test_lifecycle_codegen.py" "$COMPILER" \
     "$TESTS_DIR/lifecycle_codegen_allocations/main.dl"
@@ -860,18 +868,26 @@ run_auxiliary_test \
 run_auxiliary_test "spirv_main_return" 15 python3 -B "$SCRIPT_DIR/test_spirv_main_return.py" "$COMPILER"
 run_auxiliary_test "spirv_call_abi" 60 python3 -B "$SCRIPT_DIR/test_spirv_call_abi.py" "$COMPILER"
 run_auxiliary_test "if_chain_shader" 30 node "$PROJECT_DIR/tests/web/if_chain_shader.mjs" "$COMPILER"
+run_auxiliary_test "web_runtime_heap" 10 node "$PROJECT_DIR/tests/web/runtime_heap.mjs"
 run_auxiliary_test "web_runtime_filesystem" 10 node "$PROJECT_DIR/tests/web/runtime_filesystem.mjs"
 run_auxiliary_test "web_runtime_host" 10 node "$PROJECT_DIR/tests/web/runtime_host.mjs"
 run_auxiliary_test "web_path_library" 30 node "$PROJECT_DIR/tests/web/path_library.mjs" "$COMPILER"
 run_auxiliary_test "web_memory_layout" 30 node "$PROJECT_DIR/tests/web/memory_layout.mjs" "$COMPILER"
 run_auxiliary_test "web_runtime_math" 30 node "$PROJECT_DIR/tests/web/runtime_math.mjs" "$COMPILER"
 run_auxiliary_test "web_host_callbacks" 30 node "$PROJECT_DIR/tests/web/host_callbacks.mjs" "$COMPILER"
+run_auxiliary_test "unicode_property_data" 10 python3 -B "$SCRIPT_DIR/generate_unicode_properties.py" --check
 run_auxiliary_test "path_host_runtime" 20 python3 -B "$SCRIPT_DIR/test_path_host_runtime.py"
 run_auxiliary_test \
     "filesystem_transaction_runtime" 20 python3 -B "$SCRIPT_DIR/test_filesystem_transaction_runtime.py"
 run_auxiliary_test "process_windows_quoting" 10 python3 -B "$SCRIPT_DIR/test_process_windows_quoting.py"
 run_auxiliary_test "command_line_argument_targets" 10 python3 -B "$SCRIPT_DIR/test_command_line_argument_targets.py" "$COMPILER"
 run_auxiliary_test "shader_intrinsic_targets" 20 python3 -B "$SCRIPT_DIR/test_shader_intrinsic_targets.py" "$COMPILER"
+run_auxiliary_test "shader_vertex_inputs" 30 python3 -B "$SCRIPT_DIR/test_shader_vertex_inputs.py" "$COMPILER"
+run_auxiliary_test "shader_interpolants" 30 python3 -B "$SCRIPT_DIR/test_shader_interpolants.py" "$COMPILER"
+run_auxiliary_test "shader_uniforms" 30 python3 -B "$SCRIPT_DIR/test_shader_uniforms.py" "$COMPILER"
+run_auxiliary_test "shader_resources" 30 python3 -B "$SCRIPT_DIR/test_shader_resources.py" "$COMPILER"
+run_auxiliary_test "shader_integer_semantics" 30 python3 -B "$SCRIPT_DIR/test_shader_integer_semantics.py" "$COMPILER"
+run_auxiliary_test "shader_derivatives" 30 python3 -B "$SCRIPT_DIR/test_shader_derivatives.py" "$COMPILER"
 run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"
 run_auxiliary_test "native_platform_targets" 30 python3 -B "$SCRIPT_DIR/test_native_platform_targets.py" "$PROJECT_DIR" "$COMPILER"
@@ -883,6 +899,17 @@ run_auxiliary_test "native_pointer_calls" 20 python3 -B "$SCRIPT_DIR/test_native
 run_auxiliary_test "typed_callbacks" 120 python3 -B "$SCRIPT_DIR/test_typed_callbacks.py" "$PROJECT_DIR" "$COMPILER"
 run_auxiliary_test "native_atomics" 30 python3 -B "$SCRIPT_DIR/test_native_atomics.py" "$COMPILER"
 run_auxiliary_test "json_integer64" 30 python3 -B "$SCRIPT_DIR/test_json_integer64.py" "$COMPILER"
+run_auxiliary_test "json_decimal_oracle" 60 node "$PROJECT_DIR/tests/web/json_numbers.mjs" "$COMPILER"
+if [[ "$suite" == integration ]]; then
+    run_auxiliary_test "loop_cleanup_targets" 60 node "$PROJECT_DIR/tests/web/compiler_loops.mjs" "$COMPILER" --shipped
+    for fixture in sequence_values unicode_stream workspace_edit_text workspace_text_plan unicode_properties text_search vector_math vector_components; do
+        # Three native compilations (30 seconds each), then a cold browser
+        # compiler (60 seconds), plus execution and process startup.
+        run_auxiliary_test "${fixture}_targets" 180 node "$PROJECT_DIR/tests/web/library_values.mjs" "$COMPILER" "--case=$fixture" --shipped
+    done
+    run_auxiliary_test "literal_search_targets" 60 node "$PROJECT_DIR/tests/web/text_search.mjs" "$COMPILER" --shipped
+    run_auxiliary_test "vector_shaders" 20 python3 -B "$SCRIPT_DIR/test_vector_shaders.py" "$COMPILER"
+fi
 run_auxiliary_test "wide_integers_wasm" 60 node "$PROJECT_DIR/tests/web/wide_integers.mjs" "$COMPILER"
 run_auxiliary_test "wide_integer_values" 60 python3 -B "$SCRIPT_DIR/test_wide_integers.py" "$COMPILER"
 run_auxiliary_test "float_math_codegen" 20 python3 -B "$SCRIPT_DIR/test_float_math_codegen.py" "$COMPILER"

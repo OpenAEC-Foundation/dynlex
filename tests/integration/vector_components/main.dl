@@ -1,0 +1,19 @@
+import lib/vector.dl
+import lib/check.dl
+
+set value to a new vector with x 1.0, y 2.0 and z 3.0
+set copy to value
+set value's x to 4.0
+set the y of value to 5.0
+set value's z to 6.0
+require condition ((the x of value) = 4.0) reporting "Vector x assignment was lost"
+require condition ((the y of value) = 5.0) reporting "Vector y assignment was lost"
+require condition ((the z of value) = 6.0) reporting "Vector z assignment was lost"
+require condition ((copy's x = 1.0) and ((copy's y = 2.0) and (copy's z = 3.0))) reporting "Vector assignment mutated a copy"
+require condition ((the dot product of value and copy) = 32.0) reporting "Coordinate assignment did not reach vector arithmetic"
+set the x coordinate of value to 7.0
+set the y coordinate of value to 8.0
+set the z coordinate of value to 9.0
+require condition ((value's x = 7.0) and ((value's y = 8.0) and (value's z = 9.0))) reporting "Portable vector coordinate updates were lost"
+require condition ((copy's x = 1.0) and ((copy's y = 2.0) and (copy's z = 3.0))) reporting "Portable vector coordinate updates mutated a copy"
+print line "Vector coordinates remain editable independent values."

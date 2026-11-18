@@ -34,6 +34,7 @@ class LLVMContext;
 class Module;
 class IRBuilderBase;
 class Value;
+class Constant;
 class GlobalVariable;
 class Function;
 class SwitchInst;
@@ -89,6 +90,20 @@ struct ParseContext {
 	struct ShaderUniform {
 		std::string name;
 		std::uint32_t binding = 0;
+		DataType type;
+		Range range;
+	};
+	struct ShaderVertexInput {
+		std::string name;
+		std::uint32_t location = 0;
+		DataType type;
+		Range range;
+	};
+	struct ShaderInterpolant {
+		std::string name;
+		std::uint32_t location;
+		DataType type;
+		std::string interpolation;
 		Range range;
 	};
 
@@ -361,7 +376,11 @@ struct ParseContext {
 	std::unordered_map<llvm::BasicBlock *, llvm::BasicBlock *> ifChainFalseTargets;
 	// Global variables (module-level, accessible across all DynLex files in the program)
 	std::unordered_map<std::string, llvm::GlobalVariable *> globalLLVMVariables;
-	std::unordered_map<const Expression *, llvm::Value *> dataLLVMValues;
+	// Only module constants can be shared between generated functions.
+	std::unordered_map<const Expression *, llvm::Constant *> dataLLVMValues;
+	// Constants or owning stack slots, scoped to the generated function.
+	std::unordered_map<const Expression *, llvm::Value *> localDataLLVMValues;
+	unsigned staticReferenceDepth = 0;
 	std::unordered_map<const Expression *, llvm::GlobalVariable *> staticLLVMValues;
 	// Subject values are call-site-local temporaries keyed by their inferred assignment expression.
 	std::unordered_map<const Expression *, llvm::Value *> subjectStorage;
@@ -370,6 +389,11 @@ struct ParseContext {
 	// released from main after all user code has completed.
 	std::vector<ManagedStorageState> managedLocalStorage;
 	std::vector<ManagedStorageState> managedGlobalStorage;
+	// Return paths are emitted after the complete function's storage is known.
+	// A later subject assignment may still own a value from a preceding loop pass.
+	std::vector<ManagedStorageState> managedFunctionStorage;
+	llvm::BasicBlock *managedReturnBlock{};
+	llvm::Value *managedReturnStorage{};
 
 	// Libraries required for linking (collected from @intrinsic("call", ...) calls)
 	std::unordered_set<std::string> requiredLibraries;
@@ -379,7 +403,9 @@ struct ParseContext {
 
 	// Shader uniforms used by the selected stage, with explicit descriptor-set-zero bindings.
 	std::vector<ShaderUniform> shaderUniforms;
-	std::vector<std::string> shaderInterpolantNames;
+	std::vector<ShaderResourceValue> shaderResources;
+	std::vector<ShaderVertexInput> shaderVertexInputs;
+	std::vector<ShaderInterpolant> shaderInterpolants;
 
 	// imported source files by path (also prevents circular imports)
 	std::unordered_map<std::string, lsp::SourceFile *> importedFiles;
@@ -499,10 +525,13 @@ struct ParseContext {
 		PatternReference *reference, MatchOptions options = {}, MatchDependencies *dependencies = nullptr,
 		bool countBodyResolution = false
 	);
-	void registerShaderUniform(std::string uniformName, std::uint32_t binding, Range range);
-	void registerShaderInterpolantName(const std::string &interpolantName);
+	bool registerShaderUniform(std::string uniformName, std::uint32_t binding, DataType type, Range range);
+	bool registerShaderResource(ShaderResourceValue resource, Range range);
+	void registerShaderVertexInput(std::string name, std::uint32_t location, DataType type, Range range);
+	bool registerShaderInterpolant(ShaderInterpolant interpolant);
 	VariableReference *createVariableReference(Range range, const std::string &name);
 	std::shared_ptr<ExpressionAllocationStats> expressionAllocationStats = std::make_shared<ExpressionAllocationStats>();
+	std::uint64_t expressionInferenceRevision = 0;
 	std::shared_ptr<ExpressionStorage> createExpressionStorage();
 	std::unordered_map<InstantiatedSectionBody *, std::shared_ptr<InstantiatedSectionBody>> capturedExpressionBodies;
 	void retainCapturedExpressionBody(Expression *expression);

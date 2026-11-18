@@ -70,12 +70,16 @@ still apply through `compile_timeout_seconds.txt`.
 
 ## Browser Compiler
 
-DynLex can be built as a browser-hosted compiler module (`dynlex_web.js/.wasm`) with a Monaco-based web UI.
+DynLex can be built as a browser-hosted compiler module (`dynlex_web.js/.wasm`).
+The website and its editor are written in DynLex and rendered by the shared UI
+library. Browser JavaScript supplies the graphics and compiler-worker adapters.
 This target requires Emscripten (`emcmake`, `emcc`). The build compiles and
 caches a WebAssembly version of the same pinned LLVM fork with the WebAssembly
 and SPIR-V targets.
 The build uses SPIRV-Cross for shader reflection and a pinned Naga WebAssembly
 module to validate and translate emitted SPIR-V into WebGPU's WGSL.
+See [stage interfaces](docs/shader_interfaces.md) for typed vertex/fragment values
+and [resource bindings](docs/shader_resources.md) for textures, samplers and uniforms.
 
 Build compiler WASM artifacts and copy them into the web app:
 
@@ -98,39 +102,24 @@ Run the compiler WASM smoke test:
 ./scripts/test_web_smoke.sh
 ```
 
-Run the web app:
+The website is maintained in [dynlex-website](https://github.com/OpenAEC-Foundation/dynlex-website).
+The reusable UI framework is maintained in [dynlex-ui](https://github.com/OpenAEC-Foundation/dynlex-ui).
+This repository provides the compiler service and runtime distribution, independent of either application.
+
+Export a relocatable compiler package after building the browser compiler:
 
 ```bash
-cd src/web/ide
-npm install
-npm run dev
+python3 scripts/package_web_compiler.py --output build/dynlex-web.zip
 ```
 
-Refresh the deployable static web root (`web/`) after IDE changes:
-
-```bash
-./scripts/build_web_root.sh
-```
-
-View the deployable web site (`web/`) locally and open it in your browser:
-
-```bash
-./scripts/view_web.sh
-```
-
-Web layout:
-- `src/web/ide/`: IDE source (Vite + Monaco)
-- `web/`: deployable web root (site/wiki source + built IDE assets)
-
-The web app uses:
-- one editable `/workspace/*.dl` entry file plus read-only imported definitions
-- bundled stdlib from `/lib/*.dl` in Emscripten virtual FS
-- live debounced compile with diagnostics published by the DynLex language server
-- one persistent DynLex LSP session for completion, hover, go-to-definition,
-  semantic tokens, document symbols, quick fixes, and DynLex instantiation selection
-- live WebGPU previews for DynLex fragment/vertex shaders opened from the homepage shader gallery
-- built-in light and dark themes
-- `Run` executing the latest successful emitted program WASM
+The content-addressed package includes the browser compiler, standard library,
+shader translator, generic compiler services, runtime, build tools, installer and
+compiler branding. Consumers pin its manifest hash and build without a compiler
+checkout. `scripts/compile_project.mjs` uses the browser compiler by default. Set
+`DYNLEX_PROJECT_COMPILER` to an absolute installed compiler executable to compile
+CPU jobs natively against the package standard library; shader jobs continue to
+use the pinned browser compiler and translator. The installer is maintained at `scripts/install_release.sh`; the
+canonical logo is `resources/branding/dynlex-icon.svg`.
 
 Compiler WASM C ABI exports:
 - `dynlex_web_init`
@@ -141,7 +130,7 @@ Compiler WASM C ABI exports:
 - `dynlex_web_get_output_wasm_ptr` / `dynlex_web_get_output_wasm_len`
 - `dynlex_web_get_output_wasm_base64`
 - `dynlex_web_get_output_shader_spirv_base64`
-- `dynlex_web_get_shader_uniforms_json`
+- `dynlex_web_get_shader_reflection_json`
 - `dynlex_web_get_compiler_log_json`
 - `dynlex_web_lsp_exchange_json`
 

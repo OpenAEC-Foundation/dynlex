@@ -115,14 +115,12 @@ generateAddressOfIntrinsic(ParseContext &context, Expression *callExpr, const st
 
 [[gnu::noinline]] static CodegenResult
 generateDereferenceIntrinsic(ParseContext &context, const std::vector<Expression *> &args) {
-	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	llvm::Value *ptrVal = nullptr;
 	if (!generateIntrinsicRuntimeValue(context, args[1], ptrVal))
 		return CodegenResult::failure();
 	DataType ptrType = finalizedExpressionType(context, args[1]);
 	DataType elemType = ptrType.dereferenced();
-	llvm::Type *elemLLVMType = getLLVMType(context, elemType);
-	return builder.CreateAlignedLoad(elemLLVMType, ptrVal, getLLVMABIAlignment(context, elemType), "deref");
+	return loadLLVMValue(context, elemType, ptrVal, "deref");
 }
 
 [[gnu::noinline]] static CodegenResult
@@ -153,7 +151,6 @@ generatePointerStoreIntrinsic(ParseContext &context, const std::vector<Expressio
 
 [[gnu::noinline]] static CodegenResult
 generateDestroyAtIntrinsic(ParseContext &context, const std::vector<Expression *> &args) {
-	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	llvm::Value *ptr = nullptr;
 	if (!generateIntrinsicRuntimeValue(context, args[1], ptr))
 		return CodegenResult::failure();
@@ -161,9 +158,7 @@ generateDestroyAtIntrinsic(ParseContext &context, const std::vector<Expression *
 	requireCompilerInvariant(ptrType.isPointer(), "destroy at reached codegen with a non-pointer destination");
 	DataType elementType = ptrType.dereferenced();
 	if (typeHasManagedLifecycle(elementType)) {
-		llvm::Value *value = builder.CreateAlignedLoad(
-			getLLVMType(context, elementType), ptr, getLLVMABIAlignment(context, elementType), "destroy_value"
-		);
+		llvm::Value *value = loadLLVMValue(context, elementType, ptr, "destroy_value");
 		if (!releaseManagedValue(context, elementType, value))
 			return CodegenResult::failure();
 	}

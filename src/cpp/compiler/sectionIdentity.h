@@ -2,8 +2,8 @@
 
 #include "lsp/sourceFile.h"
 #include "section.h"
+#include "stableIdentity.h"
 #include "llvm/ADT/StringExtras.h"
-#include "llvm/Support/BLAKE3.h"
 #include <map>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -22,11 +22,7 @@ inline nlohmann::json sectionIdentity(const Section &section) {
 	};
 }
 
-inline std::string sectionIdentityDigest(std::string_view text) {
-	llvm::BLAKE3 hash;
-	hash.update(llvm::StringRef(text));
-	return llvm::toHex(hash.final(), true);
-}
+inline std::string sectionIdentityDigest(std::string_view text) { return stableIdentityDigest(text); }
 
 template <typename Visitor> void visitChildSectionIdentities(Section *section, const std::string &path, const Visitor &visit) {
 	std::map<std::string, size_t> duplicateIdentities;

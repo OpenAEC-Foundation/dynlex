@@ -1,0 +1,20 @@
+flex section when {condition}:
+    replacement:
+        @intrinsic("if", condition)
+flex section otherwise when {condition}:
+    replacement:
+        @intrinsic("else if", condition)
+flex section otherwise:
+    replacement:
+        @intrinsic("else")
+@intrinsic("store", {mode}, @intrinsic("shader uniform", "mode", 0, @intrinsic("type", "float", 32)))
+when @intrinsic("equal", mode, 0.0):
+    @intrinsic("shader output", 1.0)
+otherwise when @intrinsic("equal", mode, 1.0):
+    @intrinsic("shader output", 2.0)
+otherwise when @intrinsic("equal", mode, 2.0):
+    @intrinsic("shader output", 3.0)
+otherwise when @intrinsic("equal", mode, 3.0):
+    @intrinsic("shader output", 4.0)
+otherwise:
+    @intrinsic("shader output", 0.0)

@@ -1,0 +1,56 @@
+# Copying preserves number lexemes and member order. Containers own their children.
+import lib/json_builders.dl
+
+to get a copy of JSON node {a pointer to JSON value:source}:
+    set result to a new JSON value of kind (source's kind)
+    set result's text to source's text
+    set result's number to source's number
+    set result's boolean to source's boolean
+    set index to 0
+    loop while index < source's length:
+        if source's kind = the JSON array kind:
+            add (a copy of JSON node (the JSON value at index index in source)) to the JSON array result
+        else:
+            set entry to the item at index in (source's members)
+            add a JSON member named (entry's name) with value (a copy of JSON node (entry's value)) to result
+        increment index
+    return result
+
+to set JSON member {JSON member:replacement} in {a pointer to JSON value:object}:
+    set index to the JSON member index named (replacement's name) in object
+    if index < 0:
+        add a JSON member named (replacement's name) with value (replacement's value) to object
+    else:
+        set entry to object's members + index
+        free entry's value
+        set entry's value to replacement's value
+
+to remove JSON member {a value:name} from {a pointer to JSON value:object}:
+    set index to the JSON member index named name in object
+    if index < 0:
+        return nothing
+    free (object's members + index)'s value
+    loop while index < object's length - 1:
+        set (object's members + index)'s name to (object's members + index + 1)'s name
+        set (object's members + index)'s value to (object's members + index + 1)'s value
+        increment index
+    destroy the value at object's members + index
+    decrement object's length
+
+# Boundary predicates do not extract or coerce a missing/wrongly typed member.
+to get JSON field {a value:name} in {a pointer to JSON value:object} has kind {integer:kind}:
+    if object is not a JSON object:
+        return false
+    if object lacks JSON member named name:
+        return false
+    return (the JSON member named name in object)'s kind = kind
+
+to get {a pointer to JSON value:value} is a JSON safe integer:
+    if value's kind != the JSON number kind:
+        return false
+    return ((value's number is finite) and ((the absolute value of (value's number)) <= 9007199254740991.0)) and ((the floor of (value's number)) = value's number)
+
+to get JSON field {a value:name} in {a pointer to JSON value:object} is a safe integer:
+    if (JSON field name in object has kind the JSON number kind) = false:
+        return false
+    return (the JSON member named name in object) is a JSON safe integer

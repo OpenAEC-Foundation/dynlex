@@ -1,0 +1,4 @@
+@intrinsic("discard", "a`b``c")
+@intrinsic("discard", "\"quoted\"\\path\n\t\r\a\b\f\v\0 😀")
+@intrinsic("store", amount, 7)
+@intrinsic("discard", amount)

@@ -10,6 +10,7 @@ def check_body_resolution_demand(root, build):
     check_transitive_flex_overload(root, build)
     check_unresolved_diagnostic_order(root, build)
     check_negative_body_dependency(root, build)
+    check_section_header_body_demand(root, build)
     check_reactivated_local_variables(root, build)
     main = root / "body_resolution_demand.dl"
     source = (
@@ -54,6 +55,36 @@ def check_body_resolution_demand(root, build):
     assert missing[1:] == build(False, entry=main, success=False)[1:]
     main.write_text(activated)
     assert build(entry=main)[1:] == build(False, entry=main)[1:]
+
+
+def check_section_header_body_demand(root, build):
+    main = root / "body_section_header_demand.dl"
+    source = (
+        'integer means: @intrinsic("type", "int")\n'
+        'flex section if condition:\n'
+        '    replacement: @intrinsic("if", condition)\n'
+        'to get spare {integer:seed}:\n'
+        '    if @intrinsic("greater than", seed, 0):\n'
+        '        @intrinsic("return", seed)\n'
+        '    @intrinsic("return", 0)\n'
+        '@intrinsic("discard", 0)\n'
+        '@intrinsic("return", 0)\n'
+    )
+    main.write_text(source)
+    assert build(entry=main)[1:] == ("", b"")
+    changed = source.replace('@intrinsic("discard", 0)', '@intrinsic("discard", 1)')
+    main.write_text(changed)
+    untouched = build(entry=main)
+    assert untouched[1:] == build(False, entry=main)[1:] == ("", b"")
+    assert untouched[0]["body_resolution_units_deferred"] >= 1, \
+        "declaration-name discovery materialized the unused conditional body"
+    activated = changed.replace('@intrinsic("discard", 1)\n@intrinsic("return", 0)',
+        '@intrinsic("return", @intrinsic("subtract", @intrinsic("invoke", '
+        '@intrinsic("function", "spare $"), 5), 5))')
+    main.write_text(activated)
+    used = build(entry=main)
+    assert used[1:] == build(False, entry=main)[1:] == ("", b"")
+    assert used[0]["body_resolution_units_demanded"] >= 1
 
 
 def check_negative_body_dependency(root, build):

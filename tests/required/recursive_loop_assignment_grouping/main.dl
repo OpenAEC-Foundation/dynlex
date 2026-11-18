@@ -1,0 +1,17 @@
+function set variable to value:
+    replacement: @intrinsic("store", variable, value)
+function left + right:
+    replacement: @intrinsic("add", left, right)
+function increment value:
+    replacement: @intrinsic("store", value, @intrinsic("add", value, 1))
+integer means: @intrinsic("type", "int", 32)
+flex section loop while condition:
+    replacement: @intrinsic("loop while", condition)
+to get sum {integer:depth}:
+    set total to 0
+    set index to 0
+    loop while @intrinsic("less than", index, depth):
+        set total to total + (sum @intrinsic("subtract", depth, 1))
+        increment index
+    @intrinsic("return", @intrinsic("add", total, 1))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", sum 2))

@@ -5,13 +5,6 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import {
-  detectPlatform,
-  extractReleaseManifest,
-  parseReleaseManifest,
-  selectPrimaryReleaseAsset,
-  selectReleaseAssets,
-} from "../../web/download.js";
 import { matchingProjectVersion } from "../../scripts/update-version.mjs";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -19,7 +12,6 @@ const projectDirectory = path.resolve(testDirectory, "../..");
 matchingProjectVersion(projectDirectory);
 const manifestPath = path.join(projectDirectory, "metadata/release-manifest.txt");
 const manifestText = fs.readFileSync(manifestPath, "utf8");
-const manifest = parseReleaseManifest(manifestText);
 const releaseWorkflow = fs.readFileSync(
   path.join(projectDirectory, ".github/workflows/release.yml"),
   "utf8",
@@ -37,7 +29,7 @@ const textureLibrary = fs.readFileSync(
   "utf8",
 );
 const linuxInstaller = fs.readFileSync(
-  path.join(projectDirectory, "web/install.sh"),
+  path.join(projectDirectory, "scripts/install_release.sh"),
   "utf8",
 );
 const nativeCodegen = fs.readFileSync(
@@ -86,34 +78,8 @@ const windowsVcpkgTriplets = ["x64", "arm64"].map((architecture) =>
   )
 );
 
-assert.equal(manifest.schema, 1);
-assert.equal(manifest.repository, "OpenAEC-Foundation/dynlex");
-assert.equal(
-  extractReleaseManifest(
-    `Release notes.\n\n<!-- dynlex-release-manifest\n${manifestText.trimEnd()}\n-->\n`,
-  ),
-  manifestText.trimEnd(),
-);
-assert.throws(
-  () => extractReleaseManifest("Release notes without a manifest."),
-  /exactly one embedded release manifest/,
-);
-assert.throws(
-  () => extractReleaseManifest(
-    `<!-- dynlex-release-manifest\n${manifestText.trimEnd()}\n-->\n`
-      + `<!-- dynlex-release-manifest\n${manifestText.trimEnd()}\n-->`,
-  ),
-  /exactly one embedded release manifest/,
-);
-assert.deepEqual(
-  manifest.assets.map(({ id, os: platform, architectures, format, name }) => ({
-    id,
-    platform,
-    architectures,
-    format,
-    name,
-  })),
-  [
+// Independent package expectations; website selection is tested in site_releases.
+const manifest = { assets: [
     {
       id: "linux-x64-deb",
       platform: "linux",
@@ -163,106 +129,15 @@ assert.deepEqual(
       format: "pkg",
       name: "dynlex-macos-universal.pkg",
     },
-  ],
-);
+  ]
+};
+assert.equal(manifestText, [
+  "schema 1",
+  "repository OpenAEC-Foundation/dynlex",
+  ...manifest.assets.map(asset => `asset ${asset.id} ${asset.platform} ${asset.architectures.join(",")} ${asset.format} ${asset.name}`),
+  "",
+].join("\n"));
 
-const releaseAssets = manifest.assets.map(({ name }) => ({
-  name,
-  browser_download_url: `https://downloads.example/${name}`,
-}));
-releaseAssets.unshift({
-  name: "dynlex-0.0.1-Windows.msi",
-  browser_download_url: "https://downloads.example/obsolete.msi",
-});
-
-const selectedAssets = selectReleaseAssets(releaseAssets, manifest);
-for (const asset of manifest.assets) {
-  assert.equal(selectedAssets.get(asset.id).name, asset.name);
-}
-assert.equal(
-  selectedAssets.get("windows-x64-msi").browser_download_url,
-  "https://downloads.example/dynlex-windows-x64.msi",
-);
-
-assert.throws(
-  () => selectReleaseAssets(releaseAssets.slice(0, -1), manifest),
-  /missing release asset/,
-);
-assert.throws(
-  () => selectReleaseAssets([...releaseAssets, releaseAssets[1]], manifest),
-  /duplicate release asset/,
-);
-assert.throws(
-  () => parseReleaseManifest(`${manifestText}asset duplicate linux x64 deb dynlex-linux-x64.deb\n`),
-  /duplicate release asset name/,
-);
-
-assert.deepEqual(detectPlatform("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"), {
-  os: "windows",
-  architecture: "x64",
-  label: "Windows",
-});
-assert.deepEqual(
-  detectPlatform("Mozilla/5.0 (Windows NT 10.0; ARM64)", "arm"),
-  {
-    os: "windows",
-    architecture: "arm64",
-    label: "Windows",
-  },
-);
-assert.deepEqual(detectPlatform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"), {
-  os: "macos",
-  architecture: "unknown",
-  label: "macOS",
-});
-assert.deepEqual(detectPlatform("Mozilla/5.0 (X11; Linux x86_64)"), {
-  os: "linux",
-  architecture: "x64",
-  label: "Linux",
-});
-assert.deepEqual(
-  detectPlatform("Mozilla/5.0 (X11; Linux aarch64)"),
-  {
-    os: "linux",
-    architecture: "arm64",
-    label: "Linux",
-  },
-);
-assert.throws(
-  () => detectPlatform("Mozilla/5.0 (Linux; Android 16; Pixel 10 Pro)"),
-  /mobile operating systems/,
-);
-assert.throws(
-  () => detectPlatform("Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X)"),
-  /mobile operating systems/,
-);
-assert.throws(
-  () => detectPlatform(
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) Version/19.0 Mobile/15E148 Safari/604.1",
-    "x86",
-    5,
-  ),
-  /mobile operating systems/,
-);
-assert.throws(
-  () => detectPlatform("Mozilla/5.0 (X11; CrOS x86_64 16093.68.0)"),
-  /ChromeOS/,
-);
-assert.equal(
-  selectPrimaryReleaseAsset(manifest, detectPlatform("Mozilla/5.0 (Windows NT 10.0; ARM64)")).id,
-  "windows-arm64-msi",
-);
-assert.equal(
-  selectPrimaryReleaseAsset(manifest, detectPlatform("Mozilla/5.0 (X11; Linux aarch64)")).id,
-  "linux-arm64-deb",
-);
-assert.equal(
-  selectPrimaryReleaseAsset(
-    manifest,
-    detectPlatform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"),
-  ).id,
-  "macos-universal-pkg",
-);
 assert.match(releaseWorkflow, /runner: ubuntu-24\.04-arm[\s\S]*architecture: arm64/);
 assert.match(releaseWorkflow, /runner: windows-11-arm[\s\S]*architecture: arm64/);
 assert.match(releaseWorkflow, /runner: macos-15[\s\S]*architecture: arm64/);
@@ -630,7 +505,7 @@ esac
       assert.equal(tarResult.status, 0, tarResult.stderr);
     }
 
-    const installScript = path.join(projectDirectory, "web/install.sh");
+    const installScript = path.join(projectDirectory, "scripts/install_release.sh");
     const tarPrefix = path.join(temporaryDirectory, "local-tar-prefix");
     const localTarResult = spawnSync(
       "sh",

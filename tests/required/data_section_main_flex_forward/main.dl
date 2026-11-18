@@ -1,0 +1,11 @@
+integer means: @intrinsic("type", "int", 32)
+section number {name}:
+    declares: name
+    result: integer
+    body:
+        value: integer
+    value: @intrinsic("section field", "value")
+wrapped {integer:operand} means: @intrinsic("add", answer, operand)
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", wrapped 1))
+number answer:
+    value: 42

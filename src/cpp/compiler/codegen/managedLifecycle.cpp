@@ -4,6 +4,7 @@
 #include "intrinsicInfo.h"
 #include "patternDefinition.h"
 #include "section.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include <algorithm>
@@ -121,9 +122,7 @@ bool releaseInitializedStorage(ParseContext &context, ParseContext::ManagedStora
 	llvm::BasicBlock *continueBlock = llvm::BasicBlock::Create(*context.llvmContext, "managed.continue", function);
 	builder.CreateCondBr(initialized, releaseBlock, continueBlock);
 	builder.SetInsertPoint(releaseBlock);
-	llvm::Value *value = builder.CreateAlignedLoad(
-		getLLVMType(context, storage.type), storage.address, getLLVMABIAlignment(context, storage.type), "managed_stored_value"
-	);
+	llvm::Value *value = loadLLVMValue(context, storage.type, storage.address, "managed_stored_value");
 	if (!releaseManagedValue(context, storage.type, value))
 		return false;
 	builder.CreateStore(builder.getFalse(), storage.initializedAddress);
@@ -136,6 +135,10 @@ bool releaseInitializedStorage(ParseContext &context, ParseContext::ManagedStora
 
 bool managedExpressionResultIsOwned(ParseContext &context, Expression *expression) {
 	if (!expression || !typeHasManagedLifecycle(finalizedExpressionType(context, expression)))
+		return false;
+	// A named declaration transfers its owner into storage. Using that
+	// declaration as a surrounding field borrows the captured value.
+	if (expression->dataDeclaration)
 		return false;
 	ResolvedBindingLayers resolved = resolveCodegenBindingLayers(context, expression, context.flexBindingFrames);
 	if (resolved.expression && resolved.expression != expression) {
@@ -170,7 +173,7 @@ registerManagedStorage(ParseContext &context, llvm::Value *address, const DataTy
 	if (global) {
 		initializedAddress = new llvm::GlobalVariable(
 			*context.llvmModule, builder.getInt1Ty(), false, llvm::GlobalValue::InternalLinkage, builder.getFalse(),
-			"managed_global_initialized"
+			address->getName() + ".initialized"
 		);
 	} else {
 		llvm::Function *function = builder.GetInsertBlock() ? builder.GetInsertBlock()->getParent() : nullptr;
@@ -181,6 +184,8 @@ registerManagedStorage(ParseContext &context, llvm::Value *address, const DataTy
 		initializedAddress = initialized;
 	}
 	ParseContext::ManagedStorageState storage{address, initializedAddress, type, ownerSection};
+	if (!global)
+		context.managedFunctionStorage.push_back(storage);
 	(global ? context.managedGlobalStorage : context.managedLocalStorage).push_back(std::move(storage));
 }
 
@@ -213,8 +218,7 @@ bool storeManagedValue(ParseContext &context, llvm::Value *address, const DataTy
 		if (!releaseInitializedStorage(context, *storage))
 			return false;
 	} else {
-		llvm::Value *oldValue =
-			builder.CreateAlignedLoad(getLLVMType(context, type), address, getLLVMABIAlignment(context, type), "managed_old");
+		llvm::Value *oldValue = loadLLVMValue(context, type, address, "managed_old");
 		if (!releaseManagedValue(context, type, oldValue))
 			return false;
 	}
@@ -251,16 +255,55 @@ bool releaseManagedStorageForSection(ParseContext &context, Section *ownerSectio
 	return true;
 }
 
-bool releaseManagedStorageForReturn(ParseContext &context) {
-	for (size_t index = context.managedLocalStorage.size(); index-- > 0;)
-		if (!releaseInitializedStorage(context, context.managedLocalStorage[index]))
+bool emitManagedFunctionReturn(ParseContext &context, llvm::Value *value) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	llvm::BasicBlock *current = builder.GetInsertBlock();
+	requireCompilerInvariant(current && !current->hasTerminator(), "return cleanup requires an open block");
+	llvm::Function *function = current->getParent();
+	requireCompilerInvariant(function != context.mainLLVMFunction, "main has its own shared cleanup exit");
+	requireCompilerInvariant(
+		static_cast<bool>(value) != function->getReturnType()->isVoidTy(), "return value disagrees with its function ABI"
+	);
+	if (!context.managedReturnBlock) {
+		context.managedReturnBlock = llvm::BasicBlock::Create(*context.llvmContext, "function.cleanup", function);
+		if (value) {
+			llvm::IRBuilder<> entryBuilder(&function->getEntryBlock(), function->getEntryBlock().begin());
+			context.managedReturnStorage = entryBuilder.CreateAlloca(function->getReturnType(), nullptr, "function.return");
+		}
+	}
+	if (value)
+		builder.CreateStore(value, context.managedReturnStorage);
+	builder.CreateBr(context.managedReturnBlock);
+	return true;
+}
+
+bool finalizeManagedFunctionReturn(ParseContext &context) {
+	if (!context.managedReturnBlock)
+		return true;
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	auto savedPoint = builder.saveIP();
+	llvm::DebugLoc savedLocation = builder.getCurrentDebugLocation();
+	builder.SetCurrentDebugLocation({});
+	if (llvm::DISubprogram *scope = context.managedReturnBlock->getParent()->getSubprogram())
+		builder.SetCurrentDebugLocation(llvm::DILocation::get(*context.llvmContext, 0, 0, scope, nullptr, true));
+	builder.SetInsertPoint(context.managedReturnBlock);
+	for (size_t index = context.managedFunctionStorage.size(); index-- > 0;)
+		if (!releaseInitializedStorage(context, context.managedFunctionStorage[index]))
 			return false;
+	if (context.managedReturnStorage)
+		builder.CreateRet(
+			builder.CreateLoad(context.managedReturnBlock->getParent()->getReturnType(), context.managedReturnStorage)
+		);
+	else
+		builder.CreateRetVoid();
+	builder.restoreIP(savedPoint);
+	builder.SetCurrentDebugLocation(savedLocation);
 	return true;
 }
 
 bool releaseAllManagedStorage(ParseContext &context) {
-	for (size_t index = context.managedLocalStorage.size(); index-- > 0;)
-		if (!releaseInitializedStorage(context, context.managedLocalStorage[index]))
+	for (size_t index = context.managedFunctionStorage.size(); index-- > 0;)
+		if (!releaseInitializedStorage(context, context.managedFunctionStorage[index]))
 			return false;
 	for (size_t index = context.managedGlobalStorage.size(); index-- > 0;)
 		if (!releaseInitializedStorage(context, context.managedGlobalStorage[index]))

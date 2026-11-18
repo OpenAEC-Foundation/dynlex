@@ -1,0 +1,39 @@
+integer means: @intrinsic("type", "int", 32)
+identity {integer:value} means: @intrinsic("add", value, 0)
+function bumped target:
+    replacement:
+        @intrinsic("store", target, @intrinsic("add", target, 1))
+        @intrinsic("add", target, 0)
+function doubled {integer:value}:
+    replacement:
+        @intrinsic("add", value, value)
+function reversed {integer:first} then {integer:second}:
+    replacement:
+        @intrinsic("add", second, first)
+function replayed {integer:value} resetting target:
+    replacement:
+        @intrinsic("discard", value)
+        @intrinsic("store", target, 7)
+        @intrinsic("discard", value)
+        @intrinsic("store", target, 0)
+        @intrinsic("add", value, 0)
+to emit {integer:value}:
+    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", value))
+
+@intrinsic("store", counter, 0)
+emit (identity (identity (identity (identity (identity (identity (identity (identity (identity (identity (identity (identity (identity (identity (identity (identity (identity (identity (identity (identity (bumped counter)))))))))))))))))))))
+emit counter
+@intrinsic("store", counter, 0)
+emit (doubled (bumped counter))
+emit counter
+@intrinsic("store", counter, 0)
+emit (reversed (bumped counter) then (bumped counter))
+emit counter
+@intrinsic("store", counter, 0)
+@intrinsic("discard", @intrinsic("type of", identity (bumped counter)))
+emit counter
+emit (identity (bumped counter))
+emit counter
+@intrinsic("store", counter, 0)
+emit (replayed (bumped counter) resetting counter)
+emit counter

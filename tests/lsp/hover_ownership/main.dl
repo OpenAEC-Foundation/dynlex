@@ -1,0 +1,4 @@
+to observe: @intrinsic("discard", 0)
+observe
+@intrinsic("store", answer, 7)
+@intrinsic("discard", answer)

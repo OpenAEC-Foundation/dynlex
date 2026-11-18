@@ -1,0 +1,1 @@
+Owned sequences keep immutable copies alive and release their elements with the last owner.

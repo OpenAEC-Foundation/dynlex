@@ -1,0 +1,15 @@
+integer means: @intrinsic("type", "int", 32)
+section number {name}:
+    declares: name
+    result: integer
+    body:
+        value: integer
+    value: @intrinsic("section field", "value")
+function inspect:
+    execute:
+        number first:
+            value: second
+        number second:
+            value: 42
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", first))
+inspect

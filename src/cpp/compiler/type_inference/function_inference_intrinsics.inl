@@ -41,8 +41,6 @@ void ExpressionInferenceSupport::inferIntrinsic() {
 		return;
 	}
 	recordIntrinsicMemoryViolation(expr, context, flexBindingFrameStack);
-	if (isShaderRuntimeIntrinsicKind(kind) && !validateShaderRuntimeIntrinsic(expr, kind, context))
-		return;
 	if (info) {
 		switch (info->returnKind) {
 		case IntrinsicReturnKind::SameAsArgs:

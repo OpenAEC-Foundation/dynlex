@@ -1,0 +1,21 @@
+import lib/sections.dl
+import lib/workspace_edit_text.dl
+import lib/workspace_edit_parse.dl
+import lib/lsp_json.dl
+
+set payload to a JSON object containing [JSON child "changes" is (a JSON object containing [JSON child "file:///main.dl" is (a JSON array containing [
+    a JSON object containing [JSON child "range" is (an LSP range from line 1 and character 0 to line 1 and character 1), JSON text "newText" is "D"],
+    a JSON object containing [JSON child "range" is (an LSP range from line 0 and character 1 to line 0 and character 3), JSON text "newText" is "X"]
+])])]
+set parsed to the result of parsing payload as a workspace edit
+free payload
+set change to the workspace change at index 0 in (parsed's edit's changes)
+set plan to the workspace text edit plan for (change's edits) against (the string form of "A😀B\nC") using the workspace UTF-16 position encoding
+free parsed
+print line plan's success
+print line the count of text edits in plan
+print lines (the start byte of workspace edit 0 in plan) and (the end byte of workspace edit 0 in plan)
+print line the replacement text of workspace edit 1 in plan
+set result to the result of applying workspace text edit plan plan
+print line result's text
+free workspace text edit plan plan

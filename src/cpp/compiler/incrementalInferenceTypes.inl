@@ -55,6 +55,7 @@ std::optional<Json> inferenceTypeIdentity(
 		if (type.classInstIndex < 0)
 			break;
 		auto key = std::make_pair(static_cast<const ClassDefinition *>(type.classDefinition), type.classInstIndex);
+		const bool rootGraph = visiting.empty();
 		if (!visiting.insert(key).second)
 			break;
 		const ClassInstantiation &instantiation = type.classDefinition->instantiations[type.classInstIndex];
@@ -67,7 +68,8 @@ std::optional<Json> inferenceTypeIdentity(
 				return std::nullopt;
 			fields.push_back(std::move(*identity));
 		}
-		visiting.erase(key);
+		if (rootGraph)
+			visiting.clear();
 		result.push_back(std::move(fields));
 		break;
 	}

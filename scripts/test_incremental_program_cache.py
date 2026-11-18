@@ -269,6 +269,45 @@ def read_program(cache, entry):
     return matches[0]
 
 
+def check_shared_class_type_graph(root, build):
+    main = root / "shared_class_type_graph.dl"
+    source = '''integer means: @intrinsic("type", "int")
+class:
+    patterns:
+        pair
+    members:
+        left
+        right
+
+to get retain value:
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "graph"))
+    @intrinsic("return", value)
+
+@intrinsic("store", seed, 1)
+'''
+    previous = "seed"
+    for index in range(13):
+        pointer = f'@intrinsic("address of", {previous})'
+        layer = f"layer{index}"
+        source += f'@intrinsic("store", {layer}, @intrinsic("construct", pair, {pointer}, {pointer}))\n'
+        previous = layer
+    source += f'@intrinsic("discard", retain {previous})\n'
+    main.write_text(source)
+    cold = build(entry=main)
+    assert cold[1:] == build(False, entry=main)[1:] == ("", b"graph\n")
+    cache = root / "cache"
+    program = read_program(cache, main)
+    assert any(program["inference_summaries"].values()), "the graph type was not cached"
+    summaries = [cache / "native-v1" / f"inference-summary-{key}.entry"
+                 for key in program["inference_summary_keys"]]
+    assert summaries, "the graph type has no concrete inference payload"
+    assert all(summary.stat().st_size < 64 * 1024 for summary in summaries), \
+        "shared class types expanded into a tree in a concrete inference payload"
+    assert build(entry=main)[0]["frontend_reused"]
+    main.write_text(source.replace('"store", seed, 1', '"store", seed, 1.0'))
+    assert build(entry=main)[1:] == build(False, entry=main)[1:] == ("", b"graph\n")
+
+
 def classification_promotions(cache, program):
     """Inspect the actual output units used to restore implicit parameters."""
     from test_incremental_matcher_work import matcher_records

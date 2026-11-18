@@ -146,4 +146,3 @@ def check_classification_segment_eviction(root, build):
     edited = build(entry=main)
     assert edited[0]["matcher_segments_missing"] > 0
     assert edited[1:] == build(False, entry=main)[1:], "classification metadata eviction changed compilation"
-

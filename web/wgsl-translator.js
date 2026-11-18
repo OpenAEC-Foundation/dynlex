@@ -34,12 +34,32 @@ export async function createWgslTranslator(source) {
     "dynlex_wgsl_result_length",
     "dynlex_glsl_result_pointer",
     "dynlex_glsl_result_length",
+    "dynlex_glsl_bindings_pointer",
+    "dynlex_glsl_bindings_length",
+    "dynlex_glsl_uniforms_pointer",
+    "dynlex_glsl_uniforms_length",
     "dynlex_wgsl_error_pointer",
     "dynlex_wgsl_error_length"
   ]) {
     if (!(name in exports)) {
       throw new Error("WGSL translator has an invalid module interface");
     }
+  }
+
+  function textureBindings() {
+    const result = JSON.parse(decoder.decode(copiedBytes(
+      exports, exports.dynlex_glsl_bindings_pointer, exports.dynlex_glsl_bindings_length
+    )));
+    if (!Array.isArray(result)) throw new Error("GLSL translator returned invalid texture bindings");
+    return result;
+  }
+
+  function uniformBindings() {
+    const result = JSON.parse(decoder.decode(copiedBytes(
+      exports, exports.dynlex_glsl_uniforms_pointer, exports.dynlex_glsl_uniforms_length
+    )));
+    if (!Array.isArray(result)) throw new Error("GLSL translator returned invalid uniform bindings");
+    return result;
   }
 
   function translate(spirvBytes) {
@@ -100,7 +120,7 @@ export async function createWgslTranslator(source) {
       if (glsl.length === 0) {
         throw new Error("GLSL translator returned no shader source");
       }
-      return glsl;
+      return Object.freeze({ source: glsl, bindings: textureBindings(), uniforms: uniformBindings() });
     } finally {
       exports.dynlex_wgsl_deallocate(pointer, spirvBytes.byteLength);
     }
@@ -136,7 +156,9 @@ export async function createWgslTranslator(source) {
           exports,
           exports.dynlex_glsl_result_pointer,
           exports.dynlex_glsl_result_length
-        ))
+        )),
+        bindings: textureBindings(),
+        uniforms: uniformBindings()
       });
     } finally {
       exports.dynlex_wgsl_deallocate(pointer, spirvBytes.byteLength);

@@ -213,6 +213,7 @@ def check_capture_scope_queries(root, build):
 
 
 def check_validation_flow(root, build):
+    check_parameter_first_access_paths(root, build)
     folder = root / 'validation_flow'
     folder.mkdir()
     main = folder / 'main.dl'
@@ -269,6 +270,35 @@ def check_validation_flow(root, build):
     main.write_text(exposed(selected, '@intrinsic("command line argument count")'))
     switched = build(entry=main)
     assert switched[1:] == build(False, entry=main)[1:] and not switched[1]
+
+
+def check_parameter_first_access_paths(root, build):
+    main = root / 'parameter_first_access_paths.dl'
+    prefix = ('flex section maybe condition:\n    replacement: @intrinsic("if", condition)\n'
+              'flex section repeat while condition:\n    replacement: @intrinsic("loop while", condition)\n')
+    header = 'to get adjusted {value} when {condition}:\n'
+    call = ('@intrinsic("discard", adjusted @intrinsic("command line argument count") when '
+            '@intrinsic("equal", @intrinsic("command line argument count"), 0))\n')
+    conditional = prefix + header + ('    maybe condition:\n'
+        '        @intrinsic("store", value, 1)\n    @intrinsic("return", value)\n') + call
+    loop = prefix + header + ('    repeat while condition:\n'
+        '        @intrinsic("store", value, 1)\n'
+        '        @intrinsic("store", condition, @intrinsic("equal", 1, 0))\n'
+        '    @intrinsic("return", value)\n') + call
+    for source in [conditional, conditional.replace('value, 1', 'value, 2'), loop]:
+        main.write_text(source)
+        result = build(entry=main)
+        assert result[1:] == build(False, entry=main)[1:]
+        assert not result[1], 'An incoming value remains readable on paths that skip its conditional write'
+    unconditional = prefix + header + ('    @intrinsic("store", value, 1)\n'
+                                      '    @intrinsic("return", value)\n') + call
+    main.write_text(unconditional)
+    overwritten = build(entry=main)
+    assert overwritten[1:] == build(False, entry=main)[1:]
+    assert 'assigned before being read' in overwritten[1]
+    main.write_text(conditional)
+    restored = build(entry=main)
+    assert restored[1:] == build(False, entry=main)[1:] and not restored[1]
 
 
 def check_validation_bound_parameters(root, build):

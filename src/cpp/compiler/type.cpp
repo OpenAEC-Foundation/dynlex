@@ -260,6 +260,12 @@ std::string typeToUserName(const DataType &type) {
 	case DataType::Kind::Constraint:
 		result = "a type constraint";
 		break;
+	case DataType::Kind::ShaderImage:
+		result = "a shader image binding";
+		break;
+	case DataType::Kind::ShaderSampler:
+		result = "a shader sampler binding";
+		break;
 	}
 
 	for (int level = 0; level < pointerDepth; level++)
@@ -353,6 +359,12 @@ std::string typeToUserName(const TypeConstraint &constraint) {
 		case DataType::Kind::Constraint:
 			result = "a type constraint";
 			break;
+		case DataType::Kind::ShaderImage:
+			result = "a shader image binding";
+			break;
+		case DataType::Kind::ShaderSampler:
+			result = "a shader sampler binding";
+			break;
 		}
 	}
 
@@ -422,6 +434,12 @@ std::string DataType::toString() const {
 		break;
 	case Kind::Constraint:
 		result += "constraint";
+		break;
+	case Kind::ShaderImage:
+		result += "shader image";
+		break;
+	case Kind::ShaderSampler:
+		result += "shader sampler";
 		break;
 	case Kind::Any:
 	case Kind::Unresolved:
@@ -535,6 +553,8 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dat
 	case Kind::ArgumentPack:
 	case Kind::ArgumentReference:
 	case Kind::Constraint:
+	case Kind::ShaderImage:
+	case Kind::ShaderSampler:
 		crashCompilerBug("Constraint is compile-time only, cannot be converted to LLVM type");
 	case Kind::Unresolved:
 		crashCompilerBug("Unresolved type must be resolved before codegen");

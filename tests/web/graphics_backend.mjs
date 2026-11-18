@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { requestGraphicsBackend, createWebGlProgram } from '../../web/graphics-backend.js';
+import { requestGraphicsBackend, createWebGlProgram, createWebGlProgramAsync } from '../../web/graphics-backend.js';
 
 const original = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
 const originalWarn = console.warn;
@@ -67,3 +67,20 @@ try {
   assert.equal(details.length, 3, 'Compilation/link failures must log details');
 } finally { console.error = originalError; }
 console.log('Shared WebGL program creation: failure cleanup and generic client errors passed.');
+
+
+for (const extensionAvailable of [true, false]) {
+  let polls=0, checks=0, deleted=0, timerRan=false;
+  const gl={VERTEX_SHADER:1,FRAGMENT_SHADER:2,COMPILE_STATUS:3,LINK_STATUS:4,
+    getExtension(){return extensionAvailable?{COMPLETION_STATUS_KHR:5}:null;},
+    createShader(){return {};},shaderSource(){},compileShader(){},deleteShader(){deleted++;},
+    createProgram(){return {};},attachShader(){},linkProgram(){},deleteProgram(){},
+    getProgramParameter(program,kind){if(kind===5)return ++polls>=3;return true;},
+    getShaderParameter(){checks++;if(extensionAvailable)assert.equal(polls,3);return true;}
+  };
+  setTimeout(()=>{timerRan=true;},0);
+  await createWebGlProgramAsync(gl,'vertex','fragment');
+  assert(timerRan,'Program preparation must yield to other browser work');
+  assert.equal(checks,2);assert.equal(deleted,2);
+}
+console.log('WebGL preparation yields before status checks and polls nonblocking completion when exposed.');

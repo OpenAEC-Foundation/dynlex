@@ -54,11 +54,14 @@ class FailedReferenceWorklist {
 		}
 	}
 
-	void wakeNewExplicitVariables() {
+	void invalidateExplicitVariableNames() {
+		// Lexical names also affect arguments inside compound matches. Their
+		// changes invalidate failed matches independently of trie mutations.
 		for (PatternReference *reference : blocked) {
-			if (waiting.contains(reference) && findVisibleExplicitWholeVariableName(reference))
+			if (waiting.contains(reference))
 				wake(reference);
 		}
+		dependencies.clear();
 	}
 
 	bool drain(std::list<PatternReference *> &references) {

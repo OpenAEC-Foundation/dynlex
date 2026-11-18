@@ -7,6 +7,8 @@ constexpr std::array<const char *, 9> programPayloadFields{
 
 bool isModulePayload(std::string_view field) { return field == "generated_ir"; }
 
+using ProgramPayloads = std::unordered_map<std::string, IncrementalCacheEntry>;
+
 fs::path programPayloadPath(const fs::path &directory, std::string_view key) {
 	return directory / ("payload-" + std::string(key) + ".entry");
 }
@@ -15,7 +17,25 @@ fs::path inferenceSummaryPath(const fs::path &directory, const std::string &key)
 	return directory / ("inference-summary-" + key + ".entry");
 }
 
-std::optional<Json> readProgramManifest(const fs::path &path) {
+bool retainProgramPayload(const fs::path &directory, const std::string &key, ProgramPayloads &retained) {
+	if (retained.contains(key))
+		return true;
+	const fs::path path = programPayloadPath(directory, key);
+	auto entry = IncrementalCacheEntry::open(path);
+	if (!entry)
+		return false;
+	(void)recordCacheAccess(path);
+	retained.emplace(key, std::move(*entry));
+	return true;
+}
+
+bool retainProgramPayloads(const Json &state, const fs::path &directory, ProgramPayloads &retained) {
+	return std::ranges::all_of(state.at("payload_keys"), [&](const Json &key) {
+		return retainProgramPayload(directory, key.get<std::string>(), retained);
+	});
+}
+
+std::optional<Json> readProgramManifest(const fs::path &path, ProgramPayloads &retained) {
 	auto payload = readEntry(path);
 	if (!payload)
 		return std::nullopt;
@@ -27,31 +47,30 @@ std::optional<Json> readProgramManifest(const fs::path &path) {
 		!manifest.at("inference_class_keys").is_array())
 		throw std::runtime_error("invalid program cache manifest: " + path.string());
 	const Json &keys = manifest.at("payload_keys");
+	ProgramPayloads entries;
 	for (const char *field : programPayloadFields) {
 		if (manifest.contains(field) || !keys.contains(field) || !keys.at(field).is_string())
 			throw std::runtime_error("invalid program cache manifest: " + path.string());
-		if (!recordCacheAccess(programPayloadPath(path.parent_path(), keys.at(field).get_ref<const std::string &>())))
+		if (!retainProgramPayload(path.parent_path(), keys.at(field).get_ref<const std::string &>(), entries))
 			return std::nullopt;
 	}
+	retained = std::move(entries);
 	return manifest;
 }
 
-bool hydrateProgramField(Json &program, const fs::path &directory, const char *field) {
+bool hydrateProgramField(Json &program, const ProgramPayloads &retained, const char *field) {
 	if (program.contains(field))
 		return false;
 	std::string key = program.at("payload_keys").at(field).get<std::string>();
-	fs::path path = programPayloadPath(directory, key);
-	auto payload = readEntry(path);
-	if (!payload)
-		throw std::runtime_error("program payload disappeared: " + path.string());
-	if (digest(*payload) != key)
-		throw std::runtime_error("corrupt program payload: " + path.string());
+	std::string_view payload = retained.at(key).payload();
+	if (digest(payload) != key)
+		throw std::runtime_error("corrupt program payload: " + key);
 	if (isModulePayload(field))
-		program[field] = std::move(*payload);
+		program[field] = std::string(payload);
 	else if (std::string_view(field) == "section_dependency_graph")
-		program[field] = decodeSectionGraph(parseCachedCbor(*payload));
+		program[field] = decodeSectionGraph(parseCachedCbor(payload));
 	else
-		program[field] = parseCachedCbor(*payload);
+		program[field] = parseCachedCbor(payload);
 	return true;
 }
 

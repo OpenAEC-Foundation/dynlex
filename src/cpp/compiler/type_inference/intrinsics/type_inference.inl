@@ -27,7 +27,12 @@ void ExpressionInferenceSupport::inferTypeIntrinsic() {
 		numericByteSize = bitCount / 8;
 		typeRefType = makeBuiltinTypeReference(kindStr, context.parseContext.options.emitSPIRV, numericByteSize);
 		if (!typeRefType) {
-			failIntrinsicArgumentRequirement(2, "a supported bit width for the requested numeric type kind");
+			if (kindStr == "float")
+				failIntrinsicArgumentRequirement(2, "32 or 64 for a floating-point type");
+			else if (kindStr == "int" || kindStr == "uint" || kindStr == "integer" || kindStr == "any")
+				failIntrinsicArgumentRequirement(2, "an integer width within LLVM's type limit");
+			else
+				failIntrinsicArgumentRequirement(2, "a numeric type kind that accepts a bit width");
 			return;
 		}
 	}

@@ -1,0 +1,12 @@
+integer means: @intrinsic("type", "int", 32)
+class:
+    patterns:
+        record
+    members:
+        value as integer
+
+original means: @intrinsic("static reference", @intrinsic("construct", record, 42))
+copied means: @intrinsic("static reference", @intrinsic("construct", record, original's value))
+dereferenced means: @intrinsic("static reference", @intrinsic("dereference", copied))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", copied's value))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", dereferenced's value))

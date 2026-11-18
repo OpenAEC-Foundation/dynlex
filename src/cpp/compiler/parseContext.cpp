@@ -191,16 +191,101 @@ PatternMatch *ParseContext::match(
 	return finish(nullptr);
 }
 
-void ParseContext::registerShaderUniform(std::string uniformName, std::uint32_t binding, Range range) {
-	shaderUniforms.push_back({std::move(uniformName), binding, std::move(range)});
+bool ParseContext::registerShaderUniform(std::string uniformName, std::uint32_t binding, DataType type, Range range) {
+	for (const auto &resource : shaderResources) {
+		if (resource.binding == binding || resource.name == uniformName) {
+			addDiagnostic(Diagnostic(
+				*this, Diagnostic::Level::Error, "shader resource binding conflict", range, "binding", std::to_string(binding),
+				"first", resource.name, "second", uniformName
+			));
+			return false;
+		}
+	}
+	for (const ShaderUniform &previous : shaderUniforms) {
+		if (previous.name == uniformName) {
+			if (previous.binding != binding) {
+				addDiagnostic(Diagnostic(
+					*this, Diagnostic::Level::Error, "shader uniform binding inconsistent", range, "name", uniformName, "first",
+					std::to_string(previous.binding), "second", std::to_string(binding)
+				));
+				return false;
+			}
+			if (previous.type != type) {
+				addDiagnostic(
+					Diagnostic(*this, Diagnostic::Level::Error, "shader uniform type inconsistent", range, "name", uniformName)
+				);
+				return false;
+			}
+			return true;
+		}
+		if (previous.binding == binding) {
+			addDiagnostic(Diagnostic(
+				*this, Diagnostic::Level::Error, "shader uniform binding duplicate", range, "binding", std::to_string(binding),
+				"first", previous.name, "second", uniformName
+			));
+			return false;
+		}
+	}
+	shaderUniforms.push_back({std::move(uniformName), binding, std::move(type), std::move(range)});
+	return true;
 }
 
-void ParseContext::registerShaderInterpolantName(const std::string &interpolantName) {
-	if (interpolantName.empty())
-		return;
-	if (std::find(shaderInterpolantNames.begin(), shaderInterpolantNames.end(), interpolantName) ==
-		shaderInterpolantNames.end())
-		shaderInterpolantNames.push_back(interpolantName);
+bool ParseContext::registerShaderResource(ShaderResourceValue resource, Range range) {
+	for (const auto &previous : shaderResources) {
+		if (previous == resource)
+			return true;
+		if (previous.name == resource.name) {
+			addDiagnostic(
+				Diagnostic(*this, Diagnostic::Level::Error, "shader resource name inconsistent", range, "name", resource.name)
+			);
+			return false;
+		}
+		if (previous.binding == resource.binding) {
+			addDiagnostic(Diagnostic(
+				*this, Diagnostic::Level::Error, "shader resource binding conflict", range, "binding",
+				std::to_string(resource.binding), "first", previous.name, "second", resource.name
+			));
+			return false;
+		}
+	}
+	for (const auto &uniform : shaderUniforms) {
+		if (uniform.binding == resource.binding || uniform.name == resource.name) {
+			addDiagnostic(Diagnostic(
+				*this, Diagnostic::Level::Error, "shader resource binding conflict", range, "binding",
+				std::to_string(resource.binding), "first", uniform.name, "second", resource.name
+			));
+			return false;
+		}
+	}
+	shaderResources.push_back(std::move(resource));
+	return true;
+}
+
+void ParseContext::registerShaderVertexInput(std::string name, std::uint32_t location, DataType type, Range range) {
+	shaderVertexInputs.push_back({std::move(name), location, std::move(type), std::move(range)});
+}
+
+bool ParseContext::registerShaderInterpolant(ShaderInterpolant interpolant) {
+	for (const auto &previous : shaderInterpolants) {
+		if (previous.name == interpolant.name) {
+			if (previous.location == interpolant.location && previous.type == interpolant.type &&
+				previous.interpolation == interpolant.interpolation)
+				return true;
+			addDiagnostic(Diagnostic(
+				*this, Diagnostic::Level::Error, "shader interpolant inconsistent", interpolant.range, "name", interpolant.name
+			));
+			return false;
+		}
+		if (previous.location == interpolant.location) {
+			addDiagnostic(Diagnostic(
+				*this, Diagnostic::Level::Error, "shader interpolant duplicate", interpolant.range, "location",
+				std::to_string(interpolant.location), "first", previous.name, "second", interpolant.name
+			));
+			return false;
+		}
+	}
+	shaderInterpolants.push_back(std::move(interpolant));
+	return true;
 }
 
 VariableReference *ParseContext::createVariableReference(Range range, const std::string &name) {

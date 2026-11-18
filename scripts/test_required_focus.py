@@ -29,6 +29,7 @@ failed=0
     for suite in ("required", "integration"):
         for name, expected_suite in (("numeric_literals", "required"),
                                      ("class_layout", "required"),
+                                     ("incremental_dependencies", "required"),
                                      ("compiler_stack", "required"),
                                      ("timeout_output", "required")):
             result = subprocess.run(

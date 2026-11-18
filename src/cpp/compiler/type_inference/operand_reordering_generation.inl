@@ -253,6 +253,24 @@ static bool permitsGroupingOperand(const std::optional<GroupingParentOperand> &p
 	crashCompilerBug("unknown pattern associativity");
 }
 
+static bool groupingSpanHasEligibleRoot(
+	int start, int end, GroupingGenerationState &state, const GroupingParentOperand &parentOperand
+) {
+	if (start > end)
+		return false;
+	if (start == end) {
+		Expression *operand = state.flatNodes[start];
+		return state.opaqueNodes.contains(operand) || permitsGroupingOperand(parentOperand, operand);
+	}
+	for (int rootIndex = end; rootIndex >= start; rootIndex--) {
+		Expression *operand = state.flatNodes[rootIndex];
+		if (permitsGroupingOperand(parentOperand, operand) &&
+			isEligibleGroupingRoot(start, end, rootIndex, operand, state))
+			return true;
+	}
+	return false;
+}
+
 static GroupingGenerator<Expression *> generateFlatExpressionGroupings(
 	int start, int end, GroupingGenerationState &state, std::optional<GroupingParentOperand> parentOperand = std::nullopt
 );
@@ -317,6 +335,16 @@ static GroupingGenerator<Expression *> generateFlatExpressionGroupings(
 
 		bool hasLeftEdge = startsWithArgument(rootExpression);
 		bool hasRightEdge = endsWithArgument(rootExpression);
+		// Reject an impossible operand before enumerating any of its sibling's
+		// groupings. Otherwise an associative chain repeatedly rebuilds its
+		// entire valid side before discovering that the other side is forbidden.
+		if ((hasRightEdge && !groupingSpanHasEligibleRoot(
+				rootIndex + 1, end, state, GroupingParentOperand{rootExpression, false}
+			)) ||
+			(hasLeftEdge && !groupingSpanHasEligibleRoot(
+				start, rootIndex - 1, state, GroupingParentOperand{rootExpression, true}
+			)))
+			continue;
 		size_t sourceArgumentCount = groupingArgumentCount(rootExpression);
 		int leftArgumentIndex = hasLeftEdge ? groupingArgumentIndex(rootExpression, 0) : -1;
 		int rightArgumentIndex = hasRightEdge ? groupingArgumentIndex(rootExpression, sourceArgumentCount - 1) : -1;

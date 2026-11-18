@@ -1,0 +1,16 @@
+import lib/string.dl
+import lib/check.dl
+
+require condition ((the string form of (1794279584123 as a 64 bit integer)) = "1794279584123") reporting "A signed millisecond timestamp was narrowed to the machine word size"
+require condition ((the string form of ((-9223372036854775808) as a 64 bit integer)) = "-9223372036854775808") reporting "The minimum signed integer lost its digits"
+require condition ((the string form of (9223372036854775807 as a 64 bit integer)) = "9223372036854775807") reporting "The maximum signed integer lost its digits"
+require condition ((the string form of (18446744073709551615 as a 64 bit unsigned integer)) = "18446744073709551615") reporting "The maximum unsigned integer lost its digits"
+require condition ((the count of decimal digits in (1794279584123 as a 64 bit integer)) = 13) reporting "Counting digits narrowed an integer"
+require condition ((the count of decimal digits in (18446744073709551615 as a 64 bit unsigned integer)) = 20) reporting "Counting unsigned digits used a negative threshold"
+require condition (((1794279584123 as a 64 bit integer) padded to 15 digits) = "001794279584123") reporting "Padding narrowed an integer"
+require condition (((18446744073709551615 as a 64 bit unsigned integer) padded to 22 digits) = "0018446744073709551615") reporting "Padding narrowed an unsigned integer"
+require condition ((the string form of (1794279584123.0 as a 64 bit floating-point number)) = "1794279584123") reporting "Floating-point formatting depends on the pointer width"
+require condition ((the string form of ((-128) as an 8 bit integer)) = "-128") reporting "A narrow signed integer lost its sign"
+require condition ((the string form of (0 as a 64 bit integer)) = "0") reporting "Zero did not produce one digit"
+require condition ((the string form of ((-32768) as a 16 bit integer)) = "-32768") reporting "A sixteen-bit integer lost its digits"
+print line "Integer digits, padding, extrema and large numbers are independent of pointer width."

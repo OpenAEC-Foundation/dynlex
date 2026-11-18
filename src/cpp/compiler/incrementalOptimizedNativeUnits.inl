@@ -165,16 +165,17 @@ bool emitOptimizedNativeUnits(
 	return linked;
 }
 
-void loadNativeUnitSnapshot(Json &previous, const fs::path &directory, BuildStatistics &statistics) {
+void loadNativeUnitSnapshot(Json &previous, const ProgramPayloads &retainedPayloads, BuildStatistics &statistics) {
 	auto start = Clock::now();
-	statistics.cachePayloadsLoaded += hydrateProgramField(previous, directory, "native_units");
+	statistics.cachePayloadsLoaded += hydrateProgramField(previous, retainedPayloads, "native_units");
 	statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(start);
 }
 
 bool buildCompilerOutput(
-	ParseContext &context, const fs::path &directory, const std::string &compilerIdentity, const Json &options,
-	const std::vector<std::string> &libraries, BuildStatistics &statistics, std::string_view generatedIR, Json *previous,
-	const IncrementalIRReuse *functionReuse, bool restoredModule = false
+	ParseContext &context, const fs::path &directory, const ProgramPayloads &retainedPayloads,
+	const std::string &compilerIdentity, const Json &options, const std::vector<std::string> &libraries,
+	BuildStatistics &statistics, std::string_view generatedIR, Json *previous, const IncrementalIRReuse *functionReuse,
+	bool restoredModule = false
 ) {
 	// The unoptimized IR snapshot owns cache products; backend units consume only
 	// executable/debug metadata, so these records never enter optimizer inputs.
@@ -183,14 +184,17 @@ bool buildCompilerOutput(
 		return buildLLVMArtifact(context, directory, compilerIdentity, options, generatedIR, statistics);
 	if (!context.options.optimizationLevel)
 		return emitPartitions(
-			context, directory, compilerIdentity, options, libraries, statistics, previous, functionReuse, restoredModule
+			context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics, previous, functionReuse,
+			restoredModule
 		);
 	const Json *priorUnits = nullptr;
 	if (previous) {
-		loadNativeUnitSnapshot(*previous, directory, statistics);
+		loadNativeUnitSnapshot(*previous, retainedPayloads, statistics);
 		priorUnits = &previous->at("native_units").at("units");
 	}
-	IncrementalOptimization optimization(context, directory, compilerIdentity, options, previous, statistics, functionReuse);
+	IncrementalOptimization optimization(
+		context, directory, retainedPayloads, compilerIdentity, options, previous, statistics, functionReuse
+	);
 	optimization.run();
 	for (;;) {
 		auto start = Clock::now();
@@ -220,14 +224,14 @@ bool buildCompilerOutput(
 }
 
 bool restoreCompilerOutput(
-	ParseContext &context, const fs::path &directory, const fs::path &entry, const std::string &compilerIdentity,
-	const Json &options, const std::vector<std::string> &libraries, BuildStatistics &statistics, Json &previous,
-	bool generatedModuleAvailable = false, bool initializeTarget = false
+	ParseContext &context, const fs::path &directory, const ProgramPayloads &retainedPayloads, const fs::path &entry,
+	const std::string &compilerIdentity, const Json &options, const std::vector<std::string> &libraries,
+	BuildStatistics &statistics, Json &previous, bool generatedModuleAvailable = false, bool initializeTarget = false
 ) {
 	if (context.options.emitLLVM)
 		return restoreLLVMArtifact(
-			context, directory, entry, compilerIdentity, options, previous, statistics, generatedModuleAvailable,
-			initializeTarget
+			context, directory, retainedPayloads, entry, compilerIdentity, options, previous, statistics,
+			generatedModuleAvailable, initializeTarget
 		);
 	if (initializeTarget)
 		initializeOutputTarget(context);
@@ -236,7 +240,7 @@ bool restoreCompilerOutput(
 		return *linked;
 	if (context.options.optimizationLevel) {
 		auto start = Clock::now();
-		loadNativeUnitSnapshot(previous, directory, statistics);
+		loadNativeUnitSnapshot(previous, retainedPayloads, statistics);
 		std::vector<NativeUnitWork> plan;
 		for (const auto &[name, record] : previous.at("native_units").at("units").items())
 			plan.push_back({name, record, std::nullopt, std::nullopt, nullptr});
@@ -247,13 +251,13 @@ bool restoreCompilerOutput(
 	}
 	if (!generatedModuleAvailable) {
 		auto start = Clock::now();
-		statistics.cachePayloadsLoaded += hydrateProgramField(previous, directory, "generated_ir");
+		statistics.cachePayloadsLoaded += hydrateProgramField(previous, retainedPayloads, "generated_ir");
 		statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(start);
 		restoreGeneratedModule(context, previous, entry);
 	}
 	statistics.objectKeys.clear();
 	return buildCompilerOutput(
-		context, directory, compilerIdentity, options, libraries, statistics,
+		context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics,
 		previous.at("generated_ir").get_ref<const std::string &>(), &previous, nullptr, true
 	);
 }

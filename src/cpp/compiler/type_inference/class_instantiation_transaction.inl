@@ -8,6 +8,7 @@ struct ActiveClassInstantiation {
 struct ClassInstantiationTransaction {
 	ParseContext *parseContext{};
 	std::unordered_map<ClassDefinition *, size_t> originalInstantiationSizes;
+	std::vector<ClassDefinition *> appendedDefinitions;
 	std::vector<std::pair<ClassDefinition *, std::string>> insertedRequestKeys;
 	bool failed = false;
 };
@@ -21,15 +22,14 @@ static ClassInstantiationRequest buildClassInstantiationRequest(
 	const std::vector<DataType> *constructionArgumentTypes
 ) {
 	ClassInstantiationRequest request;
-	auto &parameters = request.parameters;
 	if (!bindingFrameStack.empty()) {
 		for (const auto &[name, expression] : bindingFrameStack.topFrame().bindings) {
 			DataType type = resolveKnownExpressionType(expression, bindingFrameStack, inferenceContext);
 			CompileTimeValue value = resolveStoredCompileTimeValue(expression, bindingFrameStack, inferenceContext);
-			parameters.push_back({name, std::move(type), std::move(value)});
+			request.parameters.push_back({name, std::move(type), std::move(value)});
 		}
 	}
-	std::sort(parameters.begin(), parameters.end(), [](const auto &left, const auto &right) {
+	std::sort(request.parameters.begin(), request.parameters.end(), [](const auto &left, const auto &right) {
 		return std::get<0>(left) < std::get<0>(right);
 	});
 	if (constructionArgumentTypes)
@@ -56,9 +56,11 @@ static void recordClassInstantiationAppend(ClassDefinition *classDefinition) {
 	requireCompilerInvariant(
 		activeClassInstantiationTransaction.has_value(), "class instantiation append has no active transaction"
 	);
-	activeClassInstantiationTransaction->originalInstantiationSizes.try_emplace(
+	auto [entry, inserted] = activeClassInstantiationTransaction->originalInstantiationSizes.try_emplace(
 		classDefinition, classDefinition->instantiations.size()
 	);
+	if (inserted)
+		activeClassInstantiationTransaction->appendedDefinitions.push_back(classDefinition);
 }
 
 static void cacheClassInstantiationRequest(
@@ -180,7 +182,7 @@ struct ScopedActiveClassInstantiation {
 			requireCompilerInvariant(
 				!activeClassInstantiationTransaction.has_value(), "class instantiation transaction leaked between resolutions"
 			);
-			activeClassInstantiationTransaction = ClassInstantiationTransaction{&parseContext, {}, {}, false};
+			activeClassInstantiationTransaction = ClassInstantiationTransaction{&parseContext, {}, {}, {}, false};
 		} else {
 			requireCompilerInvariant(
 				activeClassInstantiationTransaction && activeClassInstantiationTransaction->parseContext == &parseContext,

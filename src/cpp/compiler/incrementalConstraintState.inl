@@ -15,13 +15,15 @@ const Json *priorMatchedDependencies(const ConstraintReuseState &constraints, co
 
 constexpr std::array constraintStateFields{"all_function_projection", "graph"};
 
-const Json *selectFrontendReuseState(Json *native, Json *failure, const fs::path &directory, BuildStatistics &statistics) {
+const Json *selectFrontendReuseState(
+	Json *native, Json *failure, const fs::path &directory, ProgramPayloads &retainedPayloads, BuildStatistics &statistics
+) {
 	if (failure && !failure->at("constraint_state").is_null()) {
 		Json &state = failure->at("constraint_state");
 		const auto &key = state.at("payload_keys").at("all_function_projection").get_ref<const std::string &>();
-		if (recordCacheAccess(programPayloadPath(directory, key))) {
+		if (retainProgramPayload(directory, key, retainedPayloads)) {
 			auto start = Clock::now();
-			statistics.cachePayloadsLoaded += hydrateProgramField(state, directory, "all_function_projection");
+			statistics.cachePayloadsLoaded += hydrateProgramField(state, retainedPayloads, "all_function_projection");
 			statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(start);
 			return &state;
 		}
@@ -34,17 +36,16 @@ Json constraintStateManifest(const fs::path &directory, Json state) {
 	return state;
 }
 
-ConstraintReuseState
-selectConstraintReuseState(Json *inferred, Json *failure, const fs::path &directory, BuildStatistics &statistics) {
+ConstraintReuseState selectConstraintReuseState(
+	Json *inferred, Json *failure, const fs::path &directory, ProgramPayloads &retainedPayloads, BuildStatistics &statistics
+) {
 	if (failure && !failure->at("constraint_state").is_null()) {
 		Json &state = failure->at("constraint_state");
-		bool available = std::ranges::all_of(state.at("payload_keys"), [&](const Json &key) {
-			return recordCacheAccess(programPayloadPath(directory, key.get<std::string>()));
-		});
+		bool available = retainProgramPayloads(state, directory, retainedPayloads);
 		if (available) {
 			auto start = Clock::now();
 			for (const char *field : constraintStateFields)
-				statistics.cachePayloadsLoaded += hydrateProgramField(state, directory, field);
+				statistics.cachePayloadsLoaded += hydrateProgramField(state, retainedPayloads, field);
 			statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(start);
 			return {&state, &state.at("all_function_projection"), &state.at("graph")};
 		}

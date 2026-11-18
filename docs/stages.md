@@ -158,6 +158,12 @@ content-addressed parser snapshot and remains usable when a later stage fails.
 Every array element is parsed as a complete expression. A single-element array uses its entire interior text and nested
 bracket hierarchy, just as comma-separated elements do; a nested string or parenthesis is not the element by itself.
 
+String literal decoding and source-value presentation share one escape alphabet.
+Hover, purity reports and resolved-expression diagnostics print quoted, escaped
+values, preserving quotes, backslashes, control characters and Unicode. LSP
+Markdown code spans choose delimiters longer than every backtick run in the
+formatted value so literal contents cannot terminate their presentation.
+
 String boundaries use backslash parity: a quote preceded by an odd run of backslashes is escaped; an even run leaves
 the quote unescaped. Bracket parsing, comment scanning, and source-character validation share this rule.
 
@@ -179,6 +185,9 @@ from the syntax configuration) describes a section's body and value. A body sche
 an anonymous record with ordinary generated property accessors. Each field's constraint
 is an ordinary expression. The parser does not recognize domain-specific child syntax.
 See `docs/data_sections.md`.
+Forward-reference inference instantiates the declared result schema in the requesting
+context, like body-field constraints. Independent signature probes must not retain
+inferred expression types on the shared schema after their compile-time values roll back.
 
 Integer literals are parsed exactly rather than through floating-point storage.
 Values fitting the existing scalar ranges use signed 32 or 64 bits or unsigned
@@ -221,6 +230,11 @@ before function-body resolution must finish. This discovers only declaration nam
 the global call remains unresolved until the ordinary global-reference boundary.
 Function bodies can therefore refer to multiword data names without creating a
 dependency cycle between their own resolution and that of the declaring call.
+Discovery retains source-header snapshots and refreshes its complete contribution
+to each lexical name index until stable. A changed header match removes its prior
+tentative name while preserving independent explicit captures. Declaring captures
+give literal continuations their ordinary priority, so an optional trailing clause
+does not become part of a multiword declaration name.
 
 A section with `receiver` metadata moves its already parsed body into an ordinary
 callable function with one receiver parameter. This occurs before expression expansion
@@ -232,6 +246,9 @@ When a child inference context retains a function instantiation during a trial, 
 expression constants, operand groupings, and callable selections join the caller's
 trial state. The outer transaction commits or discards those results together with
 the inferred body; retaining only types loses metadata needed by code generation.
+Nested trial contexts look up expression constants through the complete enclosing
+trial chain. Each context owns its writes, including unknown values that shadow
+an enclosing constant; committing or rolling back a trial preserves that ownership.
 
 Incremental inference retains diagnostics as concrete-unit products. A warning
 in one function does not exclude unrelated functions in the same file from reuse.
@@ -242,6 +259,11 @@ with their concrete inference units without acquiring caller traces on cache rep
 Caller retention scopes are explicit diagnostic metadata, so reusing an enclosing
 unit also replays nested warnings which have no visible call-trace notes.
 The analysis follows evaluation order and joins the typed control-flow alternatives.
+Parameter first-access queries span every executable body section of the function.
+A conditional or loop write leaves skipped paths available to a later read;
+the first lexical reference alone cannot determine whether the incoming value is unused.
+A first-expression read already proves that the input is used. Remaining path
+analysis ends once every executable path has its first access.
 Only parameters bound by the concrete call have incoming values; omitted choice
 parameters are locals. Releasing an initialized managed parameter before replacement
 consumes its incoming value.
@@ -369,7 +391,13 @@ We discover what is a variable based on these principles:
 - `{name}` explicitly introduces or references a variable. The name can contain multiple words separated by spaces.
 - `{type:name}` does the same and constrains the variable to values accepted by the type expression. This syntax works both in pattern definitions and in executable code.
 - After a multi-word name has been introduced explicitly, later unbraced occurrences of that full name are matched as one variable in the same lexical scope and its children.
-  An exact visible explicit name is resolved before attempting a pattern call; whitespace surrounding an intrinsic argument does not change its variable identity.
+  An exact visible explicit name is resolved before attempting a pattern call, including an operand nested in another call.
+  At the start of an operator expression, that operand also precedes a colliding literal prefix function.
+  Explicit single-word parameters and locals follow the same operand priority, so a local `height` in `height is finite`
+  precedes a colliding `height is {value}` prefix pattern. Standalone single-word functions retain their normal priority
+  over parameter and local names. Data declaration names follow explicit operand priority for single-word names as well.
+  Literal continuations keep their normal priority;
+  whitespace surrounding an intrinsic argument does not change its variable identity.
 
 A square-bracket group without a top-level `|` is an explicit literal and is flattened into its ordinary literal elements.
 `{literal:text}` produces the same representation. Square-bracket groups with alternatives remain choice elements.
@@ -473,7 +501,11 @@ type or constraint operands accept. `integer` leaves the sign unspecified and ac
 `signed` and `unsigned` restrict the sign. The result keeps an exact type view whenever its properties determine a
 number kind, completing an unspecified sign and width with the built-in defaults.
 
-Number rules (`numbers are ...`) are inferred in the declared type-constraint worklist. Constraints written in a scope
+Number rules (`numbers are ...`) are inferred in the declared type-constraint worklist.
+Their expressions carry static type-constraint references, including nested expressions.
+Inactive-function reuse skips only runtime expression references, so an unused
+function's scope rules still resolve and participate in that worklist after edits.
+Constraints written in a scope
 whose number rule is still pending wait for it. Number type phrases and numeric literals written in a scope with a
 number rule receive the rule's properties where they leave them unspecified; flex replacements keep the rules of the
 file that defines them. A literal whose type came from a rule yields to an explicitly typed parameter that rejects it,
@@ -494,6 +526,8 @@ typing. Integer-to-float casts round directly to the selected IEEE precision.
 Specialization keys, editor value displays and persisted inference values retain
 the complete value and width. Decimal formatting and digit counting operate on
 the original integer type, without narrowing to a machine word.
+Floating-point type references admit 32 and 64 bits. Invalid widths are rejected
+when the type reference is formed, before code generation.
 Integer casts retain the target-width bits. Floating-point to integer casts
 truncate toward zero and are compile-time-known only when the truncated value
 fits the target signed or unsigned width, matching the native LLVM conversion.
@@ -517,6 +551,17 @@ overloads. Declaration order never selects an overload.
 this implies:
  - functions and classes are instantiated on USAGE. for functions when they're called, for classes with the construct intrinsic. so if a class or function is never used, NO instantiation is created.
 
+Class layout resolution keeps symbolic references throughout a mutually recursive
+instantiation transaction, including inline fields and array elements. An active
+symbolic layout is distinct from an unspecified generic member type. Once those
+references resolve, the graph of inline storage must be acyclic; a pointer breaks
+the storage cycle. Infinite inline storage produces a configured source diagnostic.
+
+Member lists split only at commas outside brackets and string literals. A member's
+type can be any ordinary type expression, including an intrinsic containing named
+types. Type-reference expansion visits pending arguments beneath an already parsed
+outer expression, and unresolved references retain type-constraint diagnostics.
+
 The compiler NEVER expands flexes to look for something like an intrinsic. instead, the compiler walks the code normally and once intrinsics are encountered, it does something with them.
 
 Recursive function inference runs complete body passes until the instantiation stabilizes.
@@ -526,6 +571,12 @@ pass. Encountering a return whose operand is still unresolved is distinct from e
 no return. Return observations belong to the active instantiation, reset for each body
 pass, and participate in inference-trial rollback. Returns inferred inside a nested
 function do not determine the caller's result.
+
+Taking a reference to a function whose body is already being inferred retains
+that callable's identity. Its unresolved result records the same recursive
+dependency as a direct call, so the owning body pass can establish its result
+and revisit the reference. A reference does not invoke the function or require
+another traversal of the active body.
 
 An ordinary overload lookup with unresolved recursive operands is deferred until
 the existing body reinference pass deduces those operands. Reads and assignments
@@ -602,7 +653,7 @@ We track each variable that could possibly be a constant. A variable reference c
 
 The same execution walk records pointer facts. Address provenance retains a set of possible variable-storage targets,
 an explicit null alternative, static literal storage, and whether other origins are unknown. A null pointer and a value
-containing no pointers are different facts. Assignments replace the destination's facts; alternatives and loop joins combine the possibilities.
+containing no pointers are different facts. A `static reference` identifies immutable static storage, independently of the values or pointer fields in its initializer. Provenance does not recursively re-read that initializer to identify the resulting address. Assignments replace the destination's facts; alternatives and loop joins combine the possibilities.
 Opaque writes discard certainty about affected pointer storage. Numeric operations and conversions on encoded addresses
 retain their possible origins for alias tracking but make their storage uncertain. These facts are opportunistic: DynLex does not guarantee
 memory safety, require ownership annotations, or run an additional safety-analysis pass. Memory diagnostics may report
@@ -619,6 +670,10 @@ function names. Known variable or literal storage cannot be deallocated, while n
 accepted. Parameter storage can alias heap storage and is therefore unknown. Library deallocations use these patterns rather than bypassing the check with raw external calls.
 
 Writing a concrete value through storage whose nested class subtype is still unspecified refines that storage type. Function instantiations record refinements to parameter storage and apply them to the caller, so a generic container can bind its element subtype on its first write without losing it at the function boundary. This only completes unspecified structure; it never changes an already concrete member type.
+Structurally equivalent recursive layouts retain the established storage type,
+even when their internal instantiation IDs differ. Only added structure propagates
+as a refinement, so equivalent layouts cannot generate an unbounded chain of
+function specializations.
 
 Assignments involving unfinished structure record type equations between lexical storage views. Fully determined types need no new equations; writes to existing roots still propagate through their earlier equations. Views project fields, aggregate elements and
 pointer depth, so refinement through a copied pointer also completes the corresponding subtype in its source. These are
@@ -632,7 +687,7 @@ We can reorder expressions based on types if this is the first valid instantiati
 
 **ALL** types of each previous line have to be deduced right away, except in recursive function code. we loop over the function code again if not all types were resolved. if no progress is being made, we emit diagnostics.
 
-Each loop pass walks its body once in execution order. Loop inference joins the entry state with the state produced by one body pass, then repeats the ordinary header and body walk until constants and the subject reach a fixed point. A statically true first header uses the first iteration's result as the fixed-point entry because that iteration is guaranteed; an unknown first header also retains the zero-iteration entry path. Assignments remain precise within each pass, and only values which actually differ across reachable iteration counts become unknown. A body proven unreachable by the header is not inferred and does not contribute variable, subject, or return-type state.
+Each loop pass walks its body once in execution order. Loop inference joins the entry state with the state produced by one body pass, then repeats the ordinary header and body walk until constants and the subject reach a fixed point. A statically true first header uses the first iteration's result as the fixed-point entry because that iteration is guaranteed; an unknown first header also retains the zero-iteration entry path. Assignments remain precise within each pass, and only values which actually differ across reachable iteration counts become unknown. A body proven unreachable by the header is not inferred and does not contribute variable, subject, or return-type state. Runtime body annotations join the first entry with every reachable later entry; a later returning pass cannot replace the first pass's branch choices. This annotation join is separate from the precise post-loop state established by a guaranteed first iteration.
 
 We infer top-down, left to right. So we infer the top-level expression. Before inferring it, we infer the arguments. If those arguments are expressions with arguments as well, no problem, since we infer recursively.
 
@@ -671,9 +726,15 @@ When processing a function call, we infer that function right away so we can kno
 
 Argument type inference and argument execution have separate effects. After selecting a replacement, inference restores the
 caller's execution state from before the preliminary argument walk. The replacement then applies argument effects where its
-bindings are used. An already inferred binding is reusable only when its inference did not change execution state and that same
-state still holds. This state includes constants, address provenance, the subject and the owning instantiation's effect summary;
-restoration retains inferred types, grouping selections and recursive inference dependencies.
+bindings are used. The preliminary walk records each argument's input and output execution state. A binding can replay that
+transition when its caller bindings, assignment-target role, input state and inferred tree still match. Tree revisions and
+stored results reject reuse after reinference or regrouping. These dependencies include complete replacement/caller/loop
+bodies and the source expressions reached through argument references; an argument reference is not a leaf of the inference
+result. Comparing stored results does not substitute a variable's current
+execution value. This state includes constants, address provenance, type refinements, the subject and the owning
+instantiation's effect summary. Repeated or reordered uses with different inputs are inferred normally. Restoration retains
+inferred types, grouping selections and recursive inference dependencies, avoiding exponential speculative inference for
+nested replacements around effectful arguments.
 
 Subject values belong to their function invocation during pure evaluation, just like local variable values. Publishing an unmanaged value is a local effect; publishing a managed value retains lifecycle effects and cannot make an effectful type function pure. A subject whose assignment depends on recursive inference stays pending with that dependency until a body pass resolves its value.
 
@@ -785,6 +846,10 @@ Windows default stack.
 The grouping candidate generator also has a non-inlined entry point. This keeps
 coroutine allocation elision from placing its suspended enumeration state in
 the recursive inference stack.
+Execution snapshots retain immutable instantiation-effect records through shared
+ownership. Recursive argument and grouping frames do not reserve an inline copy
+of that aggregate when no function instantiation is active. Snapshot copies share
+the immutable record; restoring a snapshot still copies its effects into the owner.
 
 Inside an active grouping trial, an expression with at most one grouping-capable
 node has no alternative operand grouping. It uses that fixed structure and the
@@ -798,6 +863,9 @@ Unary arithmetic intrinsics require numeric scalar or vector values. Classes, po
 ## Operand Reordering
 
 Binary infix patterns may declare `associativity: left` or `associativity: right`.
+Grouping generation rejects operand spans with no legal root before enumerating
+their siblings. Declared associativity must constrain the search itself, rather
+than causing an already-enumerated sibling to be discarded repeatedly.
 This is a syntax-family rule shared by typed overloads and choice spellings;
 contradictory declarations are errors. It determines grouping, not algebraic
 equivalence or reassociation by an optimizer. The rule applies to directly
@@ -894,6 +962,8 @@ A successful candidate keeps its complete inference transaction alive while the 
 
 A candidate whose validity depends on an unresolved recursive call is deferred, rather than counted as a second passing tree. A resolved alternative can establish the return type needed for the normal body reinference pass to check those deferred alternatives. Dependency observations belong to the individual candidate.
 
+A code line that observed an unresolved recursive dependency does not publish its provisional grouping as a reusable ordering. The next body pass enumerates its alternatives again with the newly deduced types. Independent, resolved lines can still commit their groupings during that pass.
+
 Nested trials and cached-grouping inference borrow the caller's fixed roots through parent-linked scopes. They collect only their own resolved roots. Type requests through flex bindings honor all active scopes, so the caller's selected expression tree cannot be regrouped behind its reference. Each scope is restored before its owning transaction or inference call ends.
 
 Replaying a selected snapshot fixes only nodes actually present in that snapshot. Callee body groupings are journaled separately and must not be frozen after their transaction has been rolled back. A committed code line or an already-ordered cloned header fixes every node of its own snapshot, even when an enclosing caller supplies a different fixed-root scope. This keeps independently valid subexpressions from being regrouped into an invalid parent condition during reuse.
@@ -975,10 +1045,20 @@ SPIR-V and its WGSL/GLSL translators. Terminating alternatives remove unreachabl
 forwarding blocks before the section exit is finalized.
 
 Array literals and class construction compose SSA aggregate values directly, allowing
-LLVM to fold static operands into constant aggregates. Named data declarations refer
-to their inferred initializer instead of mutable variable storage. `static reference`
-publishes an immutable global before lowering its initializer, allowing cyclic static
-graphs; the initializer must lower to a constant. `deferred body` uses ordinary native
+LLVM to fold static operands into constant aggregates. Named global data that lowers
+without runtime instructions remains a module constant, including forward and cyclic
+static descriptions. Runtime initializers execute in the declaration's lexical scope
+and transfer one owning snapshot into storage; readers never reuse instructions from
+another function or rerun the initializer. Function-local data owns scoped storage and captures a fresh
+value whenever its declaration executes. Declaration storage identity selects the
+initializer: main data retains its original inferred expression even when a cloned
+replacement reads it; instance-local data uses its owning lexical clone.
+Managed reads retain the snapshot and ordinary
+scope cleanup releases its owner. `static reference` publishes an immutable global
+before lowering its initializer, allowing cyclic static graphs; the initializer must
+lower to a constant. Generating a nested function saves, clears and restores the
+static-reference depth along with the other function-local codegen state.
+`deferred body` uses ordinary native
 callable generation, while the body record and receiver intrinsics use their inferred
 expressions. There is no runtime data-section builder pass.
 After cached IR is imported, static references receive names from the first use
@@ -986,6 +1066,13 @@ in the ordered function/global IR graph. Their names therefore do not depend on
 which function was generated first or restored from cache. This changes names
 only: separate objects with equal initializers retain separate addresses. Private
 static components unreachable from every function and named global are removed.
+
+Ordinary memory reads fold addresses into initialized immutable globals before
+emitting loads, using the target data layout. This includes fields, dereferences
+and pointer chains, so one static description can compose another. Globals are
+published without an initializer while their initializer is being lowered; cyclic
+graphs must not observe a fabricated zero value. Mutable storage and atomic or
+volatile reads retain their runtime semantics.
 
 Calls with an inferred pure, compile-time-known result materialize it directly
 when their runtime operands lower to LLVM constants, using the same scalar emitter
@@ -1001,6 +1088,13 @@ temporary composite types allow recursive pointers to refer to the completed
 record. Global variables carry the resulting debug expressions. Entering a new
 generated function clears the caller's instruction location, so an empty or
 fully folded body cannot inherit the caller's debug scope.
+
+Every generated function has one return cleanup exit. Its initialized owning slots are
+released in reverse registration order after the whole body has been generated, including
+subject slots introduced after an earlier return site. A loop can initialize such a slot
+on one iteration and return before its source declaration on the next. Scoped cleanup
+clears the same initialization flags; the shared exit releases each live value once.
+Returned owning values transfer their retained reference across that cleanup.
 
 Raw pointers are non-owning, regardless of their pointee type or pointer depth. Managed-lifecycle classification checks
 the pointer representation before inspecting array elements or class fields. Owning array values retain elements in forward
@@ -1038,6 +1132,17 @@ must ensure the runtime pointer and stated signature match, and should keep this
 that obtains the symbol from the relevant loader, so application code calls the wrapper rather than spelling ABI metadata at each use
 site.
 
+Vertex shaders declare typed inputs using `@intrinsic("shader vertex input", name, location, type)`.
+The name, unsigned 32-bit location and type are compile-time values. Inputs accept 32-bit signed
+integers, unsigned integers and floats, either scalar or vectors of two, three or four elements.
+Names and locations identify one consistent interface across all reachable calls. The conventional
+`Position` input uses the same interface at location zero and is declared only when read; a shader
+can instead use its own position format or no vertex buffers. Conflicting names, locations and types
+produce source diagnostics before SPIR-V emission. Volatile loads preserve actual GPU inputs.
+Browser reflection exposes logical input names, locations and emitted scalar/vector formats alongside
+uniform bindings; it resets for each compiled stage. `lib/shader.dl` supplies the natural-language
+input declaration, while the renderer owns buffer strides and offsets.
+
 Atomic scalar access uses `@intrinsic("atomic load", pointer, order)`, `atomic store`, `atomic exchange`, `atomic fetch add`,
 and `atomic fetch sub`. Orders are literal `relaxed`, `acquire`, `release`, `acq_rel`, or `seq_cst`; loads cannot use release or
 acq_rel, and stores cannot use acquire or acq_rel. Operations are CPU-only. The pointee must be a concrete naturally aligned scalar:
@@ -1055,6 +1160,15 @@ they are not an integer interchange API.
 Native callable definitions and external-call declarations and call sites apply the same narrow-scalar ABI extension attributes.
 Booleans use `zeroext`, and 8/16-bit integers extend according to signedness. Non-Darwin AArch64 (AAPCS64) leaves these scalars
 unextended; Win64 extends only Booleans. Internal pattern calls keep their separate by-reference calling convention.
+Generated function symbols identify their declaration and complete concrete argument types,
+including class layouts inside arrays and callback signatures. Definition identities follow
+source headers and lexical ownership rather than line numbers; type identities visit each
+reachable class layout once. Code generation and incremental inference share this identity
+encoder. Reordering calls cannot exchange two specializations' symbols or cached bodies.
+Compile-time type descriptors can identify an unbound class without requiring a
+runtime layout. Concrete inference summaries still require complete types.
+Exposed C-callable wrappers retain their public pattern-and-signature names;
+internal specializations and callbacks use the complete identities above.
 Internal function generation preserves each runtime argument's storage address space and caches the resulting ABI on
 the inferred instantiation. Forwarding a global reference retains its original storage; local and global references can
 therefore select distinct LLVM functions for the same inferred argument types.
@@ -1069,6 +1183,56 @@ including any BSS that has no active data segment. The module defines its own st
 browser runtime supplies linear memory and host functions, reads that linked heap boundary, and allocates from it;
 it does not compute another stack or static-data layout. Relocatable objects are never treated as executable modules.
 
+Shader uniforms declare a nonempty name, an unsigned 32-bit binding, and a compile-time type
+using `@intrinsic("shader uniform", name, binding, type)`. Numeric 32-bit scalars and
+vectors of two through four components preserve their signedness. Float32 matrices
+of two through four rows and columns use explicitly padded row records with a sixteen-byte row stride.
+Each uniform occupies one block member at offset zero. Repeated declarations must
+agree on name, binding and type. Browser reflection reports the scalar kind, row
+count and column count from the emitted block layout.
+
+Sampled shader resources use compile-time image and sampler binding values. The
+`shader image` and `shader sampler` intrinsics produce immutable identities;
+`shader sample level` and `shader sample compare` consume fixed binding references
+and runtime float32 coordinates. Image dimensions, depth/comparison compatibility
+and scalar/vector operand shapes are checked during inference. Code generation
+registers the used interface, rejects collisions with other resources or numeric
+uniforms, and emits numeric sampling operations. SPIR-V interface lowering replaces
+those operations with image/sampler loads and native sampling instructions, removing
+the internal callable declarations. Binding names remain debug metadata, without
+runtime string arrays or extra numeric capabilities. Resource
+declarations produce no runtime objects. Ordinary pure functions and fixed
+parameters preserve their identities through inference and specialization. Browser
+reflection reads the emitted separate image/sampler resources and verifies their
+bindings and image shapes against the declared interface. See `docs/shader_resources.md`.
+
+Browser translation exposes the GLSL writer's exact combined-image/sampler
+associations. Additional samplers for one image receive virtual SPIR-V image
+bindings only during GLSL translation; reflected bindings project those aliases
+back to the original image. WGSL consumes the original separate resource interface.
+GLSL ES 3.00 translation also legalizes SPIR-V bit reversal into unsigned shifts
+and masks before parsing the target module. LLVM may recognize authored arithmetic
+as `OpBitReverse`, while WebGL 2 has no `bitfieldReverse` builtin. Scalar and vector
+operands retain all 32 bits, including signed inputs through bitcasts. Constants
+are shared by type, and the legalized module is validated again. WGSL and native
+SPIR-V retain their supported bit-reversal operation.
+Before shader-source emission, nonempty switch fall-through is lowered to
+conditional case bodies within one default case. Each body is moved once; runtime
+flags preserve fall-through and completion, while the surrounding switch preserves
+break and enclosing-loop continue targets. The normalized module is validated
+again. This permits optimized if chains which contain valid SPIR-V fall-through
+without changing authored code or disabling optimization.
+
+The pinned Naga frontend also analyzes complete function control-flow graphs
+before assigning SPIR-V blocks to lexical bodies. An immediate postdominator
+before a declared selection merge is a shared continuation, even when the binary
+places it before one of its predecessors. Registering that join at the header
+prevents shared output stores from being captured by the first parsed arm.
+The dependency archive digest and source patch are pinned in
+`metadata/SHADER_TRANSLATOR` and `tools/wgsl-translator/patches/`. Web builds
+prepare that source under `.cache/shader-translator/`; they never modify Cargo's
+shared registry. Direct Cargo builds first run `scripts/prepare_shader_translator.py`.
+
 LLVM expands wide arithmetic according to the selected target. The browser runtime
 provides LLVM's i128 compiler-runtime arithmetic and numeric conversion imports
 using exact BigInt limbs. Floating-point conversions round directly to the target
@@ -1081,12 +1245,30 @@ constant. Static callback tables therefore remain constant data when their entri
 use ordinary library patterns. Host addresses and WebAssembly table indices are
 assigned by linking rather than guessed during inference.
 
-SPIR-V vertex-to-fragment interpolants are identified by arbitrary non-empty semantic names. Each independently compiled shader
-stage encodes those names into valid interface identifiers and assigns locations in lexical semantic-name order, so matching
-vertex outputs and fragment inputs receive identical locations regardless of source order. The standard shader library exposes
-the four floating-point components while the intrinsic layer owns the stage restrictions and interface storage classes.
+Vertex-to-fragment interpolants declare a nonempty name, an explicit unsigned 32-bit location,
+interpolation mode and 32-bit numeric scalar or vector of two through four components. Each stage
+uses those locations directly, including when a fragment consumes only a subset of vertex outputs.
+`shader interpolant output` takes `(name, location, interpolation, value)` and
+`shader interpolant input` takes `(name, location, interpolation, type)`. Integer values require
+flat interpolation. Repeated declarations within a stage must agree on name, location, type and
+interpolation; different names cannot occupy one location. Signed interface values preserve their
+SPIR-V signedness, with bitcasts at LLVM's signless load and store boundaries. `FrontFacing` is a
+Boolean fragment-only `shader input`. The standard shader library supplies natural-language
+wrappers; no application-specific syntax is involved.
+`shader derivative` takes a compile-time axis (`x` or `y`) and a runtime float32
+scalar or vector of two through four components. It preserves the operand type,
+is fragment-only, and emits LLVM's SPIR-V derivative intrinsic. The operation is
+convergent and cannot be evaluated as a pure function of one invocation's value.
+Derivatives must execute in uniform control flow across neighboring fragments;
+browser translation retains the target's derivative-uniformity validation.
 The SPIR-V 1.4+ entry-point interface contains all emitted module globals, including private variables, while excluding
 function-local storage. The entry-point checker validates emitted shader modules with `spirv-val --target-env vulkan1.3`.
+
+Shader integer lowering preserves signed opcode interpretation in operand and
+result types, with bitcasts at signless SSA boundaries. This includes numeric
+conversions, division, remainders, shifts, comparisons and signed GLSL extrema.
+Constant logical addresses use typed, losslessly narrowed indices instead of
+unnecessarily requiring 64-bit indexing.
 
 # Incremental Native Builds
 
@@ -1299,8 +1481,13 @@ Class references are keyed by stable class-section paths. Committed class
 instantiation field types and function signatures are saved with the constraint
 probe schedule. When the class declaration still has the same fields, the
 compiler restores its instantiation table before decoding reusable constraint
-values, including recursive class layouts. An edited class declaration makes
-its saved constraint values ineligible for reuse.
+values, including recursive class layouts. Snapshots also carry each class request's
+parameter types and compile-time values and its optional construction argument types.
+Restoration rebuilds request keys using the current declaration identities, so later
+inference reaches the restored layout instead of creating a second recursive graph.
+Scoped request identities that cannot be persisted leave class-constraint restoration
+unproven. An edited class declaration makes its saved constraint values ineligible
+for reuse.
 Matched-dependency collection stops at separately owned code-generation sections,
 including class `retain` and `release` bodies. Their runtime dependencies belong to
 their own graph units, so editing a lifecycle helper preserves class-layout
@@ -1514,6 +1701,9 @@ provisional headers cannot leave stale data declarations in a lexical scope.
 `classification_units_invalidated` counts units evaluated, and
 `classification_units_reactivated` counts cached units restarted by changed exports.
 `classification_cascades_stopped` counts retained units from the potential cascade.
+Failed local-variable lookups track whether definition resolution currently permits
+unmatched names. Each transition back to completed definitions wakes those lookups,
+including after cached classification reopens the definition phase.
 The topology, reference-literal sets, potential signatures, and promoted parameters
 are separate content-addressed CBOR records in the matcher store. Unchanged query
 and dependency units retain their records. Promotion locations use reference
@@ -2091,8 +2281,9 @@ Typed conversion instantiations participate in inference-summary and LLVM IR reu
 An interface-stable conversion body edit can retain its callers. Existing conversion
 body reads participate in the constraint dependency graph. Added conversions also
 invalidate constraint probes whose earlier selection could change.
-Class type identities include the current instantiation's field types; a changed layout
-prevents reuse. Each concrete unit records portable declaration identities and
+Class type identities include every reachable instantiation's field types. Each layout
+is visited once per root, in discovery order, so shared and recursive graphs do not
+expand into nested copies. A changed layout prevents reuse. Each concrete unit records portable declaration identities and
 structural type fingerprints for the globals its inference observed. Unrelated
 global type changes do not invalidate that unit. Source fingerprints also retain
 only the global binding names declared by that executable scope and its active
@@ -2289,6 +2480,10 @@ only if the required libraries or output identity differ.
 This still validates the edited source and updates diagnostics and matcher data.
 
 Cache entries carry BLAKE3 integrity checks and are published with atomic rename.
+Loading a program manifest retains immutable file snapshots for its payloads.
+Later stages decode those retained snapshots rather than reopening their paths,
+so concurrent cache eviction cannot invalidate an active build. Single-entry
+lookups also open and retain the file before reading its contents.
 Invalid entries and I/O failures are explicit errors. Linking uses private temporary
 copies so cache eviction cannot remove linker inputs. Entries are limited to 256 MiB;
 the disk cache is trimmed to 512 MiB after a build. Object-only and non-native
@@ -2341,6 +2536,13 @@ The actual WebAssembly host API can be checked with
 `node scripts/test_web_lsp.mjs build-web/dynlex_web.js` after building that target.
 
 When hovering over an expression, the already-evaluated compile-time value and type are shown.
+The source occurrence maps to its inferred expression in the selected callable
+instance. Repeated uses of one variable can have different values, including an
+explicitly unknown value after runtime input. Hover and semantic constant markers
+read these occurrence-specific facts; they never borrow an earlier known value
+from another use of that binding. Signature parameters use their instance's
+parameter facts because their declarations are outside executable expressions.
+Nested definitions form independent instance boundaries.
 
 Compiler ranges and source slices use UTF-8 byte offsets. Editor-facing APIs use
 UTF-16 columns: incoming edits and cursor positions convert to bytes, and outgoing

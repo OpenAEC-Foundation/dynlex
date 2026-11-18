@@ -6,9 +6,20 @@ use naga::front::spv;
 use naga::valid::{Capabilities, ValidationFlags, Validator};
 use naga::ShaderStage;
 
+mod glsl_bindings;
+mod glsl_bits;
+mod glsl_samplers;
+mod switches;
+
+#[cfg(test)]
+#[path = "../tests/cases/glsl_samplers.rs"]
+mod sampler_tests;
+
 thread_local! {
     static RESULT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
     static GLSL_RESULT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+    static GLSL_BINDINGS: RefCell<Vec<u8>> = RefCell::new(b"[]".to_vec());
+    static GLSL_UNIFORMS: RefCell<Vec<u8>> = RefCell::new(b"[]".to_vec());
     static ERROR: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -16,12 +27,31 @@ fn set_bytes(slot: &'static std::thread::LocalKey<RefCell<Vec<u8>>>, bytes: Vec<
     slot.with(|value| *value.borrow_mut() = bytes);
 }
 
+fn reset_translation() {
+    set_bytes(&RESULT, Vec::new());
+    set_bytes(&GLSL_RESULT, Vec::new());
+    set_bytes(&GLSL_BINDINGS, b"[]".to_vec());
+    set_bytes(&GLSL_UNIFORMS, b"[]".to_vec());
+    set_bytes(&ERROR, Vec::new());
+}
+
+struct GlslTranslation {
+    source: String,
+    bindings: String,
+    uniforms: String,
+}
+
 fn parse_and_validate(bytes: &[u8]) -> Result<(naga::Module, naga::valid::ModuleInfo), String> {
-    let module = spv::parse_u8_slice(bytes, &spv::Options::default())
+    let mut module = spv::parse_u8_slice(bytes, &spv::Options::default())
         .map_err(|error| format!("SPIR-V parse failed: {error}"))?;
-    let info = Validator::new(ValidationFlags::all(), Capabilities::empty())
+    let mut info = Validator::new(ValidationFlags::all(), Capabilities::empty())
         .validate(&module)
         .map_err(|error| format!("WebGPU shader validation failed: {error}"))?;
+    if switches::lower(&mut module) {
+        info = Validator::new(ValidationFlags::all(), Capabilities::empty())
+            .validate(&module)
+            .map_err(|error| format!("Shader switch lowering failed validation: {error}"))?;
+    }
     Ok((module, info))
 }
 
@@ -35,7 +65,8 @@ fn write_glsl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
     stage: ShaderStage,
-) -> Result<String, String> {
+    origins: &glsl_samplers::BindingOrigins,
+) -> Result<GlslTranslation, String> {
     let options = glsl::Options {
         version: glsl::Version::new_gles(300),
         ..Default::default()
@@ -46,7 +77,7 @@ fn write_glsl(
         multiview: None,
     };
     let mut source = String::new();
-    glsl::Writer::new(
+    let reflection = glsl::Writer::new(
         &mut source,
         &module,
         &info,
@@ -57,12 +88,38 @@ fn write_glsl(
     .map_err(|error| format!("GLSL writer initialization failed: {error}"))?
     .write()
     .map_err(|error| format!("GLSL generation failed: {error}"))?;
-    Ok(source)
+    Ok(GlslTranslation {
+        source,
+        bindings: glsl_bindings::texture_bindings(module, &reflection, origins)?,
+        uniforms: glsl_bindings::uniform_bindings(module, &reflection)?,
+    })
 }
 
-fn translate_glsl(bytes: &[u8], stage: ShaderStage) -> Result<String, String> {
+fn translate_glsl(bytes: &[u8], stage: ShaderStage) -> Result<GlslTranslation, String> {
     let (module, info) = parse_and_validate(bytes)?;
-    write_glsl(&module, &info, stage)
+    write_glsl_input(bytes, &module, &info, stage)
+}
+
+fn write_glsl_input(
+    bytes: &[u8],
+    module: &naga::Module,
+    info: &naga::valid::ModuleInfo,
+    stage: ShaderStage,
+) -> Result<GlslTranslation, String> {
+    let samplers = glsl_samplers::lower(bytes)?;
+    let sampled = samplers
+        .as_ref()
+        .map_or(bytes, |lowered| lowered.bytes.as_slice());
+    let bits = glsl_bits::lower(sampled)?;
+    let input = bits.as_deref().unwrap_or(sampled);
+    let empty = glsl_samplers::BindingOrigins::new();
+    let origins = samplers.as_ref().map_or(&empty, |lowered| &lowered.origins);
+    if samplers.is_some() || bits.is_some() {
+        let (module, info) = parse_and_validate(input)?;
+        write_glsl(&module, &info, stage, origins)
+    } else {
+        write_glsl(module, info, stage, origins)
+    }
 }
 
 fn shader_stage(stage: u32) -> Result<ShaderStage, String> {
@@ -97,8 +154,7 @@ pub unsafe extern "C" fn dynlex_wgsl_deallocate(pointer: *mut u8, length: usize)
 /// `pointer` must reference `length` readable bytes in this module's linear memory.
 #[no_mangle]
 pub unsafe extern "C" fn dynlex_wgsl_translate(pointer: *const u8, length: usize) -> i32 {
-    set_bytes(&RESULT, Vec::new());
-    set_bytes(&ERROR, Vec::new());
+    reset_translation();
     if pointer.is_null() || length == 0 {
         set_bytes(&ERROR, b"SPIR-V input is empty".to_vec());
         return 0;
@@ -125,8 +181,7 @@ pub unsafe extern "C" fn dynlex_glsl_translate(
     length: usize,
     stage: u32,
 ) -> i32 {
-    set_bytes(&RESULT, Vec::new());
-    set_bytes(&ERROR, Vec::new());
+    reset_translation();
     if pointer.is_null() || length == 0 {
         set_bytes(&ERROR, b"SPIR-V input is empty".to_vec());
         return 0;
@@ -141,7 +196,9 @@ pub unsafe extern "C" fn dynlex_glsl_translate(
     let bytes = std::slice::from_raw_parts(pointer, length);
     match translate_glsl(bytes, shader_stage) {
         Ok(source) => {
-            set_bytes(&RESULT, source.into_bytes());
+            set_bytes(&RESULT, source.source.into_bytes());
+            set_bytes(&GLSL_BINDINGS, source.bindings.into_bytes());
+            set_bytes(&GLSL_UNIFORMS, source.uniforms.into_bytes());
             1
         }
         Err(error) => {
@@ -160,9 +217,7 @@ pub unsafe extern "C" fn dynlex_shader_translate(
     length: usize,
     stage: u32,
 ) -> i32 {
-    set_bytes(&RESULT, Vec::new());
-    set_bytes(&GLSL_RESULT, Vec::new());
-    set_bytes(&ERROR, Vec::new());
+    reset_translation();
     if pointer.is_null() || length == 0 {
         set_bytes(&ERROR, b"SPIR-V input is empty".to_vec());
         return 0;
@@ -178,13 +233,15 @@ pub unsafe extern "C" fn dynlex_shader_translate(
     let translated = parse_and_validate(bytes).and_then(|(module, info)| {
         let wgsl = naga::back::wgsl::write_string(&module, &info, WriterFlags::empty())
             .map_err(|error| format!("WGSL generation failed: {error}"))?;
-        let glsl = write_glsl(&module, &info, shader_stage)?;
+        let glsl = write_glsl_input(bytes, &module, &info, shader_stage)?;
         Ok((wgsl, glsl))
     });
     match translated {
         Ok((wgsl, glsl)) => {
             set_bytes(&RESULT, wgsl.into_bytes());
-            set_bytes(&GLSL_RESULT, glsl.into_bytes());
+            set_bytes(&GLSL_RESULT, glsl.source.into_bytes());
+            set_bytes(&GLSL_BINDINGS, glsl.bindings.into_bytes());
+            set_bytes(&GLSL_UNIFORMS, glsl.uniforms.into_bytes());
             1
         }
         Err(error) => {
@@ -212,6 +269,26 @@ pub extern "C" fn dynlex_glsl_result_pointer() -> *const u8 {
 #[no_mangle]
 pub extern "C" fn dynlex_glsl_result_length() -> usize {
     GLSL_RESULT.with(|result| result.borrow().len())
+}
+
+#[no_mangle]
+pub extern "C" fn dynlex_glsl_bindings_pointer() -> *const u8 {
+    GLSL_BINDINGS.with(|result| result.borrow().as_ptr())
+}
+
+#[no_mangle]
+pub extern "C" fn dynlex_glsl_bindings_length() -> usize {
+    GLSL_BINDINGS.with(|result| result.borrow().len())
+}
+
+#[no_mangle]
+pub extern "C" fn dynlex_glsl_uniforms_pointer() -> *const u8 {
+    GLSL_UNIFORMS.with(|result| result.borrow().as_ptr())
+}
+
+#[no_mangle]
+pub extern "C" fn dynlex_glsl_uniforms_length() -> usize {
+    GLSL_UNIFORMS.with(|result| result.borrow().len())
 }
 
 #[no_mangle]

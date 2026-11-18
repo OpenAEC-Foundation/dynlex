@@ -1,14 +1,15 @@
 bool emitPartitions(
-	ParseContext &context, const fs::path &directory, const std::string &compilerIdentity, const Json &options,
-	const std::vector<std::string> &libraries, BuildStatistics &statistics, Json *previous = nullptr,
-	const IncrementalIRReuse *functionReuse = nullptr, bool restoredModule = false
+	ParseContext &context, const fs::path &directory, const ProgramPayloads &retainedPayloads,
+	const std::string &compilerIdentity, const Json &options, const std::vector<std::string> &libraries,
+	BuildStatistics &statistics, Json *previous = nullptr, const IncrementalIRReuse *functionReuse = nullptr,
+	bool restoredModule = false
 ) {
 	TemporaryObjects temporary;
 	std::vector<std::string> objects;
 	auto partitionStart = Clock::now();
 	if (previous) {
 		auto payloadStart = Clock::now();
-		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "native_units");
+		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "native_units");
 		statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 	}
 	std::unordered_set<std::string> reusedFunctions;

@@ -320,8 +320,6 @@ generateCaseIntrinsic(ParseContext &context, Expression *callExpr, const std::ve
 	}
 	if (returnType.kind == DataType::Kind::Void) {
 		llvm::Function *currentFunction = builder.GetInsertBlock()->getParent();
-		if (!releaseManagedStorageForReturn(context))
-			return CodegenResult::failure();
 		if (currentFunction == context.mainLLVMFunction) {
 			requireCompilerInvariant(context.mainCleanupBlock, "main return requires an initialized cleanup block");
 			if (!context.options.emitSPIRV) {
@@ -330,7 +328,8 @@ generateCaseIntrinsic(ParseContext &context, Expression *callExpr, const std::ve
 			}
 			builder.CreateBr(context.mainCleanupBlock);
 		} else {
-			builder.CreateRetVoid();
+			if (!emitManagedFunctionReturn(context))
+				return CodegenResult::failure();
 		}
 		return nullptr;
 	}
@@ -342,8 +341,6 @@ generateCaseIntrinsic(ParseContext &context, Expression *callExpr, const std::ve
 		if (context.options.emitSPIRV) {
 			if (ownedReturn && !releaseManagedValue(context, returnType, returnValue))
 				return CodegenResult::failure();
-			if (!releaseManagedStorageForReturn(context))
-				return CodegenResult::failure();
 			builder.CreateBr(context.mainCleanupBlock);
 			return nullptr;
 		}
@@ -352,8 +349,6 @@ generateCaseIntrinsic(ParseContext &context, Expression *callExpr, const std::ve
 			return CodegenResult::failure();
 		DataType mainReturnType{DataType::Kind::Int, 4};
 		returnValue = ensureType(context, returnValue, returnType, mainReturnType);
-		if (!releaseManagedStorageForReturn(context))
-			return CodegenResult::failure();
 		builder.CreateStore(returnValue, context.mainReturnStorage);
 		builder.CreateBr(context.mainCleanupBlock);
 		return nullptr;
@@ -368,8 +363,7 @@ generateCaseIntrinsic(ParseContext &context, Expression *callExpr, const std::ve
 	ownedReturn = managedReturn && managedExpressionResultIsOwned(context, args[1]);
 	if (managedReturn && !ownedReturn && !retainManagedValue(context, returnType, returnValue))
 		return CodegenResult::failure();
-	if (!releaseManagedStorageForReturn(context))
+	if (!emitManagedFunctionReturn(context, returnValue))
 		return CodegenResult::failure();
-	builder.CreateRet(returnValue);
 	return nullptr;
 }

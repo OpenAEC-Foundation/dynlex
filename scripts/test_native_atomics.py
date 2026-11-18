@@ -155,12 +155,12 @@ NEGATIVE_SOURCES = {
     "float8": (
         'set value to 0 as @intrinsic("type", "float", 8)\n'
         '@intrinsic("atomic load", the address of value, "relaxed")\n',
-        "a supported bit width for the requested numeric type kind",
+        "32 or 64 for a floating-point type",
     ),
     "float16": (
         'set value to 0 as @intrinsic("type", "float", 16)\n'
         '@intrinsic("atomic load", the address of value, "relaxed")\n',
-        "a supported bit width for the requested numeric type kind",
+        "32 or 64 for a floating-point type",
     ),
 }
 

@@ -17,8 +17,8 @@ bool ExpressionInferenceSupport::inferArgument(
 	bool inferred = preserveArgumentGrouping ? inferExpressionWithCurrentGrouping(arg, context, flexBindingFrameStack)
 											 : inferExpression(arg, context, false, flexBindingFrameStack);
 	expr->arguments[index] = arg;
-	if (inferred && beforeArgument && beforeArgument->matches(context))
-		argumentScope.unchanged.try_emplace(arg, std::move(*beforeArgument), arg->type);
+	if (inferred && beforeArgument)
+		argumentScope.remember(arg, std::move(*beforeArgument), flexBindingFrameStack);
 	return inferred;
 }
 

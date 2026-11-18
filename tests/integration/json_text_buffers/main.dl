@@ -1,0 +1,28 @@
+import lib/json.dl
+import lib/check.dl
+
+# Every string previously retained a buffer for the rest of this document.
+set token to the string form of "\"\\uD83D\\uDE00\""
+set count to 6000
+set size to 1 + (count * (token's length + 1))
+set source to a new string buffer containing size bytes
+store 91 as a byte into (source's data) at 0
+set writer to 1
+set index to 0
+loop while index < count:
+    copy token into (source's data) at offset writer
+    add token's length to writer
+    store (93 if (index = count - 1), else 44) as a byte into (source's data) at writer
+    increment writer
+    increment index
+require condition (writer = size) reporting "The JSON allocation fixture has an invalid length"
+parse source as JSON and set parsed to it
+require condition (parsed succeeded) reporting "A large array of escaped JSON strings could not be parsed"
+set document to parsed's value
+require condition (document's length = count) reporting "A large JSON array lost elements"
+set index to 0
+loop while index < count:
+    require condition ((the JSON text at index index in document) = "😀") reporting "A surrogate pair lost its decoded text"
+    increment index
+free document
+print line "JSON text buffers scale with individual tokens and preserve Unicode decoding."

@@ -44,7 +44,7 @@ static bool inferIncrementalFunctionBody(
 			context.groupingTrace = trial.groupingTrace;
 			context.inheritedGroupingContext = &trial;
 			context.trialJournal = trial.trialJournal;
-			context.inheritedTrialExpressionValues = &trial.trialExpressionValues;
+			context.inheritedTrialContext = &trial;
 			context.currentInstantiation = &instantiation;
 			context.currentInstantiatedSectionBody = instantiation.body.get();
 			PureExecutionState execution(parseContext, context);

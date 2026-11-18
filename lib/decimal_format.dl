@@ -1,0 +1,149 @@
+# Generate the shortest decimal inside the binary64 rounding interval. Integer
+# margins handle binade boundaries, subnormal values and ties to even exactly.
+import lib/decimal_binary.dl
+
+to get [the round trip decimal form of] {integer:value}:
+    return the string form of value
+
+to get [the round trip decimal form of] {unsigned integer:value}:
+    return the string form of value
+
+to get [the round trip decimal form of] {floating-point number:value}:
+    set bits to the binary64 bits of (value as a 64 bit floating-point number)
+    set negative to (bits shifted right by 63) != 0
+    set exponent to ((bits shifted right by 52) bitwise and 2047) as an integer
+    set mantissa to bits bitwise and (4503599627370495 as a 64 bit unsigned integer)
+    require condition (exponent != 2047) reporting "A nonfinite number has no finite decimal representation"
+    if (exponent = 0) and (mantissa = 0):
+        return (the string form of "-0") if negative, else (the string form of "0")
+    set power to -1074
+    if exponent != 0:
+        set mantissa to mantissa bitwise or (4503599627370496 as a 64 bit unsigned integer)
+        set power to exponent - 1075
+    set inclusive to (mantissa bitwise and 1) = 0
+    set numerator to a decimal magnitude from (mantissa * 4)
+    set denominator to a decimal magnitude from (4 as a 64 bit unsigned integer)
+    set lower to a decimal magnitude from ((1 as a 64 bit unsigned integer) if ((exponent > 1) and (mantissa = (4503599627370496 as a 64 bit unsigned integer))), else (2 as a 64 bit unsigned integer))
+    set upper to a decimal magnitude from (2 as a 64 bit unsigned integer)
+    if power >= 0:
+        shift decimal magnitude (the address of numerator) left by power
+        shift decimal magnitude (the address of lower) left by power
+        shift decimal magnitude (the address of upper) left by power
+    else:
+        shift decimal magnitude (the address of denominator) left by (0 - power)
+    set order to 0
+    loop while (compare decimal magnitude (the address of numerator) with (the address of denominator)) < 0:
+        multiply decimal magnitude (the address of numerator) by (10 as a 32 bit unsigned integer) adding (0 as a 32 bit unsigned integer)
+        multiply decimal magnitude (the address of lower) by (10 as a 32 bit unsigned integer) adding (0 as a 32 bit unsigned integer)
+        multiply decimal magnitude (the address of upper) by (10 as a 32 bit unsigned integer) adding (0 as a 32 bit unsigned integer)
+        decrement order
+    set boundary to a copy of decimal magnitude (the address of denominator)
+    multiply decimal magnitude (the address of boundary) by (10 as a 32 bit unsigned integer) adding (0 as a 32 bit unsigned integer)
+    loop while (compare decimal magnitude (the address of numerator) with (the address of boundary)) >= 0:
+        multiply decimal magnitude (the address of denominator) by (10 as a 32 bit unsigned integer) adding (0 as a 32 bit unsigned integer)
+        multiply decimal magnitude (the address of boundary) by (10 as a 32 bit unsigned integer) adding (0 as a 32 bit unsigned integer)
+        increment order
+    free decimal magnitude (the address of boundary)
+    set digits to a new byte array of 17 items
+    set index to 0
+    set finished to false
+    set rounding to false
+    loop while finished = false:
+        require condition (index < 17) reporting "A binary64 rounding interval required more than seventeen digits"
+        set digit to 0
+        loop while (compare decimal magnitude (the address of numerator) with (the address of denominator)) >= 0:
+            subtract decimal magnitude (the address of denominator) from (the address of numerator)
+            increment digit
+        require condition (digit < 10) reporting "An exact decimal digit exceeded its radix"
+        store ((digit + 48) as a byte) into digits at index
+        set comparison to compare decimal magnitude (the address of numerator) with (the address of lower)
+        set down to (comparison < 0) or ((comparison = 0) and inclusive)
+        set sum to a copy of decimal magnitude (the address of numerator)
+        add decimal magnitude (the address of upper) to (the address of sum)
+        set comparison to compare decimal magnitude (the address of sum) with (the address of denominator)
+        set up to (comparison > 0) or ((comparison = 0) and inclusive)
+        free decimal magnitude (the address of sum)
+        set finished to down or up
+        set rounding to up
+        if down and up:
+            set twice to a copy of decimal magnitude (the address of numerator)
+            multiply decimal magnitude (the address of twice) by (2 as a 32 bit unsigned integer) adding (0 as a 32 bit unsigned integer)
+            set comparison to compare decimal magnitude (the address of twice) with (the address of denominator)
+            free decimal magnitude (the address of twice)
+            set rounding to (comparison > 0) or ((comparison = 0) and ((digit bitwise and 1) != 0))
+        if finished = false:
+            multiply decimal magnitude (the address of numerator) by (10 as a 32 bit unsigned integer) adding (0 as a 32 bit unsigned integer)
+            multiply decimal magnitude (the address of lower) by (10 as a 32 bit unsigned integer) adding (0 as a 32 bit unsigned integer)
+            multiply decimal magnitude (the address of upper) by (10 as a 32 bit unsigned integer) adding (0 as a 32 bit unsigned integer)
+        increment index
+    set count to index
+    if rounding:
+        set index to count - 1
+        loop while (index >= 0) and ((the item at index in digits) = 57):
+            store (48 as a byte) into digits at index
+            decrement index
+        if index >= 0:
+            store (((the item at index in digits) + 1) as a byte) into digits at index
+        else:
+            store (49 as a byte) into digits at 0
+            increment order
+    free decimal magnitude (the address of numerator)
+    free decimal magnitude (the address of denominator)
+    free decimal magnitude (the address of lower)
+    free decimal magnitude (the address of upper)
+    loop while (count > 1) and ((the item at (count - 1) in digits) = 48):
+        decrement count
+    set result to a new string buffer containing 32 bytes
+    set output to result's data
+    set cursor to 0
+    if negative:
+        store (45 as a byte) into output at cursor
+        increment cursor
+    if (order < -6) or (order >= 21):
+        store (the item at 0 in digits) into output at cursor
+        increment cursor
+        if count > 1:
+            store (46 as a byte) into output at cursor
+            increment cursor
+            set index to 1
+            loop while index < count:
+                store (the item at index in digits) into output at cursor
+                increment cursor
+                increment index
+        store (101 as a byte) into output at cursor
+        increment cursor
+        store ((45 as a byte) if (order < 0), else (43 as a byte)) into output at cursor
+        increment cursor
+        set magnitude to (0 - order) if (order < 0), else order
+        set suffix to the string form of magnitude
+        set index to 0
+        loop while index < suffix's length:
+            store (the character at index in suffix) into output at cursor
+            increment cursor
+            increment index
+    else if order < 0:
+        store (48 as a byte) into output at cursor
+        store (46 as a byte) into output at (cursor + 1)
+        add 2 to cursor
+        set index to -1
+        loop while index > order:
+            store (48 as a byte) into output at cursor
+            increment cursor
+            decrement index
+        set index to 0
+        loop while index < count:
+            store (the item at index in digits) into output at cursor
+            increment cursor
+            increment index
+    else:
+        set index to 0
+        loop while (index < count) or (index <= order):
+            set digit to (the item at index in digits) if (index < count), else (48 as a byte)
+            store digit into output at cursor
+            increment cursor
+            if (index = order) and (index + 1 < count):
+                store (46 as a byte) into output at cursor
+                increment cursor
+            increment index
+    set result's length to cursor
+    return result

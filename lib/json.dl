@@ -1,6 +1,7 @@
 # DynLex JSON Library
 
 import lib/string.dl
+import lib/decimal_format.dl
 
 class:
     patterns:
@@ -70,15 +71,9 @@ to get a new JSON value of kind {integer:kind}:
     set result to storage for one slot initialized with initial
     return result
 
-to get a new JSON number from {a 64 bit integer:value}:
+to get a new JSON number from {a number:value}:
     set result to a new JSON value of kind the JSON number kind
-    set the text of result to the string form of value
-    set the number of result to value as a 64 bit floating-point number
-    return result
-
-to get a new JSON number from {a 64 bit unsigned integer:value}:
-    set result to a new JSON value of kind the JSON number kind
-    set the text of result to the string form of value
+    set the text of result to the round trip decimal form of value
     set the number of result to value as a 64 bit floating-point number
     return result
 
@@ -186,7 +181,19 @@ local flex function write {integer:scalar} as JSON UTF-8 into {a pointer to a by
 local function the JSON text read by {a pointer to a JSON parser:parser}:
     execute:
         set opening to the position of parser
-        set limit to ((the length of the source of parser) - opening)
+        # The encoded token bounds the decoded length. Retaining the remaining
+        # document here would make a collection of short strings quadratic.
+        set ending to opening + 1
+        set scanning to true
+        loop while scanning and (ending < parser's source's length):
+            set octet to the unsigned JSON byte value of the character at ending in (parser's source)
+            if octet = 34:
+                set scanning to false
+            else if octet = 92:
+                set ending to the minimum of (ending + 2) and (parser's source's length)
+            else:
+                increment ending
+        set limit to (ending - opening) - 1
         set output to a new string buffer containing limit bytes
         set writer to 0
         set the position of parser to opening + 1
@@ -290,33 +297,29 @@ to get JSON number {a pointer to a JSON value:value} has an integer lexeme:
         set cursor to (cursor + 1)
     return true
 
-local function the JSON number read by {a pointer to a JSON parser:parser}:
+local function [read a JSON number token for] {a pointer to a JSON parser:parser}:
     execute:
-        set negated to false
         if the character at the position of parser in the source of parser = 45:
-            set negated to true
             increment the position of parser
         if the position of parser >= the length of the source of parser:
             record a JSON error at the position of parser for parser
-            return 0.0 as a floating-point number
+            return nothing
         set start to the position of parser
         set first to the character at start in the source of parser
         if first is not a JSON decimal digit:
             record a JSON error at start for parser
-            return 0.0 as a floating-point number
-        set amount to 0.0 as a floating-point number
+            return nothing
         if first = 48:
             set the position of parser to start + 1
             if the position of parser < the length of the source of parser:
                 if the character at the position of parser in the source of parser is a JSON decimal digit:
                     record a JSON error at the position of parser for parser
-                    return 0.0 as a floating-point number
+                    return nothing
         else:
             set reading to true
             loop while reading and the position of parser < the length of the source of parser:
                 set digit to the character at the position of parser in the source of parser
                 if digit is a JSON decimal digit:
-                    set amount to (amount * 10.0 + ((digit - 48) as a 64 bit floating-point number))
                     increment the position of parser
                 else:
                     set reading to false
@@ -324,48 +327,35 @@ local function the JSON number read by {a pointer to a JSON parser:parser}:
             if the character at the position of parser in the source of parser = 46:
                 increment the position of parser
                 set start to the position of parser
-                set scale to 0.1 as a floating-point number
                 set reading to true
                 loop while reading and the position of parser < the length of the source of parser:
                     set digit to the character at the position of parser in the source of parser
                     if digit is a JSON decimal digit:
-                        set amount to (amount + (((digit - 48) as a 64 bit floating-point number) * scale))
-                        set scale to scale / 10.0
                         increment the position of parser
                     else:
                         set reading to false
                 if the position of parser = start:
                     record a JSON error at start for parser
-                    return 0.0 as a floating-point number
+                    return nothing
         if the position of parser < the length of the source of parser:
             set marker to the character at the position of parser in the source of parser
             if marker = 69 or marker = 101:
                 increment the position of parser
-                set negative to false
                 if the position of parser < the length of the source of parser:
                     set sign to the character at the position of parser in the source of parser
                     if sign = 43 or sign = 45:
-                        set negative to sign = 45
                         increment the position of parser
                 set start to the position of parser
-                set exponent to 0.0 as a floating-point number
                 set reading to true
                 loop while reading and the position of parser < the length of the source of parser:
                     set digit to the character at the position of parser in the source of parser
                     if digit is a JSON decimal digit:
-                        set exponent to (exponent * 10.0 + ((digit - 48) as a 64 bit floating-point number))
                         increment the position of parser
                     else:
                         set reading to false
                 if the position of parser = start:
                     record a JSON error at start for parser
-                    return 0.0 as a floating-point number
-                if negative:
-                    set exponent to -exponent
-                set amount to (amount * (10.0 raised to the power of exponent))
-        if negated:
-            set amount to -amount
-        return amount
+                    return nothing
 
 local function the JSON node read by {a pointer to a JSON parser:parser}:
     execute:
@@ -483,12 +473,12 @@ local function the JSON node read by {a pointer to a JSON parser:parser}:
                     record a JSON error at position for parser
             return result
         if token = 45 or token is a JSON decimal digit:
-            set amount to the JSON number read by parser
+            read a JSON number token for parser
             if parser's error position >= 0:
                 return 0 as a pointer to a JSON value
             set result to a new JSON value of kind the JSON number kind
-            set result's number to amount
             set the text of result to the substring of the source of parser from start spanning ((the position of parser) - start) bytes
+            set result's number to the binary64 value of validated decimal (result's text)
             return result
         record a JSON error at start for parser
         return 0 as a pointer to a JSON value

@@ -2,6 +2,7 @@
 #include "range.h"
 #include "type.h"
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <string_view>

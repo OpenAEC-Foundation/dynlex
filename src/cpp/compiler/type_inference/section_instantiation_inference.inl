@@ -40,6 +40,15 @@ bool ensureSectionInstantiationInferred(
 		inst.argumentTypes = argTypes;
 	else
 		requireCompilerInvariant(inst.argumentTypes == argTypes, "Instantiation argumentTypes diverged from map key");
+	if (inst.inferring) {
+		requireCompilerInvariant(callerContext, "recursive section inference requires its caller context");
+		// A reference needs the callable's signature, not another traversal
+		// of its active body. Retain its identity while the owning body pass
+		// resolves the result, just as for an unresolved recursive call.
+		if (!inst.returnType.isDeduced())
+			observeUnresolvedRecursiveDependency(*callerContext);
+		return true;
+	}
 	inst.requiredCompileTimeParameters = explicitCompileTimeParameters;
 	seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 	seedInstantiationCompileTimeParameters(
@@ -81,8 +90,6 @@ bool ensureSectionInstantiationInferred(
 			replayInferenceFailure(*callerContext, *inst.failure);
 		return false;
 	}
-	if (inst.inferring)
-		return inst.returnType.isDeduced() && inst.valid;
 
 	ScopedSectionLocalVariableState calleeVariableState(parseContext, section);
 	InferenceContext context(parseContext, callerContext && callerContext->trial);
@@ -103,8 +110,7 @@ bool ensureSectionInstantiationInferred(
 		context.dependencyReads = callerContext->dependencyReads;
 		// Cached instantiations cannot consume the caller's tracked constants.
 		// Only globals and instantiation-key parameter constants enter a pass.
-		context.inheritedTrialExpressionValues =
-			callerContext->trial ? &callerContext->trialExpressionValues : callerContext->inheritedTrialExpressionValues;
+		context.inheritedTrialContext = callerContext->trial ? callerContext : callerContext->inheritedTrialContext;
 		context.trialJournal = callerContext->trialJournal;
 		context.unresolvedPatternConstraintSignal = callerContext->unresolvedPatternConstraintSignal;
 	}

@@ -1,0 +1,41 @@
+# Small byte-oriented scanners for structured text protocols. Returned strings
+# own their storage; word lists own their entries until freed.
+import lib/string.dl
+import lib/list.dl
+
+to get the position of {a value:needle} in {string:text} starting at {integer:start}:
+    set fragment to the string form of needle
+    set cursor to start
+    set count to the length of fragment
+    loop while cursor + count <= text's length:
+        if text has fragment at offset cursor:
+            return cursor
+        increment cursor
+    return -1
+
+to get the ASCII lowercase form of {string:text}:
+    set result to a new string buffer containing (text's length) bytes
+    set index to 0
+    loop while index < text's length:
+        set character to the character at index in text
+        if (character >= 65) and (character <= 90):
+            set character to (character + 32) as a byte
+        store character into (the data of result) at index
+        increment index
+    return result
+
+to get {string:text} contains {a value:fragment}:
+    return the position of fragment in text starting at 0 >= 0
+
+to get the whitespace words in {string:text}:
+    set result to an empty list of string
+    set cursor to 0
+    loop while cursor < text's length:
+        loop while (cursor < text's length) and ((the character at cursor in text) <= 32):
+            increment cursor
+        set start to cursor
+        loop while (cursor < text's length) and ((the character at cursor in text) > 32):
+            increment cursor
+        if cursor > start:
+            append (the substring of text from start spanning (cursor - start) bytes) to result
+    return result

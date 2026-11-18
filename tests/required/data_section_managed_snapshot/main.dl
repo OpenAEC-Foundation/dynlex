@@ -1,0 +1,27 @@
+integer means: @intrinsic("type", "int", 32)
+class:
+    patterns:
+        owned
+    members:
+        stamp as integer
+    retain:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "retain %d\n", @intrinsic("lifecycle value")'s stamp))
+    release:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "release %d\n", @intrinsic("lifecycle value")'s stamp))
+section snapshot {name} of {integer:value}:
+    declares: name
+    result: owned
+    value: @intrinsic("construct", owned, value)
+snapshot global value of 7:
+function read global value:
+    globals:
+        global value
+    execute:
+        @intrinsic("return", global value)
+function use local {integer:seed}:
+    execute:
+        snapshot local value of seed:
+        @intrinsic("discard", local value)
+@intrinsic("discard", read global value)
+@intrinsic("discard", read global value)
+use local 11

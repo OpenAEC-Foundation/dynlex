@@ -198,6 +198,20 @@ flex function decode the UTF-8 code point in {string:text} at byte {integer:offs
 flex function decode the UTF-8 code point in {C string:text} at byte {integer:offset}:
     replacement:
         set the subject to the UTF-8 code point decoded in text at byte offset
+# Streaming reads validate only the scalar starting at the supplied byte, rather
+# than rescanning the prefix. Advance with the returned next byte offset.
+to get [the UTF-8 code point starting in] {string:text} [at byte] {integer:offset}:
+    if (offset < 0) or (offset >= text's length):
+        return an invalid UTF-8 code point position at offset
+    return the raw UTF-8 code point in text at offset
+
+flex function decode the next UTF-8 code point in {string:text} at byte {integer:offset}:
+    replacement:
+        set the subject to the UTF-8 code point starting in text at byte offset
+flex function decode the next UTF-8 code point in {C string:text} at byte {integer:offset}:
+    replacement:
+        set the subject to the UTF-8 code point starting in (the string form of text) at byte offset
+
 local function a successful text position at {integer:position}:
     replacement:
         @intrinsic("construct", a text position result, the text position success status, position, -1)

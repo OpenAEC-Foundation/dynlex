@@ -101,6 +101,7 @@ def main() -> int:
 
     sources = [repo_root / "tests/required" / name / "main.dl" for name in (
         "simple", "debug_class_globals", "debug_empty_function", "recursive_class_pointer", "recursive_class_double_pointer",
+        "debug_managed_cleanup",
     )]
     with tempfile.TemporaryDirectory(prefix="dynlex-debug-info-") as temporary_directory:
         from test_debug_source_origins import check_cross_file_local_debug_locations

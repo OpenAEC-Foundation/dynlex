@@ -31,8 +31,11 @@ bool parseFieldDeclaration(ParseContext &context, Range fieldRange, ClassSection
 		Expression *typeExpr = referenceOwner->detectPatterns(context, typeRange, SectionType::Function);
 		if (!typeExpr)
 			return false;
-		requireCompilerInvariant(typeExpr->patternReference, "class member type expression has no root pattern reference");
-		typeExpr->patternReference->purpose = PatternReference::Purpose::TypeConstraint;
+		visitExpressionTree(typeExpr, [](Expression *expression) {
+			if (expression->patternReference)
+				expression->patternReference->purpose = PatternReference::Purpose::TypeConstraint;
+			return false;
+		});
 
 		DataType type;
 		type.kind = DataType::Kind::Unresolved;

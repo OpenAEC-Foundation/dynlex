@@ -67,7 +67,9 @@ explicitVariableDeclarationPrecedes(const Range &declaration, const PatternRefer
 		   std::pair(reference.range().line->mergedLineIndex, useStart);
 }
 
-static std::vector<ExplicitVariableCandidate> explicitMultiWordVariableCandidates(const MatchProgress &progress) {
+static bool namesVisibleSingleWordFunction(const MatchProgress &progress, std::string_view name);
+
+static std::vector<ExplicitVariableCandidate> explicitNamedVariableCandidates(const MatchProgress &progress) {
 	std::vector<ExplicitVariableCandidate> result;
 	if (!progress.patternReference || progress.sourceCharIndex != 0 || !progress.patternReference->range().line)
 		return result;
@@ -80,7 +82,10 @@ static std::vector<ExplicitVariableCandidate> explicitMultiWordVariableCandidate
 			if (!section->dataVariableDeclarations.contains(name) &&
 				!explicitVariableDeclarationPrecedes(declaration, *progress.patternReference, progress.sourceElementIndex))
 				continue;
-			if (!shadowedNames.insert(name).second || name.find(' ') == std::string::npos)
+			if (!shadowedNames.insert(name).second)
+				continue;
+			if (name.find(' ') == std::string::npos && !section->dataVariableDeclarations.contains(name) &&
+				namesVisibleSingleWordFunction(progress, name))
 				continue;
 			std::vector<PatternElement> nameElements = getPatternElements(name);
 			if (nameElements.empty() || progress.sourceElementIndex + nameElements.size() > sourceElements.size())
@@ -448,6 +453,7 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 		nextMatches.insert(nextMatches.begin(), std::move(single));
 	}
 
+	llvm::SmallVector<MatchProgress, 2> explicitOperands;
 	RemainingPatternElement element = remainingPatternElement(patternReference, sourceElementIndex, sourceCharIndex);
 	bool hasSourceElement = element.exists;
 	PatternElement::Type elementType = element.type;
@@ -595,8 +601,8 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 					nextMatches.push_back(std::move(substituteStep));
 			};
 
-			auto pushExplicitMultiWordCaptures = [&]() {
-				for (const ExplicitVariableCandidate &candidate : explicitMultiWordVariableCandidates(*this)) {
+			auto pushExplicitNamedCaptures = [&]() {
+				for (const ExplicitVariableCandidate &candidate : explicitNamedVariableCandidates(*this)) {
 					MatchProgress substituteStep = *this;
 					substituteStep.currentNode = captureNode;
 					if (!pack.expectsItem || pack.count == 0)
@@ -613,7 +619,10 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 						storage, {substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, variableIndex}
 					);
 					substituteStep.patternPos += candidate.patternLength;
-					nextMatches.push_back(std::move(substituteStep));
+					if (type == SectionType::Function && currentNode == rootNode)
+						explicitOperands.push_back(std::move(substituteStep));
+					else
+						nextMatches.push_back(std::move(substituteStep));
 				}
 			};
 
@@ -640,8 +649,10 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 			};
 
 			pushArgumentCapture();
-			pushExplicitMultiWordCaptures();
 			pushSubmatch();
+			// An explicitly named value is an operand before it is a nested
+			// call. Literal continuations retain their normal higher priority.
+			pushExplicitNamedCaptures();
 			// A declaration parameter binds source identifiers rather than
 			// evaluating them as an existing expression. It uses this same trie.
 			bool declarationCapture = false;
@@ -678,7 +689,10 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 					next.appendArgument(storage, {next.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, index});
 					next.sourceElementIndex = end + 1;
 					next.patternPos += length;
-					nextMatches.push_back(std::move(next));
+					if (hasLiteralContinuation(next))
+						literalContinuations.push_back(std::move(next));
+					else
+						nextMatches.push_back(std::move(next));
 				}
 			}
 			nextMatches.insert(
@@ -723,6 +737,12 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 		};
 		nextMatches.push_back(std::move(multiple));
 	}
+	// At the start of an expression, a visible explicit name is an operand
+	// before it is a prefix call. Enclosing literal continuations retain their
+	// normal priority once the current pattern has consumed its prefix.
+	nextMatches.insert(
+		nextMatches.end(), std::make_move_iterator(explicitOperands.begin()), std::make_move_iterator(explicitOperands.end())
+	);
 	return result;
 }
 

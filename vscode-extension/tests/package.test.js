@@ -26,7 +26,7 @@ test('extension uses the shared SVG file icon and a marketplace-resolution PNG',
     });
     assert.deepEqual(
         fs.readFileSync(path.join(extensionRoot, 'icons/dynlex.svg')),
-        fs.readFileSync(path.join(extensionRoot, '../web/icons/dynlex-icon.svg')),
+        fs.readFileSync(path.join(extensionRoot, '../resources/branding/dynlex-icon.svg')),
     );
 
     const icon = fs.readFileSync(path.join(extensionRoot, manifest.icon));

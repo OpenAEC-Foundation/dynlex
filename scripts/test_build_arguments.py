@@ -31,6 +31,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-build-arguments-") as directory:
     capture = root / "arguments"
     env = {**os.environ, "PATH": str(tools) + os.pathsep + os.environ["PATH"],
            "DYNLEX_BUILD_TEST_CAPTURE": capture.as_posix(), "CCACHE_DIR": (root / "ccache").as_posix()}
+    env.pop("CMAKE_BUILD_PARALLEL_LEVEL", None)
 
     def run(*arguments, success=True):
         capture.unlink(missing_ok=True)
@@ -45,6 +46,11 @@ with tempfile.TemporaryDirectory(prefix="dynlex-build-arguments-") as directory:
     assert run("-j", "2") == ["-j2"]
     assert run("--jobs=3") == ["-j3"]
     assert run("--jobs", "4") == ["-j4"]
+    assert run() == ["-j9"]
+    env["CMAKE_BUILD_PARALLEL_LEVEL"] = "2"
+    assert run() == ["-j2"]
+    assert run("--jobs", "3") == ["-j3"]
+    env["CMAKE_BUILD_PARALLEL_LEVEL"] = ""
     assert run() == ["-j9"]
     for arguments in (("-j",), ("--jobs",), ("--jobs=",), ("-j", ""), ("--jobs=0",), ("--jobs=oops",), ("--unknown",)):
         run(*arguments, success=False)

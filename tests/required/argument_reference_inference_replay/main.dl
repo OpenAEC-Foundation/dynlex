@@ -1,0 +1,25 @@
+integer means: @intrinsic("type", "int", 32)
+function left + right:
+    execute:
+        @intrinsic("return", @intrinsic("add", left, right))
+function set target to value:
+    replacement:
+        @intrinsic("store", target, value)
+        @intrinsic("set subject", target)
+function the next value from counter:
+    replacement:
+        set {updated} to counter + 1
+        set counter to updated
+        {updated}
+function add value to target:
+    replacement:
+        set target to target + value
+function the total of {arguments:values}:
+    replacement:
+        @intrinsic("store", sum, 0)
+        @intrinsic("store", item, @intrinsic("extract element", values, 0))
+        add item to sum
+        {sum}
+@intrinsic("store", visits, 0)
+@intrinsic("store", result, (the total of (the next value from visits)))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d %d\n", result, visits))

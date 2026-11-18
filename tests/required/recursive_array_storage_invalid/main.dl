@@ -1,0 +1,7 @@
+class:
+    patterns:
+        endless
+    members:
+        entries as @intrinsic("array", 2, endless)
+
+endless

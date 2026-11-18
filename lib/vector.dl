@@ -3,12 +3,56 @@ import std.dl
 class:
     patterns:
         [a|] CPU vector
-        vector
     members:
         x, y, z
 
-a GPU vector means: @intrinsic("vector", 3)
-the vector type means: a GPU vector if the build target is GPU, else a CPU vector
+[a|] GPU vector means: @intrinsic("vector", 3)
+vector means: a GPU vector if the build target is GPU, else a CPU vector
+[the vector type] means: vector
+
+function {a GPU vector:value}['s|'] x:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        the element at 0 in value
+function {a GPU vector:value}['s|'] y:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        the element at 1 in value
+function {a GPU vector:value}['s|'] z:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        the element at 2 in value
+function the x of {a GPU vector:value}:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        value's x
+function the y of {a GPU vector:value}:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        value's y
+function the z of {a GPU vector:value}:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        value's z
+
+flex function set the x coordinate of {vector:target} to {a number:value}:
+    replacement:
+        if the build target is GPU:
+            set target to the aggregate formed by replacing element 0 in target with (value as (the type of (target's x)))
+        else:
+            @intrinsic("store", target's x, value)
+flex function set the y coordinate of {vector:target} to {a number:value}:
+    replacement:
+        if the build target is GPU:
+            set target to the aggregate formed by replacing element 1 in target with (value as (the type of (target's y)))
+        else:
+            @intrinsic("store", target's y, value)
+flex function set the z coordinate of {vector:target} to {a number:value}:
+    replacement:
+        if the build target is GPU:
+            set target to the aggregate formed by replacing element 2 in target with (value as (the type of (target's z)))
+        else:
+            @intrinsic("store", target's z, value)
 
 a new vector with x {a number:horizontal}, y {a number:vertical} and z {a number:depth} means: @intrinsic("construct", the vector type, horizontal, vertical, depth)
 
@@ -116,7 +160,7 @@ to get the dot product of {vector:left} and {vector:right}:
     return (horizontal + vertical) + depth
 
 to get the cross product of {vector:left} and {vector:right}:
-    return a new vector with x (the y of left) * (the z of right) - (the z of left) * (the y of right), y (the z of left) * (the x of right) - (the x of left) * (the z of right) and z (the x of left) * (the y of right) - (the y of left) * (the x of right)
+    return a new vector with x ((the y of left) * (the z of right) - (the z of left) * (the y of right)), y ((the z of left) * (the x of right) - (the x of left) * (the z of right)) and z ((the x of left) * (the y of right) - (the y of left) * (the x of right))
 
 to get the squared length of {vector:value}:
     return the dot product of value and value

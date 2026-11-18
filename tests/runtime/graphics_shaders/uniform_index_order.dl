@@ -1,0 +1,8 @@
+function:
+    patterns:
+        packed {value}
+    execute:
+        @intrinsic("store", {items}, @intrinsic("construct", @intrinsic("array", 2, @intrinsic("type", "float", 32)), value, value))
+        @intrinsic("return", @intrinsic("extract element", items, 0))
+@intrinsic("store", {amount}, @intrinsic("shader uniform", "amount", 0, @intrinsic("type", "float", 32)))
+@intrinsic("shader output", packed amount)

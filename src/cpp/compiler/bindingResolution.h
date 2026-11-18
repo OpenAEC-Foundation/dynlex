@@ -87,6 +87,7 @@ struct BindingFrameStack {
 	}
 
 	bool empty() const { return top == nullptr; }
+	bool sharesFramesWith(const BindingFrameStack &other) const { return top == other.top; }
 	size_t depth() const { return top ? top->depth : 0; }
 
 	const BindingFrame &topFrame() const {

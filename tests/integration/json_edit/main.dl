@@ -1,0 +1,31 @@
+import lib/json_edit.dl
+
+parse "{\"large\":18446744073709551615,\"a\":[null,true,{\"x\":\"é\"}],\"tail\":9e-123}" as JSON and set parsed to it
+require condition (parsed succeeded) reporting "The JSON copy fixture is invalid"
+set original to parsed's value
+set copy to a copy of JSON node original
+set survivor to a copy of JSON node original
+require condition ((the compact JSON form of copy) = (the compact JSON form of original)) reporting "Copying changed member order or number lexemes"
+set JSON member (JSON text "large" is "replaced") in copy
+remove JSON member "a" from copy
+set JSON member (JSON flag "added" is true) in copy
+remove JSON member "absent" from copy
+require condition ((the compact JSON form of copy) = "{\"large\":\"replaced\",\"tail\":9e-123,\"added\":true}") reporting "Editing JSON changed order or retained a removed member"
+require condition ((the JSON number named "large" in original) > 1000.0) reporting "A copied child still belongs to the original"
+require condition (JSON field "added" in copy has kind the JSON boolean kind) reporting "A field predicate lost a boolean"
+require condition ((JSON field "absent" in copy has kind the JSON null kind) = false) reporting "An absent member was treated as null"
+remove JSON member "added" from copy
+remove JSON member "large" from copy
+remove JSON member "tail" from copy
+require condition (copy's length = 0) reporting "Removing the last member retained a slot"
+free copy
+free original
+set nested to the JSON value at index 2 in (the JSON member named "a" in survivor)
+require condition ((the JSON text named "x" in nested) = "é") reporting "A copied string did not survive its original tree"
+require condition ((the compact JSON form of (the JSON member named "tail" in survivor)) = "9e-123") reporting "A copied number lexeme did not survive its original tree"
+free survivor
+set timestamp to a JSON object containing [JSON number "time" is (1794279584123 as a 64 bit integer)]
+require condition ((the compact JSON form of timestamp) = "{\"time\":1794279584123}") reporting "A save timestamp lost millisecond precision"
+require condition ((the JSON member named "time" in timestamp) is a JSON safe integer) reporting "A millisecond timestamp was rejected"
+free timestamp
+print line "JSON copies own their children, edits preserve order, and save timestamps retain precision."

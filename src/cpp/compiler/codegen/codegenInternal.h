@@ -45,6 +45,7 @@ struct LValueAddressResult {
 // Shared codegen utilities (codegenTypes.cpp)
 llvm::Type *getLLVMType(ParseContext &context, DataType type);
 llvm::Align getLLVMABIAlignment(ParseContext &context, DataType type);
+llvm::Value *loadLLVMValue(ParseContext &context, const DataType &type, llvm::Value *address, const std::string &name);
 unsigned getClassFieldLLVMIndex(ParseContext &context, const DataType &classType, int fieldIndex);
 llvm::Value *
 createClassFieldPointer(ParseContext &context, const DataType &classType, int fieldIndex, llvm::Value *classPointer);
@@ -56,7 +57,7 @@ resolveCodegenBindingLayers(ParseContext &context, Expression *expression, Bindi
 DataType finalizedExpressionType(ParseContext &context, Expression *expr);
 PatternDefinition *finalizedPatternDefinition(ParseContext &context, Expression *expr);
 llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name, DataType type);
-std::string getPatternFunctionName(Section *section);
+std::string getPatternName(Section *section);
 void allocateSectionVariables(ParseContext &context, Section *section, InstantiatedSectionBody *body = nullptr);
 LValueAddressResult generateLValueAddress(ParseContext &context, Expression *expr);
 llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromType, DataType toType);
@@ -72,7 +73,8 @@ void initializeManagedStorage(ParseContext &context, llvm::Value *address, const
 bool storeManagedValue(ParseContext &context, llvm::Value *address, const DataType &type, llvm::Value *ownedValue);
 bool releaseManagedTemporaryStorage(ParseContext &context, llvm::Value *address);
 bool releaseManagedStorageForSection(ParseContext &context, Section *ownerSection);
-bool releaseManagedStorageForReturn(ParseContext &context);
+bool emitManagedFunctionReturn(ParseContext &context, llvm::Value *value = nullptr);
+bool finalizeManagedFunctionReturn(ParseContext &context);
 bool releaseAllManagedStorage(ParseContext &context);
 
 struct FlexBindingScope {

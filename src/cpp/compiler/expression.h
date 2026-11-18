@@ -68,6 +68,7 @@ struct Expression {
 	DataType type;
 	CompileTimeValue compileTimeValue{};
 	MemoryFacts memoryFacts;
+	std::uint64_t inferenceRevision = 0;
 	Range range;
 
 	// For Literal: the actual value

@@ -56,4 +56,3 @@ def check_conversion_reuse(root, build):
         added = build(success=False, entry=main)
         assert added[1:] == build(False, success=False, entry=main)[1:]
         assert "equally specific" in added[1]
-

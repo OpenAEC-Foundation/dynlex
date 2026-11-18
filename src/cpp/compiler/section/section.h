@@ -49,7 +49,6 @@ struct InstantiatedSectionBody : std::enable_shared_from_this<InstantiatedSectio
 	InstantiatedSectionBody *bodyForChild(Section *child) const;
 	Expression *expressionForLine(const CodeLine *sourceLine) const;
 	Expression *findCloneOf(const Expression *templateExpression) const;
-	std::optional<CompileTimeValue> compileTimeValueForReference(const VariableReference *reference) const;
 };
 
 enum class InstantiationPurity {

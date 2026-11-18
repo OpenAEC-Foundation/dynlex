@@ -1,0 +1,97 @@
+[
+  {
+    "source": "main.dl",
+    "points": [
+      {
+        "line": 2,
+        "word": "answer",
+        "type": "a 32-bit integer"
+      },
+      {
+        "line": 3,
+        "word": "answer",
+        "value": "type:\n\n```dynlex\na 32-bit integer\n```\n\nvalue: `7`"
+      }
+    ]
+  },
+  {
+    "source": "globals.dl",
+    "points": [
+      {
+        "line": 0,
+        "word": "answer",
+        "type": "a 32-bit integer"
+      },
+      {
+        "line": 5,
+        "word": "answer",
+        "type": "a 32-bit integer"
+      },
+      {
+        "line": 7,
+        "word": "answer",
+        "type": "a 32-bit integer"
+      },
+      {
+        "line": 8,
+        "word": "answer",
+        "value": "type:\n\n```dynlex\na 32-bit integer\n```\n\nvalue: `2`"
+      }
+    ]
+  },
+  {
+    "source": "reassignments.dl",
+    "points": [
+      {
+        "line": 1,
+        "word": "answer",
+        "value": "type:\n\n```dynlex\na 32-bit integer\n```\n\nvalue: `1`",
+        "constant": true,
+        "definition": false
+      },
+      {
+        "line": 3,
+        "word": "answer",
+        "value": "type:\n\n```dynlex\na 32-bit integer\n```\n\nvalue: `2`",
+        "constant": true,
+        "definition": false
+      }
+    ]
+  },
+  {
+    "source": "unknown.dl",
+    "points": [
+      {
+        "line": 1,
+        "word": "answer",
+        "value": "type:\n\n```dynlex\na 32-bit integer\n```\n\nvalue: `7`",
+        "constant": true,
+        "definition": false
+      },
+      {
+        "line": 3,
+        "word": "answer",
+        "value": "type:\n\n```dynlex\na 32-bit integer\n```",
+        "constant": false,
+        "definition": false
+      }
+    ]
+  },
+  {
+    "source": "local.dl",
+    "points": [
+      {
+        "line": 2,
+        "word": "copy",
+        "type": "a 32-bit integer"
+      },
+      {
+        "line": 5,
+        "word": "copy",
+        "value": "type:\n\n```dynlex\na 32-bit integer\n```\n\nvalue: `2`",
+        "constant": true,
+        "definition": false
+      }
+    ]
+  }
+]

@@ -116,10 +116,9 @@ assert.ok(publishedDiagnostics, `didOpen published no diagnostics: ${JSON.string
 assert.deepEqual(publishedDiagnostics.params.diagnostics, []);
 
 const nestedImportUri = "file:///workspace/nested-import.dl";
-const nestedImportSource = await readFile(
-  path.resolve(import.meta.dirname, "../../tools/homepage-shaders/shaders/nano-choreography.dl"),
-  "utf8"
-);
+const nestedImportSource = "import nested/helpers.dl\n";
+assert.equal(moduleInstance.ccall("dynlex_web_set_import_sources", "number", ["string"],
+  [JSON.stringify({"nested/helpers.dl": "this deliberately unresolved fixture reports an imported diagnostic\n"})]), 0);
 const nestedImportMessages = notifyLsp("textDocument/didOpen", {
   textDocument: {
     uri: nestedImportUri,
@@ -132,7 +131,7 @@ const nestedImportDiagnosticUris = nestedImportMessages
   .filter((message) => message?.method === "textDocument/publishDiagnostics")
   .map((message) => message.params?.uri);
 assert.ok(
-  nestedImportDiagnosticUris.some((uri) => uri?.endsWith("/lib/shader.dl")),
+  nestedImportDiagnosticUris.some((uri) => uri?.endsWith("/nested/helpers.dl")),
   `Nested web import did not publish the expected library diagnostic: ${JSON.stringify(nestedImportMessages)}`
 );
 for (const uri of nestedImportDiagnosticUris) {
@@ -215,10 +214,65 @@ assert.ok(
   `Expected typed squared-value instantiation label, got: ${JSON.stringify(instantiations)}`
 );
 
+const instanceHoverUri = "file:///workspace/hover-instances.dl";
+const instanceHoverSource = await readFile(new URL("../lsp/hover_instances/main.dl", import.meta.url), "utf8");
+notifyLsp("textDocument/didOpen", { textDocument: {
+  uri: instanceHoverUri, languageId: "dynlex", version: 1, text: instanceHoverSource
+} });
+for (const [version, expected] of [[1, "a 32-bit integer"], [2, "a pointer to a byte"]]) {
+  if (version === 2) {
+    notifyLsp("textDocument/didChange", { textDocument: { uri: instanceHoverUri, version },
+      contentChanges: [{ text: instanceHoverSource.replace("echo 7)", 'echo "updated")') }] });
+  }
+  for (const position of [{line: 0, character: 16}, {line: 2, character: 29}]) {
+    const hover = requestLsp("textDocument/hover", {textDocument: {uri: instanceHoverUri}, position});
+    assert.ok(hover.contents.value.includes(expected), JSON.stringify(hover));
+  }
+}
+notifyLsp("textDocument/didClose", {textDocument: {uri: instanceHoverUri}});
+
+const ownershipHoverCases = JSON.parse(await readFile(new URL("../lsp/hover_ownership/expected.json", import.meta.url), "utf8"));
+for (const test of ownershipHoverCases) {
+  const source = await readFile(new URL("../lsp/hover_ownership/" + test.source, import.meta.url), "utf8");
+  const uri = "file:///workspace/hover-ownership-" + test.source;
+  notifyLsp("textDocument/didOpen", {textDocument: {uri, languageId: "dynlex", version: 1, text: source}});
+  const data = requestLsp("textDocument/semanticTokens/full", {textDocument: {uri}}).data;
+  const tokens = [];
+  let line = 0, column = 0;
+  for (let index = 0; index < data.length; index += 5) {
+    const [deltaLine, deltaColumn, length, kind, modifiers] = data.slice(index, index + 5);
+    line += deltaLine; column = deltaLine ? deltaColumn : column + deltaColumn;
+    tokens.push({line, column, length, kind, modifiers});
+  }
+  for (const point of test.points) {
+    const position = {line: point.line, character: source.split('\n')[point.line].lastIndexOf(point.word) + 1};
+    const result = requestLsp("textDocument/hover", {textDocument: {uri}, position});
+    if (Object.hasOwn(point, "value")) assert.deepEqual(result.contents, {kind: "markdown", value: point.value});
+    else assert.ok(result.contents.value.startsWith("type:\n\n```dynlex\n" + point.type + "\n```"), JSON.stringify(result));
+    if (Object.hasOwn(point, "constant")) {
+      const legend = initializeResult.capabilities.semanticTokensProvider.legend;
+      const token = tokens.find(token => token.line === position.line &&
+        token.column <= position.character && position.character < token.column + token.length);
+      assert.equal(legend.tokenTypes[token.kind], "variable");
+      assert.equal(Boolean(token.modifiers & (1 << legend.tokenModifiers.indexOf("constant"))), point.constant);
+      assert.equal(Boolean(token.modifiers & (1 << legend.tokenModifiers.indexOf("definition"))), point.definition);
+    }
+  }
+  notifyLsp("textDocument/didClose", {textDocument: {uri}});
+}
+
+const markupHoverUri = "file:///workspace/hover-markup.dl";
+const markupHoverSource = await readFile(new URL("../lsp/hover_markup/main.dl", import.meta.url), "utf8");
+const markupHoverExpected = JSON.parse(await readFile(new URL("../lsp/hover_markup/expected.json", import.meta.url), "utf8"));
+notifyLsp("textDocument/didOpen", {textDocument: {uri: markupHoverUri, languageId: "dynlex", version: 1, text: markupHoverSource}});
+for (const {line, character, value} of markupHoverExpected) {
+  const result = requestLsp("textDocument/hover", {textDocument: {uri: markupHoverUri}, position: {line, character}});
+  assert.deepEqual(result.contents, {kind: "markdown", value});
+}
+notifyLsp("textDocument/didClose", {textDocument: {uri: markupHoverUri}});
+
 const riverCallUri = "file:///workspace/river-calls.dl";
-const riverCallSource = `import lib/river_challenge.dl
-get the sheep in the boat and row to the other side
-`;
+const riverCallSource = "import lib/std.dl\n\nclass:\n    patterns:\n        a passenger\n    members:\n        identifier as an integer\n\nthe sheep means: @intrinsic(\"construct\", a passenger, 1)\nthe wolf means: @intrinsic(\"construct\", a passenger, 2)\nthe hay means: @intrinsic(\"construct\", a passenger, 3)\n\nfunction get {a passenger:passenger} in the boat:\n    execute:\n        print line passenger's identifier\n\nto row to the other side:\n    print line \"row\"\n\nget the sheep in the boat and row to the other side\n";
 notifyLsp("textDocument/didOpen", {
   textDocument: {
     uri: riverCallUri,
@@ -231,7 +285,7 @@ const riverCallExpressions = requestLsp("dynlex/callExpressions", { uri: riverCa
 const riverCommandSources = riverCallExpressions
   .filter((call) => (
     call.returnType === "nothing"
-    && call.definition.uri.endsWith("/lib/river_challenge.dl")
+    && call.definition.uri === riverCallUri
   ))
   .map((call) => {
     assert.equal(call.range.start.line, call.range.end.line);
@@ -327,7 +381,7 @@ const shaderSpirvBase64 = moduleInstance.ccall(
   [],
   []
 );
-const shaderUniformsJson = moduleInstance.ccall("dynlex_web_get_shader_uniforms_json", "string", [], []);
+const shaderReflectionJson = moduleInstance.ccall("dynlex_web_get_shader_reflection_json", "string", [], []);
 if (shaderStatus !== 0) {
   throw new Error(`Shader compile status ${shaderStatus}. Diagnostics: ${shaderDiagnosticsJson}`);
 }
@@ -335,17 +389,28 @@ const shaderWgsl = translator.translate(Uint8Array.from(Buffer.from(shaderSpirvB
 if (!shaderWgsl.includes("@fragment") || !shaderWgsl.includes("fn main")) {
   throw new Error(`Expected WebGPU fragment source, got: ${shaderWgsl}`);
 }
-const shaderUniforms = JSON.parse(shaderUniformsJson);
+const shaderUniforms = JSON.parse(shaderReflectionJson);
 if (!Array.isArray(shaderUniforms.uniforms) || shaderUniforms.uniforms.length !== 1) {
-  throw new Error(`Expected one reflected shader uniform, got: ${shaderUniformsJson}`);
+  throw new Error(`Expected one reflected shader uniform, got: ${shaderReflectionJson}`);
 }
 if (
   shaderUniforms.uniforms[0].name !== "time"
   || shaderUniforms.uniforms[0].group !== 0
   || shaderUniforms.uniforms[0].binding !== 0
 ) {
-  throw new Error(`Unexpected reflected shader uniform: ${shaderUniformsJson}`);
+  throw new Error(`Unexpected reflected shader uniform: ${shaderReflectionJson}`);
 }
+
+const bitReverseSource = await readFile(new URL('../runtime/graphics_shaders/bit_reverse.dl', import.meta.url), 'utf8');
+moduleInstance.ccall('dynlex_web_set_main_source', null, ['string'], [bitReverseSource]);
+assert.equal(moduleInstance.ccall('dynlex_web_compile_and_emit_shader_spirv', 'number', ['string'], ['fragment']), 0,
+  moduleInstance.ccall('dynlex_web_get_diagnostics_json', 'string'));
+const bitReverseBytes = Uint8Array.from(Buffer.from(moduleInstance.ccall('dynlex_web_get_output_shader_spirv_base64', 'string'), 'base64'));
+const bitReverseStages = translator.translateBoth(bitReverseBytes, 'fragment');
+assert(bitReverseStages.webgpu.includes('reverseBits('), 'WebGPU retains its supported bit reversal');
+assert(!bitReverseStages.webgl.includes('bitfieldReverse'), 'WebGL 2 must receive ES 3.00 operations');
+assert.deepEqual(bitReverseStages.bindings, []);
+assert.equal(bitReverseStages.uniforms[0].binding, 0);
 
 moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
   `import lib/shader.dl
@@ -387,11 +452,11 @@ moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
   `import lib/shader.dl
 
 if this is a vertex shader:
-    set the shader interpolant named "surface" with an x coordinate of (the vertex x), a y coordinate of (the vertex y), a z coordinate of (the vertex z) and a w coordinate of 1.0
+    set the smooth shader interpolant named "surface" at location 0 to ([(the vertex x), (the vertex y), (the vertex z), 1.0] as an aggregate of 4 floating-point number values)
     set the output position with x (the vertex x), y (the vertex y), z (the vertex z) and w (the vertex w)
 
 if this is a fragment shader:
-    set shade to the shader interpolant x named "surface"
+    set shade to the element at 0 in (the smooth shader interpolant named "surface" at location 0 of type an aggregate of 4 floating-point number values)
     set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 `
 ]);
@@ -553,6 +618,49 @@ const capturedStorageSource = await readFile(
   "utf8"
 );
 assert.equal(await compileAndRun(capturedStorageSource), "");
+
+const explicitOperandFixture = new URL('../required/explicit_named_operator_operand/', import.meta.url);
+assert.equal(await compileAndRun(await readFile(new URL('main.dl', explicitOperandFixture), 'utf8')),
+  await readFile(new URL('expected.txt', explicitOperandFixture), 'utf8'));
+
+assert.equal(await compileAndRun(`function [height is] {value}:
+    replacement:
+        @intrinsic("add", value, 1)
+function {value} [is finite]:
+    replacement:
+        @intrinsic("equal", value, value)
+function [validate] {height}:
+    execute:
+        @intrinsic("return", height is finite)
+@intrinsic("discard", validate 1.0)
+`), '');
+
+assert.equal(await compileAndRun(await readFile(
+  new URL('../required/nested_trial_constant_scope/main.dl', import.meta.url), 'utf8')), '');
+
+const unboundClassFixture = new URL('../required/unbound_class_symbol/', import.meta.url);
+assert.equal(await compileAndRun(await readFile(new URL('main.dl', unboundClassFixture), 'utf8')),
+  await readFile(new URL('expected.txt', unboundClassFixture), 'utf8'));
+
+for (const fixture of ['recursive_inline_pointer_layout', 'recursive_inline_array_layout', 'member_nested_type_expressions']) {
+  const directory = new URL(`../required/${fixture}/`, import.meta.url);
+  assert.equal(await compileAndRun(await readFile(new URL('main.dl', directory), 'utf8')),
+    await readFile(new URL('expected.txt', directory), 'utf8'), fixture);
+}
+assert.equal(await compileAndRun(await readFile(new URL('../required/data_section_result_probes/main.dl', import.meta.url), 'utf8')), '',
+  'Independent data-section result probes must preserve compile-time type values.');
+for (const [fixture, message] of [
+  ['recursive_inline_storage_invalid', /recursive inline storage; use a pointer to break the cycle/],
+  ['recursive_array_storage_invalid', /recursive inline storage; use a pointer to break the cycle/],
+  ['lifecycle_missing_release', /managed class requires both retain and release sections/],
+  ['lifecycle_missing_retain', /managed class requires both retain and release sections/]
+]) {
+  const source = await readFile(new URL(`../required/${fixture}/main.dl`, import.meta.url), 'utf8');
+  moduleInstance.ccall('dynlex_web_set_main_source', null, ['string'], [source]);
+  assert.notEqual(moduleInstance.ccall('dynlex_web_compile_and_emit_wasm', 'number', [], []), 0, fixture);
+  const diagnostics = moduleInstance.ccall('dynlex_web_get_diagnostics_json', 'string', [], []);
+  assert.match(diagnostics, message, fixture);
+}
 
 // Exercise the rebuilt compiler and its embedded standard library with the
 // same numeric and scope-rule regressions as the native compiler.
@@ -721,8 +829,8 @@ const shaderInitializeResult = requestLsp("initialize", {
 assert.equal(shaderInitializeResult.capabilities.hoverProvider, true);
 notifyLsp("initialized", {});
 
-const shaderHoverUri = "file:///workspace/nano-choreography.dl";
-const shaderHoverSource = nestedImportSource;
+const shaderHoverUri = "file:///workspace/dual-stage.dl";
+const shaderHoverSource = await readFile(new URL("../games/dual_stage_shader.dl", import.meta.url), "utf8");
 const shaderHoverMessages = notifyLsp("textDocument/didOpen", {
   textDocument: {
     uri: shaderHoverUri,
@@ -741,7 +849,7 @@ assert.equal(
 );
 const shaderHover = requestLsp("textDocument/hover", {
   textDocument: { uri: shaderHoverUri },
-  position: { line: 84, character: 14 }
+  position: { line: 5, character: 9 }
 });
 assert.ok(
   shaderHover?.contents,

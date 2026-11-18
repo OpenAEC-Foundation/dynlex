@@ -1,0 +1,9 @@
+@intrinsic("store", answer, 1)
+function observe:
+    globals:
+        answer
+    execute:
+        @intrinsic("discard", answer)
+observe
+@intrinsic("store", answer, 2)
+@intrinsic("discard", answer)

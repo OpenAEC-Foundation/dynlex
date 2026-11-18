@@ -1,0 +1,10 @@
+class:
+    patterns:
+        record
+    members:
+        value as @intrinsic("type", "int", 32)
+        child as @intrinsic("add pointer depth", @intrinsic("type", "int", 32))
+
+@intrinsic("store", stored, @intrinsic("static reference", @intrinsic("construct", record, 74,
+    @intrinsic("construct", @intrinsic("add pointer depth", @intrinsic("type", "int", 32))))))
+@intrinsic("discard", @intrinsic("call", "libc", "printf", @intrinsic("type", "int", 32), "%d\n", @intrinsic("property", stored, "value")))

@@ -112,4 +112,3 @@ def check_storage_origin_reuse(root, build):
     assert edited[0]["preinferred_instantiations"] >= 1
     assert edited[2] == b"after\n"
     assert edited[1:] == build(False, entry=main)[1:]
-

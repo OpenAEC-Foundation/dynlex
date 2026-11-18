@@ -1,0 +1,38 @@
+import lib/base64.dl
+import lib/check.dl
+
+set texts to ["", "f", "fo", "foo", "foob", "fooba", "foobar"]
+set encodings to ["", "Zg==", "Zm8=", "Zm9v", "Zm9vYg==", "Zm9vYmE=", "Zm9vYmFy"]
+set index to 0
+loop while index < the length of texts:
+    set text to the string form of (the item at index in texts)
+    set encoded to the Base64 form of text
+    require condition (encoded = (the item at index in encodings)) reporting "An RFC 4648 encoding vector failed"
+    set decoded to the Base64 decoding of encoded
+    require condition ((decoded's success) and (decoded's value = text)) reporting "An RFC 4648 decoding vector failed"
+    increment index
+set bytes to a new string buffer containing 256 bytes
+set index to 0
+loop while index < 256:
+    store (index as a byte) into (the data of bytes) at index
+    increment index
+set decoded to the Base64 decoding of (the Base64 form of bytes)
+require condition ((decoded's success) and (decoded's value = bytes)) reporting "Binary Base64 did not retain every byte"
+set decoded to the Base64 URL decoding of (the Base64 URL form of bytes)
+require condition ((decoded's success) and (decoded's value = bytes)) reporting "URL Base64 did not retain every byte"
+set text to the string form of "é😀\n"
+set decoded to the Base64 URL decoding of (the Base64 URL form of text)
+require condition ((decoded's success) and (decoded's value = text)) reporting "Base64 changed Unicode source bytes"
+set invalid to ["Z", "Zg=", "Zg===", "Z=g=", "Zg==x", "Zh==", "Zm9=", "Z g==", "Zg==\n", "-w==", "_w=="]
+set index to 0
+loop while index < the length of invalid:
+    set decoded to the Base64 decoding of (the string form of (the item at index in invalid))
+    require condition (decoded's success = false) reporting "Malformed Base64 was accepted"
+    increment index
+set decoded to the Base64 URL decoding of (the string form of "Zg")
+require condition ((decoded's success) and (decoded's value = "f")) reporting "Unpadded URL Base64 was rejected"
+set decoded to the Base64 URL decoding of (the string form of "Zg==")
+require condition ((decoded's success) and (decoded's value = "f")) reporting "Padded URL Base64 was rejected"
+set decoded to the Base64 URL decoding of (the string form of "Zh")
+require condition (decoded's success = false) reporting "Noncanonical trailing bits were accepted"
+print line "Base64 and URL Base64 preserve text and binary data and reject malformed encodings."

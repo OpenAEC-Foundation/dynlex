@@ -1,0 +1,1 @@
+tests/required/recursive_array_storage_invalid/main.dl:9-51: Error: an endless has recursive inline storage; use a pointer to break the cycle

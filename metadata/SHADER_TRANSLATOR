@@ -1,0 +1,6 @@
+{
+  "version": "30.0.1",
+  "archive": "https://static.crates.io/crates/naga/naga-30.0.1.crate",
+  "sha256": "a616d2fb8c89516ac2723a581f69d6c18576046bed761bd6b305e5618e6ae130",
+  "patch": "tools/wgsl-translator/patches/naga-early-merges.patch"
+}

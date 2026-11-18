@@ -1,3 +1,5 @@
+Website implementation and application tests now live in [dynlex-website](https://github.com/OpenAEC-Foundation/dynlex-website). Paths under `site/` in this implementation report refer to that repository.
+
 # UI framework extraction: fixes found during implementation
 
 The compiler retains general section, callback, memory and graphics facilities.
@@ -14,6 +16,8 @@ the compiler.
 | A function referencing a multiword global data declaration could not resolve. | Function-body matching had to finish before global calls, while declaration names were discovered only by resolving those calls. Once section signatures are known, the ordinary matcher indexes their declaring captures without executing or resolving the global initializer. | `data_declaration_function_globals` |
 | Static nested data callbacks using managed records reached codegen without inferred lifecycle bodies. | Lifecycle reachability did not follow resolved data-field values and symbolic function constants. Both now participate in the normal graph traversal. | `nested_data_callback_lifecycle` |
 | Reading an unassigned ordinary function local crashed during codegen. | Local validation ran for deferred callbacks and main, but not ordinary function instantiations. The same validation now runs after each converged ordinary function inference, reporting a source diagnostic. | `uninitialized_function_local` |
+| A callback following typed ownership links reported that an existing member did not exist. | Recursive layout resolution treated an active symbolic inline field as an unspecified generic class. Its transaction now retains the symbolic graph until completion and diagnoses infinite inline storage. | `recursive_inline_pointer_layout`, `recursive_inline_array_layout`, `recursive_inline_storage_invalid`, `recursive_array_storage_invalid` |
+| Intrinsic member types failed on nested commas, crashed without a named outer pattern, or retained unresolved nested types. | Listing separators ignored brackets and strings; member metadata and expansion assumed a named root. Lists now preserve nested expressions, type metadata follows their pattern references, and pending arguments expand under intrinsic roots. | `member_nested_type_expressions`, `recursive_inline_array_layout`; `listing_item_failure_propagation` retains a malformed first item so later items remain unprocessed. |
 
 The required fixtures above import no application libraries. The host callback test
 checks both `call pointer` and typed `invoke`, including invocation after `main`
@@ -100,3 +104,579 @@ Finally, the editor test helper no longer starts an unawaited module import in
 every future document. That leaked instrumentation into unrelated pages and
 produced uncaught import failures during navigation. Access is now awaited and
 document-scoped; tests that reload explicitly reinstall it in the new document.
+
+## Website and shared editor fixes
+
+Studio and River now share the same source-pane controls, completion menu,
+outline and inferred-instance chooser. The choice popover is a reusable DynLex
+UI component with shared placement, clipping, disabled rows, scrolling and input
+capture. F9 visits nested authored sections; F8 selects an inferred instance at
+the caret. Inspection works in read-only imports and uses the same Unicode and
+hidden-prefix mapping as other editor features. Semantic colors and hover facts
+refresh only after an instance selection is acknowledged; edited documents
+reject obsolete replies. No application-specific editor event handlers are
+needed for these tools.
+The shared interaction lifecycle also cancels queued automatic completion when
+an explicit tool opens. Choice padding and disabled rows now use the arrow
+cursor instead of retaining the source editor's text cursor.
+Website filenames now come from the shared project model. Source links and
+shader loads configure that model directly, preserving provided project files.
+The duplicate filename paragraphs and per-frame metadata polling were removed.
+Source navigation also restored a captured initial read-only flag, discarding
+later policy updates. Controls now retain application policy while their bound
+documents supply content protection; the shared editing gate combines both.
+Regression coverage includes locking, unlocking, edits after returning, and
+policy changes made while viewing an import.
+Quick fixes now use shared diagnostic selection, Unicode ranges, action menus,
+command handling and atomic source-text transactions. Staging an edit does not
+apply part of it when another target is protected, read only, unavailable or
+stale. Parked sources retain independent undo and caret state. Application
+callbacks run after all affected models and buffers are updated.
+Fixes requested during analysis initially captured an empty diagnostic list.
+Source queries now support a parameter-preparation callback at dispatch, after
+analysis settles. Fixes use it to refresh their diagnostic context, and reusing a
+feature slot clears the previous callback.
+Semantic presentation previously ignored token modifiers and their legend. The
+shared editor now retains both, matches generic type/modifier style rules, and
+includes modifier legends in its color cache identity. Default nested-call
+colors are generated from the existing canonical palette for both ordinary and
+embedded editors; no application-specific color decoder is needed.
+Disabled document controls computed muted colors in a local appearance, but
+paragraph and editor drawing read the original colors. Shared foreground
+presentation now covers document captions, inline links, semantic text, desktop
+fields, switches, buttons and ribbon captions. Authored appearances and semantic
+colors stay intact when controls change state.
+Disabling a hovered inline link also removes its underline before another pointer
+event; the recording-driver regression checks the emitted geometry and its
+restoration alongside text colors.
+Responsive documents now lay out and paint ordinary single-line fields, switches
+and choice fields, using the same editing, undo, composition, activation and
+focus code as classic windows. Editing no longer replaces a document field's
+declared font and padding. Classic fields also refresh their retained line
+geometry before drawing, and all single-line horizontal scrolling uses the same
+text-scroll state. Initial and programmatic field values use the existing
+single-line input policy.
+Choice fields now keep their stable names separate from their initial selected
+text. Ribbon declarations supply that initial value explicitly as well.
+Dropdowns previously required every option to fit in the window and maintained
+their own keyboard and drawing paths. They now use the same bounded choice
+surface as editor completion, outlines and diagnostic actions. Placement,
+scrolling, disabled selection and keyboard input are shared. Dropdown pointer
+acceptance remains on release, including cancellation when dragging away;
+completion retains acceptance on press. Document popups inherit the control's
+font and colors. The old popup-index state and its readers and writers were
+removed. Shared regressions cover long lists, small viewports, capture loss and
+authored presentation alongside editor and ribbon behavior.
+Choice placement also replaces its fixed 24-pixel line assumption with actual
+anchor bounds. Tall controls and transformed source carets use the same
+above/below placement without overlapping an anchor when there is room beside it.
+
+The website migration also exercised the following compiler paths. These are
+language and compiler fixes, with no website-specific syntax or inference rules.
+
+River's hover checks exposed two further inspection defects. Owner lookup could
+choose an unrelated called function merely because it could see the caller's
+variable. Candidate owners now require a binding in their own section. Value
+lookup also searched for the first expression sharing a variable's identity,
+which reused earlier values after assignment or runtime input. Hover and semantic
+constant markers now inspect the actual source occurrence and its inferred body.
+Import-free ownership, reassignment, unknown-input and local-instance fixtures
+exercise the same protocol through the native and browser compilers.
+
+| Symptom | Root cause and change | Regression coverage |
+| --- | --- | --- |
+| Static descriptions could not read nested aggregate values. | Immutable aggregate loads now fold through initialized globals; static-reference globals are published without fabricated zero initializers. | `static_aggregate_reads` |
+| Long associative expressions exhausted time or stack. | Grouping enumeration now prunes spans that have no eligible root. | `associative_chain`, `grouping_bounded_stack`, `grouping_fixed_root_stack` |
+| Replayed arguments lost assignments or used state from another invocation. | Replay retains complete input/output transitions and checks binding frames, assignment roles, execution state and result fingerprints. | `argument_reference_inference_replay`, `cached_callee_grouping_replay` |
+| Declared names were parsed as calls, or absorbed trailing literal words. | Declaring captures honor literal continuations and named-operand priority. Header snapshots refresh the declaration index to a fixed point and remove stale provisional names. | `data_declaration_operand_priority`, `data_declaration_suffix`, `scripts/test_data_declaration_cache.py` |
+| A named operand at an expression root lost to a colliding literal-prefix call. | Explicit named captures take operand priority while enclosing literal continuations retain their precedence. | `explicit_named_operator_operand` |
+| Unsupported numeric widths reached codegen invariants. | Builtin type construction now rejects unsupported storage widths with source diagnostics. | Required integer, unsigned, numeric-constraint, Boolean and floating-point width fixtures |
+| An early return leaked managed subjects introduced later in a loop. | Return cleanup is emitted after the complete owning-variable registry is known, preserving initialization flags and retained return values. | `managed_subject_early_return` |
+| A guaranteed first loop iteration used the return branches of a later pass. | Runtime body annotations join the first and later entries independently of the precise post-loop state. | `guaranteed_loop_early_return` |
+| Managed cleanup produced invalid debug locations. | Shared return-cleanup emission preserves valid debug metadata. | `debug_managed_cleanup` |
+| Nested inference trials lost constants retained by their enclosing trial. | Lookup follows the complete trial chain; each trial keeps ownership of its writes and unknown-value shadows. | `nested_trial_constant_scope` |
+| Cached recursive type identities expanded shared graphs into trees. | Encoding visits each reachable class layout once and fingerprints the graph. | `check_shared_class_type_graph` in `scripts/test_incremental_program_cache.py` |
+| Edited builds repeatedly specialized equivalent recursive layouts. | Refinement retains the established type when it already contains the incoming structure. | `check_equivalent_recursive_layouts` in `scripts/test_incremental_class_layouts.py` |
+| Reordered calls exchanged cached bodies for different class layouts, or lost their cached LLVM function. | Symbols use stable declaration identities and full concrete type identities, including nested arrays and callback signatures. Codegen shares the cache's graph encoder. | `check_class_symbol_identity` in `scripts/test_incremental_class_layouts.py`, `unbound_class_symbol` |
+| Hover reported unresolved types inside instantiated functions. | Hover reads the selected inferred body for expression and variable types; type and constant lookup share instance selection. | `scripts/test_lsp_hover_instances.py`, Web compiler smoke, actual shared-client connection |
+| Hovering a parameter declaration returned the whole function signature. | Declaration lookup uses the scope containing the recorded reference, independently of the header line's outer syntax section. | `scripts/test_lsp_hover_instances.py`, Web compiler smoke |
+| Hover markup corrupted values containing backticks, quotes or control characters. | Code spans now choose safe delimiters. Parsing and all three compiler string-display paths share one escape alphabet and canonical quoted-string formatter. | Import-free `tests/lsp/hover_markup`, native LSP suite and Web smoke |
+
+The shared editor additionally fixes UTF-16 workspace-edit planning, protected
+prefix ranges, completion edits and continuation commands, Unicode insertion and
+IME completion triggers, clipboard event normalization, and editor-themed popup
+geometry. Studio, River and ordinary embedded source controls use the same
+workspace, document, language client and interaction code.
+
+Two borrowed-list traversals incorrectly reassigned their by-reference arguments:
+palette comparison cleared the retained palette, causing repeated syntax-color
+application and idle redraws; query cancellation discarded the owned feature
+slots after an edit. Both now walk a local cursor. Regressions check retained list
+identity, repeated unchanged presentation, slot reuse after edits and context
+changes, and zero retained allocations through the actual Wasm runtime. These
+checks run at both optimization levels alongside the native editor fixtures.
+
+Symbol identity distinguishes type descriptors from runtime layouts: an unbound
+class used as a type argument does not need an allocated instance. Exposed
+C-callable wrappers retain their public names; the object-output test links and
+runs its existing C caller at O0, O2 and O3.
+
+LLVM can replace a constant `printf` with `puts`. The shared Wasm host now
+recognizes and implements that import, preserving UTF-8 text and its trailing
+newline. Host tests cover empty, ASCII and Unicode strings; the unbound-class
+regression also executes the optimized output through the Wasm host.
+
+Native helper test builds honor `CMAKE_BUILD_PARALLEL_LEVEL`, with one job by
+default, instead of forcing two jobs over the caller's limit.
+
+The shared language client distinguishes server requests from editor responses
+before matching IDs. A server request can legally use the same ID as an editor
+request; the preceding implementation treated it as the answer and aborted while
+reading its missing result. Server requests now receive replies with their exact
+IDs, including strings and integers beyond JavaScript's exact-number range.
+Queued replies preserve pending editor work and its ownership. Semantic refreshes
+request tokens without resending source, and changed token results invalidate
+colors independently of source revisions. Identical token data retains cached
+colors. Native and Wasm regressions cover the two protocol directions, suspended
+work, repeated refreshes and resource cleanup.
+
+A server refresh emitted after `didClose` initially invalidated the closed
+document too. The workspace then reopened that project repeatedly, producing
+background compiler traffic and paints while the UI revision stayed unchanged.
+The client tracks the open-document lifecycle and acknowledges closing refreshes
+without invalidating closed results. `source_close_refresh` reproduces the cycle
+without a renderer; the River browser check also requires idle scenes to stop
+painting.
+The same lifecycle rule also preserves cached diagnostics: the server clearing
+its report on close does not erase the editor's retained analysis results.
+
+Source projects now own their main file, imported models and configuration. The
+language connection retains one open model and version per file, synchronizes
+main-file changes before imported queries, and closes all models before changing
+projects. Queries and edits carry project identity and revision, so identical
+URIs in separate examples cannot share results.
+
+Diagnostics previously accepted only the active URI. Project snapshots now retain
+reports for loaded and unopened sources; the main token response commits the
+complete report batch, including empty reports for clean imports. Diagnostic
+presentation has its own generation, so changing or clearing a report updates
+unchanged source while identical reports preserve cached presentation.
+
+Reconfiguring provided files previously left their loaded models stale. Replaced
+sources update their snapshots, removed sources become unavailable, and restoring
+a file revives its model. External library snapshots remain independent of that
+provided file map. Read-only controls pull their document content instead of
+writing preceding control text over a refreshed import. The project still
+synchronizes its main file when the selected imported source is unavailable.
+
+Source controls retain independent per-file edit states, including undo/redo,
+selection, scrolling, semantic spans and execution marks. Definition visits no
+longer replace the main program used by Run and Save. Website actions use these
+shared project APIs, and River execution marks target the main document even
+while an imported definition is displayed. Source panes are static compositions
+of ordinary controls with scoped contextual callbacks, rather than a second
+set of hit-testing and button behavior.
+
+Fresh program loading now clears edit history and retires the matching IME
+session even when the new bytes equal the preceding source. The prior
+text-equality shortcut retained another program's redo entries and accepted its
+late input events. Background loads preserve unrelated editor focus and
+composition. Borrowed input is retained before clearing active or parked state.
+
+A source-hover regression also exposed an invisible editor animation: document
+editors approached a hover value that their renderer never used. Only buttons
+and links now animate that tint, so an unchanged editor tooltip can become idle.
+
+Selectable popovers now publish ordinary floating-layout geometry to the shared
+hit tester. Their surface blocks controls behind it, including padding, and
+dismissing it retires that geometry between paints. Completion menus use that
+same path and keep their captions out of document selection. Hovering a text
+popover preserves the source caret and keyboard input; clicking its text scopes
+selection and immediately retires the preceding input context. Escape returns
+source tools to their retained editor location. Tiny viewports hide popovers
+until their padding and content can fit.
+
+Opening an import enabled Back and Main file before the source control. Focus
+reconciliation retained only a numeric position, so those new controls took the
+editor's keyboard focus and prevented Alt+Left. The shared focus collector now
+preserves the focused layout's identity when its ordinal was not explicitly
+changed. Disabled or hidden targets still leave the focus list, and explicit
+Tab navigation retains its normal ordering. Source-pane and queued-focus tests
+cover the change after painting, rather than calling navigation actions directly.
+
+Literal Unicode matching now lives in `lib/text_search.dl`, independent of any
+editor or platform. It returns original UTF-8 byte ranges and uses linear KMP
+matching, Unicode 17 simple case folding and explicit identifier-word boundaries.
+Pinned upstream data and its license are stored in the repository; generation
+works offline and the generated tables remain immutable static arrays. Tests
+cover every code point's property checksum and compare 7,024 search cases with
+an independent oracle across native, WebAssembly and the shipped compiler.
+This is the shared matching engine; the Find/Replace controls remain unfinished.
+The full integration suite passes all 503 checks with the new library modules.
+
+Text background marks now belong to named layers with independent source
+snapshots and paint priorities. Refreshing or clearing one feature preserves the
+other layers. The painter caches snapshot checks per layer and frame, then walks
+ordered marks across rows, resetting its cursor for repeated or backward paints.
+Borrowed names and source strings remain valid when replacing their own layer.
+All declarations, fixtures and application consumers migrate to the new API;
+the old single-layer state and aliases are removed. River uses an execution
+layer and its controller tests keep an independent search layer while resetting
+execution in a parked main buffer.
+
+Plain `text area` and `read only text area` declarations reuse the shared text
+input, selection, undo, wrapping, scrolling, annotation and appearance paths.
+They provide multiline input without registering a language source document.
+The shared multiline classifier covers both these controls and source editors;
+workspace discovery still registers only source editors. This allows search
+queries and program text to use the same editing behavior with distinct roles.
+
+A final field regression exposed a rendering split: classic single-line fields
+used the shared row painter during composition but bypassed it for normal text.
+Their normal path now uses the same painter, so named marks render in classic
+fields as well as responsive fields and editors. Classic field appearances also
+carry their actual surface color into the shared disabled-ink calculation.
+
+Verification for these shared controls includes 17 fixture identities at both
+optimization levels on native and WebAssembly, with no retained Wasm allocations;
+the extended classic-field painter regression and related input cases pass on
+both targets too. Actual native field/area input and marked-source rendering,
+WebGPU/WebGL2 text/editor input, all website controllers, SDK artifact checks and
+four full Studio/River browser runs pass. This phase changes DynLex library/UI
+code and embeds the new standard modules in the browser compiler; it adds no
+C++ compiler fix.
+
+Literal matching now accepts an explicit line-break equivalence policy. It can
+match CRLF, LF and lone CR while retaining the original UTF-8 endpoints, without
+normalizing a second source string. All callers use the new signature. The
+independent corpus now covers 11,024 cases at both native/Wasm optimization
+levels and through the rebuilt browser compiler, with no retained allocations;
+the full integration suite again passes 503 checks. A library-notice manifest
+also makes the compiler-supplied notices available to application packagers.
+
+Shared Find/Replace exposed two library/compiler issues. The workspace-edit index helpers used the callable class name `sequence` for a local parameter; those locals now use `indexes`, with a fixture importing both libraries. Address-provenance inference treated `static reference` like an ordinary operation on its initializer. It could diagnose a static record with null fields as a null pointer, miss writes to immutable scalar storage, and repeatedly traverse nested static descriptions. The intrinsic now identifies static storage directly; import-free fixtures cover null fields, nested copies, immutable writes and mutable pointees behind a static pointer.
+
+Edited native builds could mix two equivalent recursive layout graphs: constraint restoration saved the layouts without their request-to-layout map. An unchanged function then reused the old graph while re-inference built a new one, making arrays of the same declared class fail element matching. The import-free reproducer allocates two mutually recursive records, edits one function, and compares the edited cached build with a clean build. Class snapshots now include portable request bindings and construction argument types; request keys are rebuilt against current declaration identities. Both fixed and parameterized recursive cases require actual constraint and function-summary reuse in the regression.
+
+Studio and River now use one retained Find/Replace controller, including Unicode and line-break matching, per-pane query fields, independent match annotations, read-only policy and atomic workspace-edit undo. Showing a field refreshes focus before reading its ordinal; forgetting a field retires its native input context. These changes fix focus lost to newly inserted controls and typing contexts retained after the owning source pane closes. Run shortcuts activate each editor's existing Run control through the same scoped command dispatch and enabled policy as pointer input. Per-event handled receipts let the browser suppress defaults only when the shared dispatcher handles the key.
+
+Native text, annotations and Snake interaction/rendering checks pass; WebGPU and WebGL2 command, editor and form checks pass. Four full website browser runs pass, including Find/Replace and keyboard Run in Studio and River, execution, language tools, progress, audio, mobile layout and downloads. The integration run passed 502 checks; its remaining shipped-library check passes after rebuilding the browser compiler with the renamed workspace helpers. Fresh shipped core/search fixtures and the independent 11,024-case search oracle also pass without retained allocations.
+
+Shared scene camera and triangle-picking helpers now reuse the core vector and column-major graphics libraries. Tests cover perspective clipping, viewport resizing, projection/ray agreement, mixed numeric precision, ground intersections, triangle winding, edges and transformed geometry. Native, WebAssembly and rebuilt-browser-compiler executions pass. These helpers prepare Farm's scene integration; Farm's renderer and interface are still unfinished.
+
+Typed shader inputs now declare a numeric type explicitly. Float32, signed int32
+and unsigned int32 scalars/vectors preserve their GPU interface types; float32
+matrices use row vectors with sixteen-byte strides. The SPIR-V patcher previously
+retargeted uniform globals without retargeting optimized element pointers. A
+minimal, import-free 2x2 matrix/vector multiplication reproduced a Workgroup
+pointer into a Uniform block at O2. Derived access-chain pointers now inherit the
+base pointer's storage class. All 21 supported input shapes validate at O0/O2,
+and the 350 required compiler checks pass.
+
+The shared UI shader driver now transfers packed numeric bytes. Owned DynLex
+values provide scalar/vector/matrix construction, integer range and whole-number
+checks, float32 finiteness checks, zero padding and column-major graphics-matrix
+conversion. This removes per-frame JSON values and host-side numeric packing.
+Cross-stage linkage compares complete input types. The website's existing shader
+previews use the new uploads and reject inputs their preview controls cannot
+supply during linkage. Native and WebAssembly value, driver and linkage fixtures
+pass at both optimization levels; Wasm allocations return to zero. Driver-width
+and numeric-range tests pass as well. Browser reflection, WGSL/GLSL translation and actual GPU pixel checks now pass
+for all 21 input shapes on WebGPU and WebGL2.
+
+GPU translation checks also exposed two portability issues. LLVM's byte-address
+optimization introduced 64-bit constant indices for small matrix rows. Shader
+address lowering now reconstructs typed accesses and narrows only constants
+whose signed value is preserved. Native optimized matrix modules no longer need
+ShaderInt64 and translate through Naga. A subsequent background WebGPU pixel
+probe proved that WGSL emission dropped SPIR-V array strides: a matrix read the
+padding slot instead of the next row. Uniform matrices now use explicit padded
+row structures; reflection derives their logical dimensions from the validated
+physical rows and offsets. The native compiler validates all 21 shapes at both
+optimization levels with that layout. The rebuilt browser compiler and complete
+GPU/GL corpus pass with this layout.
+
+The complete GPU corpus caught signed arithmetic that looked valid to SPIR-V
+validation but changed meaning during translation. LLVM's signless values were
+declared unsigned, so Naga converted a negative int32 to a positive float and
+interpreted signed division and shifts through unsigned types. Shader lowering
+now makes each opcode's signed/unsigned interpretation explicit in its operand
+and result types, preserving the original SSA bits at its boundaries. Fourteen
+independent signed/unsigned arithmetic fixtures pass native SPIR-V validation at
+O0/O2 and actual background WebGPU pixel checks after translation. The rebuilt browser compiler passes the combined 35-case matrix/arithmetic
+corpus on both WebGPU and WebGL2.
+
+WebGL2 additionally exposed GLSL's different signed-remainder behavior for
+negative operands. Signed remainder now lowers to exact truncating integer
+division, multiplication and subtraction. All fourteen arithmetic cases pass
+actual WebGL2 pixels too. Final verification includes 350 required checks,
+native shader validation at O0/O2, browser reflection/translation, and all 35
+compiled shaders rendered through both backends alongside the shared form and
+buffer-submission regressions. The website SDK is repinned to the verified compiler/UI revisions. Website
+shader models, buffer updates and all four Studio/River browser runs pass on
+WebGPU and WebGL2. The local preview is updated. The complete integration run
+finished with 504 passes and one timeout in the grouped owning-value tests.
+Every fixture passed when rerun separately: native O0/O2, native-generated Wasm
+and browser-compiler-generated Wasm, with zero retained Wasm allocations. The
+test runner now gives each fixture its own unchanged sixty-second limit instead
+of sharing one limit across several fixtures and both compilers. All six cases
+pass under those limits; no compiler behavior or test expectations were changed.
+
+The shared UI library now also owns indexed 3D geometry: segmented planes and
+boxes, spheres, tapered cylinders and cones, partial tori, rings, flat
+icosahedra and convex polygon extrusions. These cover the primitive geometry
+used by Farm's existing artwork, including subdivided water tiles, bucket
+handles and the house gable. Vertices use a portable 32-byte position/normal/UV
+record and uint32 indices. Immutable mesh copies share their storage and retain
+local bounds. Shared affine transforms provide checked inverses,
+inverse-transpose normals and mirrored handedness; mesh picking rejects missed
+local bounds and returns the nearest intersection in world coordinates.
+
+Geometry, normals, UVs, dimensions, outward triangle winding, enclosed volume,
+copy ownership, transforms and picks pass native and Wasm O0/O2 checks. The
+shipped browser compiler passes all five camera/geometry fixtures with zero
+retained allocations. Runtime boundary tests reject invalid geometry domains,
+non-finite components, singular/projective transforms and zero normals.
+Farm's shader materials, lighting, renderer and interface remain unfinished;
+these shared modules supply the geometry needed for that port.
+
+Shared scene models now describe immutable named parts, materials, local XYZ
+Euler poses and parent relationships. Instances retain the prototype while
+owning separate articulation, material and visibility state. Changed pivots
+update their descendants; unaffected branches keep their placement revisions and
+unchanged refreshes do no work. World bounds, inherited pickability and nearest
+instance picking use those same placements. Native/Wasm O0/O2 and the shipped
+browser compiler pass the model checks with zero retained allocations. Boundary
+checks cover invalid poses, physical material values, RGB widths, topology and
+missing or ambiguous part names. Sphere longitude starts at negative X so the
+existing Farm tessellation and texture seam retain their orientation.
+
+Farm's cows, farmers, chickens, houses, seeded trees, flags, egg piles, equipment,
+sacks and compost bins now have DynLex model factories under
+`site/games/farm/art/`. Their physical material data includes emissive highlights,
+metalness, roughness and application flags for the coat and water shaders.
+Meshes are shared from one owning art library. Named pivots preserve legs, arms,
+hands, heads, tails, cloth, compost heaps and equipment grips. Thirty-two cases
+containing 256 meshes match independent snapshots of the original authored
+geometry, transforms, materials and bounds. Native O0/O2, Wasm O0/O2 and the
+shipped browser compiler pass; the complete art fixture peaks at 1,580,995 live
+bytes and releases all allocations. The snapshots are data fixtures, so these
+checks no longer import the old Three.js code. Farm's shader behavior,
+world/animation controller, scene submission, lighting and interface
+still need integration.
+
+Scene meshes now own a separate float32 linear RGB stream, with explicit white
+colors on untinted primitives. The existing position/normal/UV record remains
+32 bytes; colors use twelve bytes per vertex. All mesh constructors supply
+complete streams. Baking merges indexed geometry, transforms normals, multiplies
+vertex tints and preserves outward winding under mirroring. Area-weighted normal
+generation supports custom surfaces and retains zero normals at unused or
+wholly degenerate vertices. Quaternion orientations align stems between finite
+directions. The existing UI painter and scene data share one sRGB conversion and
+linear color type. Native/Wasm O0/O2, browser-compiler, data-boundary and actual
+background WebGPU/WebGL form and pixel checks pass.
+
+The crop port preserves the authored finely divided carrot leaves, shoulders,
+roots, wheat stems, grains and awns at every growth stage. Each bed is one indexed
+colored mesh. Six independent compressed surface fixtures cover all 49,332
+oriented triangles, comparing every position, normal and linear RGB component.
+Native O0/O2, Wasm O0/O2 and browser-compiler output match within a maximum error
+of 0.00000008940696716308594. Wasm crop generation peaks at 2,092,235 live bytes
+and releases all allocations. Sphere/cylinder triangle diagonals and cone-tip
+normal selection now match the authored topology. A gold-grain tint assignment
+in the port was corrected after an import-free example confirmed ordinary
+lexical shadowing; this was not a compiler bug. The art test runner now exposes
+captured compiler diagnostics on failure instead of hiding them behind the
+subprocess exception. The crop tests do not depend on Three.js at runtime.
+
+The shared scene library can now submit indexed mesh banks and portable instance
+records through the existing shader driver. Copies of immutable geometry share
+one bank span; indices stay local to that span. Each shader/pass binding tracks
+the uploaded geometry revision, so changes to instance transforms and materials
+do not require another geometry upload. Instance records preserve model matrices,
+inverse-transpose normal columns, linear color and emission, material parameters,
+handedness and exact uint32 effect/shadow flags in 176 bytes. The matching layout
+uses fifteen vertex attributes. Ordinary DynLex shader helpers consume the same
+data for world positions, normals and camera projection.
+
+The core vector library now selects the GPU vector type when compiling a shader,
+with coordinate readers and the same vector arithmetic as CPU code. Explicit
+`set the x coordinate of value to component` operations (and y/z equivalents)
+update either representation while preserving independent copies. Existing record
+field assignment remains available. Cross-product coordinate expressions now have
+explicit grouping. These are library features and source corrections; no C++
+compiler changes were needed in this phase.
+
+Five shared fixture groups pass native O0/O2, Wasm O0/O2 and the shipped compiler,
+releasing all allocations. A private-display pixel probe compiles the actual
+DynLex shader, renders the actual DynLex mesh and instance records, and compares
+the image against CPU-projected positions on both WebGPU and WebGL2. It checks
+depth overlap, mirroring, normal matrices, color conversion, material values,
+all fifteen attributes, unsigned flags, vector arithmetic/updates, zero-vector
+normalization and retained geometry. Both backends pass with no graphics errors.
+The complete core integration suite passes 515 checks with no failures or skips.
+
+Scene instances also accept checked affine anchors before their local root pose
+and model transforms. Held models can follow an animated hand's exact placement,
+including shear, nonuniform scale and mirroring. Bounds, picking and shader
+records use those same composed transforms. Anchor changes invalidate all model
+roots and their descendants; unchanged anchors preserve the cached revision.
+Native O0/O2, Wasm O0/O2 and browser-compiler tests cover attachments, multiple
+roots, root articulation, normal matrices, independent instances and detaching,
+with zero retained allocations. The pixel probe also passes on both backends
+with an angled camera and fully overlapping triangles at different depths.
+The actual Farm equipment/animation controller still needs to use this API.
+
+Projection now requires a float32 4-by-4 camera matrix. Native O0/O2 and the
+shipped compiler reject scalar, vector and other matrix shapes instead of
+accepting an unrelated multiply operation. Valid WGSL/GLSL and reflection remain
+byte-identical to the pixel-tested shaders. The final 242-file SDK matches its
+committed UI/runtime sources. All four Studio/River WebGPU/WebGL browser runs
+pass, including versioned asset URLs; the rebuilt application binary is unchanged.
+The final camera constraint affects only an unimported source helper and the SDK
+source catalog, verified against the complete application dependency graph.
+
+## Sampled shader resources
+
+The core shader vocabulary now describes static 2D color images, cube images,
+2D depth images, ordinary samplers and comparison samplers. These are immutable
+compile-time binding values, with typed aliases and fixed parameters. Ordinary
+pure functions can return them; sampled bindings are registered only when used.
+Names and bindings share a namespace with numeric uniforms, and incompatible
+resource types, coordinate shapes or duplicate bindings produce source diagnostics.
+`lib/shader.dl` exposes explicit-level color sampling and level-zero depth
+comparison through plain-English patterns; see `docs/shader_resources.md`.
+
+SPIR-V interface lowering emits the actual image/sampler globals and sampling
+instructions, keeping opaque values inside their sampling block. Binding names
+remain metadata and require no runtime byte arrays or Int8 capability. Browser
+reflection includes sorted resource descriptions, and compiler-worker results
+preserve both stages' resource lists. Every empty/reset reflection object and
+existing exact reflection test uses the same new contract.
+
+This work also exposed an existing uniform index-order bug. When a helper first
+introduced the unsigned index type, uniform lowering could insert its new zero
+constant before that type. The constant now follows its type declaration. An
+eight-line, import-free regression validates both stages at O0/O2.
+
+Native shader validation, declaration/operand/binding diagnostics, the plain-English
+vocabulary and all 350 required compiler tests pass. The rebuilt browser compiler
+passes its smoke suite, numeric input reflection tests, resource reflection/reset
+tests, vocabulary and WGSL/GLSL translations. All 516 integration checks pass with
+no failures or skips. Shared host texture/sampler allocation, render targets, resource bindings
+and the actual Farm material/world/interface integration remain unfinished; this
+phase has not changed the live preview or its pinned SDK.
+
+## Shader translation and physical resources
+
+GLSL translation now returns the writer's exact combined-image/sampler mappings,
+including additional samplers for one image. Its virtual bindings map back to the
+original image, allowing independent sampler objects without duplicating pixel
+storage. All workers, compiler tools and stored homepage metadata use that
+contract; the homepage manifest is schema 14.
+
+Resource pixel tests exposed two additional translation defects. The WGSL writer
+cannot emit nonempty switch fall-through, so portable IR lowering moves each case
+body once into conditional execution within one switch. A separate Naga SPIR-V
+frontend defect assigned a shared block before the declared merge to its first
+incoming branch. Complete-function postdominator analysis now assigns that shared
+continuation to the header. An import-free four-way if-chain and reordered-block
+regression cover the missing-output case. The dependency archive digest and full
+source correction are pinned in `metadata/SHADER_TRANSLATOR` and the translator's
+`patches/` directory. Web builds prepare the corrected source in the local cache;
+the shared Cargo registry remains unchanged.
+
+The shared UI library has ordinary DynLex image/sampler descriptions and browser
+storage drivers. Real pixel tests pass on WebGPU and WebGL for independent
+samplers, uploaded 2D orientation, all six cube faces and mip levels, sRGB decoding,
+negative/HDR half-float values and filtered depth comparisons. These drivers are
+used by the shared shader-pass graph for retained render targets, cube baking,
+depth-only shadows, HDR/MSAA resolve and postprocessing. The Farm application
+controller is still being connected; its rendered scene has isolated pixel tests.
+
+## Scene materials, motion and static scope rules
+
+Physical scene lighting, environment sampling, filmic tone mapping, geometry
+roughness and instance normal transforms live in the shared DynLex UI library.
+Fragment derivatives are general float32 scalar/vector intrinsics with explicit
+axis, type and stage checks; LLVM calls retain convergent execution semantics.
+Actual derivative and lighting pixels pass WebGPU and WebGL checks.
+
+The browser runtime supplies `exp2` and `exp2f` when LLVM optimizes a power of two
+into those calls. The GLSL ES 3.0 path legalizes unsupported bit reversal to
+unsigned shifts and masks before Naga emits GLSL. Native SPIR-V and WGSL retain
+their supported operation. Import-free regressions cover both fixes.
+
+The Farm's procedural sky, physical material passes, filtered reflections, depth
+shadows, antialiasing and tone mapping are DynLex source. The GPU hosts execute
+the application's render graph and uploads. Explicit pass activation retains
+cached depth maps without another clear. Sky readers preserve their by-reference
+inputs, and water wave positions include the instance transform.
+
+Queued scene motion and immutable model attachments are shared library features.
+Motion tests compare 53 transitions with an independently recorded original model;
+native O0/O2 and both WebAssembly compiler paths pass. Farm character tests cover
+equipment changes without resetting poses, locomotion, chopping, arrivals,
+departures and ownership. Their scene objects join the same render and picking
+data as the landscape.
+
+Character development exposed an incremental compiler defect: skipping the body
+of an unused function also skipped its static numeric scope rule. A subsequent
+body edit could reject valid source or crash when a cached probe was committed.
+Scope-rule expressions now carry static type-constraint purpose, and inactive-body
+reuse skips runtime expressions only. The import-free edit regression is
+`scripts/test_incremental_scope_rules.py`; it runs through the required incremental
+suite. All 351 required tests and all 518 integration tests pass after the
+correction. The browser compiler rebuild and official Web smoke tests pass too.
+Farm controller integration continued after these compiler checks.
+
+Farm composition also exposed a result-schema inference defect. Forward references
+inferred a data section's shared `result` expression in place. A signature probe
+could retain its inferred type after its trial-local compile-time value had been
+discarded; the next probe rejected valid declarations or disagreed with committed
+inference. Result schemas now receive context-owned instances, matching body-field
+and receiver schemas. The import-free `data_section_result_probes` fixture covers
+independent signature probes of the same declared value. The native required suite
+passes all 352 cases after this correction.
+The rebuilt browser compiler and its official smoke tests pass as well.
+
+Farm's opening abort came from an exposed `action:farm` link without its
+application controller registration. Its route now initializes the saved document,
+editor and scene lazily. The Farm page uses its declared controls, the shared
+source workspace and program callbacks, and the DynLex scene renderer. Dispatcher tests cover opening,
+flags, work areas, playback, reset and gallery navigation. A captured-pointer
+profile-switch regression exposed a controller error: cancelling the gesture
+saved the old world after the new store had been selected. Presentation and
+persistence are now separate; cancellation cannot write progress. Reset and
+profile changes clear unfinished drawing and capture state. Both native-emitted
+Wasm and the shipped browser compiler pass these controller tests with no retained
+allocations.
+
+Actual page checks pass in WebGPU and WebGL with no WebGPU adapter. They open
+Farm through its homepage link, render the scene, run a turn, play/pause/reset,
+compile and apply the Lumberjack role through the shared compiler service, orbit
+the camera and return to the gallery. No runtime errors are reported. The
+verified build is live on the existing local preview server. Deployment migration
+and the remaining Farm execution annotations, overlays and saved-role rebuilding
+are still unfinished.
+
+Leaving Farm also cancels an in-flight role compilation. Previously only the
+simulation paused, so a late successful compilation could start playback after
+returning to the gallery or navigating to another page. The dispatcher regression
+starts a real compiler request through the role button and verifies its cancellation
+and complete allocation cleanup on exit.
+
+Integration time guards now account for cold compiler startup and the multiple
+targets in each group. A one-CPU comparison of the previous and current shipped
+compilers took 31.7 and 32.7 seconds for the same workspace-edit case, exceeding
+its old 30-second process limit; both compiled results match the expected output
+and release every allocation. The library target group includes three native
+compilations and a shipped-compiler invocation. Shader and Farm model groups also
+receive time for their complete sets of compilations and executions.
+
+Validation after Farm wiring: all 352 required compiler checks pass. The full
+integration run passed 515 checks; its three timed-out groups pass in focused
+reruns with the corrected guards. All 15 website controller cases pass, including
+the production input loop's queued-reply retirement with zero retained
+allocations. That fixture now uses the whole-application compilation budget,
+because its input dispatcher includes the Farm renderer and editor callbacks.

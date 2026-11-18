@@ -35,8 +35,9 @@ bool buildLLVMArtifact(
 }
 
 bool restoreLLVMArtifact(
-	ParseContext &context, const fs::path &directory, const fs::path &entry, const std::string &compilerIdentity,
-	const Json &options, Json &previous, BuildStatistics &statistics, bool generatedModuleAvailable, bool initializeTarget
+	ParseContext &context, const fs::path &directory, const ProgramPayloads &retainedPayloads, const fs::path &entry,
+	const std::string &compilerIdentity, const Json &options, Json &previous, BuildStatistics &statistics,
+	bool generatedModuleAvailable, bool initializeTarget
 ) {
 	statistics.llvmOutputKey = previous.at("llvm_output_key").get<std::string>();
 	if (auto text = readEntry(directory / ("llvm-output-" + statistics.llvmOutputKey + ".entry"))) {
@@ -47,7 +48,7 @@ bool restoreLLVMArtifact(
 		initializeOutputTarget(context);
 	if (!generatedModuleAvailable) {
 		auto start = Clock::now();
-		statistics.cachePayloadsLoaded += hydrateProgramField(previous, directory, "generated_ir");
+		statistics.cachePayloadsLoaded += hydrateProgramField(previous, retainedPayloads, "generated_ir");
 		statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(start);
 		restoreGeneratedModule(context, previous, entry);
 	}

@@ -1,0 +1,346 @@
+--- a/src/front/spv/mod.rs
++++ b/src/front/spv/mod.rs
+@@ -30,0 +31 @@
++mod early_merges;
+@@ -613 +614,3 @@
+-    data: I,
++    data: vec::IntoIter<u32>,
++    source: core::marker::PhantomData<I>,
++    early_merges: FastHashMap<spirv::Word, spirv::Word>,
+@@ -681 +684,3 @@
+-            data,
++            data: data.collect::<Vec<_>>().into_iter(),
++            source: core::marker::PhantomData,
++            early_merges: FastHashMap::default(),
+@@ -1723,0 +1729 @@
++        self.early_merges = early_merges::analyze(self.data.as_slice())?;
+--- a/src/front/spv/next_block.rs
++++ b/src/front/spv/next_block.rs
+@@ -2256 +2256,8 @@
+-                    selection_merge_block = Some(merge_block_id);
++                    // SPIR-V permits reconvergence before the declared merge.
++                    // End the child bodies at that first common continuation,
++                    // rather than letting its first incoming edge own it.
++                    let continuation = self.early_merges.get(&block_id).copied()
++                        .unwrap_or(merge_block_id);
++                    ctx.body_for_label.entry(continuation).or_insert(body_idx);
++                    ctx.mergers.insert(continuation, MergeBlockInformation::SelectionMerge);
++                    selection_merge_block = Some(continuation);
+--- /dev/null
++++ b/src/front/spv/early_merges.rs
+@@ -0,0 +1,315 @@
++//! Find implicit selection reconvergence before building lexical Naga bodies.
++//!
++//! A declared selection merge need not be its header's immediate postdominator.
++//! Shared blocks before that merge belong to the header's continuation, not the
++//! first child parsed. Analyze complete function CFGs so block order cannot pick
++//! their lexical owner. Loops and selections with exiting arms retain their
++//! declared boundaries; only a proven earlier postdominator is introduced.
++
++use super::Error;
++use crate::FastHashMap;
++use alloc::{vec, vec::Vec};
++
++#[derive(Default)]
++struct Block {
++    label: u32,
++    successors: Vec<u32>,
++    merge: Option<u32>,
++}
++
++fn instructions(mut words: &[u32]) -> Result<Vec<&[u32]>, Error> {
++    let mut result = Vec::new();
++    while !words.is_empty() {
++        let count = (words[0] >> 16) as usize;
++        if count == 0 {
++            return Err(Error::InvalidWordCount);
++        }
++        if count > words.len() {
++            return Err(Error::IncompleteData);
++        }
++        result.push(&words[..count]);
++        words = &words[count..];
++    }
++    Ok(result)
++}
++
++fn intersect(
++    mut left: usize,
++    mut right: usize,
++    ranks: &[usize],
++    parents: &[Option<usize>],
++) -> usize {
++    while left != right {
++        while ranks[left] > ranks[right] {
++            left = parents[left].unwrap();
++        }
++        while ranks[right] > ranks[left] {
++            right = parents[right].unwrap();
++        }
++    }
++    left
++}
++
++fn analyze_function(blocks: &[Block], result: &mut FastHashMap<u32, u32>) -> Result<(), Error> {
++    let exit = blocks.len();
++    if exit == 0 {
++        return Ok(());
++    }
++    let mut indices = FastHashMap::default();
++    for (index, block) in blocks.iter().enumerate() {
++        if indices.insert(block.label, index).is_some() {
++            return Err(Error::InvalidId(block.label));
++        }
++    }
++    let mut successors = Vec::with_capacity(exit + 1);
++    let mut reverse = vec![Vec::new(); exit + 1];
++    for (index, block) in blocks.iter().enumerate() {
++        let targets: Vec<_> = if block.successors.is_empty() {
++            vec![exit]
++        } else {
++            block
++                .successors
++                .iter()
++                .map(|label| indices.get(label).copied().ok_or(Error::InvalidId(*label)))
++                .collect::<Result<_, _>>()?
++        };
++        for &target in &targets {
++            reverse[target].push(index);
++        }
++        successors.push(targets);
++    }
++    successors.push(Vec::new());
++    // Reverse postorder of the reversed graph, rooted at a virtual function exit.
++    // Iterative DFS avoids using native stack space proportional to shader size.
++    let mut seen = vec![false; exit + 1];
++    let mut order = Vec::new();
++    let mut stack = vec![(exit, 0)];
++    seen[exit] = true;
++    while let Some((node, cursor)) = stack.last_mut() {
++        if *cursor < reverse[*node].len() {
++            let next = reverse[*node][*cursor];
++            *cursor += 1;
++            if !seen[next] {
++                seen[next] = true;
++                stack.push((next, 0));
++            }
++        } else {
++            order.push(*node);
++            stack.pop();
++        }
++    }
++    order.reverse();
++    let mut ranks = vec![usize::MAX; exit + 1];
++    for (rank, &node) in order.iter().enumerate() {
++        ranks[node] = rank;
++    }
++    let mut parents = vec![None; exit + 1];
++    parents[exit] = Some(exit);
++    loop {
++        let mut changed = false;
++        for &node in order.iter().skip(1) {
++            let mut established = successors[node]
++                .iter()
++                .copied()
++                .filter(|&next| parents[next].is_some());
++            let Some(mut parent) = established.next() else {
++                continue;
++            };
++            for next in established {
++                parent = intersect(parent, next, &ranks, &parents);
++            }
++            if parents[node] != Some(parent) {
++                parents[node] = Some(parent);
++                changed = true;
++            }
++        }
++        if !changed {
++            break;
++        }
++    }
++    for (index, block) in blocks.iter().enumerate() {
++        let Some(merge_label) = block.merge else {
++            continue;
++        };
++        let merge = *indices
++            .get(&merge_label)
++            .ok_or(Error::InvalidId(merge_label))?;
++        let Some(first) = parents[index] else {
++            continue;
++        };
++        if first == exit || first == merge {
++            continue;
++        }
++        // An early return/continue can leave the declared selection altogether.
++        // Introduce a continuation only when that declared merge postdominates
++        // this header, proving that the new boundary stays inside the construct.
++        let mut cursor = first;
++        while cursor != exit && cursor != merge {
++            cursor = parents[cursor].unwrap();
++        }
++        if cursor == merge {
++            result.insert(block.label, blocks[first].label);
++        }
++    }
++    Ok(())
++}
++
++/// `words` starts after the SPIR-V module header. The normal parser still owns
++/// instruction/type validation; this pass checks the operands it reads.
++pub(super) fn analyze(words: &[u32]) -> Result<FastHashMap<u32, u32>, Error> {
++    let instructions = instructions(words)?;
++    let mut integer_types = FastHashMap::default();
++    for instruction in &instructions {
++        if instruction[0] & 0xffff == 21 {
++            if instruction.len() != 4 {
++                return Err(Error::InvalidWordCount);
++            }
++            integer_types.insert(instruction[1], instruction[2]);
++        }
++    }
++    let mut widths = FastHashMap::default();
++    let mut in_function = false;
++    for instruction in &instructions {
++        let op = instruction[0] & 0xffff;
++        if op == 54 {
++            in_function = true;
++        }
++        // Within a function, a type ID in the first operand identifies a typed
++        // result. Outside functions, record integer constants as well. Debug and
++        // annotation operands must not be mistaken for result declarations.
++        if (in_function || (41..=52).contains(&op)) && instruction.len() >= 3 {
++            if let Some(&width) = integer_types.get(&instruction[1]) {
++                widths.insert(instruction[2], width);
++            }
++        }
++        if op == 56 {
++            in_function = false;
++        }
++    }
++    let mut blocks = Vec::<Block>::new();
++    let mut result = FastHashMap::default();
++    for instruction in instructions {
++        let op = instruction[0] & 0xffff;
++        match op {
++            54 => {
++                blocks.clear();
++                in_function = true;
++            }
++            56 => {
++                analyze_function(&blocks, &mut result)?;
++                in_function = false;
++            }
++            248 if in_function => {
++                if instruction.len() != 2 {
++                    return Err(Error::InvalidWordCount);
++                }
++                blocks.push(Block {
++                    label: instruction[1],
++                    ..Default::default()
++                });
++            }
++            247 | 249 | 250 | 251 if in_function => {
++                let block = blocks.last_mut().ok_or(Error::InvalidOperand)?;
++                match op {
++                    247 => {
++                        if instruction.len() != 3 {
++                            return Err(Error::InvalidWordCount);
++                        }
++                        block.merge = Some(instruction[1]);
++                    }
++                    249 => {
++                        if instruction.len() != 2 {
++                            return Err(Error::InvalidWordCount);
++                        }
++                        block.successors.push(instruction[1]);
++                    }
++                    250 => {
++                        if instruction.len() != 4 && instruction.len() != 6 {
++                            return Err(Error::InvalidWordCount);
++                        }
++                        block.successors.extend_from_slice(&instruction[2..4]);
++                    }
++                    251 => {
++                        if instruction.len() < 3 {
++                            return Err(Error::InvalidWordCount);
++                        }
++                        let width = *widths
++                            .get(&instruction[1])
++                            .ok_or(Error::InvalidId(instruction[1]))?;
++                        if width == 0 || width > 64 {
++                            return Err(Error::InvalidTypeWidth(width));
++                        }
++                        let step = 1 + width.div_ceil(32) as usize;
++                        if (instruction.len() - 3) % step != 0 {
++                            return Err(Error::InvalidWordCount);
++                        }
++                        block.successors.push(instruction[2]);
++                        block.successors.extend(
++                            instruction[3..]
++                                .chunks_exact(step)
++                                .map(|case| case[step - 1]),
++                        );
++                    }
++                    _ => unreachable!(),
++                }
++            }
++            _ => {}
++        }
++    }
++    Ok(result)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn diamond(order: &[u32]) -> Vec<Block> {
++        order
++            .iter()
++            .map(|&label| match label {
++                10 => Block {
++                    label,
++                    successors: vec![11, 12],
++                    merge: Some(30),
++                },
++                11 | 12 => Block {
++                    label,
++                    successors: vec![20],
++                    merge: None,
++                },
++                20 => Block {
++                    label,
++                    successors: vec![30],
++                    merge: None,
++                },
++                30 => Block {
++                    label,
++                    ..Default::default()
++                },
++                _ => unreachable!(),
++            })
++            .collect()
++    }
++
++    #[test]
++    fn early_joins_are_independent_of_binary_block_order() {
++        for order in [
++            [10, 11, 12, 20, 30],
++            [10, 12, 11, 20, 30],
++            [10, 11, 20, 30, 12],
++        ] {
++            let mut result = FastHashMap::default();
++            analyze_function(&diamond(&order), &mut result).unwrap();
++            assert_eq!(result.get(&10), Some(&20));
++        }
++    }
++
++    #[test]
++    fn returning_arm_has_no_shared_continuation() {
++        let mut blocks = diamond(&[10, 11, 12, 20, 30]);
++        blocks[1].successors.clear();
++        let mut result = FastHashMap::default();
++        analyze_function(&blocks, &mut result).unwrap();
++        assert!(result.is_empty());
++    }
++}

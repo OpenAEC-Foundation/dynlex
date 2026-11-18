@@ -43,6 +43,8 @@ Json captureClassInstantiations(const std::map<const Section *, std::string> &se
 }
 
 bool restoreClassInstantiations(const Json &saved, const std::map<std::string, Section *> &sections) {
+	if (saved.is_null())
+		return false;
 	std::map<std::string, ClassDefinition *> classes;
 	for (const auto &[path, entry] : saved.items()) {
 		auto found = sections.find(path);

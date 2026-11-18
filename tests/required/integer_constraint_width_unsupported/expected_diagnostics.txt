@@ -1,0 +1,3 @@
+tests/required/integer_constraint_width_unsupported/main.dl:53-60: Error: Intrinsic 'type' argument 2 must be an integer width within LLVM's type limit
+  note: while inferring intrinsic 'type' in '@intrinsic("type", "integer", 8388616)' with arguments [a pointer to a byte, a 32-bit integer] -> an unresolved value tests/required/integer_constraint_width_unsupported/main.dl:23-61
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", @intrinsic("type", "integer", 8388616))' with arguments [an unresolved value] -> an unresolved value tests/required/integer_constraint_width_unsupported/main.dl:1-62

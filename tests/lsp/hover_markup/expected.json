@@ -1,0 +1,17 @@
+[
+  {
+    "line": 0,
+    "character": 23,
+    "value": "type:\n\n```dynlex\na pointer to a byte\n```\n\nvalue: ```\"a`b``c\"```"
+  },
+  {
+    "line": 1,
+    "character": 23,
+    "value": "type:\n\n```dynlex\na pointer to a byte\n```\n\nvalue: `\"\\\"quoted\\\"\\\\path\\n\\t\\r\\a\\b\\f\\v\\0 😀\"`"
+  },
+  {
+    "line": 3,
+    "character": 22,
+    "value": "type:\n\n```dynlex\na 32-bit integer\n```\n\nvalue: `7`"
+  }
+]

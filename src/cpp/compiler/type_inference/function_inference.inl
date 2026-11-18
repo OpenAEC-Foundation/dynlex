@@ -69,32 +69,7 @@ static bool definitionsHaveUnresolvedTypeConstraints(const std::vector<PatternDe
 #include "execution_state.inl"
 #include "inference_failure_products.inl"
 
-// Reuse a binding only when inferring it made no execution-state change and
-// that exact state still holds. Mutating arguments are replayed at their use.
-struct InferredArgumentScope {
-	struct Input {
-		InferenceExecutionSnapshot state;
-		DataType type;
-	};
-	InferenceContext &context;
-	const InferredArgumentScope *parent;
-	std::unordered_map<Expression *, Input> unchanged;
-
-	explicit InferredArgumentScope(InferenceContext &context) : context(context), parent(context.inferredArguments) {
-		context.inferredArguments = this;
-	}
-	~InferredArgumentScope() { context.inferredArguments = parent; }
-
-	bool reusable(Expression *expression) const {
-		for (auto *scope = this; scope; scope = scope->parent) {
-			auto found = scope->unchanged.find(expression);
-			if (found != scope->unchanged.end() && found->second.type == expression->type &&
-				found->second.state.matches(context))
-				return true;
-		}
-		return false;
-	}
-};
+#include "inferred_arguments.inl"
 
 struct InstantiationProgressSnapshot {
 	DataType returnType;

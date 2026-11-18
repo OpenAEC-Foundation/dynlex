@@ -1,0 +1,1 @@
+Integer digits, padding, extrema and large numbers are independent of pointer width.

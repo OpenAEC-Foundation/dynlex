@@ -1,0 +1,67 @@
+// Compile source snapshots with the compiler shipped to browser projects.
+import { readFile, writeFile, mkdir, mkdtemp, cp, rm } from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {execFileSync} from 'node:child_process';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+import { createWgslTranslator } from '../web/wgsl-translator.js';
+
+const [requestFile, outputArgument, compilerArgument = fileURLToPath(new URL('../src/web/ide/public/compiler/', import.meta.url))] = process.argv.slice(2);
+if (!requestFile || !outputArgument) throw new Error('Usage: compile_project.mjs <project.json> <output> [compiler directory]');
+const request = JSON.parse(await readFile(requestFile, 'utf8'));
+const directory = path.resolve(compilerArgument);
+const factory = (await import(pathToFileURL(path.join(directory, 'dynlex_web.js')).href)).default;
+const compiler = await factory({ locateFile: name => path.join(directory, name) });
+const call = (name, result = null, types = [], values = []) => compiler.ccall(name, result, types, values);
+const json = name => JSON.parse(call(name, 'string'));
+function checked(name, types = [], values = []) {
+  if (call(name, 'number', types, values) !== 0)
+    throw new Error(JSON.stringify({ diagnostics: json('dynlex_web_get_diagnostics_json'),
+      log: json('dynlex_web_get_compiler_log_json') }));
+}
+call('dynlex_web_init');
+checked('dynlex_web_set_import_sources', ['string'], [JSON.stringify(request.sources)]);
+const jobs = request.jobs ?? [{ entry: request.entry, kind: 'wasm', output: path.basename(outputArgument) }];
+const output = request.jobs ? path.resolve(outputArgument) : path.dirname(path.resolve(outputArgument));
+const nativeCompiler=process.env.DYNLEX_PROJECT_COMPILER;
+if(nativeCompiler && !path.isAbsolute(nativeCompiler)) throw new Error('DYNLEX_PROJECT_COMPILER must be an absolute executable path');
+let translator, workspace;
+try {
+if (nativeCompiler) {
+  workspace = await mkdtemp(path.join(os.tmpdir(),'dynlex-project-'));
+  await cp(new URL('../lib/',import.meta.url),path.join(workspace,'lib'),{recursive:true});
+  // The compiler service validated normalized, relative source paths above.
+  for (const [name,source] of Object.entries(request.sources)) {
+    const file=path.join(workspace,name);
+    await mkdir(path.dirname(file),{recursive:true});
+    await writeFile(file,source);
+  }
+}
+for (const job of jobs) {
+  const started = performance.now();
+  checked('dynlex_web_set_entry_file', ['string'], [job.entry]);
+  const target = path.join(output, job.output);
+  await mkdir(path.dirname(target), { recursive: true });
+  if (job.kind === 'wasm') {
+    if (workspace) {
+      const options=job.traced?['--trace-execution']:[];
+      execFileSync(nativeCompiler,[path.join(workspace,job.entry),'--emit-wasm','-O2',...options,'-o',target],{cwd:workspace,stdio:'inherit'});
+    } else {
+      checked(job.traced ? 'dynlex_web_compile_and_emit_wasm_traced' : 'dynlex_web_compile_and_emit_wasm');
+      await writeFile(target, Buffer.from(call('dynlex_web_get_output_wasm_base64', 'string'), 'base64'));
+    }
+  } else if (job.kind === 'shader') {
+    translator ??= await createWgslTranslator(await readFile(path.join(directory, 'dynlex_wgsl_translator.wasm')));
+    checked('dynlex_web_compile_and_emit_shader_spirv', ['string'], [job.stage]);
+    const bytes = Buffer.from(call('dynlex_web_get_output_shader_spirv_base64', 'string'), 'base64');
+    const translated = translator.translateBoth(bytes, job.stage);
+    await writeFile(target + '.wgsl', translated.webgpu);
+    await writeFile(target + '.glsl', translated.webgl);
+    await writeFile(target + '.json', JSON.stringify({...json('dynlex_web_get_shader_reflection_json'),
+      glslBindings: translated.bindings, glslUniforms: translated.uniforms}) + '\n');
+  } else throw new Error(`Unknown output kind: ${job.kind}`);
+  console.log(`Compiled ${job.entry} → ${job.output} (${Math.round(performance.now() - started)} ms)`);
+}
+} finally {
+  if(workspace) await rm(workspace,{recursive:true,force:true});
+}

@@ -156,7 +156,7 @@ static std::string renderResolvedExpression(Expression *expr) {
 		if (const auto *number = std::get_if<double>(&expr->literalValue))
 			return std::to_string(*number);
 		if (const auto *text = std::get_if<std::string>(&expr->literalValue))
-			return "\"" + *text + "\"";
+			return quotedSourceString(*text);
 		return "<literal>";
 	case Expression::Kind::ArgumentPack:
 		return std::string(expr->range.subString);
@@ -649,8 +649,7 @@ class GroupingInferenceTransaction {
 		  savedGroupingTrialJournal(context.groupingTrialJournal), savedGroupingTrace(context.groupingTrace),
 		  savedFixedGroupingRoots(context.fixedGroupingRoots), savedResolvedGroupingRoots(context.resolvedGroupingRoots),
 		  savedDetectGroupingAmbiguity(context.detectGroupingAmbiguity), savedPendingDiagnostics(context.pendingDiagnostics),
-		  savedExpressionStack(context.expressionStack),
-		  savedInheritedTrialExpressionValues(context.inheritedTrialExpressionValues),
+		  savedExpressionStack(context.expressionStack), savedInheritedTrialContext(context.inheritedTrialContext),
 		  trialFixedGroupingRoots(fixedGroupingRoots),
 		  trialFixedGroupingScope{trialFixedGroupingRoots, savedFixedGroupingRoots} {
 		context.trial = true;
@@ -771,7 +770,7 @@ class GroupingInferenceTransaction {
 	bool savedDetectGroupingAmbiguity;
 	std::vector<Diagnostic> *savedPendingDiagnostics;
 	std::vector<InferenceContext::ExpressionFrame> savedExpressionStack;
-	const std::unordered_map<Expression *, CompileTimeValue> *savedInheritedTrialExpressionValues;
+	const InferenceContext *savedInheritedTrialContext;
 	std::unordered_set<Expression *> trialFixedGroupingRoots;
 	InferenceContext::FixedGroupingScope trialFixedGroupingScope;
 	std::vector<Diagnostic> queuedDiagnostics;
@@ -786,7 +785,7 @@ class GroupingInferenceTransaction {
 		context.resolvedGroupingRoots = savedResolvedGroupingRoots;
 		context.detectGroupingAmbiguity = savedDetectGroupingAmbiguity;
 		context.pendingDiagnostics = savedPendingDiagnostics;
-		context.inheritedTrialExpressionValues = savedInheritedTrialExpressionValues;
+		context.inheritedTrialContext = savedInheritedTrialContext;
 	}
 
 	void restoreSavedState() {

@@ -1,0 +1,1 @@
+@intrinsic("discard", @intrinsic("type", "int", 8388616))

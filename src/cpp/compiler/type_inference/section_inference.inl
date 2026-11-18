@@ -122,6 +122,7 @@ static bool inferSectionLineRange(
 	auto inferLineExpression = [&](CodeLine *line, Expression *&lineExpression) {
 		if (!lineExpression)
 			return true;
+		ScopedRecursiveInferenceObservation lineObservation(context, context.currentInstantiation);
 		observeCodeLineGrouping(line, context);
 		applyCodeLineGrouping(line, lineExpression, context);
 		bool alreadyOrdered = codeLineCanReuseGrouping(line, context);
@@ -132,7 +133,10 @@ static bool inferSectionLineRange(
 			context.typesValid = false;
 			return false;
 		}
-		commitCodeLineGrouping(line, lineExpression, context, ambiguityChecked);
+		// A recursive operand can leave more than one grouping provisional.
+		// Reconsider them once the owning body pass supplies its return type.
+		if (!lineObservation.observed())
+			commitCodeLineGrouping(line, lineExpression, context, ambiguityChecked);
 		bool finalReplacementValue = section->type == SectionType::Replacement && line == section->codeLines.back();
 		if (!finalReplacementValue && !consumeStatementMemoryFacts(lineExpression, context))
 			return false;
@@ -457,6 +461,15 @@ static bool inferSectionLineRange(
 			auto constantsAfterFirstIteration = context.currentVariableValues;
 			auto addressesAfterFirstIteration = context.currentAddressState;
 			auto subjectAfterFirstIteration = context.currentSubject;
+			// The exit state can exploit a guaranteed first iteration. Runtime
+			// body annotations must still describe that first entry as well as
+			// every later entry, including a later pass which returns.
+			auto runtimeConstants = constantsAtLoopEntry;
+			auto runtimeAddresses = addressesAtLoopEntry;
+			auto runtimeSubject = subjectAtLoopEntry;
+			auto annotatedConstants = constantsAtLoopEntry;
+			auto annotatedAddresses = addressesAtLoopEntry;
+			auto annotatedSubject = subjectAtLoopEntry;
 			const auto &baseConstants = firstIterationGuaranteed ? constantsAfterFirstIteration : constantsAtLoopEntry;
 			const auto &baseAddresses = firstIterationGuaranteed ? addressesAfterFirstIteration : addressesAtLoopEntry;
 			const auto &baseSubject = firstIterationGuaranteed ? subjectAfterFirstIteration : subjectAtLoopEntry;
@@ -480,6 +493,21 @@ static bool inferSectionLineRange(
 				auto constantsAtIterationEntry = context.currentVariableValues;
 				auto addressesAtIterationEntry = context.currentAddressState;
 				auto subjectAtIterationEntry = context.currentSubject;
+				if (firstIterationGuaranteed) {
+					mergeExecutionStates(
+						context, {runtimeConstants, constantsAtIterationEntry}, {runtimeAddresses, addressesAtIterationEntry},
+						{runtimeSubject, subjectAtIterationEntry}
+					);
+					runtimeConstants = context.currentVariableValues;
+					runtimeAddresses = context.currentAddressState;
+					runtimeSubject = context.currentSubject;
+					context.currentVariableValues = constantsAtIterationEntry;
+					context.currentAddressState = addressesAtIterationEntry;
+					context.currentSubject = subjectAtIterationEntry;
+				}
+				annotatedConstants = constantsAtIterationEntry;
+				annotatedAddresses = addressesAtIterationEntry;
+				annotatedSubject = subjectAtIterationEntry;
 				bool iterationFallsThrough = true;
 				if (!inferSectionLineRange(
 						section, body, openingExpression, context, bindingFrameStack, startLineIndex, false,
@@ -510,6 +538,20 @@ static bool inferSectionLineRange(
 			}
 			if (firstIterationGuaranteed && sectionFallsThrough)
 				openingExpression->sectionOutcome.write().conditionValue = {};
+			if (firstIterationGuaranteed && (runtimeConstants != annotatedConstants || runtimeAddresses != annotatedAddresses ||
+											 runtimeSubject != annotatedSubject)) {
+				InferenceExecutionSnapshot exitState(context);
+				context.currentVariableValues = std::move(runtimeConstants);
+				context.currentAddressState = std::move(runtimeAddresses);
+				context.currentSubject = runtimeSubject;
+				bool runtimeBodyFallsThrough = true;
+				if (!inferSectionLineRange(
+						section, body, openingExpression, context, bindingFrameStack, startLineIndex, false,
+						&runtimeBodyFallsThrough, false
+					))
+					return false;
+				exitState.restoreState(context);
+			}
 		}
 	}
 	if (fallsThrough)

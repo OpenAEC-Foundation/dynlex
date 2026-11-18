@@ -1,0 +1,4 @@
+@intrinsic("store", answer, 1)
+@intrinsic("discard", answer)
+@intrinsic("store", answer, 2)
+@intrinsic("discard", answer)

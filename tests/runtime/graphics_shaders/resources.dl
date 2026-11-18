@@ -1,0 +1,27 @@
+false means: @intrinsic("equal", 0, 1)
+true means: @intrinsic("equal", 0, 0)
+
+function:
+    patterns:
+        image binding {@intrinsic("fix", @intrinsic("type", "string")):name} at {@intrinsic("fix", @intrinsic("type", "int", 32)):slot}
+    execute:
+        @intrinsic("return", @intrinsic("shader image", name, slot, "2d", false))
+
+function:
+    patterns:
+        sample {@intrinsic("fix", @intrinsic("type", "shader image")):image} with {@intrinsic("fix", @intrinsic("type", "shader sampler")):sampler} at {uv}
+    execute:
+        @intrinsic("return", @intrinsic("shader sample level", image, sampler, uv, 0.0))
+
+@intrinsic("store", {albedo}, image binding "albedo" at 1)
+@intrinsic("store", {detail}, image binding "detail 🌽" at 6)
+@intrinsic("store", {sky}, @intrinsic("shader image", "sky", 2, "cube", false))
+@intrinsic("store", {shadow}, @intrinsic("shader image", "shadow", 3, "2d", true))
+@intrinsic("store", {linear sampler}, @intrinsic("shader sampler", "linear", 4, false))
+@intrinsic("store", {shadow sampler}, @intrinsic("shader sampler", "comparison", 5, true))
+@intrinsic("store", {uv}, @intrinsic("shader uniform", "uv", 0, @intrinsic("vector", 2)))
+@intrinsic("store", {paint}, sample albedo with linear sampler at uv)
+@intrinsic("store", {pattern}, sample detail with linear sampler at uv)
+@intrinsic("store", {environment}, @intrinsic("shader sample level", sky, linear sampler, @intrinsic("construct", @intrinsic("vector", 3), 1.0, 0.0, 0.0), 1.0))
+@intrinsic("store", {visibility}, @intrinsic("shader sample compare", shadow, shadow sampler, uv, 0.5))
+@intrinsic("shader output", @intrinsic("multiply", @intrinsic("add", @intrinsic("add", paint, pattern), environment), visibility))

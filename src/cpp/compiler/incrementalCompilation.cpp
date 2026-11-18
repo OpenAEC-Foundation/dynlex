@@ -13,6 +13,7 @@
 #include "dataSections.h"
 #include "expression.h"
 #include "expressionCapture.h"
+#include "incrementalCacheEntry.h"
 #include "incrementalClassRestoration.h"
 #include "incrementalDebugIR.h"
 #include "incrementalGraphCodec.h"
@@ -101,9 +102,9 @@
 namespace {
 using Json = nlohmann::json;
 namespace fs = std::filesystem;
-constexpr std::string_view cacheHeader = "DynLex incremental cache v1\n";
+constexpr std::string_view cacheHeader = IncrementalCacheEntry::header;
+constexpr uintmax_t maximumEntryBytes = IncrementalCacheEntry::maximumBytes;
 constexpr std::string_view parserIndexPrefix = "parser-index-";
-constexpr uintmax_t maximumEntryBytes = 256 * 1024 * 1024;
 constexpr uintmax_t maximumCacheBytes = 512 * 1024 * 1024;
 using Clock = std::chrono::steady_clock;
 
@@ -146,28 +147,11 @@ bool recordCacheAccess(const fs::path &path) {
 }
 
 std::optional<std::string> readEntry(const fs::path &path) {
-	std::error_code error;
-	if (!fs::exists(path, error)) {
-		if (error)
-			throw fs::filesystem_error("cannot inspect cache entry", path, error);
+	auto entry = IncrementalCacheEntry::open(path);
+	if (!entry)
 		return std::nullopt;
-	}
-	std::string entry;
-	try {
-		entry = readFile(path);
-	} catch (const fs::filesystem_error &exception) {
-		if (exception.code() == std::errc::no_such_file_or_directory)
-			return std::nullopt; // Another build may have evicted this entry.
-		throw;
-	}
-	const size_t payloadOffset = cacheHeader.size() + 65;
-	if (entry.size() < payloadOffset || !entry.starts_with(cacheHeader) || entry[payloadOffset - 1] != '\n' ||
-		digest(std::string_view(entry).substr(payloadOffset)) != entry.substr(cacheHeader.size(), 64))
-		throw std::runtime_error("corrupt cache entry: " + path.string());
-	// Cache eviction tracks successful access, including reused optimization
-	// units whose contents need no rewrite during an edited build.
-	recordCacheAccess(path);
-	return entry.substr(payloadOffset);
+	(void)recordCacheAccess(path);
+	return std::string(entry->payload());
 }
 
 void writeEntry(const fs::path &path, std::string_view payload) {
@@ -219,7 +203,6 @@ void recordSemanticSources(Json &result, RecordingFileSystem &files, const Parse
 	}
 }
 
-#include "incrementalSectionIdentity.inl"
 bool containsNestedDefinition(const Section &section) {
 	for (const Section *child : section.children) {
 		if (!child->patternDefinitions.empty() || containsNestedDefinition(*child))
@@ -250,6 +233,7 @@ Json inactiveFunctionSections(const ParseContext &context, const std::map<std::s
 
 #include "incrementalDeclarationCodec.inl"
 #include "incrementalResolvedDeclaration.inl"
+#include "incrementalSectionIdentity.inl"
 
 bool reusableCodegenSection(const Section &section) {
 	if (section.type == SectionType::Retain || section.type == SectionType::Release)
@@ -415,6 +399,7 @@ bool compileIncrementally(
 		statistics.parserIndexEntry = parserIndexEntry.string();
 		bool success = false;
 		std::optional<Json> previous;
+		ProgramPayloads retainedPayloads;
 		std::optional<Json> previousFailure;
 		bool reusePreviousFrontend = false;
 		bool reuseFailedFrontend = false;
@@ -436,7 +421,7 @@ bool compileIncrementally(
 				previousMatcherKey = previousFailure->at("matcher_key").get<std::string>();
 		}
 		if (!reuseFailedFrontend) {
-			if (auto cached = readProgramManifest(programEntry)) {
+			if (auto cached = readProgramManifest(programEntry, retainedPayloads)) {
 				summaryStore.observe(
 					cached->at("inference_summary_keys"), cached->at("inference_body_keys"), cached->at("inference_class_keys")
 				);
@@ -471,7 +456,8 @@ bool compileIncrementally(
 				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
 				context.requiredLibraries.insert(libraries.begin(), libraries.end());
 				success = restoreCompilerOutput(
-					context, directory, programEntry, compilerIdentity, options, libraries, statistics, *previous, false, true
+					context, directory, retainedPayloads, programEntry, compilerIdentity, options, libraries, statistics,
+					*previous, false, true
 				);
 			}
 			if (success &&
@@ -489,11 +475,12 @@ bool compileIncrementally(
 		} else {
 			if (previous) {
 				auto payloadStart = Clock::now();
-				statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "all_function_projection");
+				statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "all_function_projection");
 				statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 			}
 			const Json *frontendState = selectFrontendReuseState(
-				previous ? &*previous : nullptr, previousFailure ? &*previousFailure : nullptr, directory, statistics
+				previous ? &*previous : nullptr, previousFailure ? &*previousFailure : nullptr, directory, retainedPayloads,
+				statistics
 			);
 			auto restoreStart = Clock::now();
 			recording->observations = Json::object();
@@ -570,7 +557,7 @@ bool compileIncrementally(
 				Json records = Json::object();
 				if (previous) {
 					auto start = Clock::now();
-					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "validation_units");
+					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "validation_units");
 					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(start);
 					records = previous->at("validation_units");
 				}
@@ -746,7 +733,8 @@ bool compileIncrementally(
 					statistics.objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 				} else {
 					success = restoreCompilerOutput(
-						context, directory, programEntry, compilerIdentity, options, libraries, statistics, *previous
+						context, directory, retainedPayloads, programEntry, compilerIdentity, options, libraries, statistics,
+						*previous
 					);
 				}
 				if (success) {
@@ -896,12 +884,12 @@ bool compileIncrementally(
 							emitted = true;
 						} else
 							emitted = restoreCompilerOutput(
-								compiled, directory, programEntry, compilerIdentity, options, libraries, statistics, *previous,
-								true
+								compiled, directory, retainedPayloads, programEntry, compilerIdentity, options, libraries,
+								statistics, *previous, true
 							);
 					} else
 						emitted = buildCompilerOutput(
-							compiled, directory, compilerIdentity, options, libraries, statistics,
+							compiled, directory, retainedPayloads, compilerIdentity, options, libraries, statistics,
 							result.at("generated_ir").get_ref<const std::string &>(), previous ? &*previous : nullptr,
 							functionReuse.get()
 						);

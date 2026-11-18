@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 from test_incremental_dependency_graph import check_cross_file_typed_overload, check_deferred_match_key_replay, check_independent_constraint_probes, check_skipped_constraint_expression_retention, check_class_constraint_value_reuse, check_header_parameter_constraint_owner, check_precedence_match_key_replay, check_folded_value_remains_active, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_resolved_declaration_snapshot_reuse, check_reused_ir_dependency_graph_variants, check_runtime_pure_value_summary, check_temporary_expression_parse_reuse, check_top_level_projection_reuse, check_top_level_execution_constraint_probes, check_unrelated_added_pattern_constraint_probes
-from test_incremental_program_cache import check_integration_builds, check_program_payloads, check_cache_eviction, check_recent_cache_entries, check_graph_encoding, check_corrupt_object_entry
+from test_incremental_program_cache import check_integration_builds, check_program_payloads, check_cache_eviction, check_recent_cache_entries, check_shared_class_type_graph, check_graph_encoding, check_corrupt_object_entry
 from test_incremental_frontend_diagnostic_owners import check_frontend_diagnostic_units
 from test_incremental_match_replay import check_choice_declaration_replay, check_deferred_body_match_replay, check_flex_body_match_replay
 from test_incremental_native_units import check_interned_literal_identity, check_native_partition_edits
@@ -18,6 +18,7 @@ from test_incremental_projection_stages import check_comment_inactive_active_seq
 from test_default_incremental_cache import check_default_cache
 from test_incremental_optimized_ir import check_optimized_function_reuse
 from test_incremental_optimization_units import check_optimization_units
+from test_incremental_scope_rules import check_scope_rule_after_local_edit
 from test_incremental_body_activation import check_inactive_body_activation
 from test_incremental_storage_origins import check_storage_origin_reuse
 from test_incremental_conversions import check_conversion_reuse
@@ -40,6 +41,7 @@ from test_incremental_lifecycle_replacements import check_lifecycle_replacement_
 from test_incremental_root_execution import check_local_function_symbols, check_root_class_reuse, check_root_execution_reuse, check_static_function_dependency
 from test_incremental_body_units import check_body_resolution_units
 from test_incremental_section_analysis import check_section_analysis_work
+from test_incremental_import_edits import check_source_and_import_edits
 from test_incremental_native_codegen import check_optimized_native_codegen
 from test_incremental_classification import check_recursive_classification_cascade, check_incremental_classification
 from test_incremental_effect_cascade import check_bounded_effect_cascade
@@ -48,7 +50,10 @@ from test_incremental_data_initializers import check_global_data_initializers
 from test_incremental_grouping_state import check_grouping_state
 
 project = Path(sys.argv[1]).resolve()
-integration_mode = sys.argv[2:] == ["--integration"]
+mode = sys.argv[2:]
+if mode not in ([], ["--integration"], ["--required-base"], ["--required-dependencies"]):
+    raise SystemExit("Expected --integration, --required-base, --required-dependencies, or no mode")
+integration_mode = mode == ["--integration"]
 # Most counter checks use O0 so native body dependency shortcuts are observable.
 # Dedicated optimized checks also exercise function reuse at every optimized level.
 optimization_flags = () if integration_mode else ("-O0",)
@@ -92,17 +97,29 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         print("Incremental native integration builds passed")
         raise SystemExit(0)
 
+    if mode != ["--required-base"]:
+        check_root_execution_reuse(root, build)
+        check_storage_origin_reuse(root, build)
+        check_body_materialization(root, build)
+        check_incremental_classification(root, build)
+        check_independent_constraint_probes(root, build)
+        check_leaf_dependency_cascade(root, build)
+        check_native_partition_edits(root, build)
+        if mode == ["--required-dependencies"]:
+            print("Incremental dependency and native-unit checks passed")
+            raise SystemExit(0)
+
     check_default_cache(compiler, root / "automatic-cache")
+    check_scope_rule_after_local_edit(root, build)
+    check_shared_class_type_graph(root, build)
     check_recent_cache_entries(root, build)
     check_optimized_function_reuse(root, build)
     check_optimization_units(root, build)
     check_body_resolution_units(root, build)
     check_section_analysis_work(root, build)
     check_optimized_native_codegen(root, build)
-    check_root_execution_reuse(root, build)
     check_root_class_reuse(root, build)
     check_inactive_body_activation(root, build)
-    check_storage_origin_reuse(root, build)
     check_conversion_reuse(root, build)
     check_matcher_fingerprint_work(root, build)
     check_source_observation_reuse(root, build)
@@ -113,7 +130,6 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_capture_note_wording(root, build)
     check_diagnostic_stage_reuse(root, build)
     check_variable_binding_units(root, build)
-    check_body_materialization(root, build)
     check_body_syntax_products(root, build)
     check_inference_failures(root, build)
     check_grouping_state(root, build)
@@ -125,7 +141,6 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_entry_metadata_reuse(root, build)
     check_active_resolution_units(root, build)
     check_definition_resolution_units(root, build)
-    check_incremental_classification(root, build)
     check_lifecycle_replacement_roots(root, build)
     check_local_function_symbols(root, build)
     check_static_function_dependency(root, build)
@@ -522,7 +537,6 @@ function left times right:
     assert scope_edit[0]["functions_ir_reused"] == 0, "file number-rule edit retained stale function IR"
     assert scope_edit[1:] == build(False, entry=scope_main)[1:], "file number-rule edit differs from clean build"
     check_temporary_expression_parse_reuse(root, build)
-    check_independent_constraint_probes(root, build)
     check_skipped_constraint_expression_retention(root, build)
     check_class_constraint_value_reuse(root, build)
     check_unrelated_added_pattern_constraint_probes(root, build)
@@ -532,7 +546,6 @@ function left times right:
     check_inferred_section_dependencies(root, build)
     check_callable_trial_dependencies(root, build)
     check_global_data_initializers(root, build)
-    check_leaf_dependency_cascade(root, build)
     check_resolved_declaration_snapshot_reuse(root, build)
     specific_main = root / "specific_addition.dl"
     specific_base = ('integer means: @intrinsic("type", "int")\n'
@@ -752,7 +765,6 @@ function left times right:
     check_comment_inactive_active_sequence(root, build)
     check_nested_inactive_stage_retention(root, build)
     check_typed_variant_dependency_retention(root, build)
-    check_native_partition_edits(root, build)
 
     class_main = root / "class_main.dl"
     class_source = ('integer means: @intrinsic("type", "int")\n'
@@ -958,33 +970,7 @@ function left times right:
 
     check_configured_source_comments(root, main, build)
 
-    original_time = main.stat().st_mtime_ns
-    main.write_text("this is an undefined expression\n")
-    os.utime(main, ns=(original_time, original_time))
-    broken = build(success=False)
-    reference = build(False, success=False)
-    assert broken[1] == reference[1], "invalid source reused old diagnostics or code"
-    main.write_text(source)
-    assert build()[1:] == build(False)[1:]
-
-    nested = root / "nested"
-    nested.mkdir()
-    imported_main = nested / "main.dl"
-    imported_main.write_text("import helper.dl\n")
-    helper = root / "helper.dl"
-    helper.write_text(source)
-    first_import = build(entry=imported_main)
-    assert first_import[1:] == build(False, entry=imported_main)[1:]
-    assert build(entry=imported_main)[0]["frontend_reused"]
-    (nested / "helper.dl").write_text(source.replace('"alpha"))', '"delta"))'))
-    shadow = build(entry=imported_main)
-    assert not shadow[0]["frontend_reused"], "new higher-priority import was ignored"
-    assert shadow[1:] == build(False, entry=imported_main)[1:]
-    (nested / "helper.dl").unlink()
-    helper.write_text(source.replace('"alpha"))', '"omega"))'))
-    assert build(entry=imported_main)[1:] == build(False, entry=imported_main)[1:]
-    helper.unlink()
-    assert build(success=False, entry=imported_main)[1] == build(False, success=False, entry=imported_main)[1]
+    check_source_and_import_edits(root, main, source, build)
 
     main.write_text(source)
     build()

@@ -10,6 +10,7 @@
 #include "debugTypeProducts.h"
 #include "executionTrace.h"
 #include "expression.h"
+#include "functionCodegenScope.h"
 #include "intrinsicInfo.h"
 #include "llvmOutput.h"
 #include "native.h"
@@ -151,7 +152,7 @@ llvm::Function *generateSpecializedFunction(
 	llvm::FunctionType *funcType = llvm::FunctionType::get(returnType, paramTypes, false);
 
 	// Name includes type signature for uniqueness
-	std::string funcName = getPatternFunctionName(section);
+	std::string funcName = getPatternName(section);
 	for (const DataType &t : argTypes) {
 		funcName += "_" + encodeLLVMNameComponent(t.toString());
 	}
@@ -199,35 +200,11 @@ llvm::Function *generateSpecializedFunction(
 
 	llvm::BasicBlock *entry = llvm::BasicBlock::Create(*context.llvmContext, "entry", func);
 
-	// Save all codegen state
-	llvm::BasicBlock *savedBlock = builder.GetInsertBlock();
-	llvm::BasicBlock::iterator savedPoint = builder.GetInsertPoint();
-	llvm::DebugLoc savedDebugLoc = builder.getCurrentDebugLocation();
-	auto savedCodegenParameterBindings = context.codegenParameterBindings;
-	auto savedCodegenParameterDefinitions = context.codegenParameterDefinitions;
-	// Another storage ABI can recursively generate this same inferred body.
-	// Its local addresses and subjects belong to its own LLVM function.
-	auto savedVariableStorage = context.variableStorage;
-	auto savedSubjectStorage = std::move(context.subjectStorage);
-	context.subjectStorage.clear();
-	llvm::Value *savedManagedLifecycleValueBinding = context.managedLifecycleValueBinding;
-	const Instantiation *savedCodegenInstantiation = context.currentCodegenInstantiation;
-	BindingFrameStack savedFlexBindingFrames = context.flexBindingFrames;
-	std::vector<ParseContext::ManagedStorageState> savedManagedLocalStorage = std::move(context.managedLocalStorage);
-	context.managedLocalStorage.clear();
-	// Function bodies must not see caller-side flex bindings or blame their
-	// diagnostics on the caller's flex expansion.
-	context.flexBindingFrames = makeBindingFrameStack(BindingFrame{});
-	std::vector<Range> savedFlexCallSiteRanges = std::move(context.flexCallSiteRangeStack);
-	context.flexCallSiteRangeStack.clear();
-
+	FunctionCodegenScope functionScope(context, savedDebugScope);
 	builder.SetInsertPoint(entry);
 	builder.SetCurrentDebugLocation({});
 
 	// Set up parameter bindings by declaration identity.
-	context.codegenParameterBindings.clear();
-	context.codegenParameterDefinitions.clear();
-	context.managedLifecycleValueBinding = nullptr;
 	requireCompilerInvariant(activeInst.argumentTypes == argTypes, "Codegen argTypes diverged from instantiation signature");
 	std::vector<VariableReference *> parameterDefinitions(paramBindings.size());
 	for (size_t parameterIndex = 0; parameterIndex < paramBindings.size(); parameterIndex++) {
@@ -284,27 +261,12 @@ llvm::Function *generateSpecializedFunction(
 
 	// Add implicit void return if the function returns void
 	if (bodySucceeded && activeInst.returnType.kind == DataType::Kind::Void && !builder.GetInsertBlock()->hasTerminator()) {
-		bodySucceeded = releaseManagedStorageForReturn(context);
-		if (bodySucceeded)
-			builder.CreateRetVoid();
+		bodySucceeded = emitManagedFunctionReturn(context);
 	}
 
 	// Restore all codegen state
-	context.flexBindingFrames = savedFlexBindingFrames;
-	context.flexCallSiteRangeStack = std::move(savedFlexCallSiteRanges);
-	context.codegenParameterBindings = std::move(savedCodegenParameterBindings);
-	context.codegenParameterDefinitions = std::move(savedCodegenParameterDefinitions);
-	context.variableStorage = std::move(savedVariableStorage);
-	context.subjectStorage = std::move(savedSubjectStorage);
-	context.managedLifecycleValueBinding = savedManagedLifecycleValueBinding;
-	context.currentCodegenInstantiation = savedCodegenInstantiation;
-	context.currentDebugScope = savedDebugScope;
-	context.managedLocalStorage = std::move(savedManagedLocalStorage);
-
-	if (savedBlock) {
-		builder.SetInsertPoint(savedBlock, savedPoint);
-		builder.SetCurrentDebugLocation(savedDebugLoc);
-	}
+	if (bodySucceeded)
+		bodySucceeded = finalizeManagedFunctionReturn(context);
 	return bodySucceeded ? func : nullptr;
 }
 
@@ -446,6 +408,8 @@ bool emitSectionFlexCallerBody(
 #include "codegenLiteralValues.inl"
 
 // Generate code for an expression
+#include "dataValueCodegen.inl"
+
 CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 	if (!expr)
 		return nullptr;
@@ -518,11 +482,30 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		Variable *dataVariable = expr->range.section()->findVariable(expr->variable);
 		if (dataVariable && dataVariable->dataInitializer) {
 			Expression *initializer = dataVariable->dataInitializer;
-			if (context.currentInstantiatedSectionBody) {
-				if (Expression *clone = context.currentInstantiatedSectionBody->findCloneOf(initializer))
-					initializer = clone;
+			if (dataVariable->isGlobal) {
+				if (auto constant = context.dataLLVMValues.find(initializer); constant != context.dataLLVMValues.end())
+					return constant->second;
+				if (context.staticReferenceDepth || !context.mainLLVMFunction)
+					return generateExpressionCode(context, initializer);
+				return loadGlobalDataValue(context, dataVariable, finalizedExpressionType(context, expr), true);
 			}
-			return generateExpressionCode(context, initializer);
+			// Resolve the declaration's storage owner, not the reader's body:
+			// replacements can read original main data from a cloned expression.
+			// Instance-local declarations instead require their inferred clone.
+			if (variableStorageKey(expr).scope) {
+				Expression *instantiatedInitializer = nullptr;
+				for (auto *scope = expr->owningSectionBody; scope && !instantiatedInitializer; scope = scope->parentBody)
+					instantiatedInitializer = scope->findCloneOf(initializer);
+				requireCompilerInvariant(
+					instantiatedInitializer, "local data read has no inferred declaration in its lexical scope"
+				);
+				initializer = instantiatedInitializer;
+			}
+			if (!context.localDataLLVMValues.contains(initializer)) {
+				if (!generateExpressionCode(context, initializer))
+					return CodegenResult::failure();
+			}
+			return loadLocalDataValue(context, initializer, true);
 		}
 
 		// Determine this variable's type for loading
@@ -537,9 +520,8 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			return generateCompileTimeRuntimeValue(context, valueIt->second, varType);
 		}
 
-		llvm::Type *loadType = getLLVMType(context, varType);
 		auto loadOwnedValue = [&](llvm::Value *address, const std::string &valueName) -> CodegenResult {
-			llvm::Value *value = builder.CreateAlignedLoad(loadType, address, getLLVMABIAlignment(context, varType), valueName);
+			llvm::Value *value = loadLLVMValue(context, varType, address, valueName);
 			if (typeHasManagedLifecycle(varType) && !retainManagedValue(context, varType, value))
 				return CodegenResult::failure();
 			return value;
@@ -574,10 +556,19 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 
 		Section *matchedSection = matchedDef->section;
 		requireCompilerInvariant(matchedSection != nullptr, "Selected overload has no section");
-		if (matchedSection->dataSection) {
-			if (auto cached = context.dataLLVMValues.find(expr); cached != context.dataLLVMValues.end())
-				return cached->second;
+		if (matchedSection->dataSection && expr->dataDeclaration) {
+			Variable *variable = expr->dataDeclaration->range.section()->findVariable(expr->dataDeclaration->variable);
+			requireCompilerInvariant(variable, "data declaration has no variable during codegen");
+			if (variable->isGlobal) {
+				if (auto constant = context.dataLLVMValues.find(expr); constant != context.dataLLVMValues.end())
+					return constant->second;
+			} else if (context.localDataLLVMValues.contains(expr)) {
+				return loadLocalDataValue(context, expr, false);
+			}
 		}
+
+		const DataInstructionSnapshot dataInstructions =
+			expr->dataDeclaration ? currentDataInstructions(context) : DataInstructionSnapshot{};
 
 		// Non-flex class type references are compile-time only — no runtime code.
 		// Flex class sections (primitive type definitions) fall through to flex expansion.
@@ -687,8 +678,13 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			context.currentSwitchExitBlock = savedSwitchExitBlock;
 			if (!succeeded)
 				return CodegenResult::failure();
-			if (matchedSection->dataSection)
-				context.dataLLVMValues[expr] = result;
+			if (matchedSection->dataSection && expr->dataDeclaration) {
+				Variable *variable = expr->dataDeclaration->range.section()->findVariable(expr->dataDeclaration->variable);
+				bool stored = variable->isGlobal ? storeGlobalDataValue(context, expr, variable, result, dataInstructions)
+												 : storeLocalDataValue(context, expr, result);
+				if (!stored)
+					return CodegenResult::failure();
+			}
 			return result;
 		}
 

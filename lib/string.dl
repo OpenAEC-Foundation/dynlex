@@ -213,11 +213,7 @@ to get the string form of {integer:value}:
     return result
 
 to get the string form of {unsigned integer:value}:
-    set remaining to value
-    set digits to 1
-    loop while remaining >= (10 as (the type of remaining)):
-        set remaining to (remaining / (10 as (the type of remaining)))
-        set digits to (digits + 1)
+    set digits to the count of decimal digits in value
     set result to a new string buffer containing digits bytes
     set data to the data of result
     set remaining to value
@@ -237,7 +233,7 @@ to get the string form of {unsigned integer:value}:
 to get the string form of {floating-point number:value}:
     set negative to value < 0.0
     set magnitude to the absolute value of value
-    set whole to (the floor of magnitude) as a word sized integer
+    set whole to (the floor of magnitude) as a 64 bit integer
     set places to the count of decimal digits in whole
     set decimals to 6 - places
     if decimals < 0:
@@ -247,7 +243,7 @@ to get the string form of {floating-point number:value}:
     loop while index < decimals:
         multiply scale by 10
         increment index
-    set rounded to (the floor of ((magnitude * scale) as a floating-point number + 0.5)) as a word sized integer
+    set rounded to (the floor of ((magnitude * scale) as a floating-point number + 0.5)) as a 64 bit integer
     set whole to rounded / scale
     set fraction to rounded mod scale
     set integral to the string form of whole

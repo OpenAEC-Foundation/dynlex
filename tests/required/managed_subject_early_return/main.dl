@@ -1,0 +1,33 @@
+integer means: @intrinsic("type", "int", 32)
+class:
+    patterns:
+        owned
+    members:
+        number as integer
+    retain:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "+%d\n", the number of @intrinsic("lifecycle value")))
+    release:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "-%d\n", the number of @intrinsic("lifecycle value")))
+flex section loop while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+function return [nothing]:
+    replacement:
+        @intrinsic("return")
+to inspect cleanup:
+    @intrinsic("store", index, @intrinsic("modulo", @intrinsic("call", "libc", "rand", integer), 1))
+    loop while @intrinsic("less than", index, 2):
+        if @intrinsic("equal", index, 1):
+            return nothing
+        @intrinsic("set subject", @intrinsic("construct", owned, 7))
+        @intrinsic("store", index, @intrinsic("add", index, 1))
+inspect cleanup
+@intrinsic("store", cursor, @intrinsic("modulo", @intrinsic("call", "libc", "rand", integer), 1))
+loop while @intrinsic("less than", cursor, 2):
+    if @intrinsic("equal", cursor, 1):
+        return nothing
+    @intrinsic("set subject", @intrinsic("construct", owned, 9))
+    @intrinsic("store", cursor, @intrinsic("add", cursor, 1))

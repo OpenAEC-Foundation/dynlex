@@ -1,0 +1,19 @@
+integer means: @intrinsic("type", "int", 32)
+section appearance {name}:
+    declares: name
+    result: integer
+    value:
+        42
+
+title {integer:text} means: @intrinsic("add", text, 1)
+answer means: 3
+use {integer:rule} means: @intrinsic("add", rule, 0)
+to emit {integer:value}:
+    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", value))
+
+emit (use title appearance)
+emit (use answer)
+appearance title appearance:
+appearance answer:
+emit (use title appearance)
+emit (use answer)

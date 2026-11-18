@@ -1,0 +1,5 @@
+function echo {value}:
+    execute:
+        @intrinsic("return", value)
+
+@intrinsic("discard", echo 7)

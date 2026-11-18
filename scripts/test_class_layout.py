@@ -12,7 +12,8 @@ if len(sys.argv) != 2:
 project = Path(sys.argv[1]).resolve()
 build = project / "build"
 subprocess.run(
-    ["cmake", "--build", str(build), "--target", "dynlex_class_layout_test", "--parallel", "2"],
+    ["cmake", "--build", str(build), "--target", "dynlex_class_layout_test",
+     "--parallel", os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL", "1")],
     cwd=project,
     check=True,
 )

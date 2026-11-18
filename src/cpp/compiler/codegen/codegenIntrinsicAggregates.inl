@@ -4,12 +4,16 @@ generateStaticReferenceIntrinsic(ParseContext &context, Expression *callExpr, co
 		return cached->second;
 	DataType valueType = finalizedExpressionType(context, args[1]);
 	auto *global = new llvm::GlobalVariable(
-		*context.llvmModule, getLLVMType(context, valueType), true, llvm::GlobalValue::InternalLinkage,
-		llvm::Constant::getNullValue(getLLVMType(context, valueType)), "section.data"
+		*context.llvmModule, getLLVMType(context, valueType), true, llvm::GlobalValue::InternalLinkage, nullptr, "section.data"
 	);
 	global->setAlignment(getLLVMABIAlignment(context, valueType));
 	global->setMetadata("dynlex.static.reference", llvm::MDNode::get(*context.llvmContext, {}));
 	context.staticLLVMValues[callExpr] = global;
+	struct StaticReferenceScope {
+		ParseContext &context;
+		StaticReferenceScope(ParseContext &ctx) : context(ctx) { ++context.staticReferenceDepth; }
+		~StaticReferenceScope() { --context.staticReferenceDepth; }
+	} staticScope(context);
 	CodegenResult value = generateExpressionCode(context, args[1]);
 	if (!value)
 		return value;
@@ -164,10 +168,7 @@ generatePropertyIntrinsic(ParseContext &context, Expression *callExpr, const std
 		return CodegenResult::failure();
 	if (propertyAddress.status == LValueAddressStatus::Addressable) {
 		requireCompilerInvariant(propertyAddress.address != nullptr, "addressable property produced no field address");
-		llvm::Value *fieldValue = builder.CreateAlignedLoad(
-			getLLVMType(context, fieldType), propertyAddress.address, getLLVMABIAlignment(context, fieldType),
-			fieldName + "_val"
-		);
+		llvm::Value *fieldValue = loadLLVMValue(context, fieldType, propertyAddress.address, fieldName + "_val");
 		if (typeHasManagedLifecycle(fieldType) && !retainManagedValue(context, fieldType, fieldValue))
 			return CodegenResult::failure();
 		return fieldValue;
@@ -187,34 +188,89 @@ generatePropertyIntrinsic(ParseContext &context, Expression *callExpr, const std
 	return fieldValue;
 }
 
-[[gnu::noinline]] static CodegenResult
-generateShaderInputIntrinsic(ParseContext &context, const std::vector<Expression *> &args, IntrinsicKind kind) {
+static CodegenResult
+generateShaderVertexInput(ParseContext &context, Expression *callExpr, const std::string &name, std::uint32_t location) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	DataType type = finalizedExpressionType(context, callExpr);
+	context.registerShaderVertexInput(name, location, type, intrinsicDiagnosticRange(context, callExpr));
+	std::string globalName = shaderVertexInputGlobalName(name, location, type);
+	llvm::Type *valueType = getLLVMType(context, type);
+	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
+	if (!global) {
+		constexpr unsigned spirvInputAddressSpace = 7;
+		global = new llvm::GlobalVariable(
+			*context.llvmModule, valueType, false, llvm::GlobalValue::ExternalLinkage, llvm::Constant::getNullValue(valueType),
+			globalName, nullptr, llvm::GlobalValue::NotThreadLocal, spirvInputAddressSpace
+		);
+	}
+	requireCompilerInvariant(global->getValueType() == valueType, "vertex input symbol has a conflicting LLVM type");
+	llvm::LoadInst *input = builder.CreateLoad(valueType, global, name);
+	input->setVolatile(true);
+	return input;
+}
+
+static llvm::GlobalVariable *
+generateShaderInterpolantGlobal(ParseContext &context, const std::vector<Expression *> &args, DataType type, bool output) {
+	std::string name = getCompileTimeString(context, args[1]);
+	auto location = getCompileTimeIntegerValue(resolveStoredCompileTimeValue(args[2], context.flexBindingFrames));
+	requireCompilerInvariant(
+		location && *location >= 0 && static_cast<std::uint64_t>(*location) <= UINT32_MAX,
+		"shader interpolant reached codegen without a validated location"
+	);
+	if (!context.registerShaderInterpolant(
+			{name, static_cast<std::uint32_t>(*location), type, getCompileTimeString(context, args[3]),
+			 intrinsicDiagnosticRange(context, args[1])}
+		))
+		return nullptr;
+	std::string globalName = shaderInterpolantGlobalName(name);
+	llvm::Type *valueType = getLLVMType(context, type);
+	auto *global = context.llvmModule->getGlobalVariable(globalName);
+	if (!global) {
+		global = new llvm::GlobalVariable(
+			*context.llvmModule, valueType, false, llvm::GlobalValue::ExternalLinkage, llvm::Constant::getNullValue(valueType),
+			globalName, nullptr, llvm::GlobalValue::NotThreadLocal, output ? 8 : 7
+		);
+	}
+	requireCompilerInvariant(global->getValueType() == valueType, "shader interpolant global has a conflicting LLVM type");
+	return global;
+}
+
+[[gnu::noinline]] static CodegenResult generateShaderInputIntrinsic(
+	ParseContext &context, Expression *callExpr, const std::vector<Expression *> &args, IntrinsicKind kind
+) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	std::string inputName = getCompileTimeString(context, args[1]);
-	std::string globalName;
-	if (kind == IntrinsicKind::ShaderInterpolantInput) {
-		globalName = shaderInterpolantGlobalName(inputName);
-		context.registerShaderInterpolantName(inputName);
-	} else if (inputName == "FragCoord") {
-		globalName = "gl_FragCoord";
-	} else if (inputName == "Position") {
-		globalName = "in_Position";
-	} else {
-		crashCompilerBug("unknown shader input reached codegen after type inference");
-	}
-	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
-	if (!global && kind == IntrinsicKind::ShaderInterpolantInput) {
-		constexpr unsigned spirvInputAddressSpace = 7;
-		llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
-		global = new llvm::GlobalVariable(
-			*context.llvmModule, vec4Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, globalName, nullptr,
-			llvm::GlobalValue::NotThreadLocal, spirvInputAddressSpace
+	if (kind == IntrinsicKind::ShaderVertexInput) {
+		auto location = getCompileTimeIntegerValue(resolveStoredCompileTimeValue(args[2], context.flexBindingFrames));
+		requireCompilerInvariant(
+			location && *location >= 0 && static_cast<std::uint64_t>(*location) <= UINT32_MAX,
+			"vertex input reached codegen without its validated location"
 		);
-		global->setInitializer(llvm::Constant::getNullValue(vec4Ty));
+		return generateShaderVertexInput(context, callExpr, inputName, static_cast<std::uint32_t>(*location));
 	}
-	requireCompilerInvariant(global != nullptr, "validated shader input is missing its codegen global");
-	llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
-	llvm::LoadInst *input = builder.CreateLoad(vec4Ty, global, inputName);
+	if (kind == IntrinsicKind::ShaderInput && inputName == "Position")
+		return generateShaderVertexInput(context, callExpr, inputName, 0);
+	DataType type = finalizedExpressionType(context, callExpr);
+	llvm::Type *valueType = getLLVMType(context, type);
+	llvm::GlobalVariable *global = nullptr;
+	if (kind == IntrinsicKind::ShaderInterpolantInput) {
+		global = generateShaderInterpolantGlobal(context, args, type, false);
+		if (!global)
+			return CodegenResult::failure();
+	} else {
+		requireCompilerInvariant(
+			inputName == "FragCoord" || inputName == "FrontFacing", "unknown shader input reached codegen after type inference"
+		);
+		std::string globalName = "gl_" + inputName;
+		global = context.llvmModule->getGlobalVariable(globalName);
+		if (!global) {
+			global = new llvm::GlobalVariable(
+				*context.llvmModule, valueType, false, llvm::GlobalValue::ExternalLinkage,
+				llvm::Constant::getNullValue(valueType), globalName, nullptr, llvm::GlobalValue::NotThreadLocal, 7
+			);
+		}
+	}
+	llvm::LoadInst *input = builder.CreateLoad(valueType, global, inputName);
 	input->setVolatile(true);
 	return input;
 }
@@ -222,7 +278,7 @@ generateShaderInputIntrinsic(ParseContext &context, const std::vector<Expression
 [[gnu::noinline]] static CodegenResult
 generateShaderUniformIntrinsic(ParseContext &context, Expression *callExpr, const std::vector<Expression *> &args) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	// The SPIR-V patcher wraps this scalar global in a set-zero UBO at the explicit binding.
+	// The SPIR-V patcher wraps the value in a set-zero uniform block.
 	std::string uniformName = getCompileTimeString(context, args[1]);
 	requireCompilerInvariant(!uniformName.empty(), "shader uniform reached codegen without a validated name");
 	std::optional<std::int64_t> bindingValue =
@@ -231,78 +287,72 @@ generateShaderUniformIntrinsic(ParseContext &context, Expression *callExpr, cons
 		bindingValue && *bindingValue >= 0 && static_cast<std::uint64_t>(*bindingValue) <= UINT32_MAX,
 		"shader uniform reached codegen without a validated binding"
 	);
-	context.registerShaderUniform(
-		uniformName, static_cast<std::uint32_t>(*bindingValue), intrinsicDiagnosticRange(context, callExpr)
-	);
+	DataType valueType = finalizedExpressionType(context, callExpr);
+	if (!context.registerShaderUniform(
+			uniformName, static_cast<std::uint32_t>(*bindingValue), valueType, intrinsicDiagnosticRange(context, callExpr)
+		))
+		return CodegenResult::failure();
+	llvm::Type *llvmType = getLLVMType(context, valueType);
+	llvm::Type *storageType = llvmType;
+	const bool matrix = valueType.kind == DataType::Kind::Matrix;
+	if (matrix) {
+		llvm::SmallVector<llvm::Type *, 8> fields;
+		auto *rowType = llvm::FixedVectorType::get(builder.getFloatTy(), valueType.matrixColumns());
+		for (int row = 0; row < valueType.matrixRows(); ++row) {
+			fields.push_back(rowType);
+			if (valueType.matrixColumns() == 2)
+				fields.push_back(llvm::FixedVectorType::get(builder.getFloatTy(), 2));
+			else if (valueType.matrixColumns() == 3)
+				fields.push_back(builder.getFloatTy());
+		}
+		storageType = llvm::StructType::get(builder.getContext(), fields);
+	}
 	std::string globalName = "ubo_" + uniformName;
 	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
 	if (!global) {
-		llvm::Type *f32Ty = builder.getFloatTy();
 		global = new llvm::GlobalVariable(
-			*context.llvmModule, f32Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, globalName, nullptr,
+			*context.llvmModule, storageType, false, llvm::GlobalValue::ExternalLinkage, nullptr, globalName, nullptr,
 			llvm::GlobalValue::NotThreadLocal, 3
 		);
-		global->setInitializer(llvm::Constant::getNullValue(f32Ty));
+		global->setInitializer(llvm::Constant::getNullValue(storageType));
 	}
-	return builder.CreateLoad(builder.getFloatTy(), global, uniformName + "_val");
+	requireCompilerInvariant(global->getValueType() == storageType, "uniform global disagrees with its registered type");
+	llvm::Value *stored = builder.CreateLoad(storageType, global, uniformName + "_val");
+	if (!matrix)
+		return stored;
+	// Explicit padding remains visible in WGSL, which has no array-stride annotation.
+	llvm::Value *value = llvm::Constant::getNullValue(llvmType);
+	const unsigned step = valueType.matrixColumns() < 4 ? 2 : 1;
+	for (unsigned row = 0; row < static_cast<unsigned>(valueType.matrixRows()); ++row) {
+		llvm::Value *field = builder.CreateExtractValue(stored, row * step, "uniform_row");
+		value = builder.CreateInsertValue(value, field, row, "uniform_matrix");
+	}
+	return value;
 }
 
 [[gnu::noinline]] static CodegenResult
 generateShaderOutputIntrinsic(ParseContext &context, const std::vector<Expression *> &args, IntrinsicKind kind) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
-	llvm::Value *color = nullptr;
-	if (kind == IntrinsicKind::ShaderOutput) {
-		if (!generateIntrinsicRuntimeValue(context, args[1], color))
+	const bool interpolant = kind == IntrinsicKind::ShaderInterpolantOutput;
+	Expression *operand = args[interpolant ? 4 : 1];
+	llvm::Value *value = nullptr;
+	if (!generateIntrinsicRuntimeValue(context, operand, value))
+		return CodegenResult::failure();
+	llvm::GlobalVariable *global = nullptr;
+	if (interpolant) {
+		global = generateShaderInterpolantGlobal(context, args, finalizedExpressionType(context, operand), true);
+		if (!global)
 			return CodegenResult::failure();
-		DataType shaderVector{DataType::Kind::Vector};
-		shaderVector.arraySize = 4;
-		shaderVector.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
-		color = ensureType(context, color, finalizedExpressionType(context, args[1]), shaderVector);
 	} else {
-		constexpr size_t firstValueIndex = 2;
-		llvm::Value *red = nullptr;
-		llvm::Value *green = nullptr;
-		llvm::Value *blue = nullptr;
-		llvm::Value *alpha = nullptr;
-		if (!generateIntrinsicRuntimeValue(context, args[firstValueIndex], red) ||
-			!generateIntrinsicRuntimeValue(context, args[firstValueIndex + 1], green) ||
-			!generateIntrinsicRuntimeValue(context, args[firstValueIndex + 2], blue) ||
-			!generateIntrinsicRuntimeValue(context, args[firstValueIndex + 3], alpha))
-			return CodegenResult::failure();
-
-		DataType floatType = {DataType::Kind::Float, 4};
-		red = ensureType(context, red, finalizedExpressionType(context, args[firstValueIndex]), floatType);
-		green = ensureType(context, green, finalizedExpressionType(context, args[firstValueIndex + 1]), floatType);
-		blue = ensureType(context, blue, finalizedExpressionType(context, args[firstValueIndex + 2]), floatType);
-		alpha = ensureType(context, alpha, finalizedExpressionType(context, args[firstValueIndex + 3]), floatType);
-
-		color = llvm::Constant::getNullValue(vec4Ty);
-		color = builder.CreateInsertElement(color, alpha, getVectorLaneIndexValue(context, 3), "color_a");
-		color = builder.CreateInsertElement(color, blue, getVectorLaneIndexValue(context, 2), "color_b");
-		color = builder.CreateInsertElement(color, green, getVectorLaneIndexValue(context, 1), "color_g");
-		color = builder.CreateInsertElement(color, red, getVectorLaneIndexValue(context, 0), "color_r");
+		DataType vector{DataType::Kind::Vector};
+		vector.arraySize = 4;
+		vector.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
+		value = ensureType(context, value, finalizedExpressionType(context, operand), vector);
+		std::string name = context.options.shaderStage == ParseContext::ShaderStage::Vertex ? "gl_Position" : "gl_FragColor";
+		global = context.llvmModule->getGlobalVariable(name);
+		requireCompilerInvariant(global != nullptr, "validated shader output is missing its codegen global");
 	}
-
-	std::string outName;
-	if (kind == IntrinsicKind::ShaderInterpolantOutput) {
-		std::string interpolantName = getCompileTimeString(context, args[1]);
-		outName = shaderInterpolantGlobalName(interpolantName);
-		context.registerShaderInterpolantName(interpolantName);
-	} else {
-		outName = (context.options.shaderStage == ParseContext::ShaderStage::Vertex) ? "gl_Position" : "gl_FragColor";
-	}
-	llvm::GlobalVariable *outGlobal = context.llvmModule->getGlobalVariable(outName);
-	if (!outGlobal && kind == IntrinsicKind::ShaderInterpolantOutput) {
-		constexpr unsigned spirvOutputAddressSpace = 8;
-		outGlobal = new llvm::GlobalVariable(
-			*context.llvmModule, vec4Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, outName, nullptr,
-			llvm::GlobalValue::NotThreadLocal, spirvOutputAddressSpace
-		);
-		outGlobal->setInitializer(llvm::Constant::getNullValue(vec4Ty));
-	}
-	requireCompilerInvariant(outGlobal != nullptr, "validated shader output is missing its codegen global");
-	llvm::StoreInst *store = builder.CreateStore(color, outGlobal);
+	llvm::StoreInst *store = builder.CreateStore(value, global);
 	store->setMetadata(shaderOutputMetadataName, llvm::MDNode::get(*context.llvmContext, {}));
 	return nullptr;
 }
@@ -342,10 +392,7 @@ generateExtractElementIntrinsic(ParseContext &context, const std::vector<Express
 	builder.CreateStore(aggregate, storage);
 	llvm::Value *address =
 		builder.CreateInBoundsGEP(getLLVMType(context, aggregateType), storage, {builder.getInt32(0), idx}, "element_address");
-	return builder.CreateAlignedLoad(
-		getLLVMType(context, *aggregateType.arrayElementType), address,
-		getLLVMABIAlignment(context, *aggregateType.arrayElementType), "elem"
-	);
+	return loadLLVMValue(context, *aggregateType.arrayElementType, address, "elem");
 }
 
 [[gnu::noinline]] static CodegenResult
@@ -383,7 +430,5 @@ generateInsertElementIntrinsic(ParseContext &context, const std::vector<Expressi
 		getLLVMType(context, aggregateType), storage, {builder.getInt32(0), index}, "element_address"
 	);
 	builder.CreateAlignedStore(element, address, getLLVMABIAlignment(context, elementType));
-	return builder.CreateAlignedLoad(
-		getLLVMType(context, aggregateType), storage, getLLVMABIAlignment(context, aggregateType), "aggregate_inserted"
-	);
+	return loadLLVMValue(context, aggregateType, storage, "aggregate_inserted");
 }

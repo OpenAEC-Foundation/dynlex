@@ -144,6 +144,8 @@ template <typename Classes> DataType decodePortableConstraintType(const Json &en
 }
 
 std::optional<Json> encodePortableConstraint(const TypeConstraint &constraint, const ClassIdentityPaths &classPaths) {
+	if (constraint.classInstantiationIndex && *constraint.classInstantiationIndex < -1)
+		return std::nullopt;
 	Json classPath = nullptr;
 	if (constraint.classDefinition) {
 		auto path = classPaths.find(constraint.classDefinition);
@@ -204,7 +206,7 @@ template <typename Classes> TypeConstraint decodePortableConstraint(const Json &
 	constraint.classInstantiationIndex = optionalInt(encoded.at(11));
 	if (constraint.classInstantiationIndex)
 		requireCompilerInvariant(
-			constraint.classDefinition &&
+			constraint.classDefinition && *constraint.classInstantiationIndex >= -1 &&
 				*constraint.classInstantiationIndex < static_cast<int>(constraint.classDefinition->instantiations.size()),
 			"saved constraint refers to an unrestored class instantiation"
 		);

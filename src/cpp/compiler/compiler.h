@@ -38,10 +38,16 @@ bool isInternalSourcePath(std::string_view path);
 void expandExpression(Expression *expr, Section *section);
 
 inline bool expandPendingTypeReferenceExpression(Expression *expr, Section *section) {
-	if (!expr || expr->kind != Expression::Kind::Pending || !section)
+	if (!expr || !section)
 		return false;
-	expandExpression(expr, section);
-	return true;
+	if (expr->kind == Expression::Kind::Pending) {
+		expandExpression(expr, section);
+		return true;
+	}
+	bool expanded = false;
+	for (Expression *argument : expr->arguments)
+		expanded = expandPendingTypeReferenceExpression(argument, section) || expanded;
+	return expanded;
 }
 
 // Intrinsic operator checking utilities

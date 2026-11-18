@@ -135,6 +135,7 @@ static void inferOrderedExpression(
 	context.typesValid = true;
 	if (!expr)
 		return;
+	expr->inferenceRevision = ++context.parseContext.expressionInferenceRevision;
 	context.setExpressionValue(expr, {});
 	expr->inferredArgumentReference.reset();
 	expr->memoryFacts = {};

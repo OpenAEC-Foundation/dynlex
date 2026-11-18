@@ -1,4 +1,5 @@
 #pragma once
+#include "shaderResource.h"
 #include "typeConstraint.h"
 #include "typeReferenceValue.h"
 #include "wideInteger.h"
@@ -50,4 +51,5 @@ struct CompileTimeFunction {
 
 using CompileTimeValue = std::variant<
 	std::monostate, std::int64_t, std::uint64_t, MinimumSignedIntegerMagnitude, double, std::string, bool, TypeReferenceValue,
-	TypeConstraint, CompileTimePointer, CompileTimeFunction, ExpressionCapture, ArgumentPackValue, WideInteger>;
+	TypeConstraint, CompileTimePointer, CompileTimeFunction, ExpressionCapture, ArgumentPackValue, WideInteger,
+	ShaderResourceValue>;

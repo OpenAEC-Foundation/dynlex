@@ -442,6 +442,10 @@ bool resolvePatterns(ParseContext &context) {
 		ref->patternElements = getPatternElements(ref->pattern.text);
 	for (PatternReference *ref : globalReferences)
 		ref->patternElements = getPatternElements(ref->pattern.text);
+	DataDeclarationNameIndex declarationNames;
+	declarationNames.add(globalReferences);
+	declarationNames.add(bodyReferences);
+
 	// Compute initial VL counts before resolution
 	computeVariableLikeCounts(context, unResolvedSections, true);
 	bodyReferences.clear();
@@ -683,22 +687,21 @@ bool resolvePatterns(ParseContext &context) {
 			if (staleInvalidationOccurred) {
 				madeProgress = true;
 			}
-			if (unResolvedSections.empty()) {
-				std::unordered_set<Section *> changedScopes;
-				bool namesChanged = indexDataDeclarationNames(context, globalReferences, changedScopes);
-				namesChanged |= indexDataDeclarationNames(context, bodyReferences, changedScopes);
-				if (namesChanged) {
-					for (PatternReference *reference : referencesAffectedByDataNames(definitionReferences, changedScopes)) {
-						if (reference->match)
-							queueReferenceForRematch(reference);
-						else
-							for (Section *section = reference->range().section(); section; section = section->parent)
-								if (!section->patternDefinitions.empty())
-									appendUniqueSection(pendingPromotionCleanupSections, section);
-					}
-					failedBodyWorklist.wakeNewExplicitVariables();
-					madeProgress = true;
+			declarationNames.add(globalReferences);
+			declarationNames.add(bodyReferences);
+			std::unordered_set<Section *> changedScopes;
+			if (declarationNames.refresh(context, changedScopes)) {
+				for (PatternReference *reference : referencesAffectedByDataNames(definitionReferences, changedScopes)) {
+					if (reference->match)
+						queueReferenceForRematch(reference);
+					else
+						for (Section *section = reference->range().section(); section; section = section->parent)
+							if (!section->patternDefinitions.empty())
+								appendUniqueSection(pendingPromotionCleanupSections, section);
 				}
+				failedBodyWorklist.invalidateExplicitVariableNames();
+				appendRequeuedReferences();
+				continue;
 			}
 
 			failedBodyWorklist.setUnmatchedVariablesAllowed(unResolvedSections.empty());

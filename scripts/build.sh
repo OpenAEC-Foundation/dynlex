@@ -180,7 +180,9 @@ if [ "$LINT" = "true" ]; then
 fi
 
 if [[ -n "$JOBS" ]]; then
-    : # The explicit job count takes precedence over host CPU detection.
+    : # An explicit job count takes precedence over environment and host defaults.
+elif [[ -n "${CMAKE_BUILD_PARALLEL_LEVEL:-}" ]]; then
+    JOBS="$CMAKE_BUILD_PARALLEL_LEVEL"
 elif command -v nproc >/dev/null 2>&1; then
     JOBS="$(nproc)"
 elif command -v getconf >/dev/null 2>&1; then

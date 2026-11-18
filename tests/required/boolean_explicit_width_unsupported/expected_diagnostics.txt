@@ -1,0 +1,3 @@
+tests/required/boolean_explicit_width_unsupported/main.dl:50-51: Error: Intrinsic 'type' argument 2 must be a numeric type kind that accepts a bit width
+  note: while inferring intrinsic 'type' in '@intrinsic("type", "bool", 8)' with arguments [a pointer to a byte, a 32-bit integer] -> an unresolved value tests/required/boolean_explicit_width_unsupported/main.dl:23-52
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", @intrinsic("type", "bool", 8))' with arguments [an unresolved value] -> an unresolved value tests/required/boolean_explicit_width_unsupported/main.dl:1-53

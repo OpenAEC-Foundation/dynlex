@@ -78,6 +78,28 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 				return *result;
 		return {};
 	}
+	if (kind == IntrinsicKind::ShaderImage || kind == IntrinsicKind::ShaderSampler) {
+		CompileTimeValue name = readArgumentValue(expr->arguments[1]);
+		auto binding = getCompileTimeIntegerValue(readArgumentValue(expr->arguments[2]));
+		requireCompilerInvariant(
+			std::holds_alternative<std::string>(name) && binding, "validated shader resource lost its static identity"
+		);
+		CompileTimeValue flag = readArgumentValue(expr->arguments[kind == IntrinsicKind::ShaderImage ? 4 : 3]);
+		requireCompilerInvariant(std::holds_alternative<bool>(flag), "validated shader resource lost its flag");
+		ShaderResourceKind resourceKind;
+		if (kind == IntrinsicKind::ShaderImage) {
+			CompileTimeValue dimension = readArgumentValue(expr->arguments[3]);
+			requireCompilerInvariant(
+				std::holds_alternative<std::string>(dimension), "validated shader image lost its dimension"
+			);
+			resourceKind = std::get<bool>(flag)							? ShaderResourceKind::Depth2D
+						   : std::get<std::string>(dimension) == "cube" ? ShaderResourceKind::ImageCube
+																		: ShaderResourceKind::Image2D;
+		} else {
+			resourceKind = std::get<bool>(flag) ? ShaderResourceKind::ComparisonSampler : ShaderResourceKind::Sampler;
+		}
+		return ShaderResourceValue{std::get<std::string>(name), static_cast<std::uint32_t>(*binding), resourceKind};
+	}
 	if (kind == IntrinsicKind::SizeOf) {
 		CompileTimeValue typeValue = readArgumentValue(requireArgument(1, expr->intrinsicName));
 		auto *typeRef = std::get_if<TypeReferenceValue>(&typeValue);

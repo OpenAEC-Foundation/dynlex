@@ -122,8 +122,10 @@ Clang 20+ as the bootstrap compiler, and the pinned LLVM 23 fork built by
 - `src/cpp/compiler/codegen/`: LLVM codegen, intrinsics, SPIR-V/native backends
 - `src/cpp/dap/`: Debug Adapter Protocol server (GDB MI backend)
 - `src/cpp/lsp/`: Language server
-- `src/web/ide/`: Browser IDE source (Vite + Monaco)
-- `web/`: Static web root (site/wiki source + deployed assets)
+- `src/web/compiler/`: Browser compiler and program-worker transport
+- `src/web/ide/public/compiler/`: Shipped compiler and generic runtime payloads
+- Website declarations, games and deployment live in the separate dynlex-website repository.
+- `web/`: Shared graphics-backend and shader-translator adapters
 - `vscode-extension/`: VS Code extension (TypeScript)
 - `tests/required/`: Focused compiler test cases; the suite has a two-minute budget after the compiler build.
 - `tests/integration/`: Library and application test cases. CAD geometry and its fixtures live in [dynlex-cadkernel](https://github.com/OpenAEC-Foundation/dynlex-cadkernel).

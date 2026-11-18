@@ -10,14 +10,15 @@ RUSTUP_BIN_DIR="${CARGO_HOME:-${HOME:?}/.cargo}/bin"
 export PATH="$RUSTUP_BIN_DIR:$PATH"
 . "$SCRIPT_DIR/llvm_toolchain.sh"
 
-for dep in emcmake emcc cmake ninja git cargo; do
+for dep in emcmake emcc cmake ninja git cargo python3 patch; do
     if ! command -v "$dep" >/dev/null 2>&1; then
         echo "Missing required dependency: $dep"
-        echo "Install Emscripten, CMake, Ninja, Git, and Rust first."
+        echo "Install Emscripten, CMake, Ninja, Git, Rust, Python, and patch first."
         exit 1
     fi
 done
 
+python3 "$SCRIPT_DIR/prepare_shader_translator.py"
 dynlex_ensure_llvm_toolchain web
 mkdir -p "$BUILD_DIR"
 

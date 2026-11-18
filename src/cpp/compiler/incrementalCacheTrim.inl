@@ -83,7 +83,11 @@ CacheTrimWork trimCache(const fs::path &directory) {
 	for (const Entry &entry : entries) {
 		if (size <= maximumCacheBytes)
 			break;
-		fs::remove(directory / entry.name);
+		const fs::path path = directory / entry.name;
+		const std::u8string utf8 = path.u8string();
+		llvm::StringRef filename(reinterpret_cast<const char *>(utf8.data()), utf8.size());
+		if (std::error_code error = llvm::sys::fs::remove(filename))
+			throw fs::filesystem_error("cannot evict cache entry", path, error);
 		size -= entry.size;
 		++work.entriesRemoved;
 	}

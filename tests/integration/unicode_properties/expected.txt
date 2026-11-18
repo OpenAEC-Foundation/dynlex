@@ -1,0 +1,1 @@
+Unicode 17 simple case folding and identifier word properties are shared scalar operations.

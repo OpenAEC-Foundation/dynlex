@@ -632,11 +632,11 @@ jobs:
           fi
           PACKAGE_NAME="$(./scripts/release-asset.sh name '${{ matrix.asset_id }}')"
           if [[ "${{ matrix.format }}" == "deb" ]]; then
-            sudo ./web/install.sh "release-artifacts/linux/$PACKAGE_NAME"
+            sudo ./scripts/install_release.sh "release-artifacts/linux/$PACKAGE_NAME"
             DYNLEX_BIN="$(command -v dynlex)"
           else
             INSTALL_PREFIX="$RUNNER_TEMP/dynlex-tar-install"
-            ./web/install.sh \
+            ./scripts/install_release.sh \
               --prefix "$INSTALL_PREFIX" \
               "release-artifacts/linux/$PACKAGE_NAME"
             DYNLEX_BIN="$INSTALL_PREFIX/bin/dynlex"

@@ -6,3 +6,7 @@ false
 UTF-16 position is outside a code point boundary
 false
 Text edit ranges overlap
+true
+YZXd
+false
+Text edit ranges overlap

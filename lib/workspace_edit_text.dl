@@ -45,6 +45,17 @@ local class:
         edits as a pointer to a prepared workspace text edit collection
         failure reason as a string
 
+# A plan owns the source snapshot and its validated edits in application order.
+# Editors may inspect byte ranges before committing a protected-buffer edit.
+class:
+    patterns:
+        [a|] workspace text edit plan
+    members:
+        success as a boolean
+        source as a string
+        edits as a pointer to a prepared workspace text edit collection
+        failure reason as a string
+
 local function {workspace offset result:result} succeeded:
     replacement:
         result's success
@@ -177,34 +188,34 @@ local function a new workspace edit index collection:
         allocate one slot of initial and set result to it
         return result
 
-local function append workspace edit index {integer:value} to {a pointer to a workspace edit index collection:sequence}:
+local function append workspace edit index {integer:value} to {a pointer to a workspace edit index collection:indexes}:
     execute:
-        set required to the collection length after adding one item to the length of sequence
-        set growth to the collection capacity from the capacity of sequence expanded to hold required items
-        if growth > the capacity of sequence:
-            set resized to the checked allocation from ((the items of sequence) as a pointer) resized to growth items of an integer
-            set the items of sequence to resized
-            set the capacity of sequence to growth
-        @intrinsic("initialize at", (the items of sequence) + (the length of sequence), value)
-        set the length of sequence to required
+        set required to the collection length after adding one item to the length of indexes
+        set growth to the collection capacity from the capacity of indexes expanded to hold required items
+        if growth > the capacity of indexes:
+            set resized to the checked allocation from ((the items of indexes) as a pointer) resized to growth items of an integer
+            set the items of indexes to resized
+            set the capacity of indexes to growth
+        @intrinsic("initialize at", (the items of indexes) + (the length of indexes), value)
+        set the length of indexes to required
 
-local function the workspace edit index at {integer:position} in {a pointer to a workspace edit index collection:sequence}:
+local function the workspace edit index at {integer:position} in {a pointer to a workspace edit index collection:indexes}:
     execute:
-        if position < 0 or position >= the length of sequence:
+        if position < 0 or position >= the length of indexes:
             abort the program
-        return the item at position in the items of sequence
+        return the item at position in the items of indexes
 
-local function replace workspace edit index at {integer:position} in {a pointer to a workspace edit index collection:sequence} with {integer:value}:
+local function replace workspace edit index at {integer:position} in {a pointer to a workspace edit index collection:indexes} with {integer:value}:
     execute:
-        if position < 0 or position >= the length of sequence:
+        if position < 0 or position >= the length of indexes:
             abort the program
-        store value into the items of sequence at position
+        store value into the items of indexes at position
 
-local function free workspace edit index collection {a pointer to a workspace edit index collection:sequence}:
+local function free workspace edit index collection {a pointer to a workspace edit index collection:indexes}:
     execute:
-        deallocate the items of sequence
-        @intrinsic("destroy at", sequence)
-        deallocate sequence
+        deallocate the items of indexes
+        @intrinsic("destroy at", indexes)
+        deallocate indexes
 
 local function the stable prepared workspace edit indexes for {a pointer to a prepared workspace text edit collection:collection}:
     execute:
@@ -237,8 +248,8 @@ local function the result of validating workspace text edit indexes {a pointer t
         set replacement to false
         set position to 0
         loop while position < the length of order:
-            set position to the workspace edit index at position in order
-            set prepared to the prepared workspace text edit at position in collection
+            set index to the workspace edit index at position in order
+            set prepared to the prepared workspace text edit at index in collection
             if prepared's start offset < consumed:
                 return a failed workspace text result reporting the string form of "Text edit ranges overlap"
             if prepared's start offset != grouping:
@@ -312,34 +323,58 @@ local function the prepared workspace text edit result for {a pointer to a works
             an empty workspace edit text
         )
 
-to get the result of applying workspace text edits {a pointer to a workspace text edit collection:edits} to {string:source} using {integer:encoding}:
+to get [the workspace text edit plan for] {a pointer to a workspace text edit collection:edits} [against] {string:source} [using] {integer:encoding}:
     set preparation to the prepared workspace text edit result for edits against source using encoding
     set prepared to preparation's edits
     if preparation failed:
-        set reason to preparation's failure reason
-        free prepared workspace text edits prepared
-        return a failed workspace text result reporting reason
+        return @intrinsic("construct", workspace text edit plan, false, source, prepared, preparation's failure reason)
     set order to the stable prepared workspace edit indexes for prepared
     set validation to the result of validating workspace text edit indexes prepared ordered by order
     if validation failed:
         free workspace edit index collection order
-        free prepared workspace text edits prepared
-        return validation
+        return @intrinsic("construct", workspace text edit plan, false, source, prepared, validation's failure reason)
+    set ordered to a new prepared workspace text edit collection
+    set index to 0
+    loop while index < the length of order:
+        append (the prepared workspace text edit at (the workspace edit index at index in order) in prepared) to prepared workspace edits ordered
+        increment index
+    free workspace edit index collection order
+    free prepared workspace text edits prepared
+    return @intrinsic("construct", workspace text edit plan, true, source, ordered, an empty workspace edit text)
+
+to [free workspace text edit plan] {workspace text edit plan:plan}:
+    free prepared workspace text edits (plan's edits)
+
+to get [the count of text edits in] {workspace text edit plan:plan}:
+    return plan's edits's length
+
+to get [the start byte of workspace edit] {integer:index} [in] {workspace text edit plan:plan}:
+    return (the prepared workspace text edit at index in (plan's edits))'s start offset
+
+to get [the end byte of workspace edit] {integer:index} [in] {workspace text edit plan:plan}:
+    return (the prepared workspace text edit at index in (plan's edits))'s end offset
+
+to get [the replacement text of workspace edit] {integer:index} [in] {workspace text edit plan:plan}:
+    return (the prepared workspace text edit at index in (plan's edits))'s new text
+
+to get [the result of applying workspace text edit plan] {workspace text edit plan:plan}:
+    if plan's success = false:
+        return a failed workspace text result reporting (plan's failure reason)
+    set source to plan's source
+    set prepared to plan's edits
     set length to the length of source
     set position to 0
-    loop while position < the length of order:
-        set change to the prepared workspace text edit at (the workspace edit index at position in order) in prepared
+    loop while position < the length of prepared:
+        set change to the prepared workspace text edit at position in prepared
         set length to (length + the length of change's new text)
         set length to (length - (change's end offset - change's start offset))
         set position to (position + 1)
     if (length < 0) or (length > the maximum string buffer length):
-        free workspace edit index collection order
-        free prepared workspace text edits prepared
         return a failed workspace text result reporting the string form of "Text edit result is too large"
     set output to a new string buffer containing length bytes
     set reader, writer and position to 0
-    loop while position < the length of order:
-        set change to the prepared workspace text edit at (the workspace edit index at position in order) in prepared
+    loop while position < the length of prepared:
+        set change to the prepared workspace text edit at position in prepared
         set span to (change's start offset - reader)
         if span > 0:
             set unchanged to the substring of source from reader spanning span bytes
@@ -355,8 +390,12 @@ to get the result of applying workspace text edits {a pointer to a workspace tex
         set tail to the substring of source from reader spanning remainder bytes
         copy tail into the data of output at offset writer
         set writer to (writer + remainder)
-    free workspace edit index collection order
-    free prepared workspace text edits prepared
     if writer != length:
         abort the program
     return a successful workspace text result containing output
+
+to get [the result of applying workspace text edits] {a pointer to a workspace text edit collection:edits} [to] {string:source} [using] {integer:encoding}:
+    set plan to the workspace text edit plan for edits against source using encoding
+    set result to the result of applying workspace text edit plan plan
+    free workspace text edit plan plan
+    return result
