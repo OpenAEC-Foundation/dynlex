@@ -75,6 +75,27 @@ qualification before publication. Ordinary editor inference still runs; this
 iteration eliminates redundant nested grouping work rather than restoring typed
 queries across edits. The complete all-stage objective remains active/incomplete.
 
+At03:38 UTC the initial194ccf13 candidate fails six of334 required checks:
+one source range retains leading whitespace and five diagnostics lose inference
+notes. Stop all publication gates. The shortcut incorrectly borrowed the fully
+ordered branch's rule of fixing every child node; the ordinary generator fixes
+only the grouping-capable root in this structural case. It also omitted the
+generator's range normalization and the ordinary failure propagation boundary.
+Keep those contracts while sharing the parent rollback journal: normalize current
+ranges, fix only the actual root, and preserve/reset the failed expression's
+snapshot before publishing its captured diagnostic with the current outer trace.
+The six unchanged, minimal required fixtures now match the qualified baseline's
+complete output and exit codes exactly. The complete LSP suite and focused runtime
+checks pass again. Debugger line probes did not reach the selected helper paths;
+they provide no additional runtime attribution evidence.
+
+The initial source/measurements remain in i107-initial-frozen-inputs.json,
+i107-initial-validation.json, i107-initial-required.log, i107-lsp-paired and
+i107-native-controls.json. They do not qualify the corrected artifact. Run the
+same fixed120-observation editor and88-observation native matrices once on the
+corrected image, then require every full gate. Do not change diagnostic expectations.
+The full objective remains active/incomplete.
+
 ## Completed iteration: I106 shared editor syntax products
 
 Started18 November at01:45 UTC; first deadline02:30 UTC. Previous turn is
