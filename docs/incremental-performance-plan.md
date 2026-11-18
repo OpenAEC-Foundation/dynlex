@@ -10,6 +10,23 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## Iteration I117: correct physical source line reuse proofs
+
+The published compiler reproduces three independent failures. An executable
+edit following a CR-only comment can reuse an old executable. A mixed-line
+ending file can mask a changed top-level statement with an inactive function's
+body even when the frontend runs. A reserved argument byte added to a comment
+can bypass the source loader's diagnostic. Minimal no-import examples establish
+wrong output or diagnostics against clean invocations.
+
+The correction uses the source file's physical line index for semantic digests,
+diagnostic line ordinals and source projections. It retains comment text when
+trimming would hide a reserved argument byte. The targeted source preparation
+and checkpoint checks pass at O0 and O2 on the corrected image fe1b0a8a. A CR-only
+comment insertion moves a warning and its notes to the clean-build locations
+with no codegen. The source commit b8b4c9d3 affects native incremental builds.
+Production suite verification still follows.
+
 ## Iteration I115: prove a unique operand layout before retaining grouping state
 
 The focused preinference reproduction changes a wrapper's integer literal.

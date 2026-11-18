@@ -82,6 +82,7 @@ def check_source_preparation(root, build):
     assert repaired[1:] == build(False, entry=main)[1:]
     assert repaired[2] == b"repaired\n"
     check_source_line_endings(root, build)
+    check_diagnostic_physical_lines(root, build)
     check_source_projection_line_boundaries(root, build)
     check_lexical_observation_in_comment(root, build)
     check_transformed_source_chunks(root, build)
@@ -126,6 +127,20 @@ def check_source_projection_line_boundaries(root, build):
     edited = build(entry=entry)
     assert edited[1:] == build(False, entry=entry)[1:]
     assert edited[2] == b"second\n"
+
+
+def check_diagnostic_physical_lines(root, build):
+    entry = root / "physical-diagnostic-lines.dl"
+    source = (b'integer means: @intrinsic("type", "int")\rvalue means: 1\r'
+              b'to show {integer:value}: @intrinsic("discard", value)\rshow 2\r')
+    entry.write_bytes(source)
+    original = build(entry=entry)
+    assert "physical-diagnostic-lines.dl:3:" in original[1]
+    entry.write_bytes(b"# Shift warnings and notes\r" + source)
+    shifted = build(entry=entry)
+    assert shifted[0]["frontend_reused"] and shifted[0]["codegen_and_link_ms"] == 0
+    assert shifted[1:] == build(False, entry=entry)[1:]
+    assert "physical-diagnostic-lines.dl:4:" in shifted[1]
 
 
 def check_lexical_observation_in_comment(root, build):
