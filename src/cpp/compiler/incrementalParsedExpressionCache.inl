@@ -8,7 +8,7 @@ void appendParseLength(std::string &output, std::uint64_t value) {
 	} while (value);
 }
 
-std::uint64_t readParseLength(std::string_view input, size_t &position) {
+size_t readParseLength(std::string_view input, size_t &position) {
 	std::uint64_t value = 0;
 	for (unsigned index = 0; index < 10; index++) {
 		if (position == input.size())
@@ -18,7 +18,7 @@ std::uint64_t readParseLength(std::string_view input, size_t &position) {
 			throw std::runtime_error("invalid parsed expression cache length");
 		value |= static_cast<std::uint64_t>(byte & 0x7f) << (index * 7);
 		if (!(byte & 0x80))
-			return value;
+			return value <= SIZE_MAX ? static_cast<size_t>(value) : throw std::runtime_error("parsed length overflow");
 	}
 	throw std::runtime_error("invalid parsed expression cache length");
 }

@@ -68,6 +68,20 @@ run includes its result-holding Python client; retained compiler products stay
 flat across edits. Finish native controls, required<=120 s, affected integration,
 full LSP, actual web and shared-root qualification before publication.
 
+I106 native qualification passes334/0/0 required checks uncached in98.201 s,
+462/0/0 integration checks in698.601 s and the complete LSP suite. The actual
+web build finds a pre-existing native-only codec boundary:64-bit decoded lengths
+narrow into32-bit address-sized frame fields. A minimal C++ repro confirms the
+compile error. Return address-sized lengths and reject values beyondSIZE_MAX;
+keep literal words64-bit and preserve the valid cache wire format. The extracted
+actual reader passes native and32-bit WebAssembly boundary/overflow tests, and
+the parsed-product LSP regression passes again. The fixed native image d1230f74
+has identical allocated ELF sections, addresses and sizes to the benchmarked
+82ea576d image, excluding only the build-id note. Thus the native executed code
+and program data are unchanged; retain the original native gates and measurements
+with this explicit provenance. Actual full web and shared-root gates remain
+required before publication. No native cold algorithmic speedup is claimed.
+
 ## Closed iteration: I105 rejected adaptive signature intersection
 
 Started18 November at01:19 UTC; first deadline02:04 UTC. Previous turn is
