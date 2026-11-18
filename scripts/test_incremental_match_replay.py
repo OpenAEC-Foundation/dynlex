@@ -42,7 +42,7 @@ def check_flex_body_match_replay(root, build):
               '    execute:\n'
               '        @intrinsic("return", @intrinsic("add", item, the bonus))\n'
               '@intrinsic("store", input, @intrinsic("call", "libc", "rand", integer))\n'
-              '@intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\\n", '
+              '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", '
               '@intrinsic("subtract", compute input, input)))\n')
     main.write_text(source)
     assert build(entry=main)[2] == b"1\n"
@@ -61,9 +61,9 @@ def check_flex_body_match_replay(root, build):
                             '@intrinsic("store", input,')
     folded = folded.replace('@intrinsic("subtract", compute input, input)',
                             '@intrinsic("subtract", report input, input)')
-    folded = folded.replace('@intrinsic("discard", @intrinsic("call", "libc", "printf",',
+    folded = folded.replace('@intrinsic("discard", @intrinsic("variadic call", "libc", "printf",',
                             '@intrinsic("discard", compute input)\n'
-                            '@intrinsic("discard", @intrinsic("call", "libc", "printf",')
+                            '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf",')
     main.write_text(folded)
     assert build(entry=main)[2] == b"1\n"
     main.write_text(folded.replace('the bonus means: 1', 'the bonus means: 2'))

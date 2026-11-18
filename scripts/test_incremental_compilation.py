@@ -97,7 +97,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         raise SystemExit(0)
 
     if mode != ["--required-base"]:
-        check_root_execution_reuse(root, build)
+        check_root_execution_reuse(root, build, compiler)
         check_storage_origin_reuse(root, build)
         check_body_materialization(root, build)
         check_incremental_classification(root, build)

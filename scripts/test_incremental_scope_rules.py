@@ -21,7 +21,7 @@ function a matrix:
 function advance {@intrinsic("type", "float", 64):seconds}:
     execute:
 BODY
-@intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%f\\n", advance @intrinsic("cast", @intrinsic("call", "libc", "atoi", integer, "2"), @intrinsic("type", "float", 64))))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%f\\n", advance @intrinsic("cast", @intrinsic("call", "libc", "atoi", integer, "2"), @intrinsic("type", "float", 64))))
 '''
     bodies = [
         '        @intrinsic("return", @intrinsic("divide", @intrinsic("multiply", seconds, 6.28), 0.85))',

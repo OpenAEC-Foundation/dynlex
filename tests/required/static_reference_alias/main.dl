@@ -2,7 +2,7 @@ function print shared value:
     globals:
         value
     execute:
-        @intrinsic("discard", @intrinsic("call", "libc", "printf", @intrinsic("type", "int", 32), "%d\n", value))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", value))
 
 @intrinsic("store", value, 7)
 @intrinsic("store", holder, @intrinsic("static reference", @intrinsic("address of", value)))

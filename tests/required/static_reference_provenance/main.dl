@@ -30,4 +30,4 @@ function set variable to value:
     @intrinsic("static reference", 1),
     @intrinsic("static reference", 1)))
 set copied to copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (copy of (initial record))))))))))))))
-@intrinsic("discard", @intrinsic("call", "libc", "printf", an integer, "%d\n", @intrinsic("property", copied, "value")))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", @intrinsic("property", copied, "value")))

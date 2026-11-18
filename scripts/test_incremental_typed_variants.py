@@ -12,7 +12,7 @@ def check_typed_variant_dependency_retention(root, build):
               '    @intrinsic("return", @intrinsic("cast", @intrinsic("add", value, the bonus), destination))\n'
               'to report:\n'
               '    @intrinsic("store", input, @intrinsic("call", "libc", "abs", integer, 4))\n'
-              '    @intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\\n", '
+              '    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", '
               'adjusted input as integer))\n'
               'to touch: @intrinsic("discard", 1)\n'
               'report\ntouch\n'

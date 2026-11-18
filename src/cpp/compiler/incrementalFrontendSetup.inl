@@ -22,8 +22,13 @@ IncrementalBodyDemand bodyDemand(context, matcherCache, frontendState, matcherPa
 context.sourceOwnerReferencesPublished = [&](Section *section, std::vector<PatternReference *> references) {
 	classification.sourceReferencesPublished(section, references);
 };
-context.reuseMatcherResult = std::bind_front(&IncrementalMatcherCache::reuse, &matcherCache);
-context.recordMatcherResult = std::bind_front(&IncrementalMatcherCache::record, &matcherCache);
+context.reuseMatcherResult = [&](PatternReference *reference, MatchOptions options, MatchDependencies *dependencies) {
+	return matcherCache.reuse(reference, std::move(options), dependencies);
+};
+context.recordMatcherResult = [&](PatternReference *reference, MatchOptions options, const PatternMatch *match,
+								  const MatchDependencies *dependencies) {
+	matcherCache.record(reference, std::move(options), match, dependencies);
+};
 context.prepareDeferredMatcherReplay = [&](std::list<PatternReference *> &references) {
 	auto projectionStart = Clock::now();
 	{

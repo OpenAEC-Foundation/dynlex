@@ -290,8 +290,8 @@ def check_folded_before_restored_runtime_call(root, build):
         'function value as {type:destination}:\n'
         '    execute: return @intrinsic("cast", value, destination)\n'
         'function widened {integer:value}:\n    execute: return value as wide\n'
-        '@intrinsic("call", "libc", "printf", @intrinsic("type", "nothing"), "%lld\\n", 42 as wide)\n'
-        '@intrinsic("call", "libc", "printf", @intrinsic("type", "nothing"), "%lld\\n", '
+        '@intrinsic("variadic call", "libc", "printf", @intrinsic("type", "nothing"), 1, "%lld\\n", 42 as wide)\n'
+        '@intrinsic("variadic call", "libc", "printf", @intrinsic("type", "nothing"), 1, "%lld\\n", '
         'widened (@intrinsic("call", "libc", "atoi", integer, "42")))\n'
         'to broken: @intrinsic("discard", missing)\n'
     )

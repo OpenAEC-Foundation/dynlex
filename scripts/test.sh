@@ -321,15 +321,14 @@ def kill_posix_tree(pid):
                     pass
             tracked.update(newly_found)
     finally:
+        # Every discovered process is stopped, so it cannot fork during cleanup.
+        # Signal each PID once; Darwin rejects a second group kill when only
+        # zombies remain in that group.
         for child in tracked:
             try:
                 os.kill(child, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-        try:
-            os.killpg(pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
 
 try:
     output, _ = process.communicate(input=standard_input, timeout=timeout_seconds)
@@ -707,7 +706,7 @@ start_test_group() {
         trap - EXIT
         passed=0; failed=0; skipped=0; test_output=""; failures=()
         "$@" || exit "$?"
-        printf '%s\0' "$passed" "$failed" "$skipped" "$test_output" "${failures[@]}" > "$TEST_OUTPUT_DIR/$group-results"
+        printf '%s\0' "$passed" "$failed" "$skipped" "$test_output" "${failures[@]+"${failures[@]}"}" > "$TEST_OUTPUT_DIR/$group-results"
     ) &
     test_group_worker=$!
 }
@@ -735,7 +734,7 @@ collect_test_group() {
     failed=$((failed + group_failed))
     skipped=$((skipped + group_skipped))
     test_output="$group_output$test_output"
-    failures=("${group_failures[@]}" "${failures[@]}")
+    failures=("${group_failures[@]+"${group_failures[@]}"}" "${failures[@]+"${failures[@]}"}")
 }
 
 collect_required_tests() {
