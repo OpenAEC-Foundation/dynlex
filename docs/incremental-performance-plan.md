@@ -10,6 +10,50 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## I137 Screen ThinLTO for WebAssembly optimization
+
+The pinned linker consumes seventeen pre-link groups from the actual
+generated Ribbon IR. The RGB edit reuses fifteen pre-link groups. LLVM
+writes seventeen new backend cache entries for that edit. The private
+backend takes 5.08 CPU seconds with the warm ThinLTO cache and 4.32 seconds
+with the whole-module optimizer and a fresh object emission. Population
+takes 6.13 versus 4.24 CPU seconds. Cached and clean ThinLTO output matches
+byte for byte. Both pipelines produce the same tested callback behavior
+and frame geometry. Keep the current object cache and inspect the ThinLTO
+import dependencies before considering a different optimization boundary.
+
+## I136 Reuse WebAssembly machine objects across compiler processes
+
+The first production attempt (I135) lowered fifteen unchanged objects
+because LLVM's fresh and restored modules gave the optimizer different
+in-memory naming and use order. The saved IR now supplies the optimizer
+input on clean and incremental builds. The focused regression edits the
+entry while retaining an independently called object. The debug path
+also preserves the absent debug-global list used by a clean build.
+
+Two paired builds of the archived 125-file Ribbon application give the
+following medians. Both cases produce byte-identical output and matching
+diagnostics against a clean build of the same compiler.
+
+| Case | CPU seconds before → after | Peak RSS MiB before → after | Cache MB before → after |
+|---|---:|---:|---:|
+| Populate an empty cache | 24.66 → 24.84 | 788 → 798 | 80.70 → 80.83 |
+| Edit a function body | 8.60 → 7.25 | 687 → 695 | 120.28 → 119.78 |
+
+The edit reuses sixteen of seventeen objects and lowers fourteen of
+161 optimized functions. Object preparation and lowering fall from
+1.71 to 0.21 seconds wall time. Whole-module optimization still takes
+2.52 seconds. The frontend prepares one file and reuses 124. Section
+analysis still evaluates all 4,319 headers and dispatches 6,775 body
+lines. Pattern matching computes six body queries and reuses 1,102 body
+resolution units. Inference still performs 35 body passes.
+
+The staged native compiler passes 389 uncached required checks in
+24.547 seconds and the three compiler regression groups in 79.511
+seconds. Adding, editing, and removing callbacks matches clean artifacts
+and runtime results at O2 and debug O2. Five native WebAssembly runtime
+checks pass. The rebuilt browser compiler passes its smoke and LSP checks.
+
 ## I134 Screen separate WebAssembly machine objects
 
 After the normal LLVM optimizer, a private prototype lowers 16 groups of
