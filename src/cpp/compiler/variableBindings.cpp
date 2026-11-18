@@ -144,28 +144,68 @@ static std::vector<VariableBindingGroup> evaluateBindings(const VariableBindingU
 }
 } // namespace
 
+Section *variableBindingDomain(const ParseContext &context, const VariableReference &reference) {
+	Section *function = enclosingVariableFunctionScope(reference.range.section());
+	return function ? function : context.mainSection;
+}
+
+void registerUnresolvedVariableReference(ParseContext &context, VariableReference &reference) {
+	context.unresolvedVariableReferences[reference.name].push_back(&reference);
+	if (auto *hooks = context.variableBindingHooks)
+		hooks->referenceChanged(reference, true);
+}
+
+void removeUnresolvedVariableReference(ParseContext &context, VariableReference &reference) {
+	auto found = context.unresolvedVariableReferences.find(reference.name);
+	// Pattern parameters are bound directly and never enter this collection.
+	if (found == context.unresolvedVariableReferences.end())
+		return;
+	if (found->second.remove(&reference)) {
+		if (auto *hooks = context.variableBindingHooks)
+			hooks->referenceChanged(reference, false);
+	}
+	if (found->second.empty())
+		context.unresolvedVariableReferences.erase(found);
+}
+
 void materializeVariableGroups(ParseContext &context, Section *selectedDomain) {
 	auto started = std::chrono::steady_clock::now();
 	auto *hooks = context.variableBindingHooks;
+	VariableBindingHooks::References selected;
+	if (selectedDomain) {
+		requireCompilerInvariant(hooks && context.sourceSyntaxResolutionComplete, "binding domain requested before resolution");
+		selected = hooks->selectDomain(selectedDomain);
+	}
 	std::vector<std::string> names;
-	for (const auto &[name, _] : context.unresolvedVariableReferences)
-		names.push_back(name);
-	std::sort(names.begin(), names.end());
+	if (selectedDomain) {
+		for (const auto &[name, _] : selected)
+			names.push_back(name);
+	} else {
+		for (const auto &[name, _] : context.unresolvedVariableReferences)
+			names.push_back(name);
+		std::sort(names.begin(), names.end());
+	}
 	for (const std::string &name : names) {
+		if (hooks)
+			hooks->work.nameVisits++;
 		BindingDomains domains;
 		auto boundary = [&](Section *section) {
 			Section *function = enclosingVariableFunctionScope(section);
 			return function ? function : context.mainSection;
 		};
 		std::vector<VariableReference *> references;
-		for (VariableReference *reference : context.unresolvedVariableReferences.at(name)) {
-			Section *scope = reference->range.section();
-			if (context.deferredBodyResolution && context.deferredBodyResolution(scope))
-				continue;
-			if (selectedDomain && boundary(scope) != selectedDomain)
-				continue;
-			references.push_back(reference);
-		}
+		auto collect = [&](const auto &available) {
+			for (VariableReference *reference : available) {
+				if (hooks)
+					hooks->work.referenceVisits++;
+				if (!context.deferredBodyResolution || !context.deferredBodyResolution(reference->range.section()))
+					references.push_back(reference);
+			}
+		};
+		if (selectedDomain)
+			collect(selected.at(name));
+		else
+			collect(context.unresolvedVariableReferences.at(name));
 		for (VariableReference *reference : references) {
 			Section *function = enclosingVariableFunctionScope(reference->range.section());
 			if (!functionDeclaresGlobalName(function, name))

@@ -5,6 +5,8 @@
 #include "compileTimeValue.h"
 #include "compiler.h"
 #include "compilerUtils.h"
+#include "debugScope.h"
+#include "debugTypeProducts.h"
 #include "intrinsicInfo.h"
 #include "patternDefinition.h"
 #include "sourceFile.h"
@@ -185,7 +187,9 @@ llvm::DIType *getDIType(ParseContext &context, DataType type) {
 			context.diBuilder->getOrCreateArray(members)
 		);
 		context.classDebugTypes[key] = complete;
-		return context.diBuilder->replaceTemporary(llvm::TempDICompositeType(forward), complete);
+		auto *resolved = context.diBuilder->replaceTemporary(llvm::TempDICompositeType(forward), complete);
+		recordDebugTypeProduct(context, type, resolved);
+		return resolved;
 	}
 	default:
 		return nullptr;
@@ -423,7 +427,8 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 					llvm::DIType *diType = getDIType(context, varType);
 					auto *gvExpr = context.diBuilder->createExpression();
 					globalVar->addDebugInfo(context.diBuilder->createGlobalVariableExpression(
-						context.diCompileUnit, name, name, diFile, line, diType, /*IsLocalToUnit=*/true, gvExpr
+						context.diCompileUnit, name, name, diFile, line, diType, /*IsLocalToUnit=*/true, /*isDefined=*/true,
+						gvExpr
 					));
 				}
 			}
@@ -443,7 +448,9 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 					auto *diVar = context.diBuilder->createAutoVariable(context.currentDebugScope, name, diFile, line, diType);
 					context.diBuilder->insertDeclare(
 						storage, diVar, context.diBuilder->createExpression(),
-						llvm::DILocation::get(*context.llvmContext, line, varDef->range.start() + 1, context.currentDebugScope),
+						llvm::DILocation::get(
+							*context.llvmContext, line, varDef->range.start() + 1, debugScopeForFile(context, diFile)
+						),
 						static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder).GetInsertBlock()
 					);
 				}

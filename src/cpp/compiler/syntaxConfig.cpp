@@ -1,4 +1,5 @@
 #include "syntaxConfig.h"
+#include "builtinSyntaxConfig.h"
 #include "compiler.h"
 #include "parseContext.h"
 #include "pathUtils.h"
@@ -641,7 +642,7 @@ std::optional<std::string> definitionShorthandSyntaxError(const SyntaxConfig &co
 	return std::nullopt;
 }
 
-bool initializeSyntaxConfigs(ParseContext &context, const std::string &mainPath) {
+bool initializeBuiltinSyntaxConfig(ParseContext &context) {
 	context.builtinSyntax = {};
 	context.builtinSyntaxConfigPath.clear();
 	std::vector<std::string> builtinCandidates = {
@@ -660,7 +661,12 @@ bool initializeSyntaxConfigs(ParseContext &context, const std::string &mainPath)
 		context.builtinSyntaxConfigPath = candidate;
 		break;
 	}
+	return true;
+}
 
+bool initializeSyntaxConfigs(ParseContext &context, const std::string &mainPath) {
+	if (!initializeBuiltinSyntaxConfig(context))
+		return false;
 	context.projectSyntax = context.builtinSyntax;
 	context.projectSyntaxConfigPath = findProjectSyntaxConfigPath(context, mainPath);
 	if (!context.projectSyntaxConfigPath.empty() &&

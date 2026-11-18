@@ -1,3 +1,30 @@
+template <typename Visitor> void forEachInferenceSourceScope(const Section &section, const Visitor &visit) {
+	visit(section);
+	for (const Section *child : section.children)
+		if (child->patternDefinitions.empty() && !hasCodegenSectionIdentity(*child))
+			forEachInferenceSourceScope(*child, visit);
+}
+
+template <typename Visitor> void forEachInferenceSourceReference(const Section &section, const Visitor &visit) {
+	forEachInferenceSourceScope(section, [&](const Section &scope) {
+		for (PatternReference *reference : scope.patternReferences)
+			visit(reference);
+	});
+}
+
+std::string sourceMatchInputs(const Json &projection, const std::string &path) {
+	std::string products;
+	for (const auto &[kind, outputs] : std::array{
+			 std::pair{'M', &projection.at("matches")},
+			 std::pair{'U', &projection.at("matcher_projection").at("source_match_results")}
+		 })
+		if (auto result = outputs->find(path); result != outputs->end()) {
+			products.push_back(kind);
+			products += result->get_ref<const std::string &>();
+		}
+	return products;
+}
+
 Json patternNodeIdentity(const PatternTreeNode *node) {
 	Json path = Json::array();
 	for (const PatternTreeNode *current = node; current && current->parentNode; current = current->parentNode)
@@ -49,16 +76,15 @@ Json resolvedMatchIdentity(const PatternMatch &match, const std::map<const Secti
 	};
 }
 
-struct ResolvedFunctionMatches {
+struct ResolvedReferenceMatches {
 	std::string fingerprint;
 	std::string entries;
 };
 
-ResolvedFunctionMatches resolvedFunctionMatches(
-	const Section *section, const std::map<const Section *, std::string> &paths, IncrementalMatcherCache &matcherCache,
-	const Json *priorEntries, const Json *priorFingerprint, size_t *reused
+ResolvedReferenceMatches resolvedReferenceMatches(
+	const std::vector<PatternReference *> &references, const std::map<const Section *, std::string> &paths,
+	IncrementalMatcherCache &matcherCache, const Json *priorEntries, const Json *priorFingerprint, size_t *reused
 ) {
-	std::vector<PatternReference *> references = sourceOwnerReferences(*section);
 	auto oldEntries = priorEntries ? matcherCache.restoreReferenceKeys(priorEntries->get_ref<const std::string &>()) : nullptr;
 	auto oldIdentities =
 		priorFingerprint ? matcherCache.restoreMatchIdentities(priorFingerprint->get_ref<const std::string &>()) : std::nullopt;

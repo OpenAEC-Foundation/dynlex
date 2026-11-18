@@ -15,7 +15,11 @@ Import directives use the configured spelling at any indentation level. Imported
 lines retain their authored indentation and source identity; a missing indented
 import reports its path at the original source columns.
 
-Each source file fixes its URI and internal-library classification when created.
+Each source file fixes its display URI, canonical path and internal-library
+classification when created. Matcher fingerprints, trie mutation signatures,
+import deduplication and source observations share the canonical path. A provider
+transition from a disk path to an equivalent editor URI therefore preserves
+semantic identity without repeating filesystem normalization per query.
 Content edits preserve that identity. Syntax lookup selects the current compilation's
 builtin or project configuration from that classification without repeating filesystem
 canonicalization for each source range.
@@ -59,11 +63,52 @@ inference, cloning and relevant provider mutations demand a unit before consumin
 its matches or bindings. Reusing a typed body can leave its original resolution
 product encoded for the entire build. Binding snapshots retain untouched domains;
 late demands publish new source bindings to live inference identity indexes.
+Selected binding demands use a function-domain reference index built after
+source resolution and deferred-section reparenting. Reference publication and
+removal maintain that index, so binding one demanded function does not scan
+other functions' references. Whole-program binding retains its global-domain
+joins. `binding_reference_visits` counts actual consumer scans;
+`binding_domain_index_reference_visits` counts the initial index scan, with
+separate build, selection and update counters.
+Each reusable body also retains whether its source contains declared variable
+constraints, including typed references bound directly to pattern parameters.
+The constraint collector demands such an owner before collecting its declarations;
+otherwise a cached body would conceal validation queries. Summaries reuse the
+same source/matching proof as their body unit. Statistics report summary units
+reused/scanned, source references scanned and `binding_constraint_demands`.
+Concrete inference inputs include resolved fixed local constraints and their
+declared types within that source unit's scope boundaries. A provider change can
+therefore invalidate cached successes or failures without changing a function's
+authored header. Signature lookup inputs remain separate from local-body inputs.
 `body_resolution_units_deferred` counts units still encoded at reporting time,
 `body_resolution_units_demanded` counts units restored on semantic demand, and
 `body_resolution_references_restored` counts actual replayed reference outcomes.
-This whole-unit path currently excludes debug/trace builds and does not extend
-the native incremental driver to tooling or other output modes.
+Debug builds reuse these source-resolution products against current source ranges;
+validated inference facts and typed bodies can also be restored using current
+source anchors. Debug builds retain runtime bodies even when native IR exists,
+so changed debug locations can regenerate IR without repeating semantic inference.
+Native debug IR retains per-function queries for authored declaration and statement
+locations, variable/class/member locations and referenced global debug records.
+Logical source-line identities are shared with typed-body restoration. IR closure
+reuse requires those queries to retain their current physical locations; moved
+locations rebuild the affected IR while unchanged runtime facts remain reusable.
+Body and diagnostic source readers construct anchor identities only for requested
+semantic owners. The shared identity builder preserves the owner, text digest and
+duplicate occurrence used by debug metadata. Generated-line origins and source
+slices use the first authored physical anchor in import order. Late binding
+publication updates declaration mappings. `body_source_anchor_owners_indexed` and
+`body_source_anchor_lines_indexed` count actual index construction, including an
+owner requested independently by separate readers; they do not claim distinct
+owners across the whole process. Unrelated owners do not incur anchor hashing or
+encoded/decoded anchor-map construction.
+Imported debug metadata belongs to the current compilation unit, including global
+declaration records. Reusing entry IR preserves the saved compile unit's global
+declaration order independently of the module's canonical symbol ordering. Debug
+type metadata is emitted only when it has actual records.
+`debug_ir_location_queries` and `debug_ir_location_hits` expose
+location validation work. This whole-unit path
+currently excludes tracing and does not extend the shared incremental driver to
+tooling or non-native backends.
 
 Native incremental builds retain unresolved expression syntax with a reference
 outline. An unchanged function body registers its current-source pattern and
@@ -301,6 +346,14 @@ call results; a changed function becomes a stable dependency boundary only when
 those results, types, and effects are all preserved. Unserializable observed results
 leave that boundary unproven, so callers are checked again.
 
+Source-owner inference inputs consume ordered resolved-match identities, including
+flex, class and lifecycle owners. Initial/final lookup keys still validate cached
+matching and replay, but a changed candidate tree with an unchanged selected
+result does not invalidate downstream inference. Unchanged source reference units
+retain their result identities; equivalent expanded-function reference units share
+the same product. A changed match, variable classification or argument grouping
+changes the semantic result fingerprint and propagates to its consumers.
+
 Incremental matcher keys reuse each parsed reference's candidate literal spellings and numeric literal arguments.
 Each indexed definition contributes to a tree of its required literal words. A reference fingerprints only
 the signatures whose words occur in its matcher input, including wildcard-start patterns. A new overload
@@ -356,6 +409,9 @@ one argument when no ordinary spelling matches. Parentheses delimit an element's
 expression normally. There is one trie path for a variadic declaration, independent
 of argument count. Each matched element retains its caller-owned pack, element index and caller bindings;
 resolution does not generate declarations for different arities. Captures resolve the current element root, so operand regrouping updates the original argument tree. The compilation context retains captured source bodies for its arena lifetime.
+Forwarding an extracted argument reference into another pack preserves its original
+capture and caller bindings. It does not capture the forwarding variable again;
+recursive expansion checks therefore recognize the same source argument.
 
 Capture names are type-agnostic unless a type expression appears before the colon. There is no lexical word-capture type; finite concepts such as shader stages are represented by literal patterns, and text values use an ordinary string type constraint.
 
@@ -559,6 +615,14 @@ reference assignment target does not execute the expression previously bound the
 Thus the same `for each` replacement handles arrays, lists and heterogeneous packs.
 No separate pack-iteration intrinsic exists.
 
+Pack construction keeps its elements unevaluated; their value/address diagnostics
+are consumed when an extracted expression is actually used. An unresolved
+variable read contributes a deferred value-use diagnostic, while storage targets
+remain inferable. Reusing an argument-inference observation requires both its
+execution-state input and its expression type to match. A later store can refine
+that type without changing the tracked execution state, so state equality alone
+does not justify reusing an earlier unresolved-read observation.
+
 A loop that selects argument references retains a separately inferred body for
 each compile-time iteration, with fresh local types for that iteration. Every caller-body transfer inside those iterations
 also owns its corresponding inferred caller body. Native generation emits those
@@ -751,6 +815,13 @@ Execution snapshots retain immutable instantiation-effect records through shared
 ownership. Recursive argument and grouping frames do not reserve an inline copy
 of that aggregate when no function instantiation is active. Snapshot copies share
 the immutable record; restoring a snapshot still copies its effects into the owner.
+
+Inside an active grouping trial, an expression with at most one grouping-capable
+node has no alternative operand grouping. It uses that fixed structure and the
+parent trial's rollback journal directly, while still inferring current types,
+overloads, effects and diagnostics. This skips candidate generation and a nested
+transaction; it does not reuse a prior typed result. Native incremental statistics
+and editor traces expose the actual count as `unique_grouping_trials_skipped`.
 
 Unary arithmetic intrinsics require numeric scalar or vector values. Classes, pointers, arrays, matrices, booleans, and type values are rejected during inference, before code generation. Floating-point vector negation uses the element type to select floating-point instructions.
 
@@ -1175,12 +1246,24 @@ manifests and individual inference-summary records retain their own JSON formats
 module payloads retain raw LLVM bitcode. All readers select the format from the
 artifact contract. Compiler identity keeps incompatible derived snapshots separate.
 
-Native executable file builds use incremental compilation automatically. The default
+Native executable and LLVM text file builds use incremental compilation automatically. The default
 cache lives under `dynlex/compiler` in the operating system's user cache directory:
 XDG cache storage on Unix, Darwin user cache storage on macOS, and LocalAppData
 on Windows. `--cache-dir <directory>` overrides that location, `--no-incremental`
 performs a clean build, and `--incremental-stats` reports the actual cache directory
-and reuse. Cache overrides and statistics apply only to native executable file builds.
+and reuse. Cache overrides and statistics apply to native executable and LLVM text file builds.
+LLVM text output uses the same incremental semantic and unoptimized function-IR
+products, with its output mode in the program identity. Its final text has an
+independent content-addressed artifact; no native objects are lowered or linked.
+An unchanged output or diagnostic-wording edit does not rewrite that file. A
+missing/damaged destination or a changed output path restores the text directly;
+an evicted text artifact regenerates it from saved IR. Streams replay cached text
+on each invocation. Ordinary and incremental LLVM emission canonicalize symbol order before
+optimization and share final rendering, with explicit output I/O errors. Private debug-cache products never enter the output.
+`llvm_outputs_built` and `llvm_outputs_restored` expose artifact work. Changed LLVM
+output still runs whole-module optimization; semantic and function IR reuse do
+not imply incremental optimization for this output mode.
+
 A complete native result is reusable while every filesystem observation remains identical. Source edits that
 only add, remove or change comments or trailing whitespace also reuse the result when
 debug locations, execution traces and diagnostics cannot become stale. The semantic
@@ -1355,6 +1438,10 @@ by identity before inference, so inserting or removing a declaration cannot shif
 another query's result. Retained lookup reads use the same identity to locate their
 original record when the next snapshot is captured. Other results are committed
 by inference as before.
+Number rules retain their successful constraint result through this same product.
+Fresh inference validates the rule intrinsic and records its diagnostics; replay
+installs the validated properties and publishes the retained diagnostics once.
+An edited provider invalidates that result through the ordinary query dependencies.
 Class references are keyed by stable class-section paths. Committed class
 instantiation field types and function signatures are saved with the constraint
 probe schedule. When the class declaration still has the same fields, the
@@ -1503,9 +1590,12 @@ The existing binary matcher cache stores each unit's reference indices, direct
 variable outcomes, exact source spans and positive or failed lookup keys. The
 JSON projection stores only the unit's content key. Restored matches and variable
 references rejoin the ordinary expansion and precedence-invalidation machinery.
-Bodies in files with prior frontend diagnostics run the normal resolver. Typed
-inference diagnostics have their own retained products and do not exclude those
-files from body-resolution or declaration-classification reuse.
+Definition units associated with prior frontend diagnostics run the normal
+resolver. Their identities include enclosing definitions and note locations;
+unrelated bodies in the same file remain eligible for reuse. Failed snapshots
+retain completed matcher products for healthy units. Typed inference diagnostics
+have their own retained products and do not exclude those units from body-resolution
+or declaration-classification reuse.
 `body_resolution_units_reused` and `body_resolution_references_restored`
 count this restoration, separately from references evaluated by the resolver.
 File-local declaration inputs and exported classification signatures include each
@@ -1560,8 +1650,12 @@ Classification distinguishes changed inputs from changed exported signatures.
 Strongly connected components use both the old and current edges, including deleted
 providers. A component with changed inputs resolves normally as a group. Unchanged
 downstream components may provisionally restore their saved headers and bodies.
-Before committing the definition boundary, the compiler compares resolved header
-and visible-name exports. An unchanged export stops the cascade. A changed export
+During resolution, the compiler compares ready header and visible-name exports.
+Each header becomes available when its definitions settle. Name environments use
+the definition-completion boundary where declarations are indexed, before those
+declaring calls resolve. An unresolved call elsewhere cannot delay a ready
+producer's changed export or leave cached downstream parameters in diagnostics.
+An unchanged export stops the cascade. A changed export
 retracts the directly dependent cached components, removes their indexed headers
 and body-derived parameter bindings, restores their cached initial word counts,
 and resolves those bodies normally. Their
@@ -1605,6 +1699,15 @@ from work performed for the edit; `classification_ms` measures the stage. Patter
 keys combine active definition contributions independent of insertion order;
 removing and readding the same definition restores its earlier key.
 
+Declared-constraint source identities are built once per actual declaration target
+during a constraint pass. Element, variable-reference and number-rule targets have
+separate keys. Source-path components are indexed on demand, and line-occurrence
+indexes visit only the queried line's owning scope. Persistent identity bytes are
+unchanged, including duplicate declaration ordinals. The
+`constraint_identity_computations`, `constraint_identity_cache_hits`,
+`constraint_identity_sections_indexed` and `constraint_identity_lines_indexed`
+counters expose this work.
+
 Variable ownership has separate persistent products after expression expansion.
 Queries are partitioned by spelling and lexical function boundary. A declared
 global reader joins the ancestor domains it can reach before ownership is
@@ -1639,8 +1742,15 @@ the cache compares the changed paths' required literals against each
 owning function before replay; a potentially affected function rematches.
 Changes that alter precedence rules or participating families also rematch. A precedence
 rebuild never carries replay keys into a later pass.
-An edit confined to the bodies of ordinary functions that had no inferred
-instantiation in the prior build can stop after pattern resolution and validation.
+An edit confined to eligible unread function bodies can stop after pattern
+resolution and validation. This includes flex bodies: absence of a native
+instantiation alone does not prove that inference did not consume a body.
+Recorded inference reads, constraint probes, callable queries and the dependency
+closure of retained IR keep consumed bodies active, including reads from rejected
+trials and compile-time-only calls. Only owners represented in the logical source
+stream enter the inactive source mask; a generated accessor with no source body
+cannot mask an input. Exposed functions and owners containing nested definitions
+remain outside this path.
 An unchanged inactive body with no remaining implicit-parameter candidates can
 skip resolution even when its pattern begins with a word used by other calls;
 its declaration cannot change through body-driven parameter promotion.
@@ -1653,6 +1763,10 @@ the declaration on the same physical line.
 It refreshes body and resolved-match fingerprints for edited inactive functions,
 then reuses the prior inferred result and linked objects. Active function edits
 traverse type inference again; eligible unchanged instantiations reuse cached summaries.
+`type_inference_reused` reports whole-result reuse; `function_body_inference_passes`,
+`preinferred_instantiations`, `inference_source_definitions_indexed`,
+`ir_generation_ms`, `objects_built` and `link_ms` expose remaining work rather than
+counting inherited products as newly restored functions.
 Blank and comment-only logical lines do not contribute to function-body fingerprints.
 When inference is reused, the saved constraint-probe schedule and class instantiations
 remain attached to the next snapshot even if its frontend projection was rebuilt.
@@ -1750,6 +1864,27 @@ that propagation. Inference variants restored from cache carry their prior call
 dependencies forward, while newly inferred variants capture current calls.
 Imported LLVM functions retain their prior variant dependencies when their bodies
 were not re-inferred.
+Source-match edges are separate products from inferred selections and reads. Their
+producer version includes the owning unit's body layout and its native-match,
+expanded-reference and scoped source-reference product identities. The root's layout
+covers its own scopes rather than requiring an authored definition-body record.
+Semantic source scopes stop at nested declarations and independently emitted bodies,
+including retain/release. The `source_match_units` map in the matcher projection
+publishes their reference products; classification retains its broader owner view.
+Inference fingerprints
+read these same matching products and compiled declarations independently of native
+emission. A flex or class source unit therefore retains its lookup dependencies,
+and adding an overload below an unchanged forwarding flex invalidates its cached
+native callers. An unchanged encoded body retains these edges without constructing its
+references; a missing or changed product demands only that owner's match result.
+Failed constraint snapshots retain the same source-match products independently
+of ordinary typed inference. Repairing a constraint can consume those newer
+matches without reconstructing unrelated bodies from an older native snapshot.
+Section reads record direct dependencies. Trial ancestors follow the recorded
+callee edges, so fresh and retained callee inference produce the same section
+dependency view. Constraint-probe observations retain their own read closure.
+`matched_dependency_facts_reused`, `matched_dependency_facts_captured`, and
+`matched_dependency_owners_demanded` report this graph work separately.
 
 When a body edit preserves its inferred interface, the compiler can reuse the
 entry point's inference and IR. This checks the top-level execution source,
@@ -1762,6 +1897,27 @@ agree. Imported entry IR also supplies globals that exposed functions reference.
 The `root_execution_reused` counter records when the entry was imported.
 Lifecycle discovery also follows each preinferred function whose body will be
 generated. These bodies can require managed cleanup when the entry IR is reused.
+
+Global type outputs retain independently validated entry-prefix queries. A prefix
+records its actual source, positive/failed lookup, callee, value and external
+global-type reads, together with class facts at that checkpoint. Globals produced
+inside the prefix are outputs of its execution proof. They do not become circular
+external inputs merely because a store also observes its target's type. A worklist
+can restore proved outputs and preinfer changed readers before checking the whole
+entry. These types are provisional until entry reuse succeeds; ordinary entry
+inference receives the original types if that proof fails. Knowing an older type
+alone never validates a producer. The current prefix source proof can still cover
+the entire unchanged entry; this is not statement-level incremental execution.
+`global_type_producers_captured`, `global_type_producers_checked` and
+`global_type_producers_restored` expose the work.
+
+Entry preparation extends compatible class-instance prefixes transactionally.
+Existing indices and layouts must agree; referenced class cycles are reserved
+before field decoding, and request collisions reject reuse. Failed restoration
+rolls back appended instances and requests. Cached entry globals are bound to their
+actual LLVM declarations before replacement code generation. Managed globals keep
+the saved initialization-flag identity, so regenerated writers and reused entry
+code use the same storage.
 
 The graph follows instantiated replacement bodies, caller bodies, static loop
 iterations, and data expressions, including compile-time-only callable queries.
@@ -1789,6 +1945,21 @@ Storage scopes identify observations within a process and survive key refinement
 the persisted graph uses section paths and final concrete keys. Discarded trials'
 observations are projected into their callers. Cycle checks commit a reusable result
 only after the entire reachable cycle has been checked.
+Within a compiler process, dependency checks share per-query proof nodes. Reading
+a callee interface or observed value records the query's consumer, including reads
+which later reject a proof. Accepting new inference products invalidates their
+recorded transitive consumers instead of clearing unrelated positive proofs.
+Consumer traversal handles cycles and is demand-driven; it does not rebuild a
+whole reverse index after each acceptance. The dependency records being checked
+remain persistent across processes; these memoized validity proofs belong to the
+current inferred context. `inference_query_checks`, `inference_query_units_checked`,
+`inference_query_proof_hits`, `inference_query_proofs_invalidated`,
+`inference_query_proofs_retained` and `inference_query_consumer_edges_visited`
+count actual work. With statistics enabled, `inference_query_check_ms` and
+`inference_query_invalidation_ms` measure checking and invalidation separately.
+Retention is counted per invalidation event; successive events can retain the
+same proof again. Unit-check counts expose actual reevaluation separately.
+Disabled timing probes perform no clock reads.
 Aggregate dependency units are captured only when a retained output's dependency
 closure requests them. Unchanged units retain their records. Source input fingerprints
 are computed once after declared constraints and signature templates are finalized,
@@ -1796,6 +1967,19 @@ and shared by reuse checks and persistence. `inference_unit_inputs_computed` and
 `inference_unit_input_ms` expose that work; `inference_units_captured`,
 `inference_units_reused`, `inference_aggregate_units_captured`, and
 `inference_aggregate_units_reused` distinguish new and retained dependency records.
+With `--incremental-stats`, `dependency_graph_ms` includes successful and failed
+dependency-product publication. The setup, sections, reverse, units and lookups
+subphase timings are disjoint. Matched-dependency timing overlaps sections;
+unit capture, normalization and global propagation are nested within units.
+Section visits, normalized units and global dependency-edge visits count actual
+work, including repeated edge visits during propagation. Skipped publication
+reports zero work. These scoped probes read no clocks when statistics are disabled.
+Source-only section dependency records can retain their previous outputs when
+current matched edges are equal and no inferred variants, reads or lookups contribute.
+Main execution retains its separate inference proof. An unused edit can leave its
+producer pending until a consumer needs the graph; that consumer validates the new
+matches before considering record reuse. `dependency_graph_source_only_sections_reused`
+counts these retained records within `dependency_graph_entries_reused`.
 The interface comparison captures only the instantiation just preinferred.
 Other variants, including unchanged variants of that same function, retain their
 summaries and generated IR independently. The same encoder produces
@@ -1947,6 +2131,24 @@ without value state or retained native IR are removed.
 The graph payload stores section paths once and indexes forward, reverse, and
 per-instantiation edges by path number. Concrete keys and source fingerprint versions
 also have shared tables, so repeated dependencies do not duplicate their hashes.
+Loading retains the compact encoding alongside its semantic graph. Capture records
+whether forward edges, reverse edges and instantiation lists changed. Publication
+reuses those encoded columns and the path table when the ordered path identities
+are unchanged; adding or removing an identity rebuilds every path-indexed column.
+Matched-input rows retain their encoding when their version and indexed dependencies
+match. Inference-unit rows are compared against the current shared key/source tables
+and retained in place when all encoded fields agree. Rebuilding the dictionaries in
+canonical order avoids accumulating obsolete entries. New observations, shifted
+key IDs, changed values and path additions/removals still rebuild affected rows.
+The codec lives in `incrementalGraphCodec.cpp` and has direct roundtrip/edit coverage.
+This avoids reconstructing equal JSON rows; it still visits current dictionaries
+and compares inference fields. It does not make graph capture or whole-payload
+CBOR serialization incremental.
+The retained encoding and change markers are process-local producer state, not
+additional persisted graph fields. `graph_encoding_columns_reused`,
+`graph_encoding_columns_built`, `graph_encoding_records_built` and
+`graph_encoding_records_reused` report actual
+conversion work at native graph publication.
 Variants whose compile-time arguments
 cannot form an inference-summary key store the union of their selected edges
 under the reserved `*` variant key. Importing their IR retains those edges, so
@@ -2249,10 +2451,54 @@ so concurrent cache eviction cannot invalidate an active build. Single-entry
 lookups also open and retain the file before reading its contents.
 Invalid entries and I/O failures are explicit errors. Linking uses private temporary
 copies so cache eviction cannot remove linker inputs. Entries are limited to 256 MiB;
-the disk cache is trimmed to 512 MiB after a build. The LSP and other output modes retain
-their ordinary compilation pipeline.
+the disk cache is trimmed to 512 MiB after a build. Object-only and non-native
+output modes retain their ordinary compilation pipeline.
 
 # LSP Interaction
+
+The language server retains semantic contexts per main document and analysis
+profile. A new analysis request reloads configuration and validates actual source
+observations, including failed import lookups, content, canonical identity and
+internal-library classification. If those source inputs and non-message syntax
+identities are unchanged, it updates configured diagnostic messages, related notes
+and quick-fix titles without repeating compilation. Native and editor builds share
+the filesystem observation implementation and diagnostic provenance. Configuration
+lookup dependencies include missing candidates, so opening a nearer configuration
+or closing an unsaved document refreshes its consumers.
+
+A successful editor context also survives comment and trailing-whitespace edits
+when configured lexical code remains identical on every physical source line.
+The proof compares the importer's immutable source snapshots, not a live provider
+that may now prefer an editor buffer over disk. It validates current source
+characters through the importer's shared validator, retains missing/shadowing
+lookup checks, and requires unchanged syntax and source identity. Semantic ranges
+keep their original coordinates; comment tokens read the current editor document.
+Edits which move executable lines still reconstruct the ordinary current-source
+context. This boundary adds no disk products or extra user setting.
+
+Tooling also retains the native parser's unresolved expression and definition
+products, including temporary type-constraint syntax. Parser inputs and the
+current builtin/project non-message syntax identity select reusable products.
+Restoration creates ordinary nodes, references and bindings at current ranges;
+matching and inference determine their current meaning. A failed analysis keeps
+its used syntax plus one last complete set; success prunes earlier entries.
+The trace reports actual expression parses, reused expressions and definitions,
+reused temporary expressions (a subset of expression reuse), and encoded syntax
+bytes. This cache adds no disk product or configuration option.
+
+Ordinary source edits reconstruct a current-source context and reuse the native
+matcher's positive and failed lookup products through compiler hooks. The same
+candidate, binding, precedence and configuration fingerprints validate those
+results; restored matches bind to the current tree and source ranges. Each profile
+retains only index-selected immutable matcher segments in memory. A failed analysis
+keeps its used queries and the last successful product set, without accumulating
+historical failed queries. The next successful analysis prunes that earlier set.
+Temporary hooks are detached before publishing the context. Source preparation,
+classification and type inference still run through the ordinary tooling pipeline.
+The existing LSP trace option reports evaluated/reused contexts, actual matcher
+computations and hits, and retained encoded matcher bytes through log messages.
+The actual WebAssembly host API can be checked with
+`node scripts/test_web_lsp.mjs build-web/dynlex_web.js` after building that target.
 
 When hovering over an expression, the already-evaluated compile-time value and type are shown.
 The source occurrence maps to its inferred expression in the selected callable
@@ -2269,6 +2515,16 @@ ranges, semantic tokens, web diagnostics, and execution traces convert back.
 Normalized semantic tokens map each authored source slice separately. Formatted literal text and braces receive string annotations, while embedded expressions keep their own tokens.
 Source files share line indexing; the semantic token encoder is shared by the
 language server and tagged-token inspection tools.
+Constant-variable modifiers index direct source-expression facts on their first
+query within a semantic-token request. Reference and definition lookups share
+that index and retain their distinct reference identities. Instantiation and
+constant-parameter values continue to use the owning scope. A later request
+builds its index against the current compilation context.
+Configuration message validation accepts the same arbitrary identifiers, nested
+variants and quoted empty values as the compiler loader. Message completions read
+the current builtin configuration through the editor filesystem, independently
+of a partially written project configuration. Both message names and variant
+names come from that data.
 
 Document symbols combine the authored ranges of their opening line, own code,
 and descendant sections. Anonymous execution and branch sections contribute to

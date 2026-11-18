@@ -263,6 +263,12 @@ static bool inferSectionLineRange(
 	}
 
 	bool sectionFallsThrough = true;
+	auto rootCheckpoint = [&]() {
+		if (initializeSection && section == context.parseContext.mainSection && !context.trial &&
+			context.parseContext.inferenceProducts)
+			context.parseContext.inferenceProducts->rootCheckpoint();
+	};
+	rootCheckpoint();
 	for (size_t i = startLineIndex; i < section->codeLines.size(); i++) {
 		CodeLine *line = section->codeLines[i];
 		Expression *&lineExpression = body ? body->lineExpression(i) : line->expression;
@@ -389,6 +395,7 @@ static bool inferSectionLineRange(
 			mergeExecutionStates(context, branchConstantStates, branchAddressStates, branchSubjectStates);
 
 			i = chainEnd;
+			rootCheckpoint();
 			continue;
 		}
 		if (lineExpression && lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Loop) {
@@ -402,10 +409,12 @@ static bool inferSectionLineRange(
 					return false;
 				}
 				lineExpression->executionFallsThrough = sectionFallsThrough;
+				rootCheckpoint();
 				break;
 			}
 			if (condition && !*condition) {
 				lineExpression->sectionBodyReachable = false;
+				rootCheckpoint();
 				continue;
 			}
 			bool loopFallsThrough = true;
@@ -416,6 +425,7 @@ static bool inferSectionLineRange(
 				sectionFallsThrough = false;
 				break;
 			}
+			rootCheckpoint();
 			continue;
 		}
 		bool openedSectionFallsThrough = true;
@@ -429,6 +439,7 @@ static bool inferSectionLineRange(
 			sectionFallsThrough = false;
 			break;
 		}
+		rootCheckpoint();
 	}
 	if (loopSection && context.staticLoopFrames.back().required) {
 		if (!inferStaticLoopIterations(

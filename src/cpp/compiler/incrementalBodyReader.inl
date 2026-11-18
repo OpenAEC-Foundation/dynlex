@@ -267,7 +267,8 @@ class InferenceBodyReader {
 			);
 		for (const Json &fix : item.at(4))
 			result->quickFixes.push_back(
-				{fix.at(0).get<std::string>(), sources.range(fix.at(1)), fix.at(2).get<std::string>()}
+				{renderCachedDiagnosticText(context, fix.at(0)), sources.range(fix.at(1)), fix.at(2).get<std::string>(),
+				 configured(fix.at(0))}
 			);
 		return result;
 	}

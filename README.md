@@ -56,10 +56,12 @@ compiling and running its DynLex fixtures and auxiliary checks. No test preparat
 is moved ahead of that timer. Required fixture builds and non-cache compiler
 checks disable incremental reuse; cache regressions start with fresh test projects.
 `--run-only` skips the compiler build and keeps the same process-tree budget.
-C++ unit checks for numeric parsing and class layout
-run in the integration suite and in separate Linux, macOS, and Windows CI steps.
-Integration tests also cover larger library and application programs. Release
-verification runs both suites. The CAD fixtures and their verifier live in dynlex-cadkernel.
+C++ unit checks for numeric parsing and class layout run in the required suite
+and in separate Linux, macOS, and Windows CI steps.
+The integration suite covers larger library and application programs, additional
+compiler regressions, runtime behavior and tooling. It has individual check timeouts
+but no overall 120-second limit. Release verification runs both suites.
+The CAD fixtures and their verifier live in dynlex-cadkernel.
 
 Integration compilations have a 30-second default budget (60 seconds on Windows)
 to include optimization of application libraries. Required fixtures retain their

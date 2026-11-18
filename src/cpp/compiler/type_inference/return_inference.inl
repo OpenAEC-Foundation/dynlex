@@ -114,7 +114,6 @@ static Diagnostic buildIncompatibleReturnTypeDiagnostic(
 	const DataType &actualType
 ) {
 	Range diagnosticRange = returnValueExpression ? returnValueExpression->range : returnExpression->range;
-	const SyntaxConfig &syntax = syntaxConfigForRange(context.parseContext, diagnosticRange);
 	std::string expectedTypeName = typeToUserName(expectedType);
 	std::string actualTypeName = typeToUserName(actualType);
 	Diagnostic diagnostic(
@@ -123,10 +122,10 @@ static Diagnostic buildIncompatibleReturnTypeDiagnostic(
 	);
 	Range originRange = context.currentInstantiation->returnTypeOriginRange;
 	if (originRange.line) {
-		diagnostic.relatedInfo.push_back(
-			{renderConfiguredMessage(syntax, "incompatible return type", "related origin", {{"type", expectedTypeName}}),
-			 originRange}
-		);
+		diagnostic.relatedInfo.push_back(configuredRelatedInfo(
+			context.parseContext, diagnosticRange, "incompatible return type", "related origin", originRange,
+			{{"type", expectedTypeName}}
+		));
 	}
 
 	if (returnValueExpression && isSupportedCastConversion(actualType, expectedType) &&
@@ -135,10 +134,10 @@ static Diagnostic buildIncompatibleReturnTypeDiagnostic(
 		if (targetTypeSource) {
 			std::string replacement =
 				"@intrinsic(\"cast\", " + std::string(returnValueExpression->range.subString) + ", " + *targetTypeSource + ")";
-			diagnostic.quickFixes.push_back(
-				{renderConfiguredMessage(syntax, "incompatible return type", "quick fix convert", {{"type", expectedTypeName}}),
-				 returnValueExpression->range, std::move(replacement)}
-			);
+			diagnostic.quickFixes.push_back(configuredDiagnosticFix(
+				context.parseContext, diagnosticRange, "incompatible return type", "quick fix convert",
+				returnValueExpression->range, std::move(replacement), {{"type", expectedTypeName}}
+			));
 		}
 	}
 	return diagnostic;

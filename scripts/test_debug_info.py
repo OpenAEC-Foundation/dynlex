@@ -11,6 +11,53 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent
 
 
+def check_incremental_source_locations(compiler, verifier, root):
+    source = root / "incremental_debug.dl"
+    original = ('to get next value:\n'
+                '    @intrinsic("return", @intrinsic("add", value, 1))\n'
+                'to report {value}:\n'
+                '    @intrinsic("variadic call", "libc", "printf", '
+                '@intrinsic("type", "nothing"), 1, "%d\\n", next value)\n'
+                'report @intrinsic("command line argument count")\n')
+    for optimization in ("-O0", "-O2"):
+        cache = root / ("cache" + optimization)
+        for index, text in enumerate((original,
+                "# moved\n\n" + original.replace('"add", value, 1', '"add", value, 2'),
+                "# moved again\n\n\n" + original)):
+            source.write_text(text)
+            dumps = []
+            for incremental in ((True,) if index == 0 else (True, False)):
+                output = root / ("incremental.out" if incremental else "clean.out")
+                selected_cache = cache if incremental else root / f"fresh{optimization}-{index}"
+                assert incremental or not selected_cache.exists()
+                flags = ["--cache-dir", str(selected_cache)]
+                subprocess.run([str(compiler), str(source), "-g", optimization, *flags,
+                                "-o", str(output)], cwd=root, capture_output=True, check=True)
+                subprocess.run([str(verifier), "--verify", str(output)],
+                               capture_output=True, check=True)
+                dump = subprocess.check_output([str(verifier), "--debug-info", "--debug-line",
+                                                str(output)], text=True)
+                lines = dump.splitlines()
+                assert "file format" in lines[0], dump
+                dumps.append(lines[1:])
+            if index:
+                assert dumps[0] == dumps[1], "incremental DWARF differs from current clean source"
+    from test_incremental_debug_ir import debug_ir_global_edits, debug_ir_recursive_edits
+    for optimization in ("-O0", "-O2"):
+        for index, text in enumerate(debug_ir_global_edits() + debug_ir_recursive_edits()):
+            source.write_text(text)
+            dumps = []
+            for mode in ("incremental", "fresh"):
+                cache = root / f"globals-{optimization}-{mode}{index if mode == 'fresh' else ''}"
+                output = root / f"globals-{mode}.out"
+                subprocess.run([str(compiler), str(source), "-g", optimization, "--cache-dir", str(cache),
+                                "-o", str(output)], cwd=root, capture_output=True, check=True)
+                subprocess.run([str(verifier), "--verify", str(output)], capture_output=True, check=True)
+                dumps.append(subprocess.check_output([str(verifier), "--debug-info", "--debug-line",
+                                                      str(output)], text=True).splitlines()[1:])
+            assert dumps[0] == dumps[1], "reused global/type DWARF differs from a fresh build"
+
+
 def resolve_native_llvm_install_directory() -> Path | None:
     completed = subprocess.run(
         [
@@ -57,6 +104,9 @@ def main() -> int:
         "debug_managed_cleanup",
     )]
     with tempfile.TemporaryDirectory(prefix="dynlex-debug-info-") as temporary_directory:
+        from test_debug_source_origins import check_cross_file_local_debug_locations
+        check_cross_file_local_debug_locations(compiler, Path(temporary_directory))
+        check_incremental_source_locations(compiler, dwarf_verifier, Path(temporary_directory))
         for source in sources:
             executable = Path(temporary_directory) / (source.parent.name + ".out")
             compile_result = subprocess.run(

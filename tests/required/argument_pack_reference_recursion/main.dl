@@ -1,0 +1,6 @@
+function assign {arguments:names} to value:
+    replacement:
+        @intrinsic("discard", value)
+        @intrinsic("store", {item}, @intrinsic("extract element", names, 0))
+        assign item to value
+assign target to 1

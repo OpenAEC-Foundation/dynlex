@@ -79,6 +79,8 @@ static const MemoryFacts &expressionMemoryFacts(Expression *expression, const Bi
 }
 
 static void recordExpressionMemoryFacts(Expression *expression, InferenceContext &context, const BindingFrameStack &bindings) {
+	if (expression->kind == Expression::Kind::ArgumentPack)
+		return; // Elements are captured expressions; extraction determines their value or address use.
 	MemoryFacts &facts = expression->memoryFacts;
 	auto consume = [&](const std::shared_ptr<const Diagnostic> &violation) {
 		if (!facts.value)

@@ -1,5 +1,5 @@
 bool IncrementalClassification::canReuse(Unit &unit) {
-	if (!prior || unit.environment || !unit.old || context.options.emitDebugInfo || context.options.traceExecution ||
+	if (!prior || unit.environment || !unit.old || context.options.traceExecution ||
 		unit.section->parent != context.mainSection || !reusableResolutionSection(*unit.section) || unit.referenceCount == 0)
 		return false;
 	const Json &diagnosticUnits = previous->at("frontend_diagnostic_units");
@@ -133,9 +133,17 @@ std::vector<Section *> IncrementalClassification::invalidated() {
 	std::vector<Section *> result;
 	if (!prior || captured || !validationNeeded)
 		return result;
+	// Declaration names are indexed once the definitions settle, before the
+	// declaring calls resolve. Definition exports have their own readiness.
+	bool environmentsReady = std::ranges::all_of(units, [](const Unit &unit) {
+		return unit.environment || unit.section->patternDefinitionsResolved;
+	});
 	std::vector<size_t> changed;
 	for (size_t index = 0; index < units.size(); index++) {
 		if (!evaluate[index] || !dirty.contains(units[index].path))
+			continue;
+		const Unit &unit = units[index];
+		if (unit.environment ? !environmentsReady : !unit.section->patternDefinitionsResolved)
 			continue;
 		std::string current = exported(units[index]);
 		if (current != observedExports[index]) {

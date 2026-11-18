@@ -12,25 +12,20 @@ static Diagnostic buildAssignmentTypeChangeDiagnostic(
 		parseContext, Diagnostic::Level::Error, "variable type change", diagnosticRange, "name", name, "from_type",
 		typeToUserName(currentType), "to_type", typeToUserName(valueType)
 	);
-	const SyntaxConfig &syntax = syntaxConfigForRange(parseContext, diagnosticRange);
 	if (currentTypeOriginRange.line) {
-		diagnostic.relatedInfo.push_back(
-			{renderConfiguredMessage(
-				 syntax, "variable type change", "related origin", {{"name", name}, {"type", typeToUserName(currentType)}}
-			 ),
-			 currentTypeOriginRange}
-		);
+		diagnostic.relatedInfo.push_back(configuredRelatedInfo(
+			parseContext, diagnosticRange, "variable type change", "related origin", currentTypeOriginRange,
+			{{"name", name}, {"type", typeToUserName(currentType)}}
+		));
 	}
 	if (!currentTypeOriginFloatLiteralReplacement.empty() && valueType.kind == DataType::Kind::Float &&
 		currentType.kind == DataType::Kind::Int && currentTypeOriginRange.line) {
-		diagnostic.quickFixes.push_back(
-			{renderConfiguredMessage(
-				 syntax, "variable type change", "quick fix float literal",
-				 {{"original", (std::string)currentTypeOriginRange.subString},
-				  {"replacement", currentTypeOriginFloatLiteralReplacement}}
-			 ),
-			 currentTypeOriginRange, currentTypeOriginFloatLiteralReplacement}
-		);
+		diagnostic.quickFixes.push_back(configuredDiagnosticFix(
+			parseContext, diagnosticRange, "variable type change", "quick fix float literal", currentTypeOriginRange,
+			currentTypeOriginFloatLiteralReplacement,
+			{{"original", (std::string)currentTypeOriginRange.subString},
+			 {"replacement", currentTypeOriginFloatLiteralReplacement}}
+		));
 	}
 	return diagnostic;
 }
@@ -65,8 +60,7 @@ static int getRefinedClassInstantiationIndex(
 	std::vector<DataType> refinedFieldTypes = baseFieldTypes;
 	refinedFieldTypes[fieldIndex] = refinedFieldType;
 	bool instantiationExists = std::any_of(
-		classDef->instantiations.begin(), classDef->instantiations.end(),
-		[&](const ClassInstantiation &instantiation) {
+		classDef->instantiations.begin(), classDef->instantiations.end(), [&](const ClassInstantiation &instantiation) {
 		return instantiation.fieldTypes == refinedFieldTypes;
 	}
 	);

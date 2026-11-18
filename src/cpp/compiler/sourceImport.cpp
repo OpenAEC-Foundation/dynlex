@@ -4,6 +4,7 @@
 #include "pathUtils.h"
 #include "pattern/transformedPattern.h"
 #include "section/parseUtils.h"
+#include "sourceIdentity.h"
 #include "sourcePreparation.h"
 #include "sourceSyntax.h"
 #include "sourceTransform.h"
@@ -112,13 +113,7 @@ static ResolvedImport resolveImportPath(
 }
 
 static void updateLineTrimming(CodeLine *line, const SyntaxConfig &syntax) {
-	size_t commentPos = findCommentStart(line->fullText, syntax.commentPrefix);
-	std::string_view withoutComment =
-		(commentPos != std::string_view::npos) ? line->fullText.substr(0, commentPos) : line->fullText;
-	size_t trimmedEnd = withoutComment.size();
-	while (trimmedEnd > 0 && std::isspace(static_cast<unsigned char>(withoutComment[trimmedEnd - 1])) != 0)
-		trimmedEnd--;
-	line->rightTrimmedText = withoutComment.substr(0, trimmedEnd);
+	line->rightTrimmedText = sourceCodeWithoutComment(line->fullText, syntax.commentPrefix);
 }
 
 static CodeLine *
@@ -136,49 +131,13 @@ createSourceLine(ParseContext &context, lsp::SourceFile *sourceFile, int sourceF
 }
 
 static bool validateSourceCharacters(ParseContext &context, CodeLine *line, const SyntaxConfig &syntax) {
-	bool insideString = false;
-	size_t commentStart = findCommentStart(line->fullText, syntax.commentPrefix);
-	std::vector<size_t> pendingStringArgumentCharacters;
-	for (size_t index = 0; index < line->fullText.size(); index++) {
-		char character = line->fullText[index];
-		if (index < commentStart && character == '"' && !isEscapedCharacter(line->fullText, index)) {
-			insideString = !insideString;
-			if (!insideString)
-				pendingStringArgumentCharacters.clear();
-			continue;
-		}
-		if (character != argumentChar)
-			continue;
-		if (index < commentStart && insideString) {
-			pendingStringArgumentCharacters.push_back(index);
-			continue;
-		}
-
-		context.addDiagnostic(Diagnostic(
-			context, Diagnostic::Level::Error, "disallowed character", Range(line, index, index + 1), "character", "U+0007"
-		));
-		return false;
-	}
-	if (!pendingStringArgumentCharacters.empty()) {
-		size_t index = pendingStringArgumentCharacters.front();
-		context.addDiagnostic(Diagnostic(
-			context, Diagnostic::Level::Error, "disallowed character", Range(line, index, index + 1), "character", "U+0007"
-		));
-		return false;
-	}
-	return true;
-}
-
-static std::string canonicalSourceKey(std::string_view path) {
-	std::filesystem::path fsPath = pathutil::toFilesystemPath(path);
-	std::error_code ec;
-	std::filesystem::path canonical = std::filesystem::weakly_canonical(fsPath, ec);
-	if (ec) {
-		canonical = std::filesystem::absolute(fsPath, ec);
-		if (ec)
-			return fsPath.lexically_normal().string();
-	}
-	return canonical.lexically_normal().string();
+	auto invalid = invalidSourceCharacterOffset(line->fullText, syntax.commentPrefix);
+	if (!invalid)
+		return true;
+	context.addDiagnostic(Diagnostic(
+		context, Diagnostic::Level::Error, "disallowed character", Range(line, *invalid, *invalid + 1), "character", "U+0007"
+	));
+	return false;
 }
 
 bool isInternalSourcePath(std::string_view path) {
@@ -207,7 +166,7 @@ importSourceFile(const std::string &path, ParseContext &context, const std::stri
 		return false;
 	}
 	// Canonicalize path to prevent duplicate imports via different path strings
-	std::string canonicalPath = canonicalSourceKey(sourceFile->uri.empty() ? path : sourceFile->uri);
+	const std::string &canonicalPath = sourceFile->canonicalPath;
 	if (context.importedFiles.contains(canonicalPath)) {
 		return true; // Already processed, skip
 	}

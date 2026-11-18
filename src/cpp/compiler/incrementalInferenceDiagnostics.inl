@@ -16,7 +16,9 @@ Json captureUnitDiagnostic(const Diagnostic &diagnostic, InferenceBodySources &s
 			)
 		);
 	for (const DiagnosticFix &fix : diagnostic.quickFixes)
-		fixes.push_back(Json::array({fix.title, sources.range(fix.range), fix.replacement}));
+		fixes.push_back(
+			Json::array({inferenceDiagnosticText(fix.title, fix.configuredTitle), sources.range(fix.range), fix.replacement})
+		);
 	return Json{
 		{"level", static_cast<int>(diagnostic.level)},
 		{"message", inferenceDiagnosticText(diagnostic.message, diagnostic.configuredMessage)},
@@ -51,7 +53,10 @@ Diagnostic restoreUnitDiagnostic(
 		);
 	}
 	for (const Json &fix : record.at("fixes"))
-		diagnostic.quickFixes.push_back({fix.at(0).get<std::string>(), sources.range(fix.at(1)), fix.at(2).get<std::string>()});
+		diagnostic.quickFixes.push_back(
+			{renderCachedDiagnosticText(context, fix.at(0)), sources.range(fix.at(1)), fix.at(2).get<std::string>(),
+			 configured(fix.at(0))}
+		);
 	const auto &discriminator = record.at("discriminator").get_ref<const std::string &>();
 	const auto &identity = record.at("publication").get_ref<const std::string &>();
 	if (!discriminator.empty() || !identity.empty()) {

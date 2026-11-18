@@ -7,6 +7,12 @@ struct ConstraintReuseState {
 	const Json *graph = nullptr;
 };
 
+const Json *priorMatchedDependencies(const ConstraintReuseState &constraints, const Json *inferred) {
+	if (!constraints.graph || (inferred && constraints.graph == &inferred->at("section_dependency_graph")))
+		return nullptr;
+	return &constraints.graph->at("matched");
+}
+
 constexpr std::array constraintStateFields{"all_function_projection", "graph"};
 
 const Json *selectFrontendReuseState(
@@ -50,15 +56,14 @@ ConstraintReuseState selectConstraintReuseState(
 }
 
 Json captureConstraintGraph(
-	const std::map<const Section *, std::string> &paths, const IncrementalInferenceReads &reads, const Json &schedule,
-	const Json *prior
+	const ParseContext &context, const Json &projection, const std::map<const Section *, std::string> &paths,
+	const IncrementalInferenceReads &reads, const Json &schedule, const Json *prior, BuildStatistics &statistics
 ) {
+	MatchedDependencyFacts matchedFacts(context, projection, paths, prior ? prior->at("matched") : Json::object(), statistics);
 	std::map<std::string, std::set<std::string>> reverse, lookupOwners;
 	for (const auto &[section, path] : paths) {
-		std::vector<Section *> matched;
-		collectMatchedSectionDependencies(section, matched);
-		for (const Section *dependency : matched)
-			reverse[paths.at(dependency)].insert(path);
+		for (const Json &dependency : matchedFacts.dependencies(section))
+			reverse[dependency.get<std::string>()].insert(path);
 		for (const std::string &dependency : reads.dependenciesOf(path))
 			reverse[dependency].insert(path);
 		for (const std::string &key : reads.readsOf(path))
@@ -76,13 +81,15 @@ Json captureConstraintGraph(
 		observation["owners"] = owners;
 		lookups[key] = std::move(observation);
 	}
-	return Json{{"reverse", std::move(reverse)}, {"callable_lookups", std::move(lookups)}};
+	return Json{
+		{"reverse", std::move(reverse)}, {"callable_lookups", std::move(lookups)}, {"matched", matchedFacts.snapshot()}
+	};
 }
 
 Json captureCurrentConstraintState(
 	ParseContext &context, RecordingFileSystem &files, Json &projection, const std::map<const Section *, std::string> &paths,
 	const IncrementalInferenceReads &reads, const Json &frontendDiagnosticUnits, const ConstraintReuseState &prior,
-	bool compiled, bool reusedInference, const Json *native
+	bool compiled, bool reusedInference, const Json *native, BuildStatistics &statistics
 ) {
 	if (reusedInference) {
 		for (const char *field : {"constraint_probe_schedule", "class_instantiations"})
@@ -102,7 +109,9 @@ Json captureCurrentConstraintState(
 		{"files", files.observations},
 		{"all_function_projection", projection},
 		{"frontend_diagnostic_units", frontendDiagnosticUnits},
-		{"graph", captureConstraintGraph(paths, reads, projection.at("constraint_probe_schedule"), prior.graph)}
+		{"graph", captureConstraintGraph(
+					  context, projection, paths, reads, projection.at("constraint_probe_schedule"), prior.graph, statistics
+				  )}
 	};
 	recordSemanticSources(state, files, context);
 	return state;

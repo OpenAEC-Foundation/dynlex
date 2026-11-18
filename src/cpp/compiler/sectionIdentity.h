@@ -24,8 +24,7 @@ inline nlohmann::json sectionIdentity(const Section &section) {
 
 inline std::string sectionIdentityDigest(std::string_view text) { return stableIdentityDigest(text); }
 
-template <typename Visitor> void visitSectionIdentities(Section *section, const std::string &path, const Visitor &visit) {
-	visit(section, path);
+template <typename Visitor> void visitChildSectionIdentities(Section *section, const std::string &path, const Visitor &visit) {
 	std::map<std::string, size_t> duplicateIdentities;
 	for (size_t index = 0; index < section->children.size(); index++) {
 		Section *child = section->children[index];
@@ -39,8 +38,15 @@ template <typename Visitor> void visitSectionIdentities(Section *section, const 
 		} else {
 			component = "a" + std::to_string(index);
 		}
-		visitSectionIdentities(child, path + "/" + component, visit);
+		visit(child, path + "/" + component);
 	}
+}
+
+template <typename Visitor> void visitSectionIdentities(Section *section, const std::string &path, const Visitor &visit) {
+	visit(section, path);
+	visitChildSectionIdentities(section, path, [&](Section *child, const std::string &childPath) {
+		visitSectionIdentities(child, childPath, visit);
+	});
 }
 
 inline bool hasCodegenSectionIdentity(const Section &section) {

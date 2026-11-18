@@ -51,6 +51,8 @@ class DynLexServer : public LanguageServer {
 	// Target-specific ParseContexts per main document URI.
 	ParseContextMap parseContexts;
 	ParseContextMap completionParseContexts;
+	std::unordered_map<std::string, std::vector<LspAnalysisResult>> analysisResults;
+	ImportGraph observedBy;
 	std::vector<ParseContext::Options> analysisProfiles{ParseContext::Options{}};
 	std::unordered_map<std::string, std::unique_ptr<TextDocument>> compiledDocuments;
 	std::string workspaceRootPath;

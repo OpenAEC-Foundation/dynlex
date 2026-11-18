@@ -175,8 +175,9 @@ Json captureAllFunctionProjection(
 		} else {
 			const Json *oldEntries =
 				prior && prior->at("match_entries").contains(path) ? &prior->at("match_entries").at(path) : nullptr;
-			ResolvedFunctionMatches result = resolvedFunctionMatches(
-				section, paths, matcherCache, oldEntries, oldEntries ? &prior->at("matches").at(path) : nullptr,
+			ResolvedReferenceMatches result = resolvedReferenceMatches(
+				sourceOwnerReferences(*section), paths, matcherCache, oldEntries,
+				oldEntries ? &prior->at("matches").at(path) : nullptr,
 				projectionWork ? &projectionWork->matchEntriesReused : nullptr
 			);
 			matches[path] = std::move(result.fingerprint);

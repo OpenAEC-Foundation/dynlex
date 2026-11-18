@@ -691,6 +691,15 @@ done
 return 0
 }
 
+start_fixture_tests() {
+    start_test_group fixture run_fixture_tests
+    fixture_worker=$test_group_worker
+}
+
+collect_fixture_tests() {
+    collect_test_group fixture "$fixture_worker"
+}
+
 start_test_group() {
     local group="$1"
     shift
@@ -704,11 +713,11 @@ start_test_group() {
 }
 
 collect_test_group() {
-    local worker="$1" group="$2"
+    local group="$1" worker="$2"
     local worker_status=0
     wait "$worker" || worker_status=$?
     if [[ $worker_status -ne 0 ]]; then
-        echo "Suite group $group exited with status $worker_status." >&2
+        echo "Test group $group exited with status $worker_status." >&2
         return "$worker_status"
     fi
     local group_passed group_failed group_skipped group_output group_failure
@@ -729,6 +738,14 @@ collect_test_group() {
     failures=("${group_failures[@]}" "${failures[@]}")
 }
 
+collect_required_tests() {
+    local status=0
+    collect_fixture_tests || status=$?
+    collect_test_group incremental "$incremental_worker" || status=$?
+    collect_test_group incremental_dependencies "$incremental_dependencies_worker" || status=$?
+    return "$status"
+}
+
 # Run fixtures concurrently with the independent auxiliary checks in the short gate.
 # Integration checks keep their existing single-group memory budget.
 if [[ "$suite" == required ]]; then
@@ -742,7 +759,7 @@ run_auxiliary_test() {
     local test_name="$1"
     local required_test=false
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|embedded_directory|llvm_toolchain|build_arguments|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|incremental_cache_entries|data_declaration_cache|cache_codec|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|suite_groups|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|embedded_directory|llvm_toolchain|build_arguments|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|incremental_dependencies|incremental_cache_entries|data_declaration_cache|cache_codec|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack|nested_timeout|timeout_output)
         required_test=true ;;
     esac
     if [[ "$suite" == required && "$required_test" != true ]] ||
@@ -771,15 +788,16 @@ run_auxiliary_test() {
         ((failed++)) || true
         failures+=("$test_name")
     fi
-}
-
-run_required_incremental_tests() {
-    run_auxiliary_test "incremental_compilation" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR"
     return 0
 }
+
 if [[ "$suite" == required ]]; then
-    start_test_group incremental run_required_incremental_tests
+    start_test_group incremental run_auxiliary_test \
+        "incremental_compilation" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required-base
     incremental_worker=$test_group_worker
+    start_test_group incremental_dependencies run_auxiliary_test \
+        "incremental_dependencies" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required-dependencies
+    incremental_dependencies_worker=$test_group_worker
 fi
 
 run_auxiliary_test "elf_binary_guard" 10 python3 -B "$SCRIPT_DIR/test_no_elf_binaries.py"
@@ -792,6 +810,7 @@ run_auxiliary_test "process_error_mode" 10 python3 -B "$SCRIPT_DIR/test_process_
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
 run_auxiliary_test "runtime_feature_macros" 10 python3 -B "$SCRIPT_DIR/test_runtime_feature_macros.py"
 run_auxiliary_test "vulkan_test_environment" 10 python3 -B "$SCRIPT_DIR/test_vulkan_test_environment.py"
+run_auxiliary_test "benchmark_staging" 10 python3 -B "$SCRIPT_DIR/test_benchmark_staging.py" "$PROJECT_DIR"
 if [[ "$is_windows" == "true" ]]; then
     run_auxiliary_test \
         "windows_dependency_installer" 10 \
@@ -939,8 +958,7 @@ if [[ "$suite" == integration ]]; then
 fi
 
 if [[ "$suite" == required ]]; then
-    collect_test_group "$incremental_worker" incremental || exit "$?"
-    collect_test_group "$fixture_worker" fixture || exit "$?"
+    collect_required_tests || { status=$?; printf '%s' "$test_output"; exit "$status"; }
 fi
 
 total_elapsed_ms=$(elapsed_ms_since "$total_start_ms")

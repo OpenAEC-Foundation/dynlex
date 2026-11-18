@@ -191,7 +191,10 @@ def main():
         for label, binary in binaries.items():
             staged = workspace / "bin" / slots[label] / ("dynlex.exe" if os.name == "nt" else "dynlex")
             staged.parent.mkdir(parents=True, exist_ok=True)
+            original_file = binary.stat()
             shutil.copy2(binary, staged)
+            if os.path.samestat(original_file, staged.stat()):
+                raise RuntimeError("compiler staging requires an independent file, not a hard link")
             if digest(staged) != report["compiler_sha256"][label]:
                 raise RuntimeError("staged compiler differs from the requested executable")
             subprocess.run([str(staged), "--version"], check=True, capture_output=True,
@@ -276,7 +279,7 @@ def main():
                           for r in rows if r["phase"] == "populate" and r["case"] in empty_cases]
             report["empty_cache_summary"] = summarize(empty_rows, ["empty-default-cache"])
         report["compiler_unchanged"] = all(digest(path) == report["compiler_sha256"][label]
-                                           for label, path in binaries.items())
+                                           for label, path in executables.items())
         if not report["compiler_unchanged"]:
             raise RuntimeError("a compiler executable changed during the comparison")
         report["complete"] = True

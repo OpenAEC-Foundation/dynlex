@@ -11,6 +11,8 @@ struct SourceFile {
 	virtual ~SourceFile() = default;
 
 	const std::string uri;
+	// Provider-independent identity; uri retains the source spelling used by callers.
+	const std::string canonicalPath;
 	// Source identity and library classification stay fixed across content edits.
 	const bool isInternal;
 	std::string content;

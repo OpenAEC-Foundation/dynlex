@@ -18,6 +18,7 @@ class GlobalVariable;
 struct ParseContext;
 struct Section;
 struct Instantiation;
+class IncrementalDebugIR;
 
 class IncrementalIRReuse {
   public:
@@ -25,12 +26,14 @@ class IncrementalIRReuse {
 	IncrementalIRReuse(
 		ParseContext &context, const std::string &previousIR, const nlohmann::json &previousFunctions,
 		const nlohmann::json &previousCallableFunctions, const nlohmann::json &previousFunctionInstantiations,
-		std::map<const Section *, std::string> sectionPaths, std::shared_ptr<IncrementalUnitSelection> eligible,
-		std::shared_ptr<IncrementalUnitSelection> replacements, GlobalInputCheck globalInputCheck
+		const nlohmann::json *previousDebugInputs, std::map<const Section *, std::string> sectionPaths,
+		std::shared_ptr<IncrementalUnitSelection> eligible, std::shared_ptr<IncrementalUnitSelection> replacements,
+		GlobalInputCheck globalInputCheck
 	);
 	bool reuse(Section *section, llvm::Function *function, const nlohmann::json &currentFunctionInstantiations);
 	bool hasReusableIRForInstantiation(const Section *section, const std::string &key) const;
 	bool reuseRoot();
+	void bindRootGlobals(ParseContext &context, const nlohmann::json &managedStorage);
 	bool rootReused() const { return reusedRoot; }
 	bool import(ParseContext &context, const nlohmann::json &currentFunctionInstantiations);
 	size_t reusedCount() const { return reusedNames.size(); }
@@ -38,6 +41,8 @@ class IncrementalIRReuse {
 	size_t dependencyHits() const { return dependencyCacheHits; }
 	size_t globalInputChecks() const { return deferredGlobalChecks; }
 	size_t globalInputHits() const { return deferredGlobalHits; }
+	size_t debugLocationQueries() const;
+	size_t debugLocationHits() const;
 	const std::unordered_set<std::string> &reusedFunctionNames() const { return reusedNames; }
 
   private:
@@ -47,6 +52,7 @@ class IncrementalIRReuse {
 	};
 	const Dependencies &dependenciesOf(const llvm::Function &function) const;
 	bool selected(const std::string &name, const IncrementalUnitSelection &selection) const;
+	bool debugLocationsUnchanged(const std::string &name) const;
 	bool reusableClosure(
 		const llvm::Function &function, llvm::Module &current, std::unordered_set<std::string> &names,
 		const GlobalInputCheck &globalInputsUnchanged, bool allowDeferredGlobals
@@ -56,6 +62,9 @@ class IncrementalIRReuse {
 	const nlohmann::json &previousFunctions;
 	const nlohmann::json &previousCallableFunctions;
 	const nlohmann::json &previousFunctionInstantiations;
+	const nlohmann::json *previousDebugInputs;
+	std::unique_ptr<IncrementalDebugIR> debugInputs;
+	mutable std::unordered_map<std::string, bool> debugLocationProofs;
 	std::map<const Section *, std::string> sectionPaths;
 	std::shared_ptr<IncrementalUnitSelection> eligible;
 	std::shared_ptr<IncrementalUnitSelection> replacements;
@@ -63,6 +72,7 @@ class IncrementalIRReuse {
 	std::map<std::string, const Section *> sectionsByPath;
 	std::unordered_map<std::string, std::unordered_map<std::string, std::vector<std::string>>> previousNamesByPathAndKey;
 	std::unordered_set<std::string> reusedNames;
+	std::unordered_set<std::string> rootGlobalDeclarations;
 	bool reusedRoot = false;
 	mutable std::unordered_map<const llvm::Function *, Dependencies> dependencyCache;
 	mutable size_t dependencyCacheHits = 0;

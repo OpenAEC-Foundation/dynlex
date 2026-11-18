@@ -6,10 +6,13 @@
 #include "compileTimeValue.h"
 #include "compiler.h"
 #include "compilerUtils.h"
+#include "debugScope.h"
+#include "debugTypeProducts.h"
 #include "executionTrace.h"
 #include "expression.h"
 #include "functionCodegenScope.h"
 #include "intrinsicInfo.h"
+#include "llvmOutput.h"
 #include "native.h"
 #include "nativeScalarABI.h"
 #include "numberScopeRules.h"
@@ -896,10 +899,8 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 				auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 				// Use a DILexicalBlockFile scope when the code line's source file
 				// differs from the current scope's file (e.g., imported code in main)
-				llvm::DIScope *scope = context.currentDebugScope;
 				llvm::DIFile *lineFile = getOrCreateDIFile(context, line->sourceFile);
-				if (lineFile && lineFile != scope->getFile())
-					scope = context.diBuilder->createLexicalBlockFile(scope, lineFile);
+				llvm::DIScope *scope = debugScopeForFile(context, lineFile);
 				builder.SetCurrentDebugLocation(
 					llvm::DILocation::get(*context.llvmContext, line->sourceFileLineIndex + 1, 0, scope)
 				);

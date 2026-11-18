@@ -87,7 +87,8 @@ def to_file_uri(path: pathlib.Path) -> str:
 
 
 class LspSession:
-    def __init__(self, server_path: pathlib.Path, cwd: pathlib.Path, print_messages: bool, print_stderr: bool) -> None:
+    def __init__(self, server_path: pathlib.Path, cwd: pathlib.Path, print_messages: bool, print_stderr: bool,
+                 server_arguments: tuple[str, ...] = ("--stdio",)) -> None:
         self.server_path = server_path
         self.cwd = cwd
         self.print_messages = print_messages
@@ -96,7 +97,7 @@ class LspSession:
         self.server_requests: list[dict[str, Any]] = []
         self.server_notifications: list[dict[str, Any]] = []
         self.process = subprocess.Popen(
-            [str(server_path), "--stdio"],
+            [str(server_path), *server_arguments],
             cwd=cwd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,

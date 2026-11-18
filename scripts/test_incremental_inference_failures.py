@@ -271,7 +271,34 @@ def check_retained_trial_observations(root, build):
             assert edited[0]['function_body_inference_passes'] == 0, 'observation refresh lost the saved typed body'
 
 
+def check_argument_reference_recursion(root, build):
+    main = root / 'argument_reference_recursion.dl'
+    recursive = ('function assign {arguments:names} to value:\n'
+                 '    replacement:\n'
+                 '        @intrinsic("discard", value)\n'
+                 '        @intrinsic("store", {item}, @intrinsic("extract element", names, 0))\n'
+                 '        assign item to value\n')
+    call = 'assign target to 1\n'
+    main.write_text(recursive + call)
+    failed = build(entry=main, success=False)
+    assert 'recursive flex expansion' in failed[1]
+    assert failed[1:] == build(False, entry=main, success=False)[1:]
+
+    scalar = ('function assign name to value:\n'
+              '    replacement: @intrinsic("store", name, value)\n')
+    main.write_text(recursive + scalar + call +
+                    '@intrinsic("return", @intrinsic("subtract", target, 1))\n')
+    repaired = build(entry=main)
+    assert repaired[1:] == build(False, entry=main)[1:]
+
+    main.write_text(recursive + call)
+    removed = build(entry=main, success=False)
+    assert removed[1:] == failed[1:]
+    assert removed[1:] == build(False, entry=main, success=False)[1:]
+
+
 def check_inference_failures(root, build):
+    check_argument_reference_recursion(root, build)
     check_failed_units(root, build)
     check_failed_native_bridge(root, build)
     check_failed_caller_trace(root, build)

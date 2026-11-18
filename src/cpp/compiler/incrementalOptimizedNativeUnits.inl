@@ -71,7 +71,7 @@ bool nativeLinkUnchanged(
 	const std::vector<std::string> &keys
 ) {
 	return previous && previous->at("object_keys") == keys && previous->at("libraries") == libraries &&
-		   linkedOutputUnchanged(context, *previous);
+		   compilerOutputUnchanged(context, *previous);
 }
 
 void recordOptimizedNativeUnits(std::vector<NativeUnitWork> &plan, BuildStatistics &statistics) {
@@ -171,11 +171,17 @@ void loadNativeUnitSnapshot(Json &previous, const ProgramPayloads &retainedPaylo
 	statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(start);
 }
 
-bool buildNativeOutput(
+bool buildCompilerOutput(
 	ParseContext &context, const fs::path &directory, const ProgramPayloads &retainedPayloads,
 	const std::string &compilerIdentity, const Json &options, const std::vector<std::string> &libraries,
-	BuildStatistics &statistics, Json *previous, const IncrementalIRReuse *functionReuse, bool restoredModule = false
+	BuildStatistics &statistics, std::string_view generatedIR, Json *previous, const IncrementalIRReuse *functionReuse,
+	bool restoredModule = false
 ) {
+	// The unoptimized IR snapshot owns cache products; backend units consume only
+	// executable/debug metadata, so these records never enter optimizer inputs.
+	consumeDebugIRProducts(*context.llvmModule);
+	if (context.options.emitLLVM)
+		return buildLLVMArtifact(context, directory, compilerIdentity, options, generatedIR, statistics);
 	if (!context.options.optimizationLevel)
 		return emitPartitions(
 			context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics, previous, functionReuse,
@@ -217,11 +223,18 @@ bool buildNativeOutput(
 	}
 }
 
-bool linkOrRestoreNativeOutput(
+bool restoreCompilerOutput(
 	ParseContext &context, const fs::path &directory, const ProgramPayloads &retainedPayloads, const fs::path &entry,
 	const std::string &compilerIdentity, const Json &options, const std::vector<std::string> &libraries,
-	BuildStatistics &statistics, Json &previous, bool generatedModuleAvailable = false
+	BuildStatistics &statistics, Json &previous, bool generatedModuleAvailable = false, bool initializeTarget = false
 ) {
+	if (context.options.emitLLVM)
+		return restoreLLVMArtifact(
+			context, directory, retainedPayloads, entry, compilerIdentity, options, previous, statistics,
+			generatedModuleAvailable, initializeTarget
+		);
+	if (initializeTarget)
+		initializeOutputTarget(context);
 	statistics.objectKeys = previous.at("object_keys").get<std::vector<std::string>>();
 	if (auto linked = linkCachedObjects(context, directory, statistics.objectKeys, libraries, statistics))
 		return *linked;
@@ -243,13 +256,16 @@ bool linkOrRestoreNativeOutput(
 		restoreGeneratedModule(context, previous, entry);
 	}
 	statistics.objectKeys.clear();
-	return buildNativeOutput(
-		context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics, &previous, nullptr, true
+	return buildCompilerOutput(
+		context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics,
+		previous.at("generated_ir").get_ref<const std::string &>(), &previous, nullptr, true
 	);
 }
 
-void recordNativeOutput(Json &program, BuildStatistics &statistics, const Json *previous) {
+void recordCompilerOutput(Json &program, BuildStatistics &statistics, const Json *previous) {
 	program["object_keys"] = statistics.objectKeys;
+	if (!statistics.llvmOutputKey.empty())
+		program["llvm_output_key"] = statistics.llvmOutputKey;
 	auto save = [&](const char *field, Json &value) {
 		if (!value.is_null())
 			program[field] = std::move(value);

@@ -17,6 +17,8 @@ struct TemporaryObjects {
 };
 
 struct BuildStatistics {
+	bool measureDependencyGraph = false;
+	bool measureInferenceQueries = false;
 	ValidationWork validation;
 	VariableBindingWork bindings;
 	size_t bindingInputsReused = 0;
@@ -41,6 +43,10 @@ struct BuildStatistics {
 	size_t inferenceSummaryUnitsLoaded = 0;
 	size_t valueDependencyQueriesChecked = 0;
 	size_t valueDependencyQueriesReused = 0;
+	size_t inferenceQueryChecks = 0, inferenceQueryUnitsChecked = 0, inferenceQueryProofHits = 0;
+	size_t inferenceQueryProofsInvalidated = 0;
+	size_t inferenceQueryProofsRetained = 0, inferenceQueryConsumerEdgesVisited = 0;
+	double inferenceQueryCheckMilliseconds = 0, inferenceQueryInvalidationMilliseconds = 0;
 	size_t inferenceSummaryUnitsEncoded = 0;
 	size_t inferenceSummaryUnitsWritten = 0;
 	size_t inferenceBodiesEncoded = 0;
@@ -70,6 +76,7 @@ struct BuildStatistics {
 	bool reusedRootExecution = false;
 	size_t cachedIRDependencyScans = 0;
 	size_t cachedIRDependencyHits = 0;
+	size_t debugIRLocationQueries = 0, debugIRLocationHits = 0;
 	size_t cachedIRGlobalInputChecks = 0;
 	size_t cachedIRGlobalInputHits = 0;
 	size_t precedenceSignaturesReused = 0;
@@ -77,6 +84,8 @@ struct BuildStatistics {
 	size_t topLevelProjectionSectionsReused = 0;
 	size_t reusedObjects = 0;
 	size_t builtObjects = 0;
+	std::string llvmOutputKey;
+	size_t llvmOutputsBuilt = 0, llvmOutputsRestored = 0;
 	size_t nativePartitionModulesBuilt = 0;
 	size_t nativePartitionModulesSkipped = 0;
 	ModulePartitionCloneWork nativePartitionCloneWork;
@@ -104,6 +113,9 @@ struct BuildStatistics {
 	size_t dependencyGraphSectionsReused = 0;
 	size_t preinferDependencyGraphSectionsChecked = 0;
 	size_t dependencyGraphEntriesReused = 0;
+	size_t matchedDependencyFactsReused = 0;
+	size_t matchedDependencyFactsCaptured = 0;
+	size_t matchedDependencyOwnersDemanded = 0;
 	size_t dependencyGraphReverseNodesUpdated = 0;
 	size_t inactiveProjectionMatchesRechecked = 0;
 	size_t reusedDiagnosticRecords = 0;
@@ -129,6 +141,8 @@ struct BuildStatistics {
 	size_t bodySyntaxUnitsParsed = 0, bodySyntaxUnitsRestored = 0, bodySyntaxUnitsSkipped = 0;
 	SourceProjectionWork sourceProjectionWork;
 	DeclarationProjectionWork declarationProjection;
+	size_t constraintIdentityComputations = 0, constraintIdentityHits = 0;
+	size_t constraintIdentityScopesIndexed = 0, constraintIdentityLinesIndexed = 0;
 	ClassificationWork classification;
 	double matcherKeyMilliseconds = 0;
 	double matcherRestoreMilliseconds = 0;
@@ -148,6 +162,7 @@ struct BuildStatistics {
 	double matcherProjectionMilliseconds = 0;
 	MatcherProjectionWork matcherProjection;
 	PayloadWriteWork payloadWrite;
+	GraphEncodingWork graphEncoding;
 	ProjectionCopyWork projectionCopy;
 	size_t matcherDeclarationsReused = 0;
 	size_t matcherPathSnapshotsBuilt = 0;
@@ -164,6 +179,7 @@ struct BuildStatistics {
 	double matcherSnapshotMilliseconds = 0;
 	size_t matcherSnapshotBytes = 0;
 	IncrementalMatcherCache::StorageStatistics matcherStorage;
+	size_t globalTypeProducersCaptured = 0, globalTypeProducersChecked = 0, globalTypeProducersRestored = 0;
 	size_t globalInputDefinitionsIndexed = 0, globalTypeInputsCaptured = 0, globalTypeInputsChecked = 0,
 		   globalTypeInputFingerprintsComputed = 0, globalTypeInputReadsRecorded = 0;
 	size_t deferredQueryProbes = 0, deferredQueryInterfacesPreserved = 0;
@@ -175,6 +191,13 @@ struct BuildStatistics {
 	double matcherStoreMilliseconds = 0;
 	double matcherStoreCPUMilliseconds = 0;
 	double dependencyGraphMilliseconds = 0;
+	double dependencyGraphSetupMilliseconds = 0, dependencyGraphSectionsMilliseconds = 0,
+		   dependencyGraphMatchedMilliseconds = 0, dependencyGraphReverseMilliseconds = 0, dependencyGraphUnitsMilliseconds = 0,
+		   dependencyGraphLookupsMilliseconds = 0;
+	double dependencyGraphUnitCaptureMilliseconds = 0, dependencyGraphUnitNormalizeMilliseconds = 0,
+		   dependencyGraphUnitGlobalsMilliseconds = 0;
+	size_t dependencyGraphSectionsVisited = 0, dependencyGraphUnitsNormalized = 0, dependencyGraphGlobalEdgesVisited = 0;
+	size_t dependencyGraphSourceOnlySectionsReused = 0;
 	double preinferenceMilliseconds = 0;
 	double codegenMilliseconds = 0;
 	double irGenerationMilliseconds = 0;

@@ -68,6 +68,32 @@ std::string_view trimView(std::string_view text) {
 	return text;
 }
 
+std::string configScalar(std::string_view text) {
+	std::string result = "\"";
+	for (char character : text) {
+		switch (character) {
+		case '\n':
+			result += "\\n";
+			break;
+		case '\r':
+			result += "\\r";
+			break;
+		case '\t':
+			result += "\\t";
+			break;
+		case '\\':
+			result += "\\\\";
+			break;
+		case '"':
+			result += "\\\"";
+			break;
+		default:
+			result += character;
+		}
+	}
+	return result + '"';
+}
+
 bool hasWhitespace(std::string_view text) {
 	return std::any_of(text.begin(), text.end(), [](unsigned char c) {
 		return std::isspace(c);
@@ -480,41 +506,18 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 			continue;
 		}
 		if (node.entry.key == "messages") {
-			static const std::unordered_set<std::string> allowed = {
-				"could not import main file",
-				"failed to import source file",
-				"invalid indentation amount",
-				"invalid indentation character",
-				"invalid indentation increase",
-				"missing body section",
-				"unknown section",
-				"unexpected class line",
-				"shorthand definition requires pattern",
-				"replacement shorthand requires inline body",
-				"value shorthand requires multiline body",
-				"action shorthand returns value",
-				"value shorthand returns nothing",
-				"replacement shorthand returns nothing",
-				"invalid associativity",
-				"associativity requires binary infix",
-				"conflicting associativity",
-				"conflicting associativity related",
-			};
 			for (const auto &grandChild : node.children) {
-				if (!allowed.contains(grandChild->entry.key)) {
-					addDiagnostic(
-						diagnostics, grandChild->entry.line, grandChild->entry.keyStart, grandChild->entry.keyEnd,
-						"unknown config key '" + grandChild->entry.key + "' under 'messages'"
-					);
-					return false;
-				}
-				if (grandChild->entry.value.empty()) {
-					addDiagnostic(
-						diagnostics, grandChild->entry.line, grandChild->entry.keyStart, grandChild->entry.keyEnd,
-						"config entry 'messages." + grandChild->entry.key + "' must define a value"
-					);
-					return false;
-				}
+				if (grandChild->entry.valueStart >= 0)
+					continue;
+				for (const auto &variant : grandChild->children)
+					if (variant->entry.valueStart < 0) {
+						addDiagnostic(
+							diagnostics, variant->entry.line, variant->entry.keyStart, variant->entry.keyEnd,
+							"config entry 'messages." + grandChild->entry.key + "." + variant->entry.key +
+								"' must define a value"
+						);
+						return false;
+					}
 			}
 			continue;
 		}
@@ -592,7 +595,7 @@ std::vector<int> encodeConfigSemanticTokens(const TextDocument &document) {
 	return encodeSemanticTokens(builder.tokenLines(), document);
 }
 
-CompletionList collectConfigCompletions(const TextDocument &document, int line, int character) {
+CompletionList collectConfigCompletions(const TextDocument &document, int line, int character, const SyntaxConfig &builtin) {
 	CompletionList result;
 	std::vector<CompletionItem> items;
 	std::set<std::string> seen;
@@ -723,47 +726,23 @@ CompletionList collectConfigCompletions(const TextDocument &document, int line, 
 				addItem(replacement, detail, indent + replacement);
 		}
 	} else if (parent == "messages") {
-		const std::vector<std::pair<std::string, std::string>> suggestions = {
-			{"could not import main file: \"couldn't import main file: {path}\"", "main import failure message"},
-			{"failed to import source file: \"failed to import source file: {path}\"", "import failure message"},
-			{"invalid indentation amount: \"Invalid indentation! expected {expected}, but found {found}\"",
-			 "indentation size message"},
-			{"invalid indentation character: \"Invalid indentation! expected only {expected}, but found {found}\"",
-			 "indentation character message"},
-			{"invalid indentation increase: \"Invalid indentation! expected at max {expected}, but found {found}\"",
-			 "indentation increase message"},
-			{"missing body section: \"Code without body section\"", "missing body section message"},
-			{"unknown section: \"Unknown section: {section}\"", "unknown section message"},
-			{"unexpected class line: \"unexpected line in class definition\"", "class line message"},
-			{"shorthand definition requires pattern: \"Definition shorthand '{keyword}' requires a pattern\"",
-			 "missing shorthand pattern message"},
-			{"replacement shorthand requires inline body: \"'{keyword}' requires an expression on the same line\"",
-			 "missing inline replacement body message"},
-			{"value shorthand requires multiline body: \"'{keyword}' requires an indented body on following lines\"",
-			 "inline value body message"},
-			{"action shorthand returns value: \"Action '{function}' must return nothing\"", "action return contract message"},
-			{"value shorthand returns nothing: \"Value function '{function}' must return a value\"",
-			 "value return contract message"},
-			{"replacement shorthand returns nothing: \"Replacement '{function}' must return a value\"",
-			 "replacement return contract message"},
-			{"invalid associativity: \"An associativity declaration requires exactly one direction\"",
-			 "invalid associativity message"},
-			{"associativity requires binary infix: \"Associativity requires a binary infix pattern\"",
-			 "associativity pattern shape message"},
-			{"conflicting associativity: \"Conflicting associativity declarations in one syntax family\"",
-			 "associativity conflict message"},
-			{"conflicting associativity related: \"The other associativity is declared by this pattern\"",
-			 "associativity conflict origin message"},
-			{"class size unknown member type: \"Cannot determine the size of {type} because the type of member '{member}' is "
-			 "unknown; it is 'a value'\"",
-			 "unknown class member size message"},
-		};
-		for (const auto &[replacement, detail] : suggestions) {
+		for (const auto &[name, variants] : builtin.messages.entries) {
+			std::string replacement = name + ':';
+			if (variants.size() == 1 && variants.contains("message"))
+				replacement += ' ' + configScalar(variants.at("message"));
 			if (startsLike(replacement))
-				addItem(replacement, detail, indent + replacement);
+				addItem(replacement, "message override", indent + replacement);
 		}
+	} else if (stack.size() >= 2 && stack[stack.size() - 2].key == "messages") {
+		if (auto found = builtin.messages.entries.find(parent); found != builtin.messages.entries.end())
+			for (const auto &[name, value] : found->second) {
+				std::string replacement = name + ": " + configScalar(value);
+				if (startsLike(replacement))
+					addItem(replacement, "message variant", indent + replacement);
+			}
 	}
 
+	std::ranges::sort(items, {}, &CompletionItem::label);
 	result.items = std::move(items);
 	return result;
 }

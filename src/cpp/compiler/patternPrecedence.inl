@@ -96,12 +96,10 @@ static bool resolvePatternPrecedence(ParseContext &context) {
 				if (family.associativity != PatternAssociativity::Unspecified &&
 					family.associativity != section->associativity) {
 					Diagnostic diagnostic(context, Diagnostic::Level::Error, "conflicting associativity", definition->range);
-					diagnostic.relatedInfo.push_back(
-						{renderConfiguredMessage(
-							 syntaxConfigForRange(context, definition->range), "conflicting associativity related"
-						 ),
-						 family.associativityOrigin->range}
-					);
+					diagnostic.relatedInfo.push_back(configuredRelatedInfo(
+						context, definition->range, "conflicting associativity related", "message",
+						family.associativityOrigin->range
+					));
 					context.addDiagnostic(std::move(diagnostic));
 					return false;
 				}

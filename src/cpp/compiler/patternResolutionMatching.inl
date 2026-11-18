@@ -19,14 +19,7 @@ static void removeVariableReferencesFromMatch(
 				refSection->variableReferences.erase(it);
 		}
 
-		// Remove from unresolvedVariableReferences
-		auto uit = context.unresolvedVariableReferences.find(name);
-		if (uit != context.unresolvedVariableReferences.end()) {
-			auto &vec = uit->second;
-			vec.erase(std::remove(vec.begin(), vec.end(), varMatch.variableReference), vec.end());
-			if (vec.empty())
-				context.unresolvedVariableReferences.erase(uit);
-		}
+		removeUnresolvedVariableReference(context, *varMatch.variableReference);
 
 		// Undo searchParentPatterns effects when requested. Stale invalidation may call
 		// this with revertImplicitPromotions=false to avoid transient promotion thrash
@@ -316,13 +309,10 @@ static bool resolveReferences(
 							suggestion.definition->range
 						));
 					if (suggestion.isMultiWord && !suggestion.spelling.empty()) {
-						diag.quickFixes.push_back({
-							renderConfiguredMessage(
-								syntax, "ambiguous single word reference", "quick fix", {{"spelling", suggestion.spelling}}
-							),
-							reference->range(),
-							suggestion.spelling,
-						});
+						diag.quickFixes.push_back(configuredDiagnosticFix(
+							context, reference->range(), "ambiguous single word reference", "quick fix", reference->range(),
+							suggestion.spelling, {{"spelling", suggestion.spelling}}
+						));
 					}
 					// Intentionally no per-reference dedupe tracking here.
 					context.diagnostics.push_back(std::move(diag));
@@ -753,14 +743,14 @@ bool resolvePatterns(ParseContext &context) {
 					madeProgress = true;
 			}
 
+			if (reactivateCachedClassifications(
+					context, skippedCachedBodies, bodyReferences, unResolvedSections, definitionToReferences,
+					queueReferenceForRematch, definitionReferences
+				)) {
+				appendRequeuedReferences();
+				continue;
+			}
 			if (unResolvedSections.empty() && bodyReferences.empty() && !failedBodyWorklist.hasWaiting()) {
-				if (reactivateCachedClassifications(
-						context, skippedCachedBodies, bodyReferences, unResolvedSections, definitionToReferences,
-						queueReferenceForRematch, definitionReferences
-					)) {
-					appendRequeuedReferences();
-					continue;
-				}
 				break;
 			}
 

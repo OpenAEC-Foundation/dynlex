@@ -4,11 +4,7 @@ template <typename Visit> void forEachSemanticLine(std::string_view content, std
 		size_t end = content.find('\n', start);
 		if (end == std::string_view::npos)
 			end = content.size();
-		std::string_view line = content.substr(start, end - start);
-		if (size_t comment = findCommentStart(line, commentPrefix); comment != std::string_view::npos)
-			line = line.substr(0, comment);
-		while (!line.empty() && std::isspace(static_cast<unsigned char>(line.back())))
-			line.remove_suffix(1);
+		std::string_view line = sourceCodeWithoutComment(content.substr(start, end - start), commentPrefix);
 		if (!line.empty())
 			visit(line, lineIndex);
 		start = end + (end < content.size());

@@ -6,6 +6,18 @@ from cache_payloads import decode_cbor, read_payload
 import os
 
 
+def check_corrupt_object_entry(cache, output, build):
+    # Damage all option variants so the current program certainly encounters one.
+    entries = list((cache / "native-v1").glob("object-*.entry"))
+    for entry in entries:
+        data = entry.read_bytes()
+        entry.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
+    output.unlink()
+    corrupted = build(success=False)
+    assert "corrupt cache entry" in corrupted[1], "cache corruption was hidden"
+    assert corrupted[0] is None or corrupted[0]["objects_built"] == 0
+
+
 def check_recent_cache_entries(root, build):
     active = ('integer means: @intrinsic("type", "int")\n'
               'exposed function preserved:\n    execute:\n'
@@ -40,6 +52,8 @@ def check_recent_cache_entries(root, build):
         assert repeated[0]["frontend_reused"], f"eviction removed retained dependencies after {case} edit"
         assert repeated[1:] == edited[1:] and not filler.exists()
     check_cache_metadata(root, build)
+    from test_incremental_deferred_graph import check_deferred_graph
+    check_deferred_graph(root, build)
 
 
 def check_cache_metadata(root, build):
@@ -121,6 +135,9 @@ def decode_graph(encoded):
     unit_keys, unit_sources = encoded["inference_unit_keys"], encoded["inference_unit_sources"]
     assert len(paths) == len(encoded["forward"]) == len(encoded["instantiations"])
     return {
+        "global_type_producers": encoded["global_type_producers"],
+        "matched": {path: {"input": item[0], "dependencies": [paths[index] for index in item[1]]}
+                    for path, item in zip(paths, encoded["matched"])},
         "forward": {path: [paths[index] for index in edges]
                     for path, edges in zip(paths, encoded["forward"])},
         "reverse": {paths[index]: [paths[caller] for caller in callers]
@@ -311,6 +328,65 @@ def classification_promotions(cache, program):
     return {unit[0]: {(output[0], output[1]) for output in read(unit[4])} for unit in topology["units"]}
 
 
+def check_graph_encoding(root, build):
+    main = root / "graph_encoding.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'to alpha: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\n'
+              'to beta: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))\n'
+              'alpha\nbeta\n')
+    main.write_text(source)
+    cold = build(entry=main)
+    assert cold[0]["graph_encoding_columns_built"] > 0
+    assert cold[0]["graph_encoding_columns_reused"] == 0
+    assert cold[0]["graph_encoding_records_reused"] == 0
+    previous = read_program(root / "cache", main)["section_dependency_graph"]
+    for word in ("second", "third"):
+        main.write_text(source.replace('"first"', f'"{word}"'))
+        edited = build(entry=main)
+        assert edited[1:] == build(False, entry=main)[1:]
+        current = read_program(root / "cache", main)["section_dependency_graph"]
+        assert all(current[field] == previous[field]
+                   for field in ("forward", "reverse", "instantiations"))
+        assert edited[0]["graph_encoding_columns_reused"] >= 4, \
+            "a body edit re-encoded unchanged graph paths and edge columns"
+        assert edited[0]["graph_encoding_columns_built"] > 0
+        assert edited[0]["graph_encoding_records_reused"] > 0
+        previous = current
+    with_call = source.replace('to alpha: ', 'to alpha:\n    beta\n    ')
+    for text in (with_call, source):
+        main.write_text(text)
+        changed = build(entry=main)
+        assert changed[1:] == build(False, entry=main)[1:]
+        current = read_program(root / "cache", main)["section_dependency_graph"]
+        assert set(current["forward"]) == set(previous["forward"])
+        assert current["forward"] != previous["forward"]
+        assert current["reverse"] != previous["reverse"]
+        assert 1 <= changed[0]["graph_encoding_columns_reused"] < 4, \
+            "an added or removed call retained changed edge columns"
+        previous = current
+    added = (source.replace('alpha\nbeta\n', 'aardvark\nalpha\nbeta\n') +
+             'to aardvark: @intrinsic("discard", 1)\n')
+    for text in (added, source):
+        main.write_text(text)
+        changed = build(entry=main)
+        assert changed[1:] == build(False, entry=main)[1:]
+        assert changed[0]["graph_encoding_columns_reused"] == 0, \
+            "changed path IDs retained an encoded edge column"
+        graph = read_program(root / "cache", main)["section_dependency_graph"]
+        assert all(target in graph["forward"] for edges in graph["forward"].values()
+                   for target in edges)
+    main = root / "graph_early_error.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              '@intrinsic("store", {integer:value}, 1)\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('integer means:', 'other means:'))
+    for _ in range(2):
+        assert build(entry=main, success=False)[1:] == build(False, entry=main, success=False)[1:]
+    main.write_text(source)
+    assert build(entry=main)[1:] == build(False, entry=main)[1:]
+
+
 def check_program_payloads(root, build):
     main = root / "program_payloads.dl"
     source = ('integer means: @intrinsic("type", "int")\n'
@@ -324,7 +400,7 @@ def check_program_payloads(root, build):
     manifest = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
     assert set(manifest["payload_keys"]) == {
         "all_function_projection", "section_dependency_graph", "inference_summaries", "generated_ir", "native_units",
-        "optimization_units", "validation_units"
+        "optimization_units", "validation_units", "debug_ir_inputs"
     }
     assert all(field not in manifest for field in manifest["payload_keys"])
     summary_blob = directory / f"payload-{manifest['payload_keys']['inference_summaries']}.entry"

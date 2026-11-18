@@ -3,6 +3,7 @@
 #include "cachedCbor.h"
 #include "classInstantiationRequest.h"
 #include "codegen/codegen.h"
+#include "codegen/llvmOutput.h"
 #include "codegen/native.h"
 #include "codegen/nativeLibraries.h"
 #include "codegen/targetOptions.h"
@@ -14,6 +15,8 @@
 #include "expressionCapture.h"
 #include "incrementalCacheEntry.h"
 #include "incrementalClassRestoration.h"
+#include "incrementalDebugIR.h"
+#include "incrementalGraphCodec.h"
 #include "incrementalIRReuse.h"
 #include "incrementalMatcherCache.h"
 #include "incrementalModuleBitcode.h"
@@ -26,13 +29,17 @@
 #include "numberScopeRules.h"
 #include "pathUtils.h"
 #include "patternTreeNode.h"
+#include "recordingFileSystem.h"
 #include "section.h"
 #include "section/classSection.h"
 #include "section/variable.h"
 #include "sectionIdentity.h"
+#include "sourceIdentity.h"
+#include "sourceLineIdentity.h"
 #include "sourcePreparation.h"
 #include "sourcePreprocessing.h"
 #include "sourceReferenceOrder.h"
+#include "sourceSyntax.h"
 #include "syntaxConfig.h"
 #include "validation.h"
 #include "variableBindings.h"
@@ -115,8 +122,6 @@ double processCPUMilliseconds() {
 	return std::chrono::duration<double, std::milli>(user + system).count();
 }
 
-std::string digest(std::string_view text) { return stableIdentityDigest(text); }
-
 #include "incrementalCompilerIdentity.inl"
 
 std::string readFile(const fs::path &path) {
@@ -173,8 +178,6 @@ void writeEntry(const fs::path &path, std::string_view payload) {
 
 #include "incrementalProgramCache.inl"
 
-#include "incrementalSourceObservations.inl"
-
 #include "incrementalDiagnosticCache.inl"
 #include "incrementalParsedExpressionCache.inl"
 #include "incrementalParserProductIndex.inl"
@@ -208,12 +211,21 @@ bool containsNestedDefinition(const Section &section) {
 	return false;
 }
 
-Json inactiveFunctionSections(const std::map<std::string, Section *> &sections) {
+Json inactiveFunctionSections(const ParseContext &context, const std::map<std::string, Section *> &sections) {
+	// Generated bodies outside the merged source stream cannot mask any input.
+	std::unordered_set<const Section *> sourceOwners;
+	for (const CodeLine *line : context.codeLines) {
+		const Section *owner = line->section;
+		while (owner && sourceOwners.insert(owner).second)
+			owner = owner->parent;
+	}
 	Json inactive = Json::object();
 	for (const auto &[path, section] : sections) {
-		if (section->type != SectionType::Function || section->patternDefinitions.empty() || section->isFlex ||
-			section->isExposed || !section->instantiations.empty() || containsNestedDefinition(*section))
+		if (section->type != SectionType::Function || section->patternDefinitions.empty() || section->isExposed ||
+			!section->instantiations.empty() || containsNestedDefinition(*section) || !sourceOwners.contains(section))
 			continue;
+		// Snapshot capture removes owners consumed by inference, constraint
+		// probes or retained IR, including flexes with no native instantiation.
 		inactive[path] = sectionIdentity(*section);
 	}
 	return inactive;
@@ -324,6 +336,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalInferenceIdentities.inl"
 #include "incrementalOptimizationInputs.inl"
 #include "incrementalOptimization.inl"
+#include "incrementalLLVMArtifact.inl"
 #include "incrementalOptimizedNativeUnits.inl"
 #include "incrementalInferenceValues.inl"
 #include "incrementalInferenceKeys.inl"
@@ -352,6 +365,7 @@ std::string renderModule(const llvm::Module &module) {
 #include "incrementalConstraintState.inl"
 #include "incrementalInferenceUnitCheck.inl"
 #include "incrementalRootExecution.inl"
+#include "incrementalGlobalTypeProducers.inl"
 #include "incrementalInferenceController.inl"
 #include "incrementalInferenceState.inl"
 // clang-format on
@@ -376,6 +390,8 @@ bool compileIncrementally(
 		RecordingFileSystem *recording = files.get();
 		context.fileSystem = std::move(files);
 		BuildStatistics statistics;
+		statistics.measureDependencyGraph = showStatistics;
+		statistics.measureInferenceQueries = showStatistics;
 		InferenceSummaryStore summaryStore(directory, statistics);
 		statistics.cacheDirectory = directory.string();
 		statistics.cacheEntry = programEntry.string();
@@ -417,6 +433,8 @@ bool compileIncrementally(
 					previousMatcherKey = previous->at("matcher_key").get<std::string>();
 			}
 		}
+		if (previous && context.options.emitLLVM)
+			statistics.llvmOutputKey = previous->at("llvm_output_key").get<std::string>();
 		statistics.cacheLoadMilliseconds = elapsedMilliseconds(compileStart);
 		if (reuseFailedFrontend) {
 			statistics.reusedFrontend = true;
@@ -430,28 +448,22 @@ bool compileIncrementally(
 		} else if (reusePreviousFrontend) {
 			statistics.reusedFrontend = true;
 			std::cerr << cachedDiagnostics;
-			if (linkedOutputUnchanged(context, *previous)) {
+			if (compilerOutputUnchanged(context, *previous)) {
 				success = true;
 				statistics.objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 			} else {
-				context.llvmContext = new llvm::LLVMContext();
-				context.llvmModule = new llvm::Module("dynlex_cached_link", *context.llvmContext);
-				std::string error;
-				context.targetMachine = createNativeTargetMachine(context, error);
-				if (!context.targetMachine)
-					throw std::runtime_error(error);
 				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
 				context.requiredLibraries.insert(libraries.begin(), libraries.end());
-				success = linkOrRestoreNativeOutput(
+				success = restoreCompilerOutput(
 					context, directory, retainedPayloads, programEntry, compilerIdentity, options, libraries, statistics,
-					*previous
+					*previous, false, true
 				);
 			}
 			if (success &&
-				(configOnlyChange || !statistics.nativeUnits.is_null() || !linkedOutputUnchanged(context, *previous))) {
+				(configOnlyChange || !statistics.nativeUnits.is_null() || !compilerOutputUnchanged(context, *previous))) {
 				Json result = *previous;
-				recordNativeOutput(result, statistics, &*previous);
-				result["linked_output"] = linkedOutputIdentity(context);
+				recordCompilerOutput(result, statistics, &*previous);
+				result["compiler_output"] = compilerOutputIdentity(context);
 				if (configOnlyChange) {
 					result["files"] = recording->observations;
 					result["diagnostics"] = cachedDiagnostics;
@@ -666,7 +678,7 @@ bool compileIncrementally(
 			auto constraintSnapshotStart = Clock::now();
 			Json constraintState = captureCurrentConstraintState(
 				context, *recording, resolvedFunctionProjection, sectionPaths, inferenceReads, frontendDiagnosticUnits,
-				priorConstraints, compiled, reuseTypeInference, previous ? &*previous : nullptr
+				priorConstraints, compiled, reuseTypeInference, previous ? &*previous : nullptr, statistics
 			);
 			statistics.constraintSnapshotMilliseconds += elapsedMilliseconds(constraintSnapshotStart);
 			statistics.expressionParseHits = parserCache.hits();
@@ -715,11 +727,11 @@ bool compileIncrementally(
 				statistics.reusedTypeInference = true;
 				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
 				context.requiredLibraries.insert(libraries.begin(), libraries.end());
-				if (linkedOutputUnchanged(context, *previous)) {
+				if (compilerOutputUnchanged(context, *previous)) {
 					success = true;
 					statistics.objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 				} else {
-					success = linkOrRestoreNativeOutput(
+					success = restoreCompilerOutput(
 						context, directory, retainedPayloads, programEntry, compilerIdentity, options, libraries, statistics,
 						*previous
 					);
@@ -745,9 +757,9 @@ bool compileIncrementally(
 					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
 					result["frontend_diagnostic_units"] = std::move(frontendDiagnosticUnits);
 					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
-					recordNativeOutput(result, statistics, &*previous);
+					recordCompilerOutput(result, statistics, &*previous);
 					recordSemanticSources(result, *recording, context);
-					result["linked_output"] = linkedOutputIdentity(context);
+					result["compiler_output"] = compilerOutputIdentity(context);
 					auto writeStart = Clock::now();
 					writeProgramEntry(
 						programEntry, std::move(result), &*previous, showStatistics ? &statistics.payloadWrite : nullptr
@@ -799,6 +811,7 @@ bool compileIncrementally(
 						{"diagnostic_records", diagnosticRecords},
 						{"diagnostic_sources", diagnosticSources}
 					};
+					result["debug_ir_inputs"] = captureDebugIRInputs(compiled, sectionPaths);
 					result["matcher_key"] = saveMatcher(IncrementalMatcherCache::SnapshotScope::Complete);
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
 					result["all_function_projection"]["binding_units"] = bindings.snapshot();
@@ -826,28 +839,28 @@ bool compileIncrementally(
 										   ? previous->at("global_types")
 										   : captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
 					result["global_types"] = globalTypes;
+					result["global_storage"] = captureGlobalStorage(compiled);
 					result["inference_summaries"] =
 						inferenceReuse
 							? inferenceReuse->snapshot(
 								  sectionPaths, result.at("function_sections"), result.at("function_instantiations"),
-								  &statistics.reusedInferenceSummarySections
+								  &statistics.reusedInferenceSummarySections, compiled.options.emitDebugInfo
 							  )
 							: captureInferenceSummaries(
 								  compiled, products.sourceIndex(), sectionPaths, products.globalInputs(), summaryStore,
 								  nativeInferenceUnits(result.at("function_sections"), result.at("function_instantiations")),
-								  nullptr, nullptr, false, &products.references()
+								  nullptr, nullptr, compiled.options.emitDebugInfo, &products.references()
 							  );
 					result["root_diagnostics"] =
 						captureRootInferenceDiagnostics(compiled, sectionPaths, products.sourceIndex());
-					auto graphStart = Clock::now();
 					result["section_dependency_graph"] = captureSectionDependencyGraph(
 						compiled, result, sectionPaths, inferenceReads,
 						result.at("all_function_projection").at("constraint_probe_schedule").at("callable_lookups"), statistics,
 						inferenceInputFingerprints, products.globalInputs(),
 						priorInference ? &priorInference->at("section_dependency_graph") : nullptr, graphStable,
-						retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr), &products
+						retainedGraphVariants(functionReuse.get(), previous ? &*previous : nullptr), &products,
+						priorMatchedDependencies(priorConstraints, priorInference)
 					);
-					statistics.dependencyGraphMilliseconds = elapsedMilliseconds(graphStart);
 					retainInferenceInputPaths(
 						result.at("all_function_projection").at("constraint_probe_schedule"),
 						result.at("section_dependency_graph"), retainedActivePaths
@@ -862,27 +875,29 @@ bool compileIncrementally(
 					statistics.snapshotMilliseconds = elapsedMilliseconds(snapshotStart);
 					bool emitted;
 					if (previous && previous->at("generated_ir") == result.at("generated_ir")) {
-						if (previous->at("libraries") == libraries && linkedOutputUnchanged(compiled, *previous)) {
+						if (previous->at("libraries") == libraries && compilerOutputUnchanged(compiled, *previous)) {
 							statistics.objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 							emitted = true;
 						} else
-							emitted = linkOrRestoreNativeOutput(
+							emitted = restoreCompilerOutput(
 								compiled, directory, retainedPayloads, programEntry, compilerIdentity, options, libraries,
 								statistics, *previous, true
 							);
 					} else
-						emitted = buildNativeOutput(
+						emitted = buildCompilerOutput(
 							compiled, directory, retainedPayloads, compilerIdentity, options, libraries, statistics,
-							previous ? &*previous : nullptr, functionReuse.get()
+							result.at("generated_ir").get_ref<const std::string &>(), previous ? &*previous : nullptr,
+							functionReuse.get()
 						);
 					if (!emitted)
 						return false;
-					recordNativeOutput(result, statistics, previous ? &*previous : nullptr);
-					result["linked_output"] = linkedOutputIdentity(compiled);
+					recordCompilerOutput(result, statistics, previous ? &*previous : nullptr);
+					result["compiler_output"] = compilerOutputIdentity(compiled);
 					auto writeStart = Clock::now();
 					writeProgramEntry(
 						programEntry, std::move(result), previous ? &*previous : nullptr,
-						showStatistics ? &statistics.payloadWrite : nullptr
+						showStatistics ? &statistics.payloadWrite : nullptr,
+						showStatistics ? &statistics.graphEncoding : nullptr
 					);
 					statistics.cacheWriteMilliseconds = elapsedMilliseconds(writeStart);
 					return true;
@@ -919,7 +934,8 @@ bool compileIncrementally(
 						directory, captureFailedInferenceState(
 									   context, *recording, resolvedFunctionProjection, sectionPaths, inferenceReads,
 									   inferenceReuse.get(), summaryStore, statistics, inferenceInputFingerprints,
-									   priorInference, graphStable, previous ? &*previous : nullptr, products
+									   priorInference, graphStable, previous ? &*previous : nullptr, products,
+									   priorMatchedDependencies(priorConstraints, priorInference)
 								   )
 					);
 					statistics.snapshotMilliseconds += elapsedMilliseconds(snapshotStart);

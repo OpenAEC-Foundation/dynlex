@@ -1,3 +1,5 @@
+#include "variableBindings.h"
+
 static bool typeContainsSymbolicClassInstantiation(const DataType &type) {
 	return (type.classDefinition && type.classInstIndex < -1) ||
 		   (type.arrayElementType && typeContainsSymbolicClassInstantiation(*type.arrayElementType));
@@ -52,11 +54,8 @@ static bool expressionEvaluatesIntrinsic(Expression *expression, IntrinsicKind k
 		   intrinsicKind(expression->intrinsicName) == kind;
 }
 
-// Records the properties of a `numbers are ...` rule once its line is inferred.
-static bool commitNumberRule(DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext, const TypeConstraint &rule) {
-	CodeLine *line = item.numberRuleLine;
-	line->expression = item.expression;
-	auto *rulesSection = static_cast<ScopeRulesSection *>(line->section);
+static bool
+validateNumberRuleResult(const DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext, const TypeConstraint &rule) {
 	if (!expressionEvaluatesIntrinsic(item.expression, IntrinsicKind::NumberRule)) {
 		parseContext.addDiagnostic(
 			Diagnostic(parseContext, Diagnostic::Level::Error, "number rule not a rule", item.diagnosticRange)
@@ -71,9 +70,14 @@ static bool commitNumberRule(DeclaredTypeConstraintWorkItem &item, ParseContext 
 			item.diagnosticRange.subString
 		));
 	}
+	return true;
+}
+
+// Publish a fresh or dependency-validated rule result without evaluating it again.
+static void commitNumberRule(const DeclaredTypeConstraintWorkItem &item, const TypeConstraint &rule) {
+	auto *rulesSection = static_cast<ScopeRulesSection *>(item.numberRuleLine->section);
 	rulesSection->rules.numbers = NumberScopeRule{{item.diagnosticRange, rulesSection->absolute}, rule};
 	rulesSection->rules.numberRulePending = false;
-	return true;
 }
 
 static void commitDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext, size_t index) {
@@ -100,6 +104,7 @@ static void commitDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, P
 		readPatternTypeConstraintValue(expression, context, constraint, parameterType),
 		"pattern type-constraint probe and committed result type disagreed"
 	);
+	parseContext.constraintQueries.at(index).value = ParseContext::IncrementalConstraintValue{constraint, parameterType};
 	item.expression = expression;
 	if (item.numberRuleLine) {
 		item.numberRuleConstraint = std::move(constraint);
@@ -203,6 +208,8 @@ static bool collectDeclaredTypeConstraintWorkItems(
 	ParseContext &parseContext, Section *section, std::vector<DeclaredTypeConstraintWorkItem> &items,
 	DeclaredConstraintIdentities &identities
 ) {
+	if (parseContext.variableBindingHooks)
+		parseContext.variableBindingHooks->prepareConstraints(section);
 	if (auto *rulesSection = dynamic_cast<ScopeRulesSection *>(section)) {
 		for (CodeLine *line : section->codeLines) {
 			if (!line->expression)
@@ -210,7 +217,6 @@ static bool collectDeclaredTypeConstraintWorkItems(
 			Range ruleRange(line, line->patternText);
 			ScopeRules &rules = rulesSection->rules;
 			if (rules.numberRulePending) {
-				const SyntaxConfig &syntax = syntaxConfigForRange(parseContext, ruleRange);
 				Diagnostic diagnostic(
 					parseContext, Diagnostic::Level::Error, "scope rule repeated", ruleRange, "rule", line->patternText
 				);
@@ -219,9 +225,9 @@ static bool collectDeclaredTypeConstraintWorkItems(
 						   &static_cast<ScopeRulesSection *>(item.numberRuleLine->section)->rules == &rules;
 				});
 				requireCompilerInvariant(first != items.end(), "pending number rule has no work item");
-				diagnostic.relatedInfo.push_back(
-					{renderConfiguredMessage(syntax, "scope rule repeated", "related rule"), first->diagnosticRange}
-				);
+				diagnostic.relatedInfo.push_back(configuredRelatedInfo(
+					parseContext, ruleRange, "scope rule repeated", "related rule", first->diagnosticRange
+				));
 				parseContext.diagnostics.push_back(std::move(diagnostic));
 				return false;
 			}
@@ -478,10 +484,12 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 				destroyExpressions();
 				return false;
 			}
-			bool reuseValue = reuseItem && !item.numberRuleLine && prior->value;
+			bool reuseValue = reuseItem && prior->value;
 			if (reuseValue) {
 				const auto &value = *prior->value;
-				if (item.element) {
+				if (item.numberRuleLine) {
+					item.numberRuleConstraint = value.constraint;
+				} else if (item.element) {
 					item.element->resolvedTypeConstraint = value.constraint;
 					item.element->resolvedParameterType = value.parameterType;
 				} else {
@@ -496,29 +504,24 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 				parseContext.constraintValuesReused++;
 			} else {
 				commitDeclaredTypeConstraint(item, parseContext, itemIndex);
-				if (item.element)
-					query.value = ParseContext::IncrementalConstraintValue{
-						item.element->resolvedTypeConstraint, item.element->resolvedParameterType
-					};
-				else if (item.variableReference)
-					query.value = ParseContext::IncrementalConstraintValue{
-						item.variableReference->declaredTypeConstraint, item.variableReference->declaredType
-					};
 				recordDeclaredConstraintDependencies(item, parseContext, variableOwners, query.dependencies);
 			}
-			query.state = Query::State::Ready;
-			query.pass = pass;
-			query.readsReused = reuseItem;
 			if (item.numberRuleLine) {
-				if (!commitNumberRule(item, parseContext, item.numberRuleConstraint)) {
+				item.numberRuleLine->expression = item.expression;
+				if (!reuseValue && !validateNumberRuleResult(item, parseContext, item.numberRuleConstraint)) {
 					query.state = Query::State::Failed;
+					query.pass = pass;
 					item.expression = nullptr;
 					destroyExpressions();
 					return false;
 				}
+				commitNumberRule(item, item.numberRuleConstraint);
 			} else {
 				destroyTypeConstraintExpression(item.expression);
 			}
+			query.state = Query::State::Ready;
+			query.pass = pass;
+			query.readsReused = reuseItem;
 			item.expression = nullptr;
 			item.expressionOmittedForReuse = false;
 			unresolvedCount--;

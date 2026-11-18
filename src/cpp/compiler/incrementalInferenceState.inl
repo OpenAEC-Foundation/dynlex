@@ -37,7 +37,8 @@ Json captureFailedInferenceState(
 	ParseContext &context, RecordingFileSystem &files, const Json &projection,
 	const std::map<const Section *, std::string> &paths, IncrementalInferenceReads &reads, IncrementalInferenceReuse *reuse,
 	InferenceSummaryStore &store, BuildStatistics &statistics, std::map<std::string, std::string> &fingerprints, Json *prior,
-	const std::unordered_set<const Section *> &stable, const Json *native, const IncrementalInferenceProducts &products
+	const std::unordered_set<const Section *> &stable, const Json *native, const IncrementalInferenceProducts &products,
+	const Json *previousMatched
 ) {
 	Json functions = native ? native->at("function_sections") : Json::object();
 	Json keys = native ? native->at("function_instantiations") : Json::object();
@@ -54,7 +55,8 @@ Json captureFailedInferenceState(
 	state["function_instantiations"] = Json::object();
 	state["section_dependency_graph"] = captureSectionDependencyGraph(
 		context, state, paths, reads, projection.at("constraint_probe_schedule").at("callable_lookups"), statistics,
-		fingerprints, products.globalInputs(), prior ? &prior->at("section_dependency_graph") : nullptr, stable, {}, &products
+		fingerprints, products.globalInputs(), prior ? &prior->at("section_dependency_graph") : nullptr, stable, {}, &products,
+		previousMatched
 	);
 	recordSemanticSources(state, files, context);
 	return state;

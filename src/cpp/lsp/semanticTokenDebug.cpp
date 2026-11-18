@@ -301,7 +301,9 @@ std::vector<SemanticToken> collectLiveLineSemanticTokens(
 static std::vector<std::string_view> splitLines(std::string_view text);
 
 std::vector<std::vector<SemanticToken>>
-collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCount, bool suppressOnFileErrors) {
+collectSemanticTokens(ParseContext &context, const SourceFile &source, bool suppressOnFileErrors) {
+	const std::string uri = pathutil::toAbsoluteUri(source.uri);
+	int lineCount = source.lineCount();
 	if (!context.hasCompleted(ParseContext::CompilationStage::AnalyzedSections))
 		return {};
 	const bool hasFunctionPatterns = context.hasCompleted(ParseContext::CompilationStage::ResolvedFunctionPatterns);
@@ -474,17 +476,8 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 		addToken(::Range(line, line->rightTrimmedText), SemanticTokenType::Section, false);
 	}
 
-	lsp::SourceFile *authoredSource = nullptr;
-	for (CodeLine *line : context.codeLines) {
-		if (line->sourceFile && pathutil::toAbsoluteUri(line->sourceFile->uri) == uri) {
-			authoredSource = line->sourceFile;
-			break;
-		}
-	}
-	if (!authoredSource)
-		return builder.tokenLines();
-	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, authoredSource);
-	std::vector<std::string_view> authoredLines = splitLines(authoredSource->content);
+	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, &source);
+	std::vector<std::string_view> authoredLines = splitLines(source.content);
 	for (int lineIndex = 0; lineIndex < lineCount && lineIndex < static_cast<int>(authoredLines.size()); lineIndex++) {
 		std::string_view line = authoredLines[static_cast<size_t>(lineIndex)];
 		size_t commentPos = findCommentStart(line, syntax.commentPrefix);
@@ -656,9 +649,7 @@ std::string renderTaggedSemanticTokens(ParseContext &context, const std::string 
 	if (!sourceFile)
 		return {};
 
-	std::vector<std::string_view> lines = splitLines(sourceFile->content);
-	std::vector<std::vector<SemanticToken>> tokensByLine =
-		collectSemanticTokens(context, pathutil::toAbsoluteUri(path), static_cast<int>(lines.size()), suppressOnFileErrors);
+	std::vector<std::vector<SemanticToken>> tokensByLine = collectSemanticTokens(context, *sourceFile, suppressOnFileErrors);
 	return renderTaggedSemanticTokensFromData(sourceFile->content, encodeSemanticTokens(tokensByLine, *sourceFile));
 }
 

@@ -2,6 +2,7 @@
 
 from test_incremental_program_cache import read_program
 from test_incremental_flex_declarations import check_flex_declaration_retention
+from test_incremental_inactive_flex import check_inactive_flex_inference
 
 
 def check_declaration_projection_units(root, build):
@@ -37,6 +38,7 @@ def check_declaration_projection_units(root, build):
     check_failed_declaration_projection_units(root, build)
     check_declaration_syntax_profile(root, build)
     check_flex_declaration_retention(root, build)
+    check_inactive_flex_inference(root, build)
 
 
 def check_failed_declaration_projection_units(root, build):

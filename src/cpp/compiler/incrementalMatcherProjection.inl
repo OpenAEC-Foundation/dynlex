@@ -3,6 +3,8 @@ struct MatcherProjectionWork {
 	double initialBodies = 0, final = 0, headers = 0, referenceTables = 0;
 	double bindings = 0, classifications = 0, inactiveCopy = 0, publishCopy = 0;
 	double ownerContexts = 0, sourceOwnerSelection = 0;
+	double constraintSources = 0;
+	size_t constraintSourceUnitsReused = 0, constraintSourceUnitsScanned = 0, constraintSourceReferencesScanned = 0;
 };
 
 // Preserve the matcher boundary before receiver bodies become generated functions.
@@ -24,6 +26,7 @@ struct InitialMatcherProjection {
 	};
 	Json value = nullptr;
 	std::vector<Owner> owners;
+	std::unordered_set<const Section *> constraintSourceOwners;
 	bool unitsCaptured = false;
 	const Json *priorUnits = nullptr, *published = nullptr;
 	const Json &projection() const { return published ? *published : value; }
@@ -39,6 +42,7 @@ struct InitialMatcherProjection {
 		priorUnits = prior;
 		declarationsReused = 0;
 		owners.clear();
+		constraintSourceOwners.clear();
 		unitsCaptured = false;
 		std::unordered_set<const PatternReference *> deferred(deferredReferences.begin(), deferredReferences.end());
 		std::unordered_set<const Section *> functionBodies, reusable;
@@ -82,6 +86,9 @@ struct InitialMatcherProjection {
 			{"selected_digest", digest(selected.dump())},
 			{"declaration_digests", Json::object()},
 			{"match_overrides", Json::object()},
+			{"source_match_units", Json::object()},
+			{"source_match_results", Json::object()},
+			{"constraint_sources", Json::object()},
 			{"body_units", Json::object()},
 			{"final_body_units", Json::object()},
 			{"header_definitions", Json::object()},
@@ -169,6 +176,30 @@ struct InitialMatcherProjection {
 		return headers;
 	}
 
+	void captureSourceMatchResults(
+		const std::string &path, const std::vector<PatternReference *> &references, const Json &expanded,
+		const std::map<const Section *, std::string> &paths, IncrementalMatcherCache &matcherCache, bool retained = false
+	) {
+		const Json &entries = value.at("source_match_units").at(path);
+		const Json *oldEntries = priorUnits && priorUnits->at("source_match_units").contains(path)
+									 ? &priorUnits->at("source_match_units").at(path)
+									 : nullptr;
+		std::string results;
+		if (retained)
+			results = priorUnits->at("source_match_results").at(path).get<std::string>();
+		else if (expanded.at("match_entries").contains(path) && expanded.at("match_entries").at(path) == entries)
+			results = expanded.at("matches").at(path).get<std::string>();
+		else {
+			const Json *oldResults = oldEntries ? &priorUnits->at("source_match_results").at(path) : nullptr;
+			results = resolvedReferenceMatches(references, paths, matcherCache, oldEntries, oldResults, nullptr).fingerprint;
+		}
+		// Keep ordered per-reference identities available for a later edit, while
+		// consumers depend only on their settled semantic result fingerprint.
+		if (matcherCache.contains(results))
+			matcherCache.retain(results);
+		value.at("source_match_results")[path] = std::move(results);
+	}
+
 	void captureBodyUnits(
 		ParseContext &context, IncrementalMatcherCache &matcherCache, const std::map<std::string, Section *> &sections
 	) {
@@ -203,6 +234,40 @@ struct InitialMatcherProjection {
 		unitsCaptured = true;
 	}
 
+	void captureConstraintSources(const Owner &owner, const ParseContext &context) {
+		if (!owner.demandEligible)
+			return;
+		auto timer = measure(&MatcherProjectionWork::constraintSources);
+		bool declared = false;
+		if (context.retainedSourceOwners.contains(owner.section) ||
+			(context.deferredBodyResolution && context.deferredBodyResolution(owner.section))) {
+			declared = priorUnits->at("constraint_sources").contains(owner.path);
+			if (work)
+				work->constraintSourceUnitsReused++;
+		} else {
+			if (work)
+				work->constraintSourceUnitsScanned++;
+			auto visit = [&](auto &&self, const Section &scope) -> bool {
+				for (const auto &[_, references] : scope.variableReferences)
+					for (const VariableReference *reference : references) {
+						if (work)
+							work->constraintSourceReferencesScanned++;
+						if (!reference->declaredTypeConstraintName.empty())
+							return true;
+					}
+				for (const Section *child : scope.children)
+					if (child->patternDefinitions.empty() && self(self, *child))
+						return true;
+				return false;
+			};
+			declared = visit(visit, *owner.section);
+		}
+		if (declared) {
+			value.at("constraint_sources")[owner.path] = true;
+			constraintSourceOwners.insert(owner.section);
+		}
+	}
+
 	Json finish(
 		const ParseContext &context, const Json &expanded, IncrementalMatcherCache &matcherCache,
 		const std::map<std::string, Section *> &sections
@@ -220,10 +285,13 @@ struct InitialMatcherProjection {
 		for (const auto &[path, section] : sections)
 			paths.emplace(section, path);
 		for (Owner &owner : owners) {
+			captureConstraintSources(owner, context);
 			if (owner.references.empty() && !context.retainedSourceOwners.contains(owner.section))
 				owner.references = sourceOwnerReferences(*owner.section);
 			if (context.retainedSourceOwners.contains(owner.section) ||
 				(context.deferredBodyResolution && context.deferredBodyResolution(owner.section))) {
+				value.at("source_match_units")[owner.path] = priorUnits->at("source_match_units").at(owner.path);
+				captureSourceMatchResults(owner.path, owner.references, expanded, paths, matcherCache, true);
 				for (const char *field : {"final_body_units", "header_definitions"})
 					value.at(field)[owner.path] = priorUnits->at(field).at(owner.path);
 				matcherCache.retain(value.at("final_body_units").at(owner.path).get_ref<const std::string &>());
@@ -245,9 +313,32 @@ struct InitialMatcherProjection {
 			const Json &finalEntries = expanded.at("match_entries");
 			auto referenceTimer = measure(&MatcherProjectionWork::referenceTables);
 			std::string key = matcherCache.recordReferenceKeys(owner.references);
+			std::vector<PatternReference *> unitReferences;
+			forEachInferenceSourceReference(*owner.section, [&](PatternReference *reference) {
+				unitReferences.push_back(reference);
+			});
+			orderSourceReferences(unitReferences);
+			value.at("source_match_units")[owner.path] =
+				unitReferences == owner.references ? key : matcherCache.recordReferenceKeys(unitReferences);
+			captureSourceMatchResults(owner.path, unitReferences, expanded, paths, matcherCache);
 			referenceTimer.stop();
 			if (!finalEntries.contains(owner.path) || finalEntries.at(owner.path).get_ref<const std::string &>() != key)
 				value.at("match_overrides")[owner.path] = std::move(key);
+		}
+		auto referenceTimer = measure(&MatcherProjectionWork::referenceTables);
+		for (const auto &[path, section] : sections) {
+			if ((section->parent && section->patternDefinitions.empty() && !hasCodegenSectionIdentity(*section)) ||
+				value.at("source_match_units").contains(path))
+				continue;
+			std::vector<PatternReference *> references;
+			forEachInferenceSourceReference(*section, [&](PatternReference *reference) {
+				references.push_back(reference);
+			});
+			if (!references.empty()) {
+				orderSourceReferences(references);
+				value.at("source_match_units")[path] = matcherCache.recordReferenceKeys(references);
+				captureSourceMatchResults(path, references, expanded, paths, matcherCache);
+			}
 		}
 		return std::move(value);
 	}

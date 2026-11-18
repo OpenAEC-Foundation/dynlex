@@ -115,12 +115,43 @@ static bool inferExpression(
 		if (context.resolvedGroupingRoots)
 			context.resolvedGroupingRoots->insert(selectedFixedGroupingRoots.begin(), selectedFixedGroupingRoots.end());
 	};
-	if (alreadyOrdered) {
+	// One grouping-capable node cannot exchange operands with another node.
+	// Its enclosing trial already owns rollback, so no nested trial is needed.
+	bool uniqueGrouping = !alreadyOrdered && context.trial && context.groupingTrialJournal &&
+						  std::ranges::count_if(initialGrouping.nodes, [](const auto &node) {
+		return expressionHasGroupingShape(node.first);
+	}) <= 1;
+	if (uniqueGrouping) {
+		recomputeRanges(expr);
+		resetExpressionTypes(expr);
+		if (expressionHasGroupingShape(expr))
+			selectedFixedGroupingRoots.insert(expr);
+		context.parseContext.uniqueGroupingTrialsSkipped++;
+	}
+	if (alreadyOrdered || uniqueGrouping) {
 		// A committed line or cloned header preserves its entire snapshot,
 		// independently of the roots fixed by an enclosing caller's trial.
-		for (const auto &[expression, state] : initialGrouping.nodes)
-			selectedFixedGroupingRoots.insert(expression);
+		if (alreadyOrdered)
+			for (const auto &[expression, state] : initialGrouping.nodes)
+				selectedFixedGroupingRoots.insert(expression);
 		if (!tryInfer()) {
+			if (uniqueGrouping) {
+				int priority = context.hasTypeFailureDiagnostic ? context.typeFailurePriority : 1;
+				Diagnostic failure =
+					context.hasTypeFailureDiagnostic
+						? context.typeFailureDiagnostic
+						: buildFailureDetailDiagnostic(
+							  context.typeFailureSnapshot.range.line ? context.typeFailureSnapshot.range
+																	 : originalDiagnostic.range,
+							  context.typeFailureDetail, context.typeFailureRelatedInfo, context.configuredTypeFailureDetail
+						  );
+				applyGroupingSnapshot(initialGrouping);
+				expr = initialGrouping.root;
+				recomputeRanges(expr);
+				resetExpressionTypes(expr);
+				context.clearTypeFailure();
+				context.fail(std::move(failure), priority);
+			}
 			context.typesValid = false;
 			emitTypeFailureDiagnostic();
 			return false;

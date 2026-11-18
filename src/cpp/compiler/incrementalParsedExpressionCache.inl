@@ -8,7 +8,7 @@ void appendParseLength(std::string &output, std::uint64_t value) {
 	} while (value);
 }
 
-std::uint64_t readParseLength(std::string_view input, size_t &position) {
+size_t readParseLength(std::string_view input, size_t &position) {
 	std::uint64_t value = 0;
 	for (unsigned index = 0; index < 10; index++) {
 		if (position == input.size())
@@ -18,7 +18,7 @@ std::uint64_t readParseLength(std::string_view input, size_t &position) {
 			throw std::runtime_error("invalid parsed expression cache length");
 		value |= static_cast<std::uint64_t>(byte & 0x7f) << (index * 7);
 		if (!(byte & 0x80))
-			return value;
+			return value <= SIZE_MAX ? static_cast<size_t>(value) : throw std::runtime_error("parsed length overflow");
 	}
 	throw std::runtime_error("invalid parsed expression cache length");
 }
@@ -254,27 +254,9 @@ class IncrementalParsedExpressionCache {
   public:
 	enum class SnapshotScope { Complete, Partial };
 	IncrementalParsedExpressionCache(ParseContext &context, std::string_view previous) : context(context) {
-		if (previous.empty())
-			return;
-		if (!previous.starts_with(parsedExpressionCacheHeader))
-			throw std::runtime_error("invalid parsed expression cache header");
-		size_t position = parsedExpressionCacheHeader.size();
-		while (position < previous.size()) {
-			if (previous.size() - position < 65)
-				throw std::runtime_error("truncated parsed expression cache key");
-			std::string_view key = previous.substr(position, 65);
-			if (key.front() != 'R' && key.front() != 'T' && key.front() != 'D' && key.front() != 'S' && key.front() != 'P')
-				throw std::runtime_error("invalid parsed expression cache key kind");
-			position += 65;
-			std::uint64_t length = readParseLength(previous, position);
-			if (length > previous.size() - position)
-				throw std::runtime_error("truncated parsed expression cache value");
-			auto [_, inserted] = prior.emplace(key, previous.substr(position, static_cast<size_t>(length)));
-			if (!inserted)
-				throw std::runtime_error("duplicate parsed expression cache key");
-			position += static_cast<size_t>(length);
-		}
+		readPrevious(previous, false);
 	}
+	void mergePrevious(std::string_view previous) { readPrevious(previous, true); }
 
 	Expression *reuse(Section *section, Range range, SectionType patternType, bool registerPatternReferences) {
 		recordBodyAssembly(section, registerPatternReferences);
@@ -446,6 +428,35 @@ class IncrementalParsedExpressionCache {
 	}
 
   private:
+	void readPrevious(std::string_view previous, bool merging) {
+		if (previous.empty())
+			return;
+		if (!previous.starts_with(parsedExpressionCacheHeader))
+			throw std::runtime_error("invalid parsed expression cache header");
+		size_t position = parsedExpressionCacheHeader.size();
+		while (position < previous.size()) {
+			if (previous.size() - position < 65)
+				throw std::runtime_error("truncated parsed expression cache key");
+			std::string_view key = previous.substr(position, 65);
+			if (key.front() != 'R' && key.front() != 'T' && key.front() != 'D' && key.front() != 'S' && key.front() != 'P')
+				throw std::runtime_error("invalid parsed expression cache key kind");
+			position += 65;
+			std::uint64_t length = readParseLength(previous, position);
+			if (length > previous.size() - position)
+				throw std::runtime_error("truncated parsed expression cache value");
+			auto [_, inserted] = prior.emplace(key, previous.substr(position, static_cast<size_t>(length)));
+			if (!inserted) {
+				if (!merging)
+					throw std::runtime_error("duplicate parsed expression cache key");
+				requireCompilerInvariant(
+					prior.at(key) == previous.substr(position, static_cast<size_t>(length)),
+					"equivalent syntax keys have different unresolved products"
+				);
+			}
+			position += static_cast<size_t>(length);
+		}
+	}
+
 	void recordBodyAssembly(Section *scope, bool registerPatternReferences) {
 		if (!registerPatternReferences || context.compilationStage != ParseContext::CompilationStage::ImportedFiles)
 			return;

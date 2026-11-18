@@ -71,7 +71,7 @@ Json captureInactiveProjection(
 		collectSections(context.mainSection, "root", collectedSections);
 		knownSections = &collectedSections;
 	}
-	Json inactive = priorInactive ? *priorInactive : inactiveFunctionSections(*knownSections);
+	Json inactive = priorInactive ? *priorInactive : inactiveFunctionSections(context, *knownSections);
 	if (generatedFunctionPaths) {
 		for (const std::string &path : *generatedFunctionPaths)
 			inactive.erase(path);

@@ -1,3 +1,5 @@
+#include "incrementalMatchedDependencies.inl"
+
 // Inference summaries require portable argument values. Dependency edges do
 // not: variants without such keys retain their complete union under this key.
 
@@ -24,21 +26,23 @@ Json captureSectionDependencyGraph(
 	IncrementalInferenceReads &inferenceReads, const Json &probeLookups, BuildStatistics &statistics,
 	std::map<std::string, std::string> &fingerprints, InferenceGlobalInputs &globalInputs, Json *previous = nullptr,
 	const std::unordered_set<const Section *> &stable = {}, const RetainedGraphVariants &retained = {},
-	const IncrementalInferenceProducts *products = nullptr
+	const IncrementalInferenceProducts *products = nullptr, const Json *previousMatched = nullptr
 ) {
+	IncrementalWorkTimer totalTimer(statistics.measureDependencyGraph ? &statistics.dependencyGraphMilliseconds : nullptr);
+	IncrementalWorkTimer setupTimer(statistics.measureDependencyGraph ? &statistics.dependencyGraphSetupMilliseconds : nullptr);
 	const bool hadPrevious = previous != nullptr;
-	Json graph = hadPrevious ? std::move(*previous)
-							 : Json{
-								   {"forward", Json::object()},
-								   {"reverse", Json::object()},
-								   {"instantiations", Json::object()},
-								   {"callable_lookups", Json::object()},
-								   {"inference_reads", Json::object()}
-							   };
+	Json graph =
+		hadPrevious ? std::move(*previous) : Json{{"forward", Json::object()},			{"reverse", Json::object()},
+												  {"instantiations", Json::object()},	{"matched", Json::object()},
+												  {"callable_lookups", Json::object()}, {"inference_reads", Json::object()}};
 	Json &forward = graph.at("forward");
 	Json *priorUnits = hadPrevious ? &graph.at("inference_units") : nullptr;
 	Json &reverse = graph.at("reverse");
 	Json &instantiations = graph.at("instantiations");
+	MatchedDependencyFacts matchedFacts(
+		context, program.at("all_function_projection"), paths,
+		previousMatched ? *previousMatched : std::move(graph.at("matched")), statistics
+	);
 	const Json &priorLookups = graph.at("callable_lookups");
 	InferenceUnitInputs lookupInputs(context, program.at("all_function_projection"), paths, statistics, fingerprints);
 	inferenceReads.finalizeInterfaces(priorLookups, [&](const auto &path) {
@@ -64,14 +68,25 @@ Json captureSectionDependencyGraph(
 		std::set<std::string> after;
 	};
 	std::vector<DependencyChange> changes;
+	bool variantsChanged = !hadPrevious;
 	auto dependencySet = [](const Json &entries) {
 		std::set<std::string> result;
 		for (const Json &entry : entries)
 			result.insert(entry.get<std::string>());
 		return result;
 	};
+	setupTimer.stop();
+	IncrementalWorkTimer sectionsTimer(
+		statistics.measureDependencyGraph ? &statistics.dependencyGraphSectionsMilliseconds : nullptr
+	);
 	for (const auto &[section, path] : paths) {
+		statistics.dependencyGraphSectionsVisited++;
 		currentPaths.insert(path);
+		IncrementalWorkTimer matchedTimer(
+			statistics.measureDependencyGraph ? &statistics.dependencyGraphMatchedMilliseconds : nullptr
+		);
+		const Json &sourceMatches = matchedFacts.dependencies(section);
+		matchedTimer.stop();
 		std::set<std::string> retainedKeys;
 		if (auto keys = retained.keysByPath.find(path); keys != retained.keysByPath.end())
 			retainedKeys = keys->second;
@@ -94,6 +109,18 @@ Json captureSectionDependencyGraph(
 					retainedKeys.insert(key);
 		IncrementalInferenceReads::Keys sectionLookups = inferenceReads.readsOf(path);
 		IncrementalInferenceReads::Keys reads = inferenceReads.dependenciesOf(path);
+		// A source-only product has no inferred contributions. The matcher has
+		// already validated its current edges, so equal outputs stop propagation.
+		if (hadPrevious && section->parent && section->instantiations.empty() && instantiatedKeys.empty() &&
+			retainedKeys.empty() && sectionLookups.empty() && reads.empty()) {
+			auto oldEdges = forward.find(path);
+			// Decoded graph tables share paths. Read indexes are rebuilt below.
+			if (oldEdges != forward.end() && oldEdges.value() == sourceMatches && instantiations.at(path).empty()) {
+				statistics.dependencyGraphEntriesReused++;
+				statistics.dependencyGraphSourceOnlySectionsReused++;
+				continue;
+			}
+		}
 		bool reuseEntry = hadPrevious && stable.contains(section) && forward.contains(path) && instantiations.contains(path) &&
 						  sectionLookups.empty() && reads.empty();
 		std::set<std::string> currentKeys = retainedKeys;
@@ -122,9 +149,8 @@ Json captureSectionDependencyGraph(
 			statistics.dependencyGraphEntriesReused++;
 			continue;
 		}
-		std::set<std::string> direct;
+		std::set<std::string> direct = dependencySet(sourceMatches);
 		std::vector<Section *> matched;
-		collectMatchedSectionDependencies(section, matched);
 		if (!section->parent)
 			InferredSectionDependencies(matched).collectExecution(*section);
 		for (Section *dependency : matched)
@@ -200,6 +226,7 @@ Json captureSectionDependencyGraph(
 		std::set<std::string> before = forward.contains(path) ? dependencySet(forward.at(path)) : std::set<std::string>{};
 		if (before != direct)
 			changes.push_back({path, std::move(before), direct});
+		variantsChanged |= !instantiations.contains(path) || instantiations.at(path) != variants;
 		forward[path] = direct;
 		instantiations[path] = std::move(variants);
 	}
@@ -207,6 +234,11 @@ Json captureSectionDependencyGraph(
 		for (const Json &key : keys)
 			lookupOwners.try_emplace(key.get<std::string>());
 	graph["inference_reads"] = std::move(sectionReads);
+	graph["matched"] = matchedFacts.snapshot();
+	sectionsTimer.stop();
+	IncrementalWorkTimer reverseTimer(
+		statistics.measureDependencyGraph ? &statistics.dependencyGraphReverseMilliseconds : nullptr
+	);
 	if (hadPrevious) {
 		for (auto entry = forward.begin(); entry != forward.end();) {
 			if (currentPaths.contains(entry.key())) {
@@ -217,6 +249,7 @@ Json captureSectionDependencyGraph(
 			changes.push_back({path, dependencySet(entry.value()), {}});
 			entry = forward.erase(entry);
 			instantiations.erase(path);
+			variantsChanged = true;
 		}
 		std::map<std::string, std::set<std::string>> changed;
 		auto callersFor = [&](const std::string &dependency) -> std::set<std::string> & {
@@ -248,12 +281,20 @@ Json captureSectionDependencyGraph(
 		for (const auto &[path, dependents] : callers)
 			reverse[path] = dependents;
 	}
-	graph["inference_units"] =
-		InferenceUnitGraphCapture(
-			context, program.at("all_function_projection"), paths, inferenceReads, graph, priorUnits, lookupOwners, statistics,
-			fingerprints, products, globalInputs, retained.keysByPath
-		)
-			.capture(program.at("inference_summaries"), program.at("function_sections"), program.at("function_instantiations"));
+	reverseTimer.stop();
+	IncrementalWorkTimer unitsTimer(statistics.measureDependencyGraph ? &statistics.dependencyGraphUnitsMilliseconds : nullptr);
+	InferenceUnitGraphCapture unitCapture(
+		context, program.at("all_function_projection"), paths, inferenceReads, graph, priorUnits, lookupOwners, statistics,
+		fingerprints, products, globalInputs, retained.keysByPath
+	);
+	graph["inference_units"] = unitCapture.capture(
+		program.at("inference_summaries"), program.at("function_sections"), program.at("function_instantiations")
+	);
+	graph["global_type_producers"] = unitCapture.globalTypeOutputs();
+	unitsTimer.stop();
+	IncrementalWorkTimer lookupsTimer(
+		statistics.measureDependencyGraph ? &statistics.dependencyGraphLookupsMilliseconds : nullptr
+	);
 	for (const auto &[path, variants] : graph.at("inference_units").items())
 		for (const auto &[variant, unit] : variants.items())
 			for (const auto &[key, fingerprint] : unit.at("lookups").items())
@@ -265,5 +306,6 @@ Json captureSectionDependencyGraph(
 		callableLookups[key] = std::move(lookup);
 	}
 	graph["callable_lookups"] = std::move(callableLookups);
+	graph["encoding_reuse"] = graphEncodingReuse(hadPrevious && changes.empty(), hadPrevious && !variantsChanged);
 	return graph;
 }

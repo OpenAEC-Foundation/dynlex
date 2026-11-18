@@ -2,6 +2,8 @@ if (previous) {
 	auto payloadStart = Clock::now();
 	for (const char *field : {"section_dependency_graph", "inference_summaries", "generated_ir"})
 		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, field);
+	if (context.options.emitDebugInfo)
+		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "debug_ir_inputs");
 	statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 }
 priorInference = selectInferenceState(
@@ -28,11 +30,11 @@ if (priorConstraints.source && compatibleObservations(*priorConstraints.source, 
 }
 statistics.constraintPrepareMilliseconds += elapsedMilliseconds(constraintPrepareStart);
 if (priorInference) {
+	const Json *nativePrevious = previous ? &*previous : nullptr;
 	auto controller = std::make_shared<IncrementalInferenceController>(
-		*priorInference, previous ? &*previous : nullptr, recording->observations, resolvedFunctionProjection, sectionPaths,
-		inferenceReads, frontendDiagnosticRecords, statistics, functionReuse, inferenceReuse, graphStable,
-		inferenceInputFingerprints, summaryStore, &products.references(), products.sourceIndex(), products.globalInputs(),
-		products
+		*priorInference, nativePrevious, recording->observations, resolvedFunctionProjection, sectionPaths, inferenceReads,
+		frontendDiagnosticRecords, statistics, functionReuse, inferenceReuse, graphStable, inferenceInputFingerprints,
+		summaryStore, &products.references(), products.sourceIndex(), products.globalInputs(), products
 	);
 	context.runIncrementalPreinference = [controller](
 											 ParseContext &inferred,

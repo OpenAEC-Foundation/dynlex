@@ -85,7 +85,10 @@ static Json randomValue(std::mt19937_64 &random, unsigned depth) {
 	}
 }
 
+void testIncrementalGraphCodec();
+
 int main() {
+	testIncrementalGraphCodec();
 	Json fixtures = Json::array(
 		{nullptr,
 		 true,

@@ -21,9 +21,9 @@ struct ExpressionInferenceSupport {
 
 	void failConfigured(
 		Range range, std::string_view key, std::string_view variant = "message",
-		std::vector<std::pair<std::string, std::string>> replacements = {}
+		std::vector<std::pair<std::string, std::string>> replacements = {}, int priority = 1
 	) const {
-		context.fail(context.setConfiguredTypeFailure(range, key, variant, std::move(replacements)));
+		context.fail(context.setConfiguredTypeFailure(range, key, variant, std::move(replacements)), priority);
 	}
 
 	void failIntrinsicArgumentRequirement(size_t argumentIndex, std::string_view requirement) const {

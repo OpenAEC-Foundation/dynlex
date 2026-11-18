@@ -291,11 +291,10 @@ void appendNumberRuleOrigins(const ParseContext &context, Expression *root, std:
 		return false;
 	});
 	for (const ScopeRuleSource *source : sources) {
-		const SyntaxConfig &syntax = syntaxConfigForRange(context, source->range);
-		relatedInfo.push_back(
-			{renderConfiguredMessage(syntax, "number rule origin", "message", {{"rule", source->range.subString}}),
-			 source->range}
-		);
+		relatedInfo.push_back(configuredRelatedInfo(
+			context, source->range, "number rule origin", "message", source->range,
+			{{"rule", std::string(source->range.subString)}}
+		));
 	}
 }
 

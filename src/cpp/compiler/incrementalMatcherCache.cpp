@@ -101,7 +101,7 @@ void appendDefinition(Fingerprint &key, const PatternDefinition *definition) {
 	);
 	const CodeLine *line = definition->range.line;
 	const Section *section = definition->section;
-	key.string(line->sourceFile->uri);
+	key.string(line->sourceFile->canonicalPath);
 	key.number(definition->range.start());
 	key.number(definition->range.end());
 	key.string(line->fullText);
@@ -114,7 +114,7 @@ void appendDefinition(Fingerprint &key, const PatternDefinition *definition) {
 	if (section->dataFieldOwner) {
 		const CodeLine *opening = section->dataFieldOwner->openingLine;
 		requireCompilerInvariant(opening && opening->sourceFile, "data field matcher definition has no owning source section");
-		key.string(opening->sourceFile->uri);
+		key.string(opening->sourceFile->canonicalPath);
 		key.string(opening->fullText);
 		key.number(static_cast<int>(section->dataFieldOwner->type));
 	}
@@ -122,7 +122,7 @@ void appendDefinition(Fingerprint &key, const PatternDefinition *definition) {
 
 void appendSourcePosition(Fingerprint &key, const Range &range) {
 	requireCompilerInvariant(range.line && range.line->sourceFile, "incremental matcher source position has no source file");
-	key.string(range.line->sourceFile->uri);
+	key.string(range.line->sourceFile->canonicalPath);
 	key.number(range.start());
 	key.number(range.end());
 }
@@ -332,7 +332,7 @@ std::string IncrementalMatcherCache::key(PatternReference &reference, bool track
 	// Nested expression matches and named single-word probes use the function tree.
 	if (functions != root)
 		appendTreeState(functions);
-	fingerprint.string(range.line->sourceFile->uri);
+	fingerprint.string(range.line->sourceFile->canonicalPath);
 	fingerprint.number(range.start());
 	fingerprint.number(range.end());
 	fingerprint.string(range.line->fullText);
@@ -591,8 +591,7 @@ PatternMatch *IncrementalMatcherCache::restoreBodyMatch(PatternReference &refere
 }
 
 std::optional<PatternMatch *> IncrementalMatcherCache::restoreResult(
-	PatternReference &source, std::string cacheKey, std::string_view value, bool prevalidated,
-	MatchDependencies *dependencies
+	PatternReference &source, std::string cacheKey, std::string_view value, bool prevalidated, MatchDependencies *dependencies
 ) {
 	PatternReference *reference = &source;
 	if (value.empty())

@@ -1,4 +1,5 @@
 #include "lspFileSystem.h"
+#include "pathUtils.h"
 
 namespace lsp {
 
@@ -14,7 +15,7 @@ SourceFile *LspFileSystem::getFile(const std::string &path, FileReadPurpose purp
 	if (it != documents.end())
 		return snapshot(*it->second);
 
-	std::string uri = "file://" + path;
+	std::string uri = pathutil::toAbsoluteUri(path);
 	it = documents.find(uri);
 	if (it != documents.end())
 		return snapshot(*it->second);
