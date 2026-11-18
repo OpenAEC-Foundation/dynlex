@@ -22,6 +22,7 @@ namespace fs = std::filesystem;
 namespace llvmfs = llvm::sys::fs;
 using Clock = std::chrono::steady_clock;
 constexpr uint64_t maximumCacheBytes = 512 * 1024 * 1024;
+constexpr uint64_t cacheTrimTargetBytes = maximumCacheBytes - 4 * 1024 * 1024;
 thread_local IncrementalCacheDirectory *activeDirectory = nullptr;
 
 std::string utf8Path(const fs::path &path) {
@@ -47,18 +48,18 @@ DirectoryStamp directoryStamp(const fs::path &path) {
 	};
 }
 
-std::optional<llvmfs::file_status> entryStatus(const fs::path &path, llvm::StringRef name) {
+std::optional<llvmfs::file_status> entryStatus(llvm::StringRef name) {
 	llvmfs::file_status status;
-	if (auto error = llvmfs::status(name, status)) {
-		if (error == std::errc::no_such_file_or_directory)
-			return std::nullopt;
+	auto error = llvmfs::status(name, status);
+	if (error == std::errc::no_such_file_or_directory)
+		return std::nullopt;
+	if (!error && llvmfs::is_regular_file(status))
+		return status;
+	const fs::path path(std::u8string_view(reinterpret_cast<const char8_t *>(name.data()), name.size()));
+	if (error)
 		throw fs::filesystem_error("cannot inspect cache metadata", path, error);
-	}
-	if (!llvmfs::is_regular_file(status)) {
-		auto reason = llvmfs::is_directory(status) ? std::errc::is_a_directory : std::errc::operation_not_supported;
-		throw fs::filesystem_error("cannot inspect cache size", path, std::make_error_code(reason));
-	}
-	return status;
+	auto reason = llvmfs::is_directory(status) ? std::errc::is_a_directory : std::errc::operation_not_supported;
+	throw fs::filesystem_error("cannot inspect cache size", path, std::make_error_code(reason));
 }
 
 struct CacheCheckpoint {
@@ -198,7 +199,7 @@ void IncrementalCacheDirectory::publish(const fs::path &path, std::string_view p
 	const auto destination = utf8Path(path);
 	uint64_t replacedBytes = 0;
 	if (bytes) {
-		if (auto replaced = entryStatus(path, destination))
+		if (auto replaced = entryStatus(destination))
 			replacedBytes = replaced->getSize();
 	}
 	updateCheckpoint(std::nullopt);
@@ -215,7 +216,7 @@ void IncrementalCacheDirectory::remove(const fs::path &path) {
 	);
 	std::lock_guard threadLock(publicationMutex);
 	auto locked = lockCheckpoint(*control, controlPath);
-	auto removed = entryStatus(path, utf8Path(path));
+	auto removed = entryStatus(utf8Path(path));
 	if (!removed)
 		return;
 	auto bytes = checkedSize();
@@ -234,7 +235,7 @@ CacheTrimWork IncrementalCacheDirectory::trim() {
 
 	const auto scanStart = Clock::now();
 	struct Entry {
-		fs::path path;
+		std::string name;
 		uint64_t bytes;
 		llvm::sys::TimePoint<> time;
 	};
@@ -248,9 +249,8 @@ CacheTrimWork IncrementalCacheDirectory::trim() {
 		auto filename = llvm::sys::path::filename(file->path());
 		if (!isCacheEntryName({filename.data(), filename.size()}))
 			continue;
-		auto path = directory / filename.str();
-		if (auto status = entryStatus(path, file->path())) {
-			entries.push_back({std::move(path), status->getSize(), status->getLastModificationTime()});
+		if (auto status = entryStatus(file->path())) {
+			entries.push_back({filename.str(), status->getSize(), status->getLastModificationTime()});
 			size += status->getSize();
 		}
 	}
@@ -262,16 +262,16 @@ CacheTrimWork IncrementalCacheDirectory::trim() {
 	if (size > maximumCacheBytes) {
 		const auto orderStart = Clock::now();
 		std::sort(entries.begin(), entries.end(), [](const Entry &left, const Entry &right) {
-			return left.time == right.time ? left.path < right.path : left.time < right.time;
+			return left.time == right.time ? left.name < right.name : left.time < right.time;
 		});
 		work.entriesSorted = entries.size();
 		work.orderMilliseconds = std::chrono::duration<double, std::milli>(Clock::now() - orderStart).count();
 		updateCheckpoint(std::nullopt);
 		for (const Entry &entry : entries) {
-			IncrementalCacheEntry::evict(entry.path);
+			IncrementalCacheEntry::evict(directory / entry.name);
 			size -= entry.bytes;
 			++work.entriesRemoved;
-			if (size <= maximumCacheBytes)
+			if (size <= cacheTrimTargetBytes)
 				break;
 		}
 	}

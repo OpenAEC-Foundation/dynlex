@@ -10,6 +10,19 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## Iteration I125: amortize eviction in a nearly full cache
+
+The default cache held 24,613 entries and was 500 bytes below its 512 MiB
+limit. A private cache with the same entry count and logical size forced
+seven scans during 18 rejected WebAssembly edits. Eviction now leaves 4 MiB
+of headroom, without changing the upper limit. The scan counts in the
+matched probe fall from seven to one, and total CPU time falls from 1.017
+seconds to 0.232 seconds with identical diagnostics. The probe evicts 193
+old entries versus seven previously. A separate quota test verifies the
+eviction order and the next publication's scan-free path.
+The staged Linux compiler passes all 389 required checks in 33.616 seconds
+after the compiler build.
+
 ## Iteration I124: account for cache publications without rescanning
 
 The compiler maintains the logical byte count of immutable cache entries
@@ -36,6 +49,9 @@ WebAssembly artifact replay. A Linux fault-injection check kills a compiler
 just after an entry rename, then a fresh process rescans and produces the
 same output as a clean compilation. This covers process interruption at the
 publication boundary.
+The staged required suite also passes on one logical CPU in 78.25 seconds
+wall. The complete native build passes all 389 required checks in 45.842
+seconds, and the native and rebuilt-browser LSP checks pass.
 
 ## Qualified snapshot I119
 
