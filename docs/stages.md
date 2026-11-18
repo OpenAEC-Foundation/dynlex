@@ -2523,8 +2523,13 @@ mappings retain the payload. Managed global storage follows the LLVM definitions
 that replace its temporary declarations during cached IR linking.
 Invalid entries and I/O failures are explicit errors. Linking uses private temporary
 copies so cache eviction cannot remove linker inputs. Entries are limited to 256 MiB;
-the disk cache is trimmed to 512 MiB after a build. Object-only and non-native
-output modes retain their ordinary compilation pipeline.
+the disk cache is trimmed to 512 MiB after a build. A checkpoint records the
+total logical size of published entries. The compiler stages entry bytes before
+taking the publication lock, then accounts for replacements and removals while
+holding the lock. Cache readers continue to own their immutable snapshots.
+When the checkpoint matches the directory and stays within the budget,
+finalization skips entry enumeration. Initial accounting, a changed directory,
+an interrupted publication or an over-budget total uses a full scan.
 
 # LSP Interaction
 

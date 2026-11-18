@@ -4,8 +4,44 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string_view>
+
+namespace llvm {
+class raw_fd_stream;
+}
+
+inline constexpr std::string_view parserIndexPrefix = "parser-index-";
+
+struct CacheTrimWork {
+	size_t entriesScanned = 0;
+	size_t entriesSorted = 0;
+	size_t entriesRemoved = 0;
+	double scanMilliseconds = 0;
+	double orderMilliseconds = 0;
+};
+
+// The cache size checkpoint covers immutable, atomically published entries.
+// Publishers serialize their individual directory changes, not compilation.
+class IncrementalCacheDirectory {
+  public:
+	explicit IncrementalCacheDirectory(const std::filesystem::path &directory);
+	~IncrementalCacheDirectory();
+	static IncrementalCacheDirectory &current();
+	void publish(const std::filesystem::path &path, std::string_view payload);
+	void remove(const std::filesystem::path &path);
+	CacheTrimWork trim();
+
+  private:
+	std::optional<uint64_t> checkedSize();
+	void updateCheckpoint(std::optional<uint64_t> bytes);
+	std::filesystem::path directory;
+	std::filesystem::path pending;
+	std::filesystem::path controlPath;
+	std::mutex publicationMutex;
+	std::unique_ptr<llvm::raw_fd_stream> control;
+};
 
 // Retain the immutable file, rather than its pathname, while a build uses it.
 // Atomic replacement and cache eviction cannot invalidate a loaded snapshot.

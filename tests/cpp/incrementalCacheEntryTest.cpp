@@ -1,6 +1,8 @@
 #include "incrementalCacheEntry.h"
 #include "stableIdentity.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Process.h"
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -28,6 +30,40 @@ void writeEntry(const fs::path &path, const std::string &payload) {
 	output.write(payload.data(), payload.size());
 	output.close();
 	expect(bool(output), "Could not write the cache fixture");
+}
+
+void verifyCacheBudget(const fs::path &directory) {
+	const fs::path filler = directory / ("object-" + std::string(64, 'a') + ".entry");
+	const fs::path entry = directory / ("program-" + std::string(64, 'b') + ".entry");
+	{
+		IncrementalCacheDirectory cache(directory);
+		int descriptor;
+		expect(!llvm::sys::fs::openFileForWrite(utf8Path(filler), descriptor), "Could not create a sparse cache fixture");
+		auto size = 512 * 1024 * 1024 - IncrementalCacheEntry::header.size() - 66;
+		expect(!llvm::sys::fs::resize_file_sparse(descriptor, size), "Could not size a sparse cache fixture");
+		expect(!llvm::sys::Process::SafelyCloseFileDescriptor(descriptor), "Could not close a sparse cache fixture");
+		fs::last_write_time(filler, fs::file_time_type::clock::now() - std::chrono::hours(1));
+		expect(cache.trim().entriesScanned == 1, "Initial budget missed an existing entry");
+		cache.publish(entry, "a");
+		expect(cache.trim().entriesScanned == 0, "Tracking a published entry scanned the directory");
+		cache.publish(entry, "b");
+		expect(cache.trim().entriesScanned == 0, "Replacing an equal-sized entry increased the budget charge");
+		cache.remove(entry);
+		cache.publish(entry, "c");
+		expect(cache.trim().entriesScanned == 0, "Removing an entry left a budget charge");
+		cache.publish(entry, "dd");
+		const auto work = cache.trim();
+		expect(
+			work.entriesScanned == 2 && work.entriesRemoved == 1 && !fs::exists(filler),
+			"Growing an entry over the budget did not evict the oldest entry"
+		);
+		expect(IncrementalCacheEntry::open(entry)->payload() == "dd", "Eviction removed the newly published payload");
+	}
+	// An interrupted checkpoint is discarded without changing any entry.
+	std::ofstream(directory / "publication" / "budget", std::ios::trunc).close();
+	IncrementalCacheDirectory recovered(directory);
+	expect(recovered.trim().entriesScanned == 1, "Interrupted accounting did not rescan persisted entries");
+	expect(recovered.trim().entriesScanned == 0, "Recovered accounting did not persist");
 }
 
 int verifyEntries(int argc, char **argv) {
@@ -102,6 +138,7 @@ int verifyEntries(int argc, char **argv) {
 	}
 	expect(rejected, "An oversized retained entry bypassed the size limit");
 	fs::remove(path);
+	verifyCacheBudget(directory / "accounting");
 	std::cout << "Retained cache payloads survive eviction and atomic replacement; integrity checks remain explicit.\n";
 	return 0;
 }

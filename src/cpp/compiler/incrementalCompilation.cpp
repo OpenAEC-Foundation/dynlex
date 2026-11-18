@@ -103,10 +103,7 @@
 namespace {
 using Json = nlohmann::json;
 namespace fs = std::filesystem;
-constexpr std::string_view cacheHeader = IncrementalCacheEntry::header;
 constexpr uintmax_t maximumEntryBytes = IncrementalCacheEntry::maximumBytes;
-constexpr std::string_view parserIndexPrefix = "parser-index-";
-constexpr uintmax_t maximumCacheBytes = 512 * 1024 * 1024;
 using Clock = std::chrono::steady_clock;
 
 double elapsedMilliseconds(Clock::time_point start) {
@@ -155,27 +152,7 @@ std::optional<std::string> readEntry(const fs::path &path) {
 	return std::string(entry->payload());
 }
 
-void writeEntry(const fs::path &path, std::string_view payload) {
-	if (payload.size() + cacheHeader.size() + 65 > maximumEntryBytes)
-		throw std::runtime_error("cache entry exceeds the size limit: " + path.string());
-	llvm::SmallString<256> temporary;
-	int descriptor;
-	if (std::error_code error = llvm::sys::fs::createUniqueFile(path.string() + ".tmp-%%%%%%", descriptor, temporary))
-		throw fs::filesystem_error("cannot create cache entry", path, error);
-	llvm::raw_fd_ostream output(descriptor, true);
-	output << cacheHeader << digest(payload) << '\n' << payload;
-	output.close();
-	if (output.has_error()) {
-		std::error_code error = output.error();
-		output.clear_error();
-		llvm::sys::fs::remove(temporary);
-		throw fs::filesystem_error("cannot write cache entry", path, error);
-	}
-	if (std::error_code error = llvm::sys::fs::rename(temporary, path.string())) {
-		llvm::sys::fs::remove(temporary);
-		throw fs::filesystem_error("cannot publish cache entry", path, error);
-	}
-}
+void writeEntry(const fs::path &path, std::string_view payload) { IncrementalCacheDirectory::current().publish(path, payload); }
 
 #include "incrementalProgramCache.inl"
 
@@ -299,8 +276,6 @@ std::string renderModule(const llvm::Module &module) {
 
 #include "incrementalLinkedOutput.inl"
 
-#include "incrementalCacheTrim.inl"
-
 // clang-format off: these fragments share declarations in this order.
 #include "incrementalNativeObjects.inl"
 #include "incrementalSourceScopes.inl"
@@ -363,7 +338,7 @@ bool compileIncrementally(
 	try {
 		auto compileStart = Clock::now();
 		fs::path directory = fs::absolute(cacheDirectory) / "native-v1";
-		fs::create_directories(directory);
+		IncrementalCacheDirectory storage(directory);
 		std::string compilerIdentity = compilerBuildIdentity(compilerPath);
 		Json options = optionIdentity(context.options);
 		std::string programKey = digest(compilerIdentity + options.dump());
@@ -960,8 +935,8 @@ bool compileIncrementally(
 		}
 		auto finalizeStart = Clock::now();
 		if (success)
-			fs::remove(failedEntry);
-		statistics.cacheTrimWork = trimCache(directory);
+			storage.remove(failedEntry);
+		statistics.cacheTrimWork = storage.trim();
 		statistics.cacheFinalizeMilliseconds = elapsedMilliseconds(finalizeStart);
 		statistics.fileObservationRequests = recording->observationRequests();
 		statistics.fileObservationsComputed = recording->observationsComputed();
