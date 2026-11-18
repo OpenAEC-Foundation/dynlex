@@ -10,7 +10,127 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Active iteration: I112 restore the browser's shared matcher implementation
+## Active iteration: I113 integrate and publish the corrected compiler
+
+Started18 November at12:05 UTC; implementation deadline12:50 UTC. The previous
+goal turn answered the user's timing question and verified the live integration
+job. This continuation completes I112's487/0/0 integration and eight-build
+resource comparison, commits the qualified source/browser artifacts as61c92732,
+and integrates local master8674e44f as220e2575. Preserve its literal-priority
+matcher fix, portability fixes and complete required-suite worker coverage.
+Resolve the sole test-driver conflict by running grouping-state regressions in
+the native inference group and retaining the inference-failure check exactly
+once. No test or assertion is dropped.
+
+Freeze the combined sources; build native and actual WebAssembly serially, run
+focused regressions, all391 required checks uncached within120s, full LSP,
+real-program parity/cost controls and all487 integration checks. Refresh the
+shipped browser artifacts from the combined source build. Then integrate with
+local master, rebuild/verify the shared-root compiler, push the qualified
+snapshot and dispose the merged worktree while retaining verified build data.
+Do not add another optimization inside this qualification boundary or label the
+correctness repair a performance gain. The full every-stage goal remains active.
+
+Combined native image0d28feda builds successfully under the serial memory limit
+and passes the focused grouping/dependency checks in33.073s, all391 required
+checks uncached in67.745s and the full LSP suite in6.886s. The real-program
+controls, combined browser build and full integration remain outstanding;
+earlier846c0a1a results are not attributed to this newer image.
+
+The combined real-program matrix now passes exact diagnostics and executable
+parity in all five cases. Successive body edits still infer32,11,1 bodies; the
+first matched inference stage is933.565ms versus261.717ms on master370e530a's
+qualified baseline. The actual browser build completes in362.921s and its host
+LSP edit/parity regression passes in2.742s. Full487-check integration is live.
+The first-edit debugger probe and guarded shared-root publication pipeline wait
+for that exact qualification job, then run serially. The debugger checks actual
+inference rejections rather than borrowing counts from an earlier image, and
+removes its disposable source/cache after retaining the report. Publication
+requires frozen source/browser hashes, a clean tracked root, reviewed mainline
+integration and successful root required/LSP/focused checks before push/disposal.
+Master1a9f9a90 adds test portability and a Windows-only UTF-8 process manifest;
+its exact diff leaves compiler C++, browser transport, libraries and config
+unchanged. The manifest is not a browser embedded-library input. Preserve the
+completed compiler qualification, verify those production hashes after merging,
+and run the updated required/LSP/focused checks on the shared-root build. Do not
+restart the live integration run for this test/build-metadata-only change.
+
+Integration stopped at 486 passes and one failure after 1160.048 seconds.
+The completion visibility fixture aborts at the cursor following
+`set {same line value} to 1 and add 2 to `. Both the combined compiler and
+the compiler built from local master reproduce the same invariant failure.
+The debugger reaches the completion frontier's ancestor walk. That walk
+canonicalizes the current progress only, then reads older parent groups
+directly. The shared matcher moves a merged group's values to its canonical
+group, so an older continuation can legitimately reference an empty redirect.
+Fix ancestor access through the canonical group and share it with matcher
+debug rendering. Preserve the existing completion regression and add a
+no-import reproduction. Publication waits for the corrected build and tests.
+
+Local master41093e7f independently fixes the same ancestor access and prepares
+required test tools before the suite timer. Its original suite passes391/0/0
+required and487/0/0 integration checks. The incremental worktree integrates
+that exact compiler fix at3dffa73e and adds a16-line no-import regression. The
+regression aborts before the fix and verifies the earlier variable remains a
+completion candidate after it. The corrected native image861c29d7 passes that
+test, the original completion fixture and the focused grouping/dependency tests.
+A serial validation job owns the remaining required, WebAssembly and integration
+checks. The earlier486/1/0 is retained as failure evidence.
+
+Independent first-edit progress: an eight-line no-import program with an
+earlier real-argument call and a later integer-argument wrapper exhibits5,2,1
+body passes across population and two literal edits. Both edits can reuse
+entry execution. The first edit changes the unchanged integer helper's saved
+grouping transition from checked-to-checked to absent-to-checked, with identical
+operand layout. Preinference begins before the earlier real call establishes
+the grouping. This is observable extra inference in the unchanged helper,
+independent of the completion crash. The real-program attribution records the
+phase and owning query before candidate cache state is removed.
+
+The repaired snapshot passes391 required checks uncached in74.707 seconds and
+the full native LSP suite. The required job uses254.005 CPU seconds including
+its children. Parallel workers account for the difference between CPU and wall
+time. The browser rebuild and WebAssembly LSP checks pass. Full integration is
+running on the repaired image, followed by the shared-root qualification.
+
+The real first-edit trace on861c29d7 confirms32 body passes and entry inference.
+It measures240 grouping checks, with17 rejections during speculative inference
+and15 during ordinary inference. The mismatched reads include172 absent current
+layouts,241 absent saved inputs and53 unavailable prerequisite instances. These
+counts describe reads within rejected products, so one rejection can account for
+many mismatches. The matched cache population stores7.75MB of grouping data
+within8.41MB of concrete summaries, including3.21MB of scope identity strings
+across3336 uses. The trace preserves evidence and removes the temporary cache.
+
+The next bounded experiment uses short identities for grouping scope references.
+It preserves the exact grouping and availability checks. The prototypeba25bd04
+keeps complete typed storage origins for their actual consumers and interns
+grouping-only scopes by the same stable digest. Its serial benchmark queue runs
+after the repaired snapshot publishes. Measure cold and edited CPU time, peak
+RSS and cache bytes with exact diagnostics and output parity before retaining it.
+This addresses storage and restoration costs. Causal inference of changed bodies
+in their original grouping context is a separate unresolved boundary.
+
+An isolated cache-maintenance probe holds the program and output constant while
+adding unrelated entry names. Across nine alternating samples per size, 15,
+2015 and6015 entries take0.066,4.442 and13.094 ms to scan, with corresponding
+process CPU medians6.201,10.738 and19.414 ms. Every invocation reuses the
+frontend and does zero object or link work. The real-program first edit scans
+3479 entries in12.43 ms, so removing that scan cannot account for the observed
+inference regression. Existing eviction checks deliberately add entries between
+unchanged builds. Retain that behavior and avoid treating the historical
+whole-suite cache-growth correlation as a measured stage breakdown.
+
+Master5bf9accf updates test progress and timeout regression reporting only.
+The reviewed merge preserves exact compiler and browser inputs. Verify the
+updated required checks after merging without discarding the active integration
+result for this test-driver change.
+Master7fd18a2c also normalizes CRLF output in an existing LLVM-output check.
+Both test-only updates are included in the shared-root verification.
+
+Combined qualification completes: all391 required checks pass uncached in74.707s, full native LSP and focused grouping checks pass, including the reduced no-import completion regression, and the rebuilt browser compiler passes host LSP and all487 integration checks in1007.440s. Exact source, compiler and browser hashes are retained in i113-repaired-inputs.json and i113-repaired-validation.json. This qualifies the combined worktree snapshot; shared-root verification and publication follow. The full objective remains incomplete.
+
+## Completed iteration: I112 restore the browser's shared matcher implementation
 
 Started18 November at11:33:26 UTC; deadline12:18:26 UTC. I111's integrated
 native image846c0a1a passes389 required checks uncached in72.950 s, full LSP,
@@ -1803,14 +1923,14 @@ trying to force the inconclusive lives percentage over a threshold.
 
 The complete goal is still active. A qualified optimization is a snapshot, not
 proof that every stage is incremental. The P01-P24 inventory below retains the
-complete scope. Last published qualification is I107, commit224cac46. I108-I112's
-grouping execution, constant-observation and browser-build corrections remain
-isolated until their shared-root gates pass. Current image846c0a1a has passed
-focused, required, native LSP, actual rebuilt WebAssembly LSP and all487 full
-integration checks. Local master8674e44f has since added portability and matcher
-literal-priority fixes, including the same browser source-list correction.
-Preserve both sets of changes and verify the combined native/browser and
-shared-root builds before publishing. Current evidence and remaining
+complete scope. Snapshot publication requires shared-root qualification and an
+origin push, separately from owner test passes; the iteration record above
+tracks those gates. Current combined image0d28feda passes focused regressions,
+all391 required checks, native LSP, the actual rebuilt browser LSP and the
+five-case native parity matrix. Its full integration and shared-root results
+are recorded above when complete. Grouping execution, constant-observation,
+browser-build, matcher literal-priority and reviewed portability corrections
+must all survive integration. Current evidence and remaining
 boundaries are:
 
 | Requirement | Verified coverage | Remaining work |
@@ -1818,12 +1938,12 @@ boundaries are:
 | Source/config edits | File preparation, preprocessing chunks, source observations and outlines have retained products. | Semantic section/declaration objects still reconstruct broadly after active edits. |
 | Parameter classification | Focused tests cover removing the last parameter use, dependent reclassification and recovery. | Broad eligibility/index consumers still run; prove locality across every declaration and scope change. |
 | Positive/failed pattern lookups | Persistent match, binding and constraint reads retain successful and failed dependencies. | Some matcher catalogs, validation and persistence still process broad program state. |
-| Type inference | Ordinary concrete bodies, constraint results, diagnostics and validated global products can replay. Focused grouping tests now preserve first-execution state, negative observations, recursive completion and constant results. | Current first body edit still infers32 bodies versus the baseline's1; successive edits fall to11 and1. Its first matched inference stage is812ms versus185ms, while source preparation is essentially unchanged. Resolve this actual inference work before parser micro-optimizations. Statement/block/CFG products and complete locality across source/configuration changes remain unfinished. |
+| Type inference | Ordinary concrete bodies, constraint results, diagnostics and validated global products can replay. Focused grouping tests now preserve first-execution state, negative observations, recursive completion and constant results. | Current first body edit still infers32 bodies versus the baseline's1; successive edits fall to11 and1. Its first matched inference stage is934ms versus262ms, while source preparation is essentially unchanged. Resolve this actual inference work before parser micro-optimizations. Statement/block/CFG products and complete locality across source/configuration changes remain unfinished. |
 | Diagnostics | All62 wording benchmark invocations update existing warnings with zero objects/linking; focused tests cover error removal and diagnostic movement. | Complete locality across all early-error and configuration changes remains unproven. |
 | LLVM IR | Native/debug function and entry closures reuse; LLVM text has an incremental driver. I094 passes12 complete-graph builds/comparisons and42 native artifact pairs; required/integration checks include debug edit/parity coverage. | Whole-module work remains, and tracing excludes major paths. |
 | Objects/link | Unchanged objects reuse; ordinary body benchmark rebuilds one object; fast paths skip linking. | Necessary executable changes use a conventional full link. Other output drivers still need shared products. |
 | Tooling/targets | Native/LLVM reuse; editor source syntax and matcher products share current source identities. I107 improves measured editor updates about7%. | Ordinary editor type inference still runs; object-only, WebAssembly and SPIR-V do not share the complete persistent pipeline. |
-| Required budget | Current isolated compiler389/0/0 uncached in72.950s, after integrating master370e530a's independent test groups. | Verify the shared-root build with master117a2970 and preserve the120s post-build budget. |
+| Required budget | Current combined compiler391/0/0 uncached in67.745s. No fixtures or assertions were removed; native checks and fixture workers remain independent. | Verify the updated shared-root suite with master1a9f9a90 and preserve the120s post-build budget. |
 
 ## Prior iteration: I092 first-edit global-product attribution
 
