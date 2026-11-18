@@ -67,9 +67,44 @@ bool valueUnchanged(const Unit &unit, const Json &query) {
 	}
 	return false;
 }
+bool currentGroupingMatchesNative(const Section *section, const std::string &key, const Json &saved) {
+	for (const auto &[arguments, instance] : section->instantiations) {
+		auto identity = inferenceSummaryKey(arguments, identities);
+		if (!identity || *identity != key)
+			continue;
+		const Json *summary = summaryStore.load(saved);
+		return summary &&
+			   sameGroupingLayouts(
+				   encodeGroupingLayouts(instance.groupingProduct, sourceIndex), summary->at("grouping").at("groupings")
+			   );
+	}
+	return true;
+}
 bool nativeInputsUnchanged(const Section *section, const std::string &key) {
 	if (!native)
 		return false;
+	const std::string &path = sectionPaths.at(section);
+	const Json &nativeSummaries = native->at("inference_summaries");
+	if (!nativeSummaries.contains(path) || !nativeSummaries.at(path).contains(key))
+		return false;
+	const Json &saved = nativeSummaries.at(path).at(key);
+	if (context.hasCompleted(ParseContext::CompilationStage::InferredTypes)) {
+		auto [proof, inserted] = nativeGroupingValidity.try_emplace({path, key}, true);
+		if (inserted)
+			proof->second = currentGroupingMatchesNative(section, key, saved);
+		if (!proof->second)
+			return false;
+	} else {
+		const Json *current = reference({path, key});
+		if (!current)
+			return false;
+		if (current->at("payload") != saved.at("payload")) {
+			const Json *facts = summaryStore.load(*current), *nativeFacts = summaryStore.load(saved);
+			if (!facts || !nativeFacts ||
+				!sameGroupingLayouts(facts->at("grouping").at("groupings"), nativeFacts->at("grouping").at("groupings")))
+				return false;
+		}
+	}
 	const Json &graph = native->at("section_dependency_graph").at("inference_units");
 	std::set<Unit> visited;
 	std::stack<Unit> pending;
@@ -104,3 +139,4 @@ private:
 Json refreshedSummaries = Json::object();
 std::map<Unit, Json> validatedInputs, currentSelections;
 std::set<Unit> nativeEquivalent;
+std::map<Unit, bool> nativeGroupingValidity;

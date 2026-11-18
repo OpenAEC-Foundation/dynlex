@@ -803,6 +803,41 @@ We know this because we instantiate `print line value` and walk over the code ju
 
 All instantiations of a function have the same operand reordering for each code line, but can use different overloads. The first valid instantiation determines reordering.
 
+Native semantic queries retain their observed grouping inputs and resulting
+groupings, including the absence of a prior choice. Reuse requires those inputs
+to match the current execution order. Publishing a cached choice participates in
+the caller's grouping transaction; rejecting that trial removes its choice.
+Already inferred callees contribute observations of their current grouping state
+to enclosing queries. Removing an earlier call therefore restores ambiguity
+checking when the remaining call becomes the first instantiation. Portable node
+layouts can stay encoded until source inference actually demands that body.
+Interface comparison uses the resulting operand trees; ambiguity-check progress
+remains part of the execution precondition, while actual diagnostics have their
+own retained product. Selected-grouping replay can disable further ambiguity
+search after it has already retained the selected diagnostics. Its grouping flags
+alone therefore do not establish whether a semantic result is complete.
+A concrete query separately records whether its caller requested ambiguity
+diagnostics. Type-only probe results remain reusable by probes; a later call
+requiring those diagnostics infers the body before publishing its grouping.
+Inference replay also retains which concrete instances must already be available
+and which instances its execution makes available. These effects roll back with
+grouping trials. Queries with no grouping observations or completion dependencies
+have independently available facts and add no grouping execution effect. Reading
+an existing dependent instance depends on that available result;
+its historical negative observations are not newly published source groupings.
+Reading that result retains its completed-callee closure, so an earlier completion
+and a fresh execution publish the same availability effects. Loading facts for an
+instance already completed by a reused caller does not execute its grouping
+effects again or demand its historical first-execution inputs. Its current
+operand-layout and diagnostic-profile checks still apply at ordinary use sites.
+Native IR validation compares operand layouts separately from these compiler
+availability effects, which do not themselves change emitted function bodies.
+Constant observations retain their actual operand layouts as part of the query
+proof. Reinference captures its new grouping result before retaining prior
+argument/result observations. Persisted observation joins apply the same layout
+check alongside the existing type and global inputs; different groupings may
+produce different constants for identical argument types and values.
+
 We reuse the same strategy (code) for flex functions where possible, keeping it DRY.
 
 Each function body is contained in one source file. Includes at file scope may

@@ -20,6 +20,14 @@ static DataType ensureExpressionType(Expression *&expr, InferenceContext &contex
 #include <bit>
 #include <memory>
 
+static std::shared_ptr<const GroupingProduct> captureGroupingProduct(
+	const std::shared_ptr<const GroupingTrace> &, const std::shared_ptr<const GroupingTrace> &,
+	const std::shared_ptr<const VariableStorageScope> & = {}
+);
+static void observeGroupingResult(const Instantiation &, InferenceContext &);
+static void observeGroupingProbe(const InferenceContext &, InferenceContext &);
+static bool sameGroupingResults(const GroupingProduct &, const GroupingProduct &);
+
 static DataType effectiveInferredExpressionType(Expression *expression) {
 	if (!expression)
 		return {};
@@ -413,16 +421,34 @@ static bool runInstantiationReinferenceLoop(
 	InferenceContext &context, Instantiation &instantiation, PatternDefinition *definition, const Range &fallbackRange,
 	std::string functionName, bool canDeferToCaller, InferPassFn &&inferPass
 ) {
-	struct RetainedPureValues {
-		Instantiation &instantiation;
+	requireCompilerInvariant(
+		!instantiation.inferenceReusedFromCache || (context.parseContext.inferenceProducts && instantiation.groupingProduct),
+		"cached inference has no grouping query owner"
+	);
+	struct RetainInferenceProducts {
+		InferenceContext &context;
+		Instantiation &instance;
+		std::shared_ptr<const GroupingTrace> begin;
+		bool ambiguityRequested;
+		std::shared_ptr<const GroupingProduct> priorGrouping;
 		decltype(Instantiation::pureReturnValuesByArguments) values;
 		bool complete;
-		~RetainedPureValues() {
-			instantiation.pureReturnValuesByArguments.merge(values);
-			instantiation.pureReturnValuesComplete &= complete;
+		~RetainInferenceProducts() {
+			if (context.parseContext.inferenceProducts) {
+				instance.groupingProduct = captureGroupingProduct(context.groupingTrace, begin, instance.storageScope);
+				instance.groupingAmbiguityRequested = ambiguityRequested;
+			}
+			if (priorGrouping && !sameGroupingResults(*priorGrouping, *instance.groupingProduct))
+				return;
+			instance.pureReturnValuesByArguments.merge(values);
+			instance.pureReturnValuesComplete &= complete;
 		}
 	} retained{
+		context,
 		instantiation,
+		context.groupingTrace,
+		!context.trial || context.detectGroupingAmbiguity,
+		instantiation.inferenceReusedFromCache ? instantiation.groupingProduct : nullptr,
 		instantiation.inferenceReusedFromCache ? std::move(instantiation.pureReturnValuesByArguments)
 											   : decltype(Instantiation::pureReturnValuesByArguments){},
 		!instantiation.inferenceReusedFromCache || instantiation.pureReturnValuesComplete

@@ -1,7 +1,9 @@
 #pragma once
+#include "groupingProduct.h"
 #include "groupingSnapshot.h"
 #include "patternElement.h"
 #include "sourceExpression.h"
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -81,6 +83,9 @@ struct CodeLine {
 	bool hasCommittedGrouping = false;
 	bool groupingAmbiguityChecked = false;
 	GroupingSnapshot committedGrouping;
+	GroupingState groupingState;
+	std::vector<Expression *> groupingSourceNodes;
+	std::optional<bool> groupingDependencyTracked;
 
 	// Mapping from transformed text back to original file locations.
 	std::vector<SourceSlice> sourceSlices;

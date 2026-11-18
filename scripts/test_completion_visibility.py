@@ -3,6 +3,7 @@
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -20,9 +21,36 @@ def completion_output(compiler: Path, source: Path, position: str) -> str:
     return result.stdout
 
 
+def check_shared_parent_completion(compiler: Path) -> None:
+    source = '''fixed integer means: @intrinsic("fix", @intrinsic("type", "int", 32))
+type means: @intrinsic("type", "type")
+nothing means: @intrinsic("type", "nothing")
+function set {arguments:variables} to value:
+    replacement:
+        @intrinsic("store", @intrinsic("extract element", variables, 0), value)
+{fixed integer:count} {type:kind} array means: @intrinsic("array", count, kind)
+function add value to target:
+    replacement:
+        @intrinsic("discard", value)
+        @intrinsic("discard", target)
+flex function {nothing:left}[ and|.] {nothing:right}:
+    replacement:
+        @intrinsic("discard", left)
+        @intrinsic("discard", right)
+'''
+    prefix = "set {same line value} to 1 and add 2 to "
+    name = "same line value"
+    with tempfile.TemporaryDirectory(prefix="dynlex-completion-parent-") as directory:
+        path = Path(directory) / "main.dl"
+        path.write_text(source + prefix + name + "\n", encoding="utf-8")
+        position = f"{len(source.splitlines()) + 1}:{len(prefix) + 1}"
+        assert name in completion_labels(compiler, path, position), "completion lost the earlier variable"
+
+
 def main() -> int:
     project_dir = Path(__file__).resolve().parent.parent
     compiler = Path(sys.argv[1]) if len(sys.argv) > 1 else project_dir / "build" / "dynlex"
+    check_shared_parent_completion(compiler)
     fixture_dir = project_dir / "tests" / "integration" / "local_functions"
 
     imported_labels = completion_labels(compiler, fixture_dir / "main.dl")

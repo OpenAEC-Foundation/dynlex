@@ -2,7 +2,8 @@
 // graph is being decoded, so cycles cannot observe half-restored effects.
 class Restoration {
   public:
-	Restoration(IncrementalInferenceReuse &owner, InferenceContext *caller) : owner(owner), caller(caller) {
+	Restoration(IncrementalInferenceReuse &owner, InferenceContext *caller, bool evaluatedQuery = false)
+		: evaluatedQuery(evaluatedQuery), owner(owner), caller(caller) {
 		requireCompilerInvariant(!owner.restoration, "nested inference record restoration");
 		owner.restoration = this;
 	}
@@ -18,7 +19,10 @@ class Restoration {
 		owner.restoration = nullptr;
 	}
 
-	bool prepare(Section *section, const InstantiationKey &key, Instantiation &slot, ParseContext::InferenceReuseUse use) {
+	bool prepare(
+		Section *section, const InstantiationKey &key, Instantiation &slot, ParseContext::InferenceReuseUse use,
+		const std::vector<CompileTimeValue> *callValues = nullptr
+	) {
 		auto identity = inferenceSummaryKey(key, owner.identities);
 		if (!identity ||
 			(!owner.eligible->contains(section, *identity) && !owner.refreshed(owner.sectionPaths.at(section), *identity)))
@@ -31,10 +35,14 @@ class Restoration {
 		if (!saved)
 			return false;
 		Entry &entry = stage(section, key, slot);
+		if (evaluatedQuery && !requested)
+			requested = &slot;
 		if (entry.ready)
 			return true;
 		entry.identity = *identity;
 		const Json &summary = *saved;
+		entry.facts.groupingProduct = decodeGroupingProduct(summary.at("grouping"), owner.sourceIndex);
+		entry.facts.groupingAmbiguityRequested = summary.at("grouping_checked").get<bool>();
 		if (!types(summary, *reference))
 			return false;
 		if (!owner.globalInputClosureUnchanged(path, *identity))
@@ -93,11 +101,18 @@ class Restoration {
 		facts.storageScope = owner.context.storageScopeForInstantiation(section, key);
 		owner.globalInputs.retain(facts.storageScope, summary.at("global_inputs"));
 		bool pureValue = facts.purity == InstantiationPurity::Pure && facts.returnType.kind != DataType::Kind::Void;
+		requireCompilerInvariant(
+			use != ParseContext::InferenceReuseUse::ConstantCall || callValues,
+			"constant inference query has no argument values"
+		);
+		bool knownResult = use == ParseContext::InferenceReuseUse::ConstantCall && pureValue &&
+						   facts.pureReturnValuesByArguments.contains(*callValues);
+		bool constantNeedsBody = use == ParseContext::InferenceReuseUse::ConstantCall && pureValue && !knownResult;
 		bool requiresBody = use != ParseContext::InferenceReuseUse::SymbolicReference &&
-							(use != ParseContext::InferenceReuseUse::ConstantCall || !pureValue);
+							(use != ParseContext::InferenceReuseUse::ConstantCall || !knownResult);
 		entry.hasIR = requiresBody && owner.irReuse && owner.irReuse->hasReusableIRForInstantiation(section, *identity);
 		facts.inferenceReusedFromCache = true;
-		facts.needsReinfer = requiresBody && !entry.hasIR;
+		facts.needsReinfer = requiresBody && (!entry.hasIR || constantNeedsBody);
 		entry.ready = true;
 		return true;
 	}
@@ -178,6 +193,11 @@ class Restoration {
 				return false;
 		}
 		for (auto &[slot, entry] : entries) {
+			if (slot == requested && (!supportsGroupingQuery(entry.facts, caller) ||
+									  !validateGroupingProduct(owner.context, entry.facts.groupingProduct, caller)))
+				return false;
+		}
+		for (auto &[slot, entry] : entries) {
 			requireCompilerInvariant(entry.ready, "inference restoration left an undecoded unit");
 			*slot = std::move(entry.facts);
 			restoreInferenceDiagnostics(
@@ -207,6 +227,8 @@ class Restoration {
 	}
 
   private:
+	Instantiation *requested = nullptr;
+	bool evaluatedQuery;
 	struct Entry {
 		Section *section;
 		Instantiation original;

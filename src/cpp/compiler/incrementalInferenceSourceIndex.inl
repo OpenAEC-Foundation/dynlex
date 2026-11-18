@@ -2,6 +2,7 @@
 // inference borrows or groups expressions. Every fact snapshot shares this view.
 class InferenceSourceIndex {
   public:
+	ParseContext &parseContext() const { return context; }
 	InferenceSourceIndex(
 		ParseContext &context, const std::map<const Section *, std::string> &paths,
 		const std::map<std::string, Section *> &sections, BuildStatistics &statistics
@@ -89,6 +90,19 @@ class InferenceSourceIndex {
 		}
 		return encoded->second;
 	}
+	Json lineIdentity(CodeLine *line) const {
+		indexScope(*line->section);
+		const Root &root = roots.at(lineRoots.at(line));
+		return Json::array({root.path, lineRoots.at(line) - scopeRootStarts.at(line->section)});
+	}
+	CodeLine *decodeLine(const Json &identity) const {
+		const auto &path = identity.at(0).get_ref<const std::string &>();
+		Section *section = sections.at(path);
+		indexScope(*section);
+		const Root &root = roots.at(scopeRootStarts.at(section) + identity.at(1).get<size_t>());
+		requireCompilerInvariant(root.path == path, "cached grouping lost its source line");
+		return root.line;
+	}
 	Expression *decodeExpression(const Json &site) const {
 		statistics.inferenceSourceExpressionLookups++;
 		const std::string &path = site.at(0).get_ref<const std::string &>();
@@ -142,6 +156,7 @@ class InferenceSourceIndex {
 		if (!indexedScopes.insert(&section).second)
 			return false;
 		statistics.inferenceSourceScopesIndexed++;
+		scopeRootStarts.emplace(&section, roots.size());
 		const std::string &path = paths.at(&section);
 		std::unordered_map<std::string, size_t> occurrences;
 		for (CodeLine *line : section.codeLines)
@@ -184,6 +199,7 @@ class InferenceSourceIndex {
 	mutable std::vector<Expression *> arguments;
 	mutable std::unordered_map<const Expression *, Node> nodes;
 	mutable std::unordered_set<const Section *> indexedScopes;
+	mutable std::unordered_map<const Section *, size_t> scopeRootStarts;
 	mutable std::unordered_map<const VariableReference *, Json> definitions;
 	mutable bool definitionsReady = false;
 	mutable std::unordered_map<const Expression *, Json> expressions;

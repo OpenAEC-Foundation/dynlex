@@ -108,13 +108,14 @@ void activateReplacements() {
 		else
 			requireCompilerInvariant(restoreArguments(key, replacement), "native replacement lost its concrete arguments");
 		auto &slot = replacement.section->instantiations[replacement.key];
-		requireCompilerInvariant(
-			inferenceReuse->reuse(
-				replacement.section, replacement.key, slot, ParseContext::InferenceReuseUse::RuntimeCall, nullptr
-			) && slot.valid &&
-				slot.bodyInferred,
-			"native replacement lost its completed inferred body"
-		);
+		if (!slot.valid || !slot.bodyInferred || slot.needsReinfer)
+			requireCompilerInvariant(
+				inferenceReuse->reuse(
+					replacement.section, replacement.key, slot, ParseContext::InferenceReuseUse::SymbolicReference, nullptr
+				) && slot.valid &&
+					inferenceReuse->loadBody(replacement.section, replacement.key, slot, nullptr),
+				"native replacement lost its completed inferred body"
+			);
 		if (scheduledReplacements.insert(key).second)
 			inferredContext->incrementalReplacementFunctions.push_back(std::move(replacement));
 	}

@@ -65,27 +65,40 @@
 			return resolveStoredCompileTimeValue(argumentExpression, flexBindingFrameStack, &context);
 		}, knownBindings, knownValues);
 	}
-	if (!inst.returnType.isDeduced() && context.parseContext.reuseInferredInstantiation) {
+	std::vector<CompileTimeValue> argumentValues =
+		knownCallArguments ? compileTimeArgumentValueVector(knownValues) : std::vector<CompileTimeValue>{};
+	bool unavailable = context.parseContext.inferenceProducts && !inst.inferring &&
+					   !inferenceInstanceAvailable(context.parseContext, inst.storageScope, &context);
+	if ((!inst.returnType.isDeduced() || (inst.inferenceReusedFromCache && unavailable)) &&
+		context.parseContext.reuseInferredInstantiation) {
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
-		context.parseContext.reuseInferredInstantiation(
+		bool prepared = context.parseContext.reuseInferredInstantiation(
 			matchedSection, instantiationKey, inst,
 			knownCallArguments ? ParseContext::InferenceReuseUse::ConstantCall : ParseContext::InferenceReuseUse::RuntimeCall,
-			&context
+			&context, knownCallArguments ? &argumentValues : nullptr
 		);
+		if (!prepared && unavailable) {
+			inst.failure.reset();
+			inst.needsReinfer = true;
+		}
 	} else if (inst.inferenceReusedFromCache && !knownCallArguments && !inst.needsReinfer &&
 			   !inst.pureReturnValuesByArguments.empty() && context.parseContext.reuseInferredInstantiation) {
 		bool prepared = context.parseContext.reuseInferredInstantiation(
-			matchedSection, instantiationKey, inst, ParseContext::InferenceReuseUse::RuntimeCall, &context
+			matchedSection, instantiationKey, inst, ParseContext::InferenceReuseUse::RuntimeCall, &context, nullptr
 		);
 		requireCompilerInvariant(prepared, "cached pure observations changed before runtime use");
 	}
+	if (context.parseContext.inferenceProducts && inst.valid && inst.returnType.isDeduced() && !inst.inferring &&
+		!supportsGroupingQuery(inst, &context))
+		inst.needsReinfer = true;
 	if (inst.failure) {
+		if (context.parseContext.inferenceProducts && !inst.groupingProduct->providedInstances.empty())
+			recordInferenceInstance(context, inst.storageScope, false);
 		replayInferenceFailure(context, *inst.failure);
 		return true;
 	}
 	if (knownCallArguments && inst.inferenceReusedFromCache && inst.purity == InstantiationPurity::Pure &&
 		inst.returnType.kind != DataType::Kind::Void) {
-		auto argumentValues = compileTimeArgumentValueVector(knownValues);
 		if (inst.pureReturnValuesByArguments.contains(argumentValues))
 			context.parseContext.pureValueSummaryHits++;
 		else if (!inst.bodyInferred && (!context.parseContext.restoreInferredBody ||
@@ -93,9 +106,13 @@
 			inst.needsReinfer = true;
 	}
 	std::optional<InstantiationKey> refinedInstantiationKey;
-	bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer;
-	if (!inst.inferring && hasReusableInstantiation)
+	bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer &&
+									(!context.parseContext.inferenceProducts ||
+									 inferenceInstanceAvailable(context.parseContext, inst.storageScope, &context));
+	if (!inst.inferring && hasReusableInstantiation) {
+		observeGroupingResult(inst, context);
 		publishDeferredInferenceDiagnostics(context, inst);
+	}
 	if (!inst.inferring && !hasReusableInstantiation) {
 		int failureBase = static_cast<int>(context.diagnosticTraceDepth());
 		ScopedSectionLocalVariableState calleeVariableState(context.parseContext, matchedSection);
@@ -200,7 +217,8 @@
 		observeUnresolvedRecursiveDependency(context);
 	}
 	if (!inst.valid) {
-		noteInferenceProduct(inst, context);
+		if (!inst.inferring)
+			noteInferenceProduct(inst, context);
 		context.typesValid = false;
 		return true;
 	}
@@ -265,6 +283,7 @@
 		context.parseContext.refineInstantiationStorageScope(matchedSection, instantiationKey, *refinedInstantiationKey);
 	}
 	context.setExpressionValue(expr, context.lookupExpressionValue(expr));
-	noteInferenceProduct(inst, context);
+	if (!inst.inferring)
+		noteInferenceProduct(inst, context);
 	return true;
 }

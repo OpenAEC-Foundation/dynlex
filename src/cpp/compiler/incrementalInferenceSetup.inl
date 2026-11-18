@@ -1,6 +1,6 @@
 if (previous) {
 	auto payloadStart = Clock::now();
-	for (const char *field : {"section_dependency_graph", "inference_summaries", "generated_ir"})
+	for (const char *field : {"section_dependency_graph", "inference_summaries", "generated_ir", "root_grouping"})
 		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, field);
 	if (context.options.emitDebugInfo)
 		statistics.cachePayloadsLoaded += hydrateProgramField(*previous, retainedPayloads, "debug_ir_inputs");

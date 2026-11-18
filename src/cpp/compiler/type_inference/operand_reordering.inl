@@ -354,15 +354,22 @@ static bool startsWithArgument(Expression *expression);
 static bool endsWithArgument(Expression *expression);
 static bool argumentHasAdjacentSiblingSlot(Expression *expression, size_t argumentIndex);
 
+#include "grouping_products.inl"
+
 static const GroupingSnapshot *codeLineGroupingForContext(CodeLine *line, const InferenceContext &context) {
 	if (!line)
 		return nullptr;
+	if (line->groupingState && line->committedGrouping.nodes.empty()) {
+		line->committedGrouping = materializeGrouping(line, line->groupingState);
+		applyGroupingSnapshot(line->committedGrouping);
+		line->expression = line->committedGrouping.root;
+		recomputeRanges(line->expression);
+	}
 	if (line->hasCommittedGrouping && line->groupingAmbiguityChecked)
 		return &line->committedGrouping;
 	if (context.trial) {
-		auto trialGrouping = context.trialCodeLineGroupings.find(line);
-		if (trialGrouping != context.trialCodeLineGroupings.end())
-			return &trialGrouping->second.grouping;
+		if (const auto *grouping = context.groupingForLine(line))
+			return &grouping->grouping;
 	}
 	return line->hasCommittedGrouping ? &line->committedGrouping : nullptr;
 }
@@ -404,11 +411,15 @@ static GroupingSnapshot groupingForReusableInstance(const GroupingSnapshot &temp
 
 static void applyCodeLineGrouping(CodeLine *line, Expression *&activeExpression, const InferenceContext &context) {
 	if (context.trial) {
-		auto trialGrouping = context.trialCodeLineGroupings.find(line);
-		if (trialGrouping != context.trialCodeLineGroupings.end()) {
+		if (const auto *trialGrouping = context.groupingForLine(line)) {
 			GroupingSnapshot instanceGrouping;
-			const GroupingSnapshot *grouping = &trialGrouping->second.grouping;
-			if (trialGrouping->second.reusableTemplate && activeExpression && activeExpression->reusableTemplateExpression) {
+			const GroupingSnapshot *grouping = &trialGrouping->grouping;
+			GroupingSnapshot materialized;
+			if (grouping->nodes.empty() && trialGrouping->state) {
+				materialized = materializeGrouping(line, trialGrouping->state);
+				grouping = &materialized;
+			}
+			if (trialGrouping->reusableTemplate && activeExpression && activeExpression->reusableTemplateExpression) {
 				instanceGrouping = groupingForReusableInstance(*grouping, activeExpression);
 				grouping = &instanceGrouping;
 			}
@@ -419,13 +430,17 @@ static void applyCodeLineGrouping(CodeLine *line, Expression *&activeExpression,
 		}
 	}
 	const GroupingSnapshot *grouping = nullptr;
-	// Instantiation trees are cloned from the already-canonical reusable
-	// template. A CodeLine snapshot contains template pointers and must never be
-	// applied to an instance-owned tree.
-	if (!grouping && (!activeExpression || !activeExpression->reusableTemplateExpression))
-		grouping = codeLineGroupingForContext(line, context);
+	bool pendingSource = line->groupingState && line->committedGrouping.nodes.empty();
+	if (activeExpression && activeExpression->reusableTemplateExpression && !pendingSource)
+		return;
+	grouping = codeLineGroupingForContext(line, context);
 	if (!grouping)
 		return;
+	GroupingSnapshot instanceGrouping;
+	if (activeExpression && activeExpression->reusableTemplateExpression) {
+		instanceGrouping = groupingForReusableInstance(*grouping, activeExpression);
+		grouping = &instanceGrouping;
+	}
 	applyGroupingSnapshot(*grouping);
 	activeExpression = grouping->root;
 	recomputeRanges(activeExpression);
@@ -436,7 +451,7 @@ static bool codeLineCanReuseGrouping(CodeLine *line, const InferenceContext &con
 		return false;
 	if (line->hasCommittedGrouping && line->groupingAmbiguityChecked)
 		return true;
-	return context.trial && context.trialCodeLineGroupings.contains(line);
+	return context.trial && context.groupingForLine(line);
 }
 
 static GroupingSnapshot reusableTemplateGrouping(const GroupingSnapshot &instanceGrouping) {
@@ -459,10 +474,20 @@ static GroupingSnapshot reusableTemplateGrouping(const GroupingSnapshot &instanc
 
 static void commitCodeLineGrouping(CodeLine *line, Expression *&expr, InferenceContext &context, bool ambiguityChecked) {
 	GroupingSnapshot grouping = captureGroupingSnapshot(expr);
+	const auto *inherited = context.groupingForLine(line);
+	ambiguityChecked |= line->groupingAmbiguityChecked || (inherited && inherited->ambiguityChecked);
+	GroupingState prior = currentGroupingState(line, &context), state;
+	if (context.parseContext.inferenceProducts && line->groupingDependencyTracked.value_or(false)) {
+		state = captureGroupingLayout(
+			line, reusableTemplateGrouping(grouping), ambiguityChecked || (prior && prior->ambiguityChecked)
+		);
+		recordGroupingTransition(context, line, {prior, state});
+	}
 	if (context.trial) {
 		if (context.groupingTrialJournal)
 			context.groupingTrialJournal->recordCodeLineGroupingWrite(context.trialCodeLineGroupings, line);
 		auto &trialGrouping = context.trialCodeLineGroupings[line];
+		trialGrouping.state = std::move(state);
 		trialGrouping.reusableTemplate = expr && expr->reusableTemplateExpression;
 		trialGrouping.grouping = trialGrouping.reusableTemplate ? reusableTemplateGrouping(grouping) : std::move(grouping);
 		trialGrouping.ambiguityChecked = trialGrouping.ambiguityChecked || ambiguityChecked;
@@ -479,6 +504,7 @@ static void commitCodeLineGrouping(CodeLine *line, Expression *&expr, InferenceC
 		line->expression = line->committedGrouping.root;
 	}
 	line->hasCommittedGrouping = true;
+	line->groupingState = std::move(state);
 	if (ambiguityChecked)
 		line->groupingAmbiguityChecked = true;
 }
@@ -488,6 +514,13 @@ static void commitTrialCodeLineGroupings(InferenceContext &context) {
 		if (!line)
 			crashCompilerBug("trial inference recorded a grouping without a code line");
 		GroupingSnapshot grouping = std::move(trialGrouping.grouping);
+		line->groupingState = trialGrouping.state;
+		if (grouping.nodes.empty() && trialGrouping.state) {
+			line->committedGrouping = {};
+			line->hasCommittedGrouping = true;
+			line->groupingAmbiguityChecked = trialGrouping.ambiguityChecked;
+			continue;
+		}
 		if (trialGrouping.reusableTemplate) {
 			applyGroupingSnapshot(grouping);
 			line->expression = grouping.root;
@@ -501,6 +534,10 @@ static void commitTrialCodeLineGroupings(InferenceContext &context) {
 		line->groupingAmbiguityChecked = line->groupingAmbiguityChecked || trialGrouping.ambiguityChecked;
 	}
 	context.trialCodeLineGroupings.clear();
+	context.parseContext.availableInferenceInstances.insert(
+		context.trialAvailableInferenceInstances.begin(), context.trialAvailableInferenceInstances.end()
+	);
+	context.trialAvailableInferenceInstances.clear();
 }
 
 static int countMatchedParameters(Expression *expression, PatternDefinition *definition) {
@@ -609,8 +646,8 @@ class GroupingInferenceTransaction {
 		  savedTypeFailureRelatedInfo(context.typeFailureRelatedInfo), savedTypeFailureSnapshot(context.typeFailureSnapshot),
 		  savedTypeFailureDiagnostic(context.typeFailureDiagnostic), savedTypeFailurePriority(context.typeFailurePriority),
 		  savedHasTypeFailureDiagnostic(context.hasTypeFailureDiagnostic), savedTrialJournal(context.trialJournal),
-		  savedGroupingTrialJournal(context.groupingTrialJournal), savedFixedGroupingRoots(context.fixedGroupingRoots),
-		  savedResolvedGroupingRoots(context.resolvedGroupingRoots),
+		  savedGroupingTrialJournal(context.groupingTrialJournal), savedGroupingTrace(context.groupingTrace),
+		  savedFixedGroupingRoots(context.fixedGroupingRoots), savedResolvedGroupingRoots(context.resolvedGroupingRoots),
 		  savedDetectGroupingAmbiguity(context.detectGroupingAmbiguity), savedPendingDiagnostics(context.pendingDiagnostics),
 		  savedExpressionStack(context.expressionStack), savedInheritedTrialContext(context.inheritedTrialContext),
 		  trialFixedGroupingRoots(fixedGroupingRoots),
@@ -642,12 +679,17 @@ class GroupingInferenceTransaction {
 
 	void rollback() {
 		requireCompilerInvariant(active, "grouping inference transaction was resolved twice");
+		auto groupingReads = context.groupingTrace != savedGroupingTrace
+								 ? captureGroupingProduct(context.groupingTrace, savedGroupingTrace)
+								 : nullptr;
 		recursiveInferenceObservation.discard();
 		// Freeze completed bodies while their inferred values still belong to
 		// this transaction; undoing the grouping maps first loses those values.
 		rollbackTrialJournal(context, journal);
 		groupingJournal.rollback();
 		restoreSavedState();
+		if (groupingReads)
+			observeDiscardedGroupings(*groupingReads, context);
 		active = false;
 	}
 
@@ -722,6 +764,7 @@ class GroupingInferenceTransaction {
 	bool savedHasTypeFailureDiagnostic;
 	InferenceContext::TrialJournal *savedTrialJournal;
 	InferenceContext::GroupingTrialJournal *savedGroupingTrialJournal;
+	std::shared_ptr<const GroupingTrace> savedGroupingTrace;
 	const InferenceContext::FixedGroupingScope *savedFixedGroupingRoots;
 	std::unordered_set<Expression *> *savedResolvedGroupingRoots;
 	bool savedDetectGroupingAmbiguity;
@@ -746,6 +789,7 @@ class GroupingInferenceTransaction {
 	}
 
 	void restoreSavedState() {
+		context.groupingTrace = savedGroupingTrace;
 		context.currentInstantiatedSectionBody = savedCurrentInstantiatedSectionBody;
 		context.sectionFlexBodyFrames = std::move(savedSectionFlexBodyFrames);
 		context.staticLoopFrames = std::move(savedStaticLoopFrames);

@@ -105,13 +105,14 @@ class IncrementalInferenceController {
 		};
 		context.reuseInferredInstantiation = [this](
 												 Section *section, const InstantiationKey &key, Instantiation &instantiation,
-												 ParseContext::InferenceReuseUse use, InferenceContext *caller
+												 ParseContext::InferenceReuseUse use, InferenceContext *caller,
+												 const std::vector<CompileTimeValue> *values
 											 ) {
 			adoptQueries();
 			auto unit = inferenceReuse->identify(section, key);
 			if (!unit || !refreshUnit(*unit, !probing))
 				return false;
-			return inferenceReuse->reuse(section, key, instantiation, use, caller);
+			return inferenceReuse->reuse(section, key, instantiation, use, caller, values);
 		};
 		context.activateIncrementalReplacements = [this]() {
 			activateReplacements();
@@ -195,9 +196,16 @@ class IncrementalInferenceController {
 				statistics.dependencyGraphSectionsReused++;
 			}
 		}
-		bool rootEligible = rootInputsUnchanged && check.unchanged({"root", aggregateGraphVariant}) &&
+		bool rootEligible = rootInputsUnchanged && !previous.at("root_grouping").is_null() &&
+							check.unchanged({"root", aggregateGraphVariant}) &&
 							reusableRootExecution(context, previous, frontendDiagnostics, *inferenceReuse);
-		if (rootEligible && reuseRootWithGlobalTypes(context, previous, paths, *irReuse)) {
+		auto rootGrouping = rootEligible ? decodeGroupingProduct(previous.at("root_grouping"), sourceIndex) : nullptr;
+		if (rootEligible && validateGroupingProduct(context, rootGrouping, nullptr) &&
+			reuseRootWithGlobalTypes(context, previous, paths, *irReuse)) {
+			requireCompilerInvariant(
+				applyGroupingProduct(context, rootGrouping, nullptr), "entry replay changed grouping inputs"
+			);
+			context.rootGroupingProduct = std::move(rootGrouping);
 			globalTypes.commit();
 			graphStable.insert(context.mainSection);
 			restoreInferenceDiagnostics(context, {}, previous.at("root_diagnostics"), [&]() -> auto & {
@@ -222,8 +230,10 @@ class IncrementalInferenceController {
 		if (current.at("invocation").at(3) != prior.at("invocation").at(3))
 			return false;
 		return std::ranges::all_of(current.items(), [&](const auto &entry) {
-			return entry.key() == "pure_values" || entry.key() == "pure_values_complete" || entry.key() == "invocation" ||
-				   entry.key() == "global_inputs" || entry.key() == "pure_value_inputs" ||
+			if (entry.key() == "grouping")
+				return prior.contains("grouping") && sameGroupingOutputs(entry.value(), prior.at("grouping"));
+			return entry.key() == "grouping_checked" || entry.key() == "pure_values" || entry.key() == "pure_values_complete" ||
+				   entry.key() == "invocation" || entry.key() == "global_inputs" || entry.key() == "pure_value_inputs" ||
 				   (prior.contains(entry.key()) && prior.at(entry.key()) == entry.value());
 		});
 	}

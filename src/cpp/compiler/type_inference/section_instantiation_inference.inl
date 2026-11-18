@@ -54,15 +54,29 @@ bool ensureSectionInstantiationInferred(
 	seedInstantiationCompileTimeParameters(
 		inst, paramBindings, argTypes, inst.requiredCompileTimeParameters, evaluateParameterValue
 	);
-	if (!inst.returnType.isDeduced() && parseContext.reuseInferredInstantiation)
-		parseContext.reuseInferredInstantiation(
-			section, instantiationKey, inst, ParseContext::InferenceReuseUse::Callable, callerContext
+	bool unavailable = parseContext.inferenceProducts && !inst.inferring &&
+					   !inferenceInstanceAvailable(parseContext, inst.storageScope, callerContext);
+	if ((!inst.returnType.isDeduced() || (inst.inferenceReusedFromCache && unavailable)) &&
+		parseContext.reuseInferredInstantiation) {
+		bool prepared = parseContext.reuseInferredInstantiation(
+			section, instantiationKey, inst, ParseContext::InferenceReuseUse::Callable, callerContext, nullptr
 		);
+		if (!prepared && unavailable) {
+			inst.failure.reset();
+			inst.needsReinfer = true;
+		}
+	}
 	if (inst.inferenceReusedFromCache && parseContext.reuseInferredInstantiation)
 		parseContext.reuseInferredInstantiation(
-			section, instantiationKey, inst, ParseContext::InferenceReuseUse::Callable, callerContext
+			section, instantiationKey, inst, ParseContext::InferenceReuseUse::Callable, callerContext, nullptr
 		);
-	if (inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer) {
+	if (parseContext.inferenceProducts && inst.valid && inst.returnType.isDeduced() && !inst.inferring &&
+		!supportsGroupingQuery(inst, callerContext))
+		inst.needsReinfer = true;
+	if (inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer &&
+		(!parseContext.inferenceProducts || inferenceInstanceAvailable(parseContext, inst.storageScope, callerContext))) {
+		if (callerContext)
+			observeGroupingResult(inst, *callerContext);
 		InferenceContext publication(parseContext, callerContext && callerContext->trial);
 		if (callerContext)
 			publication.inheritDiagnosticContext(*callerContext);
@@ -70,6 +84,8 @@ bool ensureSectionInstantiationInferred(
 		return inst.valid;
 	}
 	if (inst.failure) {
+		if (parseContext.inferenceProducts && callerContext && !inst.groupingProduct->providedInstances.empty())
+			recordInferenceInstance(*callerContext, inst.storageScope, false);
 		if (callerContext)
 			replayInferenceFailure(*callerContext, *inst.failure);
 		return false;
@@ -81,12 +97,16 @@ bool ensureSectionInstantiationInferred(
 		InferenceContext &child;
 		InferenceContext *caller;
 		~RetainTrialProducts() {
+			if (caller)
+				caller->groupingTrace = child.groupingTrace;
 			if (child.trial)
 				caller->absorbTrialResultsFrom(child);
 		}
 	} retainTrialProducts{context, callerContext};
 	if (callerContext) {
 		context.inheritDiagnosticContext(*callerContext);
+		context.inheritedGroupingContext = callerContext;
+		context.groupingTrace = callerContext->groupingTrace;
 		context.dependencyReads = callerContext->dependencyReads;
 		// Cached instantiations cannot consume the caller's tracked constants.
 		// Only globals and instantiation-key parameter constants enter a pass.

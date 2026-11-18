@@ -1,8 +1,15 @@
 #include "inferenceProductHooks.h"
 
-static void noteInferenceProduct(Instantiation &instance, const InferenceContext &context) {
+static void noteInferenceProduct(Instantiation &instance, InferenceContext &context) {
 	if (!context.parseContext.inferenceProducts || !instance.storageScope)
 		return;
+	requireCompilerInvariant(!instance.inferring, "inference published an unfinished recursive query");
+	if (instance.valid || instance.failure) {
+		if (instance.groupingProduct->providedInstances.empty())
+			context.parseContext.availableInferenceInstances.insert(instance.storageScope);
+		else
+			recordInferenceInstance(context, instance.storageScope, true);
+	}
 	std::vector<Diagnostic> diagnostics;
 	if (context.pendingDiagnostics)
 		for (const Diagnostic &diagnostic : *context.pendingDiagnostics) {

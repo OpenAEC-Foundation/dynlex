@@ -84,12 +84,16 @@ bool inferenceSummaryHasValueState(const Json &summary) {
 
 Json captureSectionInferenceSummary(
 	const Section *section, const InferenceValueIdentities &identities, InferenceStorageIdentities &storage,
-	InferenceGlobalInputs &globals, size_t *capturedInstantiations = nullptr, const IncrementalUnitSelection *skipped = nullptr,
-	const std::string *onlyKey = nullptr, std::map<std::string, const Instantiation *> *capturedInstances = nullptr
+	InferenceGlobalInputs &globals, const InferenceSourceIndex &sourceIndex, size_t *capturedInstantiations = nullptr,
+	const IncrementalUnitSelection *skipped = nullptr, const std::string *onlyKey = nullptr,
+	std::map<std::string, const Instantiation *> *capturedInstances = nullptr
 ) {
 	Json summaries = Json::object();
 	for (const auto &[key, instantiation] : section->instantiations) {
 		if (!canPersistInferenceSummary(section, key, instantiation, identities))
+			continue;
+		Json grouping = encodeGroupingProduct(instantiation.groupingProduct, sourceIndex);
+		if (grouping.is_null())
 			continue;
 		auto encodedKey = encodeInferenceKey(key, identities);
 		if (!encodedKey)
@@ -104,6 +108,8 @@ Json captureSectionInferenceSummary(
 			Json record = std::move(*encodedKey);
 			record["invocation"] = encodeInferenceInvocation(*section, instantiation, globals.declaration(*section));
 			record["global_inputs"] = std::move(*globalInputs);
+			record["grouping"] = std::move(grouping);
+			record["grouping_checked"] = instantiation.groupingAmbiguityRequested;
 			summaries[identity] = std::move(record);
 			if (capturedInstances)
 				(*capturedInstances)[identity] = &instantiation;
@@ -128,6 +134,8 @@ Json captureSectionInferenceSummary(
 			instantiation.pureReturnValuesComplete && pureValues.size() == instantiation.pureReturnValuesByArguments.size();
 		Json record = std::move(*encodedKey);
 		record["invocation"] = encodeInferenceInvocation(*section, instantiation, globals.declaration(*section));
+		record["grouping"] = std::move(grouping);
+		record["grouping_checked"] = instantiation.groupingAmbiguityRequested;
 		record.update(
 			Json{
 				{"failure", nullptr},
@@ -198,6 +206,7 @@ void mergeInferenceObservedValues(Json &current, const Json &prior) {
 	if (!current.at("failure").is_null() || !prior.at("failure").is_null() ||
 		current.at("purity") != static_cast<int>(InstantiationPurity::Pure) || current.at("purity") != prior.at("purity") ||
 		current.at("pure_value_inputs").is_null() || current.at("pure_value_inputs") != prior.at("pure_value_inputs") ||
+		!sameGroupingLayouts(current.at("grouping").at("groupings"), prior.at("grouping").at("groupings")) ||
 		current.at("return_type") != prior.at("return_type"))
 		return;
 	std::map<Json, Json> observations;
@@ -241,8 +250,9 @@ Json captureInferenceSummaries(
 	};
 	for (const auto &[section, path] : sectionPaths) {
 		std::map<std::string, const Instantiation *> instances;
-		Json variants =
-			captureSectionInferenceSummary(section, identities, storage, globals, nullptr, skipped, nullptr, &instances);
+		Json variants = captureSectionInferenceSummary(
+			section, identities, storage, globals, sourceIndex, nullptr, skipped, nullptr, &instances
+		);
 		for (auto &[key, summary] : variants.items()) {
 			const Instantiation &instance = *instances.at(key);
 			if (instance.failure)
@@ -306,7 +316,7 @@ class IncrementalInferenceReuse {
 
 	bool reuse(
 		Section *section, const InstantiationKey &key, Instantiation &instantiation, ParseContext::InferenceReuseUse use,
-		InferenceContext *caller
+		InferenceContext *caller, const std::vector<CompileTimeValue> *values = nullptr
 	) {
 		auto keyText = inferenceSummaryKey(key, identities);
 		if (!keyText || (!eligible->contains(section, *keyText) && !refreshed(sectionPaths.at(section), *keyText)))
@@ -315,7 +325,9 @@ class IncrementalInferenceReuse {
 		const Json *current = reference(unit);
 		if (!current)
 			return false;
-		if (instantiation.inferenceReusedFromCache && instantiation.inferenceProductIdentity == productIdentity(unit)) {
+		if (instantiation.inferenceReusedFromCache && instantiation.inferenceProductIdentity == productIdentity(unit) &&
+			(use == ParseContext::InferenceReuseUse::SymbolicReference ||
+			 inferenceInstanceAvailable(context, instantiation.storageScope, caller))) {
 			if (instantiation.failure)
 				return true;
 			auto unit = std::pair{static_cast<const Section *>(section), *keyText};
@@ -330,13 +342,22 @@ class IncrementalInferenceReuse {
 				loadBody(section, key, instantiation, caller);
 			return true;
 		}
+		bool execute = use != ParseContext::InferenceReuseUse::SymbolicReference &&
+					   !inferenceInstanceAvailable(context, context.storageScopeForInstantiation(section, key), caller);
 		{
-			Restoration transaction(*this, caller);
-			if (!transaction.prepare(section, key, instantiation, use) || !transaction.finish())
+			Restoration transaction(*this, caller, execute);
+			if (!transaction.prepare(section, key, instantiation, use, values) || !transaction.finish())
 				return false;
 		}
 		if (instantiation.needsReinfer)
 			loadBody(section, key, instantiation, caller);
+		if (!instantiation.needsReinfer && instantiation.groupingProduct->providedInstances.empty())
+			context.availableInferenceInstances.insert(instantiation.storageScope);
+		if (!instantiation.needsReinfer && execute)
+			requireCompilerInvariant(
+				applyGroupingProduct(context, instantiation.groupingProduct, caller),
+				"inference preparation changed grouping inputs"
+			);
 		return true;
 	}
 

@@ -10,6 +10,465 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## Active iteration: I113 integrate and publish the corrected compiler
+
+Started18 November at12:05 UTC; implementation deadline12:50 UTC. The previous
+goal turn answered the user's timing question and verified the live integration
+job. This continuation completes I112's487/0/0 integration and eight-build
+resource comparison, commits the qualified source/browser artifacts as61c92732,
+and integrates local master8674e44f as220e2575. Preserve its literal-priority
+matcher fix, portability fixes and complete required-suite worker coverage.
+Resolve the sole test-driver conflict by running grouping-state regressions in
+the native inference group and retaining the inference-failure check exactly
+once. No test or assertion is dropped.
+
+Freeze the combined sources; build native and actual WebAssembly serially, run
+focused regressions, all391 required checks uncached within120s, full LSP,
+real-program parity/cost controls and all487 integration checks. Refresh the
+shipped browser artifacts from the combined source build. Then integrate with
+local master, rebuild/verify the shared-root compiler, push the qualified
+snapshot and dispose the merged worktree while retaining verified build data.
+Do not add another optimization inside this qualification boundary or label the
+correctness repair a performance gain. The full every-stage goal remains active.
+
+Combined native image0d28feda builds successfully under the serial memory limit
+and passes the focused grouping/dependency checks in33.073s, all391 required
+checks uncached in67.745s and the full LSP suite in6.886s. The real-program
+controls, combined browser build and full integration remain outstanding;
+earlier846c0a1a results are not attributed to this newer image.
+
+The combined real-program matrix now passes exact diagnostics and executable
+parity in all five cases. Successive body edits still infer32,11,1 bodies; the
+first matched inference stage is933.565ms versus261.717ms on master370e530a's
+qualified baseline. The actual browser build completes in362.921s and its host
+LSP edit/parity regression passes in2.742s. Full487-check integration is live.
+The first-edit debugger probe and guarded shared-root publication pipeline wait
+for that exact qualification job, then run serially. The debugger checks actual
+inference rejections rather than borrowing counts from an earlier image, and
+removes its disposable source/cache after retaining the report. Publication
+requires frozen source/browser hashes, a clean tracked root, reviewed mainline
+integration and successful root required/LSP/focused checks before push/disposal.
+Master1a9f9a90 adds test portability and a Windows-only UTF-8 process manifest;
+its exact diff leaves compiler C++, browser transport, libraries and config
+unchanged. The manifest is not a browser embedded-library input. Preserve the
+completed compiler qualification, verify those production hashes after merging,
+and run the updated required/LSP/focused checks on the shared-root build. Do not
+restart the live integration run for this test/build-metadata-only change.
+
+Integration stopped at 486 passes and one failure after 1160.048 seconds.
+The completion visibility fixture aborts at the cursor following
+`set {same line value} to 1 and add 2 to `. Both the combined compiler and
+the compiler built from local master reproduce the same invariant failure.
+The debugger reaches the completion frontier's ancestor walk. That walk
+canonicalizes the current progress only, then reads older parent groups
+directly. The shared matcher moves a merged group's values to its canonical
+group, so an older continuation can legitimately reference an empty redirect.
+Fix ancestor access through the canonical group and share it with matcher
+debug rendering. Preserve the existing completion regression and add a
+no-import reproduction. Publication waits for the corrected build and tests.
+
+Local master41093e7f independently fixes the same ancestor access and prepares
+required test tools before the suite timer. Its original suite passes391/0/0
+required and487/0/0 integration checks. The incremental worktree integrates
+that exact compiler fix at3dffa73e and adds a16-line no-import regression. The
+regression aborts before the fix and verifies the earlier variable remains a
+completion candidate after it. The corrected native image861c29d7 passes that
+test, the original completion fixture and the focused grouping/dependency tests.
+A serial validation job owns the remaining required, WebAssembly and integration
+checks. The earlier486/1/0 is retained as failure evidence.
+
+Independent first-edit progress: an eight-line no-import program with an
+earlier real-argument call and a later integer-argument wrapper exhibits5,2,1
+body passes across population and two literal edits. Both edits can reuse
+entry execution. The first edit changes the unchanged integer helper's saved
+grouping transition from checked-to-checked to absent-to-checked, with identical
+operand layout. Preinference begins before the earlier real call establishes
+the grouping. This is observable extra inference in the unchanged helper,
+independent of the completion crash. The real-program attribution records the
+phase and owning query before candidate cache state is removed.
+
+The repaired snapshot passes391 required checks uncached in74.707 seconds and
+the full native LSP suite. The required job uses254.005 CPU seconds including
+its children. Parallel workers account for the difference between CPU and wall
+time. The browser rebuild and WebAssembly LSP checks pass. Full integration is
+running on the repaired image, followed by the shared-root qualification.
+
+The real first-edit trace on861c29d7 confirms32 body passes and entry inference.
+It measures240 grouping checks, with17 rejections during speculative inference
+and15 during ordinary inference. The mismatched reads include172 absent current
+layouts,241 absent saved inputs and53 unavailable prerequisite instances. These
+counts describe reads within rejected products, so one rejection can account for
+many mismatches. The matched cache population stores7.75MB of grouping data
+within8.41MB of concrete summaries, including3.21MB of scope identity strings
+across3336 uses. The trace preserves evidence and removes the temporary cache.
+
+The next bounded experiment uses short identities for grouping scope references.
+It preserves the exact grouping and availability checks. The prototypeba25bd04
+keeps complete typed storage origins for their actual consumers and interns
+grouping-only scopes by the same stable digest. Its serial benchmark queue runs
+after the repaired snapshot publishes. Measure cold and edited CPU time, peak
+RSS and cache bytes with exact diagnostics and output parity before retaining it.
+This addresses storage and restoration costs. Causal inference of changed bodies
+in their original grouping context is a separate unresolved boundary.
+
+An isolated cache-maintenance probe holds the program and output constant while
+adding unrelated entry names. Across nine alternating samples per size, 15,
+2015 and6015 entries take0.066,4.442 and13.094 ms to scan, with corresponding
+process CPU medians6.201,10.738 and19.414 ms. Every invocation reuses the
+frontend and does zero object or link work. The real-program first edit scans
+3479 entries in12.43 ms, so removing that scan cannot account for the observed
+inference regression. Existing eviction checks deliberately add entries between
+unchanged builds. Retain that behavior and avoid treating the historical
+whole-suite cache-growth correlation as a measured stage breakdown.
+
+Master5bf9accf updates test progress and timeout regression reporting only.
+The reviewed merge preserves exact compiler and browser inputs. Verify the
+updated required checks after merging without discarding the active integration
+result for this test-driver change.
+Master7fd18a2c also normalizes CRLF output in an existing LLVM-output check.
+Both test-only updates are included in the shared-root verification.
+
+Combined qualification completes: all391 required checks pass uncached in74.707s, full native LSP and focused grouping checks pass, including the reduced no-import completion regression, and the rebuilt browser compiler passes host LSP and all487 integration checks in1007.440s. Exact source, compiler and browser hashes are retained in i113-repaired-inputs.json and i113-repaired-validation.json. This qualifies the combined worktree snapshot; shared-root verification and publication follow. The full objective remains incomplete.
+
+## Completed iteration: I112 restore the browser's shared matcher implementation
+
+Started18 November at11:33:26 UTC; deadline12:18:26 UTC. I111's integrated
+native image846c0a1a passes389 required checks uncached in72.950 s, full LSP,
+focused regressions and the complete real-program parity matrix. Its actual
+WebAssembly build fails to link because local master excludes
+incrementalMatcherCache.cpp even though incrementalAnalysis.cpp uses its
+in-memory constructor, reuse, record and snapshot methods. The implementation
+uses supplied byte loaders and has no native cache-entry/file dependency.
+Remove that source exclusion while keeping the native-only cache-entry driver
+excluded. Do not disable browser matcher reuse or supply stubs. The red link
+and complete compiler command are retained in i111-merged-web-build.log.
+
+The project suppresses automatic CMake regeneration; a first build retry kept
+the old source list and repeats the link failure. Explicit reconfiguration then
+builds the shared matcher implementation and links successfully. The native
+reconfiguration reports "ninja: no work to do" and its binary SHA remains
+846c0a1a, preserving its exact native qualification. Record that equivalence and
+the updated CMake input in i112-frozen-inputs.json. Actual build receipt,
+source hashes and module hashes are in i112-web-build-receipt.json.
+
+The fresh WebAssembly module passes the complete host LSP edit/parity regression.
+Both generated browser artifacts are refreshed from this build; the unchanged
+translator retains its qualified master inputs. The full487-check integration
+suite passes487/0/0 in1083.106s against this native compiler and these actual
+shipped browser artifacts. The resource comparison also completes with exact
+executable parity: first-edit peak RSS278608->322348KiB; third-edit RSS
+278096->284476KiB; retained cache after three edits67.908->80.632MB. This
+correctness repair increases work and retained data; it is not an optimization
+claim. Integration reaches its1.5GiB memory cap through reclaim, with no OOM
+events/kills, swap use or task denials observed. The final source image remains
+frozen in i112-frozen-inputs.json and all successful gates retain exact hashes.
+Local master has advanced to8674e44f, adding portability and literal-priority
+matcher fixes. Integrate those before the shared-root build, preserving both
+sets of compiler fixes. Merge/push, shared-root verification and disposal of
+the worktree remain outstanding.
+The full every-stage goal remains active/incomplete. The per-argument-type
+grouping semantics question is still pending; no answer is assumed.
+
+## Previous iteration: I111 grouping-dependent constant observations
+
+Started18 November at10:44:09 UTC; deadline11:29:09 UTC. I110 remains isolated
+and unqualified. Close a verified constant-query dependency omission before
+further optimization. A24-line no-import repro prints0 with a clean build but
+aborts incrementally with "pure query produced inconsistent observations".
+The debugger captures the same real1.0 argument yielding integer1 versus0;
+return types and pure_value_inputs are equal, but operand layouts differ.
+Evidence is i111-grouped-values/{literal.dl,literal-report.json} and
+i111-value-context.{json,log}. A reduced23-line variant without a direct known
+argument does not fail; retain that minimization result rather than claiming it
+reproduces the bug.
+
+Keep constant observations only for the same actual grouping results, alongside
+their existing type/global input proof. Migrate both retention paths: persisted
+record joins and in-memory values carried across body reinference. Capture the
+new grouping product before deciding whether the old constant table still
+belongs to that query. The red regression covers initial execution, a different
+constant argument, removal of the grouping-establishing call, and changed call
+order underO0 andO2. No assertion is removed or replaced by a conflicting-value
+overwrite. Build, focused parity, real-program costs and all qualification gates
+remain required. The source-fact and first-edit locality work remain unfinished.
+
+I110's controlled required comparison runs only after the other observed
+qualification job exits. Both exact qualified baseline and candidate reach120 s;
+neither is a pass. These controls do not isolate a patch-only timing cause.
+The queued full qualification therefore stops without launching broader jobs.
+Keep the fixed120 s limit and preserve i110-budget-check.json plus both logs.
+The full every-stage goal is active/incomplete.
+
+The implemented correction passes every focused grouping check, the full focused
+leaf-dependency checks and all three integration compile smokes. The regression
+includes fresh/reusedO0/O2 execution, known-argument edits, removal of the
+grouping-establishing call (which changes output0->1), restoration of that call,
+and exact warning parity. The clean removal case independently prints1 before
+testing the correction. Both in-memory and persistent observation joins now
+check actual operand layouts while ignoring diagnostic-check progress alone.
+
+Local master advances to370e530a while these checks run. Its qualified required
+suite has389 checks in88.027 s and splits independent incremental groups without
+dropping coverage. It also contains substantial compiler/runtime/library fixes
+and moves website source to dynlex-website. Integrate that local master before
+further combined qualification, preserving both sets of compiler fixes. Do not
+claim the previous compiler's focused results qualify the merged artifact. The
+earlier profile's rising incremental cost (44.53->78.31 ms per build quintile,
+versus steady clean29.72->31.95 ms) remains attribution evidence; gather actual
+cache/stage counters before choosing a cache optimization.
+
+The integrated snapshot is45661fd6, with constant-query fix3d69d3fa and local
+master370e530a both retained. The two merge conflicts preserve retained payload
+handles together with root grouping replay, and recursive inference observation
+together with grouping dependency reads. All changed compiler files remain below
+1000 lines. Source/baseline inputs are preserved in i111-frozen-inputs.json and
+i111-master-baseline/manifest.json; the qualified master baseline is retained
+without duplicating its binary's disk blocks.
+
+The rebuilt846c0a1a image passes the focused regressions, all389 required checks
+uncached in72.950 s, and the complete LSP suite in6.457 s. Its fixed real45-file
+five-case matrix preserves exact diagnostics and executables. Body-edit CPU
+medians are1.161->1.502 s, with32,11,1 inferred bodies versus1,1,1 on the
+qualified master baseline. The first edit still has avoidable work; this is a
+correctness snapshot, not an optimization claim. The actual WebAssembly rebuild
+and full487-check integration run remain live qualification gates. Rebuild and
+test the shipped browser compiler from this source before using the integration
+suite's --shipped cases; the unchanged translator artifact retains its verified
+master inputs. No source change enters the qualification window.
+
+A language-semantics clarification is pending: CodeLine's committed grouping has
+been shared across specializations since5ef729b5 (12 July), before this goal.
+The reproducer proves that adding generic1 can change generic1.0 from1 to0.
+Ask whether grouping should instead be independent per argument type. Preserve
+existing clean-build behavior while qualifying this snapshot; do not assume an
+answer or build a larger global-state optimization before that decision.
+Implementation is frozen before the11:29:09 deadline. Subsequent live jobs are
+verification, and the full cross-process/every-stage objective remains active.
+
+## Previous iteration: I110 native grouping proof and completion closure
+
+Started18 November at09:34:37 UTC; deadline10:19:37 UTC. I109's correctness
+boundary remains unpublished, and I108's editor source facts remain parked.
+Fix the verified native reuse crash before returning to optimization: saved and
+current string-concatenation operand layouts are identical, but their completed-
+instance sets differ21 versus22. Native instruction reuse must compare operand
+layouts, while inference execution continues to validate availability separately.
+
+Image6da2f25e passes the focused grouping regressions and the three previously
+crashing integration compile cases. Its real45-file edit sequence now completes
+with clean-build diagnostic/executable parity. It is not a speed improvement:
+body-edit CPU is3.845,2.097,2.263 seconds against1.231,1.339,1.169 on the
+qualified baseline. The required uncached suite is333/334 in109.380 seconds;
+the remaining failure is the existing nested compile-time result dependency
+test, whose second edit unnecessarily invalidates the entry point. Preserve the
+full results as i110-projection-*; do not weaken its reuse assertion.
+
+The minimal test's retained report5 query exposes the missing completion closure:
+reading an already inferred wrapper records only the wrapper as complete, whereas
+inferring it here also records its compute callee. Operand grouping and runtime
+interfaces are unchanged. Observe all completed instances exported by the wrapper,
+retaining their availability prerequisites, so fresh and previously completed
+calls publish the same closure. Build and rerun the exact failing test before
+the broader gates. No publication is qualified yet. The full every-stage goal
+remains active and incomplete.
+
+At09:56 UTC the exact nested-result regression passes after retaining the full
+completed-callee closure. Debugger tracing of the real first edit finds780
+grouping checks,106 rejections, and37 rejections of already completed instances.
+An eight-line no-import regression confirms that lazily materializing a completed
+callee repeats first-execution checks and body inference. Separate execution
+replay from facts materialization using the existing completion prerequisite.
+Keep ordinary operand-result and diagnostic-profile checks. The red test is
+i110-materialization-red.log; the corrected image is building and will run the
+full focused matrix and uncached required suite before broader qualification.
+
+Imageebd76500 passes every focused grouping test, including the eight-line
+materialization regression. The complete real-program matrix retains exact
+diagnostic/executable parity and reduces body passes to33,11,1 (previously105,
+23,1). Paired body-edit CPU medians are1.225->1.631 s, ratio1.344; imported
+edits1.665->1.812 s, cold5.157->5.207 s. Correctness remains unpublished:
+required is333/334 in103.195 s. Its next failure is the existing callback-identity
+test. Record inspection proves that callback A/B and choose have no grouping
+observations or prerequisites; only their unconditional completion outputs differ
+when the edited choose stops referencing callback B. Such independent query facts
+must not create grouping execution dependencies. Retain their facts independently
+of grouping-trial rollback and emit completion prerequisites/effects only for
+queries with actual grouping observations or dependent completions. Keep the
+existing callback root-reuse assertion, both optimization profiles and exact
+fresh/reused behavior. Archive the previous artifact as i110-materialization-*.
+The corrected image is building; all gates remain outstanding for that image.
+
+At10:12 UTC the independent-query correction passes the full focused leaf
+dependency checks, including both callback optimization profiles, but the workspace
+integration compile crashes. Stop broader qualification. Debugger evidence shows
+noteInferenceProduct publishing a recursive placeholder with valid=true,
+inferring=true, bodyInferred=false and no completed grouping product. The return
+type is already usable, but the recursive body has not completed. A seven-line
+no-import recursion reproduces SIGSEGV before the fix (i110-recursive-red.log).
+Publish products from non-flex call sites only when that instance is no longer
+being inferred; keep recursive type dependencies and ordinary call inference.
+An invariant rejects any future unfinished publication. This repairs the producer
+phase rather than manufacturing an empty product. Implementation is frozen for
+the final focused, real-program, required<=120 s and broader qualification gates.
+The iteration's10:19:37 deadline remains the implementation limit; live gate jobs
+are verification, not permission for another optimization variant.
+
+Image67369f12 completes all focused grouping and leaf-dependency checks plus the
+three previously crashing integration compile cases. Its complete five-case
+matrix preserves exact diagnostics and executables. Paired body-edit CPU medians
+are1.866->2.247 s, ratio1.204 [1.046,1.715]; imported edits2.107->2.581 s,
+ratio1.344 [0.873,1.425]. Cache-disabled cold ratio0.996 [0.992,1.044], comment
+0.992 [0.942,1.005], wording1.001 [0.893,1.069] establish no change. Do not
+compare these absolute timings to older runs as if machine conditions matched.
+Successive body edits infer32,11,1 bodies versus the baseline's1,1,1; entry
+reuse isfalse,true,true. Implementation stopped before the10:19:37 deadline;
+the unchanged image is now in required and broader verification. No optimization
+claim or publication is qualified yet. The remaining avoidable first-edit work
+must be addressed after this correctness boundary passes, with its actual state
+and interface dependencies preserved.
+
+The final required run hits its unchanged120 s wall limit; it is not a pass.
+An independent agent's dynlex-merge-qualification.service, running the
+startup-runtime worktree's integration suite, overlaps the matrix and required
+run (active since10:18:15 UTC). Do not attribute the timeout solely to contention
+without a control. The unchanged candidate's complete incremental regression
+group passes all2657 builds under a512 MiB cap and lower CPU priority:125.937 s
+instrumented wall time,115.426 child CPU s. Preserve per-function/build cost in
+i110-incremental-test-profile.json. This proves those functional checks, not the
+whole required suite or its budget. A queued controller waits for the observed
+other job, then verifies the qualified root's exact commit/binary before running
+baseline and candidate required gates sequentially. A changed baseline stops
+that comparison explicitly. Only a334/0/0 candidate pass within120 s unlocks
+resource comparison, full LSP/integration and actual web qualification. No merge
+or push is qualified; the full every-stage goal remains active and incomplete.
+
+## Previous iteration: I109 qualify grouping execution dependencies
+
+Started18 November at06:05:16 UTC; first deadline06:50:16 UTC. I108's source-fact
+boundary remains parked. Finish the demonstrated cross-stage grouping bugs:
+semantic query replay must preserve first-instantiation choices and warnings,
+evicted bodies and new constant observations must infer ordinarily, and LLVM
+reuse must depend on the actual grouping results. A runtime regression prints10
+incrementally versus20 cleanly before the native fix. The real Breakout control
+also exposes a grouping-result invariant failure; minimize and diagnose that
+context transition before further optimization. Complete one correct producer /
+consumer boundary with exact fresh/reused diagnostics and runtime parity, then
+measure real-program CPU, memory, disk and code. The required uncached suite is
+currently334/0/0 in97.802 seconds on the preceding candidate; that is not final
+qualification. Do not publish the current patch until all gates pass. One45-minute
+extension requires concrete progress. The full every-stage goal remains active.
+
+At06:48 UTC all focused grouping regressions and the five-case native parity
+matrix pass, and the uncached required suite passes334/0/0 in100.525 seconds.
+Do not publish this candidate: a body edit grows from one inferred body to104,
+and1.14 to3.49 CPU seconds. Grouping outputs currently use changed line text as
+identity and interface comparison includes contextual grouping inputs. Complete
+the bounded precision correction using unit-relative source positions and output
+interfaces, then remeasure. Memoize final IR grouping checks only after inference
+has established immutable results. This is concrete implementation and benchmark
+progress; use the sole extension to07:35:16 UTC. Editor source facts remain parked.
+
+At07:35 UTC the bounded precision iteration ends without a publishable performance
+result. The broad completeness filter passes all focused grouping regressions,
+but the complete five-case control records body edits at1.066->2.476 CPU seconds
+and imported edits at1.390->2.750. Cold and fast paths remain approximately equal.
+Do not retain that filter as measured: it rejects read-only observations of another
+query's unchecked state along with actual unchecked writes. Its required run was
+stopped when the complete benchmark established this rejection; no full-pass claim
+applies to image6f3e0a05. Preserve its evidence as i109-broad-filter-*.
+
+The narrowed write-only filter also fails the real-program benchmark. Inspection
+of selected-grouping replay establishes that the completeness assumption was wrong:
+the compiler intentionally disables repeat ambiguity search after retaining the
+selected diagnostics. An unchecked write therefore does not prove that the semantic
+query is incomplete. Reject both filters, preserve their measured artifacts, and
+keep exact execution-precondition validation plus independent diagnostic products.
+A minimal conversion regression now checks actual fresh/reused ambiguity warnings
+when a previously rejected conversion is later selected, instead of imposing that
+incorrect internal cache-state assumption. Finish this verified correctness boundary
+before extending source-fact work or adding unrelated features. Interface comparison
+uses operand layouts rather than ambiguity-check progress alone; measure that
+independent correction without either rejected filter.
+
+The functional conversion regression is red on imagea0d4bbd4: adding the selected
+conversion loses the clean build's ambiguity warning. The retained red repro is
+i109-conversion-profile/red.json with its22-line no-import source and compiler
+logs. The missing input is the requested diagnostic profile, not a blanket
+completeness rule for grouping writes. Retain probe products, record whether their
+caller requested ambiguity checking, and require that proof before a stronger
+semantic call consumes the result. Empty grouping products need no such search.
+This correctness correction is being built single-job under the memory cap;
+full focused parity, real-program cost and required uncached<=120 s remain gates.
+
+Image59345509 fixes the conversion-warning regression and passes334 required
+checks uncached in102.081 s, the full LSP suite, and focused nested/associative/
+precedence checks. Its real45-file control preserves exact diagnostics and native
+executables but still costs3.088,1.366,1.147 CPU s over three successive body
+edits, versus1.071,1.044,1.122 on the qualified baseline. Body passes are105,23,1.
+The separate resource comparison sees363864 versus269072 KiB peak RSS on the
+first edit; by the third edit it is268404 versus267536. Retained cache data after
+those edits is79.590 versus67.115 MB. Do not label this a speed improvement.
+Evidence is preserved in i109-query-profile-* before further source changes.
+
+Direct debugger tracing finds105 grouping-state rejections and no diagnostic-
+profile rejections in that real first edit. Across the rejected products,172
+observations expect a grouping that is absent,799 expect absence after a grouping
+has been established, and61 differ only in check progress. No two present states
+have different operand trees. Constraint probes roll back their state and do not
+establish the proposed missing upstream grouping effect. Preserve the actual
+evidence in i109-query-rejections{,-coarse}.{json,log}; debugger runs are work
+attribution, not timing measurements. Disposable debug caches were removed after
+retaining550 summary versions in i109-query-summary-versions.json.gz, freeing
+221.7 MB without deleting benchmark evidence.
+
+Full integration on59345509 is459/462, with three crashes in
+filesystem_invalid_path_queries, workspace_edit_apply, and path_host_runtime.
+Stop publication and web qualification. The same failure now reproduces in20
+no-import lines: a completed instance observed absence during a rejected
+alternative; another call later creates that grouping; reading the already valid
+instance incorrectly asserts that the historical absence is a current result.
+i109-negative-observer/before.json records clean success versus SIGABRT.
+An added exposed-function regression also tests reading facts after cached entry
+execution. Grouping-query products now separately retain required/provided
+instance availability, journal it with trial state, and preserve negative reads
+at the original producer. This draft is being built and has not passed its new
+tests. All older timings and passes remain specific to59345509.
+
+Complete this compiler correctness boundary before returning to optimization.
+First rerun the minimal regressions and the three failed integration cases, then
+the full required<=120 s, affected integration, LSP and actual WebAssembly gates.
+Only then evaluate a bounded postcondition-reuse experiment for warning-free
+queries whose exact grouping effects already hold; retain strict failed-alternative
+reads and actual entry-state capture. No relaxed assumption or special syntax may
+replace the missing dependency proof. The every-stage goal remains incomplete.
+
+## Parked iteration: I108 shared source inference results
+
+Started18 November at04:37:01 UTC; first deadline05:22:01 UTC. Previous turn is
+progress: qualified I107 is published as224cac46, its merged worktree disposed,
+and one verifiedf35682d9 baseline retained. Complete a genuine semantic-query
+reuse boundary for current source facts. Native return/effect summaries alone do
+not satisfy current hover, constant, overload and call-expression consumers.
+Produce immutable source facts with portable identities and current grouping,
+then share the existing dependency proof and migrate consumers fully. Avoid I102's
+rejected runtime-body replay and retaining entire old contexts. Do not publish
+consumer-only scaffolding without an actual justified reuse result. First verify
+that semantic query replay respects source grouping when a different
+instantiation is demanded first. Fix any demonstrated compiler issue before
+continuing. Minimal no-import fresh/reused parity tests and actual work counters
+must drive the change. Compare fixed real-program code/cold CPU, memory, disk and
+code together; required uncached<=120 s, affected integration, LSP and actual web
+behavior remain gates. One45-minute extension is available only for concrete
+implementation progress. The full cross-process, every-stage goal stays active.
+
+At05:21 UTC the no-import regression demonstrates a pre-existing correctness
+failure: a cached integer call followed by a new real call accepts incompatible
+shared source groupings, while a clean build rejects them. The regression now
+covers both first argument types, added calls, reordered calls and removal.
+Implementing explicit grouping input/output products and transactional replay is
+concrete progress; use the sole extension to06:07:01 UTC for this correctness
+boundary. Current-source editor facts remain a separate subsequent boundary.
+
 ## Completed iteration: I107 structurally unique grouping inference
 
 Started18 November at03:09:53 UTC; first deadline03:54:53 UTC. Previous turn is
@@ -1464,19 +1923,27 @@ trying to force the inconclusive lives percentage over a threshold.
 
 The complete goal is still active. A qualified optimization is a snapshot, not
 proof that every stage is incremental. The P01-P24 inventory below retains the
-complete scope. Current evidence and remaining boundaries are:
+complete scope. Snapshot publication requires shared-root qualification and an
+origin push, separately from owner test passes; the iteration record above
+tracks those gates. Current combined image0d28feda passes focused regressions,
+all391 required checks, native LSP, the actual rebuilt browser LSP and the
+five-case native parity matrix. Its full integration and shared-root results
+are recorded above when complete. Grouping execution, constant-observation,
+browser-build, matcher literal-priority and reviewed portability corrections
+must all survive integration. Current evidence and remaining
+boundaries are:
 
 | Requirement | Verified coverage | Remaining work |
 |---|---|---|
 | Source/config edits | File preparation, preprocessing chunks, source observations and outlines have retained products. | Semantic section/declaration objects still reconstruct broadly after active edits. |
 | Parameter classification | Focused tests cover removing the last parameter use, dependent reclassification and recovery. | Broad eligibility/index consumers still run; prove locality across every declaration and scope change. |
 | Positive/failed pattern lookups | Persistent match, binding and constraint reads retain successful and failed dependencies. | Some matcher catalogs, validation and persistence still process broad program state. |
-| Type inference | Ordinary concrete bodies, constraint results, diagnostics and validated global products can replay. I094's two first-edit benchmarks retain entry inference and all four global type products. | Statement/block/CFG entry products and complete locality across other source/configuration changes remain unfinished. |
+| Type inference | Ordinary concrete bodies, constraint results, diagnostics and validated global products can replay. Focused grouping tests now preserve first-execution state, negative observations, recursive completion and constant results. | Current first body edit still infers32 bodies versus the baseline's1; successive edits fall to11 and1. Its first matched inference stage is934ms versus262ms, while source preparation is essentially unchanged. Resolve this actual inference work before parser micro-optimizations. Statement/block/CFG products and complete locality across source/configuration changes remain unfinished. |
 | Diagnostics | All62 wording benchmark invocations update existing warnings with zero objects/linking; focused tests cover error removal and diagnostic movement. | Complete locality across all early-error and configuration changes remains unproven. |
 | LLVM IR | Native/debug function and entry closures reuse; LLVM text has an incremental driver. I094 passes12 complete-graph builds/comparisons and42 native artifact pairs; required/integration checks include debug edit/parity coverage. | Whole-module work remains, and tracing excludes major paths. |
 | Objects/link | Unchanged objects reuse; ordinary body benchmark rebuilds one object; fast paths skip linking. | Necessary executable changes use a conventional full link. Other output drivers still need shared products. |
-| Tooling/targets | Existing native and LLVM regression coverage. | LSP, object-only, WebAssembly and SPIR-V do not yet share the complete persistent pipeline. |
-| Required budget | I094 owner334/0/0 uncached in117.635s; I093 shared compiler334/0/0 in112.003s. | Complete I094 shared verification and preserve the120s post-build budget. |
+| Tooling/targets | Native/LLVM reuse; editor source syntax and matcher products share current source identities. I107 improves measured editor updates about7%. | Ordinary editor type inference still runs; object-only, WebAssembly and SPIR-V do not share the complete persistent pipeline. |
+| Required budget | Current combined compiler391/0/0 uncached in67.745s. No fixtures or assertions were removed; native checks and fixture workers remain independent. | Verify the updated shared-root suite with master1a9f9a90 and preserve the120s post-build budget. |
 
 ## Prior iteration: I092 first-edit global-product attribution
 
