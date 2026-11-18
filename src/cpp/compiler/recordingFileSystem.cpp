@@ -15,7 +15,7 @@ lsp::SourceFile *RecordingFileSystem::getFile(const std::string &path, lsp::File
 	auto [entry, inserted] = sourceObservations.try_emplace(file);
 	if (inserted) {
 		entry->second = nlohmann::json{
-			{"content", digest(file->content)}, {"canonical", canonicalSourceKey(path)}, {"internal", file->isInternal}
+			{"content", digest(file->content)}, {"canonical", file->canonicalPath}, {"internal", file->isInternal}
 		};
 		computed++;
 	} else

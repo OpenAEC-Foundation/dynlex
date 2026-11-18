@@ -166,7 +166,7 @@ importSourceFile(const std::string &path, ParseContext &context, const std::stri
 		return false;
 	}
 	// Canonicalize path to prevent duplicate imports via different path strings
-	std::string canonicalPath = canonicalSourceKey(sourceFile->uri.empty() ? path : sourceFile->uri);
+	const std::string &canonicalPath = sourceFile->canonicalPath;
 	if (context.importedFiles.contains(canonicalPath)) {
 		return true; // Already processed, skip
 	}

@@ -15,7 +15,11 @@ Import directives use the configured spelling at any indentation level. Imported
 lines retain their authored indentation and source identity; a missing indented
 import reports its path at the original source columns.
 
-Each source file fixes its URI and internal-library classification when created.
+Each source file fixes its display URI, canonical path and internal-library
+classification when created. Matcher fingerprints, trie mutation signatures,
+import deduplication and source observations share the canonical path. A provider
+transition from a disk path to an equivalent editor URI therefore preserves
+semantic identity without repeating filesystem normalization per query.
 Content edits preserve that identity. Syntax lookup selects the current compilation's
 builtin or project configuration from that classification without repeating filesystem
 canonicalization for each source range.

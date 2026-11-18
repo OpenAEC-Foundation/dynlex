@@ -10,9 +10,10 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Next iteration: I104 matcher work after source movement
+## Active iteration: I104 matcher work after source movement
 
-After I103 publication, use one45-minute iteration to attribute and reduce the
+Started18 November at00:02 UTC; first deadline00:47 UTC. Use one45-minute
+iteration to attribute and reduce the
 extra matcher work on the first edit which moves code. The fixed real-program
 control computes5342 matcher queries on its first inserted-comment edit versus
 752 on later coordinate-moving edits; equivalent source results alone do not yet
@@ -27,6 +28,78 @@ required<=120 s plus affected integration/web gates. If the boundary does not
 repay its cost, record the result and move to the next P03/P14 materialization
 consumer. One extension is available only for concrete progress. The full
 source/config/classification/inference/diagnostic/IR/object/link goal remains active.
+
+I104 verified attribution,18 November at00:39 UTC: physical line movement is
+not the cause of the first-edit penalty. A five-code-line, two-file reproducer
+performs four new matches when the helper is opened after the main file, versus
+zero when it is opened first. GDB through `scripts/debug.sh` shows the imported
+snapshot change from an absolute filesystem spelling to a `file://` URI while
+its canonical key remains identical. The shared matcher/trie fingerprints used
+the former spelling. The first real-program statement edit consequently performs
+5346 ->756 matcher computations; imported lives edits4018 ->754 and moving
+comments5342 ->752. The remaining work includes ordinary dynamic inference
+lookups; this does not establish complete editor inference reuse.
+
+The earlier source-line breakpoint counts are inconclusive: even the known cold
+miss run recorded zero absent keys. They are explicitly marked unusable and are
+not evidence about orphan-node frequency. The first snapshot-printer attempt also
+stopped on its map-child representation; the corrected function breakpoint records
+the actual old/new snapshot URIs and equal canonical keys. Raw logs and both
+failed probes remain separate from usable measurements.
+
+Retain one canonical path per SourceFile snapshot; display spelling and source
+coordinates retain their distinct roles. Import deduplication and recording use
+that same identity. All six matcher/trie source-identity inputs use the cached
+canonical path, with no per-query filesystem normalization, new cache files,
+configuration, dependencies or alternate semantic engine. This is one net
+production line after shared producers and formatting, with one stored string
+per source snapshot. Normalizing the public display URI was rejected because
+source projections and protocol/diagnostic consumers address that distinct value.
+
+The minimal regression is red on I103 (eight computations, zero hits across two
+profiles) and passes on the candidate (zero computations and reused outcomes).
+It compares complete token vectors and client diagnostic state for main and
+helper files with fresh analysis, including body edits, overloads, parameter
+retraction and repair. Empty diagnostics are state transitions, so client state
+is retained across notifications rather than comparing notification histories.
+All full LSP scripts pass. The455 frozen inputs produce compiler
+`c7d01ebc5531d0d81a6c8fe94c7e24213b59871c2c5a7a4297e17a03e6055807`.
+
+`i104-lsp-paired/results.json` retains150 observations: five independent sessions
+per case and image, each with a first and repeat edit on fixed45-file Breakout.
+Both compilers use identical tracing; complete tokens and diagnostics match in
+every comparison. Each sample edits saved source and the editor buffer. No GUI
+program is launched. Added statements reset the real VM's sound value at entry
+to its existing step function, with no added imports.
+
+| First editor edit | I103 CPU median | I104 CPU median | Paired ratio,95% interval |
+| --- | ---: | ---: | ---: |
+| Open main body |1.60 s|1.59 s|0.98750 [0.95882,1.01274]|
+| Opened imported lives code |2.43 s|1.59 s|0.65714 [0.65306,0.65975]|
+| Add imported VM statement |2.67 s|1.60 s|0.59925 [0.59041,0.60456]|
+| Insert imported comment lines |2.68 s|1.60 s|0.60377 [0.57348,0.60687]|
+| Diagnostic wording |0.09 s|0.10 s|1.11111 [1.00000,1.25000]|
+
+CPU includes analysis and token rendering at10 ms resolution; the last row is
+at that measurement scale and repeat wording remains0.10 ->0.09 s. Ordinary
+repeat source edits remain roughly1.57–1.59 s, with intervals including parity.
+Cold opening medians over25 sessions per image are3.58 ->3.59 s. The added-
+statement first-edit RSS medians are437824 ->438332 KiB, paired1.00132
+[0.99842,1.00195]; no material first-edit memory increase is established. Other
+edited cases have stable or lower process peaks. Retained matcher bytes remain
+identical for every shown pair (6283411 normally,6286285 for the added statement).
+Keep the clear34–40% first-imported-edit speed gain with negligible storage/code
+cost; do not apply a percentage floor.
+
+At00:47 UTC use the sole45-minute qualification extension, ending01:32 UTC.
+The implemented fix, minimal red/green regression and completed150-row real-program
+matrix establish concrete progress. No further optimization enters this window.
+Native controls retain88 observations with exact executable and diagnostic parity:
+body CPU1.070739 ->1.059797 s, cold4.697140 ->4.730025 s, comment0.025605
+->0.025694 s and wording0.031196 ->0.031035 s. Their paired intervals include
+parity; no native speed gain or regression is established. All334 required tests
+pass uncached in98210 ms. Integration, actual web and shared-root qualification
+remain pending. Keep source/compiler inputs frozen throughout those checks.
 
 ## Completed iteration: I103 source-layout-preserving editor comments
 

@@ -29,7 +29,7 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 	const CodeLine *line = definition->range.line;
 	const Section *section = definition->section;
 	llvm::SHA256 hash;
-	appendMutationField(hash, line->sourceFile->uri);
+	appendMutationField(hash, line->sourceFile->canonicalPath);
 	appendMutationNumber(hash, definition->range.start());
 	appendMutationNumber(hash, definition->range.end());
 	appendMutationField(hash, definition->range.subString);
@@ -41,7 +41,7 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 	if (section->dataFieldOwner) {
 		const CodeLine *owner = section->dataFieldOwner->openingLine;
 		requireCompilerInvariant(owner && owner->sourceFile, "data field pattern mutation has no owning source section");
-		appendMutationField(hash, owner->sourceFile->uri);
+		appendMutationField(hash, owner->sourceFile->canonicalPath);
 		appendMutationField(hash, owner->patternText);
 	}
 	appendMutationNumber(hash, definition->indexedPaths.size());
@@ -88,9 +88,8 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 		std::vector<std::string_view> required;
 		for (size_t index = 0; index < path.size(); index++) {
 			const PatternElement &element = path[index];
-			if (!element.text.empty() &&
-				(element.type == PatternElement::Type::VariableLike ||
-				 (index == 0 && element.type != PatternElement::Type::Variable)))
+			if (!element.text.empty() && (element.type == PatternElement::Type::VariableLike ||
+										  (index == 0 && element.type != PatternElement::Type::Variable)))
 				required.push_back(element.text);
 		}
 		std::sort(required.begin(), required.end());

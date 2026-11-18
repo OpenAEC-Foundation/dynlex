@@ -1,10 +1,11 @@
 #include "sourceFile.h"
 #include "compiler.h"
+#include "sourceIdentity.h"
 
 namespace lsp {
 
 SourceFile::SourceFile(std::string uri, std::string content)
-	: uri(std::move(uri)), isInternal(isInternalSourcePath(this->uri)) {
+	: uri(std::move(uri)), canonicalPath(canonicalSourceKey(this->uri)), isInternal(isInternalSourcePath(this->uri)) {
 	setContent(std::move(content));
 }
 
