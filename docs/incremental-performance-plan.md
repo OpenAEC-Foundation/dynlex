@@ -10,7 +10,7 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Active iteration: I107 current-source inference facts
+## Completed iteration: I107 structurally unique grouping inference
 
 Started18 November at03:09:53 UTC; first deadline03:54:53 UTC. Previous turn is
 progress: I106 is qualified, pushed as4f55e68e, and its merged worktree disposed
@@ -124,6 +124,29 @@ combined tradeoff, subject to all full gates. Evidence is
 i107-corrected-{diagnostic-parity,performance-analysis,editor-cold-analysis,
 tradeoff-ledger,native-controls,prequalification}.json and
 i107-corrected-lsp-paired/results.json. No timing from194ccf13 qualifiesf35682d9.
+
+I107 closes18 November before its04:39:53 UTC extension deadline. Corrected
+ownerf35682d9 passes all334 required checks uncached in96.488 s,462 integration
+checks in706.826 s, the full LSP suite and actual WebAssembly host parity. Final
+WASM is6ec95c72. Local master is rebuilt from the same457 source/build inputs:
+root093a7f19 passes all334 required checks uncached in95.002 s and all nine
+focused editor regressions. No original194ccf13 gate or timing substitutes for
+this corrected artifact's qualification. Keep the37-line, no-new-payload change
+for its measured editor/cold speed and memory benefits. Ordinary editor inference
+still evaluates current types; complete per-unit typed-result reuse remains work.
+The complete cross-process, all-stage objective is active/incomplete.
+
+The next larger boundary is immutable source inference facts shared with native
+semantic queries. Current hover/constant/overload consumers read instantiated
+bodies through source-to-clone mappings; return summaries alone cannot satisfy
+them. Complete that producer/consumer boundary without retaining entire old
+contexts or repeating I102's rejected runtime-body serialization engine. Preserve
+current grouping, values, types, selected instantiations and diagnostics, then
+prove actual query reuse and measured combined benefit before publication. The
+fresh native body-edit inventory also exposes resolution setup96.326 ms,
+snapshot89.152 ms, cache writing80.624 ms and payload loading66.284 ms; these
+scopes overlap parents and must not be added. Read-only evidence is
+ i107-native-stage-inventory.json and i107-next-inference-boundary.json.
 
 ## Completed iteration: I106 shared editor syntax products
 
