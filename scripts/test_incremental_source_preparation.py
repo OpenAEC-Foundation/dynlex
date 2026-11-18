@@ -82,6 +82,9 @@ def check_source_preparation(root, build):
     assert repaired[1:] == build(False, entry=main)[1:]
     assert repaired[2] == b"repaired\n"
     check_source_line_endings(root, build)
+    check_diagnostic_physical_lines(root, build)
+    check_source_projection_line_boundaries(root, build)
+    check_lexical_observation_in_comment(root, build)
     check_transformed_source_chunks(root, build)
 
 
@@ -96,17 +99,61 @@ def check_source_line_endings(root, build):
                   '@intrinsic("discard", @intrinsic("call", "libc", "puts", '
                   '@intrinsic("type", "int"), value))\n')
         main.write_bytes(source.encode().replace(b"\n", ending))
-        helper.write_bytes(b'value means: "first"' + ending)
+        helper.write_bytes(b'# Header' + ending + b'value means: "first"' + ending)
         build(entry=main)
         main.write_bytes((source + '@intrinsic("discard", 1)\n').encode().replace(b"\n", ending))
         edited = build(entry=main)
         assert edited[1:] == build(False, entry=main)[1:]
         assert edited[0]["source_preparation_files_processed"] == 1, edited[0]
         assert edited[0]["source_preparation_files_reused"] == 2, edited[0]
-        helper.write_bytes(b'value means: "second"' + ending)
+        helper.write_bytes(b'# Header' + ending + b'value means: "second"' + ending)
         changed = build(entry=main)
         assert changed[1:] == build(False, entry=main)[1:]
         assert changed[2] == b"second\n"
+        assert not changed[0]["frontend_reused"]
+        helper.write_bytes(b'# Edited header' + ending + b'value means: "second"' + ending)
+        commented = build(entry=main)
+        assert commented[0]["frontend_reused"] and commented[1:] == changed[1:]
+
+
+def check_source_projection_line_boundaries(root, build):
+    entry = root / "mixed-source-projection.dl"
+    source = (b'to ignored:\n    @intrinsic("discard", 0)\r'
+              b'@intrinsic("discard", @intrinsic("call", "libc", "puts", '
+              b'@intrinsic("type", "int"), "first"))\r')
+    entry.write_bytes(source)
+    assert build(entry=entry)[2] == b"first\n"
+    entry.write_bytes(source.replace(b'"first"', b'"second"'))
+    edited = build(entry=entry)
+    assert edited[1:] == build(False, entry=entry)[1:]
+    assert edited[2] == b"second\n"
+
+
+def check_diagnostic_physical_lines(root, build):
+    entry = root / "physical-diagnostic-lines.dl"
+    source = (b'integer means: @intrinsic("type", "int")\rvalue means: 1\r'
+              b'to show {integer:value}: @intrinsic("discard", value)\rshow 2\r')
+    entry.write_bytes(source)
+    original = build(entry=entry)
+    assert "physical-diagnostic-lines.dl:3:" in original[1]
+    entry.write_bytes(b"# Shift warnings and notes\r" + source)
+    shifted = build(entry=entry)
+    assert shifted[0]["frontend_reused"] and shifted[0]["codegen_and_link_ms"] == 0
+    assert shifted[1:] == build(False, entry=entry)[1:]
+    assert "physical-diagnostic-lines.dl:4:" in shifted[1]
+
+
+def check_lexical_observation_in_comment(root, build):
+    entry = root / "invalid-comment-character.dl"
+    source = b'# Header\n@intrinsic("discard", 0)\n'
+    entry.write_bytes(source)
+    build(entry=entry)
+    entry.write_bytes(source.replace(b"Header", b"Header\x07"))
+    failed = build(entry=entry, success=False)
+    assert failed[1:] == build(False, entry=entry, success=False)[1:]
+    assert "U+0007" in failed[1]
+    entry.write_bytes(source)
+    assert build(entry=entry)[1:] == build(False, entry=entry)[1:]
 
 
 def check_transformed_source_chunks(root, build):

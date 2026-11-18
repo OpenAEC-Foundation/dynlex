@@ -807,6 +807,11 @@ Native semantic queries retain their observed grouping inputs and resulting
 groupings, including the absence of a prior choice. Reuse requires those inputs
 to match the current execution order. Publishing a cached choice participates in
 the caller's grouping transaction; rejecting that trial removes its choice.
+The compiler records these dependencies where an operand can change parents.
+A chain of prefix calls must start at its first prefix. A chain of suffix calls
+must end at its last suffix. Interior arguments and parenthesized operands
+start separate regions. When no region allows an alternative layout, the
+inferred body can be reused whether or not an earlier call chose its grouping.
 Already inferred callees contribute observations of their current grouping state
 to enclosing queries. Removing an earlier call therefore restores ambiguity
 checking when the remaining call becomes the first instantiation. Portable node
@@ -1288,12 +1293,12 @@ manifests and individual inference-summary records retain their own JSON formats
 module payloads retain raw LLVM bitcode. All readers select the format from the
 artifact contract. Compiler identity keeps incompatible derived snapshots separate.
 
-Native executable and LLVM text file builds use incremental compilation automatically. The default
+Native executable, native object and LLVM text file builds use incremental compilation automatically. The default
 cache lives under `dynlex/compiler` in the operating system's user cache directory:
 XDG cache storage on Unix, Darwin user cache storage on macOS, and LocalAppData
 on Windows. `--cache-dir <directory>` overrides that location, `--no-incremental`
 performs a clean build, and `--incremental-stats` reports the actual cache directory
-and reuse. Cache overrides and statistics apply to native executable and LLVM text file builds.
+and reuse. Cache overrides and statistics apply to all three output modes.
 LLVM text output uses the same incremental semantic and unoptimized function-IR
 products, with its output mode in the program identity. Its final text has an
 independent content-addressed artifact; no native objects are lowered or linked.
@@ -1305,12 +1310,23 @@ optimization and share final rendering, with explicit output I/O errors. Private
 `llvm_outputs_built` and `llvm_outputs_restored` expose artifact work. Changed LLVM
 output still runs whole-module optimization; semantic and function IR reuse do
 not imply incremental optimization for this output mode.
+Native object output shares the frontend and unoptimized function-IR products.
+The complete object is an independently cached artifact. An unchanged object
+stays in place, and a missing or changed destination restores its bytes directly.
+An evicted artifact is lowered from saved IR. A changed object uses whole-module
+optimization and lowering, with `objects_built` and `objects_reused` reporting
+that work. The compiler skips linking. Standard output receives the cached bytes
+on each invocation. On a cache miss, a temporary seekable file lets the object
+writer and ELF debug post-processing finish before the binary stream is written.
 
 A complete native result is reusable while every filesystem observation remains identical. Source edits that
 only add, remove or change comments or trailing whitespace also reuse the result when
 debug locations, execution traces and diagnostics cannot become stale. The semantic
 comparison uses each source file's configured comment prefix and retains line boundaries
-between executable text. Observations include source/config contents, canonical source
+between executable text. Source digests, source projections and diagnostic relocation
+use the physical source line index, including CR, LF and CRLF terminators. Comments
+containing the reserved argument byte remain observable to the source loader.
+Observations include source/config contents, canonical source
 identities and failed lookup candidates; a newly created higher-priority import or
 configuration therefore invalidates the result.
 Within a compilation, successful lookups of the same immutable native source
@@ -1341,10 +1357,12 @@ inference must run again. Missing optimized objects load only their own optimize
 number of payloads read on a build.
 An evicted manifest payload invalidates the program entry. Evicting an individual
 optimized unit or object only affects builds that need that artifact.
-Failed builds that reached section analysis or later store diagnostic records and
-failed pattern lookups separately from the last successful native result. An
-unchanged source or message-only configuration edit replays the errors without
-rerunning the frontend. A later code edit reuses a failed lookup only while its
+Failed builds store diagnostic records and failed lookups separately from the
+last successful native result. A failure during file loading or preprocessing
+records the observed files, including missing import candidates, and retains
+previously completed semantic products. An unchanged source or message-only
+configuration edit replays the errors without rerunning the frontend. A later
+code edit reuses a failed lookup only while its
 source and candidate pattern tree are equivalent; a successful build retires the
 failed snapshot.
 Concrete inference results have a semantic snapshot independent of successful native

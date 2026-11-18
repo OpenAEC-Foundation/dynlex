@@ -211,6 +211,8 @@ def check_partial_constraint_cycle(root, build):
 
 
 def check_partial_constraint_import(root, build):
+    from test_incremental_source_checkpoints import assert_source_diagnostic_replay
+
     main = root / "partial_constraint_import.dl"
     helper = root / "partial_constraint_provider.dl"
     helper.write_text('broken type means: 0\n')
@@ -221,6 +223,10 @@ def check_partial_constraint_import(root, build):
                     'healthy 1\n')
     initial = build(entry=main, success=False)
     assert initial[1:] == build(False, entry=main, success=False)[1:]
+    helper.unlink()
+    missing = build(entry=main, success=False)
+    assert missing[1:] == build(False, entry=main, success=False)[1:]
+    assert_source_diagnostic_replay(build(entry=main, success=False)[0])
     helper.write_text('broken type means: 1\n')
     edited = build(entry=main, success=False)
     assert edited[1:] == build(False, entry=main, success=False)[1:]

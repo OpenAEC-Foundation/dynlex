@@ -9,6 +9,7 @@ Json optionIdentity(const ParseContext::Options &options) {
 	return Json{
 		{"input", options.inputPath},
 		{"llvm_output", options.emitLLVM},
+		{"object_output", options.emitObject},
 		{"cwd", fs::current_path().string()},
 		{"no_main", options.noMain},
 		{"optimization", options.optimizationLevel},

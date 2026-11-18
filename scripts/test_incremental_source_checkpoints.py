@@ -15,10 +15,7 @@ def check_source_checkpoints(root, build):
     assert failed[0]["source_preparation_files_processed"] == 2, failed[0]
     repeated = build(entry=main, success=False)
     assert repeated[1:] == failed[1:]
-    assert repeated[0]["source_preparation_files_reused"] == 2, repeated[0]
-    assert repeated[0]["source_preparation_files_processed"] == 0, repeated[0]
-    assert repeated[0]["function_body_inference_passes"] == 0, repeated[0]
-    assert repeated[0]["objects_built"] == 0, repeated[0]
+    assert_source_diagnostic_replay(repeated[0])
 
     # Message changes must not evaluate already completed source or code units.
     config = project / "config.dl"
@@ -28,10 +25,7 @@ def check_source_checkpoints(root, build):
         wording = build(entry=main, success=False)
         assert wording[1:] == build(False, entry=main, success=False)[1:]
         assert label in wording[1]
-        assert wording[0]["source_preparation_files_reused"] == 2, wording[0]
-        assert wording[0]["source_preparation_files_processed"] == 0, wording[0]
-        assert wording[0]["function_body_inference_passes"] == 0, wording[0]
-        assert wording[0]["codegen_and_link_ms"] == 0, wording[0]
+        assert_source_diagnostic_replay(wording[0])
     config.unlink()
 
     missing.write_text('@intrinsic("discard", 0)\n')
@@ -70,3 +64,25 @@ def check_source_checkpoints(root, build):
     assert restored_import[1:] == build(False, entry=main)[1:]
     assert restored_import[0]["source_preparation_files_reused"] == 1, restored_import[0]
     assert restored_import[0]["source_preparation_files_processed"] == 2, restored_import[0]
+
+    lexical = project / "lexical.dl"
+    lexical.write_bytes(b'# Invalid\x07\r@intrinsic("discard", 0)\r')
+    rejected = build(entry=lexical, success=False)
+    assert "U+0007" in rejected[1]
+    assert_source_diagnostic_replay(build(entry=lexical, success=False)[0])
+    config.write_text('dynlex options:\n    messages:\n'
+                      '        disallowed character: "Invalid source byte {character}"\n')
+    renamed = build(entry=lexical, success=False)
+    assert_source_diagnostic_replay(renamed[0])
+    assert renamed[1:] == build(False, entry=lexical, success=False)[1:]
+    assert "Invalid source byte U+0007" in renamed[1]
+    lexical.write_bytes(lexical.read_bytes().replace(b"\x07", b""))
+    assert build(entry=lexical)[1:] == build(False, entry=lexical)[1:]
+
+
+def assert_source_diagnostic_replay(stats):
+    assert stats["frontend_reused"] and stats["import_ms"] == 0, stats
+    assert stats["source_preparation_files_reused"] == 0, stats
+    assert stats["source_preparation_files_processed"] == 0, stats
+    assert stats["function_body_inference_passes"] == 0, stats
+    assert stats["objects_built"] == 0 and stats["codegen_and_link_ms"] == 0, stats

@@ -1,29 +1,28 @@
-template <typename Visit> void forEachSemanticLine(std::string_view content, std::string_view commentPrefix, Visit visit) {
-	int lineIndex = 0;
-	for (size_t start = 0; start < content.size(); lineIndex++) {
-		size_t end = content.find('\n', start);
-		if (end == std::string_view::npos)
-			end = content.size();
-		std::string_view line = sourceCodeWithoutComment(content.substr(start, end - start), commentPrefix);
+template <typename Visit> void forEachSemanticLine(const lsp::SourceFile &source, std::string_view commentPrefix, Visit visit) {
+	for (int lineIndex = 0; lineIndex < source.lineCount(); lineIndex++) {
+		std::string_view text = source.getLineWithTerminator(lineIndex);
+		std::string_view line = sourceCodeWithoutComment(text, commentPrefix);
+		// The source loader checks the reserved argument byte even in comments.
+		if (text.substr(line.size()).contains(argumentChar))
+			line = source.getLine(lineIndex);
 		if (!line.empty())
 			visit(line, lineIndex);
-		start = end + (end < content.size());
 	}
 }
 
-std::string semanticSourceDigest(std::string_view content, std::string_view commentPrefix) {
+std::string semanticSourceDigest(const lsp::SourceFile &source, std::string_view commentPrefix) {
 	std::string semantic;
-	semantic.reserve(content.size());
-	forEachSemanticLine(content, commentPrefix, [&](std::string_view line, int) {
+	semantic.reserve(source.content.size());
+	forEachSemanticLine(source, commentPrefix, [&](std::string_view line, int) {
 		semantic.append(line);
 		semantic.push_back('\n');
 	});
 	return digest(semantic);
 }
 
-std::vector<int> semanticLineNumbers(std::string_view content, std::string_view commentPrefix) {
+std::vector<int> semanticLineNumbers(const lsp::SourceFile &source, std::string_view commentPrefix) {
 	std::vector<int> lines;
-	forEachSemanticLine(content, commentPrefix, [&](std::string_view, int index) {
+	forEachSemanticLine(source, commentPrefix, [&](std::string_view, int index) {
 		lines.push_back(index);
 	});
 	return lines;
@@ -84,7 +83,7 @@ Json captureDiagnosticRange(
 	if (inserted) {
 		const std::string &prefix =
 			source->isInternal ? context.builtinSyntax.commentPrefix : context.projectSyntax.commentPrefix;
-		found->second = semanticLineNumbers(source->content, prefix);
+		found->second = semanticLineNumbers(*source, prefix);
 	}
 	auto line = std::lower_bound(found->second.begin(), found->second.end(), start.sourceFileLineIndex);
 	int ordinal =
@@ -161,7 +160,7 @@ std::optional<std::string> renderCachedRange(
 		requireCompilerInvariant(source != nullptr, "cached diagnostic source disappeared");
 		const std::string &prefix = source->isInternal ? prefixes.at("builtin").get_ref<const std::string &>()
 													   : prefixes.at("project").get_ref<const std::string &>();
-		found = lineNumbers.emplace(uri, semanticLineNumbers(source->content, prefix)).first;
+		found = lineNumbers.emplace(uri, semanticLineNumbers(*source, prefix)).first;
 	}
 	requireCompilerInvariant(
 		static_cast<size_t>(ordinal) < found->second.size(), "semantically equal diagnostic source lost a code line"
@@ -192,4 +191,32 @@ std::optional<std::string> renderCachedDiagnostics(
 		rendered.push_back('\n');
 	}
 	return rendered;
+}
+
+void recordSemanticSources(Json &result, RecordingFileSystem &files, const ParseContext &context) {
+	result["comment_prefixes"] =
+		Json{{"builtin", context.builtinSyntax.commentPrefix}, {"project", context.projectSyntax.commentPrefix}};
+	result["configuration_files"] = files.configurationObservations;
+	result["syntax_structure"] =
+		Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity});
+	for (auto &[path, observation] : result["files"].items()) {
+		if (observation.is_null() || fs::path(path).extension() != ".dl")
+			continue;
+		lsp::SourceFile *file = files.cachedFile(path);
+		if (!file)
+			throw std::runtime_error("recorded source disappeared: " + path);
+		const std::string &prefix =
+			file->isInternal ? context.builtinSyntax.commentPrefix : context.projectSyntax.commentPrefix;
+		observation["semantic"] = semanticSourceDigest(*file, prefix);
+	}
+}
+
+void recordFailureDiagnostics(Json &result, RecordingFileSystem &files, const ParseContext &context) {
+	std::string diagnostics;
+	std::set<std::string> sources;
+	result["files"] = files.observations;
+	result["diagnostic_records"] = captureCachedDiagnostics(context, diagnostics, sources);
+	result["diagnostics"] = std::move(diagnostics);
+	result["diagnostic_sources"] = std::move(sources);
+	recordSemanticSources(result, files, context);
 }
