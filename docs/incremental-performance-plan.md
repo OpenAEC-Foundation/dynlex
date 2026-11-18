@@ -10,6 +10,22 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
+## Iteration I118: replay source-loading and preprocessing diagnostics
+
+Unchanged early failures and message-only edits now validate source and
+configuration observations and render the diagnostic without importing source
+lines. Missing candidates remain live inputs. A temporary import failure
+preserves the last completed semantic products, allowing repaired sources to
+reuse unaffected constraint results. The focused CR, lexical-error, missing
+import, repair and prior constraint checks pass at O0 and O2 on 1f17764b.
+
+On the archived 45-file Breakout application with a missing trailing import,
+nine pairs of wording edits match clean diagnostics and leave no executable.
+Replay skips restoring 7,023 prepared source lines, with zero import-stage or
+code-generation work. Median CPU time drops from 15.219 to 12.547 ms, including
+source observation checks. The implementation is a4631b66. Combine the verified
+grouping proof, source correctness fixes and object output for production gates.
+
 ## Iteration I117: correct physical source line reuse proofs
 
 The published compiler reproduces three independent failures. An executable
