@@ -75,18 +75,22 @@ def main():
     shell = os.environ.get("DYNLEX_TEST_BASH", "bash")
     with tempfile.TemporaryDirectory(prefix="dynlex-nested-timeout-") as temporary:
         root = Path(temporary)
-        direct = ('PROJECT_DIR=$1\n' + wrapper +
-                  '\nrun_with_timeout 5 --isolate-temporaries true "$2" -c "$3" "$4" "$5"\n')
+        direct = root / "direct.sh"
+        direct.write_text('PROJECT_DIR=$1\n' + wrapper +
+                          '\nrun_with_timeout 5 --isolate-temporaries true "$2" "$3" "$4" "$5"\n',
+                          encoding="utf-8", newline="\n")
+        artifact_writer = root / "create_artifact.py"
         create_artifact = ("import sys,tempfile\nfrom pathlib import Path\n"
                            "root=Path(tempfile.mkdtemp())\n"
                            "(root/'artifact').write_bytes(b'child artifact')\n"
                            "Path(sys.argv[1]).write_text(str(root))\n"
                            "raise SystemExit(int(sys.argv[2]))\n")
+        artifact_writer.write_text(create_artifact, encoding="utf-8")
         for exit_code in (0, 7):
             record = root / f"normal-{exit_code}.temporary"
             result = subprocess.run(
-                [shell, "-c", direct, "temporary-cleanup", project.as_posix(), sys.executable,
-                 create_artifact, record.as_posix(), str(exit_code)],
+                [shell, direct.as_posix(), project.as_posix(), sys.executable,
+                 artifact_writer.as_posix(), record.as_posix(), str(exit_code)],
                 capture_output=True, text=True, timeout=10,
             )
             assert result.returncode == exit_code, (result.returncode, result.stdout, result.stderr)

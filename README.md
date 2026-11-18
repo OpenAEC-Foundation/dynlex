@@ -50,14 +50,13 @@ Use `./scripts/build.sh -j1` to limit compilation to one job. `-j N`,
 ./scripts/test.sh --integration
 ```
 
-The required suite is the compiler's short iteration gate. Its 120-second
-process-tree budget starts immediately after the compiler build and includes
-compiling and running its DynLex fixtures and auxiliary checks. No test preparation
-is moved ahead of that timer. Required fixture builds and non-cache compiler
-checks disable incremental reuse; cache regressions start with fresh test projects.
-`--run-only` skips the compiler build and keeps the same process-tree budget.
-C++ unit checks for numeric parsing and class layout run in the required suite
-and in separate Linux, macOS, and Windows CI steps.
+The compiler build prepares the required C++ test executables before the
+120-second process-tree budget starts. The budget covers the entire required
+suite, including compiling and running DynLex fixtures and running the C++
+and auxiliary checks. Required fixture builds and non-cache compiler checks
+disable incremental reuse. Cache regressions start with fresh test projects.
+For `./scripts/test.sh --run-only`, prepare the compiler and C++ test executables
+with `./scripts/build.sh --test-tools`. The same process-tree budget applies.
 The integration suite covers larger library and application programs, additional
 compiler regressions, runtime behavior and tooling. It has individual check timeouts
 but no overall 120-second limit. Release verification runs both suites.

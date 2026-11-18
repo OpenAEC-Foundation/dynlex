@@ -8,6 +8,13 @@ import sys
 import tempfile
 
 
+def run_suite_script(shell, root, name, source, *arguments):
+    script = root / f"{name}.sh"
+    script.write_text(source, encoding="utf-8", newline="\n")
+    return subprocess.run([shell, script.as_posix(), root.as_posix(), *arguments],
+                          capture_output=True, text=True, timeout=10)
+
+
 def check_fixture_partitions(source, shell):
     start = source.index('run_fixture_tests() {\n')
     end = source.index('\nreturn 0\n}', start) + len('\nreturn 0\n}')
@@ -57,9 +64,8 @@ run_with_timeout() { shift; "$@"; }
 (run_fixture_tests 1 2; [[ $failed == 0 ]]) & second=$!
 wait "$first" && wait "$second"
 '''
-        result = subprocess.run([shell, '-c', setup + fixture_runner + checks,
-                                 'fixture-partitions', root.as_posix(), Path(__file__).parent.as_posix()],
-                                capture_output=True, text=True, timeout=10)
+        result = run_suite_script(shell, root, "fixture-partitions", setup + fixture_runner + checks,
+                                  Path(__file__).parent.as_posix())
         assert result.returncode == 0, (result.stdout, result.stderr)
         rows = [line.split('|') for line in (root / 'compiled').read_text().splitlines()]
         assert sorted(Path(row[0]).parent.name for row in rows) == \
@@ -117,8 +123,7 @@ collect_test_group fixture "$fixture_worker" || exit
 printf '%s/%s/%s\\n%s' "$passed" "$failed" "$skipped" "$test_output"
 printf 'failure:%s\\n' "${failures[@]}"
 '''
-        result = subprocess.run([shell, "-c", setup + helpers + check, "suite-groups", root.as_posix(), sys.executable],
-                                capture_output=True, text=True, timeout=10)
+        result = run_suite_script(shell, root, "suite-groups", setup + helpers + check, sys.executable)
         assert result.returncode == 0, result.stderr
         assert result.stdout == ("6/2/3\nfixture output\nsecond line\nincremental output\nauxiliary output\n"
                                  "failure:fixture with whitespace\nfailure:auxiliary\n"), result.stdout
@@ -127,8 +132,7 @@ crash() { return 17; }
 start_test_group crashing crash
 collect_test_group crashing "$test_group_worker"
 '''
-        result = subprocess.run([shell, "-c", setup + helpers + failure, "suite-groups", root.as_posix(), sys.executable],
-                                capture_output=True, text=True, timeout=10)
+        result = run_suite_script(shell, root, "crashed-worker", setup + helpers + failure, sys.executable)
         assert result.returncode == 17, "a crashed suite worker's status was lost"
 
         # Two named workers must rendezvous before the parent joins either one.
@@ -160,9 +164,7 @@ collect_test_group two "$two_worker" || exit
 printf '%s/%s/%s\n%s' "$passed" "$failed" "$skipped" "$test_output"
 printf 'failure:%s\n' "${failures[@]}"
 '''
-        result = subprocess.run([shell, "-c", setup + helpers + concurrent,
-                                 "independent-suite-groups", root.as_posix(), sys.executable],
-                                capture_output=True, text=True, timeout=10)
+        result = run_suite_script(shell, root, "independent-suite-groups", setup + helpers + concurrent, sys.executable)
         assert result.returncode == 0, result.stderr
         assert result.stdout == ("6/2/2\ntwo output\none output\n"
                                  "failure:two failure with whitespace\n"
@@ -181,18 +183,19 @@ passed=0; failed=0; skipped=0; test_output=""; failures=()
 start_test_group passing run_auxiliary_test incremental_compilation 10 true
 passing_worker=$test_group_worker
 collect_test_group passing "$passing_worker" || exit
-start_test_group failing run_auxiliary_test incremental_compilation 10 false
+failing_check() { printf 'first failure detail\\nsecond failure detail\\n' >&2; return 1; }
+start_test_group failing run_auxiliary_test incremental_compilation 10 failing_check
 failing_worker=$test_group_worker
 collect_test_group failing "$failing_worker" || exit
 printf '%s/%s/%s\n' "$passed" "$failed" "$skipped"
 printf 'failure:%s\n' "${failures[@]}"
 '''
-        result = subprocess.run([shell, "-c", setup + helpers + auxiliary + statuses,
-                                 "auxiliary-statuses", root.as_posix(), sys.executable],
-                                capture_output=True, text=True, timeout=10)
+        result = run_suite_script(shell, root, "auxiliary-statuses", setup + helpers + auxiliary + statuses,
+                                  sys.executable)
         assert result.returncode == 0, result.stderr
         assert result.stdout == ("Testing incremental_compilation...\n" * 2
                                  + "1/1/0\nfailure:incremental_compilation\n"), result.stdout
+        assert "(exit 1).\nfirst failure detail\nsecond failure detail\n" in result.stderr, result.stderr
 
         joins = '''
 crashed() { return 17; }
@@ -213,9 +216,7 @@ status=0
 collect_required_tests || status=$?
 printf '%s/%s/%s\n' "$status" "$passed" "$test_output"
 '''
-        result = subprocess.run([shell, "-c", setup + helpers + joins,
-                                 "joined-suite-workers", root.as_posix(), sys.executable],
-                                capture_output=True, text=True, timeout=10)
+        result = run_suite_script(shell, root, "joined-suite-workers", setup + helpers + joins, sys.executable)
         assert result.returncode == 0, result.stderr
         assert result.stdout == "17/10/dependency outputdependency outputcompleted outputcompleted output\n", result.stdout
 

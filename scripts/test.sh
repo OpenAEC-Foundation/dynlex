@@ -742,7 +742,11 @@ run_auxiliary_test() {
     auxiliary_output=$(run_with_timeout "$timeout_seconds" "$@" 2>&1)
     auxiliary_exit=$?
     test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
-    printf 'Auxiliary check %s finished in %s ms (exit %s).\n' "$test_name" "$test_elapsed_ms" "$auxiliary_exit" >&2
+    local progress="Auxiliary check $test_name finished in $test_elapsed_ms ms (exit $auxiliary_exit)."
+    if [[ $auxiliary_exit -ne 0 && -n "$auxiliary_output" ]]; then
+        progress+=$'\n'"$auxiliary_output"
+    fi
+    printf '%s\n' "$progress" >&2
     if [[ $auxiliary_exit -eq 0 ]]; then
         append_test_result "PASS" "$GREEN" "$test_name" "" "$test_elapsed_ms"
         ((passed++))
