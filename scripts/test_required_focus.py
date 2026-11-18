@@ -46,10 +46,10 @@ failed=0
     build_phase = preparation + source.split(preparation, 1)[1].split('\nif ! (cd "$PROJECT_DIR"', 1)[0]
     with tempfile.TemporaryDirectory(prefix="dynlex-required-boundary-") as directory:
         build = Path(directory) / "build.sh"
-        build.write_text("#!/bin/sh\nprintf 'COMPILER_BUILD\\n'\n", encoding="utf-8", newline="\n")
+        build.write_text("#!/bin/sh\nprintf 'COMPILER_BUILD:%s\\n' \"$@\"\n", encoding="utf-8", newline="\n")
         build.chmod(0o755)
         for run_only, suite_worker, expected in (
-            (False, False, ["COMPILER_BUILD", "TIMED_SUITE:120"]),
+            (False, False, ["COMPILER_BUILD:--test-tools", "TIMED_SUITE:120"]),
             (True, False, ["TIMED_SUITE:120"]),
             (True, True, []),
         ):

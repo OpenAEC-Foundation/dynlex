@@ -9,6 +9,7 @@ LINT=true
 BUILD_TYPE=Optimized
 JOBS=""
 JOBS_SET=false
+TEST_TOOLS=false
 while (( $# )); do
     arg="$1"
     case $arg in
@@ -16,6 +17,7 @@ while (( $# )); do
         --lint=true) LINT=true ;;
         --debug) BUILD_TYPE=Debug ;;
         --release) BUILD_TYPE=Release; LINT=false ;;
+        --test-tools) TEST_TOOLS=true ;;
         -j|--jobs)
             if (( $# < 2 )); then
                 echo "Missing job count for $arg" >&2
@@ -193,4 +195,8 @@ else
     JOBS=1
 fi
 
-ninja -j"$JOBS"
+if [[ "$TEST_TOOLS" == true ]]; then
+    ninja -j"$JOBS" all dynlex_required_test_tools
+else
+    ninja -j"$JOBS"
+fi

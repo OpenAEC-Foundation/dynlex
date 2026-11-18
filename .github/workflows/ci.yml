@@ -67,11 +67,6 @@ jobs:
       - name: Build and test
         run: ./scripts/test.sh --lint=false
 
-      - name: Test C++ compiler units
-        run: |
-          python3 scripts/test_numeric_literals.py .
-          python3 scripts/test_class_layout.py .
-
       - name: ccache stats
         if: always()
         run: ccache -s || true
@@ -124,11 +119,6 @@ jobs:
       - name: Build and test
         run: ./scripts/test.sh --lint=false
 
-      - name: Test C++ compiler units
-        run: |
-          python3 scripts/test_numeric_literals.py .
-          python3 scripts/test_class_layout.py .
-
       - name: ccache stats
         if: always()
         run: ccache -s || true
@@ -172,12 +162,6 @@ jobs:
 
       - name: Build and test
         run: ./scripts/test.sh --lint=false
-        shell: bash
-
-      - name: Test C++ compiler units
-        run: |
-          python3 scripts/test_numeric_literals.py .
-          python3 scripts/test_class_layout.py .
         shell: bash
 
   web-build-smoke:

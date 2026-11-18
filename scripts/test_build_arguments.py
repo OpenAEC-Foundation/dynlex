@@ -43,6 +43,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-build-arguments-") as directory:
         assert not capture.exists(), "an invalid argument started the build"
 
     assert run("-j1") == ["-j1"]
+    assert run("--test-tools", "-j1") == ["-j1", "all", "dynlex_required_test_tools"]
     assert run("-j", "2") == ["-j2"]
     assert run("--jobs=3") == ["-j3"]
     assert run("--jobs", "4") == ["-j4"]

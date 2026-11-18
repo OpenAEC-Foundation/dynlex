@@ -624,6 +624,12 @@ if(NOT EMSCRIPTEN)
     target_include_directories(dynlex_cached_cbor_test PRIVATE src/cpp)
     target_link_libraries(dynlex_cached_cbor_test PRIVATE nlohmann_json::nlohmann_json)
     set_target_properties(dynlex_cached_cbor_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+    add_custom_target(dynlex_required_test_tools DEPENDS
+        dynlex_numeric_literal_test
+        dynlex_class_layout_test
+        dynlex_incremental_cache_entry_test
+        dynlex_cached_cbor_test
+    )
 
 
     # MinGW stores full DWARF in every COFF object for a normal Debug build.

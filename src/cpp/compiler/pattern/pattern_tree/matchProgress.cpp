@@ -852,15 +852,23 @@ MatchProgress::materializeMatch(const MatchStorage &storage, const std::vector<P
 	return result;
 }
 
+const MatchProgress *MatchProgress::firstParent() const {
+	if (!parents)
+		return nullptr;
+	const MatchParentAlternatives *group = parents->canonical();
+	requireCompilerInvariant(!group->values.empty(), "matcher has a parent group without a parent");
+	return group->values.front();
+}
+
 std::string MatchProgress::toString() const {
 	const std::string currentConsumed = consumedSourcePrefix(patternReference, sourceElementIndex, sourceCharIndex);
-	if (!parents || parents->values.empty())
+	const MatchProgress *parent = firstParent();
+	if (!parent)
 		return currentConsumed;
 
-	const MatchProgress &parent = *parents->values.front();
-	const std::string parentRendered = parent.toString();
+	const std::string parentRendered = parent->toString();
 	const std::string parentConsumed =
-		consumedSourcePrefix(parent.patternReference, parent.sourceElementIndex, parent.sourceCharIndex);
+		consumedSourcePrefix(parent->patternReference, parent->sourceElementIndex, parent->sourceCharIndex);
 	std::string submatchConsumed = currentConsumed;
 	if (currentConsumed.size() >= parentConsumed.size() &&
 		currentConsumed.compare(0, parentConsumed.size(), parentConsumed) == 0)
