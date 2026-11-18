@@ -10,7 +10,7 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Active iteration: I113 integrate and publish the corrected compiler
+## Completed iteration: I113 integrate and publish the corrected compiler
 
 Started18 November at12:05 UTC; implementation deadline12:50 UTC. The previous
 goal turn answered the user's timing question and verified the live integration
@@ -129,6 +129,8 @@ Master7fd18a2c also normalizes CRLF output in an existing LLVM-output check.
 Both test-only updates are included in the shared-root verification.
 
 Combined qualification completes: all391 required checks pass uncached in74.707s, full native LSP and focused grouping checks pass, including the reduced no-import completion regression, and the rebuilt browser compiler passes host LSP and all487 integration checks in1007.440s. Exact source, compiler and browser hashes are retained in i113-repaired-inputs.json and i113-repaired-validation.json. This qualifies the combined worktree snapshot; shared-root verification and publication follow. The full objective remains incomplete.
+
+Shared-root qualification also passes after a fresh serial C++ rebuild: all391 required checks uncached in68.311s, full LSP and the focused grouping/dependency/integration-smoke checks. Root image isa13171600b8be98083d3d4e9db7e353edc8453c796ebe4b4f639587225ea0692; owner image is861c29d77b6437ddabbd02582a574d726020e4fee93f0c31bed34abc0a9dae5a. Compiler and library sources match the qualified worktree. The shared-root run verifies the reviewed suite-reporting changes. The first-edit inference locality issue and the broader every-stage goal remain open.
 
 ## Completed iteration: I112 restore the browser's shared matcher implementation
 
