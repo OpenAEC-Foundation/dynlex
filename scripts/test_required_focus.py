@@ -30,6 +30,7 @@ failed=0
         for name, expected_suite in (("numeric_literals", "required"),
                                      ("class_layout", "required"),
                                      ("incremental_dependencies", "required"),
+                                     ("incremental_native", "required"),
                                      ("compiler_stack", "required"),
                                      ("timeout_output", "required")):
             result = subprocess.run(

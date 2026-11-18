@@ -1,0 +1,101 @@
+# An incomplete prefix call must not publish a shorter shared submatch
+# ahead of the enclosing pattern's literal continuation.
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+        set the subject to variable
+
+function set {arguments:variables} to value:
+    replacement:
+        @intrinsic("store", {assigned}, value)
+        for each {variable} in variables:
+            set variable to assigned
+        set the subject to assigned
+
+flex function set the subject to value:
+    replacement:
+        @intrinsic("set subject", value)
+
+[an|] argument pack means: @intrinsic("type", "arguments")
+
+the length of {an argument pack:values} means: @intrinsic("type extent", values, 0)
+
+fixed value means: @intrinsic("fix", value)
+
+[an|] integer means: @intrinsic("type", "integer")
+
+[a|] floating-point number means: @intrinsic("type", "float")
+
+[a|] type means: @intrinsic("type", "type")
+
+nothing means: @intrinsic("type", "nothing")
+
+{fixed integer:count} {type:kind} array means: @intrinsic("array", count, kind)
+
+the item at index in {an argument pack:values} means: @intrinsic("extract element", values, index)
+
+function left[ |]+[ |]right:
+    associativity: left
+    execute:
+        return @intrinsic("add", left, right)
+
+function left < right:
+    execute:
+        return @intrinsic("less than", left, right)
+
+flex function {nothing:left}[ and|.] {nothing:right}:
+    replacement:
+        @intrinsic("discard", left)
+        @intrinsic("discard", right)
+
+flex function loop while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+
+flex function execute the body:
+    replacement:
+        @intrinsic("execute body")
+
+flex section [loop |]while condition:
+    replacement:
+        loop while condition
+
+flex section loop index from start to end:
+    replacement:
+        @intrinsic("store", index, start)
+        loop while index < end:
+            execute the body
+            @intrinsic("store", index, index + 1)
+
+flex section for each item [at index|] in values:
+    replacement:
+        @intrinsic("store", {collection}, values)
+        loop index from 0 to the length of collection:
+            @intrinsic("store", item, the item at index in collection)
+            execute the body
+
+function the minimum of left and right:
+    after: default
+    execute: @intrinsic("return", @intrinsic("min", left, right))
+surface {@intrinsic("add pointer depth", @intrinsic("type", "int", 8)):name} using {@intrinsic("type", "int"):appearance} means: 0
+class:
+    patterns:
+        holder
+    members:
+        minimum as floating-point number
+class:
+    patterns:
+        obstacle
+    members:
+        y as floating-point number
+
+to calculate {floating-point number:value}:
+    set surface to value
+    set object to @intrinsic("construct", obstacle)
+    set surface to the minimum of surface and (object's y)
+    @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "nothing"), 1, "%g\n", surface)
+calculate 5.0

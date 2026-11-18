@@ -128,57 +128,22 @@ PatternMatch *ParseContext::match(
 		MatchProgress &currentProgress = queue.back();
 		if (currentProgress.parents)
 			currentProgress.parents = currentProgress.parents->canonical();
+		if (currentProgress.completionToPublish) {
+			MatchProgress publication = std::move(currentProgress);
+			queue.pop_back();
+			publication.publishCompletion(storage, queue);
+			continue;
+		}
 		auto [memoizedState, inserted] = memoizedStates.try_emplace(currentProgress.controlState(), currentProgress.parents);
 		if (!inserted) {
-			std::vector<MatchProgress> resumedProgresses;
-			MatchParentAlternatives *canonicalParents = memoizedState->second;
-			if (canonicalParents)
-				canonicalParents = canonicalParents->canonical();
-			MatchParentAlternatives *incomingParents = currentProgress.parents;
-			if (canonicalParents && incomingParents && canonicalParents != incomingParents) {
-				// Equivalent matcher states share future continuations as well as
-				// the parents and completions already discovered on either path.
-				auto previousParents = canonicalParents->values;
-				auto incomingValues = std::move(incomingParents->values);
-				auto incomingCompletions = std::move(incomingParents->completedSubmatches);
-				incomingParents->valueStates.clear();
-				incomingParents->completedSubmatchStates.clear();
-				incomingParents->redirect = canonicalParents;
-				std::vector<const MatchProgress *> addedParents;
-				for (const MatchProgress *incomingParent : incomingValues) {
-					if (!canonicalParents->addParent(incomingParent))
-						continue;
-					addedParents.push_back(incomingParent);
-				}
-				std::vector<CompletedMatchProgress> addedCompletions;
-				for (const auto &completion : incomingCompletions) {
-					if (canonicalParents->addCompletion(completion))
-						addedCompletions.push_back(completion);
-				}
-				for (auto parent = previousParents.rbegin(); parent != previousParents.rend(); parent++)
-					for (auto completion = addedCompletions.rbegin(); completion != addedCompletions.rend(); completion++)
-						resumedProgresses.push_back(MatchProgress::resumeParent(storage, **parent, *completion));
-				for (auto addedParent = addedParents.rbegin(); addedParent != addedParents.rend(); addedParent++) {
-					for (auto completion = canonicalParents->completedSubmatches.rbegin();
-						 completion != canonicalParents->completedSubmatches.rend(); completion++) {
-						resumedProgresses.push_back(MatchProgress::resumeParent(storage, **addedParent, *completion));
-					}
-				}
-			}
+			MatchProgress repeated = std::move(currentProgress);
 			queue.pop_back();
-			queue.insert(
-				queue.end(), std::make_move_iterator(resumedProgresses.begin()),
-				std::make_move_iterator(resumedProgresses.end())
-			);
+			repeated.mergeParents(storage, memoizedState->second, queue);
 			continue;
 		}
 		steps++;
 		std::vector<PatternDefinition *> visibleDefinitions = currentProgress.visibleDefinitions();
 		MatchStep matchStep = currentProgress.step(storage, visibleDefinitions);
-		if (currentProgress.isSubmatchComplete(visibleDefinitions)) {
-			requireCompilerInvariant(matchStep.hasCompletedSubmatch, "completed matcher state did not produce submatch data");
-			currentProgress.parents->addCompletion(std::move(matchStep.completedSubmatch));
-		}
 		if (currentProgress.isComplete(visibleDefinitions))
 			return finish(new PatternMatch(currentProgress.materializeMatch(storage, visibleDefinitions)));
 		queue.pop_back();

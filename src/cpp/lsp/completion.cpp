@@ -225,8 +225,7 @@ bool nodeHasVisibleDefinition(PatternTreeNode *node, const SourceFile &sourceFil
 	if (!node)
 		return false;
 	return std::any_of(
-		node->matchingDefinitions.begin(), node->matchingDefinitions.end(),
-		[&](const PatternDefinition *definition) {
+		node->matchingDefinitions.begin(), node->matchingDefinitions.end(), [&](const PatternDefinition *definition) {
 		requireCompilerInvariant(definition != nullptr, "pattern tree endpoint contains a null definition");
 		return isPatternDefinitionVisibleFromSource(*definition, sourceFile);
 	}
@@ -405,37 +404,21 @@ collectMatcherFrontierCandidates(const CompletionContext &context, SectionType s
 		MatchProgress current = std::move(queue.back());
 		queue.pop_back();
 
+		if (current.parents)
+			current.parents = current.parents->canonical();
+		if (current.completionToPublish) {
+			current.publishCompletion(storage, queue);
+			continue;
+		}
+
 		auto [memoizedState, inserted] = memoizedStates.try_emplace(current.controlState(), current.parents);
 		if (!inserted) {
-			std::vector<MatchProgress> resumedProgresses;
-			MatchParentAlternatives *canonicalParents = memoizedState->second;
-			MatchParentAlternatives *incomingParents = current.parents;
-			if (canonicalParents && incomingParents && canonicalParents != incomingParents) {
-				std::vector<const MatchProgress *> addedParents;
-				for (const MatchProgress *incomingParent : incomingParents->values) {
-					if (canonicalParents->addParent(incomingParent))
-						addedParents.push_back(incomingParent);
-				}
-				for (auto addedParent = addedParents.rbegin(); addedParent != addedParents.rend(); addedParent++) {
-					for (auto completion = canonicalParents->completedSubmatches.rbegin();
-						 completion != canonicalParents->completedSubmatches.rend(); completion++) {
-						resumedProgresses.push_back(MatchProgress::resumeParent(storage, **addedParent, *completion));
-					}
-				}
-			}
-			queue.insert(
-				queue.end(), std::make_move_iterator(resumedProgresses.begin()),
-				std::make_move_iterator(resumedProgresses.end())
-			);
+			current.mergeParents(storage, memoizedState->second, queue);
 			continue;
 		}
 
 		std::vector<PatternDefinition *> visibleDefinitions = current.visibleDefinitions();
 		MatchStep matchStep = current.step(storage, visibleDefinitions);
-		if (current.isSubmatchComplete(visibleDefinitions)) {
-			requireCompilerInvariant(matchStep.hasCompletedSubmatch, "completion matcher lost completed submatch data");
-			current.parents->addCompletion(std::move(matchStep.completedSubmatch));
-		}
 
 		bool sourceComplete = current.sourceElementIndex == reference.patternElements.size();
 		// A completed call can still have a longer overload, even when the matcher

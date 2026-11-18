@@ -150,6 +150,9 @@ struct MatchProgress {
 	MatchProgress &operator=(MatchProgress &&other) noexcept = default;
 	~MatchProgress() = default;
 	MatchParentAlternatives *parents{};
+	// A queued publication runs after higher-priority literal continuations.
+	// Publications bypass control-state memoization and resume canonical parents.
+	const PatternMatch *completionToPublish{};
 	ParseContext *context{};
 	PatternTreeNode *rootNode{};
 	PatternTreeNode *currentNode{};
@@ -166,8 +169,9 @@ struct MatchProgress {
 	PackMatchState pack;
 
 	bool isComplete(const std::vector<PatternDefinition *> &visibleDefinitions) const;
-	bool isSubmatchComplete(const std::vector<PatternDefinition *> &visibleDefinitions) const;
 	MatchStep step(MatchStorage &storage, const std::vector<PatternDefinition *> &visibleDefinitions);
+	void publishCompletion(MatchStorage &storage, std::vector<MatchProgress> &queue) const;
+	void mergeParents(MatchStorage &storage, MatchParentAlternatives *known, std::vector<MatchProgress> &queue) const;
 	MatchControlState controlState() const;
 	MatchContinuationState continuationState() const;
 	bool canStartSubmatch() const;
@@ -185,8 +189,6 @@ struct MatchProgress {
 
 struct MatchStep {
 	llvm::SmallVector<MatchProgress, 4> nextMatches;
-	CompletedMatchProgress completedSubmatch;
-	bool hasCompletedSubmatch = false;
 };
 
 struct MatchStorage {

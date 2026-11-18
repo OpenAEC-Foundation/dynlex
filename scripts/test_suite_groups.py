@@ -8,12 +8,70 @@ import sys
 import tempfile
 
 
+def check_fixture_partitions(source, shell):
+    start = source.index('run_fixture_tests() {\n')
+    end = source.index('\nreturn 0\n}', start) + len('\nreturn 0\n}')
+    fixture_runner = source[start:end]
+    with tempfile.TemporaryDirectory(prefix='dynlex-fixture-partitions-') as temporary:
+        root = Path(temporary)
+        for name in ('alpha', 'beta', 'delta', 'epsilon', 'gamma'):
+            fixture = root / name
+            fixture.mkdir()
+            (fixture / 'main.dl').write_text('@intrinsic("discard", 0)\n')
+        compiler = root / 'compiler.sh'
+        compiler.write_text('''#!/bin/bash
+source=$1; shift
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == -o ]]; then output=$2; shift; fi
+    shift
+done
+printf '%s|%s\\n' "$source" "$output" >> "$COMPILE_LOG"
+printf '#!/bin/sh\\nexit 0\\n' > "$output"
+chmod +x "$output"
+''')
+        compiler.chmod(0o755)
+        setup = '''
+set -uo pipefail
+TESTS_DIR=$1; TEST_OUTPUT_DIR=$1/output; COMPILER=$1/compiler.sh
+mkdir "$TEST_OUTPUT_DIR"
+export COMPILE_LOG=$1/compiled
+source "$2/test_fixture_options.sh"
+suite=required; is_windows=false; execution_timeout_scale=1
+RED=""; GREEN=""; YELLOW=""; KNOWN_FAILURES=""
+passed=0; failed=0; skipped=0; failures=(); test_output=""
+now_ms() { printf '0\\n'; }
+elapsed_ms_since() { printf '0\\n'; }
+append_test_result() { :; }
+append_test_output() { :; }
+normalize_output() { printf '%s' "$1"; }
+run_with_timeout() { shift; "$@"; }
+'''
+        # Keep the output directory outside the fixture glob.
+        setup = setup.replace('TESTS_DIR=$1;', 'TESTS_DIR=$1/fixtures;')
+        fixtures = root / 'fixtures'
+        fixtures.mkdir()
+        for fixture in list(root.glob('*/main.dl')):
+            fixture.parent.rename(fixtures / fixture.parent.name)
+        checks = '''
+(run_fixture_tests 0 2; [[ $failed == 0 ]]) & first=$!
+(run_fixture_tests 1 2; [[ $failed == 0 ]]) & second=$!
+wait "$first" && wait "$second"
+'''
+        result = subprocess.run([shell, '-c', setup + fixture_runner + checks,
+                                 'fixture-partitions', root.as_posix(), Path(__file__).parent.as_posix()],
+                                capture_output=True, text=True, timeout=10)
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        rows = [line.split('|') for line in (root / 'compiled').read_text().splitlines()]
+        assert sorted(Path(row[0]).parent.name for row in rows) == \
+            ['alpha', 'beta', 'delta', 'epsilon', 'gamma'], 'fixtures were skipped or compiled twice'
+        assert len({Path(row[1]).parent for row in rows}) == 2, 'fixture workers share an executable path'
+
+
 def main():
     source = Path(__file__).with_name("test.sh").read_text()
-    helpers = source.split("start_fixture_tests() {\n", 1)
-    assert len(helpers) == 2, "independent required groups need reusable worker handling"
-    helpers = "start_fixture_tests() {\n" + helpers[1].split("\n# Run fixtures", 1)[0]
+    helpers = Path(__file__).with_name("test_suite_groups.sh").read_text()
     shell = os.environ.get("DYNLEX_TEST_BASH", "bash")
+    check_fixture_partitions(source, shell)
     with tempfile.TemporaryDirectory(prefix="dynlex-suite-groups-") as directory:
         root = Path(directory)
         rendezvous = root / "rendezvous.py"
@@ -143,10 +201,14 @@ dependencies() { passed=3; test_output="dependency output"; }
 passed=0; failed=0; skipped=0; test_output=""; failures=()
 start_test_group fixture crashed
 fixture_worker=$test_group_worker
+start_test_group fixture_parallel completed
+fixture_parallel_worker=$test_group_worker
 start_test_group incremental completed
 incremental_worker=$test_group_worker
 start_test_group incremental_dependencies dependencies
 incremental_dependencies_worker=$test_group_worker
+start_test_group incremental_native dependencies
+incremental_native_worker=$test_group_worker
 status=0
 collect_required_tests || status=$?
 printf '%s/%s/%s\n' "$status" "$passed" "$test_output"
@@ -155,7 +217,7 @@ printf '%s/%s/%s\n' "$status" "$passed" "$test_output"
                                  "joined-suite-workers", root.as_posix(), sys.executable],
                                 capture_output=True, text=True, timeout=10)
         assert result.returncode == 0, result.stderr
-        assert result.stdout == "17/5/dependency outputcompleted output\n", result.stdout
+        assert result.stdout == "17/10/dependency outputdependency outputcompleted outputcompleted output\n", result.stdout
 
 
 if __name__ == "__main__":

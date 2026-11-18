@@ -380,8 +380,50 @@ bool MatchProgress::isComplete(const std::vector<PatternDefinition *> &visibleDe
 	return !parents && sourceElementIndex == patternReference->patternElements.size() && !visibleDefinitions.empty();
 }
 
-bool MatchProgress::isSubmatchComplete(const std::vector<PatternDefinition *> &visibleDefinitions) const {
-	return parents && canBeSubmatch() && currentNode && !visibleDefinitions.empty();
+void MatchProgress::publishCompletion(MatchStorage &storage, std::vector<MatchProgress> &queue) const {
+	requireCompilerInvariant(completionToPublish && parents, "submatch publication has no completion or parents");
+	MatchParentAlternatives *group = parents->canonical();
+	CompletedMatchProgress completion{currentNode,		   completionToPublish, sourceElementIndex,
+									  sourceArgumentIndex, patternStartPos,		patternPos};
+	if (group->addCompletion(completion))
+		for (auto parent = group->values.rbegin(); parent != group->values.rend(); parent++)
+			queue.push_back(resumeParent(storage, **parent, completion));
+}
+
+void MatchProgress::mergeParents(
+	MatchStorage &storage, MatchParentAlternatives *known, std::vector<MatchProgress> &queue
+) const {
+	requireCompilerInvariant(bool(known) == bool(parents), "equivalent matcher states disagree on parent ownership");
+	if (!known)
+		return;
+	MatchParentAlternatives *canonicalParents = known->canonical();
+	MatchParentAlternatives *incomingParents = parents->canonical();
+	if (canonicalParents == incomingParents)
+		return;
+	// Equivalent states share future continuations as well as parents and
+	// completions already discovered on either path. The compiler and editor
+	// consume the same canonical groups and publication ordering.
+	auto previousParents = canonicalParents->values;
+	auto incomingValues = std::move(incomingParents->values);
+	auto incomingCompletions = std::move(incomingParents->completedSubmatches);
+	incomingParents->valueStates.clear();
+	incomingParents->completedSubmatchStates.clear();
+	incomingParents->redirect = canonicalParents;
+	std::vector<const MatchProgress *> addedParents;
+	for (const MatchProgress *incomingParent : incomingValues)
+		if (canonicalParents->addParent(incomingParent))
+			addedParents.push_back(incomingParent);
+	std::vector<CompletedMatchProgress> addedCompletions;
+	for (const auto &completion : incomingCompletions)
+		if (canonicalParents->addCompletion(completion))
+			addedCompletions.push_back(completion);
+	for (auto parent = previousParents.rbegin(); parent != previousParents.rend(); parent++)
+		for (auto completion = addedCompletions.rbegin(); completion != addedCompletions.rend(); completion++)
+			queue.push_back(resumeParent(storage, **parent, *completion));
+	for (auto parent = addedParents.rbegin(); parent != addedParents.rend(); parent++)
+		for (auto completion = canonicalParents->completedSubmatches.rbegin();
+			 completion != canonicalParents->completedSubmatches.rend(); completion++)
+			queue.push_back(resumeParent(storage, **parent, *completion));
 }
 
 std::vector<PatternDefinition *> MatchProgress::visibleDefinitions() const {
@@ -522,8 +564,7 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 	}
 
 	if (!visibleDefinitions.empty() && canBeSubmatch()) {
-		result.completedSubmatch = completedSubmatch(storage, visibleDefinitions);
-		result.hasCompletedSubmatch = true;
+		CompletedMatchProgress completed = completedSubmatch(storage, visibleDefinitions);
 
 		// Try extending as left operand of a new expression first (lower LIFO priority).
 		// f.e: 'the result' in 'the result = 10', or '$ + $' in 'set $ to $ + $ dollars'
@@ -538,7 +579,7 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 				storage.append(clone.match.nodesPassed, slot);
 				clone.matchedArgumentIndex = 0;
 				clone.type = SectionType::Function;
-				nextMatches.push_back(resumeParent(storage, clone, result.completedSubmatch));
+				nextMatches.push_back(resumeParent(storage, clone, completed));
 			};
 			extend(
 				rootNode->argumentPackChild,
@@ -550,11 +591,13 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 				{.captureNode = rootNode->argumentPackChild, .minimumCount = 2, .expectsItem = true}
 			);
 		}
-		// Step up to parent match (higher LIFO priority — prefer returning to the
-		// parent over speculatively extending into a new expression).
+		// Publish in traversal order, after higher-priority literal continuations.
+		// Publishing here immediately would let a newly joined parent replay a
+		// shorter match before the enclosing pattern's continuation was explored.
 		if (parents) {
-			for (auto parent = parents->values.rbegin(); parent != parents->values.rend(); parent++)
-				nextMatches.push_back(resumeParent(storage, **parent, result.completedSubmatch));
+			MatchProgress publication = *this;
+			publication.completionToPublish = completed.match;
+			nextMatches.push_back(std::move(publication));
 		}
 	}
 
