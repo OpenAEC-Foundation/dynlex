@@ -39,6 +39,8 @@ unit's 256 MiB cap after all local gates had passed. A new owner worktree
 retains the verified build data. Its production I115 build plan recompiles
 the inference translation unit and relinks.
 
+The production grouping image d3e428f8 passes all 391 required checks in 96.096 seconds, native LSP and the focused checks, the rebuilt browser's host LSP test and all 487 integration checks in 1164.512 seconds.
+
 ## Completed iteration: I113 integrate and publish the corrected compiler
 
 Started18 November at12:05 UTC; implementation deadline12:50 UTC. The previous
