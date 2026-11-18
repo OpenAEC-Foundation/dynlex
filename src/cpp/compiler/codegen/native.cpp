@@ -1,4 +1,5 @@
 #include "native.h"
+#include "fileOutput.h"
 #include "nativeLibraries.h"
 #include "nativeTarget.h"
 #include "targetOptions.h"
@@ -11,6 +12,7 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FileUtilities.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
@@ -362,11 +364,10 @@ void addNativeEmissionError(ParseContext &context, std::string message) {
 	context.diagnostics.push_back(std::move(diagnostic));
 }
 
-std::string defaultNativeObjectPath(const ParseContext &context) {
-	std::string outputPath = context.options.inputPath;
-	if (outputPath.ends_with(".dl"))
-		outputPath.resize(outputPath.size() - 3);
-	return outputPath + ".o";
+std::string defaultNativeOutputStem(std::string inputPath) {
+	if (inputPath.ends_with(".dl"))
+		inputPath.resize(inputPath.size() - 3);
+	return inputPath;
 }
 
 } // namespace
@@ -404,6 +405,14 @@ bool emitNativeObjectModule(ParseContext &context, llvm::Module &module, const s
 		}
 
 		passManager.run(module);
+		dest.close();
+		if (dest.has_error()) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "failed to write object file", Range(), "error", dest.error().message()
+			));
+			dest.clear_error();
+			return false;
+		}
 	}
 
 	if (!objectCopyProgram)
@@ -445,10 +454,45 @@ bool emitNativeObjectModule(ParseContext &context, llvm::Module &module, const s
 	return true;
 }
 
-bool emitNativeObject(ParseContext &context) {
-	const std::string objectPath =
-		context.options.outputPath.empty() ? defaultNativeObjectPath(context) : context.options.outputPath;
-	return emitNativeObjectModule(context, *context.llvmModule, objectPath);
+std::string nativeObjectPath(const ParseContext::Options &options) {
+	return options.outputPath.empty() ? defaultNativeOutputStem(options.inputPath) + ".o" : options.outputPath;
+}
+
+bool writeNativeObject(ParseContext &context, std::string_view bytes) {
+	return writeFileOutput(
+		context, nativeObjectPath(context.options), bytes, "failed to open object file", "failed to write object file"
+	);
+}
+
+bool emitNativeObject(ParseContext &context, std::string *emittedBytes) {
+	std::string path = nativeObjectPath(context.options);
+	const bool stream = path == "-";
+	llvm::FileRemover removeTemporary;
+	if (stream) {
+		// Object writers seek, and ELF debug post-processing needs a named file.
+		llvm::SmallString<256> temporary;
+		if (std::error_code error = llvm::sys::fs::createTemporaryFile("dynlex-object", "o", temporary)) {
+			addNativeEmissionError(context, "cannot create temporary object: " + error.message());
+			return false;
+		}
+		removeTemporary.setFile(temporary);
+		path = temporary.str().str();
+	}
+	if (!emitNativeObjectModule(context, *context.llvmModule, path))
+		return false;
+	if (stream || emittedBytes) {
+		auto buffer = llvm::MemoryBuffer::getFile(path, false, false);
+		if (!buffer) {
+			addNativeEmissionError(context, "cannot read emitted object: " + buffer.getError().message());
+			return false;
+		}
+		llvm::StringRef bytes = (*buffer)->getBuffer();
+		if (stream && !writeNativeObject(context, bytes))
+			return false;
+		if (emittedBytes)
+			emittedBytes->assign(bytes.data(), bytes.size());
+	}
+	return true;
 }
 
 bool emitNativeExecutable(ParseContext &context) {
@@ -458,9 +502,7 @@ bool emitNativeExecutable(ParseContext &context) {
 std::string nativeExecutablePath(const ParseContext::Options &options) {
 	if (!options.outputPath.empty())
 		return options.outputPath;
-	std::string path = options.inputPath;
-	if (path.ends_with(".dl"))
-		path.resize(path.size() - 3);
+	std::string path = defaultNativeOutputStem(options.inputPath);
 #ifdef _WIN32
 	if (llvm::sys::path::extension(path).empty())
 		path += ".exe";

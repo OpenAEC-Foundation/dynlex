@@ -105,3 +105,6 @@ def check_default_cache(compiler, root):
     check_incremental_llvm_output(root / "llvm-artifact", compiler)
     check_incremental_llvm_debug_output(root / "llvm-debug", compiler)
     check_incremental_llvm_ordering(root / "llvm-ordering", compiler)
+    from test_incremental_object_output import check_incremental_object_output
+    check_incremental_object_output(root / "object-artifact", compiler, ["-O0"])
+    check_incremental_object_output(root / "object-debug", compiler, ["-O2", "-g"])

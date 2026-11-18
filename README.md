@@ -190,7 +190,7 @@ output. Select `-O0` for unoptimized code or `-O3` for additional optimization;
 the last optimization flag wins. `-O2` does not enable fast math.
 For source-level debugging, use `-g -O0`; `-g` alone retains the default `-O2`.
 
-Native executable builds automatically reuse results from previous invocations.
+Native executable, object and LLVM text builds automatically reuse results from previous invocations.
 To inspect the cache location and compilation work:
 
 ```bash
@@ -202,11 +202,10 @@ Comment edits can reuse analyzed code, and diagnostic-message edits in `config.d
 warnings and errors without recompiling. After code edits, unaffected parser and
 matcher results can be restored. Without debug information or execution tracing,
 eligible functions also reuse inference summaries and generated LLVM bodies at all
-optimization levels. Optimized native builds cache LLVM optimization by symbol groups,
+optimization levels. Optimized executable builds cache LLVM optimization by symbol groups,
 including the callees imported into each group. Native
 partitions reuse cached objects, and an unchanged executable skips linking.
-This mode supports native executable output. Some stages still reconstruct shared
-state after code edits; the LSP retains its existing compilation pipeline.
+Some stages still reconstruct shared state after code edits.
 The cache checks file contents (including imports and syntax configuration), compiler
 identity and target options. Corruption is reported as an error. Disk usage is limited
 to 512 MiB in the system user cache directory under `dynlex/compiler`.

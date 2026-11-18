@@ -7,6 +7,7 @@ from cache_payloads import read_payload
 
 def check_grouping_state(root, build):
     check_grouped_pure_values(root, build)
+    check_fixed_grouping_edit(root, build)
     check_recursive_publication(root, build)
     check_completed_negative_observation(root, build)
     check_available_facts(root, build)
@@ -162,6 +163,28 @@ to get computed {value}:
     assert repaired[2] == b"20\n"
 
 
+def check_fixed_grouping_edit(root, build):
+    source = '''to get identity {value}:
+    @intrinsic("return", value)
+to get grouped {value}:
+    @intrinsic("return", identity identity value)
+to get answer {value}:
+    @intrinsic("return", grouped @intrinsic("add", value, 1))
+@intrinsic("discard", grouped 4.0)
+@intrinsic("variadic call", "libc", "printf", @intrinsic("type", "nothing"), 1, "%d\\n", answer @intrinsic("command line argument count"))
+'''
+    for flags in ((), ("-O2",)):
+        main = root / ("fixed_grouping_edit_optimized.dl" if flags else "fixed_grouping_edit.dl")
+        main.write_text(source)
+        assert build(entry=main, flags=flags)[2] == b"1\n"
+        main.write_text(source.replace('"add", value, 1', '"add", value, 2'))
+        edit = build(entry=main, flags=flags)
+        assert edit[1:] == build(False, entry=main, flags=flags)[1:]
+        assert edit[2] == b"2\n"
+        assert edit[0]["root_execution_reused"]
+        assert edit[0]["function_body_inference_passes"] == 1, "fixed prefix chain reinferred the unchanged callee"
+
+
 def check_failed_grouping_candidate(root, build):
     main = root / "grouping_failed_candidate.dl"
     definitions = '''integer means: @intrinsic("type", "int", 32)
@@ -261,8 +284,10 @@ def check_completed_negative_observation(root, build):
 real means: @intrinsic("type", "float", 64)
 to get doubled {integer:value}:
     @intrinsic("return", @intrinsic("add", value, value))
+to get {integer:value} doubled:
+    @intrinsic("return", @intrinsic("add", value, value))
 to get generic {value}:
-    @intrinsic("return", doubled doubled value)
+    @intrinsic("return", doubled value doubled)
 to get query {real:value}:
     @intrinsic("discard", value)
     @intrinsic("return", generic "bad")
@@ -333,8 +358,10 @@ def check_completed_callee_materialization(root, build):
     main = root / "completed_callee_materialization.dl"
     source = '''to get identity {value}:
     @intrinsic("return", value)
+to get {value} flipped:
+    @intrinsic("return", value)
 to get nested {value}:
-    @intrinsic("return", identity identity value)
+    @intrinsic("return", identity value flipped)
 to get caller {value}:
     @intrinsic("return", nested value)
 @intrinsic("discard", caller @intrinsic("command line argument count"))
@@ -354,9 +381,11 @@ def check_exposed_grouping(root, build):
     main.write_text('''integer means: @intrinsic("type", "int", 32)
 to get identity {value}:
     @intrinsic("return", value)
+to get {value} flipped:
+    @intrinsic("return", value)
 exposed function entry {integer:value}:
     execute:
-        @intrinsic("discard", identity identity value)
+        @intrinsic("discard", identity value flipped)
 ''')
     initial = build(entry=main)
     assert initial[1:] == build(False, entry=main)[1:]

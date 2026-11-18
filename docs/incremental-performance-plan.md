@@ -10,7 +10,77 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Active iteration: I113 integrate and publish the corrected compiler
+## Qualified snapshot I119
+
+Native eaaf1cc6 passes all 391 required checks in 63.588 seconds after the compiler build. Native LSP, focused grouping and source checks, rebuilt browser host LSP, and all 487 integration checks pass. This snapshot includes fixed grouping, physical source-line proofs, early diagnostic replay and native object output. The overall goal remains active.
+
+The shared-root compiler 71c9192f passes all 391 required checks in 65.419 seconds, native LSP and the focused grouping checks. Production source and browser artifacts match the qualified worktree.
+
+## Iteration I118: replay source-loading and preprocessing diagnostics
+
+Unchanged early failures and message-only edits now validate source and
+configuration observations and render the diagnostic without importing source
+lines. Missing candidates remain live inputs. A temporary import failure
+preserves the last completed semantic products, allowing repaired sources to
+reuse unaffected constraint results. The focused CR, lexical-error, missing
+import, repair and prior constraint checks pass at O0 and O2 on 1f17764b.
+
+On the archived 45-file Breakout application with a missing trailing import,
+nine pairs of wording edits match clean diagnostics and leave no executable.
+Replay skips restoring 7,023 prepared source lines, with zero import-stage or
+code-generation work. Median CPU time drops from 15.219 to 12.547 ms, including
+source observation checks. The implementation is a4631b66. Combine the verified
+grouping proof, source correctness fixes and object output for production gates.
+
+## Iteration I117: correct physical source line reuse proofs
+
+The published compiler reproduces three independent failures. An executable
+edit following a CR-only comment can reuse an old executable. A mixed-line
+ending file can mask a changed top-level statement with an inactive function's
+body even when the frontend runs. A reserved argument byte added to a comment
+can bypass the source loader's diagnostic. Minimal no-import examples establish
+wrong output or diagnostics against clean invocations.
+
+The correction uses the source file's physical line index for semantic digests,
+diagnostic line ordinals and source projections. It retains comment text when
+trimming would hide a reserved argument byte. The targeted source preparation
+and checkpoint checks pass at O0 and O2 on the corrected image fe1b0a8a. A CR-only
+comment insertion moves a warning and its notes to the clean-build locations
+with no codegen. The source commit b8b4c9d3 affects native incremental builds.
+Production suite verification still follows.
+
+## Iteration I115: prove a unique operand layout before retaining grouping state
+
+The focused preinference reproduction changes a wrapper's integer literal.
+Before the proof, an earlier real-argument call establishes a grouping input
+and the first edit re-infers an unchanged integer helper. A chain of prefixes
+or a chain of suffixes has one nesting order. Record grouping reads only where
+matched operand edges admit exchanges. Existing grouping-state tests now use
+mixed operators where they depend on genuinely different candidate layouts.
+Those cases pass on the baseline and the candidate.
+
+The isolated proof at ae8a9f82 passes the full focused grouping-state check.
+The 45-file Breakout comparison uses the shared compiler from 3d5ee1ad and
+separate caches. All five cases pass output and diagnostic parity. The first
+body edit drops from 2.441 to 1.699 CPU seconds and from 32 to 10 inferred
+bodies. Entry inference is reused, and measured inference drops from 966 to
+475 ms. Across three successive edits the baseline infers 32, 11 and 1
+bodies. The candidate infers 10, 1 and 1. The corresponding median CPU times
+are 1.590 and 1.392 seconds. Cold performance is unresolved with three pairs.
+Wording updates keep zero code generation and have medians of 48 and 52
+CPU milliseconds in this run. The work saved on the first real code edit
+justifies full production qualification of the proof. The remaining ten
+body passes and the broader dependency-locality objective stay open.
+
+The shared I113 snapshot was pushed as 3d5ee1ad after bounding Git's pack
+workers and window memory. The first push was killed at the publication
+unit's 256 MiB cap after all local gates had passed. A new owner worktree
+retains the verified build data. Its production I115 build plan recompiles
+the inference translation unit and relinks.
+
+The production grouping image d3e428f8 passes all 391 required checks in 96.096 seconds, native LSP and the focused checks, the rebuilt browser's host LSP test and all 487 integration checks in 1164.512 seconds.
+
+## Completed iteration: I113 integrate and publish the corrected compiler
 
 Started18 November at12:05 UTC; implementation deadline12:50 UTC. The previous
 goal turn answered the user's timing question and verified the live integration
@@ -129,6 +199,8 @@ Master7fd18a2c also normalizes CRLF output in an existing LLVM-output check.
 Both test-only updates are included in the shared-root verification.
 
 Combined qualification completes: all391 required checks pass uncached in74.707s, full native LSP and focused grouping checks pass, including the reduced no-import completion regression, and the rebuilt browser compiler passes host LSP and all487 integration checks in1007.440s. Exact source, compiler and browser hashes are retained in i113-repaired-inputs.json and i113-repaired-validation.json. This qualifies the combined worktree snapshot; shared-root verification and publication follow. The full objective remains incomplete.
+
+Shared-root qualification also passes after a fresh serial C++ rebuild: all391 required checks uncached in68.311s, full LSP and the focused grouping/dependency/integration-smoke checks. Root image isa13171600b8be98083d3d4e9db7e353edc8453c796ebe4b4f639587225ea0692; owner image is861c29d77b6437ddabbd02582a574d726020e4fee93f0c31bed34abc0a9dae5a. Compiler and library sources match the qualified worktree. The shared-root run verifies the reviewed suite-reporting changes. The first-edit inference locality issue and the broader every-stage goal remain open.
 
 ## Completed iteration: I112 restore the browser's shared matcher implementation
 
@@ -1944,6 +2016,28 @@ boundaries are:
 | Objects/link | Unchanged objects reuse; ordinary body benchmark rebuilds one object; fast paths skip linking. | Necessary executable changes use a conventional full link. Other output drivers still need shared products. |
 | Tooling/targets | Native/LLVM reuse; editor source syntax and matcher products share current source identities. I107 improves measured editor updates about7%. | Ordinary editor type inference still runs; object-only, WebAssembly and SPIR-V do not share the complete persistent pipeline. |
 | Required budget | Current combined compiler391/0/0 uncached in67.745s. No fixtures or assertions were removed; native checks and fixture workers remain independent. | Verify the updated shared-root suite with master1a9f9a90 and preserve the120s post-build budget. |
+
+## Iteration I116: reuse frontend and IR for native object output
+
+Object mode now uses the existing incremental frontend and per-function IR.
+A single output object has one artifact key. An unchanged destination can keep
+its bytes; a moved or damaged destination restores the object, and an evicted
+object is produced from saved IR. A changed object still lowers the whole
+module. No linker is involved. Emission to a pipe previously aborted because
+LLVM needed a seekable stream. Both pipelines now lower into a temporary
+seekable file when they produce a new object for stdout.
+
+The candidate 9178ec67 passes focused object and LLVM parity at O0 and
+debug O2, including artifact eviction, output recovery and warning-only
+configuration changes. The existing native C ABI fixture passes as well.
+On three paired samples per case using the 45-file LEXI8 Breakout source,
+median object compilation CPU time is 6.792 to 4.011 seconds for a body edit,
+5.743 to 0.042 seconds for a comment edit, and 5.989 to 0.039 seconds for a
+warning wording edit. The edited builds reuse 367 function IR products.
+Comment and wording edits perform zero optimization, object lowering or
+linking. Each edited object matches the clean object bytes and diagnostics.
+The three cache-disabled controls are insufficient to establish a cold speedup.
+The focused comparison is complete; shared-branch suite qualification follows.
 
 ## Prior iteration: I092 first-edit global-product attribution
 

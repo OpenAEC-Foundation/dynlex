@@ -171,6 +171,23 @@ void loadNativeUnitSnapshot(Json &previous, const ProgramPayloads &retainedPaylo
 	statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(start);
 }
 
+bool buildStandaloneObject(ParseContext &context, const fs::path &directory, BuildStatistics &statistics) {
+	auto start = Clock::now();
+	if (context.options.optimizationLevel)
+		optimizeLLVMModule(context, *context.llvmModule);
+	statistics.optimizationMilliseconds += elapsedMilliseconds(start);
+	start = Clock::now();
+	std::string bytes;
+	if (!emitNativeObject(context, &bytes))
+		return false;
+	std::string key = digest(bytes);
+	writeEntry(directory / ("object-" + key + ".entry"), bytes);
+	statistics.objectKeys = {std::move(key)};
+	++statistics.builtObjects;
+	statistics.nativeUnitMilliseconds += elapsedMilliseconds(start);
+	return true;
+}
+
 bool buildCompilerOutput(
 	ParseContext &context, const fs::path &directory, const ProgramPayloads &retainedPayloads,
 	const std::string &compilerIdentity, const Json &options, const std::vector<std::string> &libraries,
@@ -182,6 +199,8 @@ bool buildCompilerOutput(
 	consumeDebugIRProducts(*context.llvmModule);
 	if (context.options.emitLLVM)
 		return buildLLVMArtifact(context, directory, compilerIdentity, options, generatedIR, statistics);
+	if (context.options.emitObject)
+		return buildStandaloneObject(context, directory, statistics);
 	if (!context.options.optimizationLevel)
 		return emitPartitions(
 			context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics, previous, functionReuse,
@@ -233,21 +252,30 @@ bool restoreCompilerOutput(
 			context, directory, retainedPayloads, entry, compilerIdentity, options, previous, statistics,
 			generatedModuleAvailable, initializeTarget
 		);
+	statistics.objectKeys = previous.at("object_keys").get<std::vector<std::string>>();
+	if (context.options.emitObject) {
+		requireCompilerInvariant(statistics.objectKeys.size() == 1, "standalone object snapshot must name one object");
+		if (auto object = readEntry(directory / ("object-" + statistics.objectKeys.front() + ".entry"))) {
+			++statistics.reusedObjects;
+			return writeNativeObject(context, *object);
+		}
+	}
 	if (initializeTarget)
 		initializeOutputTarget(context);
-	statistics.objectKeys = previous.at("object_keys").get<std::vector<std::string>>();
-	if (auto linked = linkCachedObjects(context, directory, statistics.objectKeys, libraries, statistics))
-		return *linked;
-	if (context.options.optimizationLevel) {
-		auto start = Clock::now();
-		loadNativeUnitSnapshot(previous, retainedPayloads, statistics);
-		std::vector<NativeUnitWork> plan;
-		for (const auto &[name, record] : previous.at("native_units").at("units").items())
-			plan.push_back({name, record, std::nullopt, std::nullopt, nullptr});
-		auto missing = loadNativeUnitInputs(directory, plan);
-		statistics.nativeUnitMilliseconds += elapsedMilliseconds(start);
-		if (missing.empty())
-			return emitOptimizedNativeUnits(context, directory, plan, libraries, statistics, &previous);
+	if (!context.options.emitObject) {
+		if (auto linked = linkCachedObjects(context, directory, statistics.objectKeys, libraries, statistics))
+			return *linked;
+		if (context.options.optimizationLevel) {
+			auto start = Clock::now();
+			loadNativeUnitSnapshot(previous, retainedPayloads, statistics);
+			std::vector<NativeUnitWork> plan;
+			for (const auto &[name, record] : previous.at("native_units").at("units").items())
+				plan.push_back({name, record, std::nullopt, std::nullopt, nullptr});
+			auto missing = loadNativeUnitInputs(directory, plan);
+			statistics.nativeUnitMilliseconds += elapsedMilliseconds(start);
+			if (missing.empty())
+				return emitOptimizedNativeUnits(context, directory, plan, libraries, statistics, &previous);
+		}
 	}
 	if (!generatedModuleAvailable) {
 		auto start = Clock::now();
