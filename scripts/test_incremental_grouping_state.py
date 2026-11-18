@@ -6,6 +6,7 @@ from cache_payloads import read_payload
 
 
 def check_grouping_state(root, build):
+    check_grouped_pure_values(root, build)
     check_recursive_publication(root, build)
     check_completed_negative_observation(root, build)
     check_available_facts(root, build)
@@ -196,6 +197,47 @@ to get chosen {value}:
     changed = build(entry=main)
     assert changed[1:] == build(False, entry=main)[1:]
     assert changed[2] == b"1\n"
+
+
+def check_grouped_pure_values(root, build):
+    main = root / "grouped_pure_values.dl"
+    source = '''integer means: @intrinsic("type", "int", 32)
+real means: @intrinsic("type", "float", 64)
+to get wrapped {integer:value}:
+    @intrinsic("return", @intrinsic("less than", value, 0))
+to get wrapped {real:value}:
+    @intrinsic("return", @intrinsic("cast", value, integer))
+to get {integer:value} flipped:
+    @intrinsic("return", @intrinsic("cast", value, real))
+to get {real:value} flipped:
+    @intrinsic("return", @intrinsic("cast", value, integer))
+to get generic {value}:
+    @intrinsic("return", @intrinsic("cast", (wrapped value flipped), integer))
+to get query {real:value}:
+    @intrinsic("discard", value)
+    @intrinsic("return", generic 1.0)
+to get query {integer:value}:
+    @intrinsic("return", @intrinsic("less than", value, 0))
+to get {real:value} converted:
+    @intrinsic("return", @intrinsic("cast", value, integer))
+to get chosen {value}:
+    @intrinsic("return", query value converted)
+@intrinsic("discard", chosen 1.0)
+@intrinsic("discard", generic 1)
+@intrinsic("variadic call", "libc", "printf", @intrinsic("type", "nothing"), 1, "%d\\n", generic 1.0)
+'''
+    changed = source.replace('"%d\\n", generic 1.0', '"%d\\n", generic 2.0')
+    uncommitted = source.replace('@intrinsic("discard", generic 1)\n', '')
+    reordered = source.replace('@intrinsic("discard", generic 1)\n', '')
+    reordered = reordered.replace('@intrinsic("discard", chosen 1.0)',
+                                  '@intrinsic("discard", generic 1)\n@intrinsic("discard", chosen 1.0)')
+    for flags in ((), ("-O2",)):
+        for edited, expected in ((source, b"0\n"), (changed, b"0\n"),
+                                 (uncommitted, b"1\n"), (reordered, b"0\n")):
+            main.write_text(edited)
+            result = build(entry=main, flags=flags)
+            assert result[1:] == build(False, entry=main, flags=flags)[1:]
+            assert result[2] == expected, "constant observations crossed operand-grouping contexts"
 
 
 def check_recursive_publication(root, build):

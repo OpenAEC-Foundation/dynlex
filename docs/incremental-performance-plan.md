@@ -10,7 +10,55 @@ move on to larger opportunities. Percentage floors in historical experiments
 are historical decisions, not current acceptance requirements. Measure combined
 changes end to end rather than adding overlapping stage savings.
 
-## Active iteration: I110 native grouping proof and completion closure
+## Active iteration: I111 grouping-dependent constant observations
+
+Started18 November at10:44:09 UTC; deadline11:29:09 UTC. I110 remains isolated
+and unqualified. Close a verified constant-query dependency omission before
+further optimization. A24-line no-import repro prints0 with a clean build but
+aborts incrementally with "pure query produced inconsistent observations".
+The debugger captures the same real1.0 argument yielding integer1 versus0;
+return types and pure_value_inputs are equal, but operand layouts differ.
+Evidence is i111-grouped-values/{literal.dl,literal-report.json} and
+i111-value-context.{json,log}. A reduced23-line variant without a direct known
+argument does not fail; retain that minimization result rather than claiming it
+reproduces the bug.
+
+Keep constant observations only for the same actual grouping results, alongside
+their existing type/global input proof. Migrate both retention paths: persisted
+record joins and in-memory values carried across body reinference. Capture the
+new grouping product before deciding whether the old constant table still
+belongs to that query. The red regression covers initial execution, a different
+constant argument, removal of the grouping-establishing call, and changed call
+order underO0 andO2. No assertion is removed or replaced by a conflicting-value
+overwrite. Build, focused parity, real-program costs and all qualification gates
+remain required. The source-fact and first-edit locality work remain unfinished.
+
+I110's controlled required comparison runs only after the other observed
+qualification job exits. Both exact qualified baseline and candidate reach120 s;
+neither is a pass. These controls do not isolate a patch-only timing cause.
+The queued full qualification therefore stops without launching broader jobs.
+Keep the fixed120 s limit and preserve i110-budget-check.json plus both logs.
+The full every-stage goal is active/incomplete.
+
+The implemented correction passes every focused grouping check, the full focused
+leaf-dependency checks and all three integration compile smokes. The regression
+includes fresh/reusedO0/O2 execution, known-argument edits, removal of the
+grouping-establishing call (which changes output0->1), restoration of that call,
+and exact warning parity. The clean removal case independently prints1 before
+testing the correction. Both in-memory and persistent observation joins now
+check actual operand layouts while ignoring diagnostic-check progress alone.
+
+Local master advances to370e530a while these checks run. Its qualified required
+suite has389 checks in88.027 s and splits independent incremental groups without
+dropping coverage. It also contains substantial compiler/runtime/library fixes
+and moves website source to dynlex-website. Integrate that local master before
+further combined qualification, preserving both sets of compiler fixes. Do not
+claim the previous compiler's focused results qualify the merged artifact. The
+earlier profile's rising incremental cost (44.53->78.31 ms per build quintile,
+versus steady clean29.72->31.95 ms) remains attribution evidence; gather actual
+cache/stage counters before choosing a cache optimization.
+
+## Previous iteration: I110 native grouping proof and completion closure
 
 Started18 November at09:34:37 UTC; deadline10:19:37 UTC. I109's correctness
 boundary remains unpublished, and I108's editor source facts remain parked.

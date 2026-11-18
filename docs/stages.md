@@ -764,6 +764,11 @@ effects again or demand its historical first-execution inputs. Its current
 operand-layout and diagnostic-profile checks still apply at ordinary use sites.
 Native IR validation compares operand layouts separately from these compiler
 availability effects, which do not themselves change emitted function bodies.
+Constant observations retain their actual operand layouts as part of the query
+proof. Reinference captures its new grouping result before retaining prior
+argument/result observations. Persisted observation joins apply the same layout
+check alongside the existing type and global inputs; different groupings may
+produce different constants for identical argument types and values.
 
 We reuse the same strategy (code) for flex functions where possible, keeping it DRY.
 

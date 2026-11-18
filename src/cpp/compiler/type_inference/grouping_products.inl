@@ -2,6 +2,20 @@ static bool sameGroupingState(const GroupingState &left, const GroupingState &ri
 	return left == right || (left && right && *left == *right);
 }
 
+static bool sameGroupingResults(const GroupingProduct &left, const GroupingProduct &right) {
+	if (left.groupings.size() != right.groupings.size())
+		return false;
+	return std::ranges::all_of(left.groupings, [&](const auto &entry) {
+		auto found = right.groupings.find(entry.first);
+		if (found == right.groupings.end())
+			return false;
+		const auto &a = entry.second.output, &b = found->second.output;
+		if (!a || !b)
+			return a == b;
+		return a->root == b->root && a->nodes == b->nodes;
+	});
+}
+
 static GroupingState currentGroupingState(CodeLine *line, const InferenceContext *context) {
 	if (context && context->trial) {
 		if (const auto *grouping = context->groupingForLine(line))

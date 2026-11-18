@@ -206,6 +206,7 @@ void mergeInferenceObservedValues(Json &current, const Json &prior) {
 	if (!current.at("failure").is_null() || !prior.at("failure").is_null() ||
 		current.at("purity") != static_cast<int>(InstantiationPurity::Pure) || current.at("purity") != prior.at("purity") ||
 		current.at("pure_value_inputs").is_null() || current.at("pure_value_inputs") != prior.at("pure_value_inputs") ||
+		!sameGroupingLayouts(current.at("grouping").at("groupings"), prior.at("grouping").at("groupings")) ||
 		current.at("return_type") != prior.at("return_type"))
 		return;
 	std::map<Json, Json> observations;
