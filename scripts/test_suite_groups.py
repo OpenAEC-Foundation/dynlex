@@ -46,8 +46,8 @@ source "$2/test_fixture_options.sh"
 suite=required; is_windows=false; execution_timeout_scale=1
 RED=""; GREEN=""; YELLOW=""; KNOWN_FAILURES=""
 passed=0; failed=0; skipped=0; failures=(); test_output=""
-now_ms() { printf '0\\n'; }
-elapsed_ms_since() { printf '0\\n'; }
+now_ms() { printf -v "$1" 0; }
+elapsed_ms_since() { printf -v "$2" 0; }
 append_test_result() { :; }
 append_test_output() { :; }
 normalize_output() { printf '%s' "$1"; }
@@ -174,8 +174,8 @@ printf 'failure:%s\n' "${failures[@]}"
                      .split("\n}\n", 1)[0] + "\n}\n")
         statuses = '''
 suite=required; execution_timeout_scale=1; GREEN=""; RED=""
-now_ms() { printf '0\n'; }
-elapsed_ms_since() { printf '0\n'; }
+now_ms() { printf -v "$1" 0; }
+elapsed_ms_since() { printf -v "$2" 0; }
 run_with_timeout() { shift; "$@"; }
 append_test_result() { :; }
 append_test_output() { :; }

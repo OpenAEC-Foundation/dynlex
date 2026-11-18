@@ -17,8 +17,8 @@ def check_runner_policy():
     routing = "run_auxiliary_test() {\n" + source.split("run_auxiliary_test() {\n", 1)[1].split("\n}\n", 1)[0] + "\n}\n"
     shell = os.environ.get("DYNLEX_TEST_BASH", "bash")
     stubs = '''
-now_ms() { printf '0\\n'; }
-elapsed_ms_since() { printf '0\\n'; }
+now_ms() { printf -v "$1" 0; }
+elapsed_ms_since() { printf -v "$2" 0; }
 run_with_timeout() { return 0; }
 append_test_result() { :; }
 execution_timeout_scale=1
