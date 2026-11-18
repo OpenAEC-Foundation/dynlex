@@ -4,12 +4,14 @@ fs::path compilerOutputPath(const ParseContext &context) {
 		return fs::absolute(llvmOutputPath(options));
 	if (options.emitObject)
 		return fs::absolute(nativeObjectPath(options));
+	if (options.emitWASM)
+		return fs::absolute(wasmOutputPath(options));
 	return fs::absolute(nativeExecutablePath(options));
 }
 
 bool compilerOutputIsStdout(const ParseContext &context) {
 	const auto &options = context.options;
-	return (options.emitLLVM || options.emitObject) && options.outputPath == "-";
+	return (options.emitLLVM || options.emitObject || options.emitWASM) && options.outputPath == "-";
 }
 
 Json compilerOutputIdentity(const ParseContext &context) {

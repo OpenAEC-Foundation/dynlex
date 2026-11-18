@@ -66,7 +66,7 @@ planOptimizedNativeUnits(const IncrementalOptimization &optimization, const std:
 	return plan;
 }
 
-bool nativeLinkUnchanged(
+bool objectLinkUnchanged(
 	const ParseContext &context, const Json *previous, const std::vector<std::string> &libraries,
 	const std::vector<std::string> &keys
 ) {
@@ -144,7 +144,7 @@ bool emitOptimizedNativeUnits(
 		statistics.nativeFunctionsLowered += unit.record.at("functions").get<size_t>();
 	}
 	recordOptimizedNativeUnits(plan, statistics);
-	if (nativeLinkUnchanged(context, previous, libraries, statistics.objectKeys)) {
+	if (objectLinkUnchanged(context, previous, libraries, statistics.objectKeys)) {
 		statistics.nativeUnitMilliseconds += elapsedMilliseconds(start);
 		return true;
 	}
@@ -172,11 +172,8 @@ void loadNativeUnitSnapshot(Json &previous, const ProgramPayloads &retainedPaylo
 }
 
 bool buildStandaloneObject(ParseContext &context, const fs::path &directory, BuildStatistics &statistics) {
-	auto start = Clock::now();
-	if (context.options.optimizationLevel)
-		optimizeLLVMModule(context, *context.llvmModule);
-	statistics.optimizationMilliseconds += elapsedMilliseconds(start);
-	start = Clock::now();
+	optimizeWholeModuleOutput(context, statistics);
+	const auto start = Clock::now();
 	std::string bytes;
 	if (!emitNativeObject(context, &bytes))
 		return false;
@@ -186,6 +183,30 @@ bool buildStandaloneObject(ParseContext &context, const fs::path &directory, Bui
 	++statistics.builtObjects;
 	statistics.nativeUnitMilliseconds += elapsedMilliseconds(start);
 	return true;
+}
+
+bool buildWASMLinkedOutput(
+	ParseContext &context, const fs::path &directory, const std::vector<std::string> &libraries, BuildStatistics &statistics,
+	const Json *previous
+) {
+	optimizeWholeModuleOutput(context, statistics);
+	const auto start = Clock::now();
+	TemporaryObjects temporary;
+	fs::path path = temporary.directory / "program.o";
+	if (!emitWASMObject(context, path.string()))
+		return false;
+	std::string bytes = readFile(path);
+	std::string key = digest(bytes);
+	writeEntry(directory / ("object-" + key + ".entry"), bytes);
+	statistics.objectKeys = {std::move(key)};
+	++statistics.builtObjects;
+	statistics.nativeUnitMilliseconds += elapsedMilliseconds(start);
+	if (objectLinkUnchanged(context, previous, libraries, statistics.objectKeys))
+		return true;
+	const auto linkStart = Clock::now();
+	const bool linked = linkWASMObject(context, path.string());
+	statistics.linkMilliseconds += elapsedMilliseconds(linkStart);
+	return linked;
 }
 
 bool buildCompilerOutput(
@@ -201,6 +222,8 @@ bool buildCompilerOutput(
 		return buildLLVMArtifact(context, directory, compilerIdentity, options, generatedIR, statistics);
 	if (context.options.emitObject)
 		return buildStandaloneObject(context, directory, statistics);
+	if (context.options.emitWASM)
+		return buildWASMLinkedOutput(context, directory, libraries, statistics, previous);
 	if (!context.options.optimizationLevel)
 		return emitPartitions(
 			context, directory, retainedPayloads, compilerIdentity, options, libraries, statistics, previous, functionReuse,
@@ -225,7 +248,7 @@ bool buildCompilerOutput(
 		for (const NativeUnitWork &unit : plan)
 			if (unit.record.at("object_key").is_string())
 				keys.push_back(unit.record.at("object_key").get<std::string>());
-		if (keys.size() == plan.size() && nativeLinkUnchanged(context, previous, libraries, keys)) {
+		if (keys.size() == plan.size() && objectLinkUnchanged(context, previous, libraries, keys)) {
 			recordOptimizedNativeUnits(plan, statistics);
 			statistics.nativeUnitMilliseconds += elapsedMilliseconds(start);
 			return true;
@@ -260,12 +283,12 @@ bool restoreCompilerOutput(
 			return writeNativeObject(context, *object);
 		}
 	}
-	if (initializeTarget)
+	if (initializeTarget && !context.options.emitWASM)
 		initializeOutputTarget(context);
 	if (!context.options.emitObject) {
 		if (auto linked = linkCachedObjects(context, directory, statistics.objectKeys, libraries, statistics))
 			return *linked;
-		if (context.options.optimizationLevel) {
+		if (context.options.optimizationLevel && !context.options.emitWASM) {
 			auto start = Clock::now();
 			loadNativeUnitSnapshot(previous, retainedPayloads, statistics);
 			std::vector<NativeUnitWork> plan;
@@ -277,6 +300,8 @@ bool restoreCompilerOutput(
 				return emitOptimizedNativeUnits(context, directory, plan, libraries, statistics, &previous);
 		}
 	}
+	if (initializeTarget && context.options.emitWASM)
+		initializeOutputTarget(context);
 	if (!generatedModuleAvailable) {
 		auto start = Clock::now();
 		statistics.cachePayloadsLoaded += hydrateProgramField(previous, retainedPayloads, "generated_ir");

@@ -490,10 +490,9 @@ int main(int argumentCount, char *argumentValues[]) {
 		return 1;
 	}
 	const bool incrementalFileBuild = !inputFile.empty() && !runLSP && !runDAP && !useStdio && !commandSourceStart &&
-									  !context.options.emitWASM && !context.options.emitSPIRV && !emitCompletions &&
-									  !dumpPurity && !dumpDependencies;
+									  !context.options.emitSPIRV && !emitCompletions && !dumpPurity && !dumpDependencies;
 	if ((!incrementalDirectory.empty() || incrementalStatistics) && !incrementalFileBuild) {
-		std::cerr << "Cache options require a .dl file and native or LLVM output" << std::endl;
+		std::cerr << "Cache options require a .dl file and native, LLVM or WebAssembly output" << std::endl;
 		return 1;
 	}
 

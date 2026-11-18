@@ -7,6 +7,7 @@
 #include "codegen/native.h"
 #include "codegen/nativeLibraries.h"
 #include "codegen/targetOptions.h"
+#include "codegen/wasm.h"
 #include "compileTimeValue.h"
 #include "compiler.h"
 #include "conversionLookup.h"

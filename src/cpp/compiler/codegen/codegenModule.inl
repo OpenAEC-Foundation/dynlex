@@ -325,7 +325,7 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 	if (outputEmitter)
 		return outputEmitter(context);
 	// Match the incremental IR producer's input order for whole-module outputs.
-	if (context.options.emitLLVM || context.options.emitObject)
+	if (context.options.emitLLVM || context.options.emitObject || context.options.emitWASM)
 		sortModuleSymbols(*context.llvmModule);
 	if (context.options.optimizationLevel > 0)
 		optimizeLLVMModule(context, *context.llvmModule);

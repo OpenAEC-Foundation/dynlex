@@ -33,23 +33,20 @@ std::unique_ptr<llvm::TargetMachine> createWASMTargetMachine(ParseContext &conte
 	));
 }
 
-bool emitWASMModule(ParseContext &context) {
-	std::string outputPath = context.options.outputPath;
-	if (outputPath.empty())
-		outputPath = context.options.inputPath + ".wasm";
+std::string wasmOutputPath(const ParseContext::Options &options) {
+	return options.outputPath.empty() ? options.inputPath + ".wasm" : options.outputPath;
+}
 
+bool emitWASMObject(ParseContext &context, const std::string &objectPath) {
 	requireCompilerInvariant(context.targetMachine != nullptr, "WASM emission requires an initialized target machine");
-	int objectDescriptor;
-	llvm::SmallString<128> objectPath;
-	std::error_code ec = llvm::sys::fs::createTemporaryFile("dynlex-wasm", "o", objectDescriptor, objectPath);
+	std::error_code ec;
+	llvm::raw_fd_ostream object(objectPath, ec);
 	if (ec) {
 		context.diagnostics.push_back(
 			Diagnostic(context, Diagnostic::Level::Error, "wasm object open failed", Range(), "error", ec.message())
 		);
 		return false;
 	}
-	llvm::FileRemover removeObject(objectPath);
-	llvm::raw_fd_ostream object(objectDescriptor, true);
 	llvm::legacy::PassManager passManager;
 	if (context.targetMachine->addPassesToEmitFile(passManager, object, nullptr, llvm::CodeGenFileType::ObjectFile)) {
 		context.diagnostics.push_back(
@@ -66,7 +63,11 @@ bool emitWASMModule(ParseContext &context) {
 		object.clear_error();
 		return false;
 	}
+	return true;
+}
 
+bool linkWASMObject(ParseContext &context, const std::string &objectPath) {
+	const std::string outputPath = wasmOutputPath(context.options);
 	// LLD resolves code and data relocations together. Zero is reserved for null;
 	// the exported heap boundary includes aligned static data and the full stack.
 	const char *arguments[] = {
@@ -98,4 +99,17 @@ bool emitWASMModule(ParseContext &context) {
 		return false;
 	}
 	return true;
+}
+
+bool emitWASMModule(ParseContext &context) {
+	llvm::SmallString<128> objectPath;
+	if (std::error_code error = llvm::sys::fs::createTemporaryFile("dynlex-wasm", "o", objectPath)) {
+		context.addDiagnostic(
+			Diagnostic(context, Diagnostic::Level::Error, "wasm object open failed", Range(), "error", error.message())
+		);
+		return false;
+	}
+	llvm::FileRemover removeObject(objectPath);
+	const std::string path = objectPath.str().str();
+	return emitWASMObject(context, path) && linkWASMObject(context, path);
 }

@@ -1293,12 +1293,12 @@ manifests and individual inference-summary records retain their own JSON formats
 module payloads retain raw LLVM bitcode. All readers select the format from the
 artifact contract. Compiler identity keeps incompatible derived snapshots separate.
 
-Native executable, native object and LLVM text file builds use incremental compilation automatically. The default
+Native executable, native object, LLVM text and WebAssembly file builds use incremental compilation automatically. The default
 cache lives under `dynlex/compiler` in the operating system's user cache directory:
 XDG cache storage on Unix, Darwin user cache storage on macOS, and LocalAppData
 on Windows. `--cache-dir <directory>` overrides that location, `--no-incremental`
 performs a clean build, and `--incremental-stats` reports the actual cache directory
-and reuse. Cache overrides and statistics apply to all three output modes.
+and reuse. Cache overrides and statistics apply to these four output modes.
 LLVM text output uses the same incremental semantic and unoptimized function-IR
 products, with its output mode in the program identity. Its final text has an
 independent content-addressed artifact; no native objects are lowered or linked.
@@ -1318,6 +1318,13 @@ optimization and lowering, with `objects_built` and `objects_reused` reporting
 that work. The compiler skips linking. Standard output receives the cached bytes
 on each invocation. On a cache miss, a temporary seekable file lets the object
 writer and ELF debug post-processing finish before the binary stream is written.
+WebAssembly output from the native CLI uses its own target configuration and
+reuses frontend results and unoptimized function IR. It lowers a whole module
+to one relocatable object, then links with the normal WebAssembly linker.
+Unchanged Wasm output skips both stages. Destination changes, output damage and
+standard output can link the saved object for the current destination, keeping
+the module name selected by the linker. An evicted object regenerates from the
+saved IR. Object counters and link timing report these operations.
 
 A complete native result is reusable while every filesystem observation remains identical. Source edits that
 only add, remove or change comments or trailing whitespace also reuse the result when

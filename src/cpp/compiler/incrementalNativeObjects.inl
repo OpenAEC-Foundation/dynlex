@@ -233,7 +233,12 @@ std::optional<bool> linkCachedObjects(
 	statistics.reusedObjects = keys.size();
 	statistics.linkedCachedObjects = true;
 	auto linkStart = Clock::now();
-	bool linked = emitNativeExecutableWithObjects(context, paths, libraries);
+	bool linked;
+	if (context.options.emitWASM) {
+		requireCompilerInvariant(paths.size() == 1, "a WebAssembly program must have one relocatable object");
+		linked = linkWASMObject(context, paths.front());
+	} else
+		linked = emitNativeExecutableWithObjects(context, paths, libraries);
 	statistics.linkMilliseconds = elapsedMilliseconds(linkStart);
 	return linked;
 }

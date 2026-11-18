@@ -185,7 +185,7 @@ output. Select `-O0` for unoptimized code or `-O3` for additional optimization;
 the last optimization flag wins. `-O2` does not enable fast math.
 For source-level debugging, use `-g -O0`; `-g` alone retains the default `-O2`.
 
-Native executable, object and LLVM text builds automatically reuse results from previous invocations.
+Native executable, object, LLVM text and WebAssembly builds automatically reuse results from previous invocations.
 To inspect the cache location and compilation work:
 
 ```bash

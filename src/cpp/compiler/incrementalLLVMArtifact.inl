@@ -1,5 +1,3 @@
-// LLVM text has its own final artifact; semantic and function-IR reuse remain
-// owned by the common frontend. Native object producers do not call this path.
 void initializeOutputTarget(ParseContext &context) {
 	requireCompilerInvariant(
 		!context.llvmContext && !context.llvmModule && !context.targetMachine, "cached output target initialized twice"
@@ -7,9 +5,18 @@ void initializeOutputTarget(ParseContext &context) {
 	context.llvmContext = new llvm::LLVMContext();
 	context.llvmModule = new llvm::Module("dynlex_cached_output", *context.llvmContext);
 	std::string error;
-	context.targetMachine = createNativeTargetMachine(context, error);
+	context.targetMachine =
+		context.options.emitWASM ? createWASMTargetMachine(context, error) : createNativeTargetMachine(context, error);
 	if (!context.targetMachine)
 		throw std::runtime_error(error);
+}
+
+void optimizeWholeModuleOutput(ParseContext &context, BuildStatistics &statistics) {
+	if (!context.options.optimizationLevel)
+		return;
+	const auto start = Clock::now();
+	optimizeLLVMModule(context, *context.llvmModule);
+	statistics.optimizationMilliseconds += elapsedMilliseconds(start);
 }
 
 bool buildLLVMArtifact(
@@ -22,10 +29,7 @@ bool buildLLVMArtifact(
 		statistics.llvmOutputsRestored++;
 		return writeLLVMOutput(context, *text);
 	}
-	auto start = Clock::now();
-	if (context.options.optimizationLevel)
-		optimizeLLVMModule(context, *context.llvmModule);
-	statistics.optimizationMilliseconds += elapsedMilliseconds(start);
+	optimizeWholeModuleOutput(context, statistics);
 	std::string text = renderLLVMOutput(*context.llvmModule);
 	if (!writeLLVMOutput(context, text))
 		return false;
