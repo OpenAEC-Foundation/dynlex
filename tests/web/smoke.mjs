@@ -168,6 +168,12 @@ const hoverPayload = requestLsp("textDocument/hover", {
 });
 assert.ok(hoverPayload?.contents, `Expected hover payload, got: ${JSON.stringify(hoverPayload)}`);
 
+const importPathDefinition = requestLsp("textDocument/definition", {
+  textDocument,
+  position: { line: 0, character: 12 }
+});
+assert.equal(importPathDefinition?.uri, "file:///lib/std.dl");
+assert.deepEqual(importPathDefinition.range, {start: {line: 0, character: 0}, end: {line: 0, character: 0}});
 const definitionPayload = requestLsp("textDocument/definition", {
   textDocument,
   position: { line: 5, character: 14 }
