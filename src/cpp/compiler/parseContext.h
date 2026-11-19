@@ -409,6 +409,8 @@ struct ParseContext {
 
 	// imported source files by path (also prevents circular imports)
 	std::unordered_map<std::string, lsp::SourceFile *> importedFiles;
+	// Each import path points to the source selected by the compiler, including repeated imports.
+	std::vector<std::pair<Range, lsp::SourceFile *>> importDefinitions;
 	// The main source file (the one passed on the command line)
 	lsp::SourceFile *mainSourceFile{};
 	// Owns transformed/imported logical lines used throughout compilation.
