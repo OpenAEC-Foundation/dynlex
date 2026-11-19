@@ -38,6 +38,12 @@ def main():
             assert std and std["uri"].endswith("/lib/std.dl") and std["range"] == expected, std
             for line in (1, 2):
                 assert definition(entry, line, 18) == {"uri": helper.as_uri(), "range": expected}
+            # Open the destination just as the editor does before querying its imports.
+            contents = session.request("dynlex/readDocument", {"uri": helper.as_uri()})
+            assert contents == helper.read_text(encoding="utf-8")
+            session.notify("textDocument/didOpen", {"textDocument": {
+                "uri": helper.as_uri(), "languageId": "dynlex", "version": 1, "text": contents,
+            }})
             assert definition(helper, 0, 11) == {"uri": local.as_uri(), "range": expected}
             assert definition(entry, 0, 15) is None, "The trailing comment resolved as an import."
             assert definition(entry, 0, 13) is None, "Whitespace after the path resolved as an import."
