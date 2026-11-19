@@ -194,8 +194,10 @@ bool isInternalSourcePath(std::string_view path) {
 }
 
 // resolutionRoot keeps nested imports in the tree selected by their importer.
-static bool
-importSourceFile(const std::string &path, ParseContext &context, const std::string &resolutionRoot, SourceLoadPurpose purpose) {
+static bool importSourceFile(
+	const std::string &path, ParseContext &context, const std::string &resolutionRoot, SourceLoadPurpose purpose,
+	Range importSite = {}
+) {
 	lsp::SourceFile *sourceFile = context.fileSystem->getFile(path);
 	if (!sourceFile) {
 		if (context.importedFiles.empty()) {
@@ -206,6 +208,8 @@ importSourceFile(const std::string &path, ParseContext &context, const std::stri
 		}
 		return false;
 	}
+	if (importSite.line)
+		context.importDefinitions.emplace_back(importSite, sourceFile);
 	// Canonicalize path to prevent duplicate imports via different path strings
 	std::string canonicalPath = canonicalSourceKey(sourceFile->uri.empty() ? path : sourceFile->uri);
 	if (context.importedFiles.contains(canonicalPath)) {
@@ -240,7 +244,7 @@ importSourceFile(const std::string &path, ParseContext &context, const std::stri
 			ResolvedImport resolvedImport =
 				resolveImportPath(std::string(*importPathView), importingDir, activeResolutionRoot, context.fileSystem.get());
 			const std::string &importPath = resolvedImport.path;
-			if (!importSourceFile(importPath, context, resolvedImport.root, purpose)) {
+			if (!importSourceFile(importPath, context, resolvedImport.root, purpose, Range(line, *importPathView))) {
 				context.addDiagnostic(Diagnostic(
 					context, Diagnostic::Level::Error, "failed to import source file",
 					Range(

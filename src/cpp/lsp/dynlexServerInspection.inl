@@ -364,6 +364,11 @@ std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionPar
 }
 
 std::optional<Location> DynLexServer::definitionInContext(ParseContext *context, const TextDocumentPositionParams &params) {
+	for (const auto &[path, target] : context->importDefinitions) {
+		const int offset = path.line->mapSourceToOffset(params.textDocument.uri, params.position.line, params.position.character);
+		if (offset >= path.start() && offset < path.end())
+			return Location{pathutil::toAbsoluteUri(target->uri), {}};
+	}
 	if (!hasCompilationStage(context, ParseContext::CompilationStage::ResolvedPatterns)) {
 		return std::nullopt;
 	}
