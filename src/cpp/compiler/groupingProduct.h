@@ -3,6 +3,7 @@
 #include <memory>
 #include <set>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 struct CodeLine;
@@ -39,11 +40,20 @@ struct GroupingProduct {
 
 struct GroupingTrace {
 	enum class Kind { Grouping, RequiredInstance, ProvidedInstance };
-	std::shared_ptr<const GroupingTrace> previous;
+	// Snapshots share immutable prefixes. Only teardown detaches an exclusively owned link.
+	mutable std::shared_ptr<const GroupingTrace> previous;
 	CodeLine *line = nullptr;
 	GroupingTransition transition;
 	std::shared_ptr<const VariableStorageScope> instance{};
 	Kind kind = Kind::Grouping;
+
+	~GroupingTrace() {
+		auto tail = std::move(previous);
+		while (tail && tail.use_count() == 1) {
+			auto next = std::move(tail->previous);
+			tail = std::move(next);
+		}
+	}
 };
 
 bool applyGroupingProduct(ParseContext &, const std::shared_ptr<const GroupingProduct> &, InferenceContext *);

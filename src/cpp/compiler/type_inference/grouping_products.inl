@@ -26,8 +26,7 @@ static GroupingState currentGroupingState(CodeLine *line, const InferenceContext
 
 static void recordGroupingTransition(InferenceContext &context, CodeLine *line, GroupingTransition transition) {
 	if (context.parseContext.inferenceProducts)
-		context.groupingTrace =
-			std::make_shared<GroupingTrace>(GroupingTrace{context.groupingTrace, line, std::move(transition)});
+		context.groupingTrace = std::make_shared<GroupingTrace>(context.groupingTrace, line, std::move(transition));
 }
 
 static std::shared_ptr<const GroupingProduct> captureGroupingProduct(
@@ -89,12 +88,8 @@ void recordInferenceInstance(
 		requireCompilerInvariant(
 			inferenceInstanceAvailable(context.parseContext, scope, &context), "inference consumed an unavailable instance"
 		);
-	context.groupingTrace = std::make_shared<GroupingTrace>(GroupingTrace{
-		.previous = context.groupingTrace,
-		.transition = {},
-		.instance = scope,
-		.kind = provided ? GroupingTrace::Kind::ProvidedInstance : GroupingTrace::Kind::RequiredInstance
-	});
+	auto kind = provided ? GroupingTrace::Kind::ProvidedInstance : GroupingTrace::Kind::RequiredInstance;
+	context.groupingTrace = std::make_shared<GroupingTrace>(context.groupingTrace, nullptr, GroupingTransition{}, scope, kind);
 }
 
 static void observeGroupingProbe(const InferenceContext &probe, InferenceContext &caller) {
