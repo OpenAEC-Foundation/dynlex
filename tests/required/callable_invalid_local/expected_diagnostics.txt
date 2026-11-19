@@ -1,0 +1,2 @@
+tests/required/callable_invalid_local/main.dl:26-34: Error: Variable 'missing' has no type (never assigned a value)
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", @intrinsic("function", "read key"))' with arguments [an unresolved value] -> an unresolved value tests/required/callable_invalid_local/main.dl:1-58
