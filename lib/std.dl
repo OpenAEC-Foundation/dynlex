@@ -18,8 +18,7 @@ a new {type:kind} means: @intrinsic("construct", kind)
 
 function set variable to value:
     replacement:
-        @intrinsic("store", variable, value)
-        set the subject to variable
+        @intrinsic("assign", variable, value)
 function set {arguments:variables} to value:
     replacement:
         @intrinsic("store", {assigned}, value)

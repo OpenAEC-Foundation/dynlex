@@ -27,14 +27,15 @@ perform an example action
 print line it succeeded
 ```
 
-The standard `set variable to value` action assigns the variable and publishes its value as the subject. The subject is a value copy; changing it does not assign the original variable. Managed values retain their subject copies until the owning function ends:
+An action can publish a writable place or a computed value. Publishing a variable, a field of writable storage or a dereferenced pointer lets `it` read and write that same location. The compiler selects the subject at compile time. Public assignment uses the address it wrote, evaluating the destination once. A subject can keep a local variable alive after the block that published it returns. Computed subjects retain their value, including ownership of managed temporaries.
 
 ```dynlex
-set x to 1. add 5
-print lines x and it
-# 1
-# 6
+set x to 1 and add 2 to it
+print line x
+# 3
 ```
+
+The one-argument `add 5` publishes the computed sum. After `set x to 1. add 5`, `x` is 1 and `it` is 6.
 
 Replacement definitions can publish another value with `set the subject to value`. Referencing `it` before any subject assignment is an error. If different runtime branches would assign different subjects, reading `it` after the branch is also an error because its source is ambiguous. A subject assigned inside a loop is available afterward only when the first iteration is statically guaranteed and every path that can leave the loop has the same subject. When zero iterations remain possible, the pre-loop subject path is retained and a different loop assignment makes the result ambiguous.
 

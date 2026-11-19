@@ -309,6 +309,7 @@ Expression *cloneExpressionTreeImpl(
 	clone->selectedCallablePathIndex = preserveInferenceMetadata ? expression->selectedCallablePathIndex : std::nullopt;
 	clone->selectedInstantiation = preserveInferenceMetadata ? expression->selectedInstantiation : nullptr;
 	clone->subjectSetter = nullptr;
+	clone->subjectPlace = nullptr;
 	clone->compileTimeValue = preserveInferenceMetadata ? expression->compileTimeValue : CompileTimeValue{};
 	clone->arguments.reserve(expression->arguments.size());
 	for (Expression *argument : expression->arguments)

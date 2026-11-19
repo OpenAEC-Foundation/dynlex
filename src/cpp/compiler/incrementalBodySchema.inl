@@ -19,6 +19,8 @@
 	X(Path, "path")                                                                                                            \
 	X(Callable, "callable")                                                                                                    \
 	X(CallablePath, "callable_path")                                                                                           \
+	X(SubjectPlace, "subject_place")                                                                                           \
+	X(SubjectAddress, "subject_address")                                                                                       \
 	X(Subject, "subject")                                                                                                      \
 	X(Capture, "capture")                                                                                                      \
 	X(Instance, "instance")                                                                                                    \

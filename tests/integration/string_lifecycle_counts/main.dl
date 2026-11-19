@@ -3,7 +3,7 @@ import lib/std.dl
 to print owner count of {string:value}: print line @intrinsic("dereference", the owner of value)
 
 to exercise string ownership:
-    # Each public assignment also retains a subject value until this function ends.
+    # The two variables are the owners. Publishing an assignment borrows its storage.
     set first to the string form of 1001
     print owner count of first
     set second to first

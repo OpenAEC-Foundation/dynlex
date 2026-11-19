@@ -172,11 +172,14 @@ static std::optional<StorageTypeView> storageTypeView(
 		VariableStorageKey root = variableStorageKey(value);
 		Variable *variable = value->range.line->section->findVariable(value->variable);
 		requireCompilerInvariant(variable != nullptr, "storage type view lost its variable");
+		const DataType &type = root == variableStorageKey(value->variable, context.currentInstantiatedSectionBody)
+								   ? variable->type
+								   : value->type;
 		// Closed types cannot acquire further structure. Existing roots still
 		// receive writes so an earlier equation can complete its other endpoint.
-		if (!requireRoot && !context.typeRefinements.read().roots.contains(root) && !typeHasRefinableStructure(variable->type))
+		if (!requireRoot && !context.typeRefinements.read().roots.contains(root) && !typeHasRefinableStructure(type))
 			return std::nullopt;
-		if (!refineStorageRootType(root, variable, variable->type, context))
+		if (!refineStorageRootType(root, variable, type, context))
 			return std::nullopt;
 		return StorageTypeView{root, {}};
 	}
@@ -186,6 +189,9 @@ static std::optional<StorageTypeView> storageTypeView(
 		return std::nullopt;
 	IntrinsicKind kind = intrinsicKind(value->intrinsicName);
 	if (kind == IntrinsicKind::Subject) {
+		if (value->subjectSetter && value->subjectSetter->subjectPlace &&
+			value->subjectSetter->subjectPlace->kind == Expression::Kind::Variable)
+			return storageTypeView(value->subjectSetter->subjectPlace, context, {}, requireRoot);
 		auto source = context.typeRefinements.read().subjectSources.find(value->subjectSetter);
 		if (source == context.typeRefinements.read().subjectSources.end() && !typeHasRefinableStructure(value->type))
 			return std::nullopt;

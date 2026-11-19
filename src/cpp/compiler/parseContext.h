@@ -382,8 +382,12 @@ struct ParseContext {
 	std::unordered_map<const Expression *, llvm::Value *> localDataLLVMValues;
 	unsigned staticReferenceDepth = 0;
 	std::unordered_map<const Expression *, llvm::GlobalVariable *> staticLLVMValues;
-	// Subject values are call-site-local temporaries keyed by their inferred assignment expression.
-	std::unordered_map<const Expression *, llvm::Value *> subjectStorage;
+	// A dynamic place keeps its evaluated address across control-flow edges.
+	struct SubjectStorage {
+		llvm::Value *storage;
+		llvm::Type *storedAddressType{};
+	};
+	std::unordered_map<const Expression *, SubjectStorage> subjectStorage;
 	// Runtime storage that owns values with class-defined or recursively derived
 	// lifecycle behavior. Locals are scoped per generated function; globals are
 	// released from main after all user code has completed.

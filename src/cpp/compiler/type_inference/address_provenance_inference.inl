@@ -61,7 +61,24 @@ static std::optional<AddressProvenance> inferLValueAddressProvenance(
 	if (!resolvedExpression)
 		crashCompilerBug("lvalue address provenance inference lost its expression while resolving bindings");
 
+	if (resolvedExpression->subjectSetter) {
+		Expression *setter = resolvedExpression->subjectSetter;
+		if (!setter->subjectPlace)
+			return std::nullopt;
+		if (setter->subjectPlace->kind != Expression::Kind::Variable) {
+			const auto &address = *resolvedExpression->subjectAddress;
+			if (recordAddressTaken) {
+				auto &taken = context.currentAddressState.write().addressTakenVariables;
+				taken.insert(address.mayTargets.begin(), address.mayTargets.end());
+			}
+			return address;
+		}
+		resolvedExpression = setter->subjectPlace;
+	}
 	if (resolvedExpression->kind == Expression::Kind::Variable && resolvedExpression->variable) {
+		Variable *variable = findVariableForExpression(resolvedExpression);
+		if (variable->dataInitializer || variableIsFixedParameter(context, variable))
+			return std::nullopt;
 		VariableStorageKey target = variableStorageKey(resolvedExpression);
 		if (recordAddressTaken)
 			context.currentAddressState.write().addressTakenVariables.insert(target);
@@ -159,6 +176,19 @@ inferAddressProvenance(Expression *expression, InferenceContext &context, const 
 													: AddressProvenance{};
 
 	IntrinsicKind kind = intrinsicKind(resolvedExpression->intrinsicName);
+	if (kind == IntrinsicKind::Subject) {
+		if (!typeMayContainAddresses(resolvedExpression->type))
+			return {};
+		Expression *setter = resolvedExpression->subjectSetter;
+		if (!setter)
+			return {.mayTargets = {}, .unknown = true};
+		if (setter->subjectPlace && setter->subjectPlace->kind == Expression::Kind::Variable)
+			return context.lookupAddressProvenance(variableStorageKey(setter->subjectPlace));
+		if (!resolvedExpression->subjectAddress)
+			return {};
+		const auto &address = *resolvedExpression->subjectAddress;
+		return setter->subjectPlace ? dereferenceAddressProvenance(address, 1, context) : address;
+	}
 	if (kind == IntrinsicKind::StaticReference)
 		return {.mayTargets = {}, .mayBeStatic = true};
 	if (kind == IntrinsicKind::AddressOf) {

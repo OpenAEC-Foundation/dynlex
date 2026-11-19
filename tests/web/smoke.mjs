@@ -624,6 +624,10 @@ const capturedStorageSource = await readFile(
   "utf8"
 );
 assert.equal(await compileAndRun(capturedStorageSource), "");
+assert.equal(await compileAndRun(`import lib/std.dl
+set x to 1 and add 2 to it
+print x
+`), "3");
 
 const explicitOperandFixture = new URL('../required/explicit_named_operator_operand/', import.meta.url);
 assert.equal(await compileAndRun(await readFile(new URL('main.dl', explicitOperandFixture), 'utf8')),

@@ -1,5 +1,6 @@
 #pragma once
 
+static void joinAddressProvenance(AddressProvenance &destination, const AddressProvenance &source);
 static AddressInferenceState mergeAddressInferenceStates(const std::vector<AddressInferenceState> &states);
 
 // Inferring an argument determines its type even when the selected replacement
@@ -79,9 +80,16 @@ static void mergeExecutionStates(
 	context.currentAddressState = mergeAddressInferenceStates(addressStates);
 	context.currentSubject = subjectStates.front();
 	for (size_t index = 1; index < subjectStates.size(); index++) {
-		if (subjectStates[index] != context.currentSubject) {
+		const auto &other = subjectStates[index];
+		auto &subject = context.currentSubject;
+		if (other.setter != subject.setter || other.ambiguous != subject.ambiguous) {
 			context.currentSubject = {.setter = nullptr, .ambiguous = true};
 			break;
+		}
+		if (subject.address && other.address && *subject.address != *other.address) {
+			auto merged = std::make_shared<AddressProvenance>(*subject.address);
+			joinAddressProvenance(*merged, *other.address);
+			subject.address = std::move(merged);
 		}
 	}
 }

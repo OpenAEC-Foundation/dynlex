@@ -14,6 +14,45 @@ void ExpressionInferenceSupport::inferLifecycleValueIntrinsic() {
 	expr->type = context.currentInstantiation->argumentTypes.front();
 }
 
+// A single-expression replacement can forward a place. A block producing a value
+// must run its statements at publication, just like any other computed expression.
+static std::shared_ptr<const AddressProvenance>
+captureSubjectPlace(Expression *setter, const DataType &type, InferenceContext &context, const BindingFrameStack &bindings) {
+	setter->subjectPlace = nullptr;
+	setter->subjectAddress.reset();
+	if (type.isMetaType())
+		return {};
+	auto resolved = resolveInferenceBindingLayers(setter->arguments[1], bindings, &context, [](Expression *expression) {
+		return expression->inferredFlexBody && !singleExpressionFlexFunctionOutcome(expression->selectedPatternDefinition);
+	});
+	Expression *source = resolved.expression;
+	if (source->kind == Expression::Kind::Variable) {
+		Variable *variable = findVariableForExpression(source);
+		if (variable && !variable->dataInitializer && !variableIsFixedParameter(context, variable)) {
+			setter->subjectPlace = source;
+			return {};
+		}
+	}
+	if (source->subjectSetter && source->subjectSetter->subjectPlace) {
+		setter->subjectPlace = source->subjectSetter->subjectPlace;
+		if (setter->subjectPlace->kind == Expression::Kind::Variable) {
+			return {};
+		}
+	}
+	if (source->kind == Expression::Kind::IntrinsicCall) {
+		if (auto address = inferLValueAddressProvenance(source, context, resolved.bindingFrameStack, false)) {
+			if (!setter->subjectPlace)
+				setter->subjectPlace = source;
+			return std::make_shared<AddressProvenance>(std::move(*address));
+		}
+	}
+	if (typeMayContainAddresses(type)) {
+		auto value = inferAddressProvenance(source, context, resolved.bindingFrameStack);
+		return std::make_shared<AddressProvenance>(std::move(value));
+	}
+	return {};
+}
+
 void ExpressionInferenceSupport::inferSubjectIntrinsic() {
 	if (context.currentSubject.ambiguous) {
 		failWithDetail(expr->range, "the subject depends on which control-flow path executes");
@@ -24,9 +63,10 @@ void ExpressionInferenceSupport::inferSubjectIntrinsic() {
 		return;
 	}
 	expr->subjectSetter = context.currentSubject.setter;
+	expr->subjectAddress = context.currentSubject.address;
 	if (expr->subjectSetter->arguments.size() <= 1)
 		crashCompilerBug("subject assignment is missing its value expression");
-	expr->type = ensureExpressionType(expr->subjectSetter->arguments[1], context, flexBindingFrameStack);
+	expr->type = expr->subjectSetter->arguments[1]->type;
 }
 
 void ExpressionInferenceSupport::inferCommandLineArgumentsIntrinsic(IntrinsicKind kind) {

@@ -14,9 +14,12 @@ inferIntrinsicCompileTimeValue(Expression *expr, InferenceContext &context, cons
 		return {};
 	if (intrinsicKind(expr->intrinsicName) == IntrinsicKind::Return && expr->arguments.size() > 1)
 		return context.lookupExpressionValue(expr->arguments[1]);
-	if (intrinsicKind(expr->intrinsicName) == IntrinsicKind::Subject && expr->subjectSetter &&
-		expr->subjectSetter->arguments.size() > 1)
-		return context.lookupExpressionValue(expr->subjectSetter->arguments[1]);
+	if (intrinsicKind(expr->intrinsicName) == IntrinsicKind::Subject && expr->subjectSetter) {
+		if (Expression *place = expr->subjectSetter->subjectPlace)
+			return place->kind == Expression::Kind::Variable ? context.lookupKnownConstant(variableStorageKey(place))
+															 : CompileTimeValue{};
+		return context.lookupStoredExpressionValue(expr->subjectSetter->arguments.back());
+	}
 	return evaluatePureIntrinsicCompileTimeValue(expr, context.parseContext, [&](Expression *argumentExpression) {
 		return context.lookupExpressionValue(argumentExpression);
 	}, [&](Expression *expression) {
@@ -376,6 +379,16 @@ static PureExpressionExecutionResult evaluatePureExpression(
 			return {};
 		}
 		if (kind == IntrinsicKind::Subject) {
+			Expression *place = expr->subjectSetter->subjectPlace;
+			if (place) {
+				// The pure interpreter tracks variable slots but cannot load an indirect address.
+				if (place->kind != Expression::Kind::Variable)
+					return {};
+
+				CompileTimeValue value;
+				if (lookupPureExecutionLocalValue(frame, variableStorageKey(place), value))
+					return {value, false, {}};
+			}
 			auto value = frame.subjectValues.find(expr->subjectSetter);
 			requireCompilerInvariant(value != frame.subjectValues.end(), "pure subject read has no executed assignment");
 			return {value->second, false, {}};
@@ -393,7 +406,7 @@ static PureExpressionExecutionResult evaluatePureExpression(
 			valueResult.returned = true;
 			return valueResult;
 		}
-		if (kind == IntrinsicKind::Store) {
+		if (isVariableStoreIntrinsic(kind)) {
 			if (expr->arguments.size() <= 2)
 				crashCompilerBug("store intrinsic missing destination or value during pure execution");
 			Expression *destinationExpression =
@@ -402,6 +415,10 @@ static PureExpressionExecutionResult evaluatePureExpression(
 				evaluatePureExpression(expr->arguments[2], state, frame, bindingFrameStack);
 			if (valueResult.returned)
 				crashCompilerBug("store value evaluation returned unexpectedly during pure execution");
+			if (kind == IntrinsicKind::Assign)
+				frame.subjectValues[expr] = valueResult.value;
+			if (destinationExpression && destinationExpression->subjectSetter)
+				destinationExpression = destinationExpression->subjectSetter->subjectPlace;
 			if (!destinationExpression || destinationExpression->kind != Expression::Kind::Variable ||
 				!destinationExpression->variable) {
 				return {};

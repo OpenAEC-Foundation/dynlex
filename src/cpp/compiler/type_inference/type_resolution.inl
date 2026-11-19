@@ -617,8 +617,8 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 					return targetType;
 			}
 		}
-		if (kind == IntrinsicKind::Subject && resolved->subjectSetter && resolved->subjectSetter->arguments.size() > 1)
-			return resolveKnownExpressionType(resolved->subjectSetter->arguments[1], effectiveBindingFrameStack);
+		if (kind == IntrinsicKind::Subject && resolved->subjectSetter)
+			return resolved->subjectSetter->arguments[1]->type;
 	}
 	return resolved->type;
 }

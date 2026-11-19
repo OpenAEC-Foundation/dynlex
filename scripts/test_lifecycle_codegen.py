@@ -41,9 +41,9 @@ def main() -> int:
         temporary_allocations = re.findall(r'^\s+%temporary\d* = alloca ', body, flags=re.MULTILINE)
         subject_allocations = re.findall(r'^\s+%subject\d* = alloca ', body, flags=re.MULTILINE)
         initialization_flags = re.findall(r'^\s+%managed_initialized\d* = alloca i1', body, flags=re.MULTILINE)
-        if len(temporary_allocations) != 1 or len(subject_allocations) != 1 or len(initialization_flags) != 2:
+        if len(temporary_allocations) != 1 or subject_allocations or len(initialization_flags) != 1:
             print(
-                "lifecycle function must allocate one managed local, one subject copy and their two initialization flags; "
+                "lifecycle function must allocate one managed local and its initialization flag; "
                 f"found {len(temporary_allocations)} locals, {len(subject_allocations)} subjects and {len(initialization_flags)} flags",
                 file=sys.stderr,
             )

@@ -362,8 +362,8 @@ CodegenResult generateIntrinsicCode(
 		return generateDiscardIntrinsic(context, args);
 	if (kind == IntrinsicKind::CheckDeallocation)
 		return nullptr;
-	if (kind == IntrinsicKind::Store)
-		return generateStoreIntrinsic(context, args);
+	if (isVariableStoreIntrinsic(kind))
+		return generateStoreIntrinsic(context, callExpr, args);
 	ArithmeticIntrinsicKind arithmeticOp = arithmeticIntrinsicKind(name);
 	if (isArithmeticIntrinsic(arithmeticOp))
 		return generateArithmeticIntrinsic(context, args, resultType, arithmeticOp);

@@ -286,6 +286,11 @@ static bool variableIsCurrentInstantiationParameter(const InferenceContext &cont
 	return variable && variableReferenceIsCurrentInstantiationParameter(context, variable->definition);
 }
 
+static bool variableIsFixedParameter(const InferenceContext &context, Variable *variable) {
+	return variableIsCurrentInstantiationParameter(context, variable) &&
+		   context.currentInstantiation->requiredCompileTimeParameters.contains(variable->name);
+}
+
 static InstantiationPurity classifyPropertyIntrinsicPurity(
 	Expression *propertyExpr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack,
 	bool writingThroughProperty = false
@@ -330,6 +335,8 @@ classifyStoreIntrinsicPurity(Expression *storeExpr, InferenceContext &context, c
 	BindingFrameStack destinationBindingFrameStack = std::move(resolvedDestination.bindingFrameStack);
 	if (!destinationExpr)
 		return InstantiationPurity::Impure;
+	if (destinationExpr->subjectSetter && destinationExpr->subjectSetter->subjectPlace)
+		destinationExpr = destinationExpr->subjectSetter->subjectPlace;
 	if (destinationExpr->kind == Expression::Kind::Variable) {
 		Variable *variable = findVariableForExpression(destinationExpr);
 		if (!variable)
@@ -365,6 +372,7 @@ classifyCustomIntrinsicPurity(Expression *expr, InferenceContext &context, const
 		return typeHasRefinableStructure(type) || typeHasManagedLifecycle(type) ? InstantiationPurity::Impure
 																				: InstantiationPurity::Pure;
 	}
+	case IntrinsicKind::Assign:
 	case IntrinsicKind::Store:
 		return classifyStoreIntrinsicPurity(expr, context, flexBindingFrameStack);
 	case IntrinsicKind::Property:
@@ -665,7 +673,7 @@ static bool expressionIsLValueOnlyUse(const InferenceContext &context, Expressio
 	if (!consumer || consumer->kind != Expression::Kind::IntrinsicCall)
 		return false;
 	IntrinsicKind kind = intrinsicKind(consumer->intrinsicName);
-	if ((kind == IntrinsicKind::Store || kind == IntrinsicKind::AddressOf) && consumer->arguments.size() > 1)
+	if ((isVariableStoreIntrinsic(kind) || kind == IntrinsicKind::AddressOf) && consumer->arguments.size() > 1)
 		return expressionContainsTargetExpression(consumer->arguments[1], expr);
 	return false;
 }
@@ -803,7 +811,7 @@ static ImplicitPromotionTraceResult traceImplicitPromotionUse(
 		if (consumer == firstReference)
 			continue;
 		if (consumer->kind == Expression::Kind::IntrinsicCall) {
-			if (intrinsicKind(consumer->intrinsicName) == IntrinsicKind::Store && consumer->arguments.size() > 1 &&
+			if (isVariableStoreIntrinsic(intrinsicKind(consumer->intrinsicName)) && consumer->arguments.size() > 1 &&
 				expressionContainsTargetExpression(consumer->arguments[1], firstReference)) {
 				ImplicitPromotionTraceResult result;
 				result.reachesStore = true;

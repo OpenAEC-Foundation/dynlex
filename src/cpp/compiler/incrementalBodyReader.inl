@@ -338,6 +338,17 @@ class InferenceBodyReader {
 		result.selectedCallableDefinition = sources.definition(field(Field::Callable));
 		result.selectedCallablePathIndex = optional<size_t>(field(Field::CallablePath));
 		result.subjectSetter = expression(field(Field::Subject));
+		result.subjectPlace = expression(field(Field::SubjectPlace));
+		if (!field(Field::SubjectAddress).is_null()) {
+			const Json &encoded = field(Field::SubjectAddress);
+			auto address = std::make_shared<AddressProvenance>();
+			for (const Json &target : encoded.at(0))
+				address->mayTargets.insert({variable(target.at(0)), scope(target.at(1))});
+			address->mayBeNull = encoded.at(1).get<bool>();
+			address->unknown = encoded.at(2).get<bool>();
+			address->mayBeStatic = encoded.at(3).get<bool>();
+			result.subjectAddress = std::move(address);
+		}
 		if (!field(Field::Capture).is_null())
 			result.inferredArgumentReference = captureValue(field(Field::Capture));
 		if (!field(Field::Instance).is_null()) {

@@ -1,25 +1,22 @@
 #pragma once
 
+static Range storeOperandRange(const Expression &expression) {
+	const auto &range = expression.range;
+	auto [start, end] = trimmedSourceSpan(range.subString, 0, range.subString.size());
+	return range.subRange(start, end);
+}
+
 static std::string storeValueText(Expression *valueExpression) {
 	if (!valueExpression || valueExpression->range.subString.empty())
 		return "<expression>";
-	std::string_view text = valueExpression->range.subString;
-	size_t start = 0;
-	while (start < text.size() && std::isspace(static_cast<unsigned char>(text[start])))
-		start++;
-	size_t end = text.size();
-	while (end > start && std::isspace(static_cast<unsigned char>(text[end - 1])))
-		end--;
-	return std::string(text.substr(start, end - start));
+	return std::string(storeOperandRange(*valueExpression).subString);
 }
 
 static void setInvalidStoreDestinationFailure(Expression *destinationExpr, InferenceContext &context) {
-	std::string destinationText = destinationExpr && !destinationExpr->range.subString.empty()
-									  ? (std::string)destinationExpr->range.subString
-									  : "<expression>";
-	std::string detail = "assignment target '" + destinationText + "' is not writable";
+	Range range = storeOperandRange(*destinationExpr);
+	std::string detail = "assignment target '" + std::string(range.subString) + "' is not writable";
 	context.setTypeFailure(detail);
-	context.fail(buildFailureDetailDiagnostic(destinationExpr->range, std::move(detail)));
+	context.fail(buildFailureDetailDiagnostic(range, std::move(detail)));
 }
 
 struct ActiveConstraintPath {
@@ -317,6 +314,12 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		}
 	}
 
+	Expression *publishedPlace = destinationExpr->subjectSetter ? destinationExpr->subjectSetter->subjectPlace : nullptr;
+	// Only an active invocation owns the declaration's reusable Variable metadata.
+	if (publishedPlace && publishedPlace->kind == Expression::Kind::Variable &&
+		variableStorageKey(publishedPlace) ==
+			variableStorageKey(publishedPlace->variable, context.currentInstantiatedSectionBody))
+		destinationExpr = publishedPlace;
 	if (valueType.isMetaType() && (!isCompileTimeKnown(context.lookupExpressionValue(valueExpr)) ||
 								   destinationExpr->kind != Expression::Kind::Variable || !destinationExpr->variable)) {
 		context.setTypeFailure("compile time type value used at runtime");
@@ -350,10 +353,33 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		return;
 	}
 
+	if (publishedPlace && destinationExpr != publishedPlace) {
+		DataType targetType = destinationExpr->type;
+		if (!isVariableAssignmentCompatible(targetType, valueType) &&
+			!tryApplyUserConversion(valueExpr, targetType, true, context, valueBindingFrameStack)) {
+			if (context.typesValid)
+				context.fail(context.setConfiguredTypeFailure(
+					valueExpr->range, "variable type change", "message",
+					{{"name", storeValueText(destinationSourceExpr)},
+					 {"from_type", typeToUserName(targetType)},
+					 {"to_type", typeToUserName(valueType)}}
+				));
+			return;
+		}
+		auto address = inferLValueAddressProvenance(destinationExpr, context, destinationBindingFrameStack, false).value();
+		if (publishedPlace->kind == Expression::Kind::IntrinsicCall &&
+			intrinsicKind(publishedPlace->intrinsicName) == IntrinsicKind::Property)
+			invalidateAddressTargets(context, address, false);
+		else
+			applyStoreThroughAddress(context, address, valueExpr, valueBindingFrameStack);
+		recordStorageTypeAssignment(destinationExpr, destinationBindingFrameStack, valueExpr, valueBindingFrameStack, context);
+		return;
+	}
+
 	if (destinationExpr->kind == Expression::Kind::Variable && destinationExpr->variable) {
 		Section *section = destinationExpr->range.line ? destinationExpr->range.line->section : nullptr;
 		Variable *variable = section ? section->findVariable(destinationExpr->variable) : nullptr;
-		if (!variable) {
+		if (!variable || variableIsFixedParameter(context, variable)) {
 			setInvalidStoreDestinationFailure(destinationSourceExpr, context);
 			return;
 		}

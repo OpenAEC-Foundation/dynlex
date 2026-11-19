@@ -61,6 +61,7 @@ enum class IntrinsicTargets { All, Native, NativeOrWasm };
 	X(LifecycleValue, "lifecycle value", 1, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                      \
 	X(Discard, "discard", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                       \
 	X(Store, "store", 3, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Custom)                                         \
+	X(Assign, "assign", 3, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Custom)                                       \
 	X(StoreAt, "store at", 3, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                                    \
 	X(InitializeAt, "initialize at", 3, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                          \
 	X(DestroyAt, "destroy at", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                                \
@@ -332,6 +333,10 @@ constexpr IntrinsicPurityKind intrinsicPurityKind(IntrinsicKind kind) {
 	default:
 		return IntrinsicPurityKind::Impure;
 	}
+}
+
+constexpr bool isVariableStoreIntrinsic(IntrinsicKind kind) {
+	return kind == IntrinsicKind::Store || kind == IntrinsicKind::Assign;
 }
 
 constexpr bool isAlwaysPureIntrinsicKind(IntrinsicKind kind) { return intrinsicPurityKind(kind) == IntrinsicPurityKind::Pure; }

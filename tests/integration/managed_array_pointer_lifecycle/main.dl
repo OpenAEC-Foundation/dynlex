@@ -107,7 +107,6 @@ to exercise string record array pointers:
     set name to the name of entry
     print line (the length of name)
 
-# Assignment subjects retain array values too; the release sequence needs 64 bits.
 set owningRetains and owningReleases to 0
 set owningReleaseSequence to 0 as a 64 bit integer
 exercise owning arrays using the address of owningRetains, the address of owningReleases and the address of owningReleaseSequence

@@ -99,7 +99,7 @@ The accepted follow-up forms are implemented:
 | Grouped addition | `add x to total ⏎ add y to total ⏎ add z to total` (44) | `add x, y and z to total` (23) | 21 |
 | Negative membership | `not (mode is one of x, y and z)` (31) | `mode is not one of x, y and z` (29) | 2 |
 
-`set x to 1. add 5` leaves `x` equal to `1` and makes `it` equal to `6`. Public assignment publishes a value copy; it does not turn the subject into an alias of the assignment target. Internal loop and formatting assignments do not publish their private counters or caches as the subject. Explicit `add 5 to x` still changes `x`.
+`set x to 1. add 5` leaves `x` equal to `1` and makes `it` equal to `6`. Public assignment publishes its writable destination. `add 5 to it` writes to that destination, while the one-argument `add 5` publishes a new computed sum. Internal loop and formatting assignments do not publish their private counters or caches as the subject. Explicit `add 5 to x` still changes `x`.
 
 Each grouping candidate infers its arguments in source order, allowing the left action to establish the subject and refine storage types before the right action uses them. A rejected candidate restores the type equations, variable metadata, constants, pointer facts and subject. Static typing of skipped conditional operands remains separate from their runtime execution.
 
@@ -109,7 +109,7 @@ Pointer-alias refinement now propagates structural type requirements through cop
 
 Pure evaluation keeps subjects in each function call frame. Pure type functions remain usable after local assignments, managed subject lifecycle effects remain impure, and recursive assignments can defer their subject until their value type is resolved.
 
-Assignment subjects retain managed value copies until their owning function ends. The lifecycle expectations include these copies; the array release-order test uses a 64-bit counter to hold the longer sequence without overflow.
+Subjects published from writable storage borrow that storage. Computed managed subjects own a value until cleanup in the publishing function.
 
 The initial complete verification found two lifecycle reachability crashes in filesystem operations and a changed negative-fixture diagnostic trace. The lifecycle collector now follows captured expressions through the existing binding resolver and their caller scopes. Unused replacement arguments remain outside the runtime graph. Both filesystem crash cases pass after that correction, and all 31 focused argument-pack/lifecycle fixtures pass. The CAD fixture still rejects the same incomplete NURBS surface layout; its expected notes reflect the runtime-driven inference path's extra grouping frame.
 
@@ -158,7 +158,7 @@ Three pre-existing per-domain Rust comparison runners reference absent `probe.dl
 
 The existing browser-test cleanup kills its npm server process but leaves the Vite child running. The test server started for this verification was stopped explicitly. Updating that cleanup to terminate its whole process group is another proposed improvement.
 
-The IDE production build reports chunks larger than 500 kB. Splitting those bundles is another potential improvement. Superseded managed subject snapshots currently live until function exit; a future lifetime analysis could identify snapshots whose values are no longer used and reduce retained resources.
+The IDE production build reports chunks larger than 500 kB. Splitting those bundles is another potential improvement. Superseded computed managed subject snapshots currently live until function exit; a future lifetime analysis could identify snapshots whose values are no longer used and reduce retained resources.
 
 The Web smoke helper now checks each program's exit value as well as its output, including the import-free null-pointer regression. A wrong result therefore fails even when no output differs.
 

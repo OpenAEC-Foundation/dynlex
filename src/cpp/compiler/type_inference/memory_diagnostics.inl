@@ -9,7 +9,7 @@ memoryIntrinsicViolation(Expression *expression, InferenceContext &context, cons
 	IntrinsicKind kind = intrinsicKind(expression->intrinsicName);
 	bool deallocation = kind == IntrinsicKind::CheckDeallocation;
 	bool reads = kind == IntrinsicKind::Dereference || isExternalCallIntrinsicKind(kind) || isAtomicIntrinsicKind(kind);
-	bool writes = kind == IntrinsicKind::Store || kind == IntrinsicKind::StoreAt || kind == IntrinsicKind::InitializeAt;
+	bool writes = isVariableStoreIntrinsic(kind) || kind == IntrinsicKind::StoreAt || kind == IntrinsicKind::InitializeAt;
 	bool destruction = kind == IntrinsicKind::DestroyAt;
 	bool property = kind == IntrinsicKind::Property;
 	if (!deallocation && !reads && !writes && !property && !destruction)
@@ -17,7 +17,7 @@ memoryIntrinsicViolation(Expression *expression, InferenceContext &context, cons
 	Expression *pointer = expression->arguments[1];
 	DataType pointerType = resolveKnownExpressionType(pointer, bindings);
 	AddressProvenance address;
-	if (kind == IntrinsicKind::Store) {
+	if (isVariableStoreIntrinsic(kind)) {
 		std::optional<AddressProvenance> destination = inferLValueAddressProvenance(pointer, context, bindings, false);
 		if (!destination)
 			return std::nullopt;
@@ -25,7 +25,8 @@ memoryIntrinsicViolation(Expression *expression, InferenceContext &context, cons
 	} else {
 		address = inferAddressProvenance(pointer, context, bindings);
 	}
-	if ((kind != IntrinsicKind::Store && !pointerType.isPointer()) || (property && pointerType.kind != DataType::Kind::Class))
+	if ((!isVariableStoreIntrinsic(kind) && !pointerType.isPointer()) ||
+		(property && pointerType.kind != DataType::Kind::Class))
 		return std::nullopt;
 	if (kind == IntrinsicKind::DestroyAt && !typeHasManagedLifecycle(pointerType.dereferenced()))
 		return std::nullopt;
@@ -133,7 +134,7 @@ static void recordExpressionMemoryFacts(Expression *expression, InferenceContext
 
 				continue;
 			const MemoryFacts &argument = expressionMemoryFacts(expression->arguments[index], bindings);
-			bool addressOnly = index == 1 && (kind == IntrinsicKind::AddressOf || kind == IntrinsicKind::Store);
+			bool addressOnly = index == 1 && (kind == IntrinsicKind::AddressOf || isVariableStoreIntrinsic(kind));
 			consume(addressOnly ? argument.address : argument.value);
 		}
 		return;

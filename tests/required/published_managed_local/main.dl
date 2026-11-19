@@ -1,0 +1,22 @@
+integer means: @intrinsic("type", "int", 32)
+class:
+    patterns:
+        owned
+    members:
+        number as integer
+    retain:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "+%d\n", the number of @intrinsic("lifecycle value")))
+    release:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "-%d\n", the number of @intrinsic("lifecycle value")))
+it means: @intrinsic("subject")
+flex function publish private value:
+    replacement:
+        @intrinsic("store", {temporary}, @intrinsic("construct", owned, 7))
+        @intrinsic("set subject", temporary)
+
+to exercise publishing:
+    publish private value
+    @intrinsic("store", the number of it, 9)
+    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", the number of it))
+
+exercise publishing

@@ -1,0 +1,58 @@
+integer means: @intrinsic("type", "int")
+it means: @intrinsic("subject")
+flex function publish value:
+    replacement:
+        @intrinsic("set subject", value)
+flex function write value into target:
+    replacement:
+        @intrinsic("store", target, value)
+flex function show value:
+    replacement:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", value))
+
+class:
+    patterns:
+        box
+    members:
+        number as integer
+
+to get changed input seed:
+    write seed into local
+    publish local
+    write 6 into it
+    @intrinsic("return", local)
+
+to raise target:
+    write @intrinsic("add", target, 5) into target
+
+write 1 into x
+publish x
+write 4 into x
+show it
+write 5 into it
+show x
+write @intrinsic("address of", it) into location
+@intrinsic("store at", location, 12)
+show it
+show changed input 3
+write @intrinsic("construct", @intrinsic("array", changed input 2, integer)) into array
+show @intrinsic("type extent", array, 0)
+write @intrinsic("construct", box, 7) into item
+publish item
+write 8 into the number of it
+publish the number of item
+write 9 into it
+show the number of item
+
+write @intrinsic("address of", x) into pointer
+publish @intrinsic("dereference", pointer)
+write 11 into y
+write @intrinsic("address of", y) into pointer
+write 10 into it
+show x
+show y
+
+publish x
+raise it
+show x
+show @intrinsic("select", @intrinsic("equal", x, 15), 1, 0)

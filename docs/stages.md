@@ -743,7 +743,7 @@ instantiation's effect summary. Repeated or reordered uses with different inputs
 inferred types, grouping selections and recursive inference dependencies, avoiding exponential speculative inference for
 nested replacements around effectful arguments.
 
-Subject values belong to their function invocation during pure evaluation, just like local variable values. Publishing an unmanaged value is a local effect; publishing a managed value retains lifecycle effects and cannot make an effectful type function pure. A subject whose assignment depends on recursive inference stays pending with that dependency until a body pass resolves its value.
+Subject values belong to their function invocation during pure evaluation, just like local variable values. Publishing an addressable subject borrows its location. The standard assignment pattern uses the `assign` intrinsic to store and publish the same evaluated destination. Internal `store` operations preserve the current subject. Publishing a computed managed value retains its lifecycle effects. Writes through a subject have the effects of writing the published storage. A subject whose assignment depends on recursive inference stays pending with that dependency until a body pass resolves its value.
 
 A replacement's result is the current root expression of its selected source line. Regrouping can move the original
 template node beneath another expression, so template-node identity does not determine the replacement's result.
@@ -896,7 +896,7 @@ We iterate over all possible operand orders until we find a valid one.
 
 All instantiation types are known when instantiating a function and do not change. We use this fact for reordering.
 
-The only exception is the `store` intrinsic: it takes a value whose first argument's type should be determined by its second argument's type. Therefore, a `store` intrinsic wrapper has to be a flex function, so it is executed in the outer context.
+The `store` and `assign` intrinsics infer their destination type from the assigned value. Their wrappers use flex functions so the destination belongs to the caller.
 
 We prefer sub-first, aka `left = subexpression`, just like pattern matching.
 

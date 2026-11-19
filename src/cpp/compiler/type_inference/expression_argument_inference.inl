@@ -7,7 +7,7 @@ bool ExpressionInferenceSupport::inferArgument(
 		~ReferenceTargetScope() { context.inferringReferenceAssignmentTarget = previous; }
 	} targetScope{context, context.inferringReferenceAssignmentTarget};
 	context.inferringReferenceAssignmentTarget = expr->kind == Expression::Kind::IntrinsicCall &&
-												 intrinsicKind(expr->intrinsicName) == IntrinsicKind::Store && index == 1;
+												 isVariableStoreIntrinsic(intrinsicKind(expr->intrinsicName)) && index == 1;
 	Expression *arg = expr->arguments[index];
 	std::optional<InferenceExecutionSnapshot> beforeArgument;
 	if (expr->kind == Expression::Kind::PatternCall)

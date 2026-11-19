@@ -1,0 +1,4 @@
+fixed integer means: @intrinsic("fix", @intrinsic("type", "int"))
+to change {fixed integer:value}:
+    @intrinsic("assign", value, @intrinsic("add", value, 1))
+change 2

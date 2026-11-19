@@ -121,8 +121,12 @@ void ExpressionInferenceSupport::inferVoidIntrinsic(IntrinsicKind kind) {
 	}
 	if (context.typesValid)
 		expr->sectionOutcome = sectionOutcomeForIntrinsic(kind, conditionValue, sectionConditionType);
-	if (kind == IntrinsicKind::Store)
+	ScopedRecursiveInferenceObservation subjectObservation(context, context.currentInstantiation);
+	if (isVariableStoreIntrinsic(kind)) {
 		inferStoreEffects(expr, context, flexBindingFrameStack);
+		if (!context.typesValid)
+			return;
+	}
 	if ((kind == IntrinsicKind::StoreAt || kind == IntrinsicKind::InitializeAt) &&
 		!inferPointerStoreEffects(
 			expr->arguments[1], flexBindingFrameStack, expr->arguments[2], flexBindingFrameStack, expr->range, context
@@ -130,9 +134,10 @@ void ExpressionInferenceSupport::inferVoidIntrinsic(IntrinsicKind kind) {
 		return;
 	if (kind == IntrinsicKind::ExecuteBody && !inferSectionFlexCallerBody(expr, context))
 		return;
-	if (kind == IntrinsicKind::SetSubject) {
-		ScopedRecursiveInferenceObservation subjectObservation(context, context.currentInstantiation);
-		DataType valueType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+	if (kind == IntrinsicKind::SetSubject || kind == IntrinsicKind::Assign) {
+		DataType valueType = kind == IntrinsicKind::Assign
+								 ? expr->arguments[1]->type
+								 : ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 		if (!valueType.isDeduced() && subjectObservation.ownerObserved() && context.currentInstantiation) {
 			context.currentSubject = InferenceContext::SubjectState::assigned(expr);
 			expr->type = {DataType::Kind::Void};
@@ -142,8 +147,21 @@ void ExpressionInferenceSupport::inferVoidIntrinsic(IntrinsicKind kind) {
 			failWithDetail(expr->arguments[1]->range, "the subject must have a value");
 			return;
 		}
+		auto subject = InferenceContext::SubjectState::assigned(expr);
+		subject.address = captureSubjectPlace(expr, valueType, context, flexBindingFrameStack);
+		// Code generation uses the managed owners of indirect places to extend their lifetimes.
+		if (expr->subjectPlace && subject.address) {
+			AddressProvenance owners;
+			for (const auto &target : possibleAddressTargets(context, *subject.address)) {
+				Variable *variable = variableForAddressTarget(target);
+				if (variable && !variable->isGlobal && typeHasManagedLifecycle(variable->type))
+					owners.mayTargets.insert(target);
+			}
+			if (!owners.mayTargets.empty())
+				expr->subjectAddress = std::make_shared<AddressProvenance>(std::move(owners));
+		}
+		context.currentSubject = std::move(subject);
 		recordSubjectTypeSource(expr, valueType, context, flexBindingFrameStack);
-		context.currentSubject = InferenceContext::SubjectState::assigned(expr);
 	}
 	if (kind == IntrinsicKind::ShaderOutput) {
 		DataType outputType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);

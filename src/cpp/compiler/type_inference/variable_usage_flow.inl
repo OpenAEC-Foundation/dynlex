@@ -117,7 +117,7 @@ static VariableUsage analyzeVariableUsage(
 	}
 	VariableUsage usage;
 	if (expression->kind == Expression::Kind::IntrinsicCall &&
-		intrinsicKind(expression->intrinsicName) == IntrinsicKind::Store) {
+		isVariableStoreIntrinsic(intrinsicKind(expression->intrinsicName))) {
 		// Native stores evaluate the value before computing the destination.
 		usage.then(analyzeVariableUsage(expression->arguments[2], definition, incomingValue, bindings, active));
 		auto destination = resolveExpressionBindingWithCallerScope(expression->arguments[1], bindings);

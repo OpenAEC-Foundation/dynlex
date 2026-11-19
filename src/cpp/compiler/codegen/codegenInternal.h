@@ -59,6 +59,7 @@ PatternDefinition *finalizedPatternDefinition(ParseContext &context, Expression 
 llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name, DataType type);
 std::string getPatternName(Section *section);
 void allocateSectionVariables(ParseContext &context, Section *section, InstantiatedSectionBody *body = nullptr);
+llvm::Value *subjectValueAddress(ParseContext &context, Expression *subject);
 LValueAddressResult generateLValueAddress(ParseContext &context, Expression *expr);
 llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromType, DataType toType);
 llvm::Value *generateStringConstant(ParseContext &context, const std::string &value);

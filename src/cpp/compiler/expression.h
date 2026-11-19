@@ -14,6 +14,7 @@
 #include <variant>
 #include <vector>
 
+struct AddressProvenance;
 struct PatternMatch;
 struct PatternDefinition;
 struct PatternReference;
@@ -97,6 +98,10 @@ struct Expression {
 	std::optional<size_t> selectedCallablePathIndex;
 	// For the subject intrinsic: the exact preceding subject assignment whose runtime value is read.
 	Expression *subjectSetter{};
+	// For set subject: the resolved writable place, or null for a published value.
+	Expression *subjectPlace{};
+	// Flow fact captured by a subject read during inference. Typed bodies persist the selected place.
+	std::shared_ptr<const AddressProvenance> subjectAddress;
 	std::optional<ExpressionCapture> inferredArgumentReference;
 	// For non-flex PatternCalls: the exact monomorphized callee selected during
 	// type inference. Later stages consume this instance without rebuilding its key.

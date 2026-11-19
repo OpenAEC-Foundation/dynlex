@@ -1,0 +1,6 @@
+flex function publish private:
+    replacement:
+        @intrinsic("store", {hidden}, 1)
+        @intrinsic("set subject", hidden)
+publish private
+@intrinsic("store", @intrinsic("subject"), "bad")

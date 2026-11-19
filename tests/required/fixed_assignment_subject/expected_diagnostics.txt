@@ -1,0 +1,3 @@
+tests/required/fixed_assignment_subject/main.dl:26-31: Error: assignment target 'value' is not writable
+  note: while inferring intrinsic 'assign' in '@intrinsic("assign", value, @intrinsic("add", value, 1))' with arguments [a 32-bit integer, a 32-bit integer] -> an unresolved value tests/required/fixed_assignment_subject/main.dl:5-61
+  note: while inferring call 'change 2' with arguments [a 32-bit integer] -> an unresolved value tests/required/fixed_assignment_subject/main.dl:1-9

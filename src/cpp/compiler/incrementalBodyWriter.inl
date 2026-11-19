@@ -473,6 +473,18 @@ class InferenceBodyWriter {
 		field(Field::Callable, sources.definition(item.selectedCallableDefinition));
 		field(Field::CallablePath, optional(item.selectedCallablePathIndex));
 		field(Field::Subject, expression(item.subjectSetter));
+		field(Field::SubjectPlace, expression(item.subjectPlace));
+		if (item.subjectAddress) {
+			const auto &address = *item.subjectAddress;
+			Json targets = Json::array();
+			for (const auto &target : address.mayTargets)
+				targets.push_back(Json::array({variable(target.definition), scope(target.scope)}));
+			std::sort(targets.begin(), targets.end());
+			field(
+				Field::SubjectAddress,
+				Json::array({std::move(targets), address.mayBeNull, address.unknown, address.mayBeStatic})
+			);
+		}
 		field(Field::Capture, item.inferredArgumentReference ? captureValue(*item.inferredArgumentReference) : Json(nullptr));
 		field(Field::Instance, instance(item.selectedInstantiation));
 		field(Field::Expansion, expression(item.inferredFlexExpansion));

@@ -1,0 +1,2 @@
+@intrinsic("set subject", @intrinsic("add", 1, 2))
+@intrinsic("store", @intrinsic("subject"), 4)

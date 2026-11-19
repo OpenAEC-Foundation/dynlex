@@ -5,4 +5,5 @@
 #include "sectionIdentity.h"
 #include "shaderUniformType.h"
 #include "sourceStringLiterals.h"
+#include "sourceSyntax.h"
 #include "type_inference/section_inference.inl"

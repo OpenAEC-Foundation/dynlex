@@ -459,6 +459,16 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 	}
 }
 
+llvm::Value *subjectValueAddress(ParseContext &context, Expression *subject) {
+	auto position = context.subjectStorage.find(subject->subjectSetter);
+	requireCompilerInvariant(position != context.subjectStorage.end(), "subject read reached codegen before its assignment");
+	const auto &location = position->second;
+	if (!location.storedAddressType)
+		return location.storage;
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	return builder.CreateLoad(location.storedAddressType, location.storage, "subject.address");
+}
+
 LValueAddressResult generateLValueAddress(ParseContext &context, Expression *expr) {
 	ensureFlexBindingRootFrame(context);
 	BindingFrameStack savedBindingFrames = context.flexBindingFrames;
@@ -490,6 +500,8 @@ LValueAddressResult generateLValueAddress(ParseContext &context, Expression *exp
 		return {};
 
 	IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
+	if (kind == IntrinsicKind::Subject && expr->subjectSetter->subjectPlace)
+		return {subjectValueAddress(context, expr), LValueAddressStatus::Addressable};
 	if (kind == IntrinsicKind::Dereference) {
 		requireCompilerInvariant(expr->arguments.size() > 1, "dereference lvalue is missing its pointer argument");
 		CodegenResult pointer = generateExpressionCode(context, expr->arguments[1]);

@@ -6,6 +6,37 @@
 	return builder.CreateLoad(global->getValueType(), global, global->getName() + ".value");
 }
 
+static void publishSubjectAddress(ParseContext &context, Expression *setter, llvm::Value *address) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	// A published local may be used after the flex or block that introduced it.
+	// Its existing owner keeps the value alive until the enclosing function exits.
+	auto extendLifetime = [&](llvm::Value *root) {
+		for (auto &owner : context.managedLocalStorage) {
+			if (owner.address == root)
+				owner.ownerSection = currentFunctionLifetimeSection(context);
+		}
+	};
+	if (!context.managedLocalStorage.empty()) {
+		extendLifetime(address->stripInBoundsOffsets());
+		if (setter->subjectAddress) {
+			for (const auto &target : setter->subjectAddress->mayTargets) {
+				auto storage = context.variableStorage.find(target);
+				if (storage != context.variableStorage.end())
+					extendLifetime(storage->second);
+			}
+		}
+	}
+	if (setter->subjectPlace->kind == Expression::Kind::Variable) {
+		context.subjectStorage[setter] = {address};
+	} else {
+		auto &entry = builder.GetInsertBlock()->getParent()->getEntryBlock();
+		llvm::IRBuilder<> entryBuilder(&entry, entry.begin());
+		auto *slot = entryBuilder.CreateAlloca(address->getType(), nullptr, "subject.address.slot");
+		builder.CreateStore(address, slot);
+		context.subjectStorage[setter] = {slot, address->getType()};
+	}
+}
+
 [[gnu::noinline]] static CodegenResult
 generateSetSubjectIntrinsic(ParseContext &context, Expression *callExpr, const std::vector<Expression *> &args) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
@@ -14,6 +45,14 @@ generateSetSubjectIntrinsic(ParseContext &context, Expression *callExpr, const s
 		crashCompilerBug("subject assignment reached codegen without a runtime value type");
 	if (valueType.isMetaType())
 		return nullptr;
+	if (callExpr->subjectPlace) {
+		LValueAddressResult place = generateLValueAddress(context, args[1]);
+		if (place.status == LValueAddressStatus::Failed)
+			return CodegenResult::failure();
+		requireCompilerInvariant(place.status == LValueAddressStatus::Addressable, "published subject lost its writable place");
+		publishSubjectAddress(context, callExpr, place.address);
+		return nullptr;
+	}
 	CodegenResult generatedValue = generateExpressionCode(context, args[1]);
 	if (!generatedValue)
 		return generatedValue;
@@ -31,7 +70,7 @@ generateSetSubjectIntrinsic(ParseContext &context, Expression *callExpr, const s
 	} else {
 		builder.CreateStore(value, storage);
 	}
-	context.subjectStorage[callExpr] = storage;
+	context.subjectStorage[callExpr] = {storage};
 	return nullptr;
 }
 
@@ -42,10 +81,8 @@ generateSubjectIntrinsic(ParseContext &context, Expression *callExpr, const Data
 		crashCompilerBug("subject read reached codegen without an inferred assignment");
 	if (resultType.isMetaType())
 		return nullptr;
-	auto storage = context.subjectStorage.find(callExpr->subjectSetter);
-	if (storage == context.subjectStorage.end())
-		crashCompilerBug("subject read reached codegen before its inferred assignment");
-	llvm::Value *value = builder.CreateLoad(getLLVMType(context, resultType), storage->second, "subject");
+	llvm::Value *value =
+		builder.CreateLoad(getLLVMType(context, resultType), subjectValueAddress(context, callExpr), "subject");
 	if (typeHasManagedLifecycle(resultType) && !retainManagedValue(context, resultType, value))
 		return CodegenResult::failure();
 	return value;
@@ -63,7 +100,8 @@ generateSubjectIntrinsic(ParseContext &context, Expression *callExpr, const Data
 	return nullptr;
 }
 
-[[gnu::noinline]] static CodegenResult generateStoreIntrinsic(ParseContext &context, const std::vector<Expression *> &args) {
+[[gnu::noinline]] static CodegenResult
+generateStoreIntrinsic(ParseContext &context, Expression *callExpr, const std::vector<Expression *> &args) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	DataType valType = finalizedExpressionType(context, args[2]);
 	if (valType.isMetaType())
@@ -94,6 +132,8 @@ generateSubjectIntrinsic(ParseContext &context, Expression *callExpr, const Data
 		val = ensureType(context, val, valType, destType);
 		builder.CreateAlignedStore(val, ptr, getLLVMABIAlignment(context, destType));
 	}
+	if (callExpr->subjectPlace)
+		publishSubjectAddress(context, callExpr, ptr);
 	return nullptr;
 }
 

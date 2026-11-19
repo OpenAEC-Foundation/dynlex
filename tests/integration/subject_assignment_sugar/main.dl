@@ -6,3 +6,16 @@ set x to 2 and add 7
 print line it
 set x to 3. add 8
 print line it
+
+set x to 1 and add 2 to it
+print line x
+add 4 to it
+print lines x and it
+
+to get traced pointer for location:
+    print line "lookup"
+    return location
+
+set @intrinsic("dereference", traced pointer for @intrinsic("address of", x)) to 4
+add 2 to it
+print line x

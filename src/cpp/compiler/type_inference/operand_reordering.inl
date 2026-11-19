@@ -102,6 +102,8 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	expr->selectedCallablePathIndex = std::nullopt;
 	expr->selectedInstantiation = nullptr;
 	expr->subjectSetter = nullptr;
+	expr->subjectPlace = nullptr;
+	expr->subjectAddress.reset();
 	expr->inferredArgumentReference.reset();
 	expr->inferredCallerBody.reset();
 	expr->staticLoopBodies.reset();
