@@ -1,5 +1,6 @@
 #include "compiler/compiler.h"
 #include "compiler/expression.h"
+#include "compiler/groupingProduct.h"
 #include "compiler/section/classSection.h"
 #include <cstdlib>
 #include <functional>
@@ -303,7 +304,20 @@ to get the boxed payload of {a number box:container}:
 	expect(stats->liveExpressions == 0, "compilation teardown leaked clones");
 }
 
+static void checkGroupingTraceRelease() {
+	auto checkpoint = std::make_shared<GroupingTrace>();
+	auto tail = checkpoint;
+	for (size_t i = 0; i < 250000; ++i) {
+		auto node = std::make_shared<GroupingTrace>();
+		node->previous = std::move(tail);
+		tail = std::move(node);
+	}
+	tail.reset();
+	expect(checkpoint.use_count() == 1, "releasing a long inference trace retained its shared checkpoint");
+}
+
 int main() {
+	checkGroupingTraceRelease();
 	checkSourceExpressionDemand();
 	checkBodyOwnership();
 	checkDeferredBodyCloning();
