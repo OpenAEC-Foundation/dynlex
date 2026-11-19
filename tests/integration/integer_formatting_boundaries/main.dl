@@ -8,5 +8,6 @@ print line the count of decimal digits in minimum
 print line maximum padded to 40 digits
 set empty to 7 padded to 0 digits
 print line empty's length
+# The empty string has one owner. The assignment subject borrows its storage.
 print line @intrinsic("dereference", the owner of empty)
 print line formatted "left{empty}right"
