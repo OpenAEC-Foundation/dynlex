@@ -1104,6 +1104,16 @@ record. Global variables carry the resulting debug expressions. Entering a new
 generated function clears the caller's instruction location, so an empty or
 fully folded body cannot inherit the caller's debug scope.
 
+Wasm builds with `--debug-execution` emit authored source points and function entry/exit
+hooks instead of using GDB. Each point records visible declaration identities, addresses
+and a type graph derived from the target data layout. Address tables live in the entry
+block, so repeated loop pauses do not grow the stack. The browser worker uses JavaScript
+Promise Integration to suspend the actual Wasm stack, inspect memory while paused and
+resume execution. Step depth follows the instrumented call stack; variable references
+expire on resume. Debug execution participates in incremental option identity and disables
+inference/body reuse paths that would omit authored source points. The web compile API
+selects optimization level zero for this mode.
+
 Every generated function has one return cleanup exit. Its initialized owning slots are
 released in reverse registration order after the whole body has been generated, including
 subject slots introduced after an earlier return site. A loop can initialize such a slot
