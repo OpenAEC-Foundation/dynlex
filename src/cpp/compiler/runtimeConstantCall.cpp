@@ -60,11 +60,14 @@ class RuntimeConstants {
 };
 } // namespace
 
-CompileTimeValue runtimeConstantCallValue(Expression *expression, const BindingFrameStack &bindings) {
+CompileTimeValue
+runtimeConstantCallValue(const ParseContext &context, Expression *expression, const BindingFrameStack &bindings) {
 	CompileTimeValue result = resolveStoredCompileTimeValue(expression, bindings);
 	const Instantiation *instance = expression->selectedInstantiation;
 	// Type-valued calls consume the argument types, not their runtime values.
 	if (instance && instance->purity == InstantiationPurity::Pure && instance->returnType.isMetaType())
 		return result;
+	if (context.options.emitDebugInfo || context.options.debugExecution)
+		return {};
 	return isCompileTimeKnown(result) && RuntimeConstants{}.callInputs(expression, bindings) ? result : CompileTimeValue{};
 }

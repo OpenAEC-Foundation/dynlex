@@ -165,7 +165,8 @@ class RuntimeLifecycleUses {
 			}
 			collectInstantiation(*function->instantiation, true);
 		}
-		bool folded = expression->selectedInstantiation && isCompileTimeKnown(runtimeConstantCallValue(expression, bindings));
+		bool folded = expression->selectedInstantiation &&
+					  isCompileTimeKnown(runtimeConstantCallValue(context.parseContext, expression, bindings));
 		if (expression->selectedInstantiation) {
 			if (!folded && !prepareSelectedFunction(expression)) {
 				valid = false;

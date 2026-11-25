@@ -708,7 +708,7 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		// Pure calls with constant operands can materialize their inferred result.
 		Instantiation *inst = expr->selectedInstantiation;
 		requireCompilerInvariant(inst != nullptr, "non-flex call reached codegen without its selected instantiation");
-		CompileTimeValue knownResult = runtimeConstantCallValue(expr, context.flexBindingFrames);
+		CompileTimeValue knownResult = runtimeConstantCallValue(context, expr, context.flexBindingFrames);
 		if (inst->returnType.isMetaType()) {
 			if (isCompileTimeKnown(knownResult))
 				return nullptr;
@@ -761,8 +761,7 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		}
 
 		llvm::Value *result = nullptr;
-		if (!context.options.emitDebugInfo && !context.options.debugExecution && constantArguments &&
-			isCompileTimeKnown(knownResult)) {
+		if (constantArguments && isCompileTimeKnown(knownResult)) {
 			// Argument evaluation above still owns its effects and temporary lifetimes.
 			CodegenResult generated =
 				generateCompileTimeRuntimeValue(context, knownResult, finalizedExpressionType(context, expr));

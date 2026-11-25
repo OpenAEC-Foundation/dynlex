@@ -176,6 +176,17 @@ def check_signal(compiler, directory):
         session.close()
 
 
+def check_debug_call_reuse(compiler, directory):
+    source = directory / 'cached.dl'
+    code = 'to get answer:\n    @intrinsic("return", 1)\n@intrinsic("discard", answer)\n'
+    arguments = [str(compiler), str(source), '-g', '-O0', '--cache-dir', str(directory / 'cache'),
+                 '-o', str(directory / 'cached.out')]
+    for prefix in ['', '# source moved\n\n']:
+        source.write_text(prefix + code)
+        result = subprocess.run(arguments, text=True, capture_output=True, timeout=15)
+        assert result.returncode == 0, result.stderr
+
+
 def check_global_hover(compiler, directory):
     source = directory / 'global.dl'
     source.write_text('function set variable to value:\n'
@@ -297,6 +308,7 @@ def main():
         check_pause(compiler, directory)
         check_pure_call(compiler, directory)
         check_global_hover(compiler, directory)
+        check_debug_call_reuse(compiler, directory)
     print('Debug sessions preserve program output, hide GDB chatter, step, and report crashes.')
 
 
