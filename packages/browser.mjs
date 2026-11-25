@@ -76,7 +76,7 @@ function selectFolder() {
 export function createLibraryServices(catalogUrl, options = {}) {
   let db;
   const storage = options.storage || ((key, value) => stored(db ??= database(), key, value));
-  const fetch_ = options.fetch || fetch;
+  const fetch_ = (options.fetch || globalThis.fetch).bind(globalThis);
   const host = {fetch: fetch_, dependencySource(source, parent) {
     if (source.path) throw new Error('Browser libraries require portable catalog, repository or archive dependencies instead of local paths');
     if (source.url) return {...source, url: new URL(source.url, parent.url).href};

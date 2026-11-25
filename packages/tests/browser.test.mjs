@@ -4,6 +4,19 @@ import {bytes} from '../archive.mjs';
 import {packageFromFolder, emptyProject} from '../manager.mjs';
 import {createLibraryServices} from '../browser.mjs';
 
+test('browser catalog downloads preserve the global fetch receiver', async () => {
+  const previous = globalThis.fetch;
+  globalThis.fetch = function() {
+    assert.equal(this, globalThis);
+    return Promise.resolve(new Response(JSON.stringify({schema: 1, libraries: []})));
+  };
+  try {
+    const services = createLibraryServices('https://example.com/index.json');
+    const result = await services.libraries({operation: 'catalog'}, {signal: new AbortController().signal});
+    assert.deepEqual(result, {libraries: []});
+  } finally { globalThis.fetch = previous; }
+});
+
 test('browser folder installation survives service recreation and removes all unused sources', async () => {
   const storage = new Map(), files = new Map([
     ['dynlex-package.json', bytes(JSON.stringify({schema: 1, name: 'example', exports: {'*': 'ui/*'}, files: ['ui']}))],
