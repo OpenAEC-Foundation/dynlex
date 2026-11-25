@@ -344,30 +344,12 @@ Json GdbMI::parseMiList(const std::string &s, size_t &pos) {
 		if (s[pos] == ',')
 			pos++;
 
-		// Lists can contain values or results (key=value)
-		// Check if it's a result by looking for name=
-		size_t lookAhead = pos;
-		while (lookAhead < s.size() && isalnum(s[lookAhead]))
-			lookAhead++;
-		if (lookAhead < s.size() && s[lookAhead] == '=') {
-			// It's a result — parse as tuple-like
-			Json obj = Json::object();
-			obj.merge_patch(parseMiResult(s, pos));
-			while (pos < s.size() && s[pos] == ',') {
-				size_t la2 = pos + 1;
-				while (la2 < s.size() && isalnum(s[la2]))
-					la2++;
-				if (la2 < s.size() && s[la2] == '=') {
-					pos++; // skip comma
-					obj.merge_patch(parseMiResult(s, pos));
-				} else {
-					break;
-				}
-			}
-			arr.push_back(obj);
-		} else {
+		// Each result is a separate list item, including repeated names such as frame=.
+		size_t separator = s.find_first_of("=,]{}\"", pos);
+		if (separator != std::string::npos && s[separator] == '=')
+			arr.push_back(parseMiResult(s, pos));
+		else
 			arr.push_back(parseMiValue(s, pos));
-		}
 	}
 	if (pos < s.size())
 		pos++; // skip ]

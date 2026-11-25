@@ -236,6 +236,20 @@ llvm::Function *generateSpecializedFunction(
 				parameterDefinitions[parameterIndex] != nullptr, "runtime function parameter has no declaration identity"
 			);
 			context.codegenParameterBindings[parameterDefinitions[parameterIndex]] = &arg;
+			if (context.diBuilder && func->getSubprogram()) {
+				const auto &range = parameterDefinitions[parameterIndex]->range;
+				auto *file = getOrCreateDIFile(context, range.line->sourceFile);
+				unsigned line = range.line->sourceFileLineIndex + 1;
+				auto *variable = context.diBuilder->createParameterVariable(
+					context.currentDebugScope, parameterName, argIdx + 1, file, line,
+					getDIType(context, argTypes[parameterIndex]), true
+				);
+				context.diBuilder->insertDeclare(
+					&arg, variable, context.diBuilder->createExpression(),
+					llvm::DILocation::get(*context.llvmContext, line, range.start() + 1, debugScopeForFile(context, file)),
+					entry
+				);
+			}
 		}
 		argIdx++;
 	}
@@ -747,7 +761,8 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		}
 
 		llvm::Value *result = nullptr;
-		if (constantArguments && isCompileTimeKnown(knownResult)) {
+		if (!context.options.emitDebugInfo && !context.options.debugExecution && constantArguments &&
+			isCompileTimeKnown(knownResult)) {
 			// Argument evaluation above still owns its effects and temporary lifetimes.
 			CodegenResult generated =
 				generateCompileTimeRuntimeValue(context, knownResult, finalizedExpressionType(context, expr));

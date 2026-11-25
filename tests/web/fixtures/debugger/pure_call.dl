@@ -1,0 +1,4 @@
+to get increased number:
+    @intrinsic("return", @intrinsic("add", number, 1))
+@intrinsic("store", answer, increased 7)
+@intrinsic("discard", answer)

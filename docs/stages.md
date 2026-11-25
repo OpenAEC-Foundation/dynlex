@@ -1095,6 +1095,8 @@ as fixed parameters. Arguments are evaluated first and their temporary lifetimes
 are released normally, preserving effects from argument expressions. Static
 aggregates can therefore contain values computed by ordinary pure functions.
 Operands requiring loads or runtime instructions retain the selected function call.
+Debug builds preserve ordinary calls so source stepping can enter pure functions even
+when their arguments and results are known.
 Inference-time loop observations alone do not justify replacing runtime computation.
 
 Class declarations and synthetic section-body records retain their declaration

@@ -4,14 +4,13 @@ import { readCString } from '../../src/web/ide/public/compiler/runtimeFilesystem
 
 const require = (condition, message) => { if (!condition) throw new Error(message); };
 
-export async function verifyDebuggerSession() {
-  const wasm = new Uint8Array(await (await fetch('/build/debugger-test.wasm')).arrayBuffer());
-  const output = [], events = [], waiting = [];
+async function debugProgram(file) {
+  const wasm = new Uint8Array(await (await fetch(file)).arrayBuffer());
+  const output = [], pauses = [], waiting = [];
   const runtime = buildRuntimeImports(output, createRuntimeFilesystem(), inspectRuntimeWasmLayout(wasm));
   const session = new ProgramDebugger(runtime.env.__linear_memory, readCString, event => {
     if (event.type === 'program-paused') {
-      if (waiting.length) waiting.shift()(event);
-      else events.push(event);
+      if (waiting.length) waiting.shift()(event); else pauses.push(event);
     }
   }, () => {});
   runtime.env.dynlex_debug_enter = (name, location) => session.enter(name, location);
@@ -19,7 +18,14 @@ export async function verifyDebuggerSession() {
   runtime.env.dynlex_debug_location = new WebAssembly.Suspending((metadata, addresses) => session.point(metadata, addresses));
   const { instance } = await WebAssembly.instantiate(wasm, runtime);
   const running = WebAssembly.promising(instance.exports.main)();
-  const pause = () => events.length ? Promise.resolve(events.shift()) : new Promise(resolve => waiting.push(resolve));
+  const pause = () => pauses.length ? Promise.resolve(pauses.shift()) : Promise.race([
+    new Promise(resolve => waiting.push(resolve)), running.then(() => { throw new Error('The program finished before its next pause'); })
+  ]);
+  return { session, running, pause, output };
+}
+
+export async function verifyDebuggerSession() {
+  const { session, running, pause, output } = await debugProgram('/build/debugger-test.wasm');
   const value = (stopped, name, frame = 0) => stopped.frames[frame].variables.find(variable => variable.name === name)?.value;
   const command = (stopped, name) => session.command({ command: name, pause: stopped.pause });
   let stopped = await pause();
@@ -45,20 +51,7 @@ export async function verifyDebuggerSession() {
 }
 
 export async function verifyDebuggerAggregates() {
-  const wasm = new Uint8Array(await (await fetch('/build/debugger-aggregates.wasm')).arrayBuffer());
-  const runtime = buildRuntimeImports([], createRuntimeFilesystem(), inspectRuntimeWasmLayout(wasm));
-  const pauses = [], waiting = [];
-  const session = new ProgramDebugger(runtime.env.__linear_memory, readCString, event => {
-    if (event.type === 'program-paused') {
-      if (waiting.length) waiting.shift()(event); else pauses.push(event);
-    }
-  }, () => {});
-  runtime.env.dynlex_debug_enter = (name, location) => session.enter(name, location);
-  runtime.env.dynlex_debug_leave = () => session.leave();
-  runtime.env.dynlex_debug_location = new WebAssembly.Suspending((metadata, addresses) => session.point(metadata, addresses));
-  const { instance } = await WebAssembly.instantiate(wasm, runtime);
-  const running = WebAssembly.promising(instance.exports.main)();
-  const pause = () => pauses.length ? Promise.resolve(pauses.shift()) : new Promise(resolve => waiting.push(resolve));
+  const { session, running, pause } = await debugProgram('/build/debugger-aggregates.wasm');
   let stopped = await pause();
   session.command({ command: 'breakpoints', breakpoints: [{ uri: stopped.frames[0].uri, line: 17 }] });
   session.command({ command: 'continue', pause: stopped.pause });
@@ -72,6 +65,18 @@ export async function verifyDebuggerAggregates() {
   require(session.variables(variable('items').reference).map(item => item.value).join(',') === '4,5', 'Array inspection used the wrong element stride');
   const target = session.variables(variable('target').reference)[0];
   require(session.variables(target.reference)[1].value === '9007199254740993', 'Pointer inspection did not reach its target');
+  session.command({ command: 'continue', pause: stopped.pause }); await running;
+  return true;
+}
+
+export async function verifyDebuggerPureCall() {
+  const { session, running, pause } = await debugProgram('/build/debugger-pure-call.wasm');
+  let stopped = await pause();
+  session.command({ command: 'into', pause: stopped.pause }); stopped = await pause();
+  require(stopped.frames.length === 2 && stopped.frames[0].variables.find(variable => variable.name === 'number')?.value === '7',
+    'Step into skipped a pure function called with a literal argument');
+  session.command({ command: 'out', pause: stopped.pause }); stopped = await pause();
+  require(stopped.frames[0].variables.find(variable => variable.name === 'answer')?.value === '8', 'A pure debug call changed its result');
   session.command({ command: 'continue', pause: stopped.pause }); await running;
   return true;
 }

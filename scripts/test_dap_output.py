@@ -127,6 +127,19 @@ def check_output(compiler, directory):
     assert not Path(str(source) + '.debug_bin').exists(), 'Debug executable was not removed'
 
 
+def check_standard_print(compiler, directory):
+    source = directory / 'print.dl'
+    source.write_text('import lib/std.dl\nprint "test"\n')
+    session = Session(compiler, directory)
+    try:
+        session.start(source)
+        session.until(lambda message: message.get('event') == 'terminated')
+        assert session.output('stdout') == 'test', session.received
+        assert session.output('console') == '' and session.output('stderr') == '', session.received
+    finally:
+        session.close()
+
+
 def check_stop(compiler, directory):
     source = directory / 'stopped.dl'
     write_source(source, 'test')
@@ -159,6 +172,43 @@ def check_signal(compiler, directory):
         assert stopped['body']['reason'] == 'exception', stopped
         assert 'SIGSEGV' in session.output('stderr'), session.received
         assert session.output('console') == '', session.output('console')
+    finally:
+        session.close()
+
+
+def check_pure_call(compiler, directory):
+    source = directory / 'pure.dl'
+    source.write_text('to get increased number:\n'
+                      '    @intrinsic("return", @intrinsic("add", number, 1))\n'
+                      '@intrinsic("store", answer, increased 7)\n'
+                      '@intrinsic("discard", answer)\n')
+    session = Session(compiler, directory)
+    try:
+        session.request('initialize', {'adapterID': 'dynlex'})
+        session.request('launch', {'program': str(source)})
+        session.request('setBreakpoints', {'source': {'path': str(source)}, 'breakpoints': [{'line': 3}]})
+        session.request('configurationDone')
+        session.until(lambda message: message.get('event') == 'stopped')
+        session.request('stepIn', {'threadId': 1})
+        session.until(lambda message: message.get('event') == 'stopped')
+        frames = session.request('stackTrace', {'threadId': 1})['body']['stackFrames']
+        assert len(frames) >= 2 and 'increased' in frames[0]['name'], frames
+        assert session.request('evaluate', {'expression': 'number', 'frameId': frames[0]['id'],
+                                           'context': 'hover'})['body']['result'] == '7'
+        callee = session.request('scopes', {'frameId': frames[0]['id']})['body']['scopes']
+        caller = session.request('scopes', {'frameId': frames[1]['id']})['body']['scopes']
+        caller_values = session.request('variables', {'variablesReference': caller[0]['variablesReference']})['body']['variables']
+        arguments = session.request('variables', {'variablesReference': callee[1]['variablesReference']})['body']['variables']
+        assert any(value['name'] == 'answer' for value in caller_values), caller_values
+        assert any(value['name'] == 'number' and value['value'] == '7' for value in arguments), arguments
+        session.request('stepOut', {'threadId': 1})
+        session.until(lambda message: message.get('event') == 'stopped')
+        session.request('next', {'threadId': 1})
+        session.until(lambda message: message.get('event') == 'stopped')
+        result = session.request('evaluate', {'expression': 'answer', 'frameId': 0})
+        assert result['body']['result'] == '8', result
+        session.request('continue', {'threadId': 1})
+        session.until(lambda message: message.get('event') == 'terminated')
     finally:
         session.close()
 
@@ -219,10 +269,12 @@ def main():
     with tempfile.TemporaryDirectory(prefix='dynlex dap output ') as temporary:
         directory = Path(temporary)
         check_output(compiler, directory)
+        check_standard_print(compiler, directory)
         check_stop(compiler, directory)
         check_signal(compiler, directory)
         check_hover(compiler, directory)
         check_pause(compiler, directory)
+        check_pure_call(compiler, directory)
     print('Debug sessions preserve program output, hide GDB chatter, step, and report crashes.')
 
 
