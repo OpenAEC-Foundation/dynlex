@@ -415,6 +415,7 @@ struct CodeAction {
 	std::string title;
 	std::string kind = "quickfix";
 	std::optional<WorkspaceEdit> edit;
+	std::optional<Json> command;
 	std::vector<Diagnostic> diagnostics;
 };
 
@@ -423,6 +424,8 @@ inline void to_json(Json &j, const CodeAction &a) {
 	if (a.edit) {
 		j["edit"] = *a.edit;
 	}
+	if (a.command)
+		j["command"] = *a.command;
 	if (!a.diagnostics.empty()) {
 		j["diagnostics"] = a.diagnostics;
 	}

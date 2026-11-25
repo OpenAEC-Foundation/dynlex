@@ -31,6 +31,8 @@ using namespace std::literals;
 
 namespace lsp {
 
+#include "dynlexServerPackages.inl"
+
 static bool hasCompilationStage(const ParseContext *context, ParseContext::CompilationStage stage) {
 	return context && context->hasCompleted(stage);
 }
@@ -528,6 +530,7 @@ Diagnostic DynLexServer::convertDiagnostic(const ::Diagnostic &diag) const {
 			lspDiag.data = Json{{"quickFixes", quickFixes}};
 	}
 
+	addLibraryDiagnosticData(diag, lspDiag);
 	return lspDiag;
 }
 

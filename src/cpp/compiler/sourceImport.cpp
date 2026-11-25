@@ -5,6 +5,7 @@
 #include "pattern/transformedPattern.h"
 #include "section/parseUtils.h"
 #include "sourceIdentity.h"
+#include "sourcePackages.h"
 #include "sourcePreparation.h"
 #include "sourceSyntax.h"
 #include "sourceTransform.h"
@@ -200,8 +201,18 @@ static bool importSourceFile(
 				std::filesystem::path(pathutil::toFilesystemPath(sourceFile->uri.empty() ? path : sourceFile->uri))
 					.parent_path()
 					.string();
+			std::optional<PackageImport> packageImport;
+			bool packageHandled = false;
+			if (!resolvePackageImport(
+					std::string(*importPathView), sourceFile->uri.empty() ? path : sourceFile->uri, context, packageImport,
+					packageHandled, Range(line, *importPathView)
+				))
+				return false;
 			ResolvedImport resolvedImport =
-				resolveImportPath(std::string(*importPathView), importingDir, activeResolutionRoot, context.fileSystem.get());
+				packageHandled ? ResolvedImport{packageImport->path, packageImport->root}
+							   : resolveImportPath(
+									 std::string(*importPathView), importingDir, activeResolutionRoot, context.fileSystem.get()
+								 );
 			const std::string &importPath = resolvedImport.path;
 			if (!importSourceFile(importPath, context, resolvedImport.root, purpose, Range(line, *importPathView))) {
 				context.addDiagnostic(Diagnostic(

@@ -1,10 +1,12 @@
 import { WorkerConnection } from './client.js';
+import { createLibraryServices } from './packages/browser.mjs';
 
 // Browser compiler capabilities. Project UI, results, diagnostics and execution
 // policy are controlled by the DynLex application calling these services.
 export function createCompilerServices(base, dependencyUrl) {
   let dependencies, nextArtifact = 1;
   const compilers = new Map(), runners = new Set(), artifacts = new Map();
+  const libraries = createLibraryServices(new URL('../libraries/index.json', base).href);
   function connection(name) {
     if (!compilers.has(name)) compilers.set(name, new WorkerConnection(new URL('worker.js', base),
       () => compilers.delete(name)));
@@ -18,6 +20,7 @@ export function createCompilerServices(base, dependencyUrl) {
     return dependencies;
   }
   const services = {
+    libraries: libraries.libraries,
     async compiler(payload, { signal }) {
       if (payload.operation === 'release') {
         if (!artifacts.delete(payload.artifact)) throw new Error('Unknown compiler artifact');
@@ -33,7 +36,12 @@ export function createCompilerServices(base, dependencyUrl) {
         target, traced: payload.traced, stages: payload.stages
       }, { signal });
       if (result.status === 0 && target === 'wasm') {
-        result.artifact = nextArtifact++; artifacts.set(result.artifact, result.wasm); delete result.wasm;
+        let files = {};
+        if (Object.hasOwn(payload.sources, 'dynlex.json')) {
+          const manifest = JSON.parse(payload.sources['dynlex.json']);
+          if (Object.keys(manifest.dependencies).length) files = await libraries.runtimeFiles({manifest, lock: JSON.parse(payload.sources['dynlex.lock'])});
+        }
+        result.artifact = nextArtifact++; artifacts.set(result.artifact, {wasm: result.wasm, files}); delete result.wasm;
       }
       return result;
     },
@@ -47,11 +55,11 @@ export function createCompilerServices(base, dependencyUrl) {
     },
     async program(payload, { signal, emit }) {
       if (!artifacts.has(payload.artifact)) throw new Error('Unknown compiler artifact');
-      const wasm = artifacts.get(payload.artifact); artifacts.delete(payload.artifact);
+      const {wasm, files} = artifacts.get(payload.artifact); artifacts.delete(payload.artifact);
       const worker = new WorkerConnection(new URL('run-worker.js', base)); runners.add(worker);
       try {
-        return await worker.request('run', { wasm, outputLimit: payload.outputLimit }, { signal,
-          transfer: [wasm.buffer], event: event => emit({ ...event, invocation: payload.invocation }) });
+        return await worker.request('run', { wasm, files, outputLimit: payload.outputLimit }, { signal,
+          transfer: [...new Set([wasm.buffer, ...Object.values(files).map(data => data.buffer)])], event: event => emit({ ...event, invocation: payload.invocation }) });
       } finally { worker.close(); runners.delete(worker); }
     }
   };

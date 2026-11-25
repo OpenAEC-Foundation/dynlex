@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { buildRuntimeImports, createRuntimeFilesystem, inspectRuntimeWasmLayout } from '../../src/web/ide/public/compiler/runtimeImports.js';
+import {createPackageManager, emptyProject, packageFromFolder, projectFiles} from '../../packages/manager.mjs';
 
 const directory = path.resolve(process.argv[2] || 'src/web/ide/public/compiler');
 const createModule = (await import(pathToFileURL(path.join(directory, 'dynlex_web.js')).href)).default;
@@ -50,4 +51,23 @@ assert.equal(sources(helpers(2)), 0);
 call('dynlex_web_init');
 call('dynlex_web_set_main_source', null, ['string'], [main]);
 assert.notEqual(call('dynlex_web_compile_and_emit_wasm', 'number'), 0, 'Reinitializing the compiler must clear imported project sources');
-console.log('Browser project sources: nested imports, file entry points, replacement, deletion, validation and reset passed.');
+const package_ = await packageFromFolder(new Map([
+  ['dynlex-package.json', Buffer.from(JSON.stringify({schema: 1, name: 'example', files: ['src'],
+    exports: {'entry.dl': 'src/entry.dl'}}))],
+  ['src/entry.dl', Buffer.from(helpers(2)['packages/example/nested/helpers.dl'])]
+]), 'test-revision');
+const manager = createPackageManager({resolve: async () => package_});
+const installed = await manager.install(emptyProject(), {path: './fixture'}, 'widget');
+const installedSources = projectFiles(installed.project, installed.packages);
+const packageMain = main.replace('packages/example/entry.dl', 'widget/entry.dl');
+assert.equal(sources({...installedSources, 'main.dl': packageMain}), 0);
+assert.equal(call('dynlex_web_set_entry_file', 'number', ['string'], ['main.dl']), 0);
+await run(42);
+assert.equal(sources({...installedSources, 'main.dl': packageMain.replace('widget/entry.dl', 'widget/src/entry.dl')}), 0);
+assert.notEqual(call('dynlex_web_compile_and_emit_wasm', 'number'), 0);
+assert.match(call('dynlex_web_get_diagnostics_json', 'string'), /does not export/);
+delete installedSources['dynlex.lock'];
+assert.equal(sources({...installedSources, 'main.dl': packageMain}), 0);
+assert.notEqual(call('dynlex_web_compile_and_emit_wasm', 'number'), 0);
+assert.match(call('dynlex_web_get_diagnostics_json', 'string'), /lockfile/);
+console.log('Browser project sources: nested imports, locked library aliases, public exports, file entry points, replacement, deletion, validation and reset passed.');

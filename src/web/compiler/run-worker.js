@@ -16,7 +16,16 @@ self.onmessage = async ({ data: { id, payload } }) => {
       buffered += chunk;
       if (buffered.length >= 4096) flush();
     } };
-    const runtime = buildRuntimeImports(output, createRuntimeFilesystem(), inspectRuntimeWasmLayout(payload.wasm));
+    const filesystem = createRuntimeFilesystem();
+    for (const [name, data] of Object.entries(payload.files)) {
+      filesystem.files.set(name, {data, modificationTime: filesystem.lastTimestamp});
+      let slash = name.lastIndexOf('/');
+      while (slash >= 0) {
+        filesystem.directories.set(name.slice(0, slash), filesystem.lastTimestamp);
+        slash = name.lastIndexOf('/', slash - 1);
+      }
+    }
+    const runtime = buildRuntimeImports(output, filesystem, inspectRuntimeWasmLayout(payload.wasm));
     const start = performance.now();
     const { instance } = await WebAssembly.instantiate(payload.wasm, runtime);
     self.postMessage({ id, event: { type: 'program-started' } });

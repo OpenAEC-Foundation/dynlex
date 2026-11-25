@@ -365,7 +365,8 @@ std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionPar
 
 std::optional<Location> DynLexServer::definitionInContext(ParseContext *context, const TextDocumentPositionParams &params) {
 	for (const auto &[path, target] : context->importDefinitions) {
-		const int offset = path.line->mapSourceToOffset(params.textDocument.uri, params.position.line, params.position.character);
+		const int offset =
+			path.line->mapSourceToOffset(params.textDocument.uri, params.position.line, params.position.character);
 		if (offset >= path.start() && offset < path.end())
 			return Location{pathutil::toAbsoluteUri(target->uri), {}};
 	}
@@ -791,6 +792,15 @@ std::vector<CodeAction> DynLexServer::onCodeAction(const CodeActionParams &param
 		return {};
 	std::vector<CodeAction> actions;
 	for (const Diagnostic &diag : params.context.diagnostics) {
+		if (diag.data && diag.data->contains("libraryAlias")) {
+			auto alias = diag.data->at("libraryAlias").get<std::string>();
+			CodeAction action;
+			action.title = "Add " + alias + " library to project";
+			action.diagnostics.push_back(diag);
+			action.command =
+				Json{{"title", action.title}, {"command", "dynlex.addLibrary"}, {"arguments", Json::array({alias})}};
+			actions.push_back(std::move(action));
+		}
 		if (!diag.data || !diag.data->contains("quickFixes"))
 			continue;
 		for (const Json &fix : (*diag.data)["quickFixes"]) {
