@@ -42,6 +42,7 @@ function discardWebGlProgram(gl, work) {
 
 function finishWebGlProgram(gl, work) {
   try {
+    if(gl.isContextLost()) throw new Error('WebGL context was lost during shader preparation');
     for (const shader of work.shaders) {
       if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
         console.error("WebGL shader compilation failed", gl.getShaderInfoLog(shader));
@@ -70,16 +71,31 @@ export function createWebGlProgram(gl, vertexSource, fragmentSource) {
 export async function createWebGlProgramAsync(gl, vertexSource, fragmentSource) {
   const extension = gl.getExtension('KHR_parallel_shader_compile');
   const work = startWebGlProgram(gl, vertexSource, fragmentSource);
+  let lost=false;
+  const invalidate=()=>{lost=true;};
+  const requireContext=()=>{
+    if(lost||gl.isContextLost()) throw new Error('WebGL context was lost during shader preparation');
+  };
+  gl.canvas.addEventListener('webglcontextlost',invalidate);
   try {
-    if (extension !== null) {
-      while (!gl.getProgramParameter(work.program, extension.COMPLETION_STATUS_KHR))
+    try {
+      if(extension!==null) {
+        for(;;) {
+          requireContext();
+          if(gl.getProgramParameter(work.program,extension.COMPLETION_STATUS_KHR)) break;
+          await new Promise(resolve=>setTimeout(resolve,0));
+        }
+      } else {
         await new Promise(resolve => setTimeout(resolve, 0));
-    } else {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      }
+      requireContext();
+    } catch(error) {
+      // A restored context rejects objects that the browser already invalidated.
+      if(!lost||gl.isContextLost()) discardWebGlProgram(gl,work);
+      throw error;
     }
-  } catch (error) {
-    discardWebGlProgram(gl, work);
-    throw error;
+    return finishWebGlProgram(gl,work);
+  } finally {
+    gl.canvas.removeEventListener('webglcontextlost',invalidate);
   }
-  return finishWebGlProgram(gl, work);
 }

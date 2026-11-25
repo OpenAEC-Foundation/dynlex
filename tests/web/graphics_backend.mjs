@@ -42,7 +42,7 @@ try {
   for (const failure of ['vertex', 'fragment', 'link', null]) {
     const liveShaders = new Set(), livePrograms = new Set();
     const gl = {
-      VERTEX_SHADER: 'vertex', FRAGMENT_SHADER: 'fragment',
+      VERTEX_SHADER: 'vertex', FRAGMENT_SHADER: 'fragment', isContextLost() { return false; },
       createShader(type) { const shader = { type }; liveShaders.add(shader); return shader; },
       shaderSource() {}, compileShader() {},
       getShaderParameter(shader) { return shader.type !== failure; },
@@ -71,7 +71,7 @@ console.log('Shared WebGL program creation: failure cleanup and generic client e
 
 for (const extensionAvailable of [true, false]) {
   let polls=0, checks=0, deleted=0, timerRan=false;
-  const gl={VERTEX_SHADER:1,FRAGMENT_SHADER:2,COMPILE_STATUS:3,LINK_STATUS:4,
+  const gl={canvas:new EventTarget(),VERTEX_SHADER:1,FRAGMENT_SHADER:2,COMPILE_STATUS:3,LINK_STATUS:4,isContextLost(){return false;},
     getExtension(){return extensionAvailable?{COMPLETION_STATUS_KHR:5}:null;},
     createShader(){return {};},shaderSource(){},compileShader(){},deleteShader(){deleted++;},
     createProgram(){return {};},attachShader(){},linkProgram(){},deleteProgram(){},
@@ -84,3 +84,32 @@ for (const extensionAvailable of [true, false]) {
   assert.equal(checks,2);assert.equal(deleted,2);
 }
 console.log('WebGL preparation yields before status checks and polls nonblocking completion when exposed.');
+
+for(const extensionAvailable of [true,false]) {
+  let lost=false,deletedShaders=0,deletedPrograms=0,polls=0;
+  const gl={canvas:new EventTarget(),VERTEX_SHADER:1,FRAGMENT_SHADER:2,COMPILE_STATUS:3,LINK_STATUS:4,
+    isContextLost(){return lost;},getExtension(){return extensionAvailable?{COMPLETION_STATUS_KHR:5}:null;},
+    createShader(){return {};},shaderSource(){},compileShader(){},deleteShader(){deletedShaders++;},
+    createProgram(){return {};},attachShader(){},linkProgram(){},deleteProgram(){deletedPrograms++;},
+    getProgramParameter(program,kind){if(kind===5){polls++;return false;}return true;},
+    getShaderParameter(){assert.fail('Lost-context shaders must not be diagnosed as invalid source');}
+  };
+  setTimeout(()=>{lost=true;},0);
+  await assert.rejects(createWebGlProgramAsync(gl,'vertex','fragment'),/context was lost/);
+  assert.equal(deletedShaders,2);assert.equal(deletedPrograms,1);assert(polls<3);
+}
+console.log('Losing a context during shader preparation stops polling and releases interrupted work.');
+
+for(const extensionAvailable of [true,false]) {
+  const canvas=new EventTarget();let stale=false;
+  const valid=()=>assert(!stale,'An old WebGL object was used after context restoration');
+  const gl={canvas,VERTEX_SHADER:1,FRAGMENT_SHADER:2,COMPILE_STATUS:3,LINK_STATUS:4,isContextLost(){return false;},
+    getExtension(){return extensionAvailable?{COMPLETION_STATUS_KHR:5}:null;},
+    createShader(){return {};},shaderSource(){},compileShader(){},deleteShader(){valid();},
+    createProgram(){return {};},attachShader(){},linkProgram(){},deleteProgram(){valid();},
+    getProgramParameter(){valid();return false;},getShaderParameter(){valid();return true;}
+  };
+  setTimeout(()=>{stale=true;canvas.dispatchEvent(new Event('webglcontextlost'));canvas.dispatchEvent(new Event('webglcontextrestored'));},0);
+  await assert.rejects(createWebGlProgramAsync(gl,'vertex','fragment'),/context was lost/);
+}
+console.log('Shader preparation also detects a complete loss/restoration between asynchronous polls.');
