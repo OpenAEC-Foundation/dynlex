@@ -176,6 +176,27 @@ def check_signal(compiler, directory):
         session.close()
 
 
+def check_global_hover(compiler, directory):
+    source = directory / 'global.dl'
+    source.write_text('function set variable to value:\n'
+                      '    replacement: @intrinsic("store", variable, value)\n'
+                      'set {global count} to @intrinsic("add", @intrinsic("command line argument count"), 1)\n'
+                      'function inspect:\n    globals:\n        global count\n    execute:\n'
+                      '        @intrinsic("return", global count)\n'
+                      'set answer to inspect\n@intrinsic("discard", answer)\n')
+    session = Session(compiler, directory)
+    try:
+        session.request('initialize', {'adapterID': 'dynlex'})
+        session.request('launch', {'program': str(source)})
+        session.request('setBreakpoints', {'source': {'path': str(source)}, 'breakpoints': [{'line': 9}]})
+        session.request('configurationDone')
+        session.until(lambda message: message.get('event') == 'stopped')
+        result = session.request('evaluate', {'expression': 'global count', 'frameId': 0, 'context': 'hover'})
+        assert result['body']['result'] == '1', result
+    finally:
+        session.close()
+
+
 def check_pure_call(compiler, directory):
     source = directory / 'pure.dl'
     source.write_text('to get increased number:\n'
@@ -275,6 +296,7 @@ def main():
         check_hover(compiler, directory)
         check_pause(compiler, directory)
         check_pure_call(compiler, directory)
+        check_global_hover(compiler, directory)
     print('Debug sessions preserve program output, hide GDB chatter, step, and report crashes.')
 
 

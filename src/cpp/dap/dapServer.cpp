@@ -452,22 +452,25 @@ void DapServer::handleEvaluate(int reqSeq, const Json &args) {
 	if (!selectFrame(reqSeq, "evaluate", args.value("frameId", 0)))
 		return;
 	std::string expression = args.at("expression");
-	MiRecord variables = debugger->sendAndWait("stack-list-variables --no-values");
-	if (variables.recordClass == "error") {
-		sendErrorResponse(reqSeq, "evaluate", variables.values.at("msg"));
-		return;
-	}
-	for (const auto &variable : variables.values.at("variables")) {
-		if (variable.at("name") == expression) {
-			std::string quoted = "'";
-			for (char character : expression) {
-				if (character == '\\' || character == '\'')
-					quoted += '\\';
-				quoted += character;
-			}
-			expression = quoted + "'";
-			break;
+	bool variableName = args.value("context", "") == "hover";
+	if (!variableName) {
+		MiRecord variables = debugger->sendAndWait("stack-list-variables --no-values");
+		if (variables.recordClass == "error") {
+			sendErrorResponse(reqSeq, "evaluate", variables.values.at("msg"));
+			return;
 		}
+		for (const auto &variable : variables.values.at("variables"))
+			if (variable.at("name") == expression)
+				variableName = true;
+	}
+	if (variableName) {
+		std::string quoted = "'";
+		for (char character : expression) {
+			if (character == '\\' || character == '\'')
+				quoted += '\\';
+			quoted += character;
+		}
+		expression = quoted + "'";
 	}
 	MiRecord result = debugger->sendAndWait("data-evaluate-expression " + Json(expression).dump());
 	if (result.recordClass == "error") {
