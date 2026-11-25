@@ -116,7 +116,11 @@ export async function writeProject(root, project, packages) {
         const target = path.join(next, name, file); await fs.mkdir(path.dirname(target), {recursive: true}); await fs.writeFile(target, data);
       }
     }
-    for (const entry of metadata) await fs.writeFile(path.join(stage, entry.name), entry.data, {mode: entry.original?.mode ?? 0o666});
+    for (const entry of metadata) {
+      const filename = path.join(stage, entry.name);
+      await fs.writeFile(filename, entry.data);
+      if (entry.original) await fs.chmod(filename, entry.original.mode);
+    }
     if (await exists(destination)) { await fs.rename(destination, previous); hadPrevious = true; }
     await fs.rename(next, destination); replaced = true;
     let committed = 0;

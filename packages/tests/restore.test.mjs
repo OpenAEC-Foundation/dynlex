@@ -5,6 +5,21 @@ import path from 'node:path';
 import os from 'node:os';
 import {nodeManager} from '../node.mjs';
 
+test('installation preserves existing project metadata permissions despite the process umask', {skip: process.platform === 'win32'}, async () => {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'dynlex-library-permissions-'));
+  const previous = process.umask(0o022);
+  try {
+    const project = path.join(temporary, 'app'), library = path.join(temporary, 'library');
+    await fs.mkdir(project); await fs.mkdir(library);
+    await fs.writeFile(path.join(project, 'dynlex.json'), JSON.stringify({schema: 1, dependencies: {}}));
+    await fs.chmod(path.join(project, 'dynlex.json'), 0o664);
+    await fs.writeFile(path.join(library, 'dynlex-package.json'), JSON.stringify({schema: 1, name: 'example', files: ['main.dl'], exports: {'main.dl': 'main.dl'}}));
+    await fs.writeFile(path.join(library, 'main.dl'), 'answer means: 42');
+    await nodeManager(project).add({path: '../library'}, 'ui');
+    assert.equal((await fs.stat(path.join(project, 'dynlex.json'))).mode & 0o777, 0o664);
+  } finally { process.umask(previous); await fs.rm(temporary, {recursive: true, force: true}); }
+});
+
 test('local package file declarations reject symlinked parent directories', async () => {
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'dynlex-library-symlink-'));
   try {
