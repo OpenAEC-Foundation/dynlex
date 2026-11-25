@@ -9,7 +9,7 @@ class Library extends vscode.TreeItem {
         readonly documentation: string, revision: string, name: string) {
         super(alias, vscode.TreeItemCollapsibleState.None);
         this.description = `${name} · ${revision === 'local' ? revision : revision.slice(0, 12)}`;
-        this.tooltip = `${name}\nImported as ${alias}\n${revision}`;
+        this.tooltip = `${name}\nImported as ${alias}\n${revision}\nProject: ${folder.uri.fsPath}`;
         this.contextValue = 'dynlexLibrary';
         this.iconPath = new vscode.ThemeIcon('library');
     }
@@ -83,7 +83,7 @@ export function registerLibraries(context: vscode.ExtensionContext, refreshLangu
             if (containing.length) return containing[0];
         }
         if (available.length === 1) return available[0];
-        const choice = await vscode.window.showQuickPick(available.map(folder => ({label: folder.name, folder})),
+        const choice = await vscode.window.showQuickPick(available.map(folder => ({label: folder.name, description: folder.uri.fsPath, folder})),
             {placeHolder: 'Choose the application project'});
         return choice?.folder;
     }
