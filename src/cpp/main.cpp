@@ -48,7 +48,7 @@ void printUsage(std::ostream &output) {
 		   << "  -march=native|<cpu>  -mcpu=<cpu>  -mtune=<cpu>  -mattr=<features>\n"
 		   << "  -fvectorize|-fno-vectorize  -fslp-vectorize|-fno-slp-vectorize\n"
 		   << "  -funroll-loops|-fno-unroll-loops\n"
-		   << "  -o <output>  -g|--debug  --trace-execution\n"
+		   << "  -o <output>  -g|--debug  --trace-execution  --debug-execution (Wasm)\n"
 		   << "  --no-incremental  --cache-dir <directory>  --incremental-stats\n"
 		   << "  --lsp [--port PORT]  --stdio  --dap  --lsp-trace[=PATH]\n"
 		   << "  --version  --help\n\n"
@@ -320,6 +320,8 @@ int main(int argumentCount, char *argumentValues[]) {
 			context.options.emitDebugInfo = true;
 		} else if (arg == "--trace-execution") {
 			context.options.traceExecution = true;
+		} else if (arg == "--debug-execution") {
+			context.options.debugExecution = true;
 		} else if (arg == "-O0") {
 			context.options.optimizationLevel = 0;
 			context.options.optimizationSize = ParseContext::OptimizationSize::None;
@@ -444,6 +446,10 @@ int main(int argumentCount, char *argumentValues[]) {
 	}
 
 	int explicitOutputModes = 0;
+	if (context.options.debugExecution && !context.options.emitWASM) {
+		std::cerr << "--debug-execution requires --emit-wasm" << std::endl;
+		return 1;
+	}
 	explicitOutputModes += context.options.emitLLVM ? 1 : 0;
 	explicitOutputModes += context.options.emitObject ? 1 : 0;
 	explicitOutputModes += context.options.emitWASM ? 1 : 0;

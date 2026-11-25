@@ -11,9 +11,10 @@ context.prepareSourceOutlines = [&]() {
 							: nullptr;
 	const auto &bodies = initialParameterCounts.bodies();
 	for (auto &[owner, products] : owners) {
-		bool eligible = prior && !context.options.traceExecution && owner->parent == context.mainSection &&
-						owner->type == SectionType::Function && !owner->isFlex && !owner->declarationProducer &&
-						!containsNestedDefinition(*owner) && hasNoGlobalAccess(owner) && sourceOwnerReferences(*owner).empty();
+		bool eligible = prior && !context.options.traceExecution && !context.options.debugExecution &&
+						owner->parent == context.mainSection && owner->type == SectionType::Function && !owner->isFlex &&
+						!owner->declarationProducer && !containsNestedDefinition(*owner) && hasNoGlobalAccess(owner) &&
+						sourceOwnerReferences(*owner).empty();
 		const std::string &path = initialParameterCounts.path(*owner);
 		const std::vector<IncrementalMatcherCache::ReferenceMatchKeys> *references = nullptr;
 		if (eligible) {

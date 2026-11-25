@@ -4,7 +4,7 @@ import { WorkerConnection } from './client.js';
 // policy are controlled by the DynLex application calling these services.
 export function createCompilerServices(base, dependencyUrl) {
   let dependencies, nextArtifact = 1;
-  const compilers = new Map(), runners = new Set(), artifacts = new Map();
+  const compilers = new Map(), runners = new Map(), artifacts = new Map();
   function connection(name) {
     if (!compilers.has(name)) compilers.set(name, new WorkerConnection(new URL('worker.js', base),
       () => compilers.delete(name)));
@@ -30,10 +30,12 @@ export function createCompilerServices(base, dependencyUrl) {
       else throw new Error(`Unknown compiler target: ${payload.target}`);
       const result = await connection('build').request('compile', {
         sources: { ...await sources(), ...payload.sources }, entry: payload.entry,
-        target, traced: payload.traced, stages: payload.stages
+        target, traced: payload.traced, debugged: payload.debugged, stages: payload.stages
       }, { signal });
       if (result.status === 0 && target === 'wasm') {
-        result.artifact = nextArtifact++; artifacts.set(result.artifact, result.wasm); delete result.wasm;
+        result.artifact = nextArtifact++;
+        artifacts.set(result.artifact, { wasm: result.wasm, debugged: payload.debugged === true });
+        delete result.wasm;
       }
       return result;
     },
@@ -47,17 +49,27 @@ export function createCompilerServices(base, dependencyUrl) {
     },
     async program(payload, { signal, emit }) {
       if (!artifacts.has(payload.artifact)) throw new Error('Unknown compiler artifact');
-      const wasm = artifacts.get(payload.artifact); artifacts.delete(payload.artifact);
-      const worker = new WorkerConnection(new URL('run-worker.js', base)); runners.add(worker);
+      const { wasm, debugged } = artifacts.get(payload.artifact); artifacts.delete(payload.artifact);
+      if (runners.has(payload.invocation)) throw new Error('Program invocation is already running');
+      const worker = new WorkerConnection(new URL('run-worker.js', base)); runners.set(payload.invocation, worker);
       try {
-        return await worker.request('run', { wasm, outputLimit: payload.outputLimit }, { signal,
+        return await worker.request('run', { wasm, outputLimit: payload.outputLimit,
+          debugged, breakpoints: payload.breakpoints }, { signal,
           transfer: [wasm.buffer], event: event => emit({ ...event, invocation: payload.invocation }) });
-      } finally { worker.close(); runners.delete(worker); }
+      } finally { worker.close(); runners.delete(payload.invocation); }
+    },
+    async debugger(payload, { signal }) {
+      signal?.throwIfAborted();
+      const worker = runners.get(payload.invocation);
+      if (!worker) throw new Error('Debugger invocation is not running');
+      // Cancelling an inspection discards its UI reply; it must not kill the running program.
+      const result = await worker.request('debug', payload);
+      return payload.command === 'variables' ? { pause: payload.pause, reference: payload.reference, variables: result } : result;
     }
   };
   return { services, close() {
     for (const worker of compilers.values()) worker.close();
-    for (const worker of runners) worker.close();
+    for (const worker of runners.values()) worker.close();
     artifacts.clear();
   } };
 }

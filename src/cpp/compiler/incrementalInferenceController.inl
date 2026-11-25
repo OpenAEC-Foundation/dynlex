@@ -20,7 +20,8 @@ class IncrementalInferenceController {
 	void run(ParseContext &context, const std::function<bool(const ParseContext::IncrementalFunctionRequest &)> &infer) {
 		auto start = Clock::now();
 		const Json &prior = previous.at("all_function_projection");
-		if (context.options.traceExecution || !compatibleObservations(previous, observations, context))
+		if (context.options.traceExecution || context.options.debugExecution ||
+			!compatibleObservations(previous, observations, context))
 			return;
 		inferredContext = &context;
 		preparing = true;
@@ -199,7 +200,8 @@ class IncrementalInferenceController {
 		bool rootEligible = rootInputsUnchanged && !previous.at("root_grouping").is_null() &&
 							check.unchanged({"root", aggregateGraphVariant}) &&
 							reusableRootExecution(context, previous, frontendDiagnostics, *inferenceReuse);
-		auto rootGrouping = rootEligible ? decodeGroupingProduct(previous.at("root_grouping"), sourceIndex, summaryStore) : nullptr;
+		auto rootGrouping =
+			rootEligible ? decodeGroupingProduct(previous.at("root_grouping"), sourceIndex, summaryStore) : nullptr;
 		if (rootGrouping && validateGroupingProduct(context, rootGrouping, nullptr) &&
 			reuseRootWithGlobalTypes(context, previous, paths, *irReuse)) {
 			requireCompilerInvariant(

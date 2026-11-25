@@ -849,6 +849,8 @@ run_auxiliary_test "shader_integer_semantics" 30 python3 -B "$SCRIPT_DIR/test_sh
 run_auxiliary_test "shader_derivatives" 30 python3 -B "$SCRIPT_DIR/test_shader_derivatives.py" "$COMPILER"
 run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"
+run_auxiliary_test "dap_output" 30 python3 -B "$SCRIPT_DIR/test_dap_output.py" "$COMPILER"
+run_auxiliary_test "program_debugger" 10 node "$PROJECT_DIR/tests/web/program_debugger.mjs"
 run_auxiliary_test "native_platform_targets" 30 python3 -B "$SCRIPT_DIR/test_native_platform_targets.py" "$PROJECT_DIR" "$COMPILER"
 run_auxiliary_test "nested_operand_grouping" 30 python3 -B "$SCRIPT_DIR/test_nested_operand_grouping.py" "$PROJECT_DIR" "$COMPILER"
 run_auxiliary_test "string_literal_boundaries" 10 python3 -B "$SCRIPT_DIR/test_string_literal_boundaries.py" "$PROJECT_DIR" "$COMPILER"

@@ -7,6 +7,7 @@ namespace dap {
 // Parsed debugger-machine-interface output record.
 struct MiRecord {
 	enum Type {
+		Unknown,
 		Result,		   // ^done, ^running, ^error, etc.
 		ExecAsync,	   // *stopped, *running
 		StatusAsync,   // +download, etc.
@@ -17,7 +18,7 @@ struct MiRecord {
 		Prompt		   // (gdb)
 	};
 
-	Type type = Prompt;
+	Type type = Unknown;
 	int token = -1;			 // command token (-1 if none)
 	std::string recordClass; // e.g. "done", "stopped", "error"
 	nlohmann::json values;	 // parsed key=value pairs as JSON

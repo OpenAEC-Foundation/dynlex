@@ -44,6 +44,10 @@ class GdbMI {
 	pid_t pid = -1;
 	int toGdb = -1;	  // write end of stdin pipe
 	int fromGdb = -1; // read end of stdout pipe
+	int targetOutput = -1;
+	int targetTerminal = -1;
+	std::string targetPath;
+	std::string pendingOutput;
 	int nextToken = 1;
 
 	// Synchronization for sendAndWait: reader thread delivers results via deliverResult()
@@ -53,7 +57,8 @@ class GdbMI {
 	std::atomic<bool> shuttingDown{false};
 
 	// Read a single line from GDB (blocks)
-	std::string readLine();
+	bool readLine(std::string &line);
+	bool openTargetTerminal();
 
 	// Parse an MI output line into a record
 	MiRecord parseLine(const std::string &line);

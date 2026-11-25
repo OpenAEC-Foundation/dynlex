@@ -459,7 +459,9 @@ bool reflectShaderSpirv(
 	}
 }
 
-int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderStage, bool traceExecution = false) {
+int compileAndEmit(
+	WebOutputKind outputKind, ParseContext::ShaderStage shaderStage, bool traceExecution = false, bool debugExecution = false
+) {
 	WebCompilerState &state = webState();
 	if (!state.initialized) {
 		appendCompilerLog("error", "compiler state is not initialized");
@@ -483,6 +485,9 @@ int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderSta
 	context.options.emitSPIRV = outputKind == WebOutputKind::ShaderSpirv;
 	context.options.shaderStage = shaderStage;
 	context.options.traceExecution = traceExecution;
+	context.options.debugExecution = debugExecution;
+	if (debugExecution)
+		context.options.optimizationLevel = 0;
 	auto memoryFileSystem = std::make_unique<lsp::MemoryFileSystem>(std::make_unique<lsp::LocalFileSystem>());
 	if (state.mainSource)
 		memoryFileSystem->setFile(state.entryPath, *state.mainSource);
@@ -670,6 +675,10 @@ EMSCRIPTEN_KEEPALIVE int dynlex_web_compile_and_emit_wasm() {
 
 EMSCRIPTEN_KEEPALIVE int dynlex_web_compile_and_emit_wasm_traced() {
 	return compileAndEmit(WebOutputKind::ProgramWasm, ParseContext::ShaderStage::Fragment, true);
+}
+
+EMSCRIPTEN_KEEPALIVE int dynlex_web_compile_and_emit_wasm_debugged() {
+	return compileAndEmit(WebOutputKind::ProgramWasm, ParseContext::ShaderStage::Fragment, false, true);
 }
 
 EMSCRIPTEN_KEEPALIVE int dynlex_web_compile_and_emit_shader_spirv(const char *shaderStage) {

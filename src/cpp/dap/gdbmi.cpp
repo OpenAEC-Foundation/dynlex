@@ -3,27 +3,74 @@
 #include <cassert>
 #include <cerrno>
 #include <csignal>
+#include <cstdlib>
 #include <cstring>
+#include <fcntl.h>
 #include <iostream>
+#include <poll.h>
 #include <sys/wait.h>
+#include <termios.h>
 #include <unistd.h>
 
 namespace dap {
 
 GdbMI::~GdbMI() { terminate(); }
 
+bool GdbMI::openTargetTerminal() {
+	targetOutput = posix_openpt(O_RDWR | O_NOCTTY | O_NONBLOCK);
+	if (targetOutput < 0 || grantpt(targetOutput) < 0 || unlockpt(targetOutput) < 0) {
+		std::cerr << "[DAP] Failed to create program terminal: " << strerror(errno) << std::endl;
+		return false;
+	}
+	char *name = ptsname(targetOutput);
+	if (!name) {
+		std::cerr << "[DAP] Failed to locate program terminal: " << strerror(errno) << std::endl;
+		return false;
+	}
+	targetPath = name;
+	targetTerminal = open(name, O_RDWR | O_NOCTTY);
+	termios attributes{};
+	if (targetTerminal < 0 || fcntl(targetOutput, F_SETFD, FD_CLOEXEC) < 0 || fcntl(targetTerminal, F_SETFD, FD_CLOEXEC) < 0 ||
+		tcgetattr(targetTerminal, &attributes) < 0) {
+		std::cerr << "[DAP] Failed to configure program terminal: " << strerror(errno) << std::endl;
+		return false;
+	}
+	// Preserve program bytes: terminal output must not turn LF into CRLF.
+	attributes.c_oflag &= ~OPOST;
+	if (tcsetattr(targetTerminal, TCSANOW, &attributes) < 0) {
+		std::cerr << "[DAP] Failed to configure program output: " << strerror(errno) << std::endl;
+		return false;
+	}
+	return true;
+}
+
 bool GdbMI::launch(const std::string &gdbPath) {
+	if (!openTargetTerminal()) {
+		terminate();
+		return false;
+	}
 	int stdinPipe[2];
 	int stdoutPipe[2];
 
-	if (pipe(stdinPipe) < 0 || pipe(stdoutPipe) < 0) {
+	if (pipe(stdinPipe) < 0) {
 		std::cerr << "[DAP] Failed to create pipes: " << strerror(errno) << std::endl;
+		terminate();
+		return false;
+	}
+	if (pipe(stdoutPipe) < 0) {
+		std::cerr << "[DAP] Failed to create pipes: " << strerror(errno) << std::endl;
+		close(stdinPipe[0]);
+		close(stdinPipe[1]);
+		terminate();
 		return false;
 	}
 
 	pid = fork();
 	if (pid < 0) {
 		std::cerr << "[DAP] Fork failed: " << strerror(errno) << std::endl;
+		for (int descriptor : {stdinPipe[0], stdinPipe[1], stdoutPipe[0], stdoutPipe[1]})
+			close(descriptor);
+		terminate();
 		return false;
 	}
 
@@ -37,7 +84,8 @@ bool GdbMI::launch(const std::string &gdbPath) {
 		close(stdinPipe[0]);
 		close(stdoutPipe[1]);
 
-		execlp(gdbPath.c_str(), gdbPath.c_str(), "--interpreter=mi", "--quiet", nullptr);
+		std::string terminalOption = "--tty=" + targetPath;
+		execlp(gdbPath.c_str(), gdbPath.c_str(), "--interpreter=mi", "--quiet", terminalOption.c_str(), nullptr);
 		// If exec fails
 		std::cerr << "Failed to exec GDB: " << strerror(errno) << std::endl;
 		_exit(1);
@@ -53,11 +101,13 @@ bool GdbMI::launch(const std::string &gdbPath) {
 	MiRecord record;
 	while (readRecord(record)) {
 		if (record.type == MiRecord::Prompt) {
-			break;
+			return true;
 		}
+		std::cerr << "[DAP] " << record.streamText << std::endl;
 	}
 
-	return true;
+	terminate();
+	return false;
 }
 
 int GdbMI::send(const std::string &command) {
@@ -70,39 +120,82 @@ int GdbMI::send(const std::string &command) {
 	return token;
 }
 
-std::string GdbMI::readLine() {
-	std::string line;
+bool GdbMI::readLine(std::string &line) {
+	line.clear();
 	char c;
 	while (true) {
 		ssize_t n = ::read(fromGdb, &c, 1);
+		if (n < 0 && errno == EINTR)
+			continue;
 		if (n <= 0) {
-			return "";
+			if (n < 0)
+				std::cerr << "[DAP] Failed to read debugger output: " << strerror(errno) << std::endl;
+			return false;
 		}
 		if (c == '\n') {
-			return line;
+			return true;
 		}
 		line += c;
 	}
 }
 
 bool GdbMI::readRecord(MiRecord &record) {
-	std::string line = readLine();
-	if (line.empty() && errno != 0) {
-		return false;
-	}
-	// Skip empty lines
-	while (line.empty()) {
-		line = readLine();
-		if (line.empty()) {
+	while (true) {
+		pollfd descriptors[] = {{fromGdb, POLLIN, 0}, {targetOutput, POLLIN, 0}};
+		int ready = poll(descriptors, 2, -1);
+		if (ready < 0 && errno == EINTR)
+			continue;
+		if (ready < 0) {
+			std::cerr << "[DAP] Failed to wait for debugger output: " << strerror(errno) << std::endl;
+			return false;
+		}
+		// Drain program output before GDB's exit notification, without waiting for a newline.
+		if (descriptors[1].revents & POLLIN) {
+			char buffer[4096];
+			ssize_t count = ::read(targetOutput, buffer, sizeof(buffer));
+			if (count < 0 && (errno == EINTR || errno == EAGAIN))
+				continue;
+			if (count <= 0) {
+				std::cerr << "[DAP] Failed to read program output: " << strerror(errno) << std::endl;
+				return false;
+			}
+			pendingOutput.append(buffer, static_cast<size_t>(count));
+			// A read can split a UTF-8 character. Keep its unfinished suffix for the next read.
+			size_t end = pendingOutput.size();
+			size_t lead = end - 1;
+			while (lead > 0 && (static_cast<unsigned char>(pendingOutput[lead]) & 0xc0) == 0x80)
+				--lead;
+			unsigned char character = pendingOutput[lead];
+			size_t width = character < 0x80 ? 1 : character < 0xe0 ? 2 : character < 0xf0 ? 3 : 4;
+			if (end - lead < width)
+				end = lead;
+			if (end == 0)
+				continue;
+			record = MiRecord{};
+			record.type = MiRecord::TargetStream;
+			record.streamText = pendingOutput.substr(0, end);
+			pendingOutput.erase(0, end);
+			return true;
+		}
+		if (descriptors[0].revents & (POLLIN | POLLHUP)) {
+			std::string line;
+			if (!readLine(line))
+				return false;
+			if (line.empty())
+				continue;
+			record = parseLine(line);
+			return true;
+		}
+		if ((descriptors[0].revents | descriptors[1].revents) & (POLLERR | POLLNVAL | POLLHUP)) {
+			std::cerr << "[DAP] Debugger output channel closed unexpectedly" << std::endl;
 			return false;
 		}
 	}
-	record = parseLine(line);
-	return true;
 }
 
 MiRecord GdbMI::parseLine(const std::string &line) {
 	MiRecord record;
+	record.streamText = line;
 
 	if (line == "(gdb)" || line == "(gdb) ") {
 		record.type = MiRecord::Prompt;
@@ -329,18 +422,15 @@ void GdbMI::terminate() {
 	shuttingDown.store(true);
 	resultCV.notify_all();
 
-	if (pid <= 0)
-		return;
-
 	// Try graceful exit
-	if (toGdb >= 0) {
+	if (pid > 0 && toGdb >= 0) {
 		const char *exitCmd = "-gdb-exit\n";
 		::write(toGdb, exitCmd, strlen(exitCmd));
 	}
 
 	// Wait briefly for GDB to exit
 	int status;
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; pid > 0 && i < 10; i++) {
 		pid_t result = waitpid(pid, &status, WNOHANG);
 		if (result == pid) {
 			pid = -1;
@@ -363,6 +453,14 @@ void GdbMI::terminate() {
 	if (fromGdb >= 0) {
 		close(fromGdb);
 		fromGdb = -1;
+	}
+	if (targetOutput >= 0) {
+		close(targetOutput);
+		targetOutput = -1;
+	}
+	if (targetTerminal >= 0) {
+		close(targetTerminal);
+		targetTerminal = -1;
 	}
 }
 

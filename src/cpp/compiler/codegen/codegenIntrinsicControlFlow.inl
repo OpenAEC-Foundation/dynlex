@@ -59,6 +59,7 @@ generateLoopWhileIntrinsic(ParseContext &context, Expression *callExpr, const st
 
 	builder.CreateBr(condBlock);
 	builder.SetInsertPoint(condBlock);
+	emitDebugLocation(context, activeSectionFlexBodyFrame(context).openingExpression->range);
 
 	llvm::Value *condValue = nullptr;
 	if (!generateIntrinsicRuntimeValue(context, args[1], condValue))

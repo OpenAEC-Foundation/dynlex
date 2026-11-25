@@ -26,6 +26,7 @@ Json optionIdentity(const ParseContext::Options &options) {
 		{"explicit_target", options.hasExplicitTargetConfiguration},
 		{"debug", options.emitDebugInfo},
 		{"trace", options.traceExecution},
+		{"execution_debug", options.debugExecution},
 		{"resolution_limit", options.maxResolutionIterations},
 		{"host_cpu", llvm::sys::getHostCPUName().str()},
 		{"host_features", sortedFeatures}

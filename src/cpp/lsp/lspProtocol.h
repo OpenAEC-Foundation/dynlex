@@ -145,6 +145,7 @@ inline void from_json(const Json &j, TextDocumentPositionParams &p) {
 struct Hover {
 	Json contents;
 	std::optional<Range> range;
+	Json variable = nullptr;
 };
 
 inline void to_json(Json &j, const Hover &h) {
@@ -152,6 +153,8 @@ inline void to_json(Json &j, const Hover &h) {
 	if (h.range) {
 		j["range"] = *h.range;
 	}
+	if (!h.variable.is_null())
+		j["dynlexVariable"] = h.variable;
 }
 
 struct TextEdit {

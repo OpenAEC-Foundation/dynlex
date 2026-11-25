@@ -102,11 +102,12 @@ std::string DapServer::readMessage() {
 	return body;
 }
 
-void DapServer::sendJson(const Json &msg) {
+void DapServer::sendJson(Json msg) {
 	std::lock_guard<std::mutex> lock(writeMutex);
 	if (!transport || !transport->isConnected())
 		return;
 
+	msg["seq"] = seq++;
 	std::string body = msg.dump();
 	std::string header = "Content-Length: " + std::to_string(body.length()) + "\r\n\r\n";
 	std::string full = header + body;
@@ -122,23 +123,20 @@ void DapServer::sendJson(const Json &msg) {
 
 void DapServer::sendResponse(int requestSeq, const std::string &command, const Json &body) {
 	Json response = {
-		{"seq", seq++},	   {"type", "response"}, {"request_seq", requestSeq},
-		{"success", true}, {"command", command}, {"body", body},
+		{"type", "response"}, {"request_seq", requestSeq}, {"success", true}, {"command", command}, {"body", body},
 	};
 	sendJson(response);
 }
 
 void DapServer::sendErrorResponse(int requestSeq, const std::string &command, const std::string &message) {
 	Json response = {
-		{"seq", seq++},		{"type", "response"}, {"request_seq", requestSeq},
-		{"success", false}, {"command", command}, {"message", message},
+		{"type", "response"}, {"request_seq", requestSeq}, {"success", false}, {"command", command}, {"message", message},
 	};
 	sendJson(response);
 }
 
 void DapServer::sendEvent(const std::string &event, const Json &body) {
 	Json ev = {
-		{"seq", seq++},
 		{"type", "event"},
 		{"event", event},
 		{"body", body},
@@ -177,6 +175,8 @@ void DapServer::handleMessage(const Json &msg) {
 		handleScopes(reqSeq, args);
 	else if (command == "variables")
 		handleVariables(reqSeq, args);
+	else if (command == "evaluate")
+		handleEvaluate(reqSeq, args);
 	else if (command == "continue")
 		handleContinue(reqSeq, args);
 	else if (command == "next")
@@ -241,16 +241,26 @@ void DapServer::handleLaunch(int reqSeq, const Json &args) {
 	// so it can deliver result records
 	gdbReaderThread = std::thread(&DapServer::gdbReaderLoop, this);
 
+	MiRecord asyncResult = debugger->sendAndWait("gdb-set mi-async on");
+	if (asyncResult.recordClass != "done") {
+		sendErrorResponse(reqSeq, "launch", asyncResult.values.at("msg"));
+		return;
+	}
+
 	// Set working directory: use launch config's cwd, or default to the DAP server's cwd
 	// (VS Code sets the DAP adapter's cwd to the workspace root)
 	std::string cwd = args.value("cwd", "");
 	if (cwd.empty()) {
 		cwd = std::filesystem::current_path().string();
 	}
-	debugger->sendAndWait("environment-cd " + cwd);
+	MiRecord directoryResult = debugger->sendAndWait("environment-cd " + Json(cwd).dump());
+	if (directoryResult.recordClass != "done") {
+		sendErrorResponse(reqSeq, "launch", directoryResult.values.value("msg", "Failed to set working directory"));
+		return;
+	}
 
 	// Load the binary
-	MiRecord result = debugger->sendAndWait("file-exec-and-symbols " + compiledBinary);
+	MiRecord result = debugger->sendAndWait("file-exec-and-symbols " + Json(compiledBinary).dump());
 	if (result.recordClass != "done") {
 		std::string msg = result.values.value("msg", "Failed to load binary");
 		sendErrorResponse(reqSeq, "launch", msg);
@@ -286,7 +296,7 @@ void DapServer::handleSetBreakpoints(int reqSeq, const Json &args) {
 			int line = bp.value("line", 0);
 			std::string loc = sourcePath + ":" + std::to_string(line);
 
-			MiRecord result = debugger->sendAndWait("break-insert " + loc);
+			MiRecord result = debugger->sendAndWait("break-insert " + Json(loc).dump());
 
 			Breakpoint dapBp;
 			dapBp.id = static_cast<int>(breakpoints.size() + 1);
@@ -323,7 +333,11 @@ void DapServer::handleConfigurationDone(int reqSeq, const Json & /*args*/) {
 	}
 
 	// Start the program
-	debugger->send("exec-run");
+	MiRecord result = debugger->sendAndWait("exec-run");
+	if (result.recordClass == "error") {
+		sendEvent("output", {{"category", "stderr"}, {"output", result.values.value("msg", "Failed to start program") + "\n"}});
+		sendEvent("terminated");
+	}
 }
 
 void DapServer::handleThreads(int reqSeq, const Json & /*args*/) {
@@ -375,18 +389,42 @@ void DapServer::handleStackTrace(int reqSeq, const Json & /*args*/) {
 	sendResponse(reqSeq, "stackTrace", {{"stackFrames", frames}, {"totalFrames", frames.size()}});
 }
 
-void DapServer::handleScopes(int reqSeq, const Json & /*args*/) {
+bool DapServer::selectFrame(int reqSeq, const std::string &command, int frame) {
+	MiRecord selected = debugger->sendAndWait("stack-select-frame " + std::to_string(frame));
+	if (selected.recordClass == "error") {
+		sendErrorResponse(reqSeq, command, selected.values.at("msg"));
+		return false;
+	}
+	return true;
+}
+
+void DapServer::handleScopes(int reqSeq, const Json &args) {
+	int frame = args.at("frameId");
+	int locals = nextVariablesReference++, arguments = nextVariablesReference++;
+	scopeReferences.emplace(locals, ScopeInfo{frame, false});
+	scopeReferences.emplace(arguments, ScopeInfo{frame, true});
 	std::vector<Scope> scopes = {
-		{"Locals", localsRef, false},
-		{"Arguments", argsRef, false},
+		{"Locals", locals, false},
+		{"Arguments", arguments, false},
 	};
 	sendResponse(reqSeq, "scopes", {{"scopes", scopes}});
 }
 
 void DapServer::handleVariables(int reqSeq, const Json &args) {
 	int ref = args.value("variablesReference", 0);
+	auto scope = scopeReferences.find(ref);
+	if (scope == scopeReferences.end()) {
+		sendErrorResponse(reqSeq, "variables", "The variable scope is no longer available");
+		return;
+	}
+	if (!selectFrame(reqSeq, "variables", scope->second.frame))
+		return;
 
 	MiRecord result = debugger->sendAndWait("stack-list-variables --all-values");
+	if (result.recordClass == "error") {
+		sendErrorResponse(reqSeq, "variables", result.values.at("msg"));
+		return;
+	}
 
 	std::vector<Variable> vars;
 	if (result.values.contains("variables")) {
@@ -395,9 +433,8 @@ void DapServer::handleVariables(int reqSeq, const Json &args) {
 			std::string value = v.value("value", "");
 			std::string arg = v.value("arg", "0");
 
-			// Filter by scope: ref=1 for locals (arg=0), ref=2 for arguments (arg=1)
 			bool isArg = (arg == "1");
-			if ((ref == localsRef && isArg) || (ref == argsRef && !isArg)) {
+			if (scope->second.arguments != isArg) {
 				continue;
 			}
 
@@ -411,29 +448,67 @@ void DapServer::handleVariables(int reqSeq, const Json &args) {
 	sendResponse(reqSeq, "variables", {{"variables", vars}});
 }
 
-void DapServer::handleContinue(int reqSeq, const Json & /*args*/) {
-	debugger->send("exec-continue");
-	sendResponse(reqSeq, "continue", {{"allThreadsContinued", true}});
+void DapServer::handleEvaluate(int reqSeq, const Json &args) {
+	if (!selectFrame(reqSeq, "evaluate", args.value("frameId", 0)))
+		return;
+	std::string expression = args.at("expression");
+	MiRecord variables = debugger->sendAndWait("stack-list-variables --no-values");
+	if (variables.recordClass == "error") {
+		sendErrorResponse(reqSeq, "evaluate", variables.values.at("msg"));
+		return;
+	}
+	for (const auto &variable : variables.values.at("variables")) {
+		if (variable.at("name") == expression) {
+			std::string quoted = "'";
+			for (char character : expression) {
+				if (character == '\\' || character == '\'')
+					quoted += '\\';
+				quoted += character;
+			}
+			expression = quoted + "'";
+			break;
+		}
+	}
+	MiRecord result = debugger->sendAndWait("data-evaluate-expression " + Json(expression).dump());
+	if (result.recordClass == "error") {
+		sendErrorResponse(reqSeq, "evaluate", result.values.at("msg"));
+		return;
+	}
+	sendResponse(reqSeq, "evaluate", {{"result", result.values.at("value")}, {"variablesReference", 0}});
 }
 
-void DapServer::handleNext(int reqSeq, const Json & /*args*/) {
-	debugger->send("exec-next");
-	sendResponse(reqSeq, "next", Json::object());
+bool DapServer::executeCommand(
+	int reqSeq, const std::string &command, const std::string &miCommand, const Json &body, bool resumes
+) {
+	MiRecord result = debugger->sendAndWait(miCommand);
+	if (result.recordClass == "error") {
+		sendErrorResponse(reqSeq, command, result.values.at("msg"));
+		return false;
+	}
+	if (resumes)
+		scopeReferences.clear();
+	sendResponse(reqSeq, command, body);
+	return true;
 }
+
+void DapServer::handleContinue(int reqSeq, const Json & /*args*/) {
+	executeCommand(reqSeq, "continue", "exec-continue", {{"allThreadsContinued", true}});
+}
+
+void DapServer::handleNext(int reqSeq, const Json & /*args*/) { executeCommand(reqSeq, "next", "exec-next", Json::object()); }
 
 void DapServer::handleStepIn(int reqSeq, const Json & /*args*/) {
-	debugger->send("exec-step");
-	sendResponse(reqSeq, "stepIn", Json::object());
+	executeCommand(reqSeq, "stepIn", "exec-step", Json::object());
 }
 
 void DapServer::handleStepOut(int reqSeq, const Json & /*args*/) {
-	debugger->send("exec-finish");
-	sendResponse(reqSeq, "stepOut", Json::object());
+	executeCommand(reqSeq, "stepOut", "exec-finish", Json::object());
 }
 
 void DapServer::handlePause(int reqSeq, const Json & /*args*/) {
-	debugger->send("exec-interrupt");
-	sendResponse(reqSeq, "pause", Json::object());
+	pauseRequested = true;
+	if (!executeCommand(reqSeq, "pause", "exec-interrupt", Json::object(), false))
+		pauseRequested = false;
 }
 
 void DapServer::handleDisconnect(int reqSeq, const Json & /*args*/) {
@@ -469,8 +544,24 @@ void DapServer::handleGdbRecord(const MiRecord &record) {
 	if (record.type == MiRecord::ExecAsync) {
 		if (record.recordClass == "stopped") {
 			std::string reason = record.values.value("reason", "");
+			bool requestedPause = pauseRequested.exchange(false) && record.values.value("signal-name", "") == "SIGINT";
 
 			if (reason == "exited-normally" || reason == "exited" || reason == "exited-signalled") {
+				if (reason == "exited-signalled") {
+					sendEvent(
+						"output",
+						{{"category", "stderr"},
+						 {"output", "Program terminated by " + record.values.value("signal-name", "a signal") + ".\n"}}
+					);
+				} else {
+					int exitCode = std::stoi(record.values.value("exit-code", "0"), nullptr, 0);
+					if (exitCode != 0)
+						sendEvent(
+							"output",
+							{{"category", "stderr"}, {"output", "Program exited with code " + std::to_string(exitCode) + ".\n"}}
+						);
+					sendEvent("exited", {{"exitCode", exitCode}});
+				}
 				sendEvent("terminated");
 			} else {
 				// breakpoint-hit, end-stepping-range, signal-received, etc.
@@ -481,8 +572,14 @@ void DapServer::handleGdbRecord(const MiRecord &record) {
 					dapReason = "step";
 				else if (reason == "function-finished")
 					dapReason = "step";
-				else if (reason == "signal-received")
+				else if (reason == "signal-received" && !requestedPause) {
 					dapReason = "exception";
+					sendEvent(
+						"output", {{"category", "stderr"},
+								   {"output", "Program stopped: " + record.values.value("signal-name", "signal") + " (" +
+												  record.values.value("signal-meaning", "unknown signal") + ").\n"}}
+					);
+				}
 
 				int threadId = 1;
 				if (record.values.contains("thread-id")) {
@@ -490,12 +587,11 @@ void DapServer::handleGdbRecord(const MiRecord &record) {
 				}
 
 				sendEvent(
-					"stopped",
-					{
-						{"reason", dapReason},
-						{"threadId", threadId},
-						{"allThreadsStopped", true},
-					}
+					"stopped", {
+								   {"reason", dapReason},
+								   {"threadId", threadId},
+								   {"allThreadsStopped", true},
+							   }
 				);
 			}
 		} else if (record.recordClass == "running") {
@@ -503,8 +599,9 @@ void DapServer::handleGdbRecord(const MiRecord &record) {
 		}
 	} else if (record.type == MiRecord::TargetStream) {
 		sendEvent("output", {{"category", "stdout"}, {"output", record.streamText}});
-	} else if (record.type == MiRecord::ConsoleStream) {
-		sendEvent("output", {{"category", "console"}, {"output", record.streamText}});
+	} else if (record.type == MiRecord::ConsoleStream || record.type == MiRecord::LogStream ||
+			   record.type == MiRecord::Unknown) {
+		log(record.streamText);
 	}
 }
 

@@ -25,7 +25,8 @@ bool observationsStillEquivalent(
 	if (previous.at("syntax_structure") !=
 		Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity}))
 		return false;
-	if (!changedSources.empty() && (context.options.emitDebugInfo || context.options.traceExecution))
+	if (!changedSources.empty() &&
+		(context.options.emitDebugInfo || context.options.traceExecution || context.options.debugExecution))
 		return false;
 	const Json &prefixes = previous.at("comment_prefixes");
 	for (const std::string &path : changedSources) {

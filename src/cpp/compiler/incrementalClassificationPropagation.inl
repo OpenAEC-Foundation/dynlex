@@ -1,5 +1,5 @@
 bool IncrementalClassification::canReuse(Unit &unit) {
-	if (!prior || unit.environment || !unit.old || context.options.traceExecution ||
+	if (!prior || unit.environment || !unit.old || context.options.traceExecution || context.options.debugExecution ||
 		unit.section->parent != context.mainSection || !reusableResolutionSection(*unit.section) || unit.referenceCount == 0)
 		return false;
 	const Json &diagnosticUnits = previous->at("frontend_diagnostic_units");

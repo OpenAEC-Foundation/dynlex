@@ -1,0 +1,22 @@
+integer means: @intrinsic("type", "int", 32)
+class:
+    patterns:
+        sample
+    members:
+        tag as @intrinsic("type", "int", 8)
+        number as @intrinsic("type", "int", 64)
+section answer {name}:
+    declares: name
+    result: integer
+    value:
+        42
+answer fixed answer:
+@intrinsic("store", record, @intrinsic("construct", sample, 7, 9007199254740993))
+@intrinsic("store", items, [4, 5])
+@intrinsic("store", target, @intrinsic("address of", record))
+@intrinsic("store", narrow, @intrinsic("cast", @intrinsic("subtract", 0, 1), @intrinsic("type", "int", 24)))
+@intrinsic("discard", record)
+@intrinsic("discard", items)
+@intrinsic("discard", target)
+@intrinsic("discard", narrow)
+@intrinsic("discard", fixed answer)

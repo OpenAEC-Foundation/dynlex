@@ -96,7 +96,8 @@ bool canReuseInactiveBodies(
 	const Json &frontendDiagnostics, Json &currentProjection, SourceProjectionWork *projectionWork
 ) {
 	if (!previous.contains("inactive_projection") || context.options.emitDebugInfo || context.options.traceExecution ||
-		!context.scopeRuleWarnings.empty() || !compatibleObservations(previous, observations, context) ||
+		context.options.debugExecution || !context.scopeRuleWarnings.empty() ||
+		!compatibleObservations(previous, observations, context) ||
 		!sameFrontendDiagnosticRecords(frontendDiagnostics, previous.at("frontend_diagnostic_records")))
 		return false;
 	std::set<std::string> diagnosticSources = previous.at("diagnostic_sources").get<std::set<std::string>>();

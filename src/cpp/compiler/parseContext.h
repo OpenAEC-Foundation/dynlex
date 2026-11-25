@@ -308,6 +308,7 @@ struct ParseContext {
 		int maxResolutionIterations = 256;
 		bool emitDebugInfo = false;
 		bool traceExecution = false;
+		bool debugExecution = false;
 	} options;
 
 	// LLVM

@@ -88,7 +88,7 @@ struct Capabilities {
 	bool supportsConfigurationDoneRequest = true;
 	bool supportsFunctionBreakpoints = false;
 	bool supportsConditionalBreakpoints = false;
-	bool supportsEvaluateForHovers = false;
+	bool supportsEvaluateForHovers = true;
 	bool supportsStepBack = false;
 	bool supportsSetVariable = false;
 	bool supportTerminateDebuggee = true;

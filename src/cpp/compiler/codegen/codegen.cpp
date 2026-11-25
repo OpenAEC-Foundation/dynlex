@@ -8,6 +8,7 @@
 #include "compilerUtils.h"
 #include "debugScope.h"
 #include "debugTypeProducts.h"
+#include "executionDebug.h"
 #include "executionTrace.h"
 #include "expression.h"
 #include "functionCodegenScope.h"
@@ -167,6 +168,8 @@ llvm::Function *generateSpecializedFunction(
 
 	appendInternalFunctionIdentity(context, section, argTypes, funcName);
 	llvm::Function *func = llvm::Function::Create(funcType, llvm::Function::InternalLinkage, funcName, context.llvmModule);
+	if (context.options.debugExecution)
+		func->addFnAttr("dynlex.debug.name", getPatternName(section));
 	activeInst.llvmFunctionsByParameterAddressSpaces.emplace(std::move(parameterAddressSpaces), func);
 	if (context.recordGeneratedFunction)
 		context.recordGeneratedFunction(section, instantiationKey, func, false);
@@ -851,7 +854,7 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 			const Expression::BranchSelection &selection = *lineExpression->branchSelection;
 			if (selection.known) {
 				lastGeneratedValue = nullptr;
-				if (context.options.traceExecution) {
+				if (context.options.traceExecution || context.options.debugExecution) {
 					auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 					const size_t lastTest = selection.selectedBranchIndex < 0 ? chainEnd : selection.selectedBranchIndex;
 					for (size_t branch = i; branch <= lastTest; ++branch) {
@@ -895,6 +898,8 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 		}
 
 		if (lineExpression) {
+			if (lineExpression->sectionOutcome.read().kind != Expression::SectionOutcome::Kind::Loop)
+				emitDebugLocation(context, lineExpression->range);
 			if (context.diBuilder && line->sourceFile && context.currentDebugScope) {
 				auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 				// Use a DILexicalBlockFile scope when the code line's source file

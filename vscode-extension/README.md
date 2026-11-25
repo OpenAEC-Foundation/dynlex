@@ -8,6 +8,7 @@ VSCodium, and other compatible editors.
 - **Syntax Highlighting**: Server-driven semantic highlighting for DynLex code
 - **Diagnostics**: Real-time error and warning reporting as you type
 - **Go to Definition**: Navigate to variable and pattern definitions (F12 or Ctrl+Click)
+- **Debugging**: Breakpoints, stepping, call stacks, locals and paused variable hovers
 - **Incremental Sync**: Efficient document synchronization on every keystroke
 
 ## Requirements
@@ -18,6 +19,17 @@ VSCodium, and other compatible editors.
 
 Install DynLex from [dynlex.com](https://dynlex.com/) before enabling the
 extension.
+
+## Run and debug a program
+
+Open a `.dl` file, then press F5 and select **DynLex** if VS Code asks for a debugger.
+Use the **Debug Console** (View > Debug Console) to see program output. Routine
+GDB startup messages are kept in the adapter log; program failures still appear.
+
+Click beside a line number to set a breakpoint. While paused, use F10 to step over,
+F11 to step into, Shift+F11 to step out, and F5 to continue. Hover over a variable
+(including names with spaces) to inspect its runtime value. The Run and Debug
+sidebar contains the call stack, locals and arguments for the selected frame.
 
 ## Extension Settings
 

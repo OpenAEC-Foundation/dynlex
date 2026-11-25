@@ -21,8 +21,9 @@ class IncrementalBodyDemand {
 	}
 	bool select(BodyResolutionUnit &unit, std::string_view tree) {
 		Section *section = unit.section;
-		if (!prior || context.options.traceExecution || section->type != SectionType::Function || section->isFlex ||
-			section->parent != context.mainSection || !hasNoGlobalAccess(section) ||
+		if (!prior || context.options.traceExecution || context.options.debugExecution ||
+			section->type != SectionType::Function || section->isFlex || section->parent != context.mainSection ||
+			!hasNoGlobalAccess(section) ||
 			(!context.retainedSourceOwners.contains(section) && unit.deferredIndices.size() != unit.references.size()) ||
 			std::ranges::any_of(unit.references, [](const PatternReference *reference) {
 			return !reference->expression.deferred() || reference->expression.materialized() != nullptr;

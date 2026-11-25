@@ -53,7 +53,7 @@ async function handle(type, payload) {
   checked(module, 'dynlex_web_set_entry_file', ['string'], [payload.entry]);
   const start = performance.now();
   if (payload.target === 'wasm') {
-    const status = module.ccall(payload.traced ? 'dynlex_web_compile_and_emit_wasm_traced'
+    const status = module.ccall(payload.debugged ? 'dynlex_web_compile_and_emit_wasm_debugged' : payload.traced ? 'dynlex_web_compile_and_emit_wasm_traced'
       : 'dynlex_web_compile_and_emit_wasm', 'number');
     const result = { status, milliseconds: performance.now() - start, ...feedback(module) };
     if (status === 3 || status === 4) throw new Error(JSON.stringify(result));

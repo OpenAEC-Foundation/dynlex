@@ -1,0 +1,5 @@
+import helper.dl
+@intrinsic("store", counter, 1)
+report counter
+@intrinsic("store", counter, 9)
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", counter))

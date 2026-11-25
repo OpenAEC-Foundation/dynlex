@@ -37,14 +37,18 @@ class DapServer {
 
 	// Launch options
 	bool stopOnEntry = false;
+	std::atomic<bool> pauseRequested{false};
 
-	// Variable reference IDs: 1=locals, 2=arguments
-	static constexpr int localsRef = 1;
-	static constexpr int argsRef = 2;
+	struct ScopeInfo {
+		int frame;
+		bool arguments;
+	};
+	std::unordered_map<int, ScopeInfo> scopeReferences;
+	int nextVariablesReference = 1;
 
 	// Message I/O (Content-Length framing, same as LSP)
 	std::string readMessage();
-	void sendJson(const Json &msg);
+	void sendJson(Json msg);
 	void sendResponse(int requestSeq, const std::string &command, const Json &body);
 	void sendErrorResponse(int requestSeq, const std::string &command, const std::string &message);
 	void sendEvent(const std::string &event, const Json &body = Json::object());
@@ -62,6 +66,10 @@ class DapServer {
 	void handleStackTrace(int seq, const Json &args);
 	void handleScopes(int seq, const Json &args);
 	void handleVariables(int seq, const Json &args);
+	void handleEvaluate(int seq, const Json &args);
+	bool selectFrame(int seq, const std::string &command, int frame);
+	bool
+	executeCommand(int seq, const std::string &command, const std::string &miCommand, const Json &body, bool resumes = true);
 	void handleContinue(int seq, const Json &args);
 	void handleNext(int seq, const Json &args);
 	void handleStepIn(int seq, const Json &args);

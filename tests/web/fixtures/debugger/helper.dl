@@ -1,0 +1,3 @@
+to report number:
+    @intrinsic("store", increased, @intrinsic("add", number, 1))
+    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", increased))

@@ -168,6 +168,29 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    // Preserve complete DynLex variable names and ranges for debugger hovers.
+    context.subscriptions.push(
+        vscode.languages.registerEvaluatableExpressionProvider({ language: 'dynlex', scheme: 'file' }, {
+            async provideEvaluatableExpression(document, position, token) {
+                if (!client) {
+                    return undefined;
+                }
+                const response = await client.sendRequest('textDocument/hover', {
+                    textDocument: { uri: document.uri.toString() }, position
+                }, token) as unknown;
+                if (!isRecord(response) || !isRecord(response.dynlexVariable) ||
+                    typeof response.dynlexVariable.name !== 'string' || !isRecord(response.range) ||
+                    !isPosition(response.range.start) || !isPosition(response.range.end)) {
+                    return undefined;
+                }
+                return new vscode.EvaluatableExpression(new vscode.Range(
+                    response.range.start.line, response.range.start.character,
+                    response.range.end.line, response.range.end.character
+                ), response.dynlexVariable.name);
+            }
+        })
+    );
+
     // Register restart command
     context.subscriptions.push(
         vscode.commands.registerCommand('dynlex.restartServer', () => {

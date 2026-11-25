@@ -5,6 +5,7 @@
 #include "compileTimeValue.h"
 #include "compiler.h"
 #include "compilerUtils.h"
+#include "executionDebug.h"
 #include "executionTrace.h"
 #include "intrinsicInfo.h"
 #include "libraryDependencies.h"

@@ -305,6 +305,7 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 	if (context.importReusedFunctions && !context.importReusedFunctions(context))
 		return false;
 	sortDebugTypeProducts(*context.llvmModule);
+	finalizeDebugInstrumentation(context);
 	stabilizeStaticReferenceIdentities(*context.llvmModule);
 	applyTargetFunctionAttributes(context);
 

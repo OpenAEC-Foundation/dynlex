@@ -44,10 +44,10 @@ for (const job of jobs) {
   await mkdir(path.dirname(target), { recursive: true });
   if (job.kind === 'wasm') {
     if (workspace) {
-      const options=job.traced?['--trace-execution']:[];
-      execFileSync(nativeCompiler,[path.join(workspace,job.entry),'--emit-wasm','-O2',...options,'-o',target],{cwd:workspace,stdio:'inherit'});
+      const options=job.debugged?['--debug-execution']:job.traced?['--trace-execution']:[];
+      execFileSync(nativeCompiler,[path.join(workspace,job.entry),'--emit-wasm',job.debugged?'-O0':'-O2',...options,'-o',target],{cwd:workspace,stdio:'inherit'});
     } else {
-      checked(job.traced ? 'dynlex_web_compile_and_emit_wasm_traced' : 'dynlex_web_compile_and_emit_wasm');
+      checked(job.debugged ? 'dynlex_web_compile_and_emit_wasm_debugged' : job.traced ? 'dynlex_web_compile_and_emit_wasm_traced' : 'dynlex_web_compile_and_emit_wasm');
       await writeFile(target, Buffer.from(call('dynlex_web_get_output_wasm_base64', 'string'), 'base64'));
     }
   } else if (job.kind === 'shader') {

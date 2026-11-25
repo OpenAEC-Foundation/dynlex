@@ -100,6 +100,9 @@ const supportedEnvImports = new Set([
   "dynlex_host_write_standard_error",
   "dynlex_print_i64",
   "dynlex_print_string",
+  "dynlex_debug_enter",
+  "dynlex_debug_leave",
+  "dynlex_debug_location",
   "fclose",
   "ferror",
   "fflush",
@@ -633,5 +636,7 @@ export function buildRuntimeImports(stdoutChunks, filesystem, layout) {
     ...createHostImports(memory)
   };
 
+  for (const name of ['dynlex_debug_enter', 'dynlex_debug_leave', 'dynlex_debug_location'])
+    env[name] = () => { throw new WebAssembly.RuntimeError('Debug instrumentation requires an active debugger'); };
   return { env };
 }

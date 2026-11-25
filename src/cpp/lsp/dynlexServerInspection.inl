@@ -365,7 +365,8 @@ std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionPar
 
 std::optional<Location> DynLexServer::definitionInContext(ParseContext *context, const TextDocumentPositionParams &params) {
 	for (const auto &[path, target] : context->importDefinitions) {
-		const int offset = path.line->mapSourceToOffset(params.textDocument.uri, params.position.line, params.position.character);
+		const int offset =
+			path.line->mapSourceToOffset(params.textDocument.uri, params.position.line, params.position.character);
 		if (offset >= path.start() && offset < path.end())
 			return Location{pathutil::toAbsoluteUri(target->uri), {}};
 	}
@@ -420,6 +421,16 @@ std::optional<Hover> DynLexServer::onHover(const TextDocumentPositionParams &par
 std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const TextDocumentPositionParams &params) {
 	if (!hasCompilationStage(context, ParseContext::CompilationStage::InferredTypes))
 		return std::nullopt;
+	auto variableSymbol = [&](VariableReference *definition) -> Json {
+		if (!definition)
+			return nullptr;
+		const auto start = definition->range.sourceStart();
+		return {
+			{"name", definition->name},
+			{"uri", pathutil::toAbsoluteUri(start.sourceFile->uri)},
+			{"range", convertRange(definition->range)}
+		};
+	};
 
 	std::optional<CursorResolution> resolved =
 		resolveCursorData(*context, params.textDocument.uri, params.position.line, params.position.character);
@@ -480,6 +491,7 @@ std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const T
 		Hover hover;
 		hover.contents = makeVariableHoverContents(typeText, value);
 		hover.range = convertRange(annotation.range);
+		hover.variable = variableSymbol(ownedVariable->definition);
 		return hover;
 	}
 
@@ -605,6 +617,7 @@ std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const T
 
 				Hover hover;
 				hover.contents = makeVariableHoverContents(typeText, value);
+				hover.variable = variableSymbol(variableDefinition);
 				if (expr)
 					hover.range = convertRange(expr->range);
 				return hover;
@@ -663,6 +676,7 @@ std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const T
 	Hover hover;
 	hover.contents = makeVariableHoverContents(typeText, value);
 	hover.range = convertRange(referenceAtHover->range);
+	hover.variable = variableSymbol(variableDefinition);
 	return hover;
 }
 
