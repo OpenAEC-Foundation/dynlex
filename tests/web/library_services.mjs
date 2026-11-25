@@ -33,8 +33,12 @@ const server = http.createServer(async (request, response) => {
     } else if (url.pathname === '/') {
       response.setHeader('Content-Type', 'text/html');
       response.end(`<!doctype html><script type="module">
-        import {createLibraryServices} from '/packages/browser.mjs';
+        import {createLibraryServices as libraryServices} from '/packages/browser.mjs';
         import {emptyProject} from '/packages/manager.mjs';
+        const createLibraryServices=(...args)=>{
+          const service=libraryServices(...args);
+          return {...service,libraries:(payload,context)=>service.libraries({paths:[],...payload},context)};
+        };
         const check=(condition,message)=>{if(!condition) throw new Error(message);};
         try {
           const signal=new AbortController().signal, options={signal};

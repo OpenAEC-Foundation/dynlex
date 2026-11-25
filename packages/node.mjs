@@ -4,16 +4,14 @@ import os from 'node:os';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {inflateRaw} from 'node:zlib';
-import {bytes, canonical, readArchive, relativePath, verifyPackage} from './archive.mjs';
+import {bytes, canonical, readArchive, relativePath, text, verifyPackage} from './archive.mjs';
 import {createPackageManager, emptyProject, packageFromFolder, prune, validateProject} from './manager.mjs';
 
 const exec = promisify(execFile);
 async function exists(file) {
   try { await fs.access(file); return true; } catch (error) { if (error.code === 'ENOENT') return false; throw error; }
 }
-async function folder(directory) {
-  const metadata = JSON.parse(await fs.readFile(path.join(directory, 'dynlex-package.json'), 'utf8'));
-  const files = new Map();
+async function readFiles(directory, names, files = new Map()) {
   async function read(name) {
     let target = directory, stat;
     for (const part of name.split('/')) {
@@ -22,12 +20,18 @@ async function folder(directory) {
     }
     if (stat.isDirectory()) for (const child of await fs.readdir(target)) await read(`${name}/${child}`);
     else if (stat.isFile()) files.set(name, new Uint8Array(await fs.readFile(target)));
+    else throw new Error(`Unsupported library source file type: ${name}`);
   }
-  for (const name of ['dynlex-package.json', ...metadata.files]) {
+  for (const name of names) {
     relativePath(name);
     await read(name);
   }
   return files;
+}
+async function folder(directory) {
+  const files = await readFiles(directory, ['dynlex-package.json']);
+  const metadata = JSON.parse(text(files.get('dynlex-package.json')));
+  return readFiles(directory, metadata.files, files);
 }
 export function nodeHost(root, options = {}) {
   const fetch_ = options.fetch || fetch;
@@ -103,9 +107,22 @@ export async function writeProject(root, project, packages) {
     const filename = path.join(root, entry.name);
     entry.original = await exists(filename) ? {data: await fs.readFile(filename), mode: (await fs.stat(filename)).mode & 0o777} : null;
   }
-  const state = path.join(root, '.dynlex'); await fs.mkdir(state, {recursive: true});
+  const state = path.join(root, '.dynlex'), destination = path.join(state, 'packages');
+  const originalLock = metadata.find(entry => entry.name === 'dynlex.lock').original;
+  const previousPackages = originalLock ? JSON.parse(originalLock.data).packages : {};
+  if (await exists(destination)) {
+    for (const entry of await fs.readdir(destination, {withFileTypes: true})) {
+      if (Object.hasOwn(previousPackages, entry.name)) continue;
+      const directory = path.join(destination, entry.name);
+      if (!entry.isDirectory() || !await exists(path.join(directory, 'sdk.json')))
+        throw new Error(`The library cache contains unmanaged data: ${directory}`);
+      const package_ = await verifyPackage(await readFiles(directory, await fs.readdir(directory)));
+      if (package_.manifest.package !== entry.name) throw new Error('A cached library directory differs from its package identity');
+    }
+  }
+  await fs.mkdir(state, {recursive: true});
   const stage = await fs.mkdtemp(path.join(state, 'install-'));
-  const destination = path.join(state, 'packages'), previous = path.join(stage, 'previous');
+  const previous = path.join(stage, 'previous');
   let replaced = false, hadPrevious = false;
   try {
     const next = path.join(stage, 'packages'); await fs.mkdir(next);

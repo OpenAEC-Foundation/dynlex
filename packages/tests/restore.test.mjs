@@ -5,6 +5,21 @@ import path from 'node:path';
 import os from 'node:os';
 import {nodeManager} from '../node.mjs';
 
+test('installation preserves unmanaged data in the package cache by rejecting the operation', async () => {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'dynlex-library-owned-data-'));
+  try {
+    const project = path.join(temporary, 'app'), library = path.join(temporary, 'library');
+    const owned = path.join(project, '.dynlex/packages/owned/main.dl');
+    await fs.mkdir(path.dirname(owned), {recursive: true}); await fs.mkdir(library);
+    await fs.writeFile(owned, 'original means: 7');
+    await fs.writeFile(path.join(library, 'dynlex-package.json'), JSON.stringify({schema: 1, name: 'example', files: ['main.dl'], exports: {'main.dl': 'main.dl'}}));
+    await fs.writeFile(path.join(library, 'main.dl'), 'answer means: 42');
+    await assert.rejects(nodeManager(project).add({path: '../library'}, 'ui'), /unmanaged/);
+    assert.equal(await fs.readFile(owned, 'utf8'), 'original means: 7');
+    await assert.rejects(fs.access(path.join(project, 'dynlex.json')));
+  } finally { await fs.rm(temporary, {recursive: true, force: true}); }
+});
+
 test('installation preserves existing project metadata permissions despite the process umask', {skip: process.platform === 'win32'}, async () => {
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'dynlex-library-permissions-'));
   const previous = process.umask(0o022);

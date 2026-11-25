@@ -102,7 +102,7 @@ export function registerLibraries(context: vscode.ExtensionContext, refreshLangu
         if (!alias) return;
         if (!update && Object.prototype.hasOwnProperty.call((await manager(folder).read()).manifest.dependencies, alias))
             throw new Error(`The project already has a library named ${alias}`);
-        await vscode.window.withProgress({location: vscode.ProgressLocation.Notification, title: `Adding library ${alias}`},
+        await vscode.window.withProgress({location: vscode.ProgressLocation.Notification, title: `${update ? 'Updating' : 'Adding'} library ${alias}`},
             () => manager(folder).add(source, alias, update));
         changes.fire(); refresh();
         void vscode.window.showInformationMessage(`Library ${alias} is ready. Import ${alias}/… in your source.`);

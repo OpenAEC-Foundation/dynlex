@@ -1,5 +1,5 @@
 import {readArchive, verifyPackage} from './archive.mjs';
-import {createPackageManager, emptyProject, packageFromFolder, projectFiles, sourceFromUrl, validateProject} from './manager.mjs';
+import {createPackageManager, packageFromFolder, projectFiles, sourceFromUrl, validateProject} from './manager.mjs';
 
 function database() {
   return new Promise((resolve, reject) => {
@@ -103,7 +103,12 @@ export function createLibraryServices(catalogUrl, options = {}) {
     return package_;
   }};
   const manager = createPackageManager(host, catalogUrl);
-  async function materialize(project, packages = new Map()) {
+  async function materialize(project, paths, packages = new Map()) {
+    if (!Array.isArray(paths) || paths.some(path => typeof path !== 'string')) throw new Error('Application file paths must be an array of text');
+    for (const entry of Object.values(project.lock.packages)) {
+      const conflict = paths.find(path => path === entry.root || path.startsWith(entry.root + '/'));
+      if (conflict) throw new Error(`Library root conflicts with application file: ${conflict}`);
+    }
     for (const [name, entry] of Object.entries(project.lock.packages)) {
       if (!packages.has(name)) packages.set(name, await host.resolve({...entry.source, contentHash: entry.contentHash}));
     }
@@ -121,7 +126,7 @@ export function createLibraryServices(catalogUrl, options = {}) {
   }, async libraries(payload, {signal}) {
     signal.throwIfAborted();
     if (payload.operation === 'catalog') return {libraries: await manager.catalog()};
-    const project = payload.project || emptyProject();
+    const project = payload.project;
     validateProject(project);
     if (payload.operation === 'documentation') {
       const name = project.lock.dependencies[payload.alias];
@@ -129,8 +134,8 @@ export function createLibraryServices(catalogUrl, options = {}) {
       if (!url) throw new Error('This library does not declare a documentation URL');
       return {documentation: url};
     }
-    if (payload.operation === 'restore') return materialize(project);
-    if (payload.operation === 'remove') return materialize(manager.remove(project, payload.alias));
+    if (payload.operation === 'restore') return materialize(project, payload.paths);
+    if (payload.operation === 'remove') return materialize(manager.remove(project, payload.alias), payload.paths);
     let source = payload.url === undefined ? payload.source : sourceFromUrl(payload.url);
     if (payload.operation === 'folder' || (payload.operation === 'update' && project.manifest.dependencies[payload.alias]?.local)) {
       const files = await (options.selectFolder || selectFolder)();
@@ -142,6 +147,6 @@ export function createLibraryServices(catalogUrl, options = {}) {
     else if (payload.operation !== 'add') throw new Error(`Unknown library operation: ${payload.operation}`);
     const result = await manager.install(project, source, payload.alias, {update: payload.operation === 'update'});
     signal.throwIfAborted();
-    return materialize(result.project, result.packages);
+    return materialize(result.project, payload.paths, result.packages);
   }};
 }
