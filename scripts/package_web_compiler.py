@@ -12,10 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def package_files(root):
     files = {}
-    directories = ['lib', 'src/web/compiler', 'src/web/ide/public/compiler', 'resources/branding']
+    directories = ['lib', 'packages', 'src/web/compiler', 'src/web/ide/public/compiler', 'resources/branding']
     for directory in directories:
         for source in sorted((root / directory).rglob('*')):
-            if source.is_file() and source.suffix in ['.dl', '.js', '.wasm', '.svg']:
+            if source.is_file() and source.suffix in ['.dl', '.js', '.mjs', '.wasm', '.svg'] and '/tests/' not in source.as_posix():
                 files[source.relative_to(root).as_posix()] = source.read_bytes()
     for name in ['scripts/compile_project.mjs', 'scripts/run_program.mjs', 'scripts/test_web_browser.sh', 'scripts/install_release.sh',
                  'web/wgsl-translator.js', 'web/graphics-backend.js', 'LICENSE.md', 'shared/call-colors.json', 'metadata/release-manifest.txt',

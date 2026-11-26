@@ -30,7 +30,16 @@ self.onmessage = async ({ data: { id, type, payload } }) => {
       buffered += chunk;
       if (buffered.length >= 4096) flush();
     } };
-    const runtime = buildRuntimeImports(output, createRuntimeFilesystem(), inspectRuntimeWasmLayout(payload.wasm));
+    const filesystem = createRuntimeFilesystem();
+    for (const [name, data] of Object.entries(payload.files)) {
+      filesystem.files.set(name, {data, modificationTime: filesystem.lastTimestamp});
+      let slash = name.lastIndexOf('/');
+      while (slash >= 0) {
+        filesystem.directories.set(name.slice(0, slash), filesystem.lastTimestamp);
+        slash = name.lastIndexOf('/', slash - 1);
+      }
+    }
+    const runtime = buildRuntimeImports(output, filesystem, inspectRuntimeWasmLayout(payload.wasm));
     if (payload.debugged) {
       if (typeof WebAssembly.Suspending !== 'function' || typeof WebAssembly.promising !== 'function')
         throw new Error('Browser debugging requires WebAssembly JavaScript Promise Integration');

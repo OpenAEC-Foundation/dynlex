@@ -35,6 +35,28 @@
       {
         "command": "dynlex.restartServer",
         "title": "DynLex: Restart Language Server"
+      },
+      {
+        "command": "dynlex.addLibrary",
+        "title": "DynLex: Add Library…",
+        "icon": "$(add)"
+      },
+      {
+        "command": "dynlex.removeLibrary",
+        "title": "DynLex: Remove Library"
+      },
+      {
+        "command": "dynlex.updateLibrary",
+        "title": "DynLex: Update Library"
+      },
+      {
+        "command": "dynlex.libraryDocumentation",
+        "title": "DynLex: View Library Documentation"
+      },
+      {
+        "command": "dynlex.restoreLibraries",
+        "title": "DynLex: Restore Libraries",
+        "icon": "$(cloud-download)"
       }
     ],
     "breakpoints": [
@@ -286,6 +308,11 @@
           "type": "boolean",
           "default": false,
           "description": "Connect to an externally launched server instead of spawning one (for C++ debugging)"
+        },
+        "dynlex.libraries.catalog": {
+          "type": "string",
+          "default": "https://dynlex.com/libraries/index.json",
+          "description": "URL of the DynLex library catalog."
         }
       }
     },
@@ -314,7 +341,59 @@
         "id": "callDepth5",
         "description": "Call nesting color 6; colors repeat every 6 levels."
       }
-    ]
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "dynlex.libraries",
+          "name": "Libraries"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "dynlex.libraries",
+        "contents": "Add libraries to your application without using a terminal.\n[Add Library](command:dynlex.addLibrary)\n[Restore Libraries](command:dynlex.restoreLibraries)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "dynlex.addLibrary",
+          "when": "view == dynlex.libraries",
+          "group": "navigation"
+        },
+        {
+          "command": "dynlex.restoreLibraries",
+          "when": "view == dynlex.libraries",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dynlex.updateLibrary",
+          "when": "view == dynlex.libraries && viewItem == dynlexLibrary",
+          "group": "library@0"
+        },
+        {
+          "command": "dynlex.removeLibrary",
+          "when": "view == dynlex.libraries && viewItem == dynlexLibrary",
+          "group": "library@1"
+        },
+        {
+          "command": "dynlex.libraryDocumentation",
+          "when": "view == dynlex.libraries && viewItem == dynlexLibrary",
+          "group": "library@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "dynlex.addLibrary",
+          "when": "explorerResourceIsFolder",
+          "group": "dynlex"
+        }
+      ]
+    }
   },
   "scripts": {
     "postinstall": "patch-package --error-on-fail",

@@ -46,6 +46,14 @@ Managed language servers use stdio and are isolated per VS Code window. Host and
 
 ## Commands
 
+**Explorer → Libraries → +** opens the library picker. Search the catalog, add a
+Git repository or SDK archive URL, or browse a local library folder. Choose an
+import name such as `ui`, then use `import ui/native.dl` in your application.
+Library context menus offer Update, Remove and View Documentation. **Restore
+Libraries** recreates the installed files from `dynlex.lock`. Ctrl+. on a missing
+library import offers the same Add Library flow. Open your application folder;
+there is no need to work inside a library checkout.
+
 - **DynLex: Restart Language Server**: Restart the language server if it becomes unresponsive
 
 ## Token Types

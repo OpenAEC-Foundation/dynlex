@@ -87,6 +87,19 @@ if ($null -ne $invalidMetadata) {
     throw "Unsupported Clang target architecture was accepted."
 }
 
+$windowsMinimum = Get-WindowsBootstrapClangMajorVersion -LlvmBootstrapVersion 20
+if ($windowsMinimum -ne 22 -or (Get-WindowsBootstrapClangMajorVersion -LlvmBootstrapVersion 23) -ne 23) {
+    throw "Windows bootstrap selection does not satisfy both the MSVC STL and LLVM requirements."
+}
+if (Test-CompatibleClangToolchainMetadata `
+    -ClangMetadata $arm64Metadata `
+    -ClangCxxMetadata $arm64Metadata `
+    -MinimumMajorVersion $windowsMinimum `
+    -HostArchitecture "Arm64"
+) {
+    throw "Clang 20 was accepted with the current Microsoft standard library."
+}
+
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $vcpkgMetadataPath = Join-Path $projectRoot "metadata\VCPKG_TOOLCHAIN"
 $vcpkgMetadata = @{}

@@ -489,7 +489,8 @@ $bootstrapMetadata = @(Get-Content $llvmMetadataPath | Where-Object { $_ -match 
 if ($bootstrapMetadata.Count -ne 1) {
     throw "LLVM toolchain metadata must define exactly one bootstrap Clang version."
 }
-$bootstrapClangVersion = [int]($bootstrapMetadata[0] -split ' ')[1]
+$bootstrapClangVersion = Get-WindowsBootstrapClangMajorVersion `
+    -LlvmBootstrapVersion ([int]($bootstrapMetadata[0] -split ' ')[1])
 $hostArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 
 $clangBin = Resolve-CompatibleClangDirectory `

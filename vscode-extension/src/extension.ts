@@ -9,6 +9,7 @@ import {
     StreamInfo,
 } from 'vscode-languageclient/node';
 import { buildManagedServerOptions } from './managedServer';
+import { registerLibraries } from './libraries';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.LogOutputChannel;
@@ -116,6 +117,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Start the language server
     void startLanguageServer(context);
+    registerLibraries(context, () => {
+        void stopLanguageServer().then(() => startLanguageServer(context));
+    });
 
     // Watch for file changes and notify the server
     const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.dl');

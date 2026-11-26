@@ -10,6 +10,16 @@ Later stages of the compiler are very dependent on earlier stages. Every line of
 
 # Import Stage
 
+Project dependency imports use `dynlex.json` and `dynlex.lock`, discovered by
+walking upward from the importing source. An installed alias selects its locked
+package's public exports before ordinary filesystem lookup. Each package resolves
+its own declared dependencies. Explicit `./` and `../` imports remain relative.
+Manifest and lock reads use the compilation filesystem, including editor and
+browser snapshots, so recording/incremental filesystems observe metadata changes.
+Invalid metadata, mismatched requests and unexported subpaths produce an explicit
+dependency diagnostic. Resolution never installs or downloads packages.
+See [project libraries](libraries.md) for the shared editor package manager.
+
 The compiler combines all files into one large file.
 Import directives use the configured spelling at any indentation level. Imported
 lines retain their authored indentation and source identity; a missing indented

@@ -1,5 +1,15 @@
 Set-StrictMode -Version Latest
 
+function Get-WindowsBootstrapClangMajorVersion {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int] $LlvmBootstrapVersion
+    )
+
+    # The current Microsoft C++ standard library requires Clang 22 or newer.
+    return [Math]::Max(22, $LlvmBootstrapVersion)
+}
+
 function ConvertFrom-WindowsCommandEnvironment {
     param(
         [Parameter(Mandatory = $true)]
