@@ -299,6 +299,14 @@ async function packageRegistries(outputDirectory, packages) {
                 path.join(repositoryDirectory, 'LICENSE.md'),
                 path.join(registryRoot, 'LICENSE.md'),
             );
+            await cp(
+                path.join(repositoryDirectory, 'packages'),
+                path.join(registryRoot, 'packages'),
+                {
+                    recursive: true,
+                    filter: (sourcePath) => path.basename(sourcePath) !== 'tests',
+                },
+            );
             await cp(extensionDirectory, stagedExtensionDirectory, {
                 recursive: true,
                 filter: shouldCopySource,
