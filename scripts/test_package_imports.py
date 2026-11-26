@@ -36,7 +36,7 @@ with tempfile.TemporaryDirectory(prefix='dynlex-package-imports-') as temporary:
     # The language service/dependency inspector uses exactly the same resolver.
     graph = json.loads(subprocess.check_output([compiler, str(root / 'main.dl'), '--dump-dependencies'], cwd=unrelated, text=True))
     assert graph['complete']
-    assert any(name.endswith('/api/helper.dl') for name in graph['sources'])
+    assert (package / 'api/helper.dl').resolve() in {Path(name).resolve() for name in graph['sources']}
     (package / 'next').mkdir()
     (package / 'next/main.dl').write_text('answer means: 84\n')
     lock['packages']['example']['exports'] = {'*': 'next/*'}
