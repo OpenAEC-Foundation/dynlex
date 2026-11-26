@@ -102,6 +102,7 @@ def main() -> int:
     sources = [repo_root / "tests/required" / name / "main.dl" for name in (
         "simple", "debug_class_globals", "debug_empty_function", "recursive_class_pointer", "recursive_class_double_pointer",
         "debug_managed_cleanup",
+        "static_pure_call_values", "static_aggregate_reads",
     )]
     with tempfile.TemporaryDirectory(prefix="dynlex-debug-info-") as temporary_directory:
         from test_debug_source_origins import check_cross_file_local_debug_locations
@@ -123,6 +124,14 @@ def main() -> int:
             if verify_result.returncode != 0:
                 print(verify_result.stdout + verify_result.stderr, file=sys.stderr)
                 return 1
+            if source.parent.name in ("static_pure_call_values", "static_aggregate_reads"):
+                expected = source.with_name("expected.txt").read_text()
+                assert subprocess.check_output([str(executable)], text=True) == expected
+                for mode in ("-g", "--debug-execution"):
+                    module = executable.with_suffix(".wasm")
+                    subprocess.run([str(compiler), str(source), "--no-incremental", "--emit-wasm", "-O0", mode,
+                                    "-o", str(module)], cwd=repo_root, check=True, capture_output=True, text=True)
+                    assert module.read_bytes().startswith(b"\0asm")
             if source.parent.name == "debug_class_globals":
                 ir = executable.with_suffix(".ll")
                 subprocess.run([str(compiler), str(source), "-g", "-O0", "--emit-llvm", "-o", str(ir)],

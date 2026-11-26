@@ -67,7 +67,9 @@ runtimeConstantCallValue(const ParseContext &context, Expression *expression, co
 	// Type-valued calls consume the argument types, not their runtime values.
 	if (instance && instance->purity == InstantiationPurity::Pure && instance->returnType.isMetaType())
 		return result;
-	if (context.options.emitDebugInfo || context.options.debugExecution)
+	// Stepping keeps runtime calls executable; static initializers still require
+	// their proven constant values, including calls nested inside aggregates.
+	if ((context.options.emitDebugInfo || context.options.debugExecution) && context.staticReferenceDepth == 0)
 		return {};
 	return isCompileTimeKnown(result) && RuntimeConstants{}.callInputs(expression, bindings) ? result : CompileTimeValue{};
 }
