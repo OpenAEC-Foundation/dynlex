@@ -12,7 +12,7 @@ PROJECT = Path(__file__).resolve().parents[2]
 
 
 class ReleaseScriptTests(unittest.TestCase):
-    def test_calendar_release_uses_push_pipeline_and_prefixed_tag(self):
+    def check_calendar_release(self, poll_seconds=None):
         with tempfile.TemporaryDirectory(prefix="dynlex-release-script-") as directory:
             root = Path(directory)
             checkout = root / "checkout"
@@ -56,7 +56,11 @@ class ReleaseScriptTests(unittest.TestCase):
             gh.write_text('''#!/usr/bin/env bash
 set -euo pipefail
 case "$1 $2" in
-  "auth status"|"run watch") ;;
+  "auth status") ;;
+  "run watch")
+    shift 2
+    printf '%s\\n' "$*" >> "$DYNLEX_RELEASE_TEST_WATCH_LOG"
+    ;;
   "repo view") echo fixture/dynlex ;;
   "run list")
     shift 2
@@ -76,13 +80,17 @@ esac
 ''', encoding="utf-8", newline="\n")
             gh.chmod(0o755)
             log = root / "github.log"
+            watch_log = root / "watches.log"
             environment = {
                 **os.environ,
                 "PATH": str(bin_directory) + os.pathsep + os.environ["PATH"],
                 "DYNLEX_RELEASE_TEST_LOG": str(log),
+                "DYNLEX_RELEASE_TEST_WATCH_LOG": str(watch_log),
                 "RELEASE_WORKFLOW_TIMEOUT_SECONDS": "2",
-                "RELEASE_WORKFLOW_POLL_SECONDS": "1",
             }
+            environment.pop("RELEASE_WORKFLOW_POLL_SECONDS", None)
+            if poll_seconds is not None:
+                environment["RELEASE_WORKFLOW_POLL_SECONDS"] = str(poll_seconds)
             environment.pop("RELEASE_CI_WORKFLOW_FILE", None)
             environment.pop("RELEASE_WORKFLOW_FILE", None)
             result = subprocess.run(
@@ -91,11 +99,23 @@ esac
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(log.read_text().splitlines(), ["pipeline.yml", "pipeline.yml", "release.yml"])
+            watches = [line.split() for line in watch_log.read_text().splitlines()]
+            self.assertEqual(len(watches), 3)
+            for arguments in watches:
+                self.assertIn("--interval", arguments)
+                self.assertEqual(arguments[arguments.index("--interval") + 1], str(poll_seconds or 30))
+                self.assertIn("--exit-status", arguments)
             self.assertEqual(git("tag", "--list"), "v2026.45.1")
             self.assertEqual(git("status", "--porcelain"), "")
             self.assertEqual(git("log", "-1", "--format=%s"), "Release 2026.45.1")
             self.assertIn("refs/tags/v2026.45.1", git("ls-remote", "--tags", "origin"))
             self.assertIn('version = "2026.45.1"', (translator / "Cargo.toml").read_text())
+
+    def test_calendar_release_uses_push_pipeline_and_prefixed_tag(self):
+        self.check_calendar_release()
+
+    def test_workflow_watches_use_configured_poll_interval(self):
+        self.check_calendar_release(7)
 
 
 if __name__ == "__main__":

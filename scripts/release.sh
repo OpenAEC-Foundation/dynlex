@@ -44,7 +44,7 @@ VERSION_TOOL="${ROOT_DIR}/scripts/update-version.mjs"
 CI_WORKFLOW_FILE="${RELEASE_CI_WORKFLOW_FILE:-pipeline.yml}"
 RELEASE_WORKFLOW_FILE="${RELEASE_WORKFLOW_FILE:-release.yml}"
 WORKFLOW_TIMEOUT_SECONDS="${RELEASE_WORKFLOW_TIMEOUT_SECONDS:-1800}"
-WORKFLOW_POLL_SECONDS="${RELEASE_WORKFLOW_POLL_SECONDS:-5}"
+WORKFLOW_POLL_SECONDS="${RELEASE_WORKFLOW_POLL_SECONDS:-30}"
 
 if [[ ! -f "${VERSION_FILE}" ]]; then
   echo "Error: metadata/VERSION file not found at ${VERSION_FILE}" >&2
@@ -152,7 +152,7 @@ if [[ -z "${ci_base_run_id}" ]]; then
   echo "Error: timed out waiting for CI workflow run discovery for commit ${head_sha}." >&2
   exit 1
 fi
-gh run watch "${ci_base_run_id}" --repo "${repo}" --exit-status
+gh run watch "${ci_base_run_id}" --repo "${repo}" --interval "${WORKFLOW_POLL_SECONDS}" --exit-status
 echo "CI workflow run ${ci_base_run_id} succeeded."
 
 local_tag_exists=false
@@ -213,7 +213,7 @@ if [[ "${retag_mode}" != "true" ]]; then
     echo "Error: timed out waiting for CI workflow run discovery for release commit ${release_sha}." >&2
     exit 1
   fi
-  gh run watch "${ci_release_run_id}" --repo "${repo}" --exit-status
+  gh run watch "${ci_release_run_id}" --repo "${repo}" --interval "${WORKFLOW_POLL_SECONDS}" --exit-status
   echo "CI workflow run ${ci_release_run_id} succeeded."
 fi
 
@@ -223,6 +223,6 @@ if [[ -z "${release_run_id}" ]]; then
   echo "Error: timed out waiting for Release workflow run discovery for commit ${release_sha}." >&2
   exit 1
 fi
-gh run watch "${release_run_id}" --repo "${repo}" --exit-status
+gh run watch "${release_run_id}" --repo "${repo}" --interval "${WORKFLOW_POLL_SECONDS}" --exit-status
 echo "Release workflow run ${release_run_id} succeeded."
 echo "Released ${target_version}"
