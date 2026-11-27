@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -19,12 +20,14 @@ PROJECT = Path(sys.argv.pop(1)).resolve() if len(sys.argv) > 1 else Path(__file_
 
 
 class CompilerStagingTests(unittest.TestCase):
-    def run_comparison(self, directory, copy_mode="copy", mutate=False):
+    def run_comparison(self, directory, copy_mode="copy", mutate=False, platform_probe=None):
         spec = importlib.util.spec_from_file_location(
             "benchmark_staging_fixture", PROJECT / "scripts" / "benchmark_incremental_comparison.py")
         benchmark = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(benchmark)
         benchmark.REPOSITORY = directory
+        if platform_probe is not None:
+            benchmark.platform = SimpleNamespace(platform=platform_probe)
         originals = [directory / name for name in ("first", "second")]
         for path in originals:
             path.write_bytes(b"compiler image")
@@ -56,11 +59,11 @@ class CompilerStagingTests(unittest.TestCase):
 
         arguments = ["benchmark", "--baseline", str(originals[0]), "--candidate", str(originals[1]),
                      "--output", str(output), "--cases", "cold", "--cold-repetitions", "1"]
+        processes = SimpleNamespace(check_output=lambda *args, **kwargs: "fixture-revision\n", run=run)
         with patch.object(sys, "argv", arguments), \
-                patch.object(benchmark.subprocess, "check_output", return_value="fixture-revision\n"), \
-                patch.object(benchmark.subprocess, "run", side_effect=run), \
+                patch.object(benchmark, "subprocess", processes), \
                 patch.object(benchmark, "child_cpu_seconds", side_effect=iter(range(100))), \
-                patch.object(benchmark.shutil, "copy2", side_effect=copy), \
+                patch.object(benchmark, "shutil", SimpleNamespace(copy2=copy)), \
                 patch.object(benchmark, "stage_application", side_effect=application), \
                 contextlib.redirect_stdout(io.StringIO()):
             benchmark.main()
@@ -81,6 +84,16 @@ class CompilerStagingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as name:
             with self.assertRaisesRegex(RuntimeError, "changed"):
                 self.run_comparison(Path(name), mutate=True)
+
+    def test_platform_probe_preserves_real_subprocess_output(self):
+        def platform_probe():
+            output = subprocess.check_output([sys.executable, "-c", 'print("platform probe")'])
+            self.assertIsInstance(output, bytes)
+            return output.decode().strip()
+
+        with tempfile.TemporaryDirectory() as name:
+            report, _ = self.run_comparison(Path(name), platform_probe=platform_probe)
+            self.assertEqual(report["platform"], "platform probe")
 
 
 if __name__ == "__main__":

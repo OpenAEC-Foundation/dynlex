@@ -35,6 +35,7 @@ failed=0
         "associative_grouping": ("required",),
         "compiler_stack": ("required",),
         "timeout_output": ("required",),
+        "benchmark_staging": ("required",),
         "incremental_regression_base": ("integration", "compiler-regressions"),
         "incremental_regression_dependencies": ("integration", "compiler-regressions"),
         "incremental_regression_native": ("integration", "compiler-regressions"),
