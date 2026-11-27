@@ -9,6 +9,7 @@ imports fall back to the working directory and mix trees.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,63 @@ COMPILER = Path(sys.argv.pop()).resolve()
 
 
 class ImportRootConsistencyTests(unittest.TestCase):
+    def copy_compiler(self, prefix: Path) -> Path:
+        binary = prefix / "bin" / COMPILER.name
+        binary.parent.mkdir(parents=True)
+        shutil.copy2(COMPILER, binary)
+        for library in COMPILER.parent.glob("*.dll"):
+            shutil.copy2(library, binary.parent / library.name)
+        return binary
+
+    def test_relocated_compiler_uses_its_library_and_syntax_root(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dynlex-relocated-imports-") as directory:
+            root = Path(directory)
+            prefix = root / "installation with spaces"
+            compiler = self.copy_compiler(prefix)
+            library = prefix / "share/dynlex/lib"
+            library.mkdir(parents=True)
+            builtin_config = library / "config.dl"
+            builtin_config.write_text('dynlex options:\n    import: "include"\n')
+            (library / "entry.dl").write_text("include lib/helper.dl\n")
+            helper = library / "helper.dl"
+            helper.write_text("probe means: 42\n")
+            project = root / "project"
+            project.mkdir()
+            project_config = project / "config.dl"
+            project_config.write_text('dynlex options:\n    import: "use"\n')
+            working = root / "unrelated"
+            (working / "lib").mkdir(parents=True)
+            (working / "lib/helper.dl").write_text("wrong working-directory source\n")
+            main = project / "main.dl"
+            for request in ("entry.dl", "lib/entry.dl"):
+                with self.subTest(request=request):
+                    main.write_text("use " + request + "\n")
+                    result = subprocess.run(
+                        [str(compiler), str(main), "--dump-dependencies"], cwd=working,
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    report = json.loads(result.stdout)
+                    self.assertTrue(report["complete"])
+                    self.assertEqual({Path(path).resolve() for path in report["sources"]},
+                                     {main.resolve(), (library / "entry.dl").resolve(), helper.resolve()})
+                    self.assertEqual({Path(path).resolve() for path in report["configurations"]},
+                                     {builtin_config.resolve(), project_config.resolve()})
+
+    def test_relocated_compiler_does_not_use_the_build_checkouts_libraries(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dynlex-incomplete-installation-") as directory:
+            root = Path(directory)
+            compiler = self.copy_compiler(root / "installation")
+            main = root / "main.dl"
+            main.write_text("import std.dl\n")
+            result = subprocess.run(
+                [str(compiler), str(main), "--dump-dependencies"], cwd=root,
+                capture_output=True, text=True, timeout=10,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(json.loads(result.stdout)["complete"])
+            self.assertIn("failed to import source file: std.dl", result.stderr)
+
     def test_indented_configured_import_is_loaded(self) -> None:
         with tempfile.TemporaryDirectory(prefix="dynlex-indented-import-") as directory:
             root = Path(directory)

@@ -1,6 +1,7 @@
 #include "syntaxConfig.h"
 #include "builtinSyntaxConfig.h"
 #include "compiler.h"
+#include "compilerInstallation.h"
 #include "parseContext.h"
 #include "pathUtils.h"
 #include "section/parseUtils.h"
@@ -645,21 +646,11 @@ std::optional<std::string> definitionShorthandSyntaxError(const SyntaxConfig &co
 bool initializeBuiltinSyntaxConfig(ParseContext &context) {
 	context.builtinSyntax = {};
 	context.builtinSyntaxConfigPath.clear();
-	std::vector<std::string> builtinCandidates = {
-#ifdef DYNLEX_WEB
-		"/lib/config.dl",
-		"lib/config.dl",
-#endif
-		std::string(PROJECT_SOURCE_DIR) + "/lib/config.dl",
-		"/usr/share/dynlex/lib/config.dl",
-	};
-	for (const std::string &candidate : builtinCandidates) {
-		if (!context.fileSystem->getFile(candidate, lsp::FileReadPurpose::SyntaxConfiguration))
-			continue;
+	const std::string candidate = (compilerInstallation().sourceRoot / "lib/config.dl").string();
+	if (context.fileSystem->getFile(candidate, lsp::FileReadPurpose::SyntaxConfiguration)) {
 		if (!loadSyntaxConfigFile(context, candidate, context.builtinSyntax))
 			return false;
 		context.builtinSyntaxConfigPath = candidate;
-		break;
 	}
 	return true;
 }

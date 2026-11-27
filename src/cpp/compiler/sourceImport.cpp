@@ -1,4 +1,5 @@
 #include "compiler.h"
+#include "compilerInstallation.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
 #include "pathUtils.h"
@@ -89,26 +90,11 @@ static ResolvedImport resolveImportPath(
 	}
 #endif
 
-	// Try relative to the project source directory (for development builds)
-	// These come before system paths so dev builds use the source tree's libraries
-	std::string devPath = importPathUnder(PROJECT_SOURCE_DIR, path);
-	if (resolveCandidate(devPath, resolvedPath))
-		return {resolvedPath, std::string(PROJECT_SOURCE_DIR)};
-
-	// Try project lib directory (e.g., "std.dl" → "<project>/lib/std.dl")
-	std::string devLibPath = importPathUnder(importPathUnder(PROJECT_SOURCE_DIR, "lib"), path);
-	if (resolveCandidate(devLibPath, resolvedPath))
-		return {resolvedPath, std::string(PROJECT_SOURCE_DIR)};
-
-	// Try installed system path
-	std::string systemPath = importPathUnder("/usr/share/dynlex", path);
-	if (resolveCandidate(systemPath, resolvedPath))
-		return {resolvedPath, "/usr/share/dynlex"};
-
-	// Try installed library path (e.g., "std.dl" → "/usr/share/dynlex/lib/std.dl")
-	std::string systemLibPath = importPathUnder("/usr/share/dynlex/lib", path);
-	if (resolveCandidate(systemLibPath, resolvedPath))
-		return {resolvedPath, "/usr/share/dynlex"};
+	const std::string root = compilerInstallation().sourceRoot.string();
+	for (const auto &directory : {root, importPathUnder(root, "lib")}) {
+		if (resolveCandidate(importPathUnder(directory, path), resolvedPath))
+			return {resolvedPath, root};
+	}
 
 	return {path, importingFileRoot}; // Return original path (will fail with proper error)
 }
@@ -148,9 +134,12 @@ bool isInternalSourcePath(std::string_view path) {
 	std::string normalized = canonicalSourceKey(path);
 	std::replace(normalized.begin(), normalized.end(), '\\', '/');
 
-	const std::string projectLibPrefix = std::string(PROJECT_SOURCE_DIR) + "/lib/";
-	return normalized.starts_with("lib/") || normalized.starts_with("/lib/") ||
-		   normalized.starts_with("/usr/share/dynlex/lib/") || normalized.starts_with(projectLibPrefix);
+	static const std::string libraryPrefix = [] {
+		std::string root = canonicalSourceKey((compilerInstallation().sourceRoot / "lib").string());
+		std::replace(root.begin(), root.end(), '\\', '/');
+		return root + "/";
+	}();
+	return normalized.starts_with(libraryPrefix);
 }
 
 // resolutionRoot keeps nested imports in the tree selected by their importer.

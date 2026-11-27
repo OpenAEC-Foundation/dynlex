@@ -20,6 +20,13 @@ Invalid metadata, mismatched requests and unexported subpaths produce an explici
 dependency diagnostic. Resolution never installs or downloads packages.
 See [project libraries](libraries.md) for the shared editor package manager.
 
+Builtin sources, their syntax configuration, and native runtime paths share one
+compiler installation identity. A compiler running in its build directory uses
+that checkout; installed executables use the resource paths relative to their own
+binary directory, as configured by GNUInstallDirs. Installed builds never borrow
+libraries or runtime archives from the build checkout. Relocating a portable
+installation therefore preserves its imports and builtin syntax classification.
+
 The compiler combines all files into one large file.
 Import directives use the configured spelling at any indentation level. Imported
 lines retain their authored indentation and source identity; a missing indented

@@ -1,4 +1,5 @@
 #include "native.h"
+#include "compilerInstallation.h"
 #include "fileOutput.h"
 #include "nativeLibraries.h"
 #include "nativeTarget.h"
@@ -120,32 +121,12 @@ bool resolveNativeTargetConfiguration(
 	return true;
 }
 
-struct NativeInstallation {
-	std::filesystem::path prefix;
-	bool installed = false;
-};
-
-NativeInstallation nativeInstallation() {
-	const std::filesystem::path executable = llvm::sys::fs::getMainExecutable(
-		nullptr, reinterpret_cast<void *>(reinterpret_cast<std::uintptr_t>(&nativeInstallation))
-	);
-	const std::filesystem::path prefix = executable.parent_path().parent_path();
-	const std::filesystem::path installedRuntime =
-		prefix / DYNLEX_RUNTIME_LIBRARY_INSTALL_DIR / DYNLEX_RUNTIME_LIBRARY_FILENAME;
-	return {prefix, std::filesystem::exists(installedRuntime)};
-}
-
 std::filesystem::path runtimeLibraryPath() {
 	static const std::filesystem::path path = [] {
-		const NativeInstallation installation = nativeInstallation();
-		const std::filesystem::path installedPath =
-			installation.prefix / DYNLEX_RUNTIME_LIBRARY_INSTALL_DIR / DYNLEX_RUNTIME_LIBRARY_FILENAME;
+		const CompilerInstallation &installation = compilerInstallation();
 		if (installation.installed)
-			return installedPath;
-		const std::filesystem::path buildPath(DYNLEX_RUNTIME_LIBRARY_BUILD_PATH);
-		if (std::filesystem::exists(buildPath))
-			return buildPath;
-		return installedPath;
+			return installation.prefix / DYNLEX_RUNTIME_LIBRARY_INSTALL_DIR / DYNLEX_RUNTIME_LIBRARY_FILENAME;
+		return std::filesystem::path(DYNLEX_RUNTIME_LIBRARY_BUILD_PATH);
 	}();
 	return path;
 }
@@ -159,7 +140,7 @@ struct WindowsToolchain {
 };
 
 WindowsToolchain windowsToolchain() {
-	const NativeInstallation installation = nativeInstallation();
+	const CompilerInstallation &installation = compilerInstallation();
 	if (installation.installed) {
 		const std::filesystem::path root = installation.prefix / DYNLEX_WINDOWS_TOOLCHAIN_INSTALL_DIR;
 		return {
@@ -180,7 +161,7 @@ WindowsToolchain windowsToolchain() {
 
 #ifdef __APPLE__
 std::optional<std::filesystem::path> macosDependencyDirectory() {
-	const NativeInstallation installation = nativeInstallation();
+	const CompilerInstallation &installation = compilerInstallation();
 	if (!installation.installed)
 		return std::nullopt;
 	return installation.prefix / DYNLEX_MACOS_DEPENDENCY_INSTALL_DIR;
