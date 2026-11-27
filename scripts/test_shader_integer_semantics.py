@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check signed GPU operations through import-free arithmetic fixtures."""
 import json
+import os
 from pathlib import Path
 import shutil
 import struct
@@ -48,11 +49,23 @@ def main():
     validator=shutil.which('spirv-val')
     assert validator,'spirv-val is required'
     with tempfile.TemporaryDirectory(prefix='dynlex shader integers ') as directory:
-        # Exercise the CLI from an escaped file URL as well as native Windows paths.
-        generator=Path(directory)/'shader_arithmetic_cases.mjs'
-        shutil.copy2(root/'tests/web/shader_arithmetic_cases.mjs',generator)
-        shutil.copy2(root/'tests/web/shader_arithmetic_cases.json',generator.with_suffix('.json'))
+        # Exercise the CLI from a path with spaces, including native Windows paths.
+        generator=Path(directory)/'shader_arithmetic_cases_cli.mjs'
+        for name in ('shader_arithmetic_cases.mjs','shader_arithmetic_cases.json',generator.name):
+            shutil.copy2(root/'tests/web'/name,Path(directory)/name)
         fixtures=json.loads(subprocess.check_output(['node',str(generator)],text=True))
+        # Node canonicalizes the main module path. Darwin temporary directories
+        # also reach it through a symlink; exercise that spelling on every Unix.
+        if os.name != 'nt':
+            alias=Path(directory)/'linked cases'
+            alias.symlink_to(generator.parent,target_is_directory=True)
+            linked=json.loads(subprocess.check_output(['node',str(alias/generator.name)],text=True))
+            assert linked==fixtures, 'CLI generation changed through a directory symlink'
+        imported=subprocess.check_output(
+            ['node','--input-type=module','-e',
+             'await import(process.argv[1]);',
+             generator.with_name('shader_arithmetic_cases.mjs').resolve().as_uri()],text=True)
+        assert not imported, 'Importing shader cases must not emit CLI output'
         source,binary=Path(directory)/'main.dl',Path(directory)/'main.spv'
         for fixture in fixtures:
             source.write_text(fixture['source'])
