@@ -180,29 +180,23 @@ bool ensureSectionInstantiationInferred(
 	);
 	context.currentInstantiation = savedInst;
 	inst.inferring = false;
-	inst.valid = inferenceSucceeded;
-	if (!inferenceSucceeded && !inst.needsReinfer)
+	inst.valid = inferenceSucceeded && context.typesValid;
+	if (inst.valid && !inst.needsReinfer)
+		inst.valid = validateLocalVariableTypes(section, *inst.body, context);
+	if (!inst.valid && !inst.needsReinfer)
 		inst.failure = captureInferenceFailure(context, failureBase);
 	if (callerContext) {
-		if (inferenceSucceeded && inst.needsReinfer)
+		if (inst.valid && inst.needsReinfer)
 			propagateUnresolvedRecursiveDependencyToCaller(*callerContext, callerInstantiation);
 		callerContext->inheritTypeFailureFrom(context);
-		if (!inferenceSucceeded || !context.typesValid)
+		if (!inst.valid)
 			callerContext->typesValid = false;
 	}
-	if (!inst.valid || !context.typesValid) {
+	if (!inst.valid) {
 		noteInferenceProduct(inst, context);
 		return false;
 	}
 
-	if (!inst.needsReinfer && !validateLocalVariableTypes(section, *inst.body, context)) {
-		inst.valid = false;
-		inst.failure = captureInferenceFailure(context, failureBase);
-		noteInferenceProduct(inst, context);
-		if (callerContext)
-			callerContext->inheritTypeFailureFrom(context);
-		return false;
-	}
 	inst.bodyInferred = !inst.needsReinfer;
 	InstantiationKey refinedKey =
 		buildInstantiationKey(inst.requiredCompileTimeParameters, paramBindings, argTypes, evaluateParameterValue);
