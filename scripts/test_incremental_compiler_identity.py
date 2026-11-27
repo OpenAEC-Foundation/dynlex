@@ -2,8 +2,10 @@
 
 import json
 import os
+from pathlib import Path
 import shutil
 import subprocess
+import tempfile
 
 
 def check_compiler_identity(compiler, root):
@@ -27,16 +29,22 @@ def check_compiler_identity(compiler, root):
 
     original = invoke(compiler)
     output_time = output.stat().st_mtime_ns
-    padded = root / "compiler"
-    shutil.copyfile(compiler, padded)
-    padded.chmod(compiler.stat().st_mode)
-    page_size = os.sysconf("SC_PAGE_SIZE")
-    with padded.open("ab") as stream:
-        stream.write(bytes((-padded.stat().st_size) % page_size))
-    for padding in (b"", b"\0"):
+    # Changing the executable's directory changes its resource installation.
+    # Keep that environment fixed while varying only the executable padding.
+    with tempfile.NamedTemporaryFile(prefix="dynlex-identity-", dir=compiler.parent, delete=False) as clone:
+        padded = Path(clone.name)
+    try:
+        shutil.copyfile(compiler, padded)
+        padded.chmod(compiler.stat().st_mode)
+        page_size = os.sysconf("SC_PAGE_SIZE")
         with padded.open("ab") as stream:
-            stream.write(padding)
-        reused = invoke(padded)
-        assert reused["cache_entry"] == original["cache_entry"], "padding changed a linker build ID"
-        assert reused["frontend_reused"] and reused["objects_built"] == 0 and reused["link_ms"] == 0
-        assert output.stat().st_mtime_ns == output_time
+            stream.write(bytes((-padded.stat().st_size) % page_size))
+        for padding in (b"", b"\0"):
+            with padded.open("ab") as stream:
+                stream.write(padding)
+            reused = invoke(padded)
+            assert reused["cache_entry"] == original["cache_entry"], "padding changed a linker build ID"
+            assert reused["frontend_reused"] and reused["objects_built"] == 0 and reused["link_ms"] == 0
+            assert output.stat().st_mtime_ns == output_time
+    finally:
+        padded.unlink()
