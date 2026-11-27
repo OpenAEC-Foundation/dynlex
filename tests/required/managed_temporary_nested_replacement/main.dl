@@ -1,0 +1,42 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+[an|] integer means: @intrinsic("type", "int")
+
+left + right means: @intrinsic("add", left, right)
+
+class:
+    patterns:
+        [a|] tracked value
+    members:
+        number as an integer
+    retain:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "+%d\n", the number of @intrinsic("lifecycle value"))
+    release:
+        ignore @intrinsic(
+            "variadic call",
+            "libc",
+            "printf",
+            an integer,
+            1,
+            "%d\n",
+            the number of @intrinsic("lifecycle value")
+        )
+
+function combine {tracked value:left} and {tracked value:right}:
+    execute:
+        @intrinsic("return", @intrinsic("construct", a tracked value, (the number of left) + (the number of right)))
+
+# The second argument expands the same replacement body while the first argument's
+# call temporary is still live; leaving that nested body must not release it.
+function join {tracked value:left} with {tracked value:right}:
+    replacement:
+        combine left and right
+
+set total to join @intrinsic("construct", a tracked value, 1) with (join @intrinsic("construct", a tracked value, 2) with @intrinsic("construct", a tracked value, 3))
+ignore total

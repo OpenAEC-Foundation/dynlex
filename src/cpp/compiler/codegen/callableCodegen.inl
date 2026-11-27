@@ -101,7 +101,7 @@ bool ensureCallableFunctionGenerated(
 				succeeded = false;
 				break;
 			}
-			registerManagedStorage(context, parameterStorage, argumentType, section);
+			registerManagedTemporaryStorage(context, parameterStorage, argumentType, section);
 			initializeManagedStorage(context, parameterStorage, argumentType, &argument);
 			managedParameterStorage.push_back(parameterStorage);
 		} else {
