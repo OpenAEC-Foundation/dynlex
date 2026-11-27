@@ -182,9 +182,9 @@ jobs:
             .cache/vcpkg-installed
           key: ${{ steps.llvm.outputs.cache-primary-key }}
 
-      - name: Build compiler and test tools
+      - name: Build release compiler and test tools
         id: compiler-build
-        run: ./scripts/build.sh --lint=false --test-tools
+        run: ./scripts/build.sh --release --lint=false --test-tools
         shell: bash
 
       - name: Required tests

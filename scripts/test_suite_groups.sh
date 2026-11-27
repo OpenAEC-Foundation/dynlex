@@ -47,6 +47,7 @@ collect_required_tests() {
     collect_test_group fixture "$fixture_worker" || status=$?
     collect_test_group fixture_parallel "$fixture_parallel_worker" || status=$?
     collect_test_group incremental "$incremental_worker" || status=$?
+    collect_test_group data_declarations "$data_declarations_worker" || status=$?
     return "$status"
 }
 

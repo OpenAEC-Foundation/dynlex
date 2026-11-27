@@ -80,6 +80,17 @@ def main():
     check_fixture_partitions(source, shell)
     with tempfile.TemporaryDirectory(prefix="dynlex-suite-groups-") as directory:
         root = Path(directory)
+        (root / "required-plan.py").write_text('''import sys,time
+from pathlib import Path
+root=Path(sys.argv[1]); name=sys.argv[2]
+if name not in ('data_declaration_cache','ordinary'): raise SystemExit(0)
+(root/(name+'-started')).touch()
+other='ordinary' if name=='data_declaration_cache' else 'data_declaration_cache'
+deadline=time.monotonic()+5
+while not (root/(other+'-started')).exists():
+    if time.monotonic()>deadline: raise SystemExit('cache-edit checks did not overlap ordinary auxiliary work')
+    time.sleep(0.01)
+''')
         rendezvous = root / "rendezvous.py"
         rendezvous.write_text('''import sys,time
 from pathlib import Path
@@ -99,6 +110,28 @@ TEST_OUTPUT_DIR=$1
 PYTHON=$2
 passed=11; failed=7; skipped=9; test_output="parent"; failures=(parent)
 '''
+        # Execute the driver's actual early-worker plan. A late or serial
+        # cache-edit check cannot rendezvous with ordinary auxiliary work.
+        start = source.index('if [[ "$suite" == required ]]; then\n    start_test_group incremental ')
+        plan = source[start:source.index('for group in base dependencies native; do', start)]
+        scheduled = '''
+suite=required; SCRIPT_DIR=$TEST_OUTPUT_DIR; PROJECT_DIR=$TEST_OUTPUT_DIR; COMPILER=unused
+run_auxiliary_test() {
+    "$PYTHON" "$TEST_OUTPUT_DIR/required-plan.py" "$TEST_OUTPUT_DIR" "$1" || return
+    passed=$((passed+1))
+}
+passed=0; failed=0; skipped=0; test_output=""; failures=()
+'''
+        joined = '''
+run_auxiliary_test ordinary || exit
+collect_test_group incremental "$incremental_worker" || exit
+collect_test_group data_declarations "$data_declarations_worker" || exit
+printf '%s/%s/%s\n' "$passed" "$failed" "$skipped"
+'''
+        result = run_suite_script(shell, root, "required-worker-plan",
+                                  setup + helpers + scheduled + plan + joined, sys.executable)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == "3/0/0\n", result.stdout
         check = '''
 run_fixture_tests() {
     "$PYTHON" "$TEST_OUTPUT_DIR/rendezvous.py" "$TEST_OUTPUT_DIR" fixture || return
@@ -207,13 +240,21 @@ start_test_group fixture_parallel completed
 fixture_parallel_worker=$test_group_worker
 start_test_group incremental completed
 incremental_worker=$test_group_worker
+start_test_group data_declarations completed
+data_declarations_worker=$test_group_worker
 status=0
 collect_required_tests || status=$?
 printf '%s/%s/%s\n' "$status" "$passed" "$test_output"
 '''
         result = run_suite_script(shell, root, "joined-suite-workers", setup + helpers + joins, sys.executable)
         assert result.returncode == 0, result.stderr
-        assert result.stdout == "17/4/completed outputcompleted output\n", result.stdout
+        expected_join = "17/6/completed outputcompleted outputcompleted output\n"
+        assert result.stdout == expected_join, result.stdout
+        joins = joins.replace('start_test_group fixture crashed', 'start_test_group fixture completed') \
+                     .replace('start_test_group data_declarations completed', 'start_test_group data_declarations crashed')
+        result = run_suite_script(shell, root, "failed-cache-edit-worker", setup + helpers + joins, sys.executable)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == expected_join, result.stdout
 
 
 if __name__ == "__main__":

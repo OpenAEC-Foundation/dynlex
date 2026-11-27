@@ -753,6 +753,11 @@ if [[ "$suite" == required ]]; then
     start_test_group incremental run_auxiliary_test \
         "incremental_compilation" 30 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --required
     incremental_worker=$test_group_worker
+    # Cache-edit checks use private projects and caches. Start them before the
+    # serial auxiliary checks so their subprocess startup stays off that tail.
+    start_test_group data_declarations run_auxiliary_test \
+        "data_declaration_cache" 30 python3 -B "$SCRIPT_DIR/test_data_declaration_cache.py" "$COMPILER"
+    data_declarations_worker=$test_group_worker
 fi
 for group in base dependencies native; do
     run_auxiliary_test "incremental_regression_$group" 600 \
@@ -816,7 +821,6 @@ run_auxiliary_test "compiler_stack" 45 python3 -B "$SCRIPT_DIR/test_compiler_sta
 run_auxiliary_test "nested_timeout" 10 python3 -B "$SCRIPT_DIR/test_nested_timeout.py"
 run_auxiliary_test "timeout_output" 10 python3 -B "$SCRIPT_DIR/test_timeout_output.py"
 run_auxiliary_test "completion_visibility" 15 python3 -B "$SCRIPT_DIR/test_completion_visibility.py" "$COMPILER"
-run_auxiliary_test "data_declaration_cache" 30 python3 -B "$SCRIPT_DIR/test_data_declaration_cache.py" "$COMPILER"
 run_auxiliary_test \
     "lifecycle_codegen" 15 python3 -B "$SCRIPT_DIR/test_lifecycle_codegen.py" "$COMPILER" \
     "$TESTS_DIR/lifecycle_codegen_allocations/main.dl"
