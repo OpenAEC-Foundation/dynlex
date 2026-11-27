@@ -143,13 +143,15 @@ dynlex_parallel_jobs() {
 }
 
 dynlex_host_llvm_target() {
-	case "$(uname -m)" in
+	local compiler_triple
+	compiler_triple="$("$DYNLEX_LLVM_BOOTSTRAP_CC" -dumpmachine)"
+	case "${compiler_triple%%-*}" in
 	x86_64 | amd64 | AMD64 | i386 | i686) echo X86 ;;
 	aarch64 | arm64) echo AArch64 ;;
-	armv7* | armv8l) echo ARM ;;
+	arm | armv*) echo ARM ;;
 	riscv64) echo RISCV ;;
 	*)
-		echo "Error: unsupported host architecture for the DynLex LLVM toolchain: $(uname -m)" >&2
+		echo "Error: unsupported bootstrap target for the DynLex LLVM toolchain: $compiler_triple" >&2
 		return 1
 		;;
 	esac
@@ -247,6 +249,9 @@ dynlex_llvm_install_is_current() {
 	[ -f "$install_directory/lib/cmake/llvm/LLVMConfig.cmake" ] || return 1
 	[ "$(cat "$marker")" = "$(dynlex_llvm_marker_contents "$profile")" ] || return 1
 	if [ "$profile" = native ]; then
+		local configuration="$install_directory/include/llvm/Config/llvm-config.h"
+		[ -f "$configuration" ] || return 1
+		grep -q '^#define LLVM_NATIVE_TARGET ' "$configuration" || return 1
 		local tablegen="$install_directory/bin/llvm-tblgen$DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX"
 		local dwarfdump="$install_directory/bin/llvm-dwarfdump$DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX"
 		[ -x "$tablegen" ] || return 1

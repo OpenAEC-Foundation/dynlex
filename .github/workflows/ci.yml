@@ -71,6 +71,9 @@ jobs:
       - name: Required tests
         run: ./scripts/test.sh --run-only
 
+      - name: Compile installer smoke programs
+        run: python3 scripts/test_release_fixtures.py
+
       - name: Incremental compiler regressions
         if: ${{ !cancelled() && steps.compiler-build.outcome == 'success' }}
         run: ./scripts/test.sh --compiler-regressions --run-only
@@ -131,6 +134,9 @@ jobs:
       - name: Required tests
         run: ./scripts/test.sh --run-only
 
+      - name: Compile installer smoke programs
+        run: python3 scripts/test_release_fixtures.py
+
       - name: Incremental compiler regressions
         if: ${{ !cancelled() && steps.compiler-build.outcome == 'success' }}
         run: ./scripts/test.sh --compiler-regressions --run-only
@@ -183,6 +189,10 @@ jobs:
 
       - name: Required tests
         run: ./scripts/test.sh --run-only
+        shell: bash
+
+      - name: Compile installer smoke programs
+        run: python3 scripts/test_release_fixtures.py
         shell: bash
 
       - name: Incremental compiler regressions

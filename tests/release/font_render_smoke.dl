@@ -26,7 +26,7 @@ set glyphCount to 0
 set renderedGlyphLoaded to false
 loop while glyph != (0 as a pointer to a font glyph):
     if glyph's code = 65:
-        set renderedGlyphLoaded to glyph's texture is loaded
+        set renderedGlyphLoaded to (typeface's cache's atlas is loaded) and ((glyph's width > 0) and (glyph's height > 0))
     increment glyphCount
     set glyph to glyph's next
 set cacheValid to (glyphCount = 2) and renderedGlyphLoaded

@@ -33,6 +33,67 @@ def native_path(shell_path: str) -> Path:
 
 
 class LlvmToolchainTests(unittest.TestCase):
+    def test_native_backend_follows_the_bootstrap_target_under_emulation(self) -> None:
+        for machine, triple, expected in (
+            ("x86_64", "aarch64-pc-windows-msvc", "AArch64"),
+            ("arm64", "x86_64-apple-darwin", "X86"),
+            ("x86_64", "arm-unknown-linux-gnueabihf", "ARM"),
+            ("x86_64", "riscv64-unknown-linux-gnu", "RISCV"),
+        ):
+            with self.subTest(machine=machine, triple=triple):
+                completed = subprocess.run(
+                    [BASH_EXECUTABLE, "-c", '''
+set -euo pipefail
+uname() {
+    if [ "$1" = -m ]; then printf '%s\\n' "$FIXTURE_MACHINE"; else command uname "$@"; fi
+}
+. "$1"
+fixture_clang() { printf '%s\\n' "$FIXTURE_TRIPLE"; }
+DYNLEX_LLVM_BOOTSTRAP_CC=fixture_clang
+dynlex_host_llvm_target
+''',
+                     BASH_EXECUTABLE, str(SCRIPTS_DIR / "llvm_toolchain.sh")],
+                    env=dict(os.environ, FIXTURE_TRIPLE=triple, FIXTURE_MACHINE=machine),
+                    capture_output=True, text=True,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                self.assertEqual(completed.stdout.strip(), expected)
+
+    def test_native_cache_requires_a_registered_native_backend(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dynlex-llvm-native-backend-") as directory:
+            install = Path(directory)
+            (install / "lib/cmake/llvm").mkdir(parents=True)
+            (install / "lib/cmake/llvm/LLVMConfig.cmake").touch()
+            (install / "include/llvm/Config").mkdir(parents=True)
+            (install / "bin").mkdir()
+            for name in ("llvm-tblgen", "llvm-dwarfdump"):
+                tool = install / "bin" / name
+                tool.write_text("#!/bin/sh\nexit 0\n", newline="\n")
+                tool.chmod(0o755)
+            header = install / "include/llvm/Config/llvm-config.h"
+            for profile in ("native", "web"):
+                for contents in ("#define LLVM_NATIVE_TARGET LLVMInitializeX86Target\n",
+                                 "/* #undef LLVM_NATIVE_TARGET */\n", None):
+                    with self.subTest(profile=profile, header=contents):
+                        if contents is None:
+                            header.unlink(missing_ok=True)
+                        else:
+                            header.write_text(contents)
+                        completed = subprocess.run(
+                            [BASH_EXECUTABLE, "-c", '''
+set -euo pipefail
+. "$1"
+# Fixture tools are portable shell scripts on every test host.
+DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX=""
+dynlex_llvm_marker_contents "$3" > "$2/.dynlex-llvm-toolchain"
+if dynlex_llvm_install_is_current "$3" "$2"; then echo CURRENT; else echo STALE; fi
+''', BASH_EXECUTABLE, str(SCRIPTS_DIR / "llvm_toolchain.sh"), str(install), profile],
+                            capture_output=True, text=True,
+                        )
+                        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                        current = profile == "web" or (contents is not None and contents.startswith("#define"))
+                        self.assertEqual(completed.stdout.strip(), "CURRENT" if current else "STALE")
+
     def test_windows_checkout_keeps_shell_inputs_lf_terminated(self) -> None:
         with tempfile.TemporaryDirectory(prefix="dynlex-lf-checkout-") as temporary_directory:
             checkout_root = Path(temporary_directory)
