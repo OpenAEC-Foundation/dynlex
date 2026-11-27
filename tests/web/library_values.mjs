@@ -6,6 +6,7 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {buildRuntimeImports,createRuntimeFilesystem,inspectRuntimeWasmLayout} from '../../src/web/ide/public/compiler/runtimeImports.js';
 import {observeAllocations} from './allocation_probe.mjs';
+import {nativeText} from './native_text.mjs';
 const root=path.resolve(import.meta.dirname,'../..');
 const compiler=path.resolve(process.argv[2]??path.join(root,'build/dynlex'));
 const fixtures=['sequence_values','unicode_stream','workspace_edit_text','workspace_text_plan','unicode_properties','text_search','vector_math','vector_components'];
@@ -33,7 +34,7 @@ try {
     for(const optimization of ['O0','O2']) {
       const binary=path.join(directory,name+'.out');
       execFileSync(compiler,[entry,'-'+optimization,'-o',binary],{cwd:root,stdio:'inherit',timeout:30000});
-      assert.equal(execFileSync(binary,{encoding:'utf8'}),expected.get(name),`${name}: ${optimization}`);
+      assert.equal(nativeText(execFileSync(binary,{encoding:'utf8'})),expected.get(name),`${name}: ${optimization}`);
       console.log(`PASS ${name}: ${optimization}`);
     }
     execFileSync(compiler,[entry,'--emit-wasm','-O2','-o',path.join(directory,name+'.wasm')],{cwd:root,stdio:'inherit',timeout:30000});

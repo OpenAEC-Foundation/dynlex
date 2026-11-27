@@ -16,7 +16,7 @@ def main():
         local.write_text("# sibling\n", encoding="utf-8")
         (project / local.name).write_text("# other file with the same name\n", encoding="utf-8")
         helper = folder / "helper.dl"
-        helper.write_text("import café.dl\n", encoding="utf-8")
+        helper.write_bytes("import café.dl\r\n".encode("utf-8"))
         entry = project / "main.dl"
         source = "import std.dl  # standard library\nimport nested/helper.dl\nimport nested/helper.dl\n"
         entry.write_text(source, encoding="utf-8")
@@ -40,7 +40,7 @@ def main():
                 assert definition(entry, line, 18) == {"uri": helper.as_uri(), "range": expected}
             # Open the destination just as the editor does before querying its imports.
             contents = session.request("dynlex/readDocument", {"uri": helper.as_uri()})
-            assert contents == helper.read_text(encoding="utf-8")
+            assert contents == helper.read_bytes().decode("utf-8"), repr(contents)
             session.notify("textDocument/didOpen", {"textDocument": {
                 "uri": helper.as_uri(), "languageId": "dynlex", "version": 1, "text": contents,
             }})

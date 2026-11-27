@@ -15,7 +15,7 @@ def main():
         entry.parent.mkdir()
         config = work / "config.dl"
         helper = work / "shared.dl"
-        helper.write_text("picked means: 10\n")
+        helper.write_bytes(b"picked means: 10\r\n")
         source = ('import shared.dl\nmarker means: 1\nto apply {marker}:\n'
                   '    @intrinsic("discard", marker)\napply 2\n@intrinsic("discard", picked)\n')
         entry.write_text(source)
@@ -88,15 +88,15 @@ def main():
             assert not any(note["message"] == "updated builtin note" for d in diagnostics()
                            for note in d.get("relatedInformation", []))
 
-            helper.write_text("picked means: 11\n")
+            helper.write_bytes(b"picked means: 11\r\n")
             change(config, text.replace("second", "third"), 3)
             work_counts(2, 0)
-            assert session.request("dynlex/readDocument", {"uri": to_file_uri(helper)}) == helper.read_text()
+            assert session.request("dynlex/readDocument", {"uri": to_file_uri(helper)}) == helper.read_bytes().decode("utf-8")
             shadow = entry.parent / "shared.dl"
-            shadow.write_text("picked means: 20\n")
+            shadow.write_bytes(b"picked means: 20\r\n")
             change(config, text.replace("second", "fourth"), 4)
             work_counts(2, 0)
-            assert session.request("dynlex/readDocument", {"uri": to_file_uri(shadow)}) == shadow.read_text()
+            assert session.request("dynlex/readDocument", {"uri": to_file_uri(shadow)}) == shadow.read_bytes().decode("utf-8")
 
             # A previously missing configuration can appear only in the editor.
             nearer = entry.parent / "config.dl"
@@ -119,7 +119,7 @@ def main():
             session.notify("textDocument/didClose", {"textDocument": {"uri": to_file_uri(shadow)}})
             session.request("dynlex/readDocument", {"uri": uri})
             work_counts(2, 0)
-            assert session.request("dynlex/readDocument", {"uri": to_file_uri(shadow)}) == shadow.read_text()
+            assert session.request("dynlex/readDocument", {"uri": to_file_uri(shadow)}) == shadow.read_bytes().decode("utf-8")
 
             change(config, text.replace('dynlex options:\n', 'dynlex options:\n    comment: "//"\n'), 5)
             work_counts(2, 0)

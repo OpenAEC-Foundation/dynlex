@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {execFileSync} from 'node:child_process';
+import {nativeText} from './native_text.mjs';
 import {buildRuntimeImports,createRuntimeFilesystem,inspectRuntimeWasmLayout} from '../../src/web/ide/public/compiler/runtimeImports.js';
 const root=path.resolve(import.meta.dirname,'../..');
 const compiler=path.resolve(process.argv[2]??path.join(root,'build/dynlex'));
@@ -27,7 +28,7 @@ try {
     for(const optimization of ['O0','O2']) {
       const binary=path.join(directory,name+'-'+optimization+'.out');
       execFileSync(compiler,[entry,`-${optimization}`,'-o',binary],{cwd:root,stdio:'inherit',timeout:30000});
-      assert.equal(execFileSync(binary,{encoding:'utf8'}),expected.get(name),`${name}: ${optimization}`);
+      assert.equal(nativeText(execFileSync(binary,{encoding:'utf8'})),expected.get(name),`${name}: ${optimization}`);
       console.log(`PASS ${name}: ${optimization}`);
     }
     const wasm=path.join(directory,name+'.wasm');

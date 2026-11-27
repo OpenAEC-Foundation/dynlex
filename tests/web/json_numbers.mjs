@@ -6,6 +6,7 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {buildRuntimeImports,createRuntimeFilesystem,inspectRuntimeWasmLayout} from '../../src/web/ide/public/compiler/runtimeImports.js';
 import {observeAllocations} from './allocation_probe.mjs';
+import {nativeText} from './native_text.mjs';
 const root=path.resolve(import.meta.dirname,'../..');
 const directory=await fs.mkdtemp(path.join(os.tmpdir(),'dynlex-json-numbers-'));
 const memory=new DataView(new ArrayBuffer(8));
@@ -92,7 +93,7 @@ try {
   for(const optimization of ['-O0','-O2']) {
     const binary=path.join(directory,process.platform==='win32'?'numbers.exe':'numbers.out');
     execFileSync(compiler,[file,optimization,'-o',binary],{cwd:root,stdio:'inherit',timeout:180000});
-    check(execFileSync(binary,{encoding:'utf8',timeout:30000}),'Native '+optimization);
+    check(nativeText(execFileSync(binary,{encoding:'utf8',timeout:30000})),'Native '+optimization);
   }
   const wasm=path.join(directory,'numbers.wasm');
   execFileSync(compiler,[file,'--emit-wasm','-o',wasm],{cwd:root,stdio:'inherit',timeout:180000});

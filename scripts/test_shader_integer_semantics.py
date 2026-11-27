@@ -47,8 +47,12 @@ def main():
     root=Path(__file__).resolve().parents[1]
     validator=shutil.which('spirv-val')
     assert validator,'spirv-val is required'
-    fixtures=json.loads(subprocess.check_output(['node',str(root/'tests/web/shader_arithmetic_cases.mjs')],text=True))
-    with tempfile.TemporaryDirectory(prefix='dynlex-shader-integers-') as directory:
+    with tempfile.TemporaryDirectory(prefix='dynlex shader integers ') as directory:
+        # Exercise the CLI from an escaped file URL as well as native Windows paths.
+        generator=Path(directory)/'shader_arithmetic_cases.mjs'
+        shutil.copy2(root/'tests/web/shader_arithmetic_cases.mjs',generator)
+        shutil.copy2(root/'tests/web/shader_arithmetic_cases.json',generator.with_suffix('.json'))
+        fixtures=json.loads(subprocess.check_output(['node',str(generator)],text=True))
         source,binary=Path(directory)/'main.dl',Path(directory)/'main.spv'
         for fixture in fixtures:
             source.write_text(fixture['source'])

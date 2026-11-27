@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import {pathToFileURL} from 'node:url';
 const cases=JSON.parse(await fs.readFile(new URL('./shader_arithmetic_cases.json',import.meta.url),'utf8'));
 const f32='@intrinsic("type", "float", 32)';
 export const shaderArithmeticCases=cases.map(record=>{
@@ -16,4 +17,4 @@ export const shaderArithmeticCases=cases.map(record=>{
   const source=`@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4, ${f32}), ${component}, 0.0, 0.0, 1.0))\n`;
   return {...record,source,type:{scalar:record.scalar,rows:1,columns:2},samples:[...record.samples,0,0],red:0.25};
 });
-if(process.argv[1]&&new URL(import.meta.url).pathname===process.argv[1]) console.log(JSON.stringify(shaderArithmeticCases));
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href) console.log(JSON.stringify(shaderArithmeticCases));
